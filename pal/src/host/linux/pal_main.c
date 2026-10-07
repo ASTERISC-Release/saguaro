@@ -124,6 +124,7 @@ static void setup_asan(void) {
 #endif
 
 static int verify_hw_requirements(void) {
+#ifdef __x86_64__
     unsigned int values[4];
     cpuid(FEATURE_FLAGS_LEAF, /*unused*/0, values);
     const char* missing = NULL;
@@ -139,6 +140,9 @@ static int verify_hw_requirements(void) {
                   "Please upgrade your hardware.", missing);
         return -EINVAL;
     }
+#endif /* __x86_64__: no CPUID-leaf equivalent on aarch64; mbedtls falls back to its portable
+        * (non-AES-NI) software AES implementation there, so there is no hardware prerequisite
+        * to check. */
     return 0;
 }
 

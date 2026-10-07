@@ -187,6 +187,15 @@ if host_machine.cpu_family() == 'x86_64'
         '-mstack-protector-guard-reg=%gs',
         '-mstack-protector-guard-offset=8',
     ]
+elif host_machine.cpu_family() == 'aarch64'
+    # TPIDR_EL0 is aarch64's analog of x86_64's %gs-based TCB access (see pal_get_tcb() /
+    # LIBOS_TCB_GET in the aarch64 arch headers), so keep the canary read from the same place.
+    cflags_custom_stack_protector = [
+        '-fstack-protector-strong',
+        '-mstack-protector-guard=sysreg',
+        '-mstack-protector-guard-reg=tpidr_el0',
+        '-mstack-protector-guard-offset=8',
+    ]
 else
     cflags_custom_stack_protector = [
         '-fstack-protector-strong',
