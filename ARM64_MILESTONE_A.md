@@ -569,11 +569,12 @@ Harness gotchas learned (not port bugs, but they mimic flakes):
 
 Prioritized follow-ups; none block Milestone B, but (1)–(3) are cheap and high-value:
 
-1. **x86_64 parity run** — `./install.sh --run-tests` on an x86 box and diff the summary
-   against this one. Expect different skip counts by design (x86-asm module runs there,
-   musl-only in reverse); parity means **0 failed on both**. This also continuously
-   protects against arch regressions in shared code (findings #4, #6, #7 all touched
-   arch-neutral files).
+1. ~~**x86_64 parity run**~~ — **DONE** (2026-10-08, see `ARM64_X86_COMPARISON.md`):
+   x86_64 **32/0/4 (PAL) + 144/0/32 (LibOS)** vs aarch64 **28/0/8 + 140/0/36**; identical
+   test counts (36/176), every skip-set difference traced to an explicit arch/SGX guard,
+   zero failures on both. Three x86-side fixes came out of it (`send_handle.c` memcmp
+   over-read, `memory.c` arch-neutral helper placement, x86 `pal_arch.h` snapshot hook).
+   Re-run the diff after any change to shared code.
 2. **Repeat-determinism soak** — `run_all_tests.sh` back-to-back ×5 with zero failures,
    and the load-sensitive quintet + `exec_same` overnight loops. The crash family fixed in
    #12/#13 was intermittent (1-in-tens); a long soak is the only credible proof the

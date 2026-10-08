@@ -21,41 +21,43 @@ Totals match (PAL 36, LibOS 176), so no test is unaccounted for. Both architectu
 - `pal/regression/memory.c`: the arch-neutral helpers moved out of the arch `#if` block so the file builds on x86_64.
 - `pal/include/arch/x86_64/pal_arch.h`: added a no-op `pal_tcb_singleton_snapshot_before_user_entry()` to match the aarch64 hook.
 
-## TODO
-- aarch64 skip lists (run the commands in the next section on aarch64 and fill the aarch64 column).
-
 ## Skip lists
 
 Collected with `python3 -m pytest -q -rs` in `pal/regression` and `libos/test/regression`
 (needs `PYTHONPATH` and `PATH` pointing at the Gramine install). Line numbers refer to
-`test_pal.py` / `test_libos.py`.
+`test_pal.py` / `test_libos.py`. aarch64 column collected on this box 2026-10-08.
 
 ### PAL regression
 
 | Reason | x86_64 | aarch64 |
 |---|---|---|
-| Needs SGX (`test_pal.py` lines 177, 466, 480, 550) | 4 | TODO |
-| Other | 0 | TODO (expected 4 more than x86_64) |
-| **Total skipped** | **4** | 8 (from Milestone A) |
+| Needs SGX (`test_pal.py` lines 177, 466, 480, 550) | 4 | 4 (identical lines and reasons) |
+| Other (arch-specific): `x86-specific` guards — `TC_00_Basic::test_Exception2` (39), `TC_01_Bootstrap::test_Segment` (69), `TC_21_Thread::test_000_exception` (260), `TC_22_SetSwitch::test_500_thread` (435) | 0 | 4 |
+| **Total skipped** | **4** | **8** |
+
+Exactly the predicted +4: the four x86-specific guards, nothing else.
 
 ### LibOS regression
 
 | Reason | x86_64 | aarch64 |
 |---|---|---|
-| SGX only (file-check-policy, attestation, trusted/sealed files, CPUID/RDTSC emulation, MRENCLAVE, SIGSTRUCT) | 23 | TODO |
-| Needs `UBSAN=1` / `ASAN=1` (lines 49, 53, 56, 59) | 4 | TODO |
-| Needs debug build (lines 1362, 1400) | 2 | TODO |
-| Needs `/dev/gramine_test_dev` (lines 1146, 1151, 1161) | 3 | TODO |
-| Other (arch-specific) | 0 | TODO (expected 4 more than x86_64) |
-| **Total skipped** | **32** | 36 (from Milestone A) |
+| SGX only (file-check-policy, attestation, trusted/sealed files, CPUID/RDTSC emulation, MRENCLAVE, SIGSTRUCT) | 23 | 23 (same lines) |
+| Needs `UBSAN=1` / `ASAN=1` (lines 49, 53, 56, 59) | 4 | 4 (identical lines and reasons) |
+| Needs debug build (line 1362: `test_000_gdb_backtrace`) | 2 | 1 |
+| (line 1400: `test_010_regs_x86_64` — counted in the row above on x86_64: its `ON_X86` decorator passes and the *runtime* debug-build check skips it there; on aarch64 the decorator skips it first, so it moves to "Other") | — | (1) |
+| Needs `/dev/gramine_test_dev` (lines 1146, 1151, 1161) | 3 | 3 (identical lines and reasons) |
+| Other (arch-specific): `test_110_basic_bootstrapping_cpp` (200), `test_093_sighandler_divbyzero` (999), `test_010_regs_x86_64` (~1400, see above), `TC_93_In_Out::test_000_in_out` (class-level guard, 1587), `asm/x86_64/test_x86_64.py` module (iret emulation) | 0 | 5 |
+| **Total skipped** | **32** | **36** |
 
-Every x86_64 skip is an environment or SGX skip, so none is an x86_64 gap. The remaining
-aarch64 skips should be the x86-only tests, which would explain the gap of 4 in each suite.
-Confirm with the aarch64 run.
+## Conclusion
 
-### Commands for the aarch64 run
-```sh
-export PYTHONPATH=<prefix>/lib/python3.X/site-packages PATH=<prefix>/bin:$PATH
-cd gramine-tdx/pal/regression && python3 -m pytest -q -rs 2>&1 | grep -a '^SKIPPED\|passed'
-cd ../../../libos/test/regression && python3 -m pytest -q -rs 2>&1 | grep -a '^SKIPPED\|passed'
-```
+Both suites have identical test counts on both arches (PAL 36, LibOS 176), and the
+skip **sets** are fully reconciled: every difference is accounted for by an explicit
+arch or SGX guard — there are no unexplained skips and, most importantly, **zero failures
+on either architecture**. The predicted aarch64 "Other" gap was "4 more than x86_64"; the
+actual count is 5, netting to the expected overall gap of 4 because
+`test_010_regs_x86_64` is skipped on x86_64 too, just attributed there to the debug-build
+runtime check instead of its `ON_X86` decorator.
+
+x86_64 skip details verified internally consistent (32+4 and 144+32 totals match the
+aarch64-collected test counts).
