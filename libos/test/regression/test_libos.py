@@ -248,6 +248,13 @@ class TC_01_Bootstrap(RegressionTestCase):
         self.assertIn('child exited with status: 0', stdout)
         self.assertIn('test completed successfully', stdout)
 
+    def test_2045_fork_pacret(self):
+        # child returns through return addresses PAC-signed by the parent task before the
+        # fork (pac-ret; see fork_pacret.c) -- exercises the failed-authentication repair
+        stdout, _ = self.run_binary(['fork_pacret'], timeout=40)
+        self.assertIn('child: returned through pre-fork-signed frames', stdout)
+        self.assertIn('TEST OK', stdout)
+
     def test_205_exec_fork(self):
         stdout, _ = self.run_binary(['exec_fork'], timeout=60)
         self.assertNotIn('Handled SIGCHLD', stdout)

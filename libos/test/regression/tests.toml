@@ -47,6 +47,7 @@ manifests = [
   "fork_and_access_file",
   "fork_and_exec",
   "fork_disallowed",
+  "fork_pacret",
   "fp_multithread",
   "fstat_cwd",
   "futex_bitset",
