@@ -254,7 +254,9 @@ libos_syscall_t libos_syscall_table[LIBOS_SYSCALL_BOUND] = {
     [__NR_add_key]                    = (libos_syscall_t)0, // libos_syscall_add_key
     [__NR_request_key]                = (libos_syscall_t)0, // libos_syscall_request_key
     [__NR_keyctl]                     = (libos_syscall_t)0, // libos_syscall_keyctl
-    [__NR_clone]                      = (libos_syscall_t)libos_syscall_clone,
+    /* aarch64 clone() svc argument slots differ from x86_64's (x3=tls, x4=child_tidptr) --
+     * libos_syscall_clone_raw() swaps them; see its comment in sys/libos_clone.c. */
+    [__NR_clone]                      = (libos_syscall_t)libos_syscall_clone_raw,
     [__NR_execve]                     = (libos_syscall_t)libos_syscall_execve,
     [__NR_mmap]                       = (libos_syscall_t)libos_syscall_mmap,
     [__NR_fadvise64]                  = (libos_syscall_t)libos_syscall_fadvise64,

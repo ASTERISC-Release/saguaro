@@ -249,6 +249,40 @@ static long do_clone_new_vm(IDTYPE child_vmid, unsigned long flags, struct libos
     return ret;
 }
 
+/*
+ * aarch64 raw-svc entry wrapper for __NR_clone.
+ *
+ * The C-level libos_syscall_clone() below is written to x86_64's clone() svc argument-slot
+ * order: (flags, stack, parent_tidptr, child_tidptr, tls) -- which is exactly x86_64's kernel
+ * order, and how the x86_64 syscall table dispatches it with raw positional args. aarch64's
+ * kernel order is different: TLS and child_tidptr are swapped. glibc's own
+ * sysdeps/unix/sysv/linux/aarch64/clone.S documents the contract verbatim --
+ * "X0:flags, x1:newsp, x2:parenttidptr, x3:newtls, x4:childtid" (its C-level clone() takes
+ * seven args -- fn, stack, flags, arg, ptid, tls, ctid -- and shuffles them into those svc
+ * slots), and this is confirmed empirically against the exact glibc we ship: `_Fork`
+ * disassembles to flags->x0, zeros in x1-x3, and ctid (a TPIDR_EL0-relative `struct pthread`
+ * field) in x4, and the raw sigcontext dumped in our own SIGSYS handler at a guest fork()
+ * reads back exactly that. Dispatching libos_syscall_clone positionally on aarch64 therefore
+ * read the (always-zero in fork()) TLS slot as child_tidptr -> every guest fork() failed with
+ * EFAULT in the CLONE_CHILD_SETTID pointer check, and every pthread_create() child got the
+ * ctid pointer installed as its TLS base instead of the real one from x3.
+ *
+ * This wrapper must be registered ONLY at the raw __NR_clone table entry. The other callers
+ * of libos_syscall_clone() must NOT swap: libos_syscall_clone3() translates named
+ * `struct clone_args` fields (already semantically named, no slot ambiguity), and
+ * libos_fork.c's internal helpers pass NULL tid pointers (slot-invariant). aarch64 has no
+ * separate __NR_vfork: glibc's vfork.S issues a two-arg clone(CLONE_VM|CLONE_VFORK|SIGCHLD,
+ * sp) through this same entry, leaving x2-x4 whatever the C function happened to hold -- the
+ * flags there set no CLONE_*_TID/SETTLS bits, so those slots are never dereferenced and the
+ * swap is inert for vfork (which is also what the kernel itself does).
+ */
+#if defined(__aarch64__)
+long libos_syscall_clone_raw(unsigned long flags, unsigned long user_stack_addr,
+                             int* parent_tidptr, unsigned long tls, int* child_tidptr) {
+    return libos_syscall_clone(flags, user_stack_addr, parent_tidptr, child_tidptr, tls);
+}
+#endif
+
 long libos_syscall_clone(unsigned long flags, unsigned long user_stack_addr, int* parent_tidptr,
                          int* child_tidptr, unsigned long tls) {
     /*
@@ -356,7 +390,14 @@ long libos_syscall_clone(unsigned long flags, unsigned long user_stack_addr, int
     }
 
     if (flags & CLONE_CHILD_SETTID) {
-        if (!is_user_memory_writable(child_tidptr, sizeof(*child_tidptr))) {
+        /* A NULL child_tidptr is legal and simply means "no write" -- exactly what the kernel
+         * does: copy_process() stores the pointer and only put_user()s the new tid in the child
+         * when it is non-NULL. (Before the aarch64 slot-swap fix this check *looked* like the
+         * culprit for every fork() EFAULT because the always-zero TLS slot was read as this
+         * pointer; the real bug was the argument-slot mismatch, fixed by
+         * libos_syscall_clone_raw(). Keep this tolerance as kernel-alike hardening: glibc's
+         * fork()/pthread_create() always pass a non-NULL ctid, but other guest libcs need not.) */
+        if (child_tidptr && !is_user_memory_writable(child_tidptr, sizeof(*child_tidptr))) {
             ret = -EFAULT;
             goto failed;
         }

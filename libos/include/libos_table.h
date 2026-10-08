@@ -80,6 +80,12 @@ long libos_syscall_setsockopt(int fd, int level, int optname, char* optval, int 
 long libos_syscall_getsockopt(int fd, int level, int optname, char* optval, int* optlen);
 long libos_syscall_clone(unsigned long flags, unsigned long user_stack_addr, int* parent_tidptr,
                          int* child_tidptr, unsigned long tls);
+#if defined(__aarch64__)
+/* aarch64 raw-svc wrapper: swap TLS/child_tidptr svc slots (see libos_clone.c); register this
+ * at the __NR_clone table entry there instead of libos_syscall_clone itself. */
+long libos_syscall_clone_raw(unsigned long flags, unsigned long user_stack_addr,
+                             int* parent_tidptr, unsigned long tls, int* child_tidptr);
+#endif
 long libos_syscall_clone3(struct clone_args *args, size_t size);
 long libos_syscall_fork(void);
 long libos_syscall_vfork(void);
