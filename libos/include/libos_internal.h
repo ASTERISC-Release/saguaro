@@ -86,6 +86,16 @@ noreturn void restore_child_context_after_clone(struct libos_context* context);
 void prepare_sigframe(PAL_CONTEXT* context, siginfo_t* siginfo, void* handler, void* restorer,
                       bool should_use_altstack, __sigset_t* old_mask);
 
+#ifdef __aarch64__
+/* Address of the two-instruction `mov x8, #__NR_rt_sigreturn; svc` restorer trampoline that
+ * aarch64's prepare_sigframe() installs as the handler's return address (LR). aarch64 has no
+ * glibc-provided SA_RESTORER to point at (unlike x86_64, whose libc .text restorer is
+ * indistinguishable from guest code to illegal_upcall()'s internal-execution check), so
+ * illegal_upcall() must whitelist exactly this one Gramine-internal `svc` site. See
+ * rt_sigreturn_trampoline()'s comment in arch/aarch64/libos_context.c. */
+void* libos_rt_sigreturn_trampoline_addr(void);
+#endif
+
 /*!
  * \brief Restart a syscall.
  *

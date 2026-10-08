@@ -117,6 +117,36 @@ struct sigframe {
     siginfo_t siginfo;
 };
 
+/* aarch64 has no SA_RESTORER-style caller-provided restorer: the arm64 kernel itself writes a
+ * two-instruction trampoline (`mov x8, #139; svc #0`, i.e. `rt_sigreturn`) into the signal
+ * frame and points LR at it -- verified empirically on a native arm64 box: LR inside a plain
+ * handler holds the frame's address and its first words are exactly 0xd2801168/0xd4000001.
+ * The arm64 glibc correspondingly does *not* inject a restorer the way the x86_64 glibc
+ * sigaction() wrapper does (whose `sa_restorer` points into libc .text and which Gramine x86
+ * faithfully uses) -- Gramine's aarch64 port inherited that mechanism-less design and so set
+ * LR to NULL: every delivered guest handler executed `ret` to address 0. That single gap
+ * accounts for the signal-cluster test failures (itimer, sigaltstack, sigprocmask_pending,
+ * sighandler_sigpipe, syscall_restart test 2, ...).
+ * We provide the same trampoline in libsysdb's own executable .text rather than inside the
+ * frame: the arm64 kernel writes it in-frame only because its page mapping is already
+ * executable for the stack; Gramine's guest stacks are non-executable and making them
+ * executable per signal (or in general) would be a real security regression for zero benefit.
+ * Execution happens with the application's live SP, which is all `rt_sigreturn` actually
+ * consumes (same as the real kernel's trampoline: the instructions' own address is never
+ * relevant, only SP is), and the `svc #0` takes the ordinary seccomp-trap -> syscall
+ * emulation path -- indistinguishable from the glibc syscall wrapper's own `svc` at a libc
+ * text address. */
+static_assert(__NR_rt_sigreturn == 139, "hard-coded mov x8 immediate below must match");
+__attribute__((naked)) static void rt_sigreturn_trampoline(void) {
+    __asm__ volatile("mov x8, #139\n" /* == __NR_rt_sigreturn */
+                     "svc #0\n" ::: "memory");
+}
+
+/* See libos_internal.h: whitelist hook for illegal_upcall()'s internal-execution check. */
+void* libos_rt_sigreturn_trampoline_addr(void) {
+    return (void*)&rt_sigreturn_trampoline;
+}
+
 void prepare_sigframe(PAL_CONTEXT* context, siginfo_t* siginfo, void* handler, void* restorer,
                       bool should_use_altstack, __sigset_t* old_mask) {
     struct libos_thread* current = get_cur_thread();
@@ -166,8 +196,14 @@ void prepare_sigframe(PAL_CONTEXT* context, siginfo_t* siginfo, void* handler, v
      * "return to this address" register -- LR (X30) -- and the handler returns to it via a
      * plain `ret`, exactly as if it had been entered via `blr`. So we just set LR, no stack
      * space is consumed for this at all.
+     *
+     * The `restorer` argument (an SA_RESTORER-style caller-provided restorer, always NULL for
+     * real aarch64 guests since their libc never passes one -- see
+     * rt_sigreturn_trampoline()'s comment) has no meaning on this architecture: the arm64
+     * kernel ignores it too. Always use our in-process trampoline instead.
      */
-    context->regs[30] = (uint64_t)restorer;
+    __UNUSED(restorer);
+    context->regs[30] = (uint64_t)&rt_sigreturn_trampoline;
 
     context->pc = (uint64_t)handler;
     context->sp = stack;
@@ -182,6 +218,11 @@ void prepare_sigframe(PAL_CONTEXT* context, siginfo_t* siginfo, void* handler, v
 
 void restart_syscall(PAL_CONTEXT* context, uint64_t syscall_nr) {
     context->regs[8] = syscall_nr;
+    /* x0 carried the -ERESTART* code do_syscall() wrote as the "return value"; put the caller's
+     * original first argument back before re-dispatching (arm64 kernel equivalent: restoring
+     * regs[0] from pt_regs->orig_x0). Without this, e.g. a restarted `read(fd, ...)` would see
+     * fd = -ERESTARTSYS. */
+    context->regs[0] = context->orig_x0;
     /* Re-enter libos_syscall_entry with the resume address in X16 (the entry contract). No
      * explicit load is needed: context->regs[16] is written by libos_syscall_entry itself to
      * mirror the resume address (see syscallas.S), and neither pal_context_set_retval() nor

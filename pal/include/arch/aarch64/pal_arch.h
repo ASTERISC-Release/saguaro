@@ -253,6 +253,16 @@ struct PAL_CONTEXT {
     uint32_t fpcr;
     uint8_t is_fpregs_used; /* Equal to 0 iff `fpregs` is not populated. */
     uint8_t _pad[3];
+
+    /* Snapshot of the first syscall argument, saved by do_syscall() before dispatch. aarch64
+     * (like the arm64 kernel's pt_regs->orig_x0, which exists for exactly this reason) delivers
+     * the syscall return value in the same register as arg0, so a syscall answering one of the
+     * -ERESTART* codes has already destroyed its first argument by the time restart_syscall()
+     * re-dispatches it; restart_syscall() restores x0 from this mirror. Not copied to/from
+     * guest signal frames (pal_context_to_ucontext()/ucontext_to_pal_context() ignore it):
+     * after rt_sigreturn the syscall re-runs from the syscall-entry point and do_syscall()
+     * re-saves this field fresh. */
+    uint64_t orig_x0;
 };
 typedef struct PAL_CONTEXT PAL_CONTEXT;
 

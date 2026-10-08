@@ -473,8 +473,25 @@ static void illegal_upcall(bool is_in_pal, uintptr_t addr, PAL_CONTEXT* context)
     assert(context);
 
     struct libos_vma_info vma_info = {.file = NULL};
-    if (is_internal(get_cur_thread()) || context_is_libos(context)
-            || lookup_vma((void*)addr, &vma_info) || (vma_info.flags & VMA_INTERNAL)) {
+    bool internal = is_internal(get_cur_thread()) || context_is_libos(context)
+                    || lookup_vma((void*)addr, &vma_info) || (vma_info.flags & VMA_INTERNAL);
+#ifdef __aarch64__
+    /* One Gramine-internal `svc` site is intentional: the restorer trampoline that
+     * prepare_sigframe() installs as every guest signal handler's return address lives in
+     * libsysdb's own text (there's no SA_RESTORER-style libc restorer to point at on this
+     * architecture -- see rt_sigreturn_trampoline()'s comment in arch/aarch64/libos_context.c).
+     * The trap's PC is already reverted to the trapping instruction (see the SIGSYS rip fix
+     * in the PAL), so whitelist precisely: address of the `svc` word inside the trampoline,
+     * discovered by checking the trampoline's own second word rather than hardcoding an
+     * instruction-size offset. Anything else in Gramine-internal memory taking an illegal
+     * instruction remains a Gramine bug. */
+    void* tramp = libos_rt_sigreturn_trampoline_addr();
+    if (addr >= (uintptr_t)tramp && addr < (uintptr_t)tramp + 16
+            && ((uint32_t*)addr)[0] == 0xd4000001 /* svc #0 */) {
+        internal = false;
+    }
+#endif
+    if (internal) {
         internal_fault("Illegal instruction during Gramine internal execution", addr, context);
     }
 
