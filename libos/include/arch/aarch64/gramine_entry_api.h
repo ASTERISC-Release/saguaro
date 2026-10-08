@@ -31,30 +31,33 @@
 #ifdef __ASSEMBLER__
 
 /*
- * Unlike x86_64 (which reaches PAL_TCB via %gs, a register with no real hardware-return-address
- * convention to mimic, since the real `syscall` instruction itself clobbers rcx/r11 as part of
- * its own SYSCALL/SYSRET contract that this macro must match from the caller's point of view),
- * aarch64 has no such convention to replicate: `svc` traps are handled entirely inside the
- * kernel's exception entry/exit, invisible to the caller. So this can be a perfectly ordinary
- * AAPCS64 call (`blr`, return via the callee's `ret`) rather than a hand-rolled register-based
- * return scheme. X16/X17 are the architecture's own designated intra-procedure-call scratch
- * registers (used identically by linker veneers/PLT stubs), so using X16 here clobbers nothing
- * a caller could be relying on.
+ * aarch64 redesign of the x86_64 macro (see the file comment above for why aarch64 has no
+ * SYSCALL/SYSRET-style register contract to mimic): the entry point must NOT be called with a
+ * plain `blr`. libos_syscall_entry's contract carries the resume address in X16 (see syscallas.S
+ * for why X30 must not be that carrier -- aarch64 `svc` destroys no registers, so X30 at a
+ * syscall site is the application's own live link register, and clobbering it corrupts the
+ * caller's return path). A macro at a syscall site can only leave its follow-on address where it
+ * can name it, so this uses the other half of the sanctioned IP-scratch pair: `adr x16, 1f`
+ * plants the resume address explicitly and `br` (not `blr`) transfers control without touching
+ * X30; _return_from_syscall() finishes by branching to the saved resume. X30 survives exactly as
+ * it would across a real `svc`.
  *
- * This is a GOT (not direct :lo12:) reference to g_pal_tcb_singleton, since any caller of this
+ * The GOT chain runs through X17 (X16 must stay intact holding the resume address once planted).
+ * It is a GOT (not direct :lo12:) reference to g_pal_tcb_singleton, since any caller of this
  * macro -- whether PAL/LibOS code or, eventually, a patched libc -- lives in a different shared
- * object from libpal.so, where g_pal_tcb_singleton is actually defined; a direct adrp/:lo12: pair
- * computes a link-time-fixed offset and fails to link across that boundary ("relocation ... may
- * bind externally"). The extra `ldr [x16]` is needed because the GOT slot holds the *address* of
- * the variable, not its value (itself a pointer, PAL_TCB*) -- one more dereference than the
- * equivalent same-object idiom needs.
+ * object from libpal.so, where g_pal_tcb_singleton is actually defined; a direct adrp/:lo12:
+ * pair computes a link-time-fixed offset and fails to link ("relocation ... may bind
+ * externally"). The final `ldr [x17]` is needed because the GOT slot holds the *address* of the
+ * variable, not its value (itself a pointer, PAL_TCB*).
  */
 .macro GRAMINE_SYSCALL
-    adrp x16, :got:g_pal_tcb_singleton
-    ldr  x16, [x16, :got_lo12:g_pal_tcb_singleton]
-    ldr  x16, [x16]
-    ldr  x16, [x16, GRAMINE_SYSCALL_OFFSET]
-    blr  x16
+    adr  x16, 1f
+    adrp x17, :got:g_pal_tcb_singleton
+    ldr  x17, [x17, :got_lo12:g_pal_tcb_singleton]
+    ldr  x17, [x17]
+    ldr  x17, [x17, GRAMINE_SYSCALL_OFFSET]
+    br   x17
+1:
 .endm
 
 #else /* !__ASSEMBLER__ */
@@ -67,11 +70,13 @@
 
 __asm__(
     ".macro GRAMINE_SYSCALL\n"
-    "adrp x16, :got:g_pal_tcb_singleton\n"
-    "ldr  x16, [x16, :got_lo12:g_pal_tcb_singleton]\n"
-    "ldr  x16, [x16]\n"
-    "ldr  x16, [x16, " GRAMINE_XSTR(GRAMINE_SYSCALL_OFFSET) "]\n"
-    "blr  x16\n"
+    "adr  x16, 1f\n"
+    "adrp x17, :got:g_pal_tcb_singleton\n"
+    "ldr  x17, [x17, :got_lo12:g_pal_tcb_singleton]\n"
+    "ldr  x17, [x17]\n"
+    "ldr  x17, [x17, " GRAMINE_XSTR(GRAMINE_SYSCALL_OFFSET) "]\n"
+    "br   x17\n"
+    "1:\n"
     ".endm\n"
 );
 

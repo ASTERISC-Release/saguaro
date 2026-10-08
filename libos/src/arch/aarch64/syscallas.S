@@ -10,15 +10,31 @@
  * leans on x86_64 SYSCALL/SYSRET's own hardware register-clobber contract (RCX holds the resume
  * address, RCX/R11 are clobbered) to build a uniform entry convention. aarch64's `svc` has no
  * such contract at all (the kernel's exception entry/exit is invisible to userspace), so this
- * entry point is reached via a plain AAPCS64 call/return convention instead: callers (either
- * GRAMINE_SYSCALL's `blr`, or maybe_emulate_syscall()'s LR rewrite on the seccomp-trap path --
- * see libos_context.c) set LR (X30) to the resume address and branch here; we return to it via
- * X16 at the very end (see _return_from_syscall), not via `ret`.
+ * entry point is reached via explicit register passing instead: callers (either GRAMINE_SYSCALL's
+ * `adr x16, 1f; br`, or maybe_emulate_syscall() planting it in the ucontext's regs[16] on the
+ * seccomp-trap path -- see libos_context.c) place the resume address in X16 and branch here.
+ *
+ * Entry contract:
+ *   X16 = resume address (where the application should continue after this syscall)
+ *   X0-X7 = syscall args (X0-X5 meaningful), X8 = syscall number
+ *   SP = application's current stack pointer
+ *   every other GPR (X9-X15, X17-X30) holds live application state that must be preserved.
+ *
+ * X30 (LR) is deliberately NOT the resume-address carrier, mirroring neither x86_64's RCX nor any
+ * other choice involving it: unlike x86_64's RCX -- which the hardware `syscall` instruction
+ * itself destroys, so no application can ever hold live state in it at a syscall site -- aarch64's
+ * X30 at an `svc` site is the application's own live link register (leaf-ish libc syscall
+ * wrappers `ret` via it right after the `svc`). Clobbering it silently corrupts the caller's
+ * return path into an infinite loop (this was the root cause of the aarch64 helloworld spin; see
+ * ARM64_PORT_PLAN.md). So the resume address travels in X16 and the app's true X30 is saved and
+ * restored like any other live register.
  *
  * X16/X17 are AAPCS64's own designated intra-procedure-call scratch registers (IP0/IP1): by
- * convention no well-behaved caller relies on them surviving any call-like transition. We lean
- * on that throughout this file as our one pair of "free" scratch registers, the same role
- * x86_64's RCX/R11 play there (which the real `syscall` instruction itself clobbers).
+ * convention no well-behaved caller relies on them surviving any call-like transition -- the
+ * same role x86_64's RCX/R11 play there, which is why they are the sanctioned clobber set of
+ * syscall emulation on aarch64. (X17 is used as pure scratch below and its application value is
+ * not preserved; X16's saved slot in the context always mirrors the resume address, which is
+ * what syscall-restart relies on -- see restart_syscall() in libos_context.c.)
  */
 
 #include "asm_offsets.h"
@@ -33,11 +49,10 @@
 .align 4
 libos_syscall_entry:
     .cfi_startproc
-    /* Entry contract: X0-X7 = syscall args (X0-X5 meaningful), X8 = syscall number, X30 (LR) =
-     * resume address, SP = application's current stack pointer, every other GPR holds live
-     * application state that must be preserved. */
-
-    mov  x17, sp              /* X17 = original app SP, saved before we touch SP at all */
+    /* X16 = resume address (see entry contract above); it must be written into the context
+     * before X16 is reused as scratch. X17 is the only register available to compute the
+     * context address with (the GOT chain needs one), so the whole prologue is built around
+     * X17, with X16 kept intact until it has been stashed. */
 
     /* Find the LibOS-internal stack top via g_pal_tcb_singleton (see pal_arch.h's long comment
      * on why this is a plain global rather than a register on this architecture). This is a GOT
@@ -45,41 +60,54 @@ libos_syscall_entry:
      * shared object from this one (libsysdb.so), so its address isn't known until the dynamic
      * linker resolves it at load time -- a direct adrp/:lo12: pair (which computes a link-time-
      * fixed offset) can't express that and fails to link ("relocation ... may bind externally").
-     * The extra `ldr [x16]` is needed because the GOT slot holds the *address* of the variable,
+     * The extra `ldr [x17]` is needed because the GOT slot holds the *address* of the variable,
      * not its value (which is itself a pointer, PAL_TCB*) -- one more dereference than the
      * equivalent local-symbol idiom needs. */
-    adrp x16, :got:g_pal_tcb_singleton
-    ldr  x16, [x16, :got_lo12:g_pal_tcb_singleton]
-    ldr  x16, [x16]
-    ldr  x16, [x16, #(LIBOS_TCB_OFF + LIBOS_TCB_LIBOS_STACK_OFF)]
-    and  x16, x16, #0xfffffffffffffff0   /* defensive 16-byte realign */
-    sub  x16, x16, #PAL_CONTEXT_SIZE
-    mov  sp, x16                          /* switch to the LibOS stack; X16 = PAL_CONTEXT base */
+    adrp x17, :got:g_pal_tcb_singleton
+    ldr  x17, [x17, :got_lo12:g_pal_tcb_singleton]
+    ldr  x17, [x17]
+    ldr  x17, [x17, #(LIBOS_TCB_OFF + LIBOS_TCB_LIBOS_STACK_OFF)]
+    and  x17, x17, #0xfffffffffffffff0   /* defensive 16-byte realign */
+    sub  x17, x17, #PAL_CONTEXT_SIZE
 
-    /* Save all GPRs except X16/X17 into context->regs[]. */
-    stp  x0,  x1,  [x16, #(PAL_CONTEXT_REGS_OFF+0)]
-    stp  x2,  x3,  [x16, #(PAL_CONTEXT_REGS_OFF+16)]
-    stp  x4,  x5,  [x16, #(PAL_CONTEXT_REGS_OFF+32)]
-    stp  x6,  x7,  [x16, #(PAL_CONTEXT_REGS_OFF+48)]
-    stp  x8,  x9,  [x16, #(PAL_CONTEXT_REGS_OFF+64)]
-    stp  x10, x11, [x16, #(PAL_CONTEXT_REGS_OFF+80)]
-    stp  x12, x13, [x16, #(PAL_CONTEXT_REGS_OFF+96)]
-    stp  x14, x15, [x16, #(PAL_CONTEXT_REGS_OFF+112)]
-    /* regs[16]/regs[17] intentionally left stale: sacrificed scratch registers, see top comment. */
-    stp  x18, x19, [x16, #(PAL_CONTEXT_REGS_OFF+144)]
-    stp  x20, x21, [x16, #(PAL_CONTEXT_REGS_OFF+160)]
-    stp  x22, x23, [x16, #(PAL_CONTEXT_REGS_OFF+176)]
-    stp  x24, x25, [x16, #(PAL_CONTEXT_REGS_OFF+192)]
-    stp  x26, x27, [x16, #(PAL_CONTEXT_REGS_OFF+208)]
-    stp  x28, x29, [x16, #(PAL_CONTEXT_REGS_OFF+224)]
-    str  x30,      [x16, #(PAL_CONTEXT_REGS_OFF+240)]
+    /* Stash the two values that only the application's view of the machine holds. X16 is spent
+     * on the resume address first (its only carrier), then reused as the one scratch needed to
+     * move SP into the context (A64 has no `str sp` form -- SP is not a general register). */
+    str  x16, [x17, #PAL_CONTEXT_PC_OFF]  /* resume address */
+    str  x16, [x17, #(PAL_CONTEXT_REGS_OFF+128)] /* same value mirrored into regs[16] */
+    mov  x16, sp
+    str  x16, [x17, #PAL_CONTEXT_SP_OFF] /* original app SP */
+    mov  sp, x17                          /* switch to the LibOS stack; X17 = PAL_CONTEXT base */
 
-    str  x17, [x16, #PAL_CONTEXT_SP_OFF]       /* original app SP */
-    str  x30, [x16, #PAL_CONTEXT_PC_OFF]       /* resume address */
-    str  xzr, [x16, #PAL_CONTEXT_PSTATE_OFF]
-    str  xzr, [x16, #PAL_CONTEXT_FAULT_ADDRESS_OFF]
-    str  xzr, [x16, #PAL_CONTEXT_ESR_OFF]
-    str  xzr, [x16, #PAL_CONTEXT_OLDMASK_OFF]
+    /* Save all GPRs except X17 into context->regs[]. regs[16] was already written above with the
+     * same resume value, so regs[16] *always* mirrors "where the syscall we are (re-)entering
+     * returns to", which is what syscall restart (restart_syscall() jumping back to
+     * libos_syscall_entry) relies on: _return_from_syscall() restores X16 from regs[16] before
+     * branching, so a restart re-enters here with a still-correct resume address in X16. */
+    stp  x0,  x1,  [x17, #(PAL_CONTEXT_REGS_OFF+0)]
+    stp  x2,  x3,  [x17, #(PAL_CONTEXT_REGS_OFF+16)]
+    stp  x4,  x5,  [x17, #(PAL_CONTEXT_REGS_OFF+32)]
+    stp  x6,  x7,  [x17, #(PAL_CONTEXT_REGS_OFF+48)]
+    stp  x8,  x9,  [x17, #(PAL_CONTEXT_REGS_OFF+64)]
+    stp  x10, x11, [x17, #(PAL_CONTEXT_REGS_OFF+80)]
+    stp  x12, x13, [x17, #(PAL_CONTEXT_REGS_OFF+96)]
+    stp  x14, x15, [x17, #(PAL_CONTEXT_REGS_OFF+112)]
+    /* regs[16] (the resume mirror) and regs[17] are handled in the prologue above / intentionally
+     * left stale: sacrificed scratch registers, see top comment. */
+    stp  x18, x19, [x17, #(PAL_CONTEXT_REGS_OFF+144)]
+    stp  x20, x21, [x17, #(PAL_CONTEXT_REGS_OFF+160)]
+    stp  x22, x23, [x17, #(PAL_CONTEXT_REGS_OFF+176)]
+    stp  x24, x25, [x17, #(PAL_CONTEXT_REGS_OFF+192)]
+    stp  x26, x27, [x17, #(PAL_CONTEXT_REGS_OFF+208)]
+    stp  x28, x29, [x17, #(PAL_CONTEXT_REGS_OFF+224)]
+    /* The application's live link register -- saved as plain application state, *not* conflated
+     * with the resume address (that's context->pc, stored above from X16). See top comment. */
+    str  x30,      [x17, #(PAL_CONTEXT_REGS_OFF+240)]
+
+    str  xzr, [x17, #PAL_CONTEXT_PSTATE_OFF]
+    str  xzr, [x17, #PAL_CONTEXT_FAULT_ADDRESS_OFF]
+    str  xzr, [x17, #PAL_CONTEXT_ESR_OFF]
+    str  xzr, [x17, #PAL_CONTEXT_OLDMASK_OFF]
 
     /* Save FPSR/FPCR into the context's scalar fields (lightweight control state only; the full
      * FP/SIMD register file is *not* captured here, matching x86_64's approach of only saving
@@ -87,11 +115,11 @@ libos_syscall_entry:
      * a syscall, same reasoning the top-of-file x86_64 comment spells out). */
     mrs  x0, fpsr
     mrs  x1, fpcr
-    str  w0, [x16, #PAL_CONTEXT_FPSR_OFF]
-    str  w1, [x16, #PAL_CONTEXT_FPCR_OFF]
-    strb wzr, [x16, #PAL_CONTEXT_FPREGS_USED_OFF]
+    str  w0, [x17, #PAL_CONTEXT_FPSR_OFF]
+    str  w1, [x17, #PAL_CONTEXT_FPCR_OFF]
+    strb wzr, [x17, #PAL_CONTEXT_FPREGS_USED_OFF]
 
-    mov  x19, x16   /* X19 (callee-saved) = PAL_CONTEXT base, kept across the calls below */
+    mov  x19, x17   /* X19 (callee-saved) = PAL_CONTEXT base, kept across the calls below */
 
     /* Reserve libos_xstate_size() bytes directly below the context for context->fpregs to point
      * at (unpopulated for now -- only filled in if a signal needs full FP/SIMD state while this
@@ -132,8 +160,12 @@ _return_from_syscall:
     msr  fpcr, x1
 
 .Lgpr_restore:
-    /* After this point we call nothing else, so X16/X17 are fair game as pure scratch for the
-     * rest of this function (see the top-of-file comment on why that's safe). */
+    /* After this point we call nothing else. X16 and X17 have specific final values from here
+     * on -- X16 = the application's (per-contract clobbered, restart-meaningful) resume mirror,
+     * X17 = the branch target (context->pc) -- so the remaining scratch work has to route
+     * around them; X18 is used as the one spare, and the application's true X18 is reloaded
+     * after SP is switched (loading into SP-adjacent state via the still-live X19 base is safe:
+     * reading memory never disturbs registers). */
     ldp  x0,  x1,  [x19, #(PAL_CONTEXT_REGS_OFF+0)]
     ldp  x2,  x3,  [x19, #(PAL_CONTEXT_REGS_OFF+16)]
     ldp  x4,  x5,  [x19, #(PAL_CONTEXT_REGS_OFF+32)]
@@ -142,25 +174,26 @@ _return_from_syscall:
     ldp  x10, x11, [x19, #(PAL_CONTEXT_REGS_OFF+80)]
     ldp  x12, x13, [x19, #(PAL_CONTEXT_REGS_OFF+96)]
     ldp  x14, x15, [x19, #(PAL_CONTEXT_REGS_OFF+112)]
-    /* regs[16]/regs[17] intentionally not restored -- sacrificed scratch registers. */
+    ldr  x16, [x19, #(PAL_CONTEXT_REGS_OFF+128)] /* app X16 (== resume; see entry contract) */
+    /* regs[17] intentionally not restored -- sacrificed scratch register. */
     ldp  x20, x21, [x19, #(PAL_CONTEXT_REGS_OFF+160)]
     ldp  x22, x23, [x19, #(PAL_CONTEXT_REGS_OFF+176)]
     ldp  x24, x25, [x19, #(PAL_CONTEXT_REGS_OFF+192)]
     ldp  x26, x27, [x19, #(PAL_CONTEXT_REGS_OFF+208)]
     ldp  x28, x29, [x19, #(PAL_CONTEXT_REGS_OFF+224)]
-    ldr  x30,      [x19, #(PAL_CONTEXT_REGS_OFF+240)]
+    ldr  x30,      [x19, #(PAL_CONTEXT_REGS_OFF+240)] /* app's live link register */
 
-    ldr  x16, [x19, #PAL_CONTEXT_SP_OFF]
-    mov  sp, x16
-    ldr  x16, [x19, #PAL_CONTEXT_PC_OFF]   /* X16 = jump target; reused as scratch, fine */
+    ldr  x17, [x19, #PAL_CONTEXT_PC_OFF] /* branch target (resume pc or signal handler...) */
+    ldr  x18, [x19, #PAL_CONTEXT_SP_OFF]
+    mov  sp, x18                          /* switch back to the app stack */
+    ldr  x18, [x19, #(PAL_CONTEXT_REGS_OFF+144)] /* app X18, reloaded via still-live X19 base */
 
-    /* Restore X18 and (last of all) X19 itself -- we've been using X19 as our context-pointer
-     * base this whole time, so its own true value has to come out via a temporary (X17, also
-     * sacrificed scratch) rather than being overwritten mid-use. */
-    ldp  x18, x17, [x19, #(PAL_CONTEXT_REGS_OFF+144)]
-    mov  x19, x17
+    /* Restore X19 itself last -- we've been using it as our context-pointer base this whole
+     * time; a load's address register is read before being written, so this single instruction
+     * both reads the saved value through the old base and installs it. */
+    ldr  x19, [x19, #(PAL_CONTEXT_REGS_OFF+152)]
 
-    br   x16
+    br   x17
     .cfi_endproc
 .size _return_from_syscall, .-_return_from_syscall
 

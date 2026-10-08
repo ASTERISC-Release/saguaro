@@ -182,6 +182,13 @@ void prepare_sigframe(PAL_CONTEXT* context, siginfo_t* siginfo, void* handler, v
 
 void restart_syscall(PAL_CONTEXT* context, uint64_t syscall_nr) {
     context->regs[8] = syscall_nr;
+    /* Re-enter libos_syscall_entry with the resume address in X16 (the entry contract). No
+     * explicit load is needed: context->regs[16] is written by libos_syscall_entry itself to
+     * mirror the resume address (see syscallas.S), and neither pal_context_set_retval() nor
+     * anything else in the syscall-emulation path touches regs[16] -- so _return_from_syscall()
+     * restoring X16 from regs[16] here re-establishes the contract for the re-entry. context->pc
+     * is overwritten below, which is exactly what the entry expects (pc = entry point, X16 =
+     * where the restarted svc will return to). */
     context->pc = (uint64_t)&libos_syscall_entry;
 }
 
@@ -213,12 +220,19 @@ bool maybe_emulate_syscall(PAL_CONTEXT* context) {
     /* `svc #0` encodes as the little-endian byte sequence 01 00 00 d4; every aarch64 instruction
      * is 4 bytes, unlike x86_64's variable-length `syscall` (2 bytes: 0f 05). */
     if (pc[0] == 0x01 && pc[1] == 0x00 && pc[2] == 0x00 && pc[3] == 0xd4) {
-        /* Unlike x86_64 (which stashes the resume address in RCX to mimic what the real
-         * `syscall` instruction's own SYSCALL/SYSRET contract would have done), aarch64 has no
-         * such hardware convention to replicate -- we just set LR (X30) to "the instruction
-         * after the trapped svc", matching the exact same "return via LR" convention
-         * libos_syscall_entry already uses for its other entry path (GRAMINE_SYSCALL's `blr`). */
-        context->regs[30] = (uint64_t)pc + 4;
+        /* Put the resume address ("the instruction after the trapped svc") in X16 -- the entry
+         * contract's designated carrier, matching the GRAMINE_SYSCALL path (`adr x16, 1f`) and
+         * regs[16]'s new role as the resume mirror (see syscallas.S).
+         *
+         * This must NOT be regs[30]: x86_64 can stash the resume address in RCX because the real
+         * `syscall` instruction itself destroys RCX, so no application holds live state there at
+         * a syscall site. aarch64's `svc` destroys nothing -- regs[30] at this point is the
+         * application's *live* link register (leaf libc syscall wrappers `ret` via it
+         * immediately), and overwriting it corrupts the caller's return path into an infinite
+         * self-loop. That clobber was the root cause of the aarch64 helloworld hang; see
+         * ARM64_PORT_PLAN.md. regs[30] is instead saved and restored untouched as application
+         * state (ucontext_to_pal_context()/pal_context_to_ucontext() already do this). */
+        context->regs[16] = (uint64_t)pc + 4;
         context->pc = (uint64_t)&libos_syscall_entry;
         return true;
     }

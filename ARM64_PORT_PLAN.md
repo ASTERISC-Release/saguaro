@@ -96,7 +96,7 @@ Smallest, most foundational layer; both PAL and LibOS depend on it. **Done.**
 
 ## Phase 6 — Build, fix, and validate
 
-**In progress** — clean build achieved; `helloworld` execution is not yet passing. See "Current status" below.
+**Done.** Clean build; `helloworld` passes under the `linux`/`direct` PAL on aarch64 (see "Current status" below for the X30-clobber fix that unblocked it).
 
 - Iterate `ninja -C build-aarch64/` until clean, fixing compile/link errors file by file in the order of Phases 1→4 (common → PAL → LibOS → vDSO), since later layers depend on earlier ones. **Done** — full clean build, including the test suite (`-Dtests=enabled`), confirmed via `file` showing valid aarch64 ELF shared objects for `libpal.so`/`libsysdb.so`/`vdso.so` and `ninja install` succeeding.
 - Run the LibOS regression suite's smallest test first: `libos/test/regression/helloworld.c`. **Not yet green** — see below.
@@ -104,52 +104,31 @@ Smallest, most foundational layer; both PAL and LibOS depend on it. **Done.**
 
 ## Current status (most recent session)
 
-**ROOT CAUSE OF THE "SLOWNESS" FOUND — it is a correctness bug after all, not a performance problem.** The previous session's conclusion ("slowness, not a loop") was wrong in an important way: there *is* an infinite loop, ~15 syscalls into `ld.so` startup, and the last session simply never observed it because GDB's own ptrace interaction masked it.
+**FIXED AND VALIDATED: `helloworld` PASSES.** `gramine-direct helloworld` prints `Hello world!` and exits 0 in ~10ms; `pytest -k helloworld` → `TC_01_Bootstrap::test_001_helloworld PASSED`.
 
-### The bug: aarch64 syscall-emulation entry clobbers the application's live link register (X30)
+### What the "slowness" actually was: the seccomp-trap path clobbering the application's live X30
 
-Reproduced deterministically with `gramine-direct helloworld` (built from this tree, `-Dlibc=glibc`, no patched guest libc). Instrumented tracing shows exactly 9 emulation round-trips (`brk → mmap → faccessat → openat → read → fstat → mmap → mmap → mprotect`), each entering *and returning correctly*; then the process spins at 100% `utime` / 0 `stime` forever. A SIGCONT-sampled backtrace at the spin point shows:
+There *was* an infinite loop, ~9 syscalls into `ld.so` startup — a 3-instruction userspace loop inside ld.so's frameless `munmap` wrapper (`cmn → b.cs(fallthrough) → ret`, where `ret` jumped back to the `cmn`). Plain PC-sampling saw only that spin; instrumented round-trip tracing showed exactly 9 correct emulation round-trips (`brk → mmap → faccessat → openat → read → fstat → mmap → mmap → mprotect`) and then the spin at `'ret' with x30 = svc+4`.
 
-```
-   ...5c4:  mov  x8, #0xd7        // munmap
-   ...5c8:  svc  #0               // trapped by seccomp, emulated by Gramine
-   ...5cc:  cmn  x0, #0xfff
-   ...5d0:  b.cs ...5d8
-=> ...5d4:  ret        with x30 = 0x...5cc   ← poisoned!
-```
+**Root cause:** the emulation path carried the *resume address* in the guest context's **X30** (`maybe_emulate_syscall()` set `regs[30] = svc + 4`, mirroring x86_64's `%rcx`). x86_64 can do this safely because the hardware `syscall` instruction itself destroys `%rcx` — no application can hold live state there at a syscall site, so libc wrappers reload the real return address from their stack frame. aarch64's `svc` destroys **nothing**: X30 at an `svc` site is the application's own **live link register**. Installing the resume address over it (and sigreturning that) corrupts every leaf-style libc syscall wrapper — which `ret`s via X30 immediately after the `svc` — into a self-loop. The first 9 syscalls survived only because their glibc call sites are large functions that reload the true X30 from their stack frame, masking the clobber until the first frameless wrapper (`munmap`).
 
-`ret` jumps to the `cmn`, which (return value 0, carry clear) falls through to `ret` again → a 3-instruction userspace infinite loop. So the guest never issues a 10th syscall; it just spins. The PC is always inside ld.so's `munmap` wrapper, which is precisely why the earlier SIGINT-sampling read it as "slow munmap".
+**Fix — new entry contract, resume address in X16** (X16/X17, AAPCS64 IP0/IP1, are the architecturally-sanctioned clobber set and were *already* declared sacrificed by `syscallas.S`):
+- `maybe_emulate_syscall()` (aarch64 `libos_context.c`): resume → `context->regs[16]`; `regs[30]` untouched (plain app state, saved/restored by the ucontext converters as always).
+- `libos_syscall_entry` (aarch64 `syscallas.S`): entry contract now "X16 = resume address"; the TCB GOT chain is rebuilt around X17, the arriving X16 is stored into `context->pc` *and* mirrored into `context->regs[16]` (the restart invariant), and the app's X30 is saved as ordinary state.
+- `_return_from_syscall`: restores X16 from `regs[16]` and branches to `context->pc` via X17; the app's X18 reloads after the SP switch via the still-live context base, and X19 via a self-load `ldr x19, [x19, #off]`.
+- `restart_syscall()` needed no logic change — `regs[16]`'s mirror already carries the correct resume through `_return_from_syscall`'s X16 restore (invariant documented in both places).
+- `GRAMINE_SYSCALL` macro (both the `.S` and C-inline-asm copies in `gramine_entry_api.h`): now `adr x16, 1f; <GOT chain via x17>; br x17` instead of `blr x16` — delivers the resume per the new contract and never touches X30, exactly matching real `svc` clobber semantics. (Previously it was the *only* correct path, which is why the `GRAMINE_SYSCALL`-based tests passed while every real-libc test spun.)
 
-**Why it happens:** the seccomp-trap emulation path installs the *resume address* into the guest context's **X30** (`maybe_emulate_syscall()` sets `context->regs[30] = pc + 4`, mirroring x86_64's `%rcx` convention). On x86_64 that is safe because the hardware `syscall` instruction itself destroys `%rcx`/`%r11` — the application can *never* hold live state there, so libc syscall wrappers reload the real return address from the stack frame. aarch64's `svc` has **no such clobber contract**: X30 at the `svc` site is the application's own live return address (e.g. ld.so's leaf-ish `munmap` wrapper's frameless `ret` target). Overwriting it and resuming via sigreturn destroys it.
+**Also fixed:** removed a leftover debug `log_always("A quick check.")` in `_PalSystemTimeQuery()` (`pal/src/host/linux/pal_misc.c`, an initial-Tirith-commit leftover also affecting x86) that fired on *every* clock query — pure I/O overhead.
 
-Why the first 9 syscalls *appeared* to work: they are inline SYSCALL macros inside large glibc functions that had already spilled the true X30 into their stack frames and reload it in their epilogue — masking the clobber. Leaf wrappers like `munmap` (`mov x8,#nr; svc #0; cmn; b.cs; ret`) use X30 directly after the syscall and loop forever. This affects *every* leaf-style syscall wrapper in the guest libc — i.e. essentially all of them — so Milestone A can never progress past `ld.so` startup with this design.
+**Performance takeaway:** the earlier "one syscall every several seconds" reading was entirely a GDB/ptrace artifact; untraced, the full `ld.so` + `helloworld` startup through the SIGSYS round-trip path takes ~10ms wall. The seccomp-trap-per-syscall design may still cost throughput on syscall-heavy workloads (the patched-libc fast path remains the eventual answer, per the Deferred section), but there is no anomaly left to hunt.
 
-### The fix (in progress)
+### Debugging notes (still useful for future aarch64 signal-path work)
 
-Do not route the resume address through X30 at all. aarch64 has genuinely-clobberable scratch registers — X16/X17 (IP0/IP1, the linker veneer scratch) — which `syscallas.S` *already* declares sacrificed. Redesign the entry contract:
-- `maybe_emulate_syscall()` / `GRAMINE_SYSCALL`: put resume-PC in **X16** (via the ucontext at `regs[16]`, which is restored on sigreturn), keep the app's live X30 saved in `context->regs[30]` untouched.
-- `libos_syscall_entry`: take the resume address from X16 (AAPCS-scratch, same role RCX plays on x86_64) instead of X30; store it into `context->pc` and restore the app's true X30 from the saved frame.
-- `_return_from_syscall` continues to `br` to `context->pc` (already the case), and the app's X30 comes back from `context->regs[30]` (already saved/restored) — restoring the clobbered-by-us-on-entry semantics correctly.
-- `restart_syscall()` and `prepare_sigframe()` (`regs[30] = restorer`) need the same treatment: the *restorer* address legitimately goes in X30 (that mimics the `blr handler` contract — fine), but syscall-restart must not assume X30 carries anything.
-
-### Remaining known issues (updated)
-
-- Everything under "Known issues and their fixes" below is still fixed.
-- **New, found this session:** the installed libpal.so log-spams `"A quick check."` on *every* `_PalSystemTimeQuery()` call (`pal/src/host/linux/pal_misc.c` — leftover debug `log_always` from the initial Tirith commit, x86 side too). Harmless to correctness but massive I/O overhead; removed.
-- The previous session's "severe slowness of the seccomp-trap path" theory is **void** — the path never got to run more than 9 times because of the X30 clobber above. Once the fix lands, real per-syscall overhead can be measured properly; the signal-delivery round-trip cost may still be a performance topic, but the *hang* is this bug.
-
-### (superseded) earlier status text
-
-`helloworld` does not yet pass, but the remaining gap now looks like **severe performance, not a correctness bug**. Initial GDB sampling (plain PC snapshots via repeated SIGINT) was misleading: it kept landing on the same instruction inside the host's real `ld-linux-aarch64.so.1`'s inline `munmap` syscall wrapper, which looked like an infinite retry loop and caused a ~4-minute 100%-CPU background run to be killed as a presumed hang.
-
-Tracing properly (breaking on `_return_from_syscall` and dumping the saved `PAL_CONTEXT` — syscall number in `x8`, args in `x0`/`x1`, resume `pc`/`sp` — on every hit) shows this was a false read: the syscall sequence is `brk → mmap → <something, nr 0x30> → openat → read → fstat → mmap → mmap → munmap`, a completely ordinary `ld.so`/libc startup sequence, each call with different arguments and a different resume address. There is no loop. It is just extremely slow: under Milestone A's design (no patched guest libc), *every single syscall* the guest's dynamic linker issues round-trips through a SIGSYS signal delivery + full context save/restore, and observed throughput was roughly one real syscall every several seconds *while GDB/Python was actively tracing it* (tracing itself adds substantial overhead on top of the already-expensive signal path).
-
-Not yet confirmed: whether an **untraced** run (no ptrace/GDB attached) completes `ld.so`'s startup and reaches `helloworld`'s own `printf` in a tractable amount of time, or whether it's so slow that it's impractical even without tracing overhead. A plain `timeout 1200` background run (no GDB) was kicked off to settle this; result pending as of this writing. If it does complete, the remaining work is a performance question (how to make the seccomp-trap path cheaper, or revisit patching the guest libc per the deferred musl-TCB item below) rather than a bug hunt. If it does *not* complete in ~20 minutes, that itself is useful signal that something beyond raw signal-overhead is wrong, and warrants going back to the syscall-count data (how many total syscalls does a minimal `ld.so` + `helloworld` startup realistically need?) to see if the per-syscall cost or the total syscall count is the anomaly.
-
-Debugging notes for whoever continues this:
-- GDB's own pending-breakpoint-on-load mechanism does not work against Gramine's custom in-process loader (it has no `r_debug` hook GDB recognizes), so breakpoints on functions inside `libpal.so`/`libsysdb.so` have to be set by computing `runtime_base + static_offset` by hand (read `info proc mappings` for the base, `readelf -sW`/`nm` on the installed `.so` for the offset) rather than by name.
-- `gdb`'s `catch syscall <name>` is a good tool for this: it fires on real kernel syscall entry/exit regardless of seccomp, so sampling `$pc`/`$x8` at each hit (and resolving `$pc` against `info proc mappings`) distinguishes PAL-internal syscalls (land in `gramine_raw_syscalls_code_begin`, the untrapped trampoline) from guest-emulated ones (land inside `libos_syscall_entry`/`_return_from_syscall`) cleanly.
-- Breaking on `_return_from_syscall` specifically and reading the `PAL_CONTEXT` it's about to restore (passed in `x0`) is the most direct way to see "what syscall just got emulated, with what args, resuming where" without guessing from raw PC samples — that's what settled this one.
+- GDB's pending-breakpoint-on-load does not work against Gramine's custom in-process loader (no `r_debug` hook), so breakpoints in `libpal.so`/`libsysdb.so` need hand-computed `runtime_base + static_offset`.
+- `catch syscall <name>` fires on real kernel syscall entry/exit regardless of seccomp; sampling `$pc`/`$x8` distinguishes PAL-internal syscalls (in `gramine_raw_syscalls_code_begin`) from guest-emulated ones cleanly.
+- **Attaching GDB to a spinning/seccomp-trapped process can mask the spin** (ptrace signal interplay let the guest sprint past the loop while traced) — instrumented `log_always` tracing at `libos_emulate_syscall`/`handle_sync_signal` plus a `kill -CONT`-triggered SIGCONT catchpoint snapshot was what actually localized this bug.
+- Running the harness outside this repo's container needs `PATH=/home/user/.local/gramine/bin` *and* `PYTHONPATH=/home/user/.local/gramine/lib/python3.12/site-packages` (the `gramine-test`/`gramine-manifest` tools don't find each other otherwise), and `gramine-test -n tests.toml build` must run before `pytest` (manifests are generated artifacts).
 
 ### Known issues and their fixes, this session (all resolved except the munmap hang above)
 
@@ -198,5 +177,5 @@ Key reused asset from Milestone A: the `TPIDR_EL0`/`TPIDR_EL1`-based TCB access 
 
 - `ninja -C build-aarch64/` completes with no errors. **Passing.**
 - `cd gramine-tdx/pal/regression && gramine-test build -v && python3 -m pytest -v --junit-xml pal-regression.xml` — PAL-level regression. **Not yet run.**
-- `cd gramine-tdx/libos/test/regression && gramine-test -n tests.toml build -v && python3 -m pytest -v -k helloworld` passes, printing `Hello world!`. **Not yet passing — see "Current status" above.**
+- `cd gramine-tdx/libos/test/regression && gramine-test -n tests.toml build -v && python3 -m pytest -v -k helloworld` passes, printing `Hello world!`. **Passing** (`TC_01_Bootstrap::test_001_helloworld PASSED`).
 - Once that's green, run the broader `pytest -v --junit-xml libos-regression.xml` and fix failures incrementally (expected hotspots: signal delivery, clone/fork, threading — flagged above).
