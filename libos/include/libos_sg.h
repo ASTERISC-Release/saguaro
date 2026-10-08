@@ -33,6 +33,16 @@ extern struct libos_lock sg_comm_lock;
 
 #define ENABLE_SG
 
+/* Whether the SG host comm window at COMM_ADDR can exist at all in this deployment: it is
+ * attached by the host only under the VM/TDX PAL (full Tirith deployment with a qemu
+ * sg-listener); under the plain `Linux` PAL nothing ever maps it. Defined (with the full
+ * rationale) in libos_open.c next to the other SG entry point. Every comm_page() writer whose
+ * predicate is path-based -- openat's is_sg_host_path() (via that same helper) and
+ * stat()/newfstatat()'s strstr() checks -- must consult this *before* touching the window:
+ * comm_sync_notify()'s `magic` check cannot cover it, because every call site writes c->p1..p3
+ * first, so an unmapped window faults at COMM_ADDR + 0x18 on the first write. */
+bool sg_redirect_enabled(void);
+
 #define COMM_ADDR  0xf00000ULL
 #define COMM_MAGIC 0x1234567812345678ULL
 static uint64_t LOG_MMAP_EVENT = 1;

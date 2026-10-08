@@ -77,6 +77,15 @@ long libos_syscall_unlinkat(int dfd, const char* pathname, int flag) {
         if (ret < 0) {
             goto out;
         }
+    } else if (flag & AT_REMOVEDIR) {
+        /* Same rule as libos_syscall_rmdir(): a dentry whose fs cannot unlink -- e.g. the
+         * synthetic directory Gramine creates in the process of mounting, which the `synthetic`
+         * regression test checks -- is not removable. This matters specifically on aarch64,
+         * where glibc's rmdir() *is* unlinkat(AT_REMOVEDIR) (the architecture has no rmdir
+         * syscall): without this branch the two ABIs disagree, x86's rmdir() returning EACCES
+         * while aarch64 silently deletes the mount point. */
+        ret = -EACCES;
+        goto out;
     }
 
     put_inode(dent->inode);

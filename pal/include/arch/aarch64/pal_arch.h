@@ -78,13 +78,24 @@ extern __attribute__((visibility("protected"))) PAL_TCB* g_pal_tcb_singleton;
 
 #include "pal_host_arch.h"
 
-#ifndef IN_PAL
-/* Per-thread PAL_TCB registry, defined in libos_thread.c (LibOS/libsysdb.so only -- PAL-internal
- * threads always reach their TCB via the tagged-TPIDR fast path in pal_get_tcb() below instead).
- * See g_pal_tcb_registry's long comment in libos_thread.c for the design. */
+/* Per-thread PAL_TCB registry: maps each thread's application TLS pointer (TPIDR_EL0) to its
+ * own PAL_TCB. The table itself (g_pal_tcb_registry) is defined in libpal.so (see
+ * pal_arch_exception.c, like g_pal_tcb_singleton below) and reached from libsysdb.so via GOT;
+ * PAL code here uses it directly. `add` is called only from LibOS-side registration hooks
+ * (set_tls()), `del` from `_PalThreadExit()` and the exec winner, `scan` from both objects'
+ * pal_get_tcb() and from syscallas.S (GOT-based walk). See g_pal_tcb_registry's long comment in
+ * pal_arch_exception.c for the design. */
+/* Note: the *definitions* in pal_arch_exception.c carry visibility("protected") so they are
+ * exported through libpal's version script, but these declarations deliberately do NOT: a
+ * protected *function* declaration makes GCC emit direct (non-PLT) calls, which GNU ld refuses
+ * to bind against another shared object ("undefined reference"). g_pal_tcb_registry (data) is
+ * referenced only through explicit :got: relocations (syscallas.S, pal_get_tcb asm), for which
+ * protected works and matches the g_pal_tcb_singleton pattern. */
 void libos_tcb_registry_add(PAL_TCB* tcb, uintptr_t guest_tp);
+/* Deletes the binding only if it still belongs to `expected_tcb` -- see the definition's
+ * ownership-check comment (TLS addresses get legitimately re-registered by new threads). */
+void libos_tcb_registry_del(uintptr_t guest_tp, PAL_TCB* expected_tcb);
 bool libos_tcb_registry_scan(PAL_TCB** out_tcb);
-#endif
 
 /*
  * Every thread's own TPIDR_EL0 register is independent architectural state (not shared memory),
@@ -134,6 +145,17 @@ static inline bool pal_tcb_from_tagged_tpidr(PAL_TCB** out_tcb) {
 static inline PAL_TCB* pal_get_tcb(void) {
     PAL_TCB* tcb;
     if (pal_tcb_from_tagged_tpidr(&tcb)) {
+        return tcb;
+    }
+    /* Application host thread (TPIDR_EL0 is the app's own TLS pointer): resolve this thread's own
+     * PAL_TCB from the registry. Returning the singleton here (the pre-registry behavior) was
+     * wrong for any thread but the main one -- e.g. `_PalThreadExit()` then recycled the *main*
+     * thread's host stack slot. A miss is the main thread (pre-registration window) or a thread
+     * mid-execve after the snapshot; the singleton fallback is correct for exactly those. No lazy
+     * self-registration here: PAL code must not mutate the registry for app threads (LibOS's
+     * pal_get_tcb() below owns that) -- e.g. `_PalThreadExit()` deliberately runs after its own
+     * `libos_tcb_registry_del()`. */
+    if (libos_tcb_registry_scan(&tcb)) {
         return tcb;
     }
     __asm__("adrp %0, g_pal_tcb_singleton\n"

@@ -64,6 +64,50 @@ static noreturn void libos_clean_and_exit(int exit_code) {
 
 noreturn void thread_exit(int error_code, int term_signal) {
     struct libos_thread* cur_thread = get_cur_thread();
+    /* Claim this thread's exit. Only ever reached a second time from a signal upcall whose own
+     * claim won (it then never returns here); see `exiting`. */
+    __atomic_store_n(&cur_thread->exiting, true, __ATOMIC_RELEASE);
+
+    if (LIST_EMPTY(cur_thread, list)) {
+        /*
+         * This thread's list node is already removed: some *other* host thread is driving (or
+         * already drove) the exit of the LibOS thread we appear to be. That happens when a
+         * thread mis-resolves its identity through a stale TLS-keyed PAL_TCB registry binding
+         * (see g_pal_tcb_registry's comment in pal_arch_exception.c: execve unmaps the old
+         * address space, the new image's stacks routinely re-mmap at the very same addresses,
+         * and a lookup can therefore hit another thread's live binding -- deregistration at
+         * every abandon point shrinks but cannot fully close the window between a marked
+         * thread's removal from the thread list (which releases the exec winner's
+         * kill_other_threads() loop to unmap and remap) and its deregistration inside
+         * _PalThreadExit()). Such a caller must never touch this thread's list node or cleanup
+         * (a second `check_last_thread(mark_self_dead=true)` would write through the off-list
+         * node's NULL `next`, and a second non-main pass would double-run `cleanup_thread`);
+         * its own (guest-)identity is dead anyway -- just exit this host thread. Passing a NULL
+         * clear_child_tid makes PalThreadExit() perform no LibOS bookkeeping at all.
+         */
+        PalThreadExit(/*clear_child_tid=*/NULL);
+    }
+
+#ifdef __aarch64__
+    /* Drop this thread's TLS-keyed PAL_TCB registry binding *before* it removes itself from the
+     * thread list -- that removal is what releases the exec winner's kill_other_threads() loop,
+     * which then unmaps (and, via mmap reuse, hands to new threads) the address region this
+     * binding is keyed by -- and take TPIDR_EL0 over for Gramine's own use (tagged-PAL_TCB fast
+     * path) so every remaining lookup on this host thread (check_last_thread(), the async
+     * cleanup, _PalThreadExit()'s host-stack recycling, the wait-forever park) keeps resolving
+     * *this* thread's own PAL_TCB without a registry entry. This thread never runs guest code
+     * again from here, and a live thread's TPIDR_EL0 is unique, so nothing can legitimately
+     * collide with the abandoned TLS address anymore.
+     *
+     * Ordering matters: the own-PAL_TCB must be resolved *before* deregistering, since the
+     * deregistration makes this thread's own next pal_get_tcb() miss the registry and fall back
+     * to the singleton -- the boot/exec-winner thread's PAL_TCB, i.e. a *different* thread.
+     * The deletion itself is ownership-checked for the same reason (_PalThreadExit()'s comment). */
+    uintptr_t exiting_tcb = (uintptr_t)pal_get_tcb() | 1;
+    libos_tcb_registry_del(get_tls(), (PAL_TCB*)(exiting_tcb & ~(uintptr_t)1));
+    __asm__ volatile("msr tpidr_el0, %0" :: "r"(exiting_tcb) : "memory");
+#endif
+
     if (cur_thread->robust_list) {
         release_robust_list(cur_thread->robust_list);
         cur_thread->robust_list = NULL;
@@ -99,6 +143,12 @@ noreturn void thread_exit(int error_code, int term_signal) {
              *       Linux does it.
              */
             thread_prepare_wait();
+
+            /* (TPIDR_EL0 was already switched to the tagged own-PAL_TCB form at thread_exit()
+             * entry, and the TLS-keyed registry binding dropped there: the raw futex waits of
+             * this forever-park keep resolving this thread's own TCB through the tagged fast
+             * path, while the abandoned TLS address is free for legitimate reuse by the new
+             * image's threads.) */
             while (true)
                 thread_wait(/*timeout_us=*/NULL, /*ignore_pending_signals=*/true);
             __builtin_unreachable();

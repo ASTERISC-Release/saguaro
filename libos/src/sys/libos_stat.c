@@ -185,7 +185,7 @@ out:
 
 long libos_syscall_readlink(const char* file, char* buf, int bufsize) {
     #ifdef ENABLE_SG
-        if(strstr(file, "/sys/")){
+        if(sg_redirect_enabled() && strstr(file, "/sys/")){
             long _offset = libos_syscall_acquire_libos_lock();
             comm_page_t* c = comm_page(_offset);
             c->p1 = (uint64_t) file;
@@ -278,7 +278,7 @@ out:
 
 long libos_syscall_newfstatat(int dirfd, const char* pathname, struct stat* statbuf, int flags) {
     #ifdef ENABLE_SG
-        if(strstr(pathname, "/dev") || strstr(pathname, "/sys") || strstr(pathname, "/proc/sys")){
+        if(sg_redirect_enabled() && (strstr(pathname, "/dev") || strstr(pathname, "/sys") || strstr(pathname, "/proc/sys"))){
             if(!strstr(pathname, "devtest")){
                 long _offset = libos_syscall_acquire_libos_lock();
             comm_page_t* c = comm_page(_offset);

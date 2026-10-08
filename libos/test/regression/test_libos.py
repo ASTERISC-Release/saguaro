@@ -1,4 +1,5 @@
 import os
+import platform
 import re
 import shutil
 import signal
@@ -601,11 +602,16 @@ class TC_30_Syscall(RegressionTestCase):
     def test_010_stat_invalid_args(self):
         stdout, _ = self.run_binary(['stat_invalid_args'])
 
-        # Stat with invalid arguments
-        self.assertIn('stat(invalid-path-ptr) correctly returned error', stdout)
-        self.assertIn('stat(invalid-buf-ptr) correctly returned error', stdout)
-        self.assertIn('lstat(invalid-path-ptr) correctly returned error', stdout)
-        self.assertIn('lstat(invalid-buf-ptr) correctly returned error', stdout)
+        # Stat with invalid arguments. On aarch64 there are no separate stat/lstat
+        # syscalls (the architecture exposes only statx/newfstatat, which glibc's
+        # stat()/lstat() wrappers call internally, so the test's raw
+        # syscall(SYS_stat, <invalid ptr>) has nothing to fail on) -- the test
+        # binary says so and skips these sub-cases; only check them on x86_64.
+        if platform.machine() == 'x86_64':
+            self.assertIn('stat(invalid-path-ptr) correctly returned error', stdout)
+            self.assertIn('stat(invalid-buf-ptr) correctly returned error', stdout)
+            self.assertIn('lstat(invalid-path-ptr) correctly returned error', stdout)
+            self.assertIn('lstat(invalid-buf-ptr) correctly returned error', stdout)
 
     def test_011_fstat_cwd(self):
         stdout, _ = self.run_binary(['fstat_cwd'])
@@ -623,12 +629,15 @@ class TC_30_Syscall(RegressionTestCase):
         stdout, _ = self.run_binary(['getdents'])
         self.assertIn('getdents: setup ok', stdout)
 
-        # Directory listing (32-bit)
-        self.assertIn('getdents32: . [0x4]', stdout)
-        self.assertIn('getdents32: .. [0x4]', stdout)
-        self.assertIn('getdents32: file1 [0x8]', stdout)
-        self.assertIn('getdents32: file2 [0x8]', stdout)
-        self.assertIn('getdents32: dir3 [0x4]', stdout)
+        # Directory listing (32-bit). aarch64 has no legacy getdents syscall number at all
+        # (glibc's readdir() always uses getdents64 there), so the test binary has nothing to
+        # exercise for this sub-case and prints no lines; see the SYS_getdents guard there.
+        if platform.machine() != 'aarch64':
+            self.assertIn('getdents32: . [0x4]', stdout)
+            self.assertIn('getdents32: .. [0x4]', stdout)
+            self.assertIn('getdents32: file1 [0x8]', stdout)
+            self.assertIn('getdents32: file2 [0x8]', stdout)
+            self.assertIn('getdents32: dir3 [0x4]', stdout)
 
         # Directory listing (64-bit)
         self.assertIn('getdents64: . [0x4]', stdout)

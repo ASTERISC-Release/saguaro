@@ -5,9 +5,16 @@
 /* GAS port of libos_elf_entry.nasm -- NASM has no aarch64 backend.
  *
  * Before jumping to the entry point, we set:
- * - X2: zeroed, for symmetry with x86_64's RDX=0 "no atexit function" convention (see the
- *   ambiguity noted in pal_start.S's comment: aarch64 has no well-defined equivalent of this
- *   convention to begin with, so this is defensive, not load-bearing).
+ * - X0..X8: zeroed. The kernel's execve enters the program with *all* GPRs zero, and this is
+ *   load-bearing on aarch64: glibc's `_start` begins with `mov x5, x0` -- the incoming x0 *is*
+ *   the `rtld_fini` argument to __libc_start_main (real aarch64 ld.so passes its DT_FINI there;
+ *   the kernel guarantees 0 for statically-linked programs that start without an interpreter).
+ *   Entering with x0 = the entry address made glibc register `_start` itself as an atexit
+ *   handler: on exit() it re-ran __libc_start_main after RELRO had been applied, faulting on
+ *   the __libc_stack_end store (the bootstrap_static regression test). X16/X17 carry the jump
+ *   targets instead -- they are link-time scratch registers the entry code may not observe.
+ * - X2 zeroing is kept from the old port for symmetry with x86_64's RDX=0 "no atexit function"
+ *   convention (subsumed by the full zeroing above).
  * - SP: the initial stack, contains program arguments and environment.
  * - PSTATE.NZCV: zeroed (AArch64's equivalent of clearing the low FLAGS bits).
  * - FPCR: zeroed. Unlike x86_64's MXCSR (whose architectural reset value traps on every FP
@@ -23,10 +30,20 @@
 
 /* noreturn void call_elf_entry(elf_addr_t entry, void* argp) */
 call_elf_entry:
+    mov  x16, x0      /* entry (IP0/IP1: ABI-scratch, invisible to the program's startup code) */
+    mov  x17, x1
+    mov  x0, #0
+    mov  x1, #0
     mov  x2, #0
+    mov  x3, #0
+    mov  x4, #0
+    mov  x5, #0
+    mov  x6, #0
+    mov  x7, #0
+    mov  x8, #0
     msr  fpcr, x2
     msr  nzcv, x2
-    mov  sp, x1   /* set stack pointer to second arg */
-    br   x0       /* jump to entry point (first arg) */
+    mov  sp, x17      /* set stack pointer to second arg */
+    br   x16          /* jump to entry point */
 
 .section .note.GNU-stack,"",%progbits

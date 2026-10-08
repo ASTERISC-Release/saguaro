@@ -126,6 +126,15 @@ struct libos_thread {
 
     bool time_to_die;
 
+    /* Reentrancy guard for `thread_exit()`: exactly one context on this thread's host thread --
+     * either the syscall-emulation path (e.g. the losing `execve()` of a racy exec) or a signal
+     * upcall that noticed `time_to_die` -- may drive the exit; any later re-entry (e.g. a wake-up
+     * upcall hitting after the first exit started but before the host thread terminated/parked)
+     * must be a no-op. Without this, a second `thread_exit()` would remove the already-off-list
+     * node (NULL `list.next` write) and/or double-run the cleanup (`cleanup_thread` freeing the
+     * thread's LibOS stack twice -> internal stack corruption). */
+    bool exiting;
+
     void* stack;
     void* stack_top;
     void* stack_red;

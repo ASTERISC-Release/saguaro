@@ -13,6 +13,21 @@ int main(void) {
         : "0"(__NR_getpid)
         : "memory", "cc", "rcx", "r11"
     );
+#elif defined(__aarch64__)
+    /* The aarch64 analog of the raw `syscall`: a bare `svc #0` with the number in x8. Under
+     * Gramine's seccomp-based trap emulation this is exactly what an un-patched libc wrapper
+     * executes, so the test exercises the whole trap-emulation entry path (the return into the
+     * application clobbers x16/x17 and the link register by design, hence the clobber list;
+     * x0 -- the result register -- survives as the output). */
+    register long x8 __asm__("x8") = __NR_getpid;
+    register long x0 __asm__("x0");
+    __asm__ volatile (
+        "svc #0"
+        : "=r"(x0)
+        : "r"(x8)
+        : "memory", "x16", "x17", "x30"
+    );
+    ret = x0;
 #endif
     if (ret != 1)
         errx(EXIT_FAILURE, "getpid syscall: %ld (expected 1)", ret);

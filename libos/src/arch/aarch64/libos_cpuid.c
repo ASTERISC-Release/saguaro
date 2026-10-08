@@ -95,8 +95,11 @@ static void read_hwcaps(uint64_t* out_hwcap, uint64_t* out_hwcap2) {
     *out_hwcap2 = 0;
 
     PAL_HANDLE handle = NULL;
+    /* PAL_CREATE_NEVER, not PAL_CREATE_IGNORED: the linux PAL's regular-file open treats IGNORED
+     * as "caller should not have used me" (BUG()), and "open it only because it already exists"
+     * is exactly the semantics wanted here anyway (the fallback below covers failure). */
     int ret = PalStreamOpen("file:/proc/self/auxv", PAL_ACCESS_RDONLY, /*share_flags=*/0,
-                            PAL_CREATE_IGNORED, /*options=*/0, &handle);
+                            PAL_CREATE_NEVER, /*options=*/0, &handle);
     if (ret < 0)
         return;
 

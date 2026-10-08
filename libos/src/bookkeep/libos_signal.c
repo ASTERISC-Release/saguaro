@@ -771,12 +771,26 @@ void pop_unblocked_signal(__sigset_t* mask, struct libos_signal* signal) {
  */
 bool handle_signal(PAL_CONTEXT* context) {
     struct libos_thread* current = get_cur_thread();
+
     assert(current);
     assert(!is_internal(current));
     assert(!context_is_libos(context)
            || pal_context_get_ip(context) == (uint64_t)&libos_syscall_entry);
 
     if (__atomic_load_n(&current->time_to_die, __ATOMIC_ACQUIRE)) {
+        /* Only one context may drive this thread's exit (see `exiting`): if `thread_exit()` has
+         * already started (e.g. the exec-race loser path in `libos_syscall_execve()`, or a
+         * previous upcall), the exit is in progress on this host thread and pending signals for
+         * this thread are moot -- it never returns to user mode. Claim the exit or step aside.
+         * This race is real (see `exec_same`): the wait-forever main thread of a racy `execve()`
+         * performs its host `futex` waits as raw `svc`s that seccomp traps into LibOS emulation,
+         * and the emulation epilogue in libos_syscalls.c calls `handle_signal()` after *every*
+         * completed syscall -- e.g. after a wake-up `tgkill(SIGCONT)` from the exec winner's
+         * `PalThreadResume()` interrupted the main thread's park with EINTR. */
+        bool claimed = !__atomic_exchange_n(&current->exiting, true, __ATOMIC_ACQ_REL);
+        if (!claimed) {
+            return true;
+        }
         thread_exit(/*error_code=*/0, /*term_signal=*/0);
     }
 

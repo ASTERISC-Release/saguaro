@@ -148,13 +148,13 @@ long libos_syscall_creat(const char* path, mode_t mode) {
  * gated on the PAL host type at the single place where TYPE_HOST handles are created; every
  * other comm_page() writer in the LibOS (ioctl/fcntl/dup/mmap/stat) is keyed on
  * hdl->type == TYPE_HOST(_IDENTITY) and so becomes inert along with it. */
-static bool sg_comm_window_present(void) {
+bool sg_redirect_enabled(void) {
     const char* host = g_pal_public_state->host_type;
     return !strcmp(host, "VM") || !strcmp(host, "TDX");
 }
 
 static bool is_sg_host_path(const char* path) {
-    if (!sg_comm_window_present()) {
+    if (!sg_redirect_enabled()) {
         return false;
     }
     static const char* const roots[] = {"/dev", "/sys", "/root/.cache"};
