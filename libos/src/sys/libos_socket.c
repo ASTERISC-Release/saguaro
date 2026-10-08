@@ -178,7 +178,18 @@ long libos_syscall_socket(int family, int type, int protocol) {
             ret = (intptr_t)region;
         } else {
             ret = handle->info.sock.ops->register_shmem(handle, region);
-            if (ret < 0) {
+            if (ret == -ENOSYS) {
+                /* A PAL without a host-side shared UDP ring: the plain `Linux` PAL's
+                 * _PalSocketRegisterShmem() is a stub (-PAL_ERROR_NOTIMPLEMENTED), and its
+                 * send/recv paths never consult the ring -- only the VM/TDX PAL consumes it.
+                 * The ring is therefore optional (the close path is `if (udp_rx_ring) munmap`),
+                 * and "PAL cannot register one" is a capability report, not a socket() failure;
+                 * failing it here made every AF_INET SOCK_DGRAM socket() return ENOSYS under
+                 * the Linux PAL (udp/socket_ioctl/getsockopt regression tests). Drop the
+                 * region and proceed with a ringless socket. */
+                (void)libos_syscall_munmap(region, udp_rx_ring_size);
+                ret = 0;
+            } else if (ret < 0) {
                 (void)libos_syscall_munmap(region, udp_rx_ring_size);
             } else {
                 handle->info.sock.udp_rx_ring = region;
@@ -925,7 +936,24 @@ ssize_t do_recvmsg(struct libos_handle* handle, struct iovec* iov, size_t iov_le
         size_t size = 0;
         ret = sock->ops->recv(handle, iov, iov_len, msg_control, msg_controllen_ptr, &size, addr,
                               addrlen_ptr, force_nonblocking);
-        return ret < 0 ? ret : (ssize_t)size;
+        if (ret < 0) {
+            return ret;
+        }
+        /* This DGRAM fast path returns the *full* datagram length reported by the PAL (the PAL
+         * always recvmsg()'s with MSG_TRUNC so that ring-based transports can consume whole
+         * records), so the POSIX recvmsg(2) semantics -- return the number of bytes actually
+         * copied unless the caller passed MSG_TRUNC, and set MSG_TRUNC in the output flags when
+         * the datagram did not fit -- must be applied here exactly as in the generic tail of
+         * this function. Without it, recvmsg() into a too-small buffer returned the whole
+         * datagram size and left msg_flags clean (the `udp` regression test: "case 0: recvmsg
+         * returned: 64, expected: 32"). Note the input flag must be read before overwriting. */
+        size_t total_size = 0;
+        for (size_t i = 0; i < iov_len; i++) {
+            total_size += iov[i].iov_len;
+        }
+        ret = *flags & MSG_TRUNC ? (ssize_t)size : (ssize_t)MIN(size, total_size);
+        *flags = size > total_size ? MSG_TRUNC : 0;
+        return ret;
     }
     unlock(&sock->lock);
     if (!WITHIN_MASK(*flags, MSG_PEEK | MSG_DONTWAIT | MSG_TRUNC)) {
