@@ -27,6 +27,40 @@
 # CONFIG_ARP and CONFIG_ARPING disabled in src/.config to compile against
 # modern (>= ~6.x) kernel headers on any arch.
 #
+# ## Install steps (Debian/Ubuntu, arch-neutral — run from gramine-tdx/)
+#
+#   # 1. Build + runtime dependencies
+#   sudo apt install build-essential meson ninja-build pkg-config \
+#       python3-pytest python3-click python3-jinja2 python3-cryptography \
+#       python3-voluptuous python3-toml nasm procps iproute2 file linux-libc-dev
+#   (On this box voluptuous came from "pip3 install --user voluptuous" because
+#    python3-voluptuous was not installed; either source works. click/jinja2/
+#    cryptography resolve from apt here; elftools/_graminelibos_offsets are
+#    only imported by the SGX-signing tools, which stay disabled.)
+#
+#   # 2. Configure, build, install into a private prefix (~3 min native build).
+#   #    `ninja install` places the CLI scripts in <prefix>/bin and the
+#   #    graminelibos package in <prefix>/lib/python3.X/site-packages — which
+#   #    is why the script exports PYTHONPATH for exactly that directory.
+#   #    (The vm/tdx options are Tirith forks of the upstream PAL; keep them
+#   #    disabled for this direct-PAL test battery.)
+#   meson setup build-$(uname -m) -Dbuildtype=release -Ddirect=enabled \
+#       -Dsgx=disabled -Dvm=disabled -Dtdx=disabled -Dtests=enabled \
+#       -Dlibc=glibc -Dprefix="$HOME/.local/gramine"
+#   ninja -C build-$(uname -m)
+#   ninja -C build-$(uname -m) install
+#
+#   # 3. Run the battery (GRAMINE_PREFIX/PYTHONPATH are set by the script
+#   #    itself; export them manually only if you installed elsewhere):
+#   ./run_all_tests.sh
+#
+#   # Iterating on a code change afterwards:
+#   ninja -C build-$(uname -m) install && ./run_all_tests.sh --no-build
+#
+# nasm is only needed with -Dtests=enabled on x86_64 (the asm/x86_64 regression
+# module); busybox/redis/memcached fetch their upstream tarballs on their
+# example Makefiles' first build, so steps touching those suites need network.
+#
 # Every application runs under `timeout -s KILL`; a process-group kill plus a
 # final sweep (pkill -9 -x loader / libpal.so) guarantee no strays are left
 # behind after the script exits, including on Ctrl-C. (A trailing "Killed"
