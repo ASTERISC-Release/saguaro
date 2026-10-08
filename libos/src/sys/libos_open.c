@@ -135,7 +135,28 @@ long libos_syscall_creat(const char* path, mode_t mode) {
 }
 
 #ifdef ENABLE_SG
+/* The SG comm window at COMM_ADDR (0xf00000) is a fixed host-shared page provided by the
+ * full Tirith deployment: the VM/TDX PAL guest memory map has the sg-listener's shared memory
+ * attached there by the host. Under the plain `Linux` PAL (any gramine-direct run, including
+ * the entire aarch64 port, where `linux` is the only PAL) no host agent exists and the page
+ * is *never* mapped -- and note comm_sync_notify()'s `magic` check cannot cover this, because
+ * every caller writes c->p1..p3 *before* calling it, so the very first write faults
+ * (SIGSEGV at 0xf00018) long before the magic read could answer "no listener". This used to
+ * crash every openat() of any /dev or /sys path under the Linux PAL (the whole
+ * shm/devfs/close_range/procstat/keys/poll regression cluster; the x86_64 CI presumably only
+ * ever exercises these paths in VM/TDX deployments). SG host redirection therefore must be
+ * gated on the PAL host type at the single place where TYPE_HOST handles are created; every
+ * other comm_page() writer in the LibOS (ioctl/fcntl/dup/mmap/stat) is keyed on
+ * hdl->type == TYPE_HOST(_IDENTITY) and so becomes inert along with it. */
+static bool sg_comm_window_present(void) {
+    const char* host = g_pal_public_state->host_type;
+    return !strcmp(host, "VM") || !strcmp(host, "TDX");
+}
+
 static bool is_sg_host_path(const char* path) {
+    if (!sg_comm_window_present()) {
+        return false;
+    }
     static const char* const roots[] = {"/dev", "/sys", "/root/.cache"};
 
     for (size_t i = 0; i < ARRAY_SIZE(roots); i++) {
