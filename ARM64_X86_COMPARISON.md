@@ -13,8 +13,28 @@ on 2026-10-08 in the `ubuntu-gpu-kvm` container (`LOGDIR=/root/x86-logs`).
 | redis | Pass (PING/SET/GET + 20 round-trips) | Pass | |
 | helloworld | Pass | Pass | |
 | multi-thread | Pass (tls/rwlock/stress) | Pass | |
+| bash | Pass (7/7 checks) | not run | New `bash` suite in `run_all_tests.sh` |
 
 Totals match (PAL 36, LibOS 176), so no test is unaccounted for. Both architectures have zero failures.
+
+## Other CI-Examples (x86_64 only so far)
+
+Run on x86_64 on 2026-10-08, logs in `/root/x86-logs/ex`. aarch64 is not run for any of
+these yet; fill that column when you run them on aarch64. `graphics` is excluded as requested.
+
+| Example | x86_64 | aarch64 | How it was run / notes |
+|---|---|---|---|
+| sqlite | Pass (3/3) | not run | `make regression`. Needs the `sqlite3` package on the host |
+| python | Pass (4/4: hello, HTTP server+client, numpy, scipy) | not run | `make check`. Needs `python3-numpy`, `python3-scipy`, `wget` on the host |
+| lighttpd | Pass | not run | No test target. Started under `gramine-direct`, `curl` fetched `/random/10K.1.html` (10240 bytes) |
+| nginx | Pass (HTTP and HTTPS) | not run | No test target. Same `curl` check on ports 8002 and 8444 (`-k`, self-signed cert), 10240 bytes each |
+| blender | Pass | not run | `make check` renders the test scenes (about 30 s for the one logged). Downloads Blender 2.82 (x86_64 build), so it will not run on aarch64 as is |
+| mremap | Pass | not run | The program prints "ALL IN-PLACE TESTS PASSED". Its Makefile `check` target is broken (copy-pasted from helloworld, diffs against "Hello, world"), so `make check` fails regardless of the port |
+| align_test | Not a test | n/a | Prints a pointer and then `sleep(400)`. Its `check` target is the same helloworld copy and cannot pass. It reaches the end of its allocations and asserts |
+| host_to_guest | N/A | n/a | Exercises the Tirith VM hook (a special mmap size handled in `libos_mmap.c` and QEMU). It segfaults (rc 139) under the direct PAL by design, so it needs the VM PAL |
+| rust | Not run | not run | Build fails: the container's cargo 1.75 cannot parse current crates (`edition2024`). Needs a newer toolchain |
+| networks | N/A | n/a | Tirith graphics plumbing (sharedgl/EGL, host UDP server), not a direct-PAL test |
+| ra-tls-mbedtls, ra-tls-nginx, ra-tls-secret-prov | N/A | n/a | Need SGX remote attestation |
 
 ## Fixes found while running on x86_64
 - `pal/regression/send_handle.c`: `memcmp` over-read past the `MSG` literal (failed on x86_64 depending on `.rodata` layout). It now compares against a zero-padded copy.

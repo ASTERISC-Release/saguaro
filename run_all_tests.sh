@@ -2,7 +2,7 @@
 #
 # run_all_tests.sh — run the full aarch64 port test battery:
 #   PAL regression, LibOS regression, and the CI example applications
-#   (helloworld, multi-thread, busybox, redis, memcached).
+#   (helloworld, multi-thread, busybox, bash, redis, memcached).
 #
 # Usage:
 #   ./run_all_tests.sh                 # everything
@@ -90,7 +90,7 @@ export PYTHONPATH="$GRAMINE_PREFIX/lib/python3.12/site-packages${PYTHONPATH:+:$P
 LOGDIR="${LOGDIR:-$LOGDIR}"
 mkdir -p "$LOGDIR"
 
-ALL_SUITES=(pal libos helloworld multithread busybox redis memcached)
+ALL_SUITES=(pal libos helloworld multithread busybox bash redis memcached)
 DO_BUILD=1
 RUN=()
 
@@ -261,6 +261,19 @@ busybox)
     grep -qx "$HOST_ARCH" "$LOGDIR/busybox.log" || rc=1
     [ $rc -ne 0 ] && tail -3 "$LOGDIR/busybox.log"
     summary busybox $rc "sh + uname over emulated shell"
+    ;;
+
+bash)
+    # The example ships its own 7-check regression target; it uses the system
+    # bash (manifest mounts $(dirname $(which bash))), so no binary to build.
+    ( cd "$REPO/CI-Examples/bash" && make clean >/dev/null 2>&1
+      timeout -s KILL 300 make regression >"$LOGDIR/bash.log" 2>&1 )
+    rc=$?
+    n=$(grep -ac '^\[ Success [0-9]*/7 \]' "$LOGDIR/bash.log")
+    [ "$n" -eq 7 ] || rc=1
+    [ $rc -ne 0 ] && tail -3 "$LOGDIR/bash.log"
+    kill_strays
+    summary bash $rc "$n/7 checks"
     ;;
 
 redis)
