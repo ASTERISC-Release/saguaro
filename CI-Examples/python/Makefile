@@ -24,6 +24,7 @@ python.manifest: python.manifest.template
 		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		-Dentrypoint=$(realpath $(shell sh -c "command -v python3")) \
+		-Duser_site=$(shell python3 -m site --user-site) \
 		-Dra_type=$(RA_TYPE) \
 		-Dra_client_spid=$(RA_CLIENT_SPID) \
 		-Dra_client_linkable=$(RA_CLIENT_LINKABLE) \

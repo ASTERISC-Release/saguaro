@@ -1,6 +1,7 @@
 *.tar.gz
 /install/*
 /nginx-*/*
+/deps/
 /nginx_args
 /OUTPUT
 /result-*

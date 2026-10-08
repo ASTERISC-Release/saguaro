@@ -14,6 +14,12 @@ loader.env.LD_LIBRARY_PATH = "/lib:/lib:{{ arch_libdir }}:/usr/{{ arch_libdir }}
 # We limit the number of spawned threads via OMP_NUM_THREADS env variable.
 loader.env.OMP_NUM_THREADS = "4"
 
+# The guest python sees uid 0, which natively disables the user site-packages
+# directory; re-add it (a pip --user install target, e.g. numpy/scipy when the
+# distro packages are unavailable) via PYTHONPATH. Harmless where the directory
+# does not exist.
+loader.env.PYTHONPATH = "{{ user_site }}"
+
 loader.insecure__use_cmdline_argv = true
 
 sys.enable_sigterm_injection = true
