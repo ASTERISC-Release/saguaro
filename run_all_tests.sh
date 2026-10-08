@@ -39,6 +39,8 @@
 #    only imported by the SGX-signing tools, which stay disabled.)
 #
 #   # 2. Configure, build, install into a private prefix (~3 min native build).
+#   #    Or just run ./install.sh, which automates this step (and optionally
+#   #    step 1 with --deps) and can chain into this script via --run-tests.
 #   #    `ninja install` places the CLI scripts in <prefix>/bin and the
 #   #    graminelibos package in <prefix>/lib/python3.X/site-packages — which
 #   #    is why the script exports PYTHONPATH for exactly that directory.
