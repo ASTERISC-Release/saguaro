@@ -43,6 +43,16 @@ if host_machine.cpu_family() == 'x86_64'
         'mathvec/libmvec.so',
         'mathvec/libmvec.so.1',
     ]
+elif host_machine.cpu_family() == 'aarch64'
+    # Same set as x86_64: the loader (Gramine's runtime /lib chroot has no other
+    # ld-*; find_interp() resolves every test binary's PT_INTERP against it) and
+    # libmvec (built for aarch64 since glibc 2.28, in the same mathvec/ dir).
+    glibc_output_paths += [
+        'elf/ld-linux-aarch64.so.1',
+        'elf/ld.so',
+        'mathvec/libmvec.so',
+        'mathvec/libmvec.so.1',
+    ]
 endif
 
 glibc_output = []
