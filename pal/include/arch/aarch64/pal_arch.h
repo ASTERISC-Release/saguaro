@@ -49,8 +49,6 @@ static inline void pal_tcb_arch_set_stack_canary(PAL_TCB* tcb, uint64_t canary) 
 static_assert(offsetof(PAL_TCB, stack_protector_canary) == 0x8,
               "unexpected offset of stack_protector_canary in PAL_TCB struct");
 
-#include "pal_host_arch.h"
-
 /*
  * Milestone A stopgap (single-threaded only): x86_64 reaches PAL_TCB via %gs, a register the
  * real ABI never assigns to anything else, so the app's own libc can't collide with it.
@@ -66,6 +64,8 @@ static_assert(offsetof(PAL_TCB, stack_protector_canary) == 0x8,
  * thread-creation time and reached via TPIDR_EL0 plus that fixed offset.
  */
 extern PAL_TCB* g_pal_tcb_singleton;
+
+#include "pal_host_arch.h"
 
 static inline PAL_TCB* pal_get_tcb(void) {
     return g_pal_tcb_singleton;

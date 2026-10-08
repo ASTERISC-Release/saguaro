@@ -5,6 +5,7 @@
 
 #include <asm/errno.h>
 #include <asm/fcntl.h>
+#include <linux/fcntl.h> /* AT_FDCWD */
 #include <linux/fs.h>
 
 #include "api.h"
@@ -48,7 +49,7 @@ int write_all(int fd, const void* buf, size_t size) {
 int read_text_file_to_cstr(const char* path, char** out) {
     long ret;
     char* buf = NULL;
-    long fd = DO_SYSCALL(open, path, O_RDONLY, 0);
+    long fd = DO_SYSCALL(openat, AT_FDCWD, path, O_RDONLY, 0);
     if (fd < 0) {
         ret = fd;
         goto out;
@@ -107,7 +108,7 @@ int read_text_file_iter_lines(const char* path, int (*callback)(const char* line
                               void* arg) {
     int ret;
 
-    int fd = DO_SYSCALL(open, path, O_RDONLY, 0);
+    int fd = DO_SYSCALL(openat, AT_FDCWD, path, O_RDONLY, 0);
     if (fd < 0)
         return fd;
 

@@ -10,6 +10,8 @@
  *       implemented (without device-specific changes to LibOS layer).
  */
 
+#include <linux/fcntl.h> /* AT_FDCWD */
+
 #include "api.h"
 #include "ioctls.h"
 #include "pal.h"
@@ -42,7 +44,7 @@ static int dev_open(PAL_HANDLE* handle, const char* type, const char* uri, enum 
 
     hdl->dev.nonblocking = !!(options & PAL_OPTION_NONBLOCK);
 
-    ret = DO_SYSCALL(open, uri, PAL_ACCESS_TO_LINUX_OPEN(access)  |
+    ret = DO_SYSCALL(openat, AT_FDCWD, uri, PAL_ACCESS_TO_LINUX_OPEN(access)  |
                                 PAL_CREATE_TO_LINUX_OPEN(create)  |
                                 PAL_OPTION_TO_LINUX_OPEN(options) |
                                 O_CLOEXEC,
@@ -129,7 +131,7 @@ static int dev_delete(PAL_HANDLE handle, enum pal_delete_mode delete_mode) {
     if (delete_mode != PAL_DELETE_ALL)
         return -PAL_ERROR_INVAL;
 
-    int ret = DO_SYSCALL(unlink, handle->dev.realpath);
+    int ret = DO_SYSCALL(unlinkat, AT_FDCWD, handle->dev.realpath, 0);
     return ret < 0 ? unix_to_pal_error(ret) : ret;
 }
 
@@ -178,7 +180,7 @@ static int dev_attrquery(const char* type, const char* uri, PAL_STREAM_ATTR* att
     assert(strcmp(type, URI_TYPE_DEV) == 0);
 
     struct stat stat_buf;
-    int ret = DO_SYSCALL(stat, uri, &stat_buf);
+    int ret = DO_SYSCALL(newfstatat, AT_FDCWD, uri, &stat_buf, 0);
     if (ret < 0)
         return unix_to_pal_error(ret);
 

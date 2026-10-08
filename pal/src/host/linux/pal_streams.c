@@ -6,6 +6,7 @@
  */
 
 #include <asm/fcntl.h>
+#include <linux/fcntl.h> /* AT_FDCWD */
 #include <stdalign.h>
 #include <stdbool.h>
 
@@ -285,7 +286,8 @@ int _PalInitDebugStream(const char* path) {
             return unix_to_pal_error(ret);
     }
 
-    ret = DO_SYSCALL(open, path, O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC, PERM_rw_______);
+    ret = DO_SYSCALL(openat, AT_FDCWD, path, O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC,
+                     PERM_rw_______);
     if (ret < 0)
         return unix_to_pal_error(ret);
     g_log_fd = ret;

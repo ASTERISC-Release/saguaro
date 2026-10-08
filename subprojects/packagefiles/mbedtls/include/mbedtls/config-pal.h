@@ -18,9 +18,15 @@
  * TODO: analyze their impact and add the applicable ones
  */
 
+#if defined(__x86_64__)
 #define MBEDTLS_AESNI_C
-#define MBEDTLS_AES_C
 #define MBEDTLS_AES_USE_HARDWARE_ONLY
+#endif
+/* No aarch64 equivalent of the two x86_64-only defines above for now (ARMv8 Crypto Extension AES
+ * would be MBEDTLS_AESCE_C, a different mechanism, not just a renamed flag) -- mbedtls falls
+ * back to its portable software AES implementation there, same reasoning as the AES-NI hardware
+ * check guarded off in pal_main.c's verify_hw_requirements(). */
+#define MBEDTLS_AES_C
 #define MBEDTLS_ASN1_PARSE_C
 #define MBEDTLS_ASN1_WRITE_C
 #define MBEDTLS_BASE64_C
@@ -35,8 +41,8 @@
 #define MBEDTLS_GCM_C
 #define MBEDTLS_GENPRIME
 #define MBEDTLS_HAVE_ASM
-#define MBEDTLS_HAVE_SSE2
 #if defined(__x86_64__)
+#define MBEDTLS_HAVE_SSE2
 #define MBEDTLS_HAVE_X86_64
 #endif
 #define MBEDTLS_HKDF_C

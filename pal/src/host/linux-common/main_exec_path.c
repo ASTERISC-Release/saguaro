@@ -1,3 +1,6 @@
+#include <asm/fcntl.h>
+#include <linux/fcntl.h> /* AT_FDCWD */
+
 #include "api.h"
 #include "linux_utils.h"
 #include "syscall.h"
@@ -12,7 +15,10 @@ char* get_main_exec_path(void) {
         return NULL;
     }
 
-    ssize_t len = DO_SYSCALL(readlink, "/proc/self/exe", buf, BUF_SIZE);
+    /* `readlink` has no aarch64 syscall number (aarch64's generic ABI only has the *at() forms);
+     * `readlinkat(AT_FDCWD, ...)` is the direct, universally-portable equivalent and works
+     * identically on x86_64. */
+    ssize_t len = DO_SYSCALL(readlinkat, AT_FDCWD, "/proc/self/exe", buf, BUF_SIZE);
     if (len < 0) {
         free(buf);
         return NULL;

@@ -10,6 +10,10 @@
 
 #include "api.h"
 #include "cpu.h"
+/* Many generic (non-arch-dir) PAL files reach DO_SYSCALL only transitively, via
+ * pal.h -> pal_arch.h -> this file -- same as x86_64's pal_host_arch.h, which also includes this
+ * directly rather than relying on each call site to do so itself. */
+#include "syscall.h"
 
 /*
  * Conservative upper bound on usable userspace VA. x86_64 uses the hard 47-bit canonical limit

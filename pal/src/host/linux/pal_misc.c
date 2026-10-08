@@ -6,6 +6,7 @@
  */
 
 #include <asm/fcntl.h>
+#include <linux/fcntl.h> /* AT_FDCWD */
 #include <linux/time.h>
 
 #include "api.h"
@@ -18,7 +19,7 @@
 static int g_rand_fd = -1;
 
 int init_random(void) {
-    int fd = DO_SYSCALL(open, "/dev/urandom", O_RDONLY | O_CLOEXEC, 0);
+    int fd = DO_SYSCALL(openat, AT_FDCWD, "/dev/urandom", O_RDONLY | O_CLOEXEC, 0);
     if (fd < 0)
         return unix_to_pal_error(fd);
     g_rand_fd = fd;

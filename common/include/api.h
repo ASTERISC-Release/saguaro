@@ -447,6 +447,40 @@ static inline void erase_memory(void* buffer, size_t size) {
     __asm__ volatile("rep stosb" : "+D"(buffer), "+c"(size) : "a"(0) : "cc", "memory");
 }
 
+#elif defined(__aarch64__)
+/* Same logic as the x86_64 branch above (the overflow/last-page checks aren't actually x86_64-
+ * specific, just never generalized) -- duplicated rather than shared to avoid touching the
+ * x86_64 path at all while porting. */
+static inline bool __range_not_ok(uintptr_t addr, size_t size) {
+    addr += size;
+    if (addr < size) {
+        /* pointer arithmetic overflow */
+        return true;
+    }
+    if ((addr & ~(PAGE_SIZE - 1)) == ~(PAGE_SIZE - 1)) {
+        /* Disallow the very last page of memory. In C it's legal to have a pointer to the byte
+         * after an object (end), yet that would wrap the pointer, which would be wrong. Also it
+         * could be dangerous to map stuff there. */
+        return true;
+    }
+    return false;
+}
+
+/* Check if pointer to memory region is valid. Return true if the memory
+ * region may be valid, false if it is definitely invalid. */
+static inline bool access_ok(const volatile void* addr, size_t size) {
+    return !__range_not_ok((uintptr_t)addr, size);
+}
+
+/* `rep stosb` has no aarch64 equivalent; a volatile byte-store loop is immune to the same
+ * dead-store elimination concern (volatile accesses can never be optimized away), so it needs no
+ * separate compiler-barrier trick the way a plain memset()-based approach would. */
+static inline void erase_memory(void* buffer, size_t size) {
+    volatile uint8_t* p = (volatile uint8_t*)buffer;
+    for (size_t i = 0; i < size; i++)
+        p[i] = 0;
+}
+
 #else
 #error "Unsupported architecture"
 #endif /* __x86_64__ */

@@ -21,13 +21,13 @@
 #ifndef MADV_FREE
 #define MADV_FREE 8
 #endif
-#ifdef __x86_64__
+/* madvise() flags are part of the generic Linux UAPI, not an arch-specific syscall table -- these
+ * fallback values are the same on aarch64 (verified against a real aarch64 <linux/mman.h>), so,
+ * unlike the historical `#ifdef __x86_64__` guard here implied, there's no actual platform
+ * dependency to gate on. */
 #ifndef MADV_WIPEONFORK
 #define MADV_WIPEONFORK 18
 #endif
 #ifndef MADV_KEEPONFORK
 #define MADV_KEEPONFORK 19
-#endif
-#else /* __x86_64__ */
-#error "Unsupported platform"
 #endif

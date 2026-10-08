@@ -16,14 +16,15 @@ static int copy_value_to_uint64(void* addr, size_t size, uint64_t* out_value) {
     if (!addr || size > sizeof(*out_value))
         return -PAL_ERROR_INVAL;
 
-#ifdef __x86_64__
-    /* the copy below assumes little-endian machines (which x86 is) */
+#if defined(__x86_64__) || defined(__aarch64__)
+    /* the copy below assumes little-endian machines (both x86_64 and aarch64 are, in the
+     * configurations Gramine targets) */
     *out_value = 0;
     memcpy(out_value, addr, size);
     return 0;
 #else
 #error "Unsupported architecture"
-#endif /* __x86_64__ */
+#endif
 }
 
 /* finds a sub region with name `sub_region_name` among `all_sub_regions` and returns its index */

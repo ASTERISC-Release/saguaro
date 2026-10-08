@@ -101,6 +101,16 @@ add_project_arguments(
 
     language: 'c')
 
+if host_machine.cpu_family() == 'aarch64'
+    # Without this, GCC may emit calls to libgcc's "outline atomics" helpers
+    # (__aarch64_cas4_acq, __aarch64_swp4_acq, ...) for atomic ops on cores where LSE support
+    # isn't assumed at compile time -- those helpers live in libgcc/libatomic, neither of which
+    # this -nostdlib build links against. This forces the universally-compatible inline
+    # LDAXR/STLXR load/store-exclusive sequence instead, with no external runtime dependency;
+    # x86_64 has no equivalent concern since its atomics are native instructions either way.
+    add_project_arguments('-mno-outline-atomics', language: 'c')
+endif
+
 debug = get_option('buildtype') == 'debug' or get_option('buildtype') == 'debugoptimized'
 if debug
     add_project_arguments('-DDEBUG', language: 'c')

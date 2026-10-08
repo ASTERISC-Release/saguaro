@@ -40,9 +40,17 @@ libos_syscall_entry:
     mov  x17, sp              /* X17 = original app SP, saved before we touch SP at all */
 
     /* Find the LibOS-internal stack top via g_pal_tcb_singleton (see pal_arch.h's long comment
-     * on why this is a plain global rather than a register on this architecture). */
-    adrp x16, g_pal_tcb_singleton
-    ldr  x16, [x16, :lo12:g_pal_tcb_singleton]
+     * on why this is a plain global rather than a register on this architecture). This is a GOT
+     * (not direct :lo12:) reference: g_pal_tcb_singleton is defined in libpal.so, a *different*
+     * shared object from this one (libsysdb.so), so its address isn't known until the dynamic
+     * linker resolves it at load time -- a direct adrp/:lo12: pair (which computes a link-time-
+     * fixed offset) can't express that and fails to link ("relocation ... may bind externally").
+     * The extra `ldr [x16]` is needed because the GOT slot holds the *address* of the variable,
+     * not its value (which is itself a pointer, PAL_TCB*) -- one more dereference than the
+     * equivalent local-symbol idiom needs. */
+    adrp x16, :got:g_pal_tcb_singleton
+    ldr  x16, [x16, :got_lo12:g_pal_tcb_singleton]
+    ldr  x16, [x16]
     ldr  x16, [x16, #(LIBOS_TCB_OFF + LIBOS_TCB_LIBOS_STACK_OFF)]
     and  x16, x16, #0xfffffffffffffff0   /* defensive 16-byte realign */
     sub  x16, x16, #PAL_CONTEXT_SIZE

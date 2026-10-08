@@ -40,10 +40,19 @@
  * return scheme. X16/X17 are the architecture's own designated intra-procedure-call scratch
  * registers (used identically by linker veneers/PLT stubs), so using X16 here clobbers nothing
  * a caller could be relying on.
+ *
+ * This is a GOT (not direct :lo12:) reference to g_pal_tcb_singleton, since any caller of this
+ * macro -- whether PAL/LibOS code or, eventually, a patched libc -- lives in a different shared
+ * object from libpal.so, where g_pal_tcb_singleton is actually defined; a direct adrp/:lo12: pair
+ * computes a link-time-fixed offset and fails to link across that boundary ("relocation ... may
+ * bind externally"). The extra `ldr [x16]` is needed because the GOT slot holds the *address* of
+ * the variable, not its value (itself a pointer, PAL_TCB*) -- one more dereference than the
+ * equivalent same-object idiom needs.
  */
 .macro GRAMINE_SYSCALL
-    adrp x16, g_pal_tcb_singleton
-    ldr  x16, [x16, :lo12:g_pal_tcb_singleton]
+    adrp x16, :got:g_pal_tcb_singleton
+    ldr  x16, [x16, :got_lo12:g_pal_tcb_singleton]
+    ldr  x16, [x16]
     ldr  x16, [x16, GRAMINE_SYSCALL_OFFSET]
     blr  x16
 .endm
@@ -58,8 +67,9 @@
 
 __asm__(
     ".macro GRAMINE_SYSCALL\n"
-    "adrp x16, g_pal_tcb_singleton\n"
-    "ldr  x16, [x16, :lo12:g_pal_tcb_singleton]\n"
+    "adrp x16, :got:g_pal_tcb_singleton\n"
+    "ldr  x16, [x16, :got_lo12:g_pal_tcb_singleton]\n"
+    "ldr  x16, [x16]\n"
     "ldr  x16, [x16, " GRAMINE_XSTR(GRAMINE_SYSCALL_OFFSET) "]\n"
     "blr  x16\n"
     ".endm\n"

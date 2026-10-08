@@ -869,6 +869,12 @@ noreturn void start_execution(const char** arguments, const char** environs) {
                      :
                      : "r"(g_entrypoint_map.l_entry), "r"(stack_entries)
                      : "memory");
+#elif defined(__aarch64__)
+    __asm__ volatile("mov sp, %1\n"
+                     "br %0\n"
+                     :
+                     : "r"(g_entrypoint_map.l_entry), "r"(stack_entries)
+                     : "memory");
 #else
 #error "unsupported architecture"
 #endif

@@ -88,6 +88,10 @@ static int clone_implementation_wrapper(void* arg_) {
 
     /* Diagnostic: log the TLS values we just set so we can verify per-thread FS base.
      * The user will run the test and paste logs if the problem persists. */
+#ifdef __x86_64__
+    /* PalSegmentBaseGet/PAL_SEGMENT_FS only exist on x86_64 (see pal/src/pal_misc.c): aarch64 has
+     * no equivalent concept, TLS is read directly via TPIDR_EL0 (see get_tls() in
+     * libos_tcb_arch.h) rather than through this PAL API at all. */
     {
         uintptr_t fsbase = 0;
         (void)PalSegmentBaseGet(PAL_SEGMENT_FS, &fsbase);
@@ -98,6 +102,11 @@ static int clone_implementation_wrapper(void* arg_) {
             my_thread->tid, (void*)pal_get_tcb(), (void*)tcb, (unsigned long)tcb->context.tls,
             (unsigned long)fsbase);
     }
+#else
+    log_debug(
+        "[libos_clone] pid(tid)=%u pal_tcb=%p libos_tcb=%p context.tls=0x%lx",
+        my_thread->tid, (void*)pal_get_tcb(), (void*)tcb, (unsigned long)tcb->context.tls);
+#endif
 
     /* Inform the parent thread that we finished initialization. */
     PalEventSet(arg->initialize_event);

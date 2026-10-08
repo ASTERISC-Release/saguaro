@@ -30,6 +30,9 @@
 #define __NR_register_host_identity_fd 470
 #endif
 
-#ifndef __NR_syscalls
+/* Unlike __NR_register_host_identity_fd above, the real header on this box *does* already define
+ * __NR_syscalls (to 462, one past the highest real syscall) -- so `#ifndef` here would silently
+ * keep that too-small value instead of making room for our custom syscall numbers up to 501.
+ * Override it unconditionally instead. */
+#undef __NR_syscalls
 #define __NR_syscalls 550
-#endif

@@ -5,6 +5,8 @@
  * This file contains operands to handle streams with URIs that start with "file:" or "dir:".
  */
 
+#include <linux/fcntl.h> /* AT_FDCWD, AT_REMOVEDIR */
+
 #include "api.h"
 #include "linux_utils.h"
 #include "pal.h"
@@ -30,7 +32,7 @@ static int file_open(PAL_HANDLE* handle, const char* type, const char* uri, enum
     assert(WITHIN_MASK(share,   PAL_SHARE_MASK));
     assert(WITHIN_MASK(options, PAL_OPTION_MASK));
 
-    ret = DO_SYSCALL(open, uri, PAL_ACCESS_TO_LINUX_OPEN(access)  |
+    ret = DO_SYSCALL(openat, AT_FDCWD, uri, PAL_ACCESS_TO_LINUX_OPEN(access)  |
                                 PAL_CREATE_TO_LINUX_OPEN(create)  |
                                 PAL_OPTION_TO_LINUX_OPEN(options) |
                                 O_CLOEXEC,
@@ -120,7 +122,7 @@ static int file_delete(PAL_HANDLE handle, enum pal_delete_mode delete_mode) {
     if (delete_mode != PAL_DELETE_ALL)
         return -PAL_ERROR_INVAL;
 
-    DO_SYSCALL(unlink, handle->file.realpath);
+    DO_SYSCALL(unlinkat, AT_FDCWD, handle->file.realpath, 0);
     return 0;
 }
 
@@ -151,7 +153,7 @@ static int file_attrquery(const char* type, const char* uri, PAL_STREAM_ATTR* at
         return -PAL_ERROR_INVAL;
 
     struct stat stat_buf;
-    int ret = DO_SYSCALL(stat, uri, &stat_buf);
+    int ret = DO_SYSCALL(newfstatat, AT_FDCWD, uri, &stat_buf, 0);
     if (ret < 0)
         return unix_to_pal_error(ret);
 
@@ -182,7 +184,7 @@ static int file_rename(PAL_HANDLE handle, const char* type, const char* uri) {
     if (!tmp)
         return -PAL_ERROR_NOMEM;
 
-    int ret = DO_SYSCALL(rename, handle->file.realpath, uri);
+    int ret = DO_SYSCALL(renameat, AT_FDCWD, handle->file.realpath, AT_FDCWD, uri);
     if (ret < 0) {
         free(tmp);
         return unix_to_pal_error(ret);
@@ -203,7 +205,7 @@ static int dir_open(PAL_HANDLE* handle, const char* type, const char* uri, enum 
         return -PAL_ERROR_INVAL;
 
     if (create == PAL_CREATE_TRY || create == PAL_CREATE_ALWAYS) {
-        int ret = DO_SYSCALL(mkdir, uri, share);
+        int ret = DO_SYSCALL(mkdirat, AT_FDCWD, uri, share);
 
         if (ret < 0) {
             if (ret == -EEXIST && create == PAL_CREATE_ALWAYS)
@@ -214,7 +216,8 @@ static int dir_open(PAL_HANDLE* handle, const char* type, const char* uri, enum 
         }
     }
 
-    int fd = DO_SYSCALL(open, uri, O_DIRECTORY | PAL_OPTION_TO_LINUX_OPEN(options) | O_CLOEXEC, 0);
+    int fd = DO_SYSCALL(openat, AT_FDCWD, uri,
+                        O_DIRECTORY | PAL_OPTION_TO_LINUX_OPEN(options) | O_CLOEXEC, 0);
     if (fd < 0)
         return unix_to_pal_error(fd);
 
@@ -341,7 +344,7 @@ static int dir_delete(PAL_HANDLE handle, enum pal_delete_mode delete_mode) {
     if (delete_mode != PAL_DELETE_ALL)
         return -PAL_ERROR_INVAL;
 
-    int ret = DO_SYSCALL(rmdir, handle->dir.realpath);
+    int ret = DO_SYSCALL(unlinkat, AT_FDCWD, handle->dir.realpath, AT_REMOVEDIR);
     return ret < 0 ? unix_to_pal_error(ret) : 0;
 }
 
@@ -353,7 +356,7 @@ static int dir_rename(PAL_HANDLE handle, const char* type, const char* uri) {
     if (!tmp)
         return -PAL_ERROR_NOMEM;
 
-    int ret = DO_SYSCALL(rename, handle->dir.realpath, uri);
+    int ret = DO_SYSCALL(renameat, AT_FDCWD, handle->dir.realpath, AT_FDCWD, uri);
     if (ret < 0) {
         free(tmp);
         return unix_to_pal_error(ret);

@@ -11,6 +11,7 @@
 
 #include <asm/errno.h>
 #include <asm/fcntl.h>
+#include <linux/fcntl.h> /* AT_FDCWD */
 
 #include "api.h"
 #include "pal_linux.h"
@@ -18,7 +19,7 @@
 #include "topo_info.h"
 
 ssize_t read_file_buffer(const char* filename, char* buf, size_t count) {
-    int fd = DO_SYSCALL(open, filename, O_RDONLY);
+    int fd = DO_SYSCALL(openat, AT_FDCWD, filename, O_RDONLY);
     if (fd < 0)
         return fd;
 
