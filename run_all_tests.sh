@@ -2,7 +2,8 @@
 #
 # run_all_tests.sh — run the full aarch64 port test battery:
 #   PAL regression, LibOS regression, and the CI example applications
-#   (helloworld, multi-thread, busybox, bash, redis, memcached).
+#   (helloworld, multi-thread, busybox, bash, redis, memcached, sqlite, python,
+#   lighttpd, nginx, rust, networks).
 #
 # Usage:
 #   ./run_all_tests.sh                 # everything
@@ -90,7 +91,8 @@ export PYTHONPATH="$GRAMINE_PREFIX/lib/python3.12/site-packages${PYTHONPATH:+:$P
 LOGDIR="${LOGDIR:-$LOGDIR}"
 mkdir -p "$LOGDIR"
 
-ALL_SUITES=(pal libos helloworld multithread busybox bash redis memcached)
+ALL_SUITES=(pal libos helloworld multithread busybox bash redis memcached \
+            sqlite python lighttpd nginx rust networks)
 DO_BUILD=1
 RUN=()
 
@@ -158,8 +160,15 @@ declare -a RESULTS=()
 FAILED=0
 
 kill_strays() {
+    # A direct-PAL run appears in several shapes: the loader before it re-execs
+    # (comm "loader"), after re-exec (comm "exe", cmdline ".../direct/loader ..."),
+    # and forked host processes of fork()-using apps like nginx (comm "libpal.so",
+    # cmdline ".../direct/libpal.so ..."). pkill -x demonstrably missed the latter
+    # two families in battery runs, so match the Gramine-specific command lines
+    # (bracketed so this script's own text can never match the patterns it runs).
     pkill -9 -x loader 2>/dev/null
-    pkill -9 -x libpal.so 2>/dev/null
+    pkill -9 -f "/gramine/direct/[l]oader " 2>/dev/null
+    pkill -9 -f "/gramine/direct/[l]ibpal[.]so " 2>/dev/null
     sleep 0.3
 }
 trap kill_strays EXIT INT TERM
@@ -370,6 +379,120 @@ PYEOF
     stop_server memcached
     kill_strays
     summary memcached $rc "100 set/get over TCP"
+    ;;
+
+sqlite)
+    # The example ships its own 3-check regression target (create/insert/select
+    # scripts diffed against expected output); uses the host sqlite3 binary.
+    ( cd "$REPO/CI-Examples/sqlite" && timeout -s KILL 300 make regression >"$LOGDIR/sqlite.log" 2>&1 )
+    rc=$?
+    n=$(grep -ac '^\[ Success [0-9]*/3 \]' "$LOGDIR/sqlite.log")
+    [ "$n" -eq 3 ] || rc=1
+    [ $rc -ne 0 ] && tail -3 "$LOGDIR/sqlite.log"
+    kill_strays
+    summary sqlite $rc "$n/3 checks"
+    ;;
+
+python)
+    # run-tests.sh (via `make check`): helloworld, HTTP server + Gramine client +
+    # host-wget round-trip equality on 8005, numpy dot, scipy cholesky. Uses the host
+    # python3; numpy/scipy may be distro packages or a pip --user install (the manifest
+    # re-adds the user site directory via loader.env.PYTHONPATH because the guest
+    # interpreter runs as uid 0, which natively disables user site).
+    if ! python3 -c "import numpy, scipy" 2>/dev/null; then
+        summary python 0 "partial: numpy/scipy missing (apt python3-numpy python3-scipy or pip3 install --user --break-system-packages 'numpy scipy')"
+        continue
+    fi
+    wait_port_free 8005 || echo "  warning: port 8005 still busy"
+    ( cd "$REPO/CI-Examples/python" && make >/dev/null 2>&1
+      timeout -s KILL 900 make check >"$LOGDIR/python.log" 2>&1 )
+    rc=$?
+    # `make check` redirects run-tests.sh into the example's TEST_STDOUT file
+    n=$(grep -ac '^\[ Success [0-9]*/4 \]' "$REPO/CI-Examples/python/TEST_STDOUT" 2>/dev/null)
+    [ "$n" -eq 4 ] || rc=1
+    [ $rc -ne 0 ] && tail -3 "$LOGDIR/python.log"
+    kill_strays
+    summary python $rc "$n/4 checks"
+    ;;
+
+lighttpd)
+    if ! ensure_example lighttpd install/sbin/lighttpd lighttpd.manifest; then
+        summary lighttpd 1 "build (downloads lighttpd-1.4.59 via its Makefile)"; continue
+    fi
+    wait_port_free 8003 || echo "  warning: port 8003 still busy"
+    start_server lighttpd 120 "$REPO/CI-Examples/lighttpd" gramine-direct lighttpd
+    rc=1
+    for i in $(seq 1 40); do
+        if curl -sf --max-time 5 http://127.0.0.1:8003/random/10K.1.html \
+            -o "$LOGDIR/lighttpd-fetch.html" 2>/dev/null; then
+            cmp -s "$LOGDIR/lighttpd-fetch.html" \
+                "$REPO/CI-Examples/lighttpd/install/html/random/10K.1.html" && rc=0
+            break
+        fi
+        sleep 0.5
+    done
+    stop_server lighttpd
+    kill_strays
+    [ $rc -eq 0 ] && summary lighttpd 0 "10240B byte-identical over TCP" || summary lighttpd 1 "fetch/compare"
+    ;;
+
+nginx)
+    if ! ensure_example nginx install/sbin/nginx nginx.manifest; then
+        summary nginx 1 "build (on hosts without libssl-dev/libpcre-dev run CI-Examples/nginx/build-with-bundled-deps.sh first)"; continue
+    fi
+    wait_port_free 8002 || echo "  warning: port 8002 still busy"
+    start_server nginx 120 "$REPO/CI-Examples/nginx" gramine-direct nginx
+    rc=1
+    for i in $(seq 1 40); do
+        if curl -sf --max-time 5 http://127.0.0.1:8002/random/10K.1.html \
+            -o "$LOGDIR/nginx-http.html" 2>/dev/null \
+           && curl -sfk --max-time 5 https://127.0.0.1:8444/random/10K.1.html \
+            -o "$LOGDIR/nginx-https.html" 2>/dev/null; then
+            cmp -s "$LOGDIR/nginx-http.html"  "$REPO/CI-Examples/nginx/install/html/random/10K.1.html" \
+              && cmp -s "$LOGDIR/nginx-https.html" "$REPO/CI-Examples/nginx/install/html/random/10K.1.html" \
+              && rc=0
+            break
+        fi
+        sleep 0.5
+    done
+    stop_server nginx
+    kill_strays
+    [ $rc -eq 0 ] && summary nginx 0 "HTTP+HTTPS 10240B byte-identical" || summary nginx 1 "fetch/compare"
+    ;;
+
+rust)
+    if ! ensure_example rust target/release/rust-hyper-http-server rust-hyper-http-server.manifest; then
+        summary rust 1 "build (needs cargo/rustc)"; continue
+    fi
+    wait_port_free 3000 || echo "  warning: port 3000 still busy"
+    start_server rust 90 "$REPO/CI-Examples/rust" gramine-direct rust-hyper-http-server
+    rc=1
+    for i in $(seq 1 40); do
+        if curl -sf --max-time 5 http://127.0.0.1:3000/ -o "$LOGDIR/rust-fetch.html" 2>/dev/null; then
+            grep -q "Hello, World" "$LOGDIR/rust-fetch.html" && rc=0
+            break
+        fi
+        sleep 0.5
+    done
+    stop_server rust
+    kill_strays
+    [ $rc -eq 0 ] && summary rust 0 "hyper HTTP 200 over TCP" || summary rust 1 "fetch/compare"
+    ;;
+
+networks)
+    # Self-contained UDP self-test (server thread + loopback client thread): small/
+    # medium/large datagrams, ordering, burst. The Makefile drops the graphics link
+    # flags automatically when ../../../sharedgl/build is absent (see its comment).
+    if ! ensure_example networks udp nw.manifest; then summary networks 1 "build"; continue; fi
+    if timeout -s KILL 120 sh -c "cd '$REPO/CI-Examples/networks' && gramine-direct nw" \
+            >"$LOGDIR/networks.log" 2>&1 \
+       && grep -q "UDP SOCKET TEST PASSED" "$LOGDIR/networks.log"; then
+        rc=0; detail=$(grep -ao "\[server\] OK .*" "$LOGDIR/networks.log" | head -1)
+    else
+        rc=1; tail -3 "$LOGDIR/networks.log"
+    fi
+    kill_strays
+    summary networks $rc "$detail"
     ;;
 
 esac
