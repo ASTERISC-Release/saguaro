@@ -71,8 +71,12 @@ static void write_msg(PAL_HANDLE handle, int type) {
 
 static void recv_and_check(PAL_HANDLE handle, int type) {
     char buf[MSG_SIZE] = { 0 };
+    /* MSG is shorter than MSG_SIZE: compare against a zero-padded copy, not the bare literal
+     * (memcmp(..., MSG, MSG_SIZE) over-reads past the literal and fails depending on .rodata
+     * layout). */
+    char expected[MSG_SIZE] = MSG;
     read_all(handle, type, buf, sizeof(buf));
-    if (memcmp(buf, MSG, sizeof(buf))) {
+    if (memcmp(buf, expected, sizeof(buf))) {
         pal_printf("%s: got invalid message: %s\n", __func__, buf);
         PalProcessExit(1);
     }

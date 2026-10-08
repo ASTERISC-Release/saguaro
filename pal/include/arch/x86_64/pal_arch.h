@@ -238,6 +238,10 @@ typedef int64_t arch_syscall_arg_t;
     (context)->r9
 
 
+/* aarch64-only hook (see arch/aarch64/pal_arch.h): x86_64 reaches its PAL_TCB via %gs, which the
+ * application never rewrites, so there is nothing to snapshot. */
+static inline void pal_tcb_singleton_snapshot_before_user_entry(void) {}
+
 static inline void pal_context_set_ip(PAL_CONTEXT* context, uintptr_t insnptr) {
     context->rip = insnptr;
 }

@@ -65,6 +65,10 @@ __asm__ (
 ".popsection\n"
 );
 
+#else
+#error Unsupported architecture
+#endif
+
 static bool is_pc_at_func(uintptr_t pc, void (*func)(void)) {
     return pc == (uintptr_t)func;
 }
@@ -81,10 +85,6 @@ static void fixup_context_after_read(PAL_CONTEXT* context) {
     pal_context_set_ip(context, (uintptr_t)ret);
     pal_context_set_retval(context, 0);
 }
-
-#else
-#error Unsupported architecture
-#endif
 
 static void memfault_handler(bool is_in_pal, uintptr_t addr, PAL_CONTEXT* context) {
     uintptr_t pc = pal_context_get_ip(context);
