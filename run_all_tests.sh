@@ -69,7 +69,7 @@
 # job report from bash after server suites is the harness reaping its own
 # server process — cosmetic, not a stray.)
 #
-# Lessons baked into this script (see ARM64_PORT_PLAN.md):
+# Lessons baked into this script (see ARM64_MILESTONE_A.md):
 #  * Example manifests pin loader.argv: passing extra app args (e.g. -vv)
 #    makes the PAL exit the app instantly — so we always start servers with
 #    zero arguments and talk to them over TCP instead.
