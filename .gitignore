@@ -27,6 +27,13 @@ pal.map
 __pycache__
 .pytest_cache
 
+# scratch dirs created by the regression suites when pytest is run from the
+# repo root (module import / manifest generation side effects): the LibOS
+# encrypted-mount source dir and ad-hoc dirs from Directory/File PAL tests
+/tmp/
+/tmp_enc/
+/inspect/
+
 # sgx
 *.manifest.sgx
 *.sig
