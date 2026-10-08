@@ -81,25 +81,37 @@ __asm__(
  * both the real syscall number and this custom-call number. */
 #define GRAMINE_CUSTOM_SYSCALL_NR 0x100000
 
-/* GCC does not support `__attribute__((naked))` on aarch64 (unlike x86_64, where that's how the
- * body below is kept as pure, prologue-free asm) -- so, unlike the x86_64 version, this is a
- * perfectly ordinary function with a normal AAPCS64 prologue/epilogue. Declaring the clobbers
- * (including X30/LR, since GRAMINE_SYSCALL's `blr` overwrites it) lets the compiler save/restore
- * whatever it needs around the asm block on its own, and binding the output to X0 explicitly
- * (rather than relying on it surviving untouched into an implicit fallthrough return, which
- * would also trip -Wreturn-type) makes this correct under -Werror too. */
-static int gramine_call(int number __attribute__((unused)),
-                        unsigned long arg1 __attribute__((unused)),
-                        unsigned long arg2 __attribute__((unused))) {
-    register long ret_val __asm__("x0");
-    __asm__ volatile (
-        "mov x8, #" GRAMINE_XSTR(GRAMINE_CUSTOM_SYSCALL_NR) "\n"
-        "GRAMINE_SYSCALL\n"
-        : "=r"(ret_val)
-        :
-        : "x8", "x16", "x30", "memory"
+/*
+ * Unlike the x86_64 version (and unlike GRAMINE_SYSCALL above), this issues a plain `svc #0`
+ * rather than going through GRAMINE_SYSCALL. The macro needs g_pal_tcb_singleton, which is only
+ * resolvable from within PAL/LibOS's own shared objects (see its definition in
+ * pal_arch_exception.c) -- but gramine_call() is called from *guest application* code (this
+ * header is also meant for patched libc/test programs to use), a separate, unrelated binary that
+ * has no link relationship to libpal.so at all. A raw `svc` works correctly instead: it traps via
+ * the same seccomp filter as every other syscall under Milestone A's design (no libc patching),
+ * lands in libos_syscall_entry via maybe_emulate_syscall(), and libos_syscalls.c already checks
+ * the incoming syscall number against GRAMINE_CUSTOM_SYSCALL_NR generically (architecture-
+ * independent) to route it to handle_libos_call() -- so this needs no special-casing on the
+ * LibOS side at all, just the right number in X8 here.
+ *
+ * X0/X1/X2 already hold number/arg1/arg2 exactly where handle_libos_call(args[0], args[1],
+ * args[2]) expects them (ALL_SYSCALL_ARGS pulls straight from context->regs[0..5]), so, unlike
+ * x86_64's version, no register shuffling is needed beyond setting X8 -- and because this ends
+ * in a normal C `return` (not a bare asm block standing in for the whole function body the way
+ * x86_64's naked version does), there's no -Wreturn-type concern to work around either.
+ */
+static int gramine_call(int number, unsigned long arg1, unsigned long arg2) {
+    register long x0 __asm__("x0") = number;
+    register long x1 __asm__("x1") = arg1;
+    register long x2 __asm__("x2") = arg2;
+    register long x8 __asm__("x8") = GRAMINE_CUSTOM_SYSCALL_NR;
+    __asm__ volatile(
+        "svc #0\n"
+        : "+r"(x0)
+        : "r"(x1), "r"(x2), "r"(x8)
+        : "memory"
     );
-    return (int)ret_val;
+    return (int)x0;
 }
 
 #undef GRAMINE_XSTR

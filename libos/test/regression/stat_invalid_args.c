@@ -8,6 +8,17 @@
 #include <unistd.h>
 
 int main(int argc, char** argv) {
+#ifndef SYS_stat
+    /* aarch64's generic syscall ABI has neither a `stat` nor an `lstat` number at all -- this
+     * test is specifically about the legacy syscalls' own EFAULT handling, so there's nothing
+     * equivalent to substitute (unlike getdents.c's getdents/getdents64 split, there's no
+     * "modern variant of this exact syscall" to fall back to here without changing what's being
+     * tested). Report success rather than failing to build/run a test that cannot apply. */
+    (void)argc;
+    (void)argv;
+    printf("stat/lstat do not exist on this architecture; skipping\n");
+    return 0;
+#else
     int r;
     struct stat buf;
 
@@ -36,4 +47,5 @@ int main(int argc, char** argv) {
         printf("lstat(invalid-buf-ptr) correctly returned error\n");
 
     return 0;
+#endif
 }

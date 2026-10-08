@@ -27,6 +27,16 @@ struct linux_dirent64 {
 #define BUF_SIZE_SMALL 64
 
 static int do_getdents(const char* name, int fd, size_t buf_size) {
+#ifndef SYS_getdents
+    /* aarch64's generic syscall ABI has no legacy (non-64) getdents number at all -- glibc's own
+     * readdir() always uses getdents64 there, so there is nothing for this sub-case to exercise;
+     * treat it as "no entries" (0) so the do-while loop in main() ends immediately rather than
+     * failing on an unsupported syscall. */
+    (void)name;
+    (void)fd;
+    (void)buf_size;
+    return 0;
+#else
     char buf[buf_size];
 
     int count = syscall(SYS_getdents, fd, buf, buf_size);
@@ -41,6 +51,7 @@ static int do_getdents(const char* name, int fd, size_t buf_size) {
         offs += d32->d_reclen;
     }
     return count;
+#endif
 }
 
 static int do_getdents64(const char* name, int fd, size_t buf_size) {

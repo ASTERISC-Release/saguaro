@@ -1,12 +1,32 @@
 #include "pal.h"
 #include "pal_regression.h"
 
+#ifdef __x86_64__
 #define SYMBOL_ADDR(sym)                                                    \
     ({                                                                      \
         void* _sym;                                                         \
         __asm__ volatile("movq " #sym "@GOTPCREL(%%rip), %0" : "=r"(_sym)); \
         _sym;                                                               \
     })
+#elif defined(__aarch64__)
+/* Same GOT-indirect pattern as libos/src/arch/aarch64/syscallas.S's g_pal_tcb_singleton lookup:
+ * every one of these Pal* symbols is defined in a different shared object (libpal.so) from this
+ * test binary, so a direct adrp/:lo12: pair (link-time-fixed offset, same-object only) can't
+ * reach it -- unlike that lookup, this wants a *function's* address, which the GOT slot holds
+ * directly, so no extra dereference is needed here (contrast with g_pal_tcb_singleton, a data
+ * symbol, where the GOT slot holds the data's address and a further load gets its value). */
+#define SYMBOL_ADDR(sym)                                              \
+    ({                                                                \
+        void* _sym;                                                  \
+        __asm__ volatile(                                            \
+            "adrp %0, :got:" #sym "\n"                                \
+            "ldr  %0, [%0, :got_lo12:" #sym "]\n"                     \
+            : "=r"(_sym));                                            \
+        _sym;                                                        \
+    })
+#else
+#error "Unsupported architecture"
+#endif
 
 #define PRINT_SYMBOL(sym) pal_printf("symbol: %s = %p\n", #sym, SYMBOL_ADDR(sym))
 

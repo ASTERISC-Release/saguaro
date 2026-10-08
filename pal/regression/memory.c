@@ -44,6 +44,27 @@ __asm__ (
 ".popsection\n"
 );
 
+#elif defined(__aarch64__)
+void ret(void) __attribute__((visibility("internal")));
+void end_of_ret(void) __attribute__((visibility("internal")));
+__asm__ (
+".pushsection .text\n"
+".type mem_write, %function\n"
+".type mem_read, %function\n"
+".type ret, %function\n"
+".type end_of_ret, %function\n"
+"mem_write:\n"
+    "strb w1, [x0]\n"
+    "ret\n"
+"mem_read:\n"
+    "ldrb w0, [x0]\n"
+    "ret\n"
+"ret:\n"
+    "ret\n"
+"end_of_ret:\n"
+".popsection\n"
+);
+
 static bool is_pc_at_func(uintptr_t pc, void (*func)(void)) {
     return pc == (uintptr_t)func;
 }
