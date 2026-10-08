@@ -695,6 +695,14 @@ BEGIN_RS_FUNC(thread) {
     __libos_tcb_init(tcb);
 
     assert(tcb->context.regs);
+    /* On aarch64 this is the first place a forked child drops its tagged PAL_TCB TPIDR_EL0
+     * (set_tls() installs the application TLS), i.e. the first use of pal_get_tcb()'s
+     * g_pal_tcb_singleton fallback -- and the fork-child path never reaches the regular
+     * libos_init.c snapshot (that runs only after receive_checkpoint_and_restore returns).
+     * Snapshot now, while the child's own PAL_TCB is still reachable via the tagged fast path;
+     * without this the singleton is NULL in the child and the next pal_get_tcb() fallback
+     * (inlined right after this set_tls) dereferences NULL -> infinite SIGSEGV. */
+    pal_tcb_singleton_snapshot_before_user_entry();
     set_tls(tcb->context.tls);
 
     thread->pal_handle = g_pal_public_state->first_thread;
