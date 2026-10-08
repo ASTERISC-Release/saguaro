@@ -46,9 +46,18 @@ struct libos_xstate {
             = (value);                                                                    \
     } while (0)
 
+/* set_tls() below registers the thread in the per-thread PAL_TCB registry (declared in
+ * pal_arch.h via the pal.h include above; defined in libos_thread.c -- see the comment there). */
+
 /* TPIDR_EL0 is writable directly from EL0 -- unlike x86_64's %fs, which needs the
  * arch_prctl(ARCH_SET_FS, ...) syscall, no syscall is involved here at all. */
 static inline void set_tls(uintptr_t tls) {
+    /* Register *before* the msr: while the old (tagged) TPIDR_EL0 is still in place,
+     * pal_get_tcb() resolves this thread's own PAL_TCB correctly, which is the value to anchor
+     * to the new TLS key. For the application's clone()/fork() children this is their first
+     * action; after it the registry (or, pre-registration, pal_get_tcb()'s singleton fallback)
+     * is the only way to reach the TCB. */
+    libos_tcb_registry_add(pal_get_tcb(), tls);
     __asm__ volatile("msr tpidr_el0, %0" :: "r"(tls) : "memory");
 }
 

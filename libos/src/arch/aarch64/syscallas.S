@@ -54,18 +54,51 @@ libos_syscall_entry:
      * context address with (the GOT chain needs one), so the whole prologue is built around
      * X17, with X16 kept intact until it has been stashed. */
 
-    /* Find the LibOS-internal stack top via g_pal_tcb_singleton (see pal_arch.h's long comment
-     * on why this is a plain global rather than a register on this architecture). This is a GOT
-     * (not direct :lo12:) reference: g_pal_tcb_singleton is defined in libpal.so, a *different*
-     * shared object from this one (libsysdb.so), so its address isn't known until the dynamic
-     * linker resolves it at load time -- a direct adrp/:lo12: pair (which computes a link-time-
-     * fixed offset) can't express that and fails to link ("relocation ... may bind externally").
-     * The extra `ldr [x17]` is needed because the GOT slot holds the *address* of the variable,
-     * not its value (which is itself a pointer, PAL_TCB*) -- one more dereference than the
-     * equivalent local-symbol idiom needs. */
+    /* Resolve *this thread's own* PAL_TCB. The table `g_pal_tcb_registry` (see its long comment
+     * in libos_thread.c) maps a thread's application TLS pointer -- installed into TPIDR_EL0 by
+     * set_tls(), which is every clone()/fork() child's first act, hence always present before a
+     * thread's first syscall -- to that thread's PAL_TCB. Entries are stored {key = tls|1, tcb}
+     * with 0 = empty; add() never leaves holes (a failed CAS means the slot got filled), so the
+     * scan can stop at the first empty slot. Tagged pointers (bit 0 set: Gramine-internal threads
+     * whose TLS register pal_set_tcb() still owns) decode to their TCB directly.
+     *
+     * A miss can only be the main thread before its first pal_get_tcb() self-registration --
+     * the one case for which the g_pal_tcb_singleton fallback is correct -- or the startup window
+     * before the table is populated; both take the GOT fallback below. x16 (the resume address,
+     * needed for the restart mirror) and x8 (syscall number, needed for dispatch) are the only
+     * registers this scan may not destroy: both live in the application's stack frame for the
+     * duration (the stack is still the application's own, 16-byte-aligned as the ABI requires at
+     * any svc site), and are reloaded verbatim at .Ltcb_done. This replaces the pre-multi-thread
+     * design that always read g_pal_tcb_singleton here -- correct for one thread, catastrophic
+     * for more (all threads then emulated syscalls on *one shared* LibOS stack). */
+    .extern g_pal_tcb_registry
+    stp  x16, x8, [sp, #-16]!
+    mrs  x16, tpidr_el0
+    tbnz x16, #0, .Ltcb_tagged
+    orr  x16, x16, #1                 /* lookup key (slot key is `tls|1`, 0 = empty marker) */
+    adrp x17, g_pal_tcb_registry
+    add  x17, x17, :lo12:g_pal_tcb_registry
+.Ltcb_scan:
+    ldr  x8, [x17]
+    cbz  x8, .Ltcb_miss               /* empty slot: thread not registered */
+    cmp  x8, x16
+    b.eq .Ltcb_found
+    add  x17, x17, #16
+    b    .Ltcb_scan
+.Ltcb_found:
+    ldr  x17, [x17, #8]
+    cbnz x17, .Ltcb_done              /* slot claimed but its tcb store not yet visible */
+.Ltcb_miss:
     adrp x17, :got:g_pal_tcb_singleton
     ldr  x17, [x17, :got_lo12:g_pal_tcb_singleton]
     ldr  x17, [x17]
+    b    .Ltcb_done
+.Ltcb_tagged:
+    and  x17, x16, #-2                /* strip the pal_set_tcb() tag */
+.Ltcb_done:
+    ldp  x16, x8, [sp], #16
+
+    /* Find the LibOS-internal stack top in the resolved PAL_TCB. */
     ldr  x17, [x17, #(LIBOS_TCB_OFF + LIBOS_TCB_LIBOS_STACK_OFF)]
     and  x17, x17, #0xfffffffffffffff0   /* defensive 16-byte realign */
     sub  x17, x17, #PAL_CONTEXT_SIZE

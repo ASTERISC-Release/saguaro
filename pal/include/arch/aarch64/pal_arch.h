@@ -78,6 +78,14 @@ extern __attribute__((visibility("protected"))) PAL_TCB* g_pal_tcb_singleton;
 
 #include "pal_host_arch.h"
 
+#ifndef IN_PAL
+/* Per-thread PAL_TCB registry, defined in libos_thread.c (LibOS/libsysdb.so only -- PAL-internal
+ * threads always reach their TCB via the tagged-TPIDR fast path in pal_get_tcb() below instead).
+ * See g_pal_tcb_registry's long comment in libos_thread.c for the design. */
+void libos_tcb_registry_add(PAL_TCB* tcb, uintptr_t guest_tp);
+bool libos_tcb_registry_scan(PAL_TCB** out_tcb);
+#endif
+
 /*
  * Every thread's own TPIDR_EL0 register is independent architectural state (not shared memory),
  * so as long as a thread's own TPIDR_EL0 still holds what pal_set_tcb() put there (tagged with
@@ -135,22 +143,37 @@ static inline PAL_TCB* pal_get_tcb(void) {
 }
 #else
 /*
- * Cross-object (LibOS, compiled into libsysdb.so) access: GOT-indirect, same pattern as
- * syscallas.S/gramine_entry_api.h's GRAMINE_SYSCALL macro. This is correct here because
- * libsysdb.so is a normal shared object, properly loaded and relocated by a real dynamic linker
- * -- unlike libpal.so itself (see the IN_PAL branch above), so its GOT is actually populated by
- * the time this runs.
+ * Cross-object (LibOS, compiled into libsysdb.so) access. First try the per-thread PAL_TCB
+ * registry (aarch64 multi-threading, see g_pal_tcb_registry's comment in libos_thread.c): the
+ * thread's application TLS pointer (TPIDR_EL0, installed by set_tls() for clone/fork children --
+ * which register themselves right there) keys its own PAL_TCB. A scan miss can only be the main
+ * thread -- the one thread whose TLS pointer its own libc (ld.so's TLS_INIT_TP, or static
+ * startup's) plants directly, with no Gramine hook to register it -- so for the miss path the
+ * g_pal_tcb_singleton fallback *is* the correct answer, and we lazily self-register the main
+ * thread so later scans hit (idempotent: same key + same TCB; concurrent first syscalls from
+ * several never-registered threads cannot occur for the reasons above). The GOT-indirect read of
+ * g_pal_tcb_singleton itself (libsysdb and libpal are different shared objects, see the #else
+ * branch above) is kept as the final fallback for the pre-registration startup window.
  */
 static inline PAL_TCB* pal_get_tcb(void) {
     PAL_TCB* tcb;
     if (pal_tcb_from_tagged_tpidr(&tcb)) {
         return tcb;
     }
+    if (libos_tcb_registry_scan(&tcb)) {
+        return tcb;
+    }
     PAL_TCB** got_slot;
     __asm__("adrp %0, :got:g_pal_tcb_singleton\n"
             "ldr  %0, [%0, :got_lo12:g_pal_tcb_singleton]\n"
             : "=r"(got_slot));
-    return *got_slot;
+    tcb = *got_slot;
+    if (tcb) {
+        uintptr_t tp;
+        __asm__("mrs %0, tpidr_el0" : "=r"(tp));
+        libos_tcb_registry_add(tcb, tp);
+    }
+    return tcb;
 }
 #endif
 
