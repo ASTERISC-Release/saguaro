@@ -22,8 +22,15 @@ const struct generated_offset generated_offsets[] = {
     OFFSET_T(PAL_CONTEXT_SP_OFF, struct PAL_CONTEXT, sp),
     OFFSET_T(PAL_CONTEXT_PC_OFF, struct PAL_CONTEXT, pc),
     OFFSET_T(PAL_CONTEXT_PSTATE_OFF, struct PAL_CONTEXT, pstate),
+    OFFSET_T(PAL_CONTEXT_FAULT_ADDRESS_OFF, struct PAL_CONTEXT, fault_address),
+    OFFSET_T(PAL_CONTEXT_ESR_OFF, struct PAL_CONTEXT, esr),
+    OFFSET_T(PAL_CONTEXT_OLDMASK_OFF, struct PAL_CONTEXT, oldmask),
     OFFSET_T(PAL_CONTEXT_FPSR_OFF, struct PAL_CONTEXT, fpsr),
     OFFSET_T(PAL_CONTEXT_FPCR_OFF, struct PAL_CONTEXT, fpcr),
+    /* syscallas.S allocates the whole struct with one `sub sp, sp, #PAL_CONTEXT_SIZE` and fills
+     * it in via offset-based stores, rather than x86_64's sequence of individual pushes -- so,
+     * unlike x86_64's syscallas.S, it needs the total size as a constant. */
+    DEFINE(PAL_CONTEXT_SIZE, sizeof(struct PAL_CONTEXT)),
 #endif
 
     DEFINE(LIBOS_XSTATE_ALIGN, LIBOS_XSTATE_ALIGN),
