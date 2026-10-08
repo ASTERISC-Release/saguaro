@@ -255,6 +255,12 @@ class TC_01_Bootstrap(RegressionTestCase):
         self.assertIn('child: returned through pre-fork-signed frames', stdout)
         self.assertIn('TEST OK', stdout)
 
+    def test_2046_fcntl_dupfd(self):
+        # F_DUPFD/F_DUPFD_CLOEXEC must honor "lowest free fd >= arg" (min semantics),
+        # including the self-referential minimum tokio's runtime build uses for epoll
+        stdout, _ = self.run_binary(['fcntl_dupfd'])
+        self.assertIn('TEST OK', stdout)
+
     def test_205_exec_fork(self):
         stdout, _ = self.run_binary(['exec_fork'], timeout=60)
         self.assertNotIn('Handled SIGCHLD', stdout)

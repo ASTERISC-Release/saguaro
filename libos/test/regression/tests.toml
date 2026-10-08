@@ -10,6 +10,7 @@ manifests = [
   "bootstrap_static",
   "close_range",
   "console",
+  "fcntl_dupfd",
   "debug",
   "debug_log_file",
   "debug_log_inline",

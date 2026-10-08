@@ -138,6 +138,7 @@ static int flock_to_file_lock(struct flock* fl, struct libos_handle* hdl,
 
 long libos_syscall_fcntl(int fd, int cmd, unsigned long arg) {
     long retval;
+    (void)retval; /* only assigned on the ENABLE_SG comm-window redirect path */
     struct libos_handle* hdl;
     int ret;
     int flags;
@@ -178,15 +179,13 @@ sg_cont:
         /* F_DUPFD_CLOEXEC (int) */
         case F_DUPFD_CLOEXEC: {
             flags |= FD_CLOEXEC;
-            #ifdef ENABLE_SG
-                if(hdl->type == TYPE_HOST) {
-                    ret = set_new_fd_handle_by_fd(retval, hdl, flags, handle_map);
-                } else
-                    ret = set_new_fd_handle_by_fd(arg, hdl, flags, handle_map);
-                return ret;
-            #else
-                ret = set_new_fd_handle_by_fd(arg, hdl, flags, handle_map);
-            #endif
+
+            /* Same semantics as F_DUPFD: `arg` is the *minimum* fd number; the kernel picks
+             * the lowest free fd >= arg. (Assigning exactly `arg` fails with EBADF whenever
+             * `arg` is occupied, which is common: callers pass small minimums, e.g. tokio's
+             * epoll probe `fcntl(epfd, F_DUPFD_CLOEXEC, epfd)`.) The TYPE_HOST comm-window
+             * handle was redirected to the host before the switch above. */
+            ret = set_new_fd_handle_above_fd(arg, hdl, flags, handle_map);
             break;
         }
 

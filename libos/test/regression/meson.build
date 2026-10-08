@@ -33,6 +33,7 @@ tests = {
     'exec_victim': {},
     'exit': {},
     'exit_group': {},
+    'fcntl_dupfd': {},
     'fcntl_lock': {},
     'fcntl_lock_child_only': {},
     'fdleak': {},
