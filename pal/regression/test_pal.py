@@ -2,6 +2,7 @@ import ast
 import collections
 import mmap
 import pathlib
+import platform
 import random
 import shutil
 import string
@@ -100,19 +101,74 @@ class TC_01_Bootstrap(RegressionTestCase):
 
     def test_102_cpuinfo(self):
         with open('/proc/cpuinfo') as file_:
-            cpuinfo = file_.read().strip().split('\n\n')[-1]
-        cpuinfo = dict(map(str.strip, line.split(':'))
-            for line in cpuinfo.split('\n'))
+            blocks = file_.read().strip().split('\n\n')
 
         _, stderr = self.run_binary(['Bootstrap'])
 
-        self.assertIn('CPU num: {}'.format(int(cpuinfo['processor']) + 1),
-            stderr)
-        self.assertIn('CPU vendor: {[vendor_id]}'.format(cpuinfo), stderr)
-        self.assertIn('CPU brand: {[model name]}'.format(cpuinfo), stderr)
-        self.assertIn('CPU family: {[cpu family]}'.format(cpuinfo), stderr)
-        self.assertIn('CPU model: {[model]}'.format(cpuinfo), stderr)
-        self.assertIn('CPU stepping: {[stepping]}'.format(cpuinfo), stderr)
+        self.assertIn('CPU num: {}'.format(len(blocks)), stderr)
+
+        if ON_X86:
+            cpuinfo = dict(map(str.strip, line.split(':'))
+                for line in blocks[-1].split('\n'))
+            self.assertIn('CPU vendor: {[vendor_id]}'.format(cpuinfo), stderr)
+            self.assertIn('CPU brand: {[model name]}'.format(cpuinfo), stderr)
+            self.assertIn('CPU family: {[cpu family]}'.format(cpuinfo), stderr)
+            self.assertIn('CPU model: {[model]}'.format(cpuinfo), stderr)
+            self.assertIn('CPU stepping: {[stepping]}'.format(cpuinfo), stderr)
+            return
+
+        if platform.machine() != 'aarch64':
+            self.skipTest('cpuinfo emulation is implemented only for x86_64 and aarch64')
+
+        # aarch64: the PAL reads MIDR_EL1 and maps its fields onto the generic
+        # pal_cpu_info the way Linux's arch/arm64/kernel/cpuinfo.c does. The guest
+        # observes the MIDR of whichever core the process ran on, so accept any
+        # distinct core type present on the host (big.LITTLE hosts are not
+        # homogeneous; "CPU architecture" in /proc/cpuinfo is a normalized 8).
+        jep106 = {  # mirrors implementer_name() in pal/src/arch/aarch64/pal_cpuid.c
+            0x41: 'ARM Limited',
+            0x42: 'Broadcom Corporation',
+            0x43: 'Cavium Inc.',
+            0x44: 'Digital Equipment Corporation',
+            0x46: 'Fujitsu Ltd.',
+            0x48: 'HiSilicon Technologies Inc.',
+            0x49: 'Infineon Technologies AG',
+            0x4d: 'Motorola/Freescale Semiconductor Inc.',
+            0x4e: 'NVIDIA Corporation',
+            0x50: 'Applied Micro Circuits Corporation',
+            0x51: 'Qualcomm Inc.',
+            0x53: 'Samsung Electronics Co. Ltd.',
+            0x56: 'Marvell International Ltd.',
+            0x61: 'Apple Inc.',
+            0x66: 'Faraday Technology Corporation',
+            0x69: 'Intel Corporation',
+            0xc0: 'Ampere Computing',
+        }
+        cores = set()
+        for block in blocks:
+            cpuinfo = dict(map(str.strip, line.split(':'))
+                for line in block.split('\n'))
+            implementer = int(cpuinfo['CPU implementer'], 16)
+            variant = int(cpuinfo['CPU variant'], 16)
+            part = int(cpuinfo['CPU part'], 16)
+            revision = int(cpuinfo['CPU revision'], 16)
+            cores.add((jep106.get(implementer, '0x%02x' % implementer),
+                implementer, part, (variant << 4) | revision))
+
+        for what, expected in [
+            ('CPU vendor', {'CPU vendor: %s' % c[0] for c in cores}),
+            ('CPU family', {'CPU family: 8'}),
+            ('CPU model', {'CPU model: %d' % c[2] for c in cores}),
+            ('CPU stepping', {'CPU stepping: %d' % c[3] for c in cores}),
+            # the full 16-hex-digit MIDR is not reconstructable from /proc/cpuinfo
+            # (its "CPU architecture" line is normalized), so match only the
+            # derivable implementer/part suffix of the brand string.
+            ('CPU brand', {'(implementer 0x%02x, part 0x%03x)' % (c[1], c[2])
+                           for c in cores}),
+        ]:
+            self.assertTrue(any(e in stderr for e in expected),
+                'no %r line in Bootstrap output matching host core types %r'
+                % (what, sorted(cores)))
 
     def test_103_dotdot(self):
         _, stderr = self.run_binary(['..Bootstrap'])
