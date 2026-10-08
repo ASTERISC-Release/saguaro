@@ -408,7 +408,6 @@ long libos_syscall_clone(unsigned long flags, unsigned long user_stack_addr, int
         thread->clear_child_tid = child_tidptr;
 
     if (!(flags & CLONE_SETTLS)) {
-        log_always("Getting TLS from current thread");
         tls = get_tls();
     }
 

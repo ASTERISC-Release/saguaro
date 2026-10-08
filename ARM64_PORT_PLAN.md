@@ -340,3 +340,24 @@ Static-link path (default): `libsysdb` aarch64 compiles unchanged (Milestone A m
 - `cd gramine-tdx/pal/regression && gramine-test build -v && python3 -m pytest -v --junit-xml pal-regression.xml` — PAL-level regression. (Note: `ninja -C build-aarch64 test` registers no meson tests on this build config — the pytest suites are the actual gate.)
 - `cd gramine-tdx/libos/test/regression && gramine-test -n tests.toml build -v && python3 -m pytest -v -k helloworld` passes, printing `Hello world!`. **Passing** (`TC_01_Bootstrap::test_001_helloworld PASSED`).
 - Broader suite: **`140 passed, 0 failed, 36 skipped`** (36 = aarch64-irrelevant skips: musl-only, x86-asm, and platform guards added along the way). **Passing.** Stress added on top of the suite: `exec_same` (50 args) 15× idle + 8× under 12×`yes` load, `rwlock` 3× under load, the wake-queue quintet 15× each — all clean.
+- Re-verified green (`140 passed, 0 failed, 36 skipped`) after removing the pre-existing Tirith debug leftover `log_always("Getting TLS from current thread")` from `libos_clone.c` (fired on every `fork()`; present since the initial Tirith commit, same category as the `A quick check.` removal).
+
+## Example applications (real-world Milestone A validation)
+
+Run under `gramine-direct` on the aarch64 host; all network exercise over real TCP through the direct-PAL port stack.
+
+| Example | Result | Notes |
+|---|---|---|
+| `helloworld` | **Pass** | trivial baseline |
+| `multi-thread` (`thread-tls`, `thread-rwlock`, `thread-stress`) | **Pass** | exercises the per-thread PAL_TCB registry end-to-end |
+| `redis` 6.0.5 | **Pass** | `Ready to accept connections`; `PING→PONG`, `SET→OK`, `GET→bar` over TCP — first real-world epoll+TCP server on the port |
+| `busybox` 1.32.0 | **Pass** | `sh -c "echo; uname -m; uptime; ls /lib"` all work. Needed `CONFIG_TC`/`CONFIG_ARP`/`CONFIG_ARPING` disabled (upstream busybox ↔ Ubuntu-24.04 kernel-headers breakage, `TCA_CBQ_MAX`; unrelated to the port) |
+| `memcached` 1.6.21 | **Pass** | 3 fresh-start cycles × 100 pipelined `set`/`get` transactions, every payload byte-checked; `incr` counter semantics exact. libevent 2.1.12 headers built locally into `deps/local` (no dev package, no sudo); runtime resolves the host's same-SONAME `libevent-2.1.so.7` through the manifest's existing `/usr/lib/aarch64-linux-gnu` mount — no manifest change needed |
+| `align_test` | Dead example | sources fully commented out; the real version maps the SG comm region (`0xf00000`) — a VM-PAL/SG feature, out of scope |
+
+Harness gotchas learned (not port bugs, but they mimic flakes):
+
+- Example manifests pin `loader.argv` and reject command-line args (`PAL failed argv handling wasn't configured…` + instant exit) — extra args like `-vv`/`-m 64` kill the server before any traffic; run argument-free.
+- `gramine-manifest` needs `PYTHONPATH` pointing at the installed `graminelibos`, else manifest generation fails with rc=127 leaving a **0-byte manifest**.
+- Rapid kill/restart of a TCP server leaves the port in `TIME_WAIT`; memcached's *UDP* listener (same port) then logs `failed to listen on TCP port 11211: Address already in use` while its TCP listener binds fine via `SO_REUSEADDR` — benign spew if clients still get correct answers.
+- Text-protocol test clients must declare the exact value byte count — `set k 0 60 3` with a 2-char value earns a *correct* `CLIENT_ERROR bad data chunk` from the server; several apparent "server flakes" during bring-up were client framing bugs, resolved by a makefile-framed byte-count-checked client.
