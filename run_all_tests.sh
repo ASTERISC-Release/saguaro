@@ -14,6 +14,19 @@
 #   GRAMINE_PREFIX   install prefix (default: ~/.local/gramine)
 #   LOGDIR           per-test log directory (default: $LOGDIR)
 #
+# The script is architecture-neutral and also runs on x86_64 for parity
+# testing, given a Gramine install built for that host (set GRAMINE_PREFIX to
+# point at it). Example binaries/manifests are per-arch build artifacts; if an
+# example binary is missing, foreign-arch, or its manifest embeds the other
+# arch's triple, the script rebuilds it via that example's own Makefile.
+# Expect different skip counts between arches (e.g. the x86-asm module is
+# skipped on aarch64 and runs on x86_64; musl tests are the reverse), so
+# parity means "0 failed" on both, not identical passed counts.
+#
+# Known cross-arch prerequisite quirk: busybox 1.32 needs CONFIG_TC,
+# CONFIG_ARP and CONFIG_ARPING disabled in src/.config to compile against
+# modern (>= ~6.x) kernel headers on any arch.
+#
 # Every application runs under `timeout -s KILL`; a process-group kill plus a
 # final sweep (pkill -9 -x loader / libpal.so) guarantee no strays are left
 # behind after the script exits, including on Ctrl-C. (A trailing "Killed"
@@ -69,6 +82,41 @@ for bin in gramine-direct gramine-test gramine-manifest; do
     command -v "$bin" >/dev/null || { echo "ERROR: $bin not on PATH (set GRAMINE_PREFIX?)"; exit 1; }
 done
 python3 -c 'import graminelibos' 2>/dev/null || { echo "ERROR: graminelibos not on PYTHONPATH"; exit 1; }
+
+# --- architecture plumbing (script is arch-neutral: works on x86_64 too) ----
+HOST_ARCH=$(uname -m)                    # "aarch64" | "x86_64"
+case "$HOST_ARCH" in
+    aarch64) ELF_PAT="ARM aarch64"; FOREIGN_ARCH="x86_64" ;;
+    x86_64)  ELF_PAT="x86-64";    FOREIGN_ARCH="aarch64" ;;
+    *)       ELF_PAT="";          FOREIGN_ARCH="" ;;
+esac
+
+# ensure_example <example-dir> <binary> <manifest>
+# Build the example through its own Makefile if the binary is missing or was
+# produced for another architecture, or if the manifest embeds the foreign
+# arch triple (e.g. a tree generated on aarch64 now running on x86 and vice
+# versa). `make` in the example dir is the sanctioned download+build pipeline.
+ensure_example() {
+    local dir=$REPO/CI-Examples/$1 bin=$2 man=$3 need=""
+    if [ -n "$ELF_PAT" ] && ! file -b "$dir/$bin" 2>/dev/null | grep -q "$ELF_PAT"; then
+        need="binary $1/$bin missing or not $HOST_ARCH"
+    elif grep -q "$FOREIGN_ARCH" "$dir/$man" 2>/dev/null; then
+        need="manifest $1/$man embeds $FOREIGN_ARCH paths"
+    elif [ ! -s "$dir/$man" ]; then
+        need="manifest $1/$man missing or empty"
+    fi
+    if [ -n "$need" ]; then
+        echo "  building example '$1' ($need; log: $LOGDIR/$1-build.log)"
+        ( cd "$dir" && make >"$LOGDIR/$1-build.log" 2>&1 ) || {
+            echo "  make failed for $1 — build it manually (see its README/Makefile)"
+            tail -3 "$LOGDIR/$1-build.log" | sed 's/^/    /'
+            return 1
+        }
+        # some example Makefiles stop before the final manifest step
+        [ -s "$dir/$man" ] || ( cd "$dir" && make "${bin}.manifest" >>"$LOGDIR/$1-build.log" 2>&1 ) || true
+    fi
+    [ -x "$dir/$bin" ] && [ -s "$dir/$man" ]
+}
 
 declare -a RESULTS=()
 FAILED=0
@@ -145,6 +193,7 @@ libos)
     ;;
 
 helloworld)
+    if ! ensure_example helloworld helloworld helloworld.manifest; then summary helloworld 1 "build"; continue; fi
     timeout -s KILL 60 sh -c "cd '$REPO/CI-Examples/helloworld' && gramine-direct helloworld" \
         >"$LOGDIR/helloworld.log" 2>&1
     rc=$?
@@ -156,6 +205,7 @@ helloworld)
 multithread)
     rc=0
     for b in thread-tls thread-rwlock thread-stress; do
+        if ! ensure_example multi-thread "$b" "$b.manifest"; then rc=1; break; fi
         if ! timeout -s KILL 120 sh -c "cd '$REPO/CI-Examples/multi-thread' && gramine-direct $b" \
                 >"$LOGDIR/$b.log" 2>&1; then
             echo "  $b failed:"; tail -3 "$LOGDIR/$b.log"; rc=1
@@ -166,16 +216,19 @@ multithread)
     ;;
 
 busybox)
+    if ! ensure_example busybox busybox busybox.manifest; then summary busybox 1 "build"; continue; fi
     timeout -s KILL 60 sh -c "cd '$REPO/CI-Examples/busybox' && gramine-direct busybox sh -c 'echo busybox-shell-works; uname -m'" \
         >"$LOGDIR/busybox.log" 2>&1
     rc=$?
     grep -q "busybox-shell-works" "$LOGDIR/busybox.log" || rc=1
-    grep -q "aarch64" "$LOGDIR/busybox.log" || rc=1
+    # the emulated shell must report the host's own machine (arch-neutral check)
+    grep -qx "$HOST_ARCH" "$LOGDIR/busybox.log" || rc=1
     [ $rc -ne 0 ] && tail -3 "$LOGDIR/busybox.log"
     summary busybox $rc "sh + uname over emulated shell"
     ;;
 
 redis)
+    if ! ensure_example redis redis-server redis-server.manifest; then summary redis 1 "build"; continue; fi
     wait_port_free 6379 || echo "  warning: port 6379 still busy"
     start_server redis 90 "$REPO/CI-Examples/redis" gramine-direct redis-server
     python3 - >"$LOGDIR/redis-client.log" 2>&1 <<'PYEOF'
@@ -221,6 +274,7 @@ PYEOF
     ;;
 
 memcached)
+    if ! ensure_example memcached memcached memcached.manifest; then summary memcached 1 "build"; continue; fi
     wait_port_free 11211 || echo "  warning: port 11211 still busy"
     start_server memcached 120 "$REPO/CI-Examples/memcached" gramine-direct memcached
     python3 - >"$LOGDIR/memcached-client.log" 2>&1 <<'PYEOF'

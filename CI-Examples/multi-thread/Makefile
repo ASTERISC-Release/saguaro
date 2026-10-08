@@ -23,6 +23,7 @@ thread-stress.o: thread-stress.c
 thread-stress.manifest: thread-stress.manifest.template
 	gramine-manifest \
 		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
+		-Dmultiarch=$(shell $(CC) -dumpmachine) \
 		$< $@
 	gramine-manifest-check $@
 
@@ -32,6 +33,7 @@ thread-rwlock.o: thread-rwlock.c
 thread-rwlock.manifest: thread-rwlock.manifest.template
 	gramine-manifest \
 		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
+		-Dmultiarch=$(shell $(CC) -dumpmachine) \
 		$< $@
 	gramine-manifest-check $@
 
@@ -41,6 +43,7 @@ thread-tls.o: thread-tls.c
 thread-tls.manifest: thread-tls.manifest.template
 	gramine-manifest \
 		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
+		-Dmultiarch=$(shell $(CC) -dumpmachine) \
 		$< $@
 	gramine-manifest-check $@
 

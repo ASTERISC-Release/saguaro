@@ -7,7 +7,7 @@ libos.entrypoint = "/thread-tls"
 loader.log_level = "{{ log_level }}"
 # loader.log_level = "trace"
 
-loader.env.LD_LIBRARY_PATH = "/lib:/usr/lib:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu"
+loader.env.LD_LIBRARY_PATH = "/lib:/usr/lib:/usr/lib/{{ multiarch }}:/lib/{{ multiarch }}"
 # loader.env.LD_PRELOAD = "./egl_hook.so"
 loader.env.HOME = "/home/user"
 loader.env.USER = "root"
