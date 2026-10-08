@@ -104,6 +104,42 @@ Smallest, most foundational layer; both PAL and LibOS depend on it. **Done.**
 
 ## Current status (most recent session)
 
+**ROOT CAUSE OF THE "SLOWNESS" FOUND — it is a correctness bug after all, not a performance problem.** The previous session's conclusion ("slowness, not a loop") was wrong in an important way: there *is* an infinite loop, ~15 syscalls into `ld.so` startup, and the last session simply never observed it because GDB's own ptrace interaction masked it.
+
+### The bug: aarch64 syscall-emulation entry clobbers the application's live link register (X30)
+
+Reproduced deterministically with `gramine-direct helloworld` (built from this tree, `-Dlibc=glibc`, no patched guest libc). Instrumented tracing shows exactly 9 emulation round-trips (`brk → mmap → faccessat → openat → read → fstat → mmap → mmap → mprotect`), each entering *and returning correctly*; then the process spins at 100% `utime` / 0 `stime` forever. A SIGCONT-sampled backtrace at the spin point shows:
+
+```
+   ...5c4:  mov  x8, #0xd7        // munmap
+   ...5c8:  svc  #0               // trapped by seccomp, emulated by Gramine
+   ...5cc:  cmn  x0, #0xfff
+   ...5d0:  b.cs ...5d8
+=> ...5d4:  ret        with x30 = 0x...5cc   ← poisoned!
+```
+
+`ret` jumps to the `cmn`, which (return value 0, carry clear) falls through to `ret` again → a 3-instruction userspace infinite loop. So the guest never issues a 10th syscall; it just spins. The PC is always inside ld.so's `munmap` wrapper, which is precisely why the earlier SIGINT-sampling read it as "slow munmap".
+
+**Why it happens:** the seccomp-trap emulation path installs the *resume address* into the guest context's **X30** (`maybe_emulate_syscall()` sets `context->regs[30] = pc + 4`, mirroring x86_64's `%rcx` convention). On x86_64 that is safe because the hardware `syscall` instruction itself destroys `%rcx`/`%r11` — the application can *never* hold live state there, so libc syscall wrappers reload the real return address from the stack frame. aarch64's `svc` has **no such clobber contract**: X30 at the `svc` site is the application's own live return address (e.g. ld.so's leaf-ish `munmap` wrapper's frameless `ret` target). Overwriting it and resuming via sigreturn destroys it.
+
+Why the first 9 syscalls *appeared* to work: they are inline SYSCALL macros inside large glibc functions that had already spilled the true X30 into their stack frames and reload it in their epilogue — masking the clobber. Leaf wrappers like `munmap` (`mov x8,#nr; svc #0; cmn; b.cs; ret`) use X30 directly after the syscall and loop forever. This affects *every* leaf-style syscall wrapper in the guest libc — i.e. essentially all of them — so Milestone A can never progress past `ld.so` startup with this design.
+
+### The fix (in progress)
+
+Do not route the resume address through X30 at all. aarch64 has genuinely-clobberable scratch registers — X16/X17 (IP0/IP1, the linker veneer scratch) — which `syscallas.S` *already* declares sacrificed. Redesign the entry contract:
+- `maybe_emulate_syscall()` / `GRAMINE_SYSCALL`: put resume-PC in **X16** (via the ucontext at `regs[16]`, which is restored on sigreturn), keep the app's live X30 saved in `context->regs[30]` untouched.
+- `libos_syscall_entry`: take the resume address from X16 (AAPCS-scratch, same role RCX plays on x86_64) instead of X30; store it into `context->pc` and restore the app's true X30 from the saved frame.
+- `_return_from_syscall` continues to `br` to `context->pc` (already the case), and the app's X30 comes back from `context->regs[30]` (already saved/restored) — restoring the clobbered-by-us-on-entry semantics correctly.
+- `restart_syscall()` and `prepare_sigframe()` (`regs[30] = restorer`) need the same treatment: the *restorer* address legitimately goes in X30 (that mimics the `blr handler` contract — fine), but syscall-restart must not assume X30 carries anything.
+
+### Remaining known issues (updated)
+
+- Everything under "Known issues and their fixes" below is still fixed.
+- **New, found this session:** the installed libpal.so log-spams `"A quick check."` on *every* `_PalSystemTimeQuery()` call (`pal/src/host/linux/pal_misc.c` — leftover debug `log_always` from the initial Tirith commit, x86 side too). Harmless to correctness but massive I/O overhead; removed.
+- The previous session's "severe slowness of the seccomp-trap path" theory is **void** — the path never got to run more than 9 times because of the X30 clobber above. Once the fix lands, real per-syscall overhead can be measured properly; the signal-delivery round-trip cost may still be a performance topic, but the *hang* is this bug.
+
+### (superseded) earlier status text
+
 `helloworld` does not yet pass, but the remaining gap now looks like **severe performance, not a correctness bug**. Initial GDB sampling (plain PC snapshots via repeated SIGINT) was misleading: it kept landing on the same instruction inside the host's real `ld-linux-aarch64.so.1`'s inline `munmap` syscall wrapper, which looked like an infinite retry loop and caused a ~4-minute 100%-CPU background run to be killed as a presumed hang.
 
 Tracing properly (breaking on `_return_from_syscall` and dumping the saved `PAL_CONTEXT` — syscall number in `x8`, args in `x0`/`x1`, resume `pc`/`sp` — on every hit) shows this was a false read: the syscall sequence is `brk → mmap → <something, nr 0x30> → openat → read → fstat → mmap → mmap → munmap`, a completely ordinary `ld.so`/libc startup sequence, each call with different arguments and a different resume address. There is no loop. It is just extremely slow: under Milestone A's design (no patched guest libc), *every single syscall* the guest's dynamic linker issues round-trips through a SIGSYS signal delivery + full context save/restore, and observed throughput was roughly one real syscall every several seconds *while GDB/Python was actively tracing it* (tracing itself adds substantial overhead on top of the already-expensive signal path).
