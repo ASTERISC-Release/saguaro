@@ -19,8 +19,11 @@
 #include "ucontext.h" /* pulls in pal.h -> pal_arch.h, which declares g_pal_tcb_singleton */
 
 /* Milestone A stopgap single-threaded PAL_TCB storage -- see the comment on this declaration in
- * pal/include/arch/aarch64/pal_arch.h for why aarch64 can't just do what %gs does on x86_64. */
-PAL_TCB* g_pal_tcb_singleton = NULL;
+ * pal/include/arch/aarch64/pal_arch.h for why aarch64 can't just do what %gs does on x86_64.
+ * "protected" visibility here must match the extern declaration's attribute in pal_arch.h (see
+ * the comment there) -- it's this definition's own attribute that actually governs the symbol's
+ * flag in libpal.so's dynamic symbol table. */
+__attribute__((visibility("protected"))) PAL_TCB* g_pal_tcb_singleton = NULL;
 
 int arch_do_rt_sigprocmask(int sig, int how) {
     __sigset_t mask;

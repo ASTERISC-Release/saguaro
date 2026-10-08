@@ -39,6 +39,25 @@
 #include "pal_internal.h"
 #include "pal_rtld.h"
 
+#ifdef __aarch64__
+/*
+ * This whole file is, by construction, the code that runs *before* libpal.so's own GOT is
+ * populated: setup_pal_binary() -> perform_relocations(&g_pal_map) is exactly the self-relocation
+ * step (see the RELOC_TYPE_* comment below). aarch64's generic (non-register-relative) stack
+ * protector reads its canary from the `__stack_chk_guard` global via a GOT-indirect load (see
+ * common/src/stack_protector.c's comment on why aarch64 has no %gs-like register-relative
+ * scheme), which crashes the exact same way g_pal_tcb_singleton did before pal_arch.h's fix: the
+ * GOT slot isn't populated yet, so the load returns NULL and the dereference faults. Unlike
+ * g_pal_tcb_singleton, there's no "direct addressing" fix available here -- GCC, not hand-written
+ * asm, emits the canary check at every protected function's prologue/epilogue -- so the only way
+ * to keep this file's bootstrap code from reading it before it's safe to is to disable the
+ * instrumentation here entirely. Safe to do file-wide: every function here is purely
+ * ELF-loading/relocation bootstrap, not a hot path, and this file is the ONLY code that ever runs
+ * before perform_relocations(&g_pal_map) returns.
+ */
+#pragma GCC optimize("no-stack-protector")
+#endif
+
 /* ELF header address (load address of the PAL binary); modern linkers define this magic symbol
  * unconditionally; see e.g. https://github.com/bminor/glibc/commit/302247c8.
  *
@@ -46,6 +65,25 @@
  * known offset (not a reference to GOT) for the `&__ehdr_start` operation, so this operation
  * doesn't require relocation. */
 extern const elf_ehdr_t __ehdr_start __attribute__((visibility("hidden")));
+
+/* perform_relocations() below only ever needs to recognize these three reloc kinds (see the
+ * Full-RELRO/immediate-binding assumptions in the file comment); aarch64's numeric reloc-type
+ * values are completely different from x86_64's; also, with the kind of RELA layout Full RELRO +
+ * -znow produces, aarch64 uses R_AARCH64_ABS64 (not R_AARCH64_GLOB_DAT) for ordinary GOT-slot
+ * data relocations -- GLOB_DAT is reserved for a narrower case (symbols that are also exported
+ * for interposition) that doesn't come up for the self-contained binaries PAL loads, so it's
+ * accepted for completeness but ABS64 is the one actually seen in practice. */
+#if defined(__x86_64__)
+#define RELOC_TYPE_RELATIVE  R_X86_64_RELATIVE
+#define RELOC_TYPE_GLOB_DAT  R_X86_64_GLOB_DAT
+#define RELOC_TYPE_JUMP_SLOT R_X86_64_JUMP_SLOT
+#elif defined(__aarch64__)
+#define RELOC_TYPE_RELATIVE  R_AARCH64_RELATIVE
+#define RELOC_TYPE_GLOB_DAT  R_AARCH64_GLOB_DAT
+#define RELOC_TYPE_JUMP_SLOT R_AARCH64_JUMP_SLOT
+#else
+#error "Unsupported architecture"
+#endif
 
 static const char* g_pal_soname = NULL;
 static struct link_map g_pal_map;
@@ -376,14 +414,19 @@ static int perform_relocations(struct link_map* map) {
         return -PAL_ERROR_DENIED;
     }
 
-    /* perform relocs: supported binaries may have only R_X86_64_RELATIVE/R_X86_64_GLOB_DAT relas */
+    /* perform relocs: supported binaries may have only RELATIVE/GLOB_DAT (and, on aarch64,
+     * ABS64 -- see the RELOC_TYPE_* comment above) relas */
     elf_rela_t* relas_addr_end = (elf_rela_t*)((uintptr_t)relas_addr + relas_size);
     for (elf_rela_t* rela = relas_addr; rela < relas_addr_end; rela++) {
-        if (ELF_R_TYPE(rela->r_info) == R_X86_64_RELATIVE) {
+        if (ELF_R_TYPE(rela->r_info) == RELOC_TYPE_RELATIVE) {
             elf_addr_t* addr_to_relocate = (elf_addr_t*)(rela->r_offset + base_diff);
             *addr_to_relocate = *addr_to_relocate + base_diff;
             relas_count++;
-        } else if (ELF_R_TYPE(rela->r_info) == R_X86_64_GLOB_DAT) {
+        } else if (ELF_R_TYPE(rela->r_info) == RELOC_TYPE_GLOB_DAT
+#ifdef __aarch64__
+                   || ELF_R_TYPE(rela->r_info) == R_AARCH64_ABS64
+#endif
+                   ) {
             elf_addr_t symbol_addr;
             ret = find_symbol_in_loaded_maps(map, rela, &symbol_addr);
             if (ret < 0)
@@ -393,7 +436,7 @@ static int perform_relocations(struct link_map* map) {
             *addr_to_relocate = symbol_addr + rela->r_addend;
         } else {
             log_error("Unrecognized relocation type; PAL loader currently supports only "
-                      "R_X86_64_RELATIVE and R_X86_64_GLOB_DAT relocations");
+                      "RELATIVE and GLOB_DAT relocations");
             return -PAL_ERROR_DENIED;
         }
     }
@@ -403,12 +446,12 @@ static int perform_relocations(struct link_map* map) {
         return -PAL_ERROR_DENIED;
     }
 
-    /* perform PLT relocs: supported binaries may have only R_X86_64_JUMP_SLOT relas */
+    /* perform PLT relocs: supported binaries may have only JUMP_SLOT relas */
     elf_rela_t* plt_relas_addr_end = (void*)plt_relas_addr + plt_relas_size;
     for (elf_rela_t* plt_rela = plt_relas_addr; plt_rela < plt_relas_addr_end; plt_rela++) {
-        if (ELF_R_TYPE(plt_rela->r_info) != R_X86_64_JUMP_SLOT) {
+        if (ELF_R_TYPE(plt_rela->r_info) != RELOC_TYPE_JUMP_SLOT) {
             log_error("Unrecognized relocation type; PAL loader currently supports only "
-                      "R_X86_64_JUMP_SLOT relocations");
+                      "JUMP_SLOT relocations");
             return -PAL_ERROR_DENIED;
         }
 

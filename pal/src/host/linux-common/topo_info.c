@@ -210,8 +210,16 @@ static int read_cache_info(struct pal_cache_info* ci, size_t thread_idx, size_t 
     if (ret < 0)
         return ret;
     ret = get_hw_resource_value(path, &ci->physical_line_partition);
-    if (ret < 0)
-        return ret;
+    if (ret < 0) {
+        /* Not every kernel/hardware combination exposes this attribute (e.g. observed missing
+         * under KVM on this aarch64 host, even though the sibling cache attributes above are all
+         * present) -- treat it the same as the other genuinely-optional sysfs attributes already
+         * tolerated elsewhere in this file (NUMA node files, extra cache indices) rather than
+         * failing PAL startup entirely over a single informational field. */
+        if (ret != -ENOENT)
+            return ret;
+        ci->physical_line_partition = 0;
+    }
 
     return 0;
 }

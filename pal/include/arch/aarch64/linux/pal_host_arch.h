@@ -26,15 +26,19 @@
  */
 #define ARCH_HIGHEST_ADDR ((1ul << 47) - PAGE_SIZE)
 
-/* Milestone A stopgap (see the long comment on g_pal_tcb_singleton in pal_arch.h): PAL_TCB is a
- * plain process-wide global here, not reached via a register, because TPIDR_EL0 is needed for
- * the application's own libc TLS pointer and aarch64 has no second EL0-writable register the
- * way x86_64 has %gs free alongside %fs. So, unlike x86_64's pal_set_tcb() (which must issue
- * arch_prctl(ARCH_SET_GS, ...) because %gs isn't writable directly from userspace), this simply
- * stores the pointer -- no register, no syscall, and deliberately no interaction with TPIDR_EL0
- * at all, leaving it entirely under the application's own libc's control. */
+/* Milestone A stopgap (see the long comment on pal_tcb_from_tagged_tpidr() and
+ * g_pal_tcb_singleton in pal_arch.h): aarch64 has no second EL0-writable register the way
+ * x86_64 has %gs free alongside %fs, since TPIDR_EL0 is needed for the application's own libc
+ * TLS pointer. Unlike x86_64's pal_set_tcb() (which must issue arch_prctl(ARCH_SET_GS, ...)
+ * because %gs isn't writable directly from userspace), this just tags and stores the pointer
+ * directly in TPIDR_EL0 -- no syscall needed -- which gives *this* thread an immediately correct,
+ * independent-of-every-other-thread PAL_TCB for as long as nothing else overwrites TPIDR_EL0.
+ * That holds forever for Gramine's own internal threads (IPC/async worker: they never run
+ * application code), and until application code's own TLS setup overwrites it for whichever
+ * thread actually runs the application -- see pal_tcb_singleton_snapshot_before_user_entry()
+ * for how that one thread's PAL_TCB stays reachable afterwards. */
 static inline int pal_set_tcb(PAL_TCB* tcb) {
-    g_pal_tcb_singleton = tcb;
+    __asm__ volatile("msr tpidr_el0, %0" : : "r"((uint64_t)tcb | 0x1));
     return 0;
 }
 

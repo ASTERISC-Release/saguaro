@@ -2529,6 +2529,13 @@ typedef Elf32_Addr Elf32_Conflict;
 
 #define R_CRIS_NUM 20
 
+/* AArch64 relocations (only the handful pal_rtld.c's perform_relocations() actually
+ * dispatches on; not a full copy of the ABI's relocation table). */
+#define R_AARCH64_ABS64          257
+#define R_AARCH64_GLOB_DAT       1025 /* Create GOT entry */
+#define R_AARCH64_JUMP_SLOT      1026 /* Create PLT entry */
+#define R_AARCH64_RELATIVE       1027 /* Adjust by program base */
+
 /* AMD x86-64 relocations.  */
 #define R_X86_64_NONE            0  /* No reloc */
 #define R_X86_64_64              1  /* Direct 64 bit  */

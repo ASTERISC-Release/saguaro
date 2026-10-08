@@ -85,8 +85,10 @@ static void perform_signal_handling(enum pal_event event, bool is_in_pal, uintpt
 }
 
 static void handle_sync_signal(int signum, siginfo_t* info, struct ucontext* uc) {
+    bool is_seccomp_trap = false;
     if (info->si_signo == SIGSYS && info->si_code == SYS_SECCOMP) {
         ucontext_revert_syscall(uc, info->si_arch, info->si_syscall, info->si_call_addr);
+        is_seccomp_trap = true;
         if (FIRST_TIME()) {
             log_always("Emulating a raw system/supervisor call. This degrades performance, consider"
                        " patching your application to use Gramine syscall API.");
@@ -97,8 +99,27 @@ static void handle_sync_signal(int signum, siginfo_t* info, struct ucontext* uc)
 
     uintptr_t rip = ucontext_get_ip(uc);
     if (!ADDR_IN_PAL_OR_VDSO(rip)) {
-        /* exception happened in application or LibOS code, normal benign case */
-        perform_signal_handling(event, /*is_in_pal=*/false, (uintptr_t)info->si_addr, uc);
+        /* exception happened in application or LibOS code, normal benign case.
+         *
+         * For a real SIGILL, the kernel sets si_addr to the faulting instruction's own address
+         * (POSIX's documented behavior for ILL_* si_codes), which is what illegal_upcall()'s
+         * lookup_vma()/is-this-internal check (and the SIGILL it re-raises to the app if
+         * maybe_emulate_syscall() doesn't recognize the instruction) expects "addr" to mean. But
+         * for a SIGSYS/SECCOMP trap, si_addr is NOT populated with anything like that -- the
+         * kernel instead supplies the instruction's address via si_call_addr (already consumed
+         * above, by ucontext_revert_syscall(), to restore context->pc to it). Passing the raw,
+         * unrelated si_addr in this case made illegal_upcall()'s lookup_vma(addr) look up the
+         * wrong (effectively arbitrary) address, almost always failing to find a VMA and thus
+         * treating a perfectly ordinary guest syscall as fatal "Gramine internal" corruption --
+         * latent on every architecture, but only ever exercised on one that (like aarch64's
+         * Milestone A, with no patched libc) actually relies on this seccomp-trap emulation path
+         * for ordinary syscalls rather than hitting it in rare corner cases. `rip` above is
+         * already the right value for this case: ucontext_revert_syscall() just set uc's pc to
+         * si_call_addr minus the trapping instruction's size (arch-specific, computed there), and
+         * `rip` was read back out of uc after that. */
+        perform_signal_handling(event, /*is_in_pal=*/false, is_seccomp_trap ? rip
+                                                                             : (uintptr_t)info->si_addr,
+                                 uc);
         return;
     }
 

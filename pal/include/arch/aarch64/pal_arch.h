@@ -12,6 +12,7 @@
 #pragma once
 
 #include <assert.h>
+#include <stdbool.h>
 #include <stdint.h>
 
 #include "api.h"
@@ -63,12 +64,124 @@ static_assert(offsetof(PAL_TCB, stack_protector_canary) == 0x8,
  * reserve one pointer field inside its own TCB struct for Gramine's use, populated at
  * thread-creation time and reached via TPIDR_EL0 plus that fixed offset.
  */
-extern PAL_TCB* g_pal_tcb_singleton;
+/*
+ * "protected" visibility, not the implicit default: this symbol must stay in libpal.so's dynamic
+ * symbol table (LibOS, in libsysdb.so, resolves it via a cross-object GOT lookup -- see the #else
+ * branch of pal_get_tcb() below), but default visibility also tells the linker "another object
+ * loaded earlier might override this definition," which makes it reject *any* direct (non-GOT)
+ * relocation against it, even one from within libpal.so itself -- the exact "may bind externally"
+ * error this ran into. "protected" keeps the export but tells the linker libpal.so's own
+ * definition is final, which is what makes the IN_PAL branch below's direct adrp/:lo12:
+ * addressing link at all.
+ */
+extern __attribute__((visibility("protected"))) PAL_TCB* g_pal_tcb_singleton;
 
 #include "pal_host_arch.h"
 
+/*
+ * Every thread's own TPIDR_EL0 register is independent architectural state (not shared memory),
+ * so as long as a thread's own TPIDR_EL0 still holds what pal_set_tcb() put there (tagged with
+ * bit 0 set -- real PAL_TCB pointers are always at least 8-byte aligned, so that bit is otherwise
+ * always 0), reading it back directly gives that exact thread's own PAL_TCB with no cross-thread
+ * interference at all. That covers Gramine's own internal threads (the IPC worker, the async
+ * worker) completely: they never run application code, so nothing else ever touches their
+ * TPIDR_EL0 after pal_set_tcb() sets it.
+ *
+ * The one thread this *doesn't* cover on its own is whichever thread actually ends up running
+ * loaded application code: aarch64 has no second EL0-writable register the way x86_64 has %gs
+ * free alongside %fs (see the long comment on g_pal_tcb_singleton below), so that thread's own
+ * libc TLS setup (ld.so's startup, or set_tls() when emulating the app's own clone()) overwrites
+ * TPIDR_EL0 with its own (untagged) value once the app starts running. From that point on, this
+ * thread's PAL_TCB has to come from somewhere else -- g_pal_tcb_singleton, snapshotted once via
+ * pal_tcb_singleton_snapshot_before_user_entry() (see libos_rtld.c) in the narrow window after
+ * this thread's own setup is done but before application code (and thus its TLS takeover) has
+ * run. This is still exactly the single-threaded-*application* stopgap the aarch64 port
+ * documents elsewhere: the fallback only ever needs to be correct for the one thread that enters
+ * the application, same limitation as before, just no longer broken by Gramine's own unrelated
+ * internal threads along the way.
+ */
+static inline bool pal_tcb_from_tagged_tpidr(PAL_TCB** out_tcb) {
+    uint64_t tp;
+    __asm__("mrs %0, tpidr_el0" : "=r"(tp));
+    if (tp & 0x1) {
+        *out_tcb = (PAL_TCB*)(tp & ~(uint64_t)0x1);
+        return true;
+    }
+    return false;
+}
+
+#ifdef IN_PAL
+/*
+ * Direct (non-GOT) addressing for the g_pal_tcb_singleton fallback read. This compiles as part of
+ * libpal.so itself, the same object that defines g_pal_tcb_singleton, so the adrp/:lo12: pair is
+ * a link-time-fixed PC-relative offset needing no runtime relocation at all -- unlike the #else
+ * branch below (LibOS code, compiled into libsysdb.so, a genuinely different object), libpal.so
+ * is executed directly by the kernel with no PT_INTERP/dynamic linker (see pal_start.S's
+ * ENTRY(pal_start)) and so never gets a dynamic linker to populate its GOT. Plain C code
+ * referencing this exported-visibility symbol would have the compiler conservatively emit
+ * GOT-indirect loads anyway (to allow for symbol interposition), which is exactly what crashed
+ * here originally: the GOT slot is never populated, so a GOT-indirect read returns NULL/garbage.
+ * Hand-written direct addressing sidesteps that compiler policy entirely.
+ */
 static inline PAL_TCB* pal_get_tcb(void) {
-    return g_pal_tcb_singleton;
+    PAL_TCB* tcb;
+    if (pal_tcb_from_tagged_tpidr(&tcb)) {
+        return tcb;
+    }
+    __asm__("adrp %0, g_pal_tcb_singleton\n"
+            "ldr  %0, [%0, :lo12:g_pal_tcb_singleton]\n"
+            : "=r"(tcb));
+    return tcb;
+}
+#else
+/*
+ * Cross-object (LibOS, compiled into libsysdb.so) access: GOT-indirect, same pattern as
+ * syscallas.S/gramine_entry_api.h's GRAMINE_SYSCALL macro. This is correct here because
+ * libsysdb.so is a normal shared object, properly loaded and relocated by a real dynamic linker
+ * -- unlike libpal.so itself (see the IN_PAL branch above), so its GOT is actually populated by
+ * the time this runs.
+ */
+static inline PAL_TCB* pal_get_tcb(void) {
+    PAL_TCB* tcb;
+    if (pal_tcb_from_tagged_tpidr(&tcb)) {
+        return tcb;
+    }
+    PAL_TCB** got_slot;
+    __asm__("adrp %0, :got:g_pal_tcb_singleton\n"
+            "ldr  %0, [%0, :got_lo12:g_pal_tcb_singleton]\n"
+            : "=r"(got_slot));
+    return *got_slot;
+}
+#endif
+
+/* Called exactly once, by LibOS, in the narrow window after the thread that is about to start
+ * running application code has its own PAL_TCB set up (via pal_set_tcb(), reachable at that
+ * point through the tagged TPIDR_EL0 fast path above) but before that thread jumps into
+ * application entry code -- which, via ld.so's own startup or set_tls() emulating the
+ * application's own clone(), is about to overwrite TPIDR_EL0 with the application's own libc TLS
+ * pointer. g_pal_tcb_singleton is this thread's only remaining way to reach its own PAL_TCB after
+ * that happens (see the #else branch of pal_get_tcb() above), so it has to be snapshotted now,
+ * while the tagged fast path can still supply the right value. Needs the same IN_PAL/#else
+ * addressing-mode split as pal_get_tcb() itself, since this (unlike pal_set_tcb(), PAL-only)
+ * is called from LibOS. */
+static inline void pal_tcb_singleton_snapshot_before_user_entry(void) {
+    PAL_TCB* tcb = pal_get_tcb();
+#ifdef IN_PAL
+    __asm__("adrp x9, g_pal_tcb_singleton\n"
+            "str  %0, [x9, :lo12:g_pal_tcb_singleton]\n"
+            :
+            : "r"(tcb)
+            : "x9");
+#else
+    PAL_TCB** got_slot;
+    __asm__("adrp x9, :got:g_pal_tcb_singleton\n"
+            "ldr  x9, [x9, :got_lo12:g_pal_tcb_singleton]\n"
+            "mov  %0, x9\n"
+            : "=r"(got_slot)
+            :
+            : "x9");
+    *got_slot = tcb;
+#endif
 }
 
 static inline unsigned long count_ulong_bits_set(unsigned long x) {

@@ -57,8 +57,16 @@ do_syscall:
  */
 clone:
     .cfi_startproc
-    /* Pass f/arg/exit_func on the child stack, same layout as the x86_64 version. */
-    sub  x1, x1, #0x18
+    /* Pass f/arg/exit_func on the child stack, same layout as the x86_64 version. Reserve 0x20
+     * (not the 0x18 that would exactly fit f/arg/exit_func), since this value becomes the child
+     * thread's initial SP: AArch64 architecturally requires SP to be 16-byte aligned for any
+     * load/store that uses it as the base register (Linux enables this check at EL0 by default,
+     * SCTLR_EL1.SA0), and the caller-supplied `stack` here is already 16-aligned (see
+     * ALIGN_DOWN_PTR in pal_threading.c's _PalThreadCreate()) -- subtracting a non-multiple-of-16
+     * like 0x18 would misalign it, and the child's very first access through SP (`ldr x9, [sp]`
+     * below) would take an SP-alignment fault (SIGBUS) before it even reaches `f`. The extra 8
+     * bytes of padding this leaves are simply unused. */
+    sub  x1, x1, #0x20
     stp  x0, x3, [x1]       /* [x1+0x00] = f, [x1+0x08] = arg */
     str  x7, [x1, #0x10]    /* [x1+0x10] = exit_func */
 
@@ -84,7 +92,7 @@ clone:
     ldr  x9, [sp]           /* x9 = f */
     ldr  x0, [sp, #0x8]     /* x0 = arg (1st/only param for f) */
     ldr  x10, [sp, #0x10]   /* x10 = exit_func */
-    add  sp, sp, #0x18      /* restore sp to the original `stack` value */
+    add  sp, sp, #0x20      /* restore sp to the original `stack` value */
     blr  x9                 /* call f(arg); return value lands in x0 */
     blr  x10                 /* call exit_func(x0) -- x0 is already positioned as its 1st arg */
     /* Unreachable. */

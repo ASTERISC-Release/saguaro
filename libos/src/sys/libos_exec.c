@@ -19,6 +19,14 @@
 noreturn static void __libos_syscall_execve_rtld(void* new_argp, elf_auxv_t* new_auxv) {
     int ret = 0;
 
+#ifdef __aarch64__
+    /* Same reasoning as libos_init.c's call before its own set_default_tls(): this thread's
+     * PAL_TCB needs to stay reachable via g_pal_tcb_singleton for the rest of this function (and
+     * execute_elf_object() at the end of it) before TPIDR_EL0 is zeroed below and, later,
+     * overwritten by the new application image's own TLS setup. */
+    pal_tcb_singleton_snapshot_before_user_entry();
+#endif
+
     set_default_tls();
 
     thread_sigaction_reset_on_execve();
