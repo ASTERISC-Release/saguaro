@@ -10,8 +10,9 @@ on 2026-10-08 in the `ubuntu-gpu-kvm` container (`LOGDIR=/root/x86-logs`).
 | LibOS regression | 144 passed / 0 failed / 32 skipped | 140 passed / 0 failed / 36 skipped | 176 tests on both. Arch-specific tests (e.g. musl vs glibc) skip on one side and run on the other |
 | busybox | Pass (`uname -m` -> `x86_64`) | Pass (`uname -m` -> `aarch64`) | Both need `CONFIG_TC`/`CONFIG_ARP`/`CONFIG_ARPING` off (kernel-headers issue, not port related) |
 | memcached | Pass (counter semantics + 100 set/get round-trips) | Pass (3 cycles x 100 set/get, `incr` exact) | x86_64 needs `libevent-dev` |
-| redis | not run | Pass | Not part of the x86_64 parity run |
-| helloworld / multi-thread | not run | Pass | Not part of the x86_64 parity run |
+| redis | Pass (PING/SET/GET + 20 round-trips) | Pass | |
+| helloworld | Pass | Pass | |
+| multi-thread | Pass (tls/rwlock/stress) | Pass | |
 
 Totals match (PAL 36, LibOS 176), so no test is unaccounted for. Both architectures have zero failures.
 
@@ -22,4 +23,3 @@ Totals match (PAL 36, LibOS 176), so no test is unaccounted for. Both architectu
 
 ## TODO
 - Per-test skip lists (rerun with `pytest -rs`) to show which tests skip on each side.
-- Run redis, helloworld and multi-thread on x86_64.
