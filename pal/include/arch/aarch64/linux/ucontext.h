@@ -88,7 +88,17 @@ static inline void ucontext_to_pal_context(PAL_CONTEXT* context, ucontext_t* uc)
     }
 }
 
-/* fpregs is shallow copied by only setting a pointer */
+/*
+ * Unlike x86_64 (whose sigcontext.fpstate is itself a *pointer*, so pal_context_to_ucontext()
+ * there can just repoint it at context->fpregs with no data movement at all), aarch64's
+ * sigcontext carries FP/SIMD state *inline* inside a fixed 4KB __reserved[] array -- there is no
+ * pointer indirection to borrow. So unlike ucontext_to_pal_context() above (which can alias
+ * find_fpsimd_context()'s result directly, since that record's lifetime matches `uc`'s), this
+ * direction has to physically copy the NEON register data from wherever context->fpregs
+ * currently points (which may be a completely unrelated buffer, e.g. the syscall-entry scratch
+ * area in syscallas.S) into a freshly-placed fpsimd_context record inside `uc`'s own
+ * __reserved[].
+ */
 static inline void pal_context_to_ucontext(ucontext_t* uc, PAL_CONTEXT* context) {
     memcpy(uc->uc_mcontext.regs, context->regs, sizeof(context->regs));
     uc->uc_mcontext.sp = context->sp;
@@ -96,11 +106,23 @@ static inline void pal_context_to_ucontext(ucontext_t* uc, PAL_CONTEXT* context)
     uc->uc_mcontext.pstate = context->pstate;
     uc->uc_mcontext.fault_address = context->fault_address;
 
+    struct fpsimd_context* fp = (struct fpsimd_context*)uc->uc_mcontext.__reserved;
+    fp->head.magic = FPSIMD_MAGIC;
+    fp->head.size = sizeof(*fp);
     if (context->is_fpregs_used && context->fpregs) {
-        struct fpsimd_context* fp = (struct fpsimd_context*)context->fpregs;
-        fp->fpsr = context->fpsr;
-        fp->fpcr = context->fpcr;
+        fp->fpsr = context->fpregs->fpstate.fpsr;
+        fp->fpcr = context->fpregs->fpstate.fpcr;
+        memcpy(fp->vregs, context->fpregs->fpstate.vregs, sizeof(fp->vregs));
+    } else {
+        fp->fpsr = 0;
+        fp->fpcr = 0;
+        memset(fp->vregs, 0, sizeof(fp->vregs));
     }
+    /* Terminate the extensible record chain right after this one (a zeroed _aarch64_ctx marks
+     * the end, per the kernel ABI -- see find_fpsimd_context()'s loop condition above). */
+    struct _aarch64_ctx* terminator = (struct _aarch64_ctx*)((uint8_t*)fp + sizeof(*fp));
+    terminator->magic = 0;
+    terminator->size = 0;
 }
 
 static inline uint64_t ucontext_get_ip(ucontext_t* uc) {
