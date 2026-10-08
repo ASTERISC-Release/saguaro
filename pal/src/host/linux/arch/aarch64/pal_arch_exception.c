@@ -4,10 +4,10 @@
  */
 
 /*
- * This file has no aarch64-specific logic at all -- it only deals with __sigset_t/sigaction
- * struct layout (per-arch headers) and the syscall_rt_sigreturn trampoline (per-arch asm), both
- * of which are supplied by the aarch64 sibling headers/syscall.S, so the C code here is
- * identical to the x86_64 version.
+ * The sigaction/sigprocmask logic here has no aarch64-specific content at all -- it only deals
+ * with __sigset_t/sigaction struct layout (per-arch headers) and the syscall_rt_sigreturn
+ * trampoline (per-arch asm), both supplied by the aarch64 sibling headers/syscall.S, so that
+ * part of the C code is identical to the x86_64 version.
  */
 
 #include <stddef.h> /* needed by <linux/signal.h> for size_t */
@@ -16,7 +16,11 @@
 #include "sigreturn.h"
 #include "sigset.h"
 #include "syscall.h"
-#include "ucontext.h"
+#include "ucontext.h" /* pulls in pal.h -> pal_arch.h, which declares g_pal_tcb_singleton */
+
+/* Milestone A stopgap single-threaded PAL_TCB storage -- see the comment on this declaration in
+ * pal/include/arch/aarch64/pal_arch.h for why aarch64 can't just do what %gs does on x86_64. */
+PAL_TCB* g_pal_tcb_singleton = NULL;
 
 int arch_do_rt_sigprocmask(int sig, int how) {
     __sigset_t mask;

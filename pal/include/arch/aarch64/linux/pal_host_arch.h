@@ -22,16 +22,15 @@
  */
 #define ARCH_HIGHEST_ADDR ((1ul << 47) - PAGE_SIZE)
 
-/* Gramine uses GCC's stack protector that looks for the canary at tpidr_el0:[0x8] (see
- * pal_arch.h), but this function changes TPIDR_EL0, so we disable stack protector here (even
- * though it is mostly inlined).
- *
- * Unlike x86_64 (which needs the arch_prctl(ARCH_SET_GS, ...) syscall because %gs cannot be
- * written directly from userspace), aarch64's TPIDR_EL0 is a normal EL0-writable system
- * register -- no syscall is needed at all. */
-__attribute_no_stack_protector
+/* Milestone A stopgap (see the long comment on g_pal_tcb_singleton in pal_arch.h): PAL_TCB is a
+ * plain process-wide global here, not reached via a register, because TPIDR_EL0 is needed for
+ * the application's own libc TLS pointer and aarch64 has no second EL0-writable register the
+ * way x86_64 has %gs free alongside %fs. So, unlike x86_64's pal_set_tcb() (which must issue
+ * arch_prctl(ARCH_SET_GS, ...) because %gs isn't writable directly from userspace), this simply
+ * stores the pointer -- no register, no syscall, and deliberately no interaction with TPIDR_EL0
+ * at all, leaving it entirely under the application's own libc's control. */
 static inline int pal_set_tcb(PAL_TCB* tcb) {
-    __asm__ volatile("msr tpidr_el0, %0" :: "r"(tcb) : "memory");
+    g_pal_tcb_singleton = tcb;
     return 0;
 }
 

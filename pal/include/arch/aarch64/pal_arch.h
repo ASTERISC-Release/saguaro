@@ -27,10 +27,14 @@ typedef struct pal_tcb PAL_TCB;
 
 typedef struct pal_tcb {
     struct pal_tcb* self;
-    /* random per-thread canary used by GCC's stack protector; must be at tpidr_el0+0x8 because
-     * we specify `-mstack-protector-guard=sysreg -mstack-protector-guard-reg=tpidr_el0
-     * -mstack-protector-guard-offset=8` (see top-level meson.build) -- this is the aarch64
-     * analog of x86_64's %gs:[0x8] scheme. */
+    /* random per-thread canary used by GCC's stack protector. On x86_64 this must sit at a fixed
+     * %gs-relative offset because the compiler emits a direct %gs:[0x8] read on every function
+     * entry; aarch64 (Milestone A stopgap, see pal_get_tcb() below) reaches PAL_TCB through a
+     * plain global rather than a register, so the stack protector here just uses the generic
+     * per-TU global-canary scheme (see top-level meson.build) and this field's offset isn't
+     * compiler-enforced the way x86_64's is -- kept at the same offset anyway for structural
+     * parity with x86_64 and so Milestone B (which *will* need a register-relative scheme once
+     * it has somewhere to put one) doesn't have to reshuffle this struct. */
     uint64_t stack_protector_canary;
     /* uint64_t for alignment */
     uint64_t libos_tcb[(PAL_LIBOS_TCB_SIZE + sizeof(uint64_t) - 1) / sizeof(uint64_t)];
@@ -47,10 +51,24 @@ static_assert(offsetof(PAL_TCB, stack_protector_canary) == 0x8,
 
 #include "pal_host_arch.h"
 
+/*
+ * Milestone A stopgap (single-threaded only): x86_64 reaches PAL_TCB via %gs, a register the
+ * real ABI never assigns to anything else, so the app's own libc can't collide with it.
+ * aarch64 has no such spare register -- TPIDR_EL0 is the one EL0-writable register, and the
+ * real ABI requires it to hold the application's own libc TLS pointer (errno, locale data,
+ * etc. all depend on it, even in trivial programs), and unlike x86_64's `arch_prctl`, setting
+ * it is a plain unprivileged `msr`, not a syscall Gramine could intercept. So for now PAL_TCB is
+ * a single process-wide global (`g_pal_tcb_singleton`, defined in
+ * pal/src/host/linux/arch/aarch64/pal_arch_exception.c) instead of per-thread register state --
+ * correct for exactly one thread, and explicitly not yet a multi-threaded design. Fixing this
+ * properly means patching the libc build (musl, not glibc: see the Milestone A plan notes) to
+ * reserve one pointer field inside its own TCB struct for Gramine's use, populated at
+ * thread-creation time and reached via TPIDR_EL0 plus that fixed offset.
+ */
+extern PAL_TCB* g_pal_tcb_singleton;
+
 static inline PAL_TCB* pal_get_tcb(void) {
-    PAL_TCB* tcb;
-    __asm__("mrs %0, tpidr_el0" : "=r"(tcb));
-    return tcb;
+    return g_pal_tcb_singleton;
 }
 
 static inline unsigned long count_ulong_bits_set(unsigned long x) {
@@ -73,14 +91,24 @@ struct pal_cpu_info {
 
 /*
  * aarch64 FP/SIMD context, i.e. the analog of x86_64's FXSAVE/XSAVE-derived PAL_FPSTATE.
- * Mirrors the kernel's `struct fpsimd_context` (32 128-bit V registers + FPSR/FPCR); unlike
- * x86_64's XSAVE area there is no magic-number/feature-bitmap validation scheme here, and (for
- * now, scope of the aarch64 port) no SVE/SVE2 extended-register state.
+ *
+ * This must be byte-for-byte identical to the real kernel `struct fpsimd_context`
+ * (`struct _aarch64_ctx head` flattened into `magic`+`size`, then FPSR/FPCR, then 32 128-bit V
+ * registers) -- unlike x86_64, where PAL_FPSTATE is a from-scratch struct that PAL's own
+ * exception machinery fully owns, aarch64's `context->fpregs` (see ucontext_to_pal_context() in
+ * linux/ucontext.h) is a pointer taken directly from inside the real kernel-delivered sigcontext
+ * record, so this layout is dictated by the kernel ABI, not a Gramine design choice. There is no
+ * magic-number/feature-bitmap validation scheme the way x86_64's XSAVE area has one (the
+ * magic/size pair here just identifies which kind of record this is within the kernel's
+ * extensible `__reserved[]` chain), and (for now, scope of the aarch64 port) no SVE/SVE2
+ * extended-register state.
  */
 typedef struct {
-    __uint128_t vregs[32];
+    uint32_t magic; /* FPSIMD_MAGIC, see linux/ucontext.h */
+    uint32_t size;  /* sizeof(struct fpsimd_context) */
     uint32_t fpsr;
     uint32_t fpcr;
+    __uint128_t vregs[32];
 } PAL_FPSTATE;
 
 #define PAL_XSTATE_ALIGN 16

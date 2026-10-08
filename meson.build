@@ -187,16 +187,13 @@ if host_machine.cpu_family() == 'x86_64'
         '-mstack-protector-guard-reg=%gs',
         '-mstack-protector-guard-offset=8',
     ]
-elif host_machine.cpu_family() == 'aarch64'
-    # TPIDR_EL0 is aarch64's analog of x86_64's %gs-based TCB access (see pal_get_tcb() /
-    # LIBOS_TCB_GET in the aarch64 arch headers), so keep the canary read from the same place.
-    cflags_custom_stack_protector = [
-        '-fstack-protector-strong',
-        '-mstack-protector-guard=sysreg',
-        '-mstack-protector-guard-reg=tpidr_el0',
-        '-mstack-protector-guard-offset=8',
-    ]
 else
+    # aarch64 (Milestone A, single-threaded stopgap): PAL_TCB is reached via a plain exported
+    # global (g_pal_tcb_singleton, see pal_get_tcb() in pal/include/arch/aarch64/pal_arch.h), not
+    # a dedicated system register -- aarch64 has no spare EL0-writable register the way x86_64
+    # has %gs free alongside %fs, since TPIDR_EL0 is the one register the real ABI requires for
+    # the application's own libc TLS. So there's no register-relative canary scheme to wire up
+    # here; fall back to the generic (per-TU global canary) stack protector.
     cflags_custom_stack_protector = [
         '-fstack-protector-strong',
     ]

@@ -53,3 +53,4 @@ PalAttestationQuote
 PalGetSpecialKey
 PalDebugLog
 PalGetPalPublicState
+g_pal_tcb_singleton
