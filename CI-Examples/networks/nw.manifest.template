@@ -11,10 +11,8 @@ libos.entrypoint = "./udp"
 loader.insecure__use_host_env = true
 # loader.log_level = "trace"
 # Loader environment overrides
-loader.env.LD_LIBRARY_PATH = "/lib:/usr/lib:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu"
-loader.env.HOME = "/home/user"
-loader.env.USER = "santosh"
-loader.env.DISPLAY = "2:0"
+loader.env.LD_LIBRARY_PATH = "/lib:/usr/lib:{{ arch_libdir }}"
+loader.env.HOME = "/root"
 
 ##############################################
 # Core mounts
@@ -25,10 +23,9 @@ loader.env.DISPLAY = "2:0"
 
 fs.mounts = [
   # Core system dirs
-  { path = "/lib", uri = "file:/home/user/santosh/gramine-tdx-testing/gramine-tdx/built-debug/lib/x86_64-linux-gnu/gramine/runtime/glibc" },
+  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
   { path = "/usr/lib", uri = "file:/usr/lib" },
-  { path = "/usr/lib/x86_64-linux-gnu", uri = "file:/usr/lib/x86_64-linux-gnu" },
-  { path = "/lib/x86_64-linux-gnu", uri = "file:/lib/x86_64-linux-gnu" },
+  { path = "{{ arch_libdir }}", uri = "file:{{ arch_libdir }}" },
 ]
 sgx.debug = true
 sgx.edmm_enable = {{ 'true' if env.get('EDMM', '0') == '1' else 'false' }}
