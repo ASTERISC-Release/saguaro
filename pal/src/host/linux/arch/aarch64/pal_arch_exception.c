@@ -54,8 +54,8 @@ int arch_do_rt_sigaction(int sig, void* handler,
 }
 
 /*
- * Per-thread PAL_TCB registry (aarch64 multi-threading; see ARM64_PORT_PLAN.md findings #7 and
- * #11).
+ * Per-thread PAL_TCB registry (aarch64 multi-threading; see findings #9, #12 and #13 in
+ * Documentation/devel/aarch64/direct-pal-port-log.md).
  *
  * aarch64 has exactly one EL0-writable TLS register (TPIDR_EL0) and the application's libc needs
  * it, so a thread's PAL_TCB cannot live in a register the way x86_64 keeps it in %gs. What every

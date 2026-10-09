@@ -26,8 +26,8 @@
  * X30 at an `svc` site is the application's own live link register (leaf-ish libc syscall
  * wrappers `ret` via it right after the `svc`). Clobbering it silently corrupts the caller's
  * return path into an infinite loop (this was the root cause of the aarch64 helloworld spin; see
- * ARM64_PORT_PLAN.md). So the resume address travels in X16 and the app's true X30 is saved and
- * restored like any other live register.
+ * Documentation/devel/aarch64/direct-pal-port-log.md, finding #1). So the resume address travels
+ * in X16 and the app's true X30 is saved and restored like any other live register.
  *
  * X16/X17 are AAPCS64's own designated intra-procedure-call scratch registers (IP0/IP1): by
  * convention no well-behaved caller relies on them surviving any call-like transition -- the

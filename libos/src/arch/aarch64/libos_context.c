@@ -274,8 +274,9 @@ bool maybe_emulate_syscall(PAL_CONTEXT* context) {
          * application's *live* link register (leaf libc syscall wrappers `ret` via it
          * immediately), and overwriting it corrupts the caller's return path into an infinite
          * self-loop. That clobber was the root cause of the aarch64 helloworld hang; see
-         * ARM64_PORT_PLAN.md. regs[30] is instead saved and restored untouched as application
-         * state (ucontext_to_pal_context()/pal_context_to_ucontext() already do this). */
+         * Documentation/devel/aarch64/direct-pal-port-log.md, finding #1. regs[30] is instead saved
+         * and restored untouched as application state
+         * (ucontext_to_pal_context()/pal_context_to_ucontext() already do this). */
         context->regs[16] = (uint64_t)pc + 4;
         context->pc = (uint64_t)&libos_syscall_entry;
         /* Prototype fast path (opt-in): rewrite this site so it stops trapping. The current

@@ -3,7 +3,7 @@
 The applicable examples from <https://github.com/gramineproject/examples> (commit 9fdd89c5) now
 live in `CI-Examples/`: `curl gcc iperf mongodb nodejs openjdk pytorch r`. Run them with
 `scripts/examples-aarch64/run_examples.sh` (needs the Gramine install from `./install.sh`).
-Validated 2026-10-08 on the WSL2 aarch64 box (see `ARM64_MILESTONE_A.md`, "Validated platforms").
+Validated 2026-10-08 on the WSL2 aarch64 box (see `direct-pal-port-log.md`, "Validated platforms").
 Not copied (x86 / Intel-specific): `tensorflow-lite`, `openvino`, `scikit-learn-intelex`.
 
 ## Host prerequisites
