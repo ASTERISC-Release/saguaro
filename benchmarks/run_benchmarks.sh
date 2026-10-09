@@ -16,7 +16,7 @@
 #   REDIS_N / REDIS_C   redis-benchmark requests / clients (default 200000 / 50)
 #   SERVER_CPU / CLIENT_CPUS   taskset CPU lists (default: 2 / 4-7, if that many CPUs exist)
 #
-# Results are appended to benchmarks/results/<date>_<host>_<arch>.txt together with a machine
+# Results are appended to benchmarks/results/<date>_<arch>.txt (git-ignored) together with a machine
 # header, so runs on different boxes (or before/after a change) can be diffed. Prerequisites:
 # benchmarks/syscall-bench and the redis example must be buildable (run_all_tests.sh builds redis).
 # Re-run with the same settings before and after a change; compare min/median, not single runs.
@@ -27,7 +27,7 @@ ROOT=$(dirname "$HERE")
 . "$ROOT/scripts/gramine-env.sh"   # GRAMINE_PREFIX, PATH, PYTHONPATH
 ITERS=${ITERS:-300000}; REPS=${REPS:-7}
 REDIS_N=${REDIS_N:-200000}; REDIS_C=${REDIS_C:-50}
-RESULT=${RESULT:-$HERE/results/$(date +%F)_$(hostname -s)_$(uname -m).txt}
+RESULT=${RESULT:-$HERE/results/$(date +%F)_$(uname -m).txt}
 WHAT=${1:-all}
 
 NCPU=$(nproc)
@@ -41,12 +41,12 @@ header() {
     say "=============================================================="
     say "date:    $(date -Is)"
     say "git:     $(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null) ($(git -C "$ROOT" status --porcelain | wc -l) modified files)"
-    say "host:    $(hostname -s)  $(uname -srm)"
+    say "kernel:  $(uname -srm)"
     local model; model=$(lscpu | sed -n 's/^Model name:[[:space:]]*//p' | head -1)
     say "cpu:     ${model:--} x$NCPU  (vendor: $(lscpu | sed -n 's/^Vendor ID:[[:space:]]*//p' | head -1))"
     say "mem:     $(awk '/MemTotal/ {printf "%.1f GiB", $2/1048576}' /proc/meminfo)"
     say "os:      $(. /etc/os-release; echo "$PRETTY_NAME")"
-    say "gramine: $GRAMINE_PREFIX  (direct PAL, seccomp-trap syscall path unless noted)"
+    say "gramine: direct PAL (syscall-site rewriting per the manifest default unless noted)"
     say "--------------------------------------------------------------"
 }
 

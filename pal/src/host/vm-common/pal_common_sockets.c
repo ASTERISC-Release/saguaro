@@ -295,7 +295,7 @@ static void pal_common_socket_destroy(struct pal_handle* handle) {
 }
 
 static int pal_common_socket_bind(struct pal_handle* handle, struct pal_socket_addr* addr) {
-    /* Santosh's log for bind requests*/
+    /* Log for bind requests. */
     log_debug("[graphics] Bind request arrived.\n");
     
     assert(handle->hdr.type == PAL_TYPE_SOCKET);

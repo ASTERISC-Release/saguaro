@@ -13,7 +13,6 @@
 #include "libos_socket.h"
 #include "libos_table.h"
 #include "linux_abi/errors.h"
-/* Santosh changes */
 #define PROT_READ	0x1		/* Page can be read.  */
 #define PROT_WRITE	0x2		/* Page can be written.  */
 # define MAP_ANONYMOUS	0x20		/* Don't use a file.  */
@@ -144,7 +143,7 @@ long libos_syscall_socket(int family, int type, int protocol) {
     int flags = type & ~SOCK_TYPE_MASK;
     bool is_nonblocking = flags & SOCK_NONBLOCK;
 
-    /* Santosh's log for nonblocking socket calls.*/
+    /* Log for nonblocking socket calls. */
     log_debug("[graphics] Am I non-blocking: %d", is_nonblocking);
     
     bool is_cloexec = flags & SOCK_CLOEXEC;

@@ -126,7 +126,6 @@ int pal_common_file_open(struct pal_handle** handle, const char* type, const cha
     uint64_t created_dir_nodeid = 0;
     char* created_base_path = NULL;
 
-    // 
     //log_always("pal_common_file_open: type=%s, uri=%s, access=0x%x, share=0x%x, create=%d, options=0x%x",
     //            type, uri, access, share, create, options);
 
@@ -148,7 +147,7 @@ int pal_common_file_open(struct pal_handle** handle, const char* type, const cha
     else
         return ret;
 
-    // (printing resolved path for debug)
+    // Print the resolved path (debug)
     //log_always("Opening file: '%s' (resolved to '%s'), access=%d, share=%d, create=%d, options=0x%x",
     //            uri, resolved_path ? resolved_path : "(not exist)", access, share, create, options);
 

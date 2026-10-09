@@ -9,7 +9,7 @@ loader.log_level = "{{ log_level }}"
 # loader.log_level = "trace"
 
 loader.env.LD_LIBRARY_PATH = "/lib:/usr/lib:/usr/lib/{{ multiarch }}:/lib/{{ multiarch }}"
-loader.env.HOME = "/home/user"
+loader.env.HOME = "/root"
 loader.env.USER = "root"
 loader.env.DISPLAY="2:0"
 loader.env.IVSHMEM_GRAMINE_VM="1"
