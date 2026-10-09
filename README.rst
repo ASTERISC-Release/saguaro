@@ -34,17 +34,17 @@ Supported configurations
      - AMD64
      - AArch64
    * - ``direct`` (``gramine-direct``, an ordinary Linux process)
-     - inherited from upstream; being re-validated here
-     - works
-     - works; regression suites and example applications pass
+     - ⚠️ inherited from upstream; being re-validated here
+     - ✅ inherited from upstream; being re-validated here
+     - ✅ works; regression suites and example applications pass
    * - ``vm`` (``gramine-vm``, a unikernel in a QEMU guest)
-     - inherited from upstream
-     - partly validated (work in progress)
-     - planned
+     - ✅ inherited from upstream
+     - ⚠️ partly validated (work in progress)
+     - ❌ planned
    * - ``tdx`` (Intel TDX), ``sgx`` (Intel SGX)
-     - inherited from upstream
-     - not applicable
-     - not applicable
+     - ✅ inherited from upstream
+     - ❌ not applicable
+     - ❌ not applicable
 
 Details, build options and the verification status are in
 `Documentation/devel/multiarch.md <Documentation/devel/multiarch.md>`__.
