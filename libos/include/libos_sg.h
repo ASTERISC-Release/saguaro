@@ -47,44 +47,44 @@ bool sg_redirect_enabled(void);
 
 #define COMM_ADDR  0xf00000ULL
 #define COMM_MAGIC 0x1234567812345678ULL
-static uint64_t LOG_MMAP_EVENT = 1;
-static uint64_t SETUP_DATA = 2;
-static uint64_t GEM_ALLOCATION = 3;
-static uint64_t FSTAT = 4;
-static uint64_t IOCTL = 5;
-static uint64_t OPEN = 6;
-static uint64_t FCNTL = 7;
-static uint64_t READLINK = 8;
-static uint64_t NEWFSTAT = 9;
-static uint64_t GETDENT = 10;
-static uint64_t DUP = 11;
-static uint64_t DUP_IDENTITY = 30;
-static uint64_t X11_SETUP = 12;
-static uint64_t X11_PRESENT = 13;
-static uint64_t CLOSE = 14;
+static uint64_t __attribute__((unused)) LOG_MMAP_EVENT = 1;
+static uint64_t __attribute__((unused)) SETUP_DATA = 2;
+static uint64_t __attribute__((unused)) GEM_ALLOCATION = 3;
+static uint64_t __attribute__((unused)) FSTAT = 4;
+static uint64_t __attribute__((unused)) IOCTL = 5;
+static uint64_t __attribute__((unused)) OPEN = 6;
+static uint64_t __attribute__((unused)) FCNTL = 7;
+static uint64_t __attribute__((unused)) READLINK = 8;
+static uint64_t __attribute__((unused)) NEWFSTAT = 9;
+static uint64_t __attribute__((unused)) GETDENT = 10;
+static uint64_t __attribute__((unused)) DUP = 11;
+static uint64_t __attribute__((unused)) DUP_IDENTITY = 30;
+static uint64_t __attribute__((unused)) X11_SETUP = 12;
+static uint64_t __attribute__((unused)) X11_PRESENT = 13;
+static uint64_t __attribute__((unused)) CLOSE = 14;
 
-static uint64_t LSEEK = 22;
-static uint64_t READ = 24;
-static uint64_t WRITE = 25;
-static uint64_t SYSV_SEMGET = 34;
-static uint64_t SYSV_SEMCTL = 35;
-static uint64_t SYSV_SEMOP = 36;
-static uint64_t HOST_FLOCK = 37;
-static uint64_t HOST_FTRUNCATE = 38;
+static uint64_t __attribute__((unused)) LSEEK = 22;
+static uint64_t __attribute__((unused)) READ = 24;
+static uint64_t __attribute__((unused)) WRITE = 25;
+static uint64_t __attribute__((unused)) SYSV_SEMGET = 34;
+static uint64_t __attribute__((unused)) SYSV_SEMCTL = 35;
+static uint64_t __attribute__((unused)) SYSV_SEMOP = 36;
+static uint64_t __attribute__((unused)) HOST_FLOCK = 37;
+static uint64_t __attribute__((unused)) HOST_FTRUNCATE = 38;
 
-static size_t special_allocation = 0x123456789ULL;
-static uint64_t fs_offset = 500;
+static size_t __attribute__((unused)) special_allocation = 0x123456789ULL;
+static uint64_t __attribute__((unused)) fs_offset = 500;
 /* Both Integrated and Discrete GPUs should be supported */
 #define iGPUNODE_PATH "/dev/dri/renderD128"
 #define dGPUNODE_PATH "/dev/dri/renderD129"
 
-static void* DATA_REGION = (void*)SG_GEM_DATA_START;
-static const size_t DATA_SIZE = SG_GEM_DATA_SIZE;
+static void* __attribute__((unused)) DATA_REGION = (void*)SG_GEM_DATA_START;
+static const size_t __attribute__((unused)) DATA_SIZE = SG_GEM_DATA_SIZE;
 static inline comm_page_t* comm_page(long offset) {
     return (comm_page_t*)(uintptr_t)(COMM_ADDR + offset);
 }
 
-static uint64_t comm_sync_notify(comm_page_t* c) {
+static __attribute__((unused)) uint64_t comm_sync_notify(comm_page_t* c) {
     if (!c || c->magic != COMM_MAGIC) {
         return 0;
     }
@@ -102,7 +102,7 @@ static uint64_t comm_sync_notify(comm_page_t* c) {
     return c->ret;
 }
 
-static inline void ensure_lock_ready(struct libos_lock *lock){
+static inline __attribute__((unused)) void ensure_lock_ready(struct libos_lock *lock){
     if(lock_created(lock))
         return;
     if(!(create_lock(lock))){

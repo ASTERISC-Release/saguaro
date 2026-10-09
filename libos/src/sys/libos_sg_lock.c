@@ -1,6 +1,7 @@
 #include <stdlib.h>
 
 #include "./../../../libos/include/libos_sg.h"
+#include "libos_table.h"
 #include "libos_thread.h"
 #include "linux_abi/errors.h"
 
