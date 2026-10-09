@@ -592,7 +592,11 @@ bool virtio_vsock_busy_poll(uint64_t timeout_us) {
             return true;
         if (ret < 0)
             return false;
+#ifdef __x86_64__
         __asm__ volatile("pause");
+#else /* __aarch64__ */
+        __asm__ volatile("yield");
+#endif
     } while (get_tsc() < deadline_tsc);
 
     return false;

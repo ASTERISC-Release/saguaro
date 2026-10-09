@@ -19,6 +19,7 @@ struct isr_regs {
     /* pointer to FP regs (aka XSAVE area), pushed by ISRs in *.S */
     void* fpregs;
 
+#ifdef __x86_64__
     /* all GPRs except those pushed by the CPU, pushed by ISRs in *.S */
     uint64_t r8;
     uint64_t r9;
@@ -39,6 +40,17 @@ struct isr_regs {
     uint64_t int_number;               /* pushed by ISRs in *.S */
     uint64_t error_code;               /* pushed by the CPU or dummy by ISRs in *.S */
     uint64_t rip, cs, rflags, rsp, ss; /* pushed by the CPU (CS and SS are 16-bit values) */
+#else /* __aarch64__ */
+    /* All user GPRs, saved by the el0_irq asm handler: unlike x86_64 (where the preempted
+     * context is a ring-3 process whose caller-saved registers the C code doesn't rely on and
+     * the hardware-pushed iret frame carries rip/rflags/rsp) the aarch64 EL0 exception frame is
+     * ELR_EL1/SPSR_EL1/SP_EL0 system registers, which the asm must read explicitly. The FP area
+     * is again just a pointer to a per-CPU (or per-thread on the svc path) save area. */
+    uint64_t regs[31]; /* x0..x30 as saved by the entry asm */
+    uint64_t elr;      /* ELR_EL1: user return address (x86 `rip`) */
+    uint64_t spsr;     /* SPSR_EL1: saved user PSTATE (x86 `rflags`) */
+    uint64_t sp;       /* SP_EL0: user stack pointer (x86 `rsp`) */
+#endif
 } __attribute__((packed));
 
 /* Interrupt Descriptor Table gate (we only use interrupt gates, no trap gates and task gates --
@@ -101,6 +113,7 @@ static inline void spinlock_unlock_enable_irq(spinlock_t* lock) {
 }
 
 static inline noreturn void triple_fault(void) {
+#ifdef __x86_64__
     /* This IDT has a limit of 1 byte, hence #UD with this IDT loaded will result in #DF then triple
      * fault. In a microvm, a triple fault shuts down QEMU nicely. */
     static const char invalid_idtr[10] = {0};
@@ -111,6 +124,18 @@ static inline noreturn void triple_fault(void) {
 #endif
         "lgdt %0; ud2\n"
         : : "m"(invalid_idtr));
+#else /* __aarch64__ */
+    /* No triple fault on aarch64: mask all exceptions (so even a misbehaving GIC can't get us)
+     * and spin. QEMU shows this as a hung vCPU at a known address in the debugger, the closest
+     * observable equivalent of "machine shutdown on triple fault". */
+    __asm__ volatile(
+#ifdef C_NO_3F
+        "wfi\n"
+#endif
+        "msr daifset, #0xf\n"
+        "1: b 1b\n"
+    );
+#endif
     __builtin_unreachable();
 }
 

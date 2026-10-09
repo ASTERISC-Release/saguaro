@@ -112,7 +112,13 @@ int pal_common_thread_get_cpu_affinity(struct pal_handle* thread, unsigned long*
                                        size_t cpu_mask_len);
 
 int pal_common_random_bits_read(void* buffer, size_t size);
+#ifdef __aarch64__
+/* The vm kernel is built -mgeneral-regs-only (pal/src/host/vm/meson.build), so this returns
+ * the IEEE-754 bit pattern of the double that the x86 flavor returns directly in %xmm0. */
+uint64_t pal_common_get_bogomips(void);
+#else
 double pal_common_get_bogomips(void);
+#endif
 int pal_common_get_topo_info(struct pal_topo_info* topo_info);
 int pal_common_segment_base_get(enum pal_segment_reg reg, uintptr_t* addr);
 int pal_common_segment_base_set(enum pal_segment_reg reg, uintptr_t addr);

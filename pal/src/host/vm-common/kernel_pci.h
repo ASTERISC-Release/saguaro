@@ -17,10 +17,18 @@
 #include "kernel_virtio.h"
 #include "vm_callbacks.h"
 
-/* hard-code to 3GB, so that our used PCI BARs' MMIO space spawns [3GB, 3GB+16MB) */
+/* The MMIO window that BARs of the devices we drive must live in. On x86 we reprogram them into
+ * a fixed [3GB, 3GB+256MB) hole ourselves; on aarch64 (QEMU virt) the 32-bit PCIe MMIO hole is
+ * [0x10000000, 0x3f000000) (ECAM ends at 0x3f000000) and QEMU assigns BARs from its start. Must
+ * agree with ARM_PCI_MMIO_START/END in arch/aarch64/kernel_pci.c (ECAM-based BAR base check). */
+#if defined(__x86_64__)
 #define PCI_MMIO_START_ADDR 0xC0000000UL
 // #define PCI_MMIO_END_ADDR   0xC1000000UL
 #define PCI_MMIO_END_ADDR   0xD0000000UL
+#elif defined(__aarch64__)
+#define PCI_MMIO_START_ADDR 0x10000000UL
+#define PCI_MMIO_END_ADDR   0x3F000000UL
+#endif
 
 #define PCI_CONFIG_SPACE_ADDR_IO_PORT 0xCF8
 #define PCI_CONFIG_SPACE_DATA_IO_PORT 0xCFC

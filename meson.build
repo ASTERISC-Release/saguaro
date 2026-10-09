@@ -173,8 +173,13 @@ if sgx
     conf_sgx.set('CONFIG_SGX_DRIVER_INCLUDE', sgx_driver_include)
 endif
 
-if vm and host_machine.cpu_family() != 'x86_64'
-    error('VM PAL is currently available only for x86-64 arch')
+if vm and host_machine.cpu_family() not in ['x86_64', 'aarch64']
+    error('VM PAL is currently available only for x86-64 and aarch64 arches')
+endif
+
+if tdx and host_machine.cpu_family() != 'x86_64'
+    # Intel TDX is x86-only hardware, and the TDX PAL half of vm-common is x86 asm/MSRs.
+    error('TDX PAL is available only for x86-64 arch')
 endif
 
 gen_symbol_map_cmd = [

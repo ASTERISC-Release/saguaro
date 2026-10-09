@@ -65,4 +65,9 @@ DEFINE_LISTP(pal_handle);
 /* Set if an error was seen on this handle. Currently only set by `_PalStreamsWaitEvents`. */
 #define PAL_HANDLE_FD_ERROR     4
 
+#ifdef __x86_64__
 noreturn void pal_start_c(void);
+#else /* __aarch64__ */
+/* QEMU virt's -kernel ELF entry passes the DTB address in x0; see arch/aarch64/pal_main.c */
+noreturn void pal_start_c(const void* fdt);
+#endif

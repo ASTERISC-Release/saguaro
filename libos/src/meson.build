@@ -159,6 +159,22 @@ libos = shared_library('sysdb',
         cflags_sanitizers,
         cflags_graphics,
 
+        # aarch64 + VM PAL (Milestone B): LibOS runs in EL0 of the unikernel, where TPIDR_EL1
+        # (the kernel's per-CPU base holding cur_tcb) is unreadable. pal_arch.h's pal_get_tcb()
+        # then resolves the kernel-maintained g_pal_tcb_singleton mirror instead of the
+        # tagged-TPIDR/registry machinery of the Linux PAL; see
+        # pal/src/host/vm-common/arch/aarch64/pal_vm_tcb.c for the contract the kernel keeps.
+        # (x86_64 needs nothing of the sort: %gs-relative addressing works at ring-3.)
+        vm and host_machine.cpu_family() == 'aarch64' ? ['-DHOST_TYPE=VM'] : [],
+
+        # aarch64 + VM PAL (Milestone B): common_dep passes its sources (memcpy/memset/etc.)
+        # through to this target, so they are compiled with these flags. -O3 would
+        # auto-vectorize those byte loops into 128-bit ldr q/str q accesses, which
+        # architecturally fault when unaligned and have no host fixup handler at EL0 of the
+        # unikernel (under direct-PAL, Linux's alignment fixup rescues them). Same reason as
+        # in pal/src/host/vm/meson.build.
+        vm and host_machine.cpu_family() == 'aarch64' ? ['-fno-tree-vectorize'] : [],
+
         # use TLS-based stack protector of GCC (we rely on the fact that LibOS reuses the same TCB
         # as its underlying PAL which must have a canary in its PAL_TCB at offset 0x8, so no
         # additional enabling is required in the LibOS code)
@@ -178,6 +194,19 @@ libos = shared_library('sysdb',
 
         '-Wl,-zcombreloc',
         '-Wl,--no-undefined',
+
+        # aarch64 + VM PAL (Milestone B): libsysdb.so is linked against the `pal` *executable*
+        # (link_with: libpal_vm below). x86_64 ld happily resolves undefined references from a
+        # PIE executable's .dynsym, but aarch64 ld rejects executables as link inputs outright
+        # ("cannot use executable file as input to a link"). This is purely a build-time
+        # limitation: at runtime pal_rtld resolves every UNDEF of libsysdb.so against the PAL's
+        # exported symbol table anyway (find_symbol_in_loaded_maps() in pal/src/pal_rtld.c
+        # searches g_pal_map.symbol_table for exactly this, including the aarch64-only
+        # g_pal_tcb_singleton/libos_tcb_registry_* cells), so leaving the references undefined
+        # in the DSO is semantically identical -- any symbol the two binaries disagree on still
+        # fails loudly at libsysdb load time, just one phase later than ld would have.
+        vm and host_machine.cpu_family() == 'aarch64'
+            ? ['-Wl,--unresolved-symbols=ignore-in-object-files'] : [],
         '-Wl,--version-script=@0@'.format(libos_map),
         '-Wl,-T@0@'.format(libos_lds),
         '-Wl,--eh-frame-hdr',

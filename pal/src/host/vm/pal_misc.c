@@ -23,13 +23,29 @@ int _PalSystemTimeQuery(uint64_t* out_usec) {
 }
 
 int _PalCpuIdRetrieve(uint32_t leaf, uint32_t subleaf, uint32_t values[4]) {
+#ifdef __x86_64__
     cpuid(leaf, subleaf, values);
     return 0;
+#else
+    /* no CPUID instruction on aarch64 (the VM PAL never runs on a CPU exposing CPUID);
+     * callers in the guest app get "not implemented" like on any non-Intel platform */
+    __UNUSED(leaf);
+    __UNUSED(subleaf);
+    __UNUSED(values);
+    return -PAL_ERROR_NOTIMPLEMENTED;
+#endif
 }
 
+#ifdef __aarch64__
+/* the aarch64 vm kernel is built -mgeneral-regs-only: return the double's bit pattern */
+uint64_t _PalGetBogomips(void) {
+    return pal_common_get_bogomips();
+}
+#else
 double _PalGetBogomips(void) {
     return pal_common_get_bogomips();
 }
+#endif
 
 int _PalSegmentBaseGet(enum pal_segment_reg reg, uintptr_t* addr) {
     return pal_common_segment_base_get(reg, addr);

@@ -77,6 +77,11 @@ static_assert(offsetof(PAL_TCB, stack_protector_canary) == 0x8,
  */
 extern __attribute__((visibility("protected"))) PAL_TCB* g_pal_tcb_singleton;
 
+/* Implemented by the vm/tdx unikernel PALs (HOST_TYPE builds, see pal/src/host/vm-common/
+ * arch/aarch64/); declared unconditionally so the inline pal_get_tcb() below can branch on it.
+ * Never referenced in Linux PAL or LibOS builds (the branch is dead code without -DHOST_TYPE). */
+PAL_TCB* pal_get_tcb_vm(void);
+
 #include "pal_host_arch.h"
 
 /* Per-thread PAL_TCB registry: maps each thread's application TLS pointer (TPIDR_EL0) to its
@@ -144,6 +149,33 @@ static inline bool pal_tcb_from_tagged_tpidr(PAL_TCB** out_tcb) {
  * Hand-written direct addressing sidesteps that compiler policy entirely.
  */
 static inline PAL_TCB* pal_get_tcb(void) {
+#ifdef HOST_TYPE
+    /*
+     * Unikernel PAL (vm/tdx HOST_TYPE builds; Milestone B aarch64): there is no host OS, the
+     * kernel itself maintains the "current thread PAL_TCB" exactly like x86_64 keeps it in the
+     * GS base MSR -- on aarch64 that register role is played by a per-CPU slot maintained by
+     * the context-switch asm (see vm-common/arch/aarch64/kernel_multicore.h `cur_tcb` and the
+     * implementation note in vm-common/arch/aarch64/pal_common_misc.c). The tagged-TPIDR and
+     * registry paths below belong to the *Linux* PAL design, where PAL code shares EL0 with
+     * the app and TPIDR_EL0 is the app's own TLS register; in the unikernel this call runs at
+     * EL1 inside syscall windows, where TPIDR_EL0 is by contract the *application* thread's
+     * TLS and says nothing about PAL state.
+     *
+     * Two sides of the same truth: inside the kernel (IN_PAL) the authoritative slot is
+     * per_cpu_data->cur_tcb, reached via TPIDR_EL1 (`pal_get_tcb_vm()`, EL1-only). The same
+     * value is mirrored into g_pal_tcb_singleton by the context-switch asm (`str` next to the
+     * cur_tcb store), because EL0 cannot read TPIDR_EL1 -- LibOS and its stack protector then
+     * do one GOT-relative load of that exported cell, which is the closest aarch64 equivalent
+     * of x86_64's ring-3-visible `%gs:` addressing (the cell always holds the running thread's
+     * TCB while that thread runs, EL0 or EL1; multi-CPU would need one cell per CPU, matching
+     * the kernel's current single-CPU policy).
+     */
+#ifdef IN_PAL
+    return pal_get_tcb_vm();
+#else
+    return g_pal_tcb_singleton;
+#endif
+#else
     PAL_TCB* tcb;
     if (pal_tcb_from_tagged_tpidr(&tcb)) {
         return tcb;
@@ -163,6 +195,7 @@ static inline PAL_TCB* pal_get_tcb(void) {
             "ldr  %0, [%0, :lo12:g_pal_tcb_singleton]\n"
             : "=r"(tcb));
     return tcb;
+#endif
 }
 #else
 /*

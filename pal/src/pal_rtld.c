@@ -146,6 +146,8 @@ static pal_prot_flags_t elf_segment_prot_to_pal_prot(int elf_segment_prot) {
 }
 
 /* iterate through DSO's program headers to find dynamic section (for dynamic linking) */
+static elf_dyn_t* find_dynamic_section(elf_addr_t ehdr_addr, elf_addr_t base_diff)
+    __attribute__((unused)); /* unused in the aarch64+HOST_TYPE branch of setup_pal_binary() */
 static elf_dyn_t* find_dynamic_section(elf_addr_t ehdr_addr, elf_addr_t base_diff) {
     const elf_ehdr_t* header = (const elf_ehdr_t*)ehdr_addr;
     const elf_phdr_t* phdr   = (const elf_phdr_t*)(ehdr_addr + header->e_phoff);
@@ -755,6 +757,24 @@ int setup_pal_binary(bool apply_relocations) {
     g_pal_map.l_prev = NULL;
     g_pal_map.l_next = NULL;
 
+#if defined(__aarch64__) && defined(HOST_TYPE)
+    /*
+     * aarch64 unikernel PAL (vm): the kernel is a fixed-address EXEC ELF handed straight to
+     * QEMU's `-kernel` loader, which *refuses* any PT_LOAD that maps the file header (that
+     * allowance is x86-only -- see valid_elf_image()/ELF_LOAD_WRONG_ARCH). So unlike every
+     * other PAL flavor we cannot read our own e_type/e_phoff at runtime: the program headers
+     * simply are not in memory. The link script (pal/src/host/vm/arch/aarch64/pal.lds)
+     * exports the two facts pal_rtld actually needs -- the image base and the address of the
+     * .dynamic contents -- as link-time symbols; the fixed link address makes base_diff 0
+     * exactly like the ET_EXEC case below.
+     */
+    extern const elf_dyn_t __pal_dynamic_start[] __attribute__((visibility("hidden")));
+    extern const char __pal_image_base[] __attribute__((visibility("hidden")));
+    elf_addr_t pal_binary_addr = (elf_addr_t)&__pal_image_base;
+    elf_addr_t pal_base_diff   = 0x0;
+
+    elf_dyn_t* dynamic_section = (elf_dyn_t*)&__pal_dynamic_start;
+#else
     elf_ehdr_t* ehdr = (elf_ehdr_t*)&__ehdr_start;
 
     /* In case of DYN PAL binary, it must have the first loadable segment with `p_vaddr == 0`, thus
@@ -765,6 +785,7 @@ int setup_pal_binary(bool apply_relocations) {
     elf_addr_t pal_base_diff   = (ehdr->e_type == ET_EXEC) ? 0x0 : pal_binary_addr;
 
     elf_dyn_t* dynamic_section = find_dynamic_section(pal_binary_addr, pal_base_diff);
+#endif
     if (!dynamic_section) {
         log_error("PAL binary doesn't have dynamic section (required for symbol resolution)");
         return -PAL_ERROR_DENIED;

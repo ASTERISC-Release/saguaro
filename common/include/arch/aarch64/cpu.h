@@ -36,6 +36,45 @@ static noreturn void die_or_inf_loop(void) {
 
 #define CPU_RELAX() __asm__ volatile("yield" ::: "memory")
 
+/*
+ * Interrupt masking. x86's `sti`/`cli` map onto the PSTATE.{D,A,I,F} bits, moved as a unit
+ * between a GPR and PSTATE via MRS/MSR #DAIF. We mask/unmask all four (value 0xf), matching
+ * how the Gramine vm kernel uses sti/cli around its scheduler critical sections; note that
+ * these only have effect at EL1 (the vm unikernel kernel) -- at EL0 the writes are trapped or
+ * ignored, exactly like `sti`/`cli` faulting in user mode on x86.
+ */
+static inline void cli(void) {
+    __asm__ volatile("msr daifset, #0xf" ::: "memory");
+}
+
+static inline void sti(void) {
+    __asm__ volatile("msr daifclr, #0xf" ::: "memory");
+}
+
+/*
+ * Random 32-bit value. x86's rdrand() is a single `rdrand` instruction whose "data valid" flag
+ * is ignored by all Gramine call sites (they use it for log jitter, canary mixing etc., not for
+ * security). The aarch64 analog is ARMv8.5-RNG's RNDR (`mrs x, rndr`, C-flag signals validity);
+ * it is present on QEMU virt with `-cpu max` and on all Armv8.5+ cores. On a pre-8.5 core the
+ * `mrs rndr` would be an undefined instruction -- acceptable for the same reason the x86 code
+ * assumes RDRAND is present, and any security-grade randomness must come from elsewhere.
+ */
+static inline uint32_t rdrand(void) {
+#ifdef __ARM_FEATURE_RNG
+    uint64_t val;
+    __asm__ volatile("mrs %0, rndr" : "=r"(val));
+    return (uint32_t)val;
+#else
+    /* No ARMv8.5-RNG at compile time (the kernel is built for plain armv8-a): the value only
+     * feeds log jitter / fake-topology filler (see call sites), never security. A mix of the
+     * generic counter keeps callers getting distinct values without an undefined `mrs rndr`. */
+    uint64_t val;
+    __asm__ volatile("mrs %0, cntvct_el0" : "=r"(val));
+    val = (val >> 4) ^ 0x9e3779b97f4a7c15UL;
+    return (uint32_t)(val >> 32) ^ (uint32_t)val;
+#endif
+}
+
 /* aarch64 has no equivalent of x86's split MFENCE/LFENCE/SFENCE; DMB SY orders all accesses
  * (loads and stores) both ways, so it is used for all three. */
 #define MB()  __asm__ __volatile__("dmb sy" ::: "memory")
