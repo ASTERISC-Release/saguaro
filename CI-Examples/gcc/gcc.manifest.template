@@ -1,0 +1,53 @@
+# Copyright (C) 2024 Gramine contributors
+# SPDX-License-Identifier: BSD-3-Clause
+
+# This is a general manifest template for running GCC and its utility programs,
+# including as, cc1, collect2, ld.
+
+libos.entrypoint = "/usr/bin/gcc"
+
+loader.log_level = "{{ log_level }}"
+
+loader.env.LD_LIBRARY_PATH = "/lib:{{ arch_libdir }}:/usr/lib:/usr/{{ arch_libdir }}"
+loader.env.PATH = "/bin:/usr/bin"
+
+loader.insecure__use_cmdline_argv = true
+
+fs.mounts = [
+  { uri = "file:{{ gramine.runtimedir() }}", path = "/lib" },
+  { uri = "file:{{ arch_libdir }}", path = "{{ arch_libdir }}" },
+  { uri = "file:/usr", path = "/usr" },
+{%- if lib64_dir %}
+  { uri = "file:{{ lib64_dir }}", path = "{{ lib64_dir }}" },
+{%- endif %}
+
+  # cannot replace /tmp with "tmpfs" mount because Gramine currently doesn't support multi-process
+  # "tmpfs" files (e.g., "tmpfs" files created in a child process are not visible in the parent)
+  { uri = "file:/tmp", path = "/tmp" },
+]
+
+sgx.enclave_size = "1G"
+sgx.edmm_enable = {{ 'true' if env.get('EDMM', '0') == '1' else 'false' }}
+
+# `use_exinfo = true` is needed because the application may trigger lazy allocation of pages
+# (through exception handling) when EDMM is enabled
+sgx.use_exinfo = {{ 'true' if env.get('EDMM', '0') == '1' else 'false' }}
+
+sgx.trusted_files = [
+  "file:/usr/bin/gcc",
+  "file:/usr/bin/as",
+  "file:/usr/bin/ld",
+  "file:{{ gramine.runtimedir() }}/",
+  "file:{{ arch_libdir }}/",
+  "file:/usr/{{ arch_libdir }}/",
+  "file:{{ gcc_lib_path }}/{{ gcc_major_version }}/",
+{%- if lib64_dir %}
+  "file:{{ lib64_dir }}/",
+{%- endif %}
+  "file:/usr/include/",
+]
+
+sgx.allowed_files = [
+  "file:/tmp",
+  "file:test_files",
+]

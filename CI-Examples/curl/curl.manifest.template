@@ -1,0 +1,47 @@
+# Copyright (C) 2024 Gramine contributors
+# SPDX-License-Identifier: BSD-3-Clause
+
+# Curl manifest file example
+
+libos.entrypoint = "{{ curl_dir }}/curl"
+
+loader.log_level = "{{ log_level }}"
+
+loader.env.LD_LIBRARY_PATH = "/lib:{{ arch_libdir }}:/usr/{{ arch_libdir }}"
+loader.env.HOME = "{{ home }}"
+
+loader.insecure__use_cmdline_argv = true
+
+fs.mounts = [
+  { uri = "file:{{ gramine.runtimedir() }}", path = "/lib" },
+  { uri = "file:{{ arch_libdir }}", path = "{{ arch_libdir }}" },
+  { uri = "file:/usr/{{ arch_libdir }}", path = "/usr{{ arch_libdir }}" },
+  { uri = "file:/etc", path = "/etc" },
+  { uri = "file:{{ curl_dir }}", path = "{{ curl_dir }}" },
+]
+
+sgx.enclave_size = "512M"
+sgx.max_threads = {{ '1' if env.get('EDMM', '0') == '1' else '4' }}
+sgx.edmm_enable = {{ 'true' if env.get('EDMM', '0') == '1' else 'false' }}
+
+# `use_exinfo = true` is needed because the application may trigger lazy allocation of pages
+# (through exception handling) when EDMM is enabled
+sgx.use_exinfo = {{ 'true' if env.get('EDMM', '0') == '1' else 'false' }}
+
+sgx.trusted_files = [
+  "file:{{ curl_dir }}/curl",
+  "file:{{ gramine.runtimedir() }}/",
+  "file:{{ arch_libdir }}/",
+  "file:/usr/{{ arch_libdir }}/",
+]
+
+sgx.allowed_files = [
+  "file:/etc/nsswitch.conf",
+  "file:/etc/host.conf",
+  "file:/etc/resolv.conf",
+  "file:/etc/ethers",
+  "file:/etc/hosts",
+  "file:/etc/group",
+  "file:/etc/passwd",
+  "file:/etc/gai.conf",
+]

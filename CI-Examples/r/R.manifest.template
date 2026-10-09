@@ -1,0 +1,54 @@
+# Copyright (C) 2024 Gramine contributors
+# SPDX-License-Identifier: BSD-3-Clause
+
+# R manifest example
+
+libos.entrypoint = "{{ r_exec }}"
+
+loader.log_level = "{{ log_level }}"
+
+loader.env.LD_LIBRARY_PATH = "{{ r_home }}/lib:/lib:{{ arch_libdir }}:/usr/lib:/usr/{{ arch_libdir }}"
+loader.env.PATH = "{{ r_home }}/bin:/usr/bin:/bin"
+loader.env.USERNAME = ""
+loader.env.HOME = ""
+loader.env.PWD = ""
+loader.env.R_ARCH = ""
+loader.env.R_HOME = "{{ r_home }}"
+loader.env.OMP_NUM_THREADS = "4"
+
+loader.insecure__use_cmdline_argv = true
+
+sys.enable_sigterm_injection = true
+
+fs.mounts = [
+  { uri = "file:{{ gramine.runtimedir() }}", path = "/lib" },
+  { uri = "file:{{ arch_libdir }}", path = "{{ arch_libdir }}" },
+  { uri = "file:/usr", path = "/usr" },
+  { uri = "file:/bin", path = "/bin" },
+  { uri = "file:{{ r_home }}", path = "{{ r_home }}" },
+
+  { type = "tmpfs", path = "/tmp" },
+]
+
+sys.stack.size = "8M"
+sgx.enclave_size = "2G"   # for the R-benchmark-25.R script, specify at least "16G"
+sgx.max_threads = {{ '1' if env.get('EDMM', '0') == '1' else '8' }}
+sgx.edmm_enable = {{ 'true' if env.get('EDMM', '0') == '1' else 'false' }}
+
+# `use_exinfo = true` is needed because the application may trigger lazy allocation of pages
+# (through exception handling) when EDMM is enabled
+sgx.use_exinfo = {{ 'true' if env.get('EDMM', '0') == '1' else 'false' }}
+
+sgx.trusted_files = [
+  "file:{{ r_exec }}",
+  "file:{{ gramine.runtimedir() }}/",
+  "file:{{ arch_libdir }}/",
+  "file:/usr/{{ arch_libdir }}/",
+  "file:{{ r_home }}/",
+  "file:scripts/",
+
+  # R uses shell to delete files, so we need to allow /bin/sh and /bin/rm to be accessed.
+  # strace snippet: execve("/bin/sh", ["sh", "-c", "rm -rf /tmp/RtmpEiedDF"], [/* 41 vars */])
+  "file:/bin/rm",
+  "file:/bin/sh",
+]

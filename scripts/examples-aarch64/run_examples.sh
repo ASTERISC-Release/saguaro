@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-# Usage: run_examples.sh <path-to-gramineproject/examples checkout (patch applied)>
+# Usage: run_examples.sh [examples-dir]   (default: ../../CI-Examples)
 set -uo pipefail
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
-EX=${1:?usage: $0 <examples-dir>}
+EX=${1:-$HERE/../../CI-Examples}
 GRAMINE_PREFIX=${GRAMINE_PREFIX:-$HOME/.local/gramine}
 export PATH="$GRAMINE_PREFIX/bin:$PATH"
 export PYTHONPATH="$GRAMINE_PREFIX/lib/python3.12/site-packages${PYTHONPATH:+:$PYTHONPATH}"
-cp "$HERE/heavy.js" "$EX/nodejs/"; cp "$HERE/Stress.java" "$EX/openjdk/"; cp "$HERE/mongo_client_test.py" "$EX/mongodb/"
 pass=0; fail=0
 run() { local name=$1; shift
   if ( cd "$EX/$name" && eval "$@" ) >/tmp/ex-$name.log 2>&1; then echo "PASS $name"; pass=$((pass+1)); else echo "FAIL $name (see /tmp/ex-$name.log)"; fail=$((fail+1)); fi; }
