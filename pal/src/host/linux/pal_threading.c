@@ -237,7 +237,7 @@ noreturn void _PalThreadExit(int* clear_child_tid) {
                   "lock is not naturally aligned in g_thread_stack_lock");
     static_assert(sizeof(*clear_child_tid) == 4, "unexpected clear_child_tid size");
 
-    pal_arch_thread_exit_release_tcb(tcb);
+    pal_arch_thread_exit_release_tcb(&tcb->common);
 
     _PalThreadExit_asm_stub(&g_thread_stack_lock.lock, clear_child_tid);
 }
