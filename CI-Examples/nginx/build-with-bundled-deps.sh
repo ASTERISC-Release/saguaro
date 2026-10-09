@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # nginx CI example on hosts without distro libssl-dev/libpcre-dev:
 #  - PCRE: built standalone into deps/pcre-install; nginx gets the bare --with-pcre
 #    (which is what sets USE_PCRE=YES and compiles src/core/ngx_regex.c into nginx;
@@ -12,14 +12,18 @@ THIS_DIR="$(cd "$(dirname "$0")" && pwd)"
 NGINX_VERSION=1.22.0
 OPENSSL_VERSION=1.1.1w
 PCRE_VERSION=8.45
-export PATH=/home/user/.local/gramine/bin:$PATH
-export PYTHONPATH=/home/user/.local/gramine/lib/python3.12/site-packages
+# Needs the Gramine tools on PATH (gramine-manifest for the final `make`); otherwise pick them up
+# from GRAMINE_PREFIX (default ~/.local/gramine) like the other scripts do.
+if ! command -v gramine-manifest >/dev/null; then
+  . "$THIS_DIR/../../scripts/gramine-env.sh"
+fi
 cd "$THIS_DIR"
 NGINX_SRC="$THIS_DIR/nginx-$NGINX_VERSION"
 DEPS="$THIS_DIR/deps"
 mkdir -p "$DEPS"
 
-make "$NGINX_SRC/configure"
+# The Makefile rule is keyed on the relative path (./nginx-VERSION/configure); an absolute path has no rule.
+make "nginx-$NGINX_VERSION/configure"
 
 [ -x "$DEPS/pcre-install/lib/libpcre.a" ] || {
   [ -d "$DEPS/pcre-$PCRE_VERSION" ] || {
@@ -41,7 +45,10 @@ make "$NGINX_SRC/configure"
 }
 
 cd "$NGINX_SRC"
-if [ ! -f objs/ngx_auto_config.h ]; then
+# Key "already configured" on objs/Makefile: a failed ./configure leaves objs/ngx_auto_config.h
+# behind without a Makefile, which would otherwise be mistaken for a finished configure.
+if [ ! -f objs/Makefile ]; then
+  rm -rf objs
   ./configure --prefix="$THIS_DIR/install" \
     --without-http_rewrite_module --with-http_ssl_module \
     --with-pcre \

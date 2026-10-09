@@ -153,6 +153,12 @@ ensure_example() {
     [ -x "$dir/$bin" ] && [ -s "$dir/$man" ]
 }
 
+# nginx_system_deps — true if the distro provides OpenSSL and PCRE/PCRE2 development files
+nginx_system_deps() {
+    command -v pkg-config >/dev/null && pkg-config --exists openssl \
+        && { pkg-config --exists libpcre2-8 || pkg-config --exists libpcre; }
+}
+
 declare -a RESULTS=()
 FAILED=0
 
@@ -434,8 +440,18 @@ lighttpd)
     ;;
 
 nginx)
+    # The example's Makefile needs the distro's OpenSSL and PCRE development files. Without them,
+    # build with the bundled-sources fallback instead (nginx --with-openssl + a standalone PCRE).
+    if ! nginx_system_deps \
+       && ! file -b "$REPO/CI-Examples/nginx/install/sbin/nginx" 2>/dev/null | grep -q "$ELF_PAT"; then
+        echo "  libssl/libpcre dev files not found; building nginx with bundled dependencies (log: $LOGDIR/nginx-build.log)"
+        if ! ( cd "$REPO/CI-Examples/nginx" && ./build-with-bundled-deps.sh >"$LOGDIR/nginx-build.log" 2>&1 ); then
+            tail -3 "$LOGDIR/nginx-build.log" | sed 's/^/    /'
+            summary nginx 1 "bundled-deps build failed (needs curl, tar, autoconf/automake)"; continue
+        fi
+    fi
     if ! ensure_example nginx install/sbin/nginx nginx.manifest; then
-        summary nginx 1 "build (on hosts without libssl-dev/libpcre-dev run CI-Examples/nginx/build-with-bundled-deps.sh first)"; continue
+        summary nginx 1 "build"; continue
     fi
     wait_port_free 8002 || echo "  warning: port 8002 still busy"
     start_server nginx 120 "$REPO/CI-Examples/nginx" gramine-direct nginx
