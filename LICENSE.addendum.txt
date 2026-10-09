@@ -16,6 +16,7 @@ A number of files taken from other C libraries:
 * glibc - LGPL
  ** pal/include/elf/elf.h
  ** pal/include/arch/x86_64/linux/ - whole directory - for signal API definitions
+ ** pal/include/arch/aarch64/linux/sigset.h and ucontext.h - for signal API definitions
  ** We also build a patched glibc
 
 * musl - MIT

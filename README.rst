@@ -22,6 +22,11 @@ call interface (the *LibOS*) on top of a small host abstraction layer (the
 virtual-machine backends -- so that it also runs on AArch64, and keeps
 upstream's full history.
 
+Gramine (formerly *Graphene*) was designed and built by a diverse group of
+researchers and engineers from universities and industry (the retained copyright
+notices include Stony Brook University, Texas A&M University, Intel and Invisible
+Things Lab).
+
 Supported configurations
 ========================
 
@@ -88,14 +93,21 @@ Documentation
   `upstream documentation <https://gramine.readthedocs.io>`__ is a useful
   reference; details may differ in this tree.
 
+Contributing
+============
+
+Bug reports and pull requests are welcome through the GitHub repository. By
+submitting a contribution you agree that it is licensed under the license of the
+file it modifies or adds (LGPL-3.0-or-later, or BSD-3-Clause for files under
+``CI-Examples/``), and that you have the right to submit it under that license.
+
 License
 =======
 
 Gramine is licensed under the LGPL-3.0-or-later (see ``LICENSE.txt``); the
 examples in ``CI-Examples/`` are BSD-3-Clause unless a file says otherwise (see
-``LICENSE.addendum.txt``). Files added in this tree carry ``Copyright (C) 2026
-The ASTERISC Research Lab``; the copyright notices of upstream Gramine and
-gramine-tdx are retained.
+``LICENSE.addendum.txt``). The copyright notices of upstream Gramine and gramine-tdx
+are retained.
 
 Acknowledgements
 ================
