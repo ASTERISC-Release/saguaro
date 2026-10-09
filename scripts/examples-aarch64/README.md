@@ -12,6 +12,7 @@ Clone <https://github.com/gramineproject/examples> next to the repo, apply
 
 ## Extra stress programs (copied into the example dirs by the runner)
 - `heavy.js` (Node): JIT hot loops, 4 worker threads, crypto/zlib, 200 HTTP requests, fs.
+- `mongo_client_test.py` (MongoDB, via pymongo): the example's insert/fetch plus 50k-doc bulk insert, indexes, aggregation and 8 concurrent writers.
 - `Stress.java` (OpenJDK 17): JIT, 200k deliberate NPEs (HotSpot's SIGSEGV path), GC pressure on 8
   threads, contended `ConcurrentHashMap`, socket echo, file I/O.
 
@@ -26,7 +27,9 @@ Clone <https://github.com/gramineproject/examples> next to the repo, apply
 | r | pass (3/3) |
 | pytorch | pass; output byte-identical to native; ~2.4 s vs ~2.0 s native |
 | tensorflow-lite, openvino, scikit-learn-intelex | not applicable (x86 / Intel-specific) |
-| mongodb | not tried |
+| mongodb | pass (7.0.14 official aarch64 tarball; `mongo_client_test.py`: bulk insert, indexes, aggregation, 8 concurrent clients; ~3.2 s vs 3.4 s native; data survives a restart; 5/5 cold runs) |
 
 Known gap: oneDNN prints `Can't open MIDR_EL1 sysfs entry` under Gramine because the guest
 `/sys/devices/system/cpu/cpuN/regs/identification/` is not emulated (host has it). Harmless.
+
+MongoDB notes: `mongosh` is not in the tarball, so pymongo replaces it; benign server warnings under Gramine: missing `/sys/block`, TCP fast-open option, acceptor queue length. `gramine-direct` resolves symlinks, so a symlinked `mongod` still uses `mongod.manifest`.
