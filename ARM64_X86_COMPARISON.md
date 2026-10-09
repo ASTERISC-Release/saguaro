@@ -7,7 +7,7 @@ on 2026-10-08 in the `ubuntu-gpu-kvm` container (`LOGDIR=/root/x86-logs`).
 | Suite | x86_64 | aarch64 | Notes |
 |---|---|---|---|
 | PAL regression | 32 passed / 0 failed / 4 skipped | 28 passed / 0 failed / 8 skipped | 36 tests on both. Skips are arch- or SGX-specific, so the split differs |
-| LibOS regression | 144 passed / 0 failed / 32 skipped | 142 passed / 0 failed / 36 skipped | 176 tests on both at parity-run time. Skips are arch- or SGX-specific, so the split differs. Two tests were added afterwards (fork_pacret, fcntl_dupfd) — both run on both arches, so a re-run gives 178 |
+| LibOS regression | 146 passed / 0 failed / 32 skipped (re-run after pulling cc7a6ec4; was 144) | 142 passed / 0 failed / 36 skipped | 176 tests on both at parity-run time. Skips are arch- or SGX-specific, so the split differs. Two tests were added afterwards (fork_pacret, fcntl_dupfd) — both run on both arches, so a re-run gives 178 |
 | busybox | Pass (`uname -m` -> `x86_64`) | Pass (`uname -m` -> `aarch64`) | Both need `CONFIG_TC`/`CONFIG_ARP`/`CONFIG_ARPING` off (kernel-headers issue, not port related) |
 | memcached | Pass (counter semantics + 100 set/get round-trips) | Pass (3 cycles x 100 set/get, `incr` exact) | x86_64 needs `libevent-dev` |
 | redis | Pass (PING/SET/GET + 20 round-trips) | Pass | |
