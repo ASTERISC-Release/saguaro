@@ -18,7 +18,7 @@
 #
 # Results are appended to benchmarks/results/<date>_<host>_<arch>.txt together with a machine
 # header, so runs on different boxes (or before/after a change) can be diffed. Prerequisites:
-# the syscall-bench and redis examples must be buildable (run_all_tests.sh builds redis).
+# benchmarks/syscall-bench and the redis example must be buildable (run_all_tests.sh builds redis).
 # Re-run with the same settings before and after a change; compare min/median, not single runs.
 
 set -uo pipefail
@@ -52,8 +52,8 @@ header() {
 
 bench_syscall() {
     say "## syscall microbenchmark (ns/call; lower is better)  ITERS=$ITERS REPS=$REPS"
-    ( cd "$ROOT/CI-Examples/syscall-bench" && make -s >/dev/null ) || { say "build failed"; return 1; }
-    local d="$ROOT/CI-Examples/syscall-bench"
+    ( cd "$HERE/syscall-bench" && make -s >/dev/null ) || { say "build failed"; return 1; }
+    local d="$HERE/syscall-bench"
     say "-- native";          (cd "$d" && taskset -c "$SERVER_CPU" ./syscall_bench "$ITERS" "$REPS") 2>&1 | tee -a "$RESULT"
     say "-- gramine-direct";  (cd "$d" && taskset -c "$SERVER_CPU" gramine-direct syscall_bench "$ITERS" "$REPS") 2>&1 | grep -v '^Emulating' | tee -a "$RESULT"
 }

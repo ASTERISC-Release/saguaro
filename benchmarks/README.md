@@ -2,9 +2,17 @@
 
 ```
 ./benchmarks/run_benchmarks.sh            # syscall microbenchmark + redis-benchmark
-./benchmarks/run_benchmarks.sh syscall    # CI-Examples/syscall-bench only
+./benchmarks/run_benchmarks.sh syscall    # benchmarks/syscall-bench only
 ./benchmarks/run_benchmarks.sh redis      # redis-server native vs gramine-direct
 ```
+
+## Layout
+
+- `run_benchmarks.sh` — the driver: builds and runs the workloads natively and under
+  `gramine-direct`, adds a machine/git header and appends to a results file.
+- `syscall-bench/` — the per-syscall microbenchmark workload (`syscall_bench.c`, manifest template,
+  Makefile; `make REWRITE=1|0` forces `sys.rewrite_syscalls` on/off in its manifest).
+- `results/` — saved runs, one file per host/date/configuration.
 
 Results are appended to `benchmarks/results/<date>_<host>_<arch>.txt` with a machine/git header.
 Run the same settings before and after a change and compare. Server and clients are pinned with
@@ -72,4 +80,4 @@ dip described above is still present. Compare against the same-run native number
 bare metal (GX10) before drawing conclusions.
 
 A/B switch: `sys.rewrite_syscalls = false` in a manifest restores the trap path
-(`make REWRITE=0` in `CI-Examples/syscall-bench`).
+(`make REWRITE=0` in `benchmarks/syscall-bench`).
