@@ -101,13 +101,49 @@ void isr_c(struct isr_regs* regs) {
 /* EL0 synchronous exception that is not an `svc` (see the EC filter in el0_sync_entry): a
  * fault in user code with no service path yet (signal delivery needs the fine-grained page
  * tables). x86 analog: an unhandled exception frame dumped before the kernel gives up.
- * Entered from asm with x0=ESR, x1=ELR and SP on the dead area below the interrupt stack. */
+ * Entered from asm with x0=ESR, x1=ELR and SP on the dead area below the interrupt stack; the
+ * asm already spilled the app's x0..x31 (slot 31 = SP_EL0; slot 16 is lost to the adrp that
+ * computes the table address, so it is reported as scratch) into g_el0_fault_regs.
+ *
+ * This dump doubles as the stand-in for the ucontext that fault signal delivery will carry:
+ * the same fields (pc, sp, all GPRs) plus the ESR decode that Gramine's arch_signal /
+ * `PalThreadContext` will consume later. */
+#define EL0_FAULT_REGS_SLOTS 33
+uint64_t g_el0_fault_regs[EL0_FAULT_REGS_SLOTS];
+
 void el0_sync_unexpected_c(uint64_t esr, uint64_t elr) {
     uint64_t far;
     __asm__ volatile("mrs %0, far_el1" : "=r"(far));
     log_error("Panic: unexpected EL0 synchronous exception ESR=0x%lx (EC=0x%lx) ELR=0x%lx FAR=0x%lx",
               esr, esr >> 26, elr, far);
     log_error("       (only svc/EC=0x15 is serviced from EL0; fault signal delivery is TODO)");
+    /* ESR_EL1 detail bits for EC=0x20..0x25 (faults): DFSC/IFSC [5:0], WnR [6], S1PTW [11].
+     * FSC decodes as: 0b0001LL translation fault level LL, 0b0010LL access-flag level LL,
+     * 0b0011LL permission fault level LL (QEMU's get_S1prot rules, see kernel_memory.c). */
+    log_error("       FSC=0x%02lx %s WnR=%lu S1PTW=%lu IL=%lu", esr & 0x3f,
+              (esr & (1UL << 11)) ? "S1PTW!" : "    ", (esr >> 6) & 1, (esr >> 11) & 1,
+              (esr >> 31) & 1);
+    log_error("       pc=0x%016lx sp=0x%016lx", elr, g_el0_fault_regs[31]);
+    for (unsigned i = 0; i < 32; i += 4) {
+        if (i == 16) {
+            log_error("       x16=(scratch) x17=0x%016lx x18=0x%016lx x19=0x%016lx",
+                      g_el0_fault_regs[17], g_el0_fault_regs[18], g_el0_fault_regs[19]);
+            continue;
+        }
+        log_error("       x%02lu=0x%016lx x%02lu=0x%016lx x%02lu=0x%016lx x%02lu=0x%016lx",
+                  i + 0UL, g_el0_fault_regs[i + 0], i + 1UL, g_el0_fault_regs[i + 1],
+                  i + 2UL, g_el0_fault_regs[i + 2], i + 3UL, g_el0_fault_regs[i + 3]);
+    }
+    /* The faulting instruction itself, so the panic is analyzable from the log alone (the app
+     * is ASLR'd, but its 32-bit encoding matches the host-side disassembly verbatim). Guarded
+     * by a page-table lookup: ELR itself can be unmapped (prefetch abort), and EL1 has no
+     * fixup table yet -- a fault here would triple-fault with an even less useful report. */
+    uint64_t* pte;
+    if (memory_find_page_table_entry(elr, &pte) == 0) {
+        const uint32_t* insn = (const uint32_t*)(uintptr_t)elr;
+        log_error("       insn @ELR: 0x%08x (prev 0x%08x, next 0x%08x)", insn[0], insn[-1],
+                  insn[1]);
+    }
     triple_fault();
 }
 

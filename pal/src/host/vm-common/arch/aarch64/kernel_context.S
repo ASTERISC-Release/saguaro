@@ -118,8 +118,16 @@ el0_sync_entry:
     ubfx    x16, x16, #26, #6                      /* EC */
     cmp     x16, #0x15                             /* SVC64 from AArch64 EL0 */
     b.ne    .Lel0_sync_unexpected
+    /* Resume address. Unlike x86 `syscall` (whose hardware stores the post-syscall RIP in RCX
+     * for us to consume), AArch64 sets ELR_EL1 itself to the address of the instruction AFTER
+     * the `svc` for SVC exceptions -- exactly the semantics of `eret`, which does not return a
+     * link the way sysretq consumes one. An `add x16, x16, #4` copied from the x86 mental model
+     * therefore makes every syscall return to `svc + 8`: the first victim in the first test was
+     * glibc's `adrp x2, <__curbrk>` between brk's `svc` and the `str x0, [x2, #1664]` that
+     * stores the brk() result, which stored through a stale x2 = garbage (ELR=app+0x182b8 with
+     * FAR in the EL1-only device window). Linux's aarch64 syscall path likewise does not
+     * increment ELR anywhere; the "skip the svc" duty is hardware's. */
     mrs     x16, elr_el1                      /* address right after the 4-byte `svc` */
-    add     x16, x16, #4
     mrs     x9, tpidr_el1
     ldr     x9, [x9, #PER_CPU_DATA_CUR_TCB]   /* x86 %gs base, two loads instead */
     cbz     x9, hang                          /* svc with no thread context: cannot happen */
@@ -146,11 +154,51 @@ el0_sync_entry:
     /* Panic visibly: report ESR/ELR and stop. Scratch stack for the C call is the dead area
      * below the per-CPU interrupt stack (same region el1_sync uses for its frame; the previous
      * IRQ's frame is dead once its handler returned). */
-    mrs     x0, esr_el1
-    mrs     x1, elr_el1
     mrs     x16, tpidr_el1
     ldr     x16, [x16, #PER_CPU_DATA_INTERRUPT_STACK]
     sub     sp, x16, #ISR_FRAME_SIZE
+    /* Snapshot the app's whole GPR state before the C call clobbers x0/x1: diagnosing an app
+     * fault needs exactly what signal delivery will later put into the ucontext (x16/x17 are
+     * scratch by ABI so losing them to the table walk is fine). g_el0_fault_regs[31] is
+     * SP_EL0 -- the stack the app was using. */
+    adrp    x16, g_el0_fault_regs
+    add     x16, x16, :lo12:g_el0_fault_regs
+    str     x17, [x16, #8 * 17]
+    str     x0,  [x16, #8 * 0]
+    str     x1,  [x16, #8 * 1]
+    str     x2,  [x16, #8 * 2]
+    str     x3,  [x16, #8 * 3]
+    str     x4,  [x16, #8 * 4]
+    str     x5,  [x16, #8 * 5]
+    str     x6,  [x16, #8 * 6]
+    str     x7,  [x16, #8 * 7]
+    str     x8,  [x16, #8 * 8]
+    str     x9,  [x16, #8 * 9]
+    str     x10, [x16, #8 * 10]
+    str     x11, [x16, #8 * 11]
+    str     x12, [x16, #8 * 12]
+    str     x13, [x16, #8 * 13]
+    str     x14, [x16, #8 * 14]
+    str     x15, [x16, #8 * 15]
+    mrs     x9,  sp_el0
+    str     x9,  [x16, #8 * 31]
+    mrs     x9,  elr_el1
+    str     x9,  [x16, #8 * 32]
+    str     x18, [x16, #8 * 18]
+    str     x19, [x16, #8 * 19]
+    str     x20, [x16, #8 * 20]
+    str     x21, [x16, #8 * 21]
+    str     x22, [x16, #8 * 22]
+    str     x23, [x16, #8 * 23]
+    str     x24, [x16, #8 * 24]
+    str     x25, [x16, #8 * 25]
+    str     x26, [x16, #8 * 26]
+    str     x27, [x16, #8 * 27]
+    str     x28, [x16, #8 * 28]
+    str     x29, [x16, #8 * 29]
+    str     x30, [x16, #8 * 30]
+    mrs     x0, esr_el1
+    mrs     x1, elr_el1
     bl      el0_sync_unexpected_c
     b       hang
 
