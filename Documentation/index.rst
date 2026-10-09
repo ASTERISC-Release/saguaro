@@ -112,8 +112,6 @@ Contribute to Gramine
 We encourage anyone who is interested to contribute to Gramine. The below
 articles contain helpful material for prospective contributors:
 
-- :doc:`devel/contributing` - The Contributing to Gramine page outlines the
-  procedures for performing pull requests, reviews, and regression tests.
 - :doc:`devel/onboarding` - This page describes the knowledge needed to
   efficiently contribute high-quality PRs to the Gramine project. This page
   also describes typical flows that Gramine developers should follow to make
@@ -212,7 +210,6 @@ Indices and tables
    :caption: Contribute to Gramine
    :maxdepth: 1
 
-   devel/contributing
    devel/onboarding
    devel/setup
    devel/coding-style

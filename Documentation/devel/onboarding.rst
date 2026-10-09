@@ -14,8 +14,7 @@ if this means contributing less patches. Bear in mind that Gramine is a
 security-related project and needs a very careful development process.
 
 This page is intended to be a Getting Started guide for new Gramine developers,
-*not* a reference manual on exact rules for contributing to Gramine. For the
-latter, please refer to :doc:`contributing`.
+*not* a reference manual on exact rules for contributing to Gramine.
 
 Pre-requisite knowledge
 -----------------------

@@ -222,8 +222,8 @@ Additional build options
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
 - To build test binaries, run :command:`meson -Dtests=enabled`. This is
-  necessary if you will be running regression tests. See
-  :doc:`contributing` for details.
+  necessary if you will be running regression tests (then run
+  :command:`./run_all_tests.sh` from the repository root).
 
 - In order to run SGX tools with DCAP version of RA-TLS library
   (``ra_tls_verify_dcap.so``), build with :command:`meson -Ddcap=enabled` option.
