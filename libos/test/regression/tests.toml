@@ -102,6 +102,7 @@ manifests = [
   "rename_unlink",
   "rename_unlink_fchown",
   "run_test",
+  "rewrite_stress",
   "rwlock",
   "sched",
   "sched_set_get_affinity",

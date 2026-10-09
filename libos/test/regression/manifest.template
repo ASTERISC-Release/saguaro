@@ -4,6 +4,8 @@ libos.entrypoint = "{{ entrypoint }}"
 loader.env.LD_LIBRARY_PATH = "/lib:{{ arch_libdir }}:/usr/{{ arch_libdir }}"
 loader.insecure__use_cmdline_argv = true
 
+{% if env.get('REWRITE') %}sys.rewrite_syscalls = {{ env.get('REWRITE') }}{% endif %}
+
 # for flock_lock test
 sys.experimental__enable_flock = true
 

@@ -488,7 +488,19 @@ SGX-only, no aarch64 analog).
 
 ### Remaining triage backlog
 
-- **Nothing known-failing.** All entries of every previous backlog are closed (findings
+- **Known intermittent hang (found 2026-10-08 by `scripts/stress_rewrite.sh`, not yet
+  root-caused):** a process that makes syscalls in a loop while receiving asynchronous signals
+  (itimer SIGALRM at 200 us and/or `pthread_kill` from another thread every ~30 us, handlers
+  doing syscalls) occasionally livelocks: the main thread sits at 100% user CPU forever and
+  `SIGTERM`/`timeout` do not stop it (needs SIGKILL). Rate on the WSL2 box with the pure trap
+  path (`sys.rewrite_syscalls = false`): ~2.7% of cold runs of `rewrite_stress signals`
+  (4/150), ~0.8% timer-only (1/120), ~3% kill-only (4/120); with rewriting on it is the same
+  order (1/60). Native never hangs (0/200). It disappears under `log_level = "debug"`
+  (heisenbug; 80/80 clean). Reproduce: `scripts/stress_rewrite.sh -n 150 --rewrite off
+  signals_kill`. Prime suspect: a non-reentrant spinlock held by LibOS/PAL code when a
+  signal handler upcall runs on the same thread (user-mode spin, no futex wait). Needs gdb or
+  lock-ownership instrumentation.
+- Otherwise nothing known-failing: all entries of every previous backlog are closed (findings
   #7–#13).
 - Known *latent* races to keep in mind for Milestone B: the `add()` key-match **rebind**
   window (bounded and harmless today because the dying thread deregistered-and-tagged at

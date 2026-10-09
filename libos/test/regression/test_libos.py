@@ -429,6 +429,19 @@ class TC_01_Bootstrap(RegressionTestCase):
         # Multiple thread creation
         self.assertIn('256 Threads Created', stdout)
 
+    @unittest.skipUnless(platform.machine() == 'aarch64', 'aarch64-specific (svc site rewriting)')
+    def test_603_rewrite_stress(self):
+        # Lazy rewriting of trapped `svc #0` sites (sys.rewrite_syscalls): each scenario starts
+        # from a cold process. See rewrite_stress.c and scripts/stress_rewrite.sh (which repeats
+        # these many times, since the interesting races are cold-start races).
+        # The signal-driven scenarios (signals, signals_timer, signals_kill, restart) are left to
+        # scripts/stress_rewrite.sh: they expose a pre-existing, rare (~1-3%) hang in LibOS
+        # asynchronous-signal handling on aarch64 that also occurs with rewriting disabled.
+        for scenario in ['threads', 'fork', 'exec', 'blob', 'jit', 'mprotect', 'threadstorm']:
+            with self.subTest(scenario=scenario):
+                stdout, _ = self.run_binary(['rewrite_stress', scenario], timeout=180)
+                self.assertIn('OK ' + scenario, stdout)
+
     def test_602_fp_multithread(self):
         stdout, _ = self.run_binary(['fp_multithread'])
         self.assertIn('FE_TONEAREST   child: 42.5 = 42.0, -42.5 = -42.0', stdout)

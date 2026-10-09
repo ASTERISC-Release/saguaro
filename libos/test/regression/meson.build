@@ -108,6 +108,7 @@ tests = {
             '../../include/arch' / host_machine.cpu_family(),
         ),
     },
+    'rewrite_stress': {},
     'rwlock': {
         'include_directories': include_directories(
             # for `gramine_entry_api.h`
