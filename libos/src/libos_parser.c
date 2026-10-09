@@ -74,22 +74,22 @@ struct parser_table {
                    parse_pointer_arg, parse_pointer_arg}},
     [__NR_write] = {.slow = true, .name = "write", .parser = {parse_long_arg, parse_integer_arg,
                     parse_pointer_arg, parse_pointer_arg}},
-#ifdef __x86_64__ /* __NR_open does not exist on aarch64 */
+#ifdef __NR_open
     [__NR_open] = {.slow = true, .name = "open", .parser = {parse_long_arg, parse_string_arg,
                    parse_open_flags, parse_open_mode}},
 #endif
     [__NR_close] = {.slow = false, .name = "close", .parser = {parse_long_arg, parse_integer_arg}},
-#ifdef __x86_64__ /* __NR_stat does not exist on aarch64 */
+#ifdef __NR_stat
     [__NR_stat] = {.slow = false, .name = "stat", .parser = {parse_long_arg, parse_string_arg,
                    parse_pointer_arg}},
 #endif
     [__NR_fstat] = {.slow = false, .name = "fstat", .parser = {parse_long_arg, parse_integer_arg,
                     parse_pointer_arg}},
-#ifdef __x86_64__ /* __NR_lstat does not exist on aarch64 */
+#ifdef __NR_lstat
     [__NR_lstat] = {.slow = false, .name = "lstat", .parser = {parse_long_arg, parse_string_arg,
                     parse_pointer_arg}},
 #endif
-#ifdef __x86_64__ /* __NR_poll does not exist on aarch64 */
+#ifdef __NR_poll
     [__NR_poll] = {.slow = true, .name = "poll", .parser = {parse_long_arg, parse_pointer_arg,
                    parse_integer_arg, parse_integer_arg}},
 #endif
@@ -119,14 +119,14 @@ struct parser_table {
                     parse_pointer_arg, parse_integer_arg}},
     [__NR_writev] = {.slow = false, .name = "writev", .parser = {parse_long_arg, parse_integer_arg,
                      parse_pointer_arg, parse_integer_arg}},
-#ifdef __x86_64__ /* __NR_access does not exist on aarch64 */
+#ifdef __NR_access
     [__NR_access] = {.slow = false, .name = "access", .parser = {parse_long_arg, parse_string_arg,
                      parse_access_mode}},
 #endif
-#ifdef __x86_64__ /* __NR_pipe does not exist on aarch64 */
+#ifdef __NR_pipe
     [__NR_pipe] = {.slow = false, .name = "pipe", .parser = {parse_long_arg, parse_pipe_fds}},
 #endif
-#ifdef __x86_64__ /* __NR_select does not exist on aarch64 */
+#ifdef __NR_select
     [__NR_select] = {.slow = true, .name = "select", .parser = {parse_long_arg, parse_integer_arg,
                      parse_pointer_arg, parse_pointer_arg, parse_pointer_arg, parse_pointer_arg}},
 #endif
@@ -142,18 +142,18 @@ struct parser_table {
     [__NR_shmat] = {.slow = false, .name = "shmat", .parser = {NULL}},
     [__NR_shmctl] = {.slow = false, .name = "shmctl", .parser = {NULL}},
     [__NR_dup] = {.slow = false, .name = "dup", .parser = {parse_long_arg, parse_integer_arg}},
-#ifdef __x86_64__ /* __NR_dup2 does not exist on aarch64 */
+#ifdef __NR_dup2
     [__NR_dup2] = {.slow = false, .name = "dup2", .parser = {parse_long_arg, parse_integer_arg,
                    parse_integer_arg}},
 #endif
-#ifdef __x86_64__ /* __NR_pause does not exist on aarch64 */
+#ifdef __NR_pause
     [__NR_pause] = {.slow = true, .name = "pause", .parser = {parse_long_arg}},
 #endif
     [__NR_nanosleep] = {.slow = true, .name = "nanosleep", .parser = {parse_long_arg,
                         parse_timespec, parse_pointer_arg}},
     [__NR_getitimer] = {.slow = false, .name = "getitimer", .parser = {parse_long_arg,
                         parse_integer_arg, parse_pointer_arg}},
-#ifdef __x86_64__ /* __NR_alarm does not exist on aarch64 */
+#ifdef __NR_alarm
     [__NR_alarm] = {.slow = false, .name = "alarm", .parser = {parse_long_arg, parse_integer_arg}},
 #endif
     [__NR_setitimer] = {.slow = false, .name = "setitimer", .parser = {parse_long_arg,
@@ -197,10 +197,10 @@ struct parser_table {
                          parse_pointer_arg}},
     [__NR_clone] = {.slow = true, .name = "clone", .parser = {parse_long_arg, parse_clone_flags,
                     parse_pointer_arg, parse_pointer_arg, parse_pointer_arg, parse_pointer_arg}},
-#ifdef __x86_64__ /* __NR_fork does not exist on aarch64 */
+#ifdef __NR_fork
     [__NR_fork] = {.slow = true, .name = "fork", .parser = {parse_long_arg}},
 #endif
-#ifdef __x86_64__ /* __NR_vfork does not exist on aarch64 */
+#ifdef __NR_vfork
     [__NR_vfork] = {.slow = true, .name = "vfork", .parser = {parse_long_arg}},
 #endif
     [__NR_execve] = {.slow = true, .name = "execve", .parser = {parse_long_arg, parse_string_arg,
@@ -237,7 +237,7 @@ struct parser_table {
                        parse_string_arg, parse_long_arg}},
     [__NR_ftruncate] = {.slow = false, .name = "ftruncate", .parser = {parse_long_arg,
                         parse_integer_arg, parse_long_arg}},
-#ifdef __x86_64__ /* __NR_getdents does not exist on aarch64 */
+#ifdef __NR_getdents
     [__NR_getdents] = {.slow = false, .name = "getdents", .parser = {parse_long_arg,
                        parse_integer_arg, parse_pointer_arg, parse_pointer_arg}},
 #endif
@@ -246,47 +246,47 @@ struct parser_table {
     [__NR_chdir] = {.slow = false, .name = "chdir", .parser = {parse_long_arg, parse_string_arg}},
     [__NR_fchdir] = {.slow = false, .name = "fchdir", .parser = {parse_long_arg,
                      parse_integer_arg}},
-#ifdef __x86_64__ /* __NR_rename does not exist on aarch64 */
+#ifdef __NR_rename
     [__NR_rename] = {.slow = false, .name = "rename", .parser = {parse_long_arg, parse_string_arg,
                      parse_string_arg}},
 #endif
-#ifdef __x86_64__ /* __NR_mkdir does not exist on aarch64 */
+#ifdef __NR_mkdir
     [__NR_mkdir] = {.slow = false, .name = "mkdir", .parser = {parse_long_arg, parse_string_arg,
                     parse_integer_arg}},
 #endif
-#ifdef __x86_64__ /* __NR_rmdir does not exist on aarch64 */
+#ifdef __NR_rmdir
     [__NR_rmdir] = {.slow = false, .name = "rmdir", .parser = {parse_long_arg, parse_string_arg}},
 #endif
-#ifdef __x86_64__ /* __NR_creat does not exist on aarch64 */
+#ifdef __NR_creat
     [__NR_creat] = {.slow = false, .name = "creat", .parser = {parse_long_arg, parse_string_arg,
                     parse_open_mode}},
 #endif
-#ifdef __x86_64__ /* __NR_link does not exist on aarch64 */
+#ifdef __NR_link
     [__NR_link] = {.slow = false, .name = "link", .parser = {NULL}},
 #endif
-#ifdef __x86_64__ /* __NR_unlink does not exist on aarch64 */
+#ifdef __NR_unlink
     [__NR_unlink] = {.slow = false, .name = "unlink", .parser = {parse_long_arg, parse_string_arg}},
 #endif
-#ifdef __x86_64__ /* __NR_symlink does not exist on aarch64 */
+#ifdef __NR_symlink
     [__NR_symlink] = {.slow = false, .name = "symlink", .parser = {NULL}},
 #endif
-#ifdef __x86_64__ /* __NR_readlink does not exist on aarch64 */
+#ifdef __NR_readlink
     [__NR_readlink] = {.slow = false, .name = "readlink", .parser = {parse_long_arg,
                        parse_string_arg, parse_pointer_arg, parse_integer_arg}},
 #endif
-#ifdef __x86_64__ /* __NR_chmod does not exist on aarch64 */
+#ifdef __NR_chmod
     [__NR_chmod] = {.slow = false, .name = "chmod", .parser = {parse_long_arg, parse_string_arg,
                     parse_integer_arg}},
 #endif
     [__NR_fchmod] = {.slow = false, .name = "fchmod", .parser = {parse_long_arg, parse_integer_arg,
                      parse_integer_arg}},
-#ifdef __x86_64__ /* __NR_chown does not exist on aarch64 */
+#ifdef __NR_chown
     [__NR_chown] = {.slow = false, .name = "chown", .parser = {parse_long_arg, parse_string_arg,
                     parse_integer_arg, parse_integer_arg}},
 #endif
     [__NR_fchown] = {.slow = false, .name = "fchown", .parser = {parse_long_arg, parse_integer_arg,
                      parse_integer_arg, parse_integer_arg}},
-#ifdef __x86_64__ /* __NR_lchown does not exist on aarch64 */
+#ifdef __NR_lchown
     [__NR_lchown] = {.slow = false, .name = "lchown", .parser = {NULL}},
 #endif
     [__NR_umask] = {.slow = false, .name = "umask", .parser = {parse_long_arg, parse_integer_arg}},
@@ -311,7 +311,7 @@ struct parser_table {
     [__NR_setpgid] = {.slow = false, .name = "setpgid", .parser = {parse_long_arg,
                       parse_integer_arg, parse_integer_arg}},
     [__NR_getppid] = {.slow = false, .name = "getppid", .parser = {parse_long_arg}},
-#ifdef __x86_64__ /* __NR_getpgrp does not exist on aarch64 */
+#ifdef __NR_getpgrp
     [__NR_getpgrp] = {.slow = false, .name = "getpgrp", .parser = {parse_long_arg}},
 #endif
     [__NR_setsid] = {.slow = false, .name = "setsid", .parser = {parse_long_arg}},
@@ -342,25 +342,25 @@ struct parser_table {
                             parse_pointer_arg, parse_pointer_arg}},
     [__NR_sigaltstack] = {.slow = false, .name = "sigaltstack", .parser = {parse_long_arg,
                           parse_pointer_arg, parse_pointer_arg}},
-#ifdef __x86_64__ /* __NR_utime does not exist on aarch64 */
+#ifdef __NR_utime
     [__NR_utime] = {.slow = false, .name = "utime", .parser = {NULL}},
 #endif
-#ifdef __x86_64__ /* __NR_mknod does not exist on aarch64 */
+#ifdef __NR_mknod
     [__NR_mknod] = {.slow = false, .name = "mknod", .parser = {parse_long_arg, parse_string_arg,
                     parse_open_mode, parse_integer_arg}},
 #endif
-#ifdef __x86_64__ /* __NR_uselib does not exist on aarch64 */
+#ifdef __NR_uselib
     [__NR_uselib] = {.slow = false, .name = "uselib", .parser = {NULL}},
 #endif
     [__NR_personality] = {.slow = false, .name = "personality", .parser = {NULL}},
-#ifdef __x86_64__ /* __NR_ustat does not exist on aarch64 */
+#ifdef __NR_ustat
     [__NR_ustat] = {.slow = false, .name = "ustat", .parser = {NULL}},
 #endif
     [__NR_statfs] = {.slow = false, .name = "statfs", .parser = {parse_long_arg, parse_string_arg,
                      parse_pointer_arg}},
     [__NR_fstatfs] = {.slow = false, .name = "fstatfs", .parser = {parse_long_arg,
                       parse_integer_arg, parse_pointer_arg}},
-#ifdef __x86_64__ /* __NR_sysfs does not exist on aarch64 */
+#ifdef __NR_sysfs
     [__NR_sysfs] = {.slow = false, .name = "sysfs", .parser = {NULL}},
 #endif
     [__NR_getpriority] = {.slow = false, .name = "getpriority", .parser = {parse_long_arg,
@@ -390,16 +390,16 @@ struct parser_table {
                        parse_integer_arg}},
     [__NR_munlockall] = {.slow = false, .name = "munlockall", .parser = {parse_long_arg}},
     [__NR_vhangup] = {.slow = false, .name = "vhangup", .parser = {NULL}},
-#ifdef __x86_64__ /* __NR_modify_ldt does not exist on aarch64 */
+#ifdef __NR_modify_ldt
     [__NR_modify_ldt] = {.slow = false, .name = "modify_ldt", .parser = {NULL}},
 #endif
     [__NR_pivot_root] = {.slow = false, .name = "pivot_root", .parser = {NULL}},
-#ifdef __x86_64__ /* __NR__sysctl does not exist on aarch64 */
+#ifdef __NR__sysctl
     [__NR__sysctl] = {.slow = false, .name = "_sysctl", .parser = {NULL}},
 #endif
     [__NR_prctl] = {.slow = false, .name = "prctl", .parser = {NULL}},
 #ifdef __NR_arch_prctl
-#ifdef __x86_64__ /* __NR_arch_prctl does not exist on aarch64 */
+#ifdef __NR_arch_prctl
     [__NR_arch_prctl] = {.slow = false, .name = "arch_prctl", .parser = {parse_long_arg,
                          parse_integer_arg, parse_pointer_arg}},
 #endif
@@ -421,41 +421,41 @@ struct parser_table {
     [__NR_setdomainname] = {.slow = false, .name = "setdomainname", .parser = {parse_long_arg,
                             parse_pointer_arg, parse_integer_arg}},
 #ifdef __NR_iopl
-#ifdef __x86_64__ /* __NR_iopl does not exist on aarch64 */
+#ifdef __NR_iopl
     [__NR_iopl] = {.slow = false, .name = "iopl", .parser = {NULL}},
 #endif
 #endif
 #ifdef __NR_ioperm
-#ifdef __x86_64__ /* __NR_ioperm does not exist on aarch64 */
+#ifdef __NR_ioperm
     [__NR_ioperm] = {.slow = false, .name = "ioperm", .parser = {NULL}},
 #endif
 #endif
-#ifdef __x86_64__ /* __NR_create_module does not exist on aarch64 */
+#ifdef __NR_create_module
     [__NR_create_module] = {.slow = false, .name = "create_module", .parser = {NULL}},
 #endif
     [__NR_init_module] = {.slow = false, .name = "init_module", .parser = {NULL}},
     [__NR_delete_module] = {.slow = false, .name = "delete_module", .parser = {NULL}},
-#ifdef __x86_64__ /* __NR_get_kernel_syms does not exist on aarch64 */
+#ifdef __NR_get_kernel_syms
     [__NR_get_kernel_syms] = {.slow = false, .name = "get_kernel_syms", .parser = {NULL}},
 #endif
-#ifdef __x86_64__ /* __NR_query_module does not exist on aarch64 */
+#ifdef __NR_query_module
     [__NR_query_module] = {.slow = false, .name = "query_module", .parser = {NULL}},
 #endif
     [__NR_quotactl] = {.slow = false, .name = "quotactl", .parser = {NULL}},
     [__NR_nfsservctl] = {.slow = false, .name = "nfsservctl", .parser = {NULL}},
-#ifdef __x86_64__ /* __NR_getpmsg does not exist on aarch64 */
+#ifdef __NR_getpmsg
     [__NR_getpmsg] = {.slow = false, .name = "getpmsg", .parser = {NULL}},
 #endif
-#ifdef __x86_64__ /* __NR_putpmsg does not exist on aarch64 */
+#ifdef __NR_putpmsg
     [__NR_putpmsg] = {.slow = false, .name = "putpmsg", .parser = {NULL}},
 #endif
-#ifdef __x86_64__ /* __NR_afs_syscall does not exist on aarch64 */
+#ifdef __NR_afs_syscall
     [__NR_afs_syscall] = {.slow = false, .name = "afs_syscall", .parser = {NULL}},
 #endif
-#ifdef __x86_64__ /* __NR_tuxcall does not exist on aarch64 */
+#ifdef __NR_tuxcall
     [__NR_tuxcall] = {.slow = false, .name = "tuxcall", .parser = {NULL}},
 #endif
-#ifdef __x86_64__ /* __NR_security does not exist on aarch64 */
+#ifdef __NR_security
     [__NR_security] = {.slow = false, .name = "security", .parser = {NULL}},
 #endif
     [__NR_gettid] = {.slow = false, .name = "gettid", .parser = {parse_long_arg}},
@@ -474,7 +474,7 @@ struct parser_table {
     [__NR_fremovexattr] = {.slow = false, .name = "fremovexattr", .parser = {NULL}},
     [__NR_tkill] = {.slow = false, .name = "tkill", .parser = {parse_long_arg, parse_integer_arg,
                     parse_signum}},
-#ifdef __x86_64__ /* __NR_time does not exist on aarch64 */
+#ifdef __NR_time
     [__NR_time] = {.slow = false, .name = "time", .parser = {parse_long_arg, parse_pointer_arg}},
 #endif
     [__NR_futex] = {.slow = true, .name = "futex", .parser = {parse_long_arg, parse_pointer_arg,
@@ -487,7 +487,7 @@ struct parser_table {
                                 {parse_long_arg, parse_integer_arg, parse_integer_arg,
                                 parse_pointer_arg}},
 #ifdef __NR_set_thread_area
-#ifdef __x86_64__ /* __NR_set_thread_area does not exist on aarch64 */
+#ifdef __NR_set_thread_area
     [__NR_set_thread_area] = {.slow = false, .name = "set_thread_area", .parser = {NULL}},
 #endif
 #endif
@@ -497,19 +497,19 @@ struct parser_table {
     [__NR_io_submit] = {.slow = false, .name = "io_submit", .parser = {NULL}},
     [__NR_io_cancel] = {.slow = false, .name = "io_cancel", .parser = {NULL}},
 #ifdef __NR_get_thread_area
-#ifdef __x86_64__ /* __NR_get_thread_area does not exist on aarch64 */
+#ifdef __NR_get_thread_area
     [__NR_get_thread_area] = {.slow = false, .name = "get_thread_area", .parser = {NULL}},
 #endif
 #endif
     [__NR_lookup_dcookie] = {.slow = false, .name = "lookup_dcookie", .parser = {NULL}},
-#ifdef __x86_64__ /* __NR_epoll_create does not exist on aarch64 */
+#ifdef __NR_epoll_create
     [__NR_epoll_create] = {.slow = false, .name = "epoll_create", .parser = {parse_long_arg,
                            parse_integer_arg}},
 #endif
-#ifdef __x86_64__ /* __NR_epoll_ctl_old does not exist on aarch64 */
+#ifdef __NR_epoll_ctl_old
     [__NR_epoll_ctl_old] = {.slow = false, .name = "epoll_ctl_old", .parser = {NULL}},
 #endif
-#ifdef __x86_64__ /* __NR_epoll_wait_old does not exist on aarch64 */
+#ifdef __NR_epoll_wait_old
     [__NR_epoll_wait_old] = {.slow = false, .name = "epoll_wait_old", .parser = {NULL}},
 #endif
     [__NR_remap_file_pages] = {.slow = false, .name = "remap_file_pages", .parser = {NULL}},
@@ -537,7 +537,7 @@ struct parser_table {
                               parse_pointer_arg}},
     [__NR_exit_group] = {.slow = false, .name = "exit_group", .parser = {parse_long_arg,
                          parse_integer_arg}},
-#ifdef __x86_64__ /* __NR_epoll_wait does not exist on aarch64 */
+#ifdef __NR_epoll_wait
     [__NR_epoll_wait] = {.slow = true, .name = "epoll_wait", .parser = {parse_long_arg,
                          parse_integer_arg, parse_pointer_arg, parse_integer_arg,
                          parse_integer_arg}},
@@ -546,11 +546,11 @@ struct parser_table {
                         parse_integer_arg, parse_epoll_op, parse_integer_arg, parse_epoll_event}},
     [__NR_tgkill] = {.slow = false, .name = "tgkill", .parser = {parse_long_arg, parse_integer_arg,
                      parse_integer_arg, parse_signum}},
-#ifdef __x86_64__ /* __NR_utimes does not exist on aarch64 */
+#ifdef __NR_utimes
     [__NR_utimes] = {.slow = false, .name = "utimes", .parser = {NULL}},
 #endif
 #ifdef __NR_vserver
-#ifdef __x86_64__ /* __NR_vserver does not exist on aarch64 */
+#ifdef __NR_vserver
     [__NR_vserver] = {.slow = false, .name = "vserver", .parser = {NULL}},
 #endif
 #endif
@@ -573,7 +573,7 @@ struct parser_table {
     [__NR_keyctl] = {.slow = false, .name = "keyctl", .parser = {NULL}},
     [__NR_ioprio_set] = {.slow = false, .name = "ioprio_set", .parser = {NULL}},
     [__NR_ioprio_get] = {.slow = false, .name = "ioprio_get", .parser = {NULL}},
-#ifdef __x86_64__ /* __NR_inotify_init does not exist on aarch64 */
+#ifdef __NR_inotify_init
     [__NR_inotify_init] = {.slow = false, .name = "inotify_init", .parser = {NULL}},
 #endif
     [__NR_inotify_add_watch] = {.slow = false, .name = "inotify_add_watch", .parser = {NULL}},
@@ -587,7 +587,7 @@ struct parser_table {
                       parse_string_arg, parse_open_mode, parse_integer_arg}},
     [__NR_fchownat] = {.slow = false, .name = "fchownat", .parser = {parse_long_arg, parse_at_fdcwd,
                        parse_string_arg, parse_integer_arg, parse_integer_arg, parse_integer_arg}},
-#ifdef __x86_64__ /* __NR_futimesat does not exist on aarch64 */
+#ifdef __NR_futimesat
     [__NR_futimesat] = {.slow = false, .name = "futimesat", .parser = {NULL}},
 #endif
     [__NR_newfstatat] = {.slow = false, .name = "newfstatat", .parser = {parse_long_arg,
@@ -623,11 +623,11 @@ struct parser_table {
     [__NR_epoll_pwait] = {.slow = true, .name = "epoll_pwait", .parser = {parse_long_arg,
                           parse_integer_arg, parse_pointer_arg, parse_integer_arg,
                           parse_integer_arg, parse_pointer_arg, parse_pointer_arg}},
-#ifdef __x86_64__ /* __NR_signalfd does not exist on aarch64 */
+#ifdef __NR_signalfd
     [__NR_signalfd] = {.slow = false, .name = "signalfd", .parser = {NULL}},
 #endif
     [__NR_timerfd_create] = {.slow = false, .name = "timerfd_create", .parser = {NULL}},
-#ifdef __x86_64__ /* __NR_eventfd does not exist on aarch64 */
+#ifdef __NR_eventfd
     [__NR_eventfd] = {.slow = false, .name = "eventfd", .parser = {parse_long_arg,
                       parse_integer_arg}},
 #endif
