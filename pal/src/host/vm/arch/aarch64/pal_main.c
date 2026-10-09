@@ -108,9 +108,18 @@ noreturn void pal_start_c(const void* fdt) {
     if (ret < 0)
         INIT_FAIL("No valid device tree passed at boot (x0=%p)", fdt);
 
-    /* TODO(Milestone-B): count enabled /cpus nodes from the DTB; QEMU's PSCI is always
-     * available on virt, but the kernel currently supports a single CPU (init_multicore()). */
-    uint32_t num_cpus = 1;
+    /* DTB /cpus describes the actual CPU count and the PSCI cpu_on ids; until the PSCI AP
+     * bring-up lands (B7 stage 5) only CPU 0 runs, but a bigger machine must be announced,
+     * not silently truncated -- init_multicore() refuses num_cpus > 1 loudly anyway, so use
+     * the DTB count here only for the log and keep single-CPU operation. */
+    uint32_t num_cpus = dtb_num_cpus();
+    if (num_cpus > 1) {
+        log_always("device tree describes %u CPUs (PSCI %s); single-CPU kernel, using CPU 0 "
+                 "only", num_cpus, dtb_psci_available() ? (dtb_psci_conduit_hvc() ? "hvc"
+                                                                                 : "smc")
+                                                        : "absent");
+        num_cpus = 1;
+    }
 
     /* synthesize the e820-shaped array that memory_init()/memory_preload_ranges() consume --
      * same one-entry "system RAM" table the DTB describes (x86 read this from QEMU's "etc/e820"
