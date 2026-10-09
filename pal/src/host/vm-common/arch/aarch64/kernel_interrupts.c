@@ -33,9 +33,13 @@
 
 bool g_interrupts_enabled = false;
 
-/* TLB-invalidation broadcast bookkeeping (single object, same design as x86; the IPI transport
- * is GIC SGI #1 instead of the custom vector-33 IPI). Multi-CPU is a Milestone-B follow-up --
- * on a single-CPU boot this is a plain local `tlbi`. */
+/* TLB-invalidation broadcast. The x86 version of this file assembles a software shootdown
+ * (IPI + num_responses handshake) because INVLPG is local-only; aarch64 TLBIs have the
+ * broadcast in the *instruction set*: the `...is` (inner-shareable) variants invalidate on
+ * every PE in the shareable domain, and `dsb ish` waits for completion on all of them. So
+ * one core's tlb_invalidate_range() below already implements "shootdown on all CPUs" --
+ * that is what send_invalidate_tlb_ipi_and_wait() exploits instead of an SGI protocol.
+ * (QEMU TCG semantics match: its IS-TLBI emulation flushes the matching TLBs on all vCPUs.) */
 static void tlb_invalidate_range(void* addr, size_t size) {
     uint64_t start = ALIGN_DOWN((uint64_t)addr, PAGE_SIZE);
     uint64_t end   = ALIGN_UP((uint64_t)addr + size, PAGE_SIZE);
@@ -191,12 +195,17 @@ void isr_kernel_c(struct isr_regs* regs) {
 int send_invalidate_tlb_ipi_and_wait(void* addr, size_t size, bool invalidate_on_this_cpu) {
     assert(IS_ALIGNED_PTR(addr, PAGE_SIZE) && IS_ALIGNED(size, PAGE_SIZE));
 
-    if (g_num_cpus > 1) {
-        /* TODO(Milestone-B multicore): SGI-based broadcast protocol (mirrors the x86
-         * `num_responses` handshake, hardened against spurious SGIs). */
-        log_error("TLB shootdown across CPUs is not implemented yet");
-        return -PAL_ERROR_NOTIMPLEMENTED;
-    }
+    /* No software shootdown protocol exists (or is needed) on aarch64: the invalidation
+     * issued here is `tlbi vmalle1is` + `dsb ish` (see tlb_invalidate_range), which the
+     * architecture guarantees to complete on every CPU in the inner-shareable domain
+     * before the DSB completes. The x86 callers' requirement -- "every core has dropped
+     * the stale entry by the time this returns" -- is met by one core executing it, which
+     * is exactly what invalidate_on_this_cpu requests (all vm-common callers pass true).
+     * The only way it could NOT be met is invalidate_on_this_cpu == false, i.e. the caller
+     * wants a remote-core-only invalidate; that has no caller and the assert documents it
+     * rather than silently doing the broadcast anyway (the hardware already covers the
+     * other cores whether they are asked or not). */
+    assert(invalidate_on_this_cpu);
 
     if (invalidate_on_this_cpu)
         tlb_invalidate_range(addr, size);

@@ -108,16 +108,15 @@ noreturn void pal_start_c(const void* fdt) {
     if (ret < 0)
         INIT_FAIL("No valid device tree passed at boot (x0=%p)", fdt);
 
-    /* DTB /cpus describes the actual CPU count and the PSCI cpu_on ids; until the PSCI AP
-     * bring-up lands (B7 stage 5) only CPU 0 runs, but a bigger machine must be announced,
-     * not silently truncated -- init_multicore() refuses num_cpus > 1 loudly anyway, so use
-     * the DTB count here only for the log and keep single-CPU operation. */
+    /* DTB /cpus drives the CPU count (PSCI CPU_ON ids come from the same nodes, see
+     * init_multicore()). The one hardware feature the SMP path cannot do without is the PSCI
+     * conduit -- QEMU's TCG PSCI is advertised through /psci, and without it no secondary CPU
+     * can ever be started, so fall back to a single-CPU boot (announced, not silent) rather
+     * than failing the whole unikernel on a PSCI-less machine. */
     uint32_t num_cpus = dtb_num_cpus();
-    if (num_cpus > 1) {
-        log_always("device tree describes %u CPUs (PSCI %s); single-CPU kernel, using CPU 0 "
-                 "only", num_cpus, dtb_psci_available() ? (dtb_psci_conduit_hvc() ? "hvc"
-                                                                                 : "smc")
-                                                        : "absent");
+    if (num_cpus > 1 && !dtb_psci_available()) {
+        log_always("device tree describes %u CPUs but no /psci conduit is available; running "
+                   "on CPU 0 only", num_cpus);
         num_cpus = 1;
     }
 

@@ -16,6 +16,7 @@
 #include "pal_error.h"
 
 #include "kernel_apic.h"
+#include "kernel_multicore.h"
 
 static bool g_gicv3 = false; /* decided in gic_init() */
 
@@ -31,16 +32,28 @@ static inline void gicd_write(uint32_t off, uint32_t val) {
                      "r"((volatile void*)(GICD_BASE + off)) : "memory");
 }
 
-static inline uint32_t gicr_read(uint32_t off) {
+/*
+ * Redistributor frames are per-CPU: QEMU virt's DTB `intc@8000000` reg describes one
+ * contiguous region (0x80a0000, 0xf60000 = 128K per possible CPU) whose frames follow the
+ * mpidr order of the cpu@N nodes. With QEMU's linear mpidr (Aff0 == cpu index for the first
+ * 256 CPUs -- which is all MAX_NUM_CPUS allows anyway) the frame for a CPU is therefore
+ * GICR_BASE + cpu_id * GICR_SIZE. Each CPU -- APs included -- must wake and configure *its
+ * own* frame before its private timer PPI can be delivered to its CPU interface.
+ */
+static inline uintptr_t gic_redist_base_this_cpu(void) {
+    return GICR_BASE + (uintptr_t)get_per_cpu_data()->cpu_id * GICR_SIZE;
+}
+
+static inline uint32_t gicr_read(uintptr_t base, uint32_t off) {
     uint32_t v;
-    __asm__ volatile("ldar %w0, [%1]" : "=r"(v) : "r"((const volatile void*)(GICR_BASE + off))
+    __asm__ volatile("ldar %w0, [%1]" : "=r"(v) : "r"((const volatile void*)(base + off))
                      : "memory");
     return v;
 }
 
-static inline void gicr_write(uint32_t off, uint32_t val) {
+static inline void gicr_write(uintptr_t base, uint32_t off, uint32_t val) {
     __asm__ volatile("stlr %w0, [%1]" :: "r"(val),
-                     "r"((volatile void*)(GICR_BASE + off)) : "memory");
+                     "r"((volatile void*)(base + off)) : "memory");
 }
 
 static inline void gic_set_priority(uint32_t intid, uint8_t prio) {
@@ -120,16 +133,19 @@ int gic_spi_enable(uint32_t intid) {
 
 int lapic_timer_init(void) {
     /* The EL1 physical timer is PPI 30; on GICv3 its redistributor frame needs WAKER wakeup
-     * and the SGI_base mirror of the distributor registers before the line can be enabled. */
+     * and the SGI_base mirror of the distributor registers before the line can be enabled.
+     * Called once per CPU (BSP from gic_init(), each AP from pal_start_ap_c()): every access
+     * below is either this CPU's redistributor frame or a per-CPU sysreg. */
     if (g_gicv3) {
-        gicr_write(GICR_CTLR, 0);
-        gicr_write(GICR_WAKER, 0); /* clear Sleep bit; bring CPU interface out of sleep */
-        while (gicr_read(GICR_WAKER) & (1u << 2)) /* ChildrenAsleep */
+        uintptr_t rdbase = gic_redist_base_this_cpu();
+        gicr_write(rdbase, GICR_CTLR, 0);
+        gicr_write(rdbase, GICR_WAKER, 0); /* clear Sleep bit; wake this CPU interface */
+        while (gicr_read(rdbase, GICR_WAKER) & (1u << 2)) /* ChildrenAsleep */
             ;
         /* PPI 30 on the redistributor SGI_base mirror: group non-secure, priority, enable */
-        gicr_write(GICR_SGI_BASE + GICD_IGROUPR(30 / 32), 1u << (30 % 32));
-        gicr_write(GICR_SGI_BASE + GICD_IPRIORITYR(30 / 4), 0x10u << (8 * (30 % 4)));
-        gicr_write(GICR_SGI_BASE + GICD_ISENABLER(30 / 32), 1u << (30 % 32));
+        gicr_write(rdbase, GICR_SGI_BASE + GICD_IGROUPR(30 / 32), 1u << (30 % 32));
+        gicr_write(rdbase, GICR_SGI_BASE + GICD_IPRIORITYR(30 / 4), 0x10u << (8 * (30 % 4)));
+        gicr_write(rdbase, GICR_SGI_BASE + GICD_ISENABLER(30 / 32), 1u << (30 % 32));
     } else {
         gic_set_priority(GIC_INTID_PPI_EL1_PHYS, 0x10);
         gic_enable_intid(GIC_INTID_PPI_EL1_PHYS);

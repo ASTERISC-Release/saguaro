@@ -27,8 +27,11 @@ trap cleanup EXIT
 # so dump the machine DTB, repack it with dtc (drops the 1MB dumpdtb padding) and
 # load it as a plain RAM blob at the DRAM base; pal_start_c() finds it there and
 # authenticates the FDT magic.
+# SMP=4 (say) runs the PSCI bring-up: the dumpdtb *and* the boot must use the same
+# -smp, because the kernel now takes its CPU count from the DTB's cpu@N nodes.
 M="-machine virt,gic-version=3,highmem-ecam=off"
-qemu-system-aarch64 $M -accel tcg -cpu max -m 2G -smp 1 -nic none \
+SMP=${SMP:-1}
+qemu-system-aarch64 $M -accel tcg -cpu max -m 2G -smp "$SMP" -nic none \
     -machine dumpdtb="$WORK/virt.dtb" >/dev/null
 dtc -I dtb -O dtb -o "$WORK/virt-packed.dtb" "$WORK/virt.dtb"
 
@@ -74,7 +77,7 @@ if [ ! -e "$WORK/vhostfs" ]; then
     exit 1
 fi
 
-timeout ${RUN_TIMEOUT:-20} qemu-system-aarch64 $M "$@" -cpu max -m 2G -smp 1 -nic none \
+timeout ${RUN_TIMEOUT:-20} qemu-system-aarch64 $M "$@" -cpu max -m 2G -smp "$SMP" -nic none \
     -object memory-backend-memfd,id=ram1,size=2G,share=on -machine memory-backend=ram1 \
     -fw_cfg name=opt/gramine/unixtime_s,string="$(date +%s)" \
     -fw_cfg name=opt/gramine/args,string="-gramine-args init /bin/hello -gramine-args-end" \

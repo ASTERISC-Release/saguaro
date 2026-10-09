@@ -25,11 +25,13 @@
 #include "pal_host.h"
 #include "pal_internal.h"
 
+#include "kernel_apic.h"
 #include "kernel_dtb.h"
 #include "kernel_interrupts.h"
 #include "kernel_memory.h"
 #include "kernel_multicore.h"
 #include "kernel_sched.h"
+#include "kernel_syscalls.h"
 #include "kernel_time.h"
 #include "kernel_xsave.h"
 
@@ -49,17 +51,39 @@ static uint32_t g_ready_cpus   = 0; /* CPUs that finished initialization; access
  */
 struct per_cpu_data g_early_per_cpu_data = { .cpu_id = 0 };
 
+/*
+ * PSCI smc/hvc conduit call (the arm equivalent of the x86 fw_cfg/mailbox bootstrap). The
+ * conduit is firmware policy, not kernel policy: QEMU virt's DTB advertises `method = "hvc"`
+ * for TCG direct-boot (UEFI-backed machines use smc), and calling the wrong one just traps
+ * as an undefined instruction, so the DTB-parsed choice from dtb_init() drives it.
+ */
 long psci_call(uint64_t func_id, uint64_t arg0, uint64_t arg1, uint64_t arg2) {
     register uint64_t x0 __asm__("x0") = func_id;
     register uint64_t x1 __asm__("x1") = arg0;
     register uint64_t x2 __asm__("x2") = arg1;
     register uint64_t x3 __asm__("x3") = arg2;
-    __asm__ volatile("smc #0" : "+r"(x0), "+r"(x1), "+r"(x2), "+r"(x3) : : "memory");
+    if (dtb_psci_conduit_hvc()) {
+        __asm__ volatile("hvc #0" : "+r"(x0), "+r"(x1), "+r"(x2), "+r"(x3) : : "memory");
+    } else {
+        __asm__ volatile("smc #0" : "+r"(x0), "+r"(x1), "+r"(x2), "+r"(x3) : : "memory");
+    }
     return (long)x0;
 }
 
-/* asm trampoline in kernel_context.S; PSCI CPU_ON enters EL1 with the target address in x1 */
+/* PSCI v0.2/v1.0 64-bit function ids (arm DEN 0022A); the DTB's /psci properties carry the
+ * same values -- dtb_cpu_on_id() reads *cpu ids* from cpu@N reg, this is the *function id*. */
+#define PSCI_FUNC_CPU_ON 0xc4000003ULL
+
+/* asm trampoline in vm/arch/aarch64/vm_bootloader.S: re-establishes the per-CPU sysregs
+ * (TPIDR_EL1 stack/tables/VBAR) with the MMU off and calls pal_start_ap_c(x0 = cpu idx) */
 extern void pal_ap_entry(void);
+
+/* Serializes AP C bring-up exactly like x86's g_lock_single_ap_cpu: each AP's boot context
+ * parks in sched_thread(), which releases this lock on its way out of the CPU, admitting the
+ * next AP. Nothing in today's AP bring-up strictly needs it (every step is per-CPU sysregs
+ * or idempotent globals), but keeping the same one-at-a-time ordering as x86 bounds the
+ * blast radius of any future BSP-shared work in the AP path. */
+static uint32_t g_lock_single_ap_cpu = 0;
 
 int init_multicore_prepare(uint32_t num_cpus) {
     assert(num_cpus >= 1 && num_cpus <= MAX_NUM_CPUS);
@@ -131,35 +155,109 @@ int init_multicore_prepare(uint32_t num_cpus) {
 
 int init_multicore(uint32_t num_cpus) {
     assert(g_per_cpu_data);
+    assert(num_cpus >= 1 && num_cpus <= MAX_NUM_CPUS);
 
-    if (num_cpus > 1) {
-        /* TODO(Milestone-B multicore): PSCI CPU_ON loop:
-         *   psci_call(PSCI_FUNC_CPU_ON, target_mpidr, &pal_ap_entry, cpu_idx)
-         * with g_started_cpus/g_ready_cpus handshake like x86. AP bring-up needs the per-AP
-         * VBAR/stack/PAT-equivalents finished first; until then refuse multi-CPU boots loudly
-         * instead of silently running one CPU.
-         */
-        log_error("aarch64 VM PAL supports a single CPU for now (QEMU: -smp 1)");
+    /* The BSP counts itself in both counters (it finished its own bring-up — including
+     * interrupts_init() — before this point); x86's AP trampoline asm gets the started-count
+     * in the same "each running CPU counts itself" way. Each AP adds itself in
+     * pal_start_ap_c() below, so both counters must reach exactly num_cpus. */
+    __atomic_store_n(&g_started_cpus, 1, __ATOMIC_RELEASE);
+    __atomic_store_n(&g_ready_cpus, 1, __ATOMIC_RELEASE);
+
+    if (num_cpus == 1)
+        return 0;
+
+    if (!dtb_psci_available()) {
+        log_error("device tree describes %u CPUs but exposes no /psci node: cannot start "
+                  "secondary CPUs (QEMU virt needs its PSCI firmware)", num_cpus);
         return -PAL_ERROR_NOTIMPLEMENTED;
     }
 
-    __atomic_store_n(&g_started_cpus, num_cpus, __ATOMIC_RELEASE);
-    __atomic_store_n(&g_ready_cpus, num_cpus, __ATOMIC_RELEASE);
+    /* CPU_ON args (arm DEN 0022A §5.3): target cpu id = the mpidr-affinity value the DTB
+     * carries in cpu@N's reg, entry = pal_ap_entry (identity-mapped, so link address == PA
+     * even with the AP's MMU off), context id = our cpu index — the PSCI spec boots the CPU
+     * with x0 = context id, which is how pal_ap_entry learns which slot is its own. */
+    for (uint32_t i = 1; i < num_cpus; i++) {
+        long ret = psci_call(PSCI_FUNC_CPU_ON, dtb_cpu_on_id(i),
+                             (uint64_t)(uintptr_t)&pal_ap_entry, /*context id=*/i);
+        if (ret != 0) {
+            log_error("PSCI CPU_ON for CPU %u (cpu id 0x%x) failed: PSCI error %ld",
+                      i, dtb_cpu_on_id(i), ret);
+            return -PAL_ERROR_DENIED;
+        }
+    }
+
+    /* The same two-stage handshake as x86, and for the same reason: `started` proves each AP
+     * reached C (a silent PSCI no-op is distinguishable from a stuck trampoline), `ready`
+     * proves every per-CPU GIC/timer/VBAR bring-up finished before the BSP assumes SMP.
+     * delay() runs with the BSP's IRQs live, so the BSP may be tick-preempted here — the
+     * cooperative scheduler handles that (this loop holds no lock). */
+    size_t tries = 0;
+    while (__atomic_load_n(&g_started_cpus, __ATOMIC_ACQUIRE) != num_cpus) {
+        if (tries++ > num_cpus * 5) {
+            log_error("Waited for %u CPUs to start initialization, but timed out (%u started)",
+                      num_cpus, __atomic_load_n(&g_started_cpus, __ATOMIC_RELAXED));
+            return -PAL_ERROR_DENIED;
+        }
+        int ret = delay(10000, /*continue_gate=*/NULL);
+        if (ret < 0)
+            return ret;
+    }
+
+    tries = 0;
+    while (__atomic_load_n(&g_ready_cpus, __ATOMIC_ACQUIRE) != num_cpus) {
+        if (tries++ > num_cpus * 5) {
+            log_error("Waited for %u CPUs to finish initialization, but timed out (%u ready)",
+                      num_cpus, __atomic_load_n(&g_ready_cpus, __ATOMIC_RELAXED));
+            return -PAL_ERROR_DENIED;
+        }
+        int ret = delay(10000, /*continue_gate=*/NULL);
+        if (ret < 0)
+            return ret;
+    }
+
     return 0;
 }
 
 /*
  * C part of secondary-CPU bring-up; entered from the `pal_ap_entry` asm trampoline (which set
- * TPIDR_EL1 to this CPU's per_cpu_data slot and switched to the interrupt stack). Cooperative
- * scheduler takes over from the idle thread loop exactly like on CPU0.
+ * TPIDR_EL1 to this CPU's per_cpu_data slot, switched to the interrupt stack and installed
+ * VBAR). The sequence mirrors x86's pal_start_ap_c: enable this CPU's interrupt delivery,
+ * arm its private timer, (re)install per-CPU exception entry, unmask, count ready — and then
+ * park the boot context into the cooperative scheduler with sched_thread(), after which this
+ * CPU is driven by its per-CPU idle/tick machinery exactly like CPU0.
  */
 noreturn void pal_start_ap_c(uint32_t cpu_idx) {
-    __UNUSED(cpu_idx);
-    __UNUSED(g_ready_cpus);
-    /* The idle thread is not yet created for APs (single-CPU policy above); the AP would spin
-     * on a WFI loop here. PSCI CPU_STATE_OFF on return. */
-    while (true) {
-        __asm__ volatile("wfi");
-    }
+    __atomic_add_fetch(&g_started_cpus, 1, __ATOMIC_RELEASE);
+
+    assert(g_per_cpu_data && cpu_idx >= 1 && cpu_idx < MAX_NUM_CPUS);
+    /* the trampoline installed TPIDR_EL1 = &g_per_cpu_data[cpu_idx] before calling us */
+    assert(get_per_cpu_data() == &g_per_cpu_data[cpu_idx]);
+
+    /* Group-1 delivery for this CPU: ICC_PMR_EL1 + ICC_IGRPEN1_EL1 are sysregs, per-CPU. */
+    lapic_enable();
+
+    /* Wake this CPU's redistributor frame, enable its PPI30 timer line and arm its own EL1
+     * physical timer (100ms tick): every step addresses either a per-CPU sysreg or this
+     * CPU's own redistributor, so APs can run it concurrently with each other and the BSP.
+     * (Same no-check style as x86's pal_start_ap_c: none of these can fail after gic_init()
+     * succeeded on the BSP, and a failed check would have no recovery path on an AP.) */
+    lapic_timer_init();
+
+    syscalls_init();
+
+    /* sti() + g_interrupts_enabled (idempotent global, x86 interrupts_init does the same
+     * per-AP): from here on this CPU takes ticks and the scheduler owns its time. */
+    interrupts_init();
+
+    __atomic_add_fetch(&g_ready_cpus, 1, __ATOMIC_RELEASE);
+
+    /* Park the boot context and release the single-AP startup lock: sched_thread() saves this
+     * context onto the per-CPU scheduling stack (curr_tcb == NULL is exactly the case the asm
+     * was written for — there is no struct thread to save), switches this CPU to its idle
+     * thread, and the AP-boot context is never resumed — its job was only to make the CPU
+     * exist, like x86's. */
+    sched_thread(&g_lock_single_ap_cpu, /*clear_child_tid=*/NULL);
+
     __builtin_unreachable();
 }

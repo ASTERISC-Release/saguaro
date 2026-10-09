@@ -19,6 +19,8 @@
  *   normal WB memory. Memory types via MAIR: attr0 = normal WBWA, attr1 = Device-nGnRE.
  */
 
+#include "asm-offsets.h"    /* PER_CPU_DATA_* consumed by the pal_ap_entry trampoline */
+
     .macro globl sym
     .globl \sym
     .hidden \sym
@@ -125,6 +127,88 @@ _start:
 
     /* noreturn; a return from the C kernel is a fatal bug */
 1:  b       1b
+
+/* ---------------------------------------------------------------------------
+ * PSCI CPU_ON entry point for secondary CPUs (vm-common/arch/aarch64/kernel_multicore.c
+ * issues the calls). QEMU's in-kernel PSCI firmware starts the vCPU at EL1 at the
+ * entry-point address with x0 = the ContextId we passed (= cpu index), MMU and caches
+ * off, and no other state worth trusting -- so this mirrors _start's per-CPU bring-up
+ * (the sysregs below are per-CPU copies; the page tables themselves are shared
+ * identity-mapped .data) and then hands over to pal_start_ap_c(). The BSP-only parts
+ * (DTB parse, cmdline, relocation) are intentionally absent; DAIF stays masked just
+ * like on the BSP until interrupts_init() runs in the C bring-up.
+ *
+ * Keep in lockstep with _start: any sysreg _start programs per-CPU must appear here
+ * too, or the AP runs with reset values behind the BSP's back.
+ * --------------------------------------------------------------------------- */
+    globl pal_ap_entry
+pal_ap_entry:
+    msr     daifset, #0xf
+    /* x0 == cpu index (the PSCI ContextId). CPU_ON is only ever issued for indices
+     * >= 1; index 0 would mean the BSP itself got powered back on -- park it rather
+     * than double-boot the kernel on top of its own live state. */
+    cbz     x0, 2f
+
+    /* this CPU's slot: g_per_cpu_data + cpu_idx * sizeof(struct per_cpu_data) */
+    adrp    x1, g_per_cpu_data
+    add     x1, x1, :lo12:g_per_cpu_data
+    ldr     x1, [x1]
+    ldr     x2, =PER_CPU_DATA_SIZE
+    madd    x3, x0, x2, x1
+    mov     x20, x0                     /* survives the sysreg sequence for the C call */
+    msr     tpidr_el1, x3               /* per-CPU data singleton, set once and forever */
+    ldr     x2, [x3, #PER_CPU_DATA_INTERRUPT_STACK]
+    mov     sp, x2
+
+    ldr     x2, =0x00000000004400ff     /* MAIR: same attr0/attr1/attr2 as _start */
+    msr     mair_el1, x2
+    /* TCR: identical fields to _start's step-by-step build (T0SZ=25, WBWA, SH0=0b11,
+     * IPS=40-bit) -- spelled as the assembled constant because this is a hot,
+     * correctness-critical boot path on a CPU that has nothing configured yet. */
+    ldr     x2, =(25 | (1 << 8) | (1 << 10) | (3 << 12))
+    mov     x3, #2
+    lsl     x3, x3, #32
+    orr     x2, x2, x3
+    msr     tcr_el1, x2
+    adrp    x2, initial_l1_table
+    add     x2, x2, :lo12:initial_l1_table
+    msr     ttbr0_el1, x2
+    isb
+    tlbi    vmalle1
+    dsb     ish
+    isb
+
+    mrs     x2, sctlr_el1
+    bic     x2, x2, #2                  /* A: alignment checks off, same as _start */
+    orr     x2, x2, #1                  /* M */
+    orr     x2, x2, #4                  /* C */
+    orr     x2, x2, #0x1000             /* I */
+    /* PSTATE.PAN is per-CPU and QEMU -cpu max resets it set on every CPU, not just the
+     * BSP -- same clear-before-SCTLR ordering (and same reason) as _start. */
+    msr     pan, #0
+    msr     sctlr_el1, x2
+    isb
+
+    mrs     x2, cpacr_el1
+    orr     x2, x2, #(3 << 20)          /* CPACR_EL1.FPEN = 0b11 */
+    msr     cpacr_el1, x2
+    isb
+    msr     fpcr, xzr
+    msr     fpsr, xzr
+    msr     tpidr_el0, xzr
+
+    /* VBAR_EL1 is per-CPU too: install the table before unmasking anything so a stray
+     * fault on this CPU cannot take QEMU's reset vector (syscalls_init() rewrites the
+     * same value during the C bring-up; same identity-mapped label, harmless). */
+    adrp    x2, vectors
+    add     x2, x2, :lo12:vectors
+    msr     vbar_el1, x2
+    isb
+
+    mov     x0, x20
+    bl      pal_start_ap_c
+2:  wfe
+    b       2f                          /* pal_start_ap_c is noreturn; never reached */
 
 /* ---------------------------------------------------------------------------
  * Static initial page tables (identity map). Link-time values are safe because
