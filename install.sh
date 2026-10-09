@@ -6,9 +6,8 @@
 #
 # Usage:
 #   ./install.sh                     # deps info + meson setup + build + install
-#   ./install.sh --deps              # additionally run the apt dependency line
-#                                    # (needs sudo; skipped with a notice if
-#                                    #  sudo is unavailable)
+#   ./install.sh --deps              # force the apt dependency install (done
+#                                    # automatically if build tools are missing)
 #   ./install.sh --run-tests         # run ./run_all_tests.sh --no-build after
 #   ./install.sh --run-tests libos   # ...limited to the named suites
 #   ./install.sh --prefix /opt/gramine --build-dir build-x
@@ -27,8 +26,8 @@
 # matching options and ninja rebuilds only what changed.
 #
 # Notes:
-#  * --deps is OFF by default because this box has no passwordless sudo; the
-#    exact apt line is printed instead so you can run it yourself.
+#  * Dependencies are installed via apt (sudo, may prompt for a password)
+#    automatically when build tools are missing, or always with --deps.
 #  * vm/tdx are Tirith forks of the PAL that need extra system dependencies
 #    (and SGX/TDX hardware); they stay disabled for the direct-PAL battery.
 #  * nasm is only needed with tests=enabled on x86_64.
@@ -65,24 +64,30 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-APT_LINE='sudo apt install build-essential meson ninja-build pkg-config \
-    python3-pytest python3-click python3-jinja2 python3-cryptography \
-    python3-voluptuous python3-toml nasm procps iproute2 file linux-libc-dev'
+APT_PKGS='build-essential meson ninja-build pkg-config python3-pytest
+    python3-click python3-jinja2 python3-cryptography python3-voluptuous
+    python3-toml python3-tomli python3-tomli-w python3-pip bison gawk nasm procps iproute2 file linux-libc-dev'
 
-for tool in meson ninja python3 cc; do
-    command -v "$tool" >/dev/null || { echo "ERROR: '$tool' not found (needed for the build; see --deps)"; exit 1; }
-done
+missing_tools() {
+    for tool in meson ninja python3 cc make pkg-config bison; do
+        command -v "$tool" >/dev/null || return 0
+    done
+    return 1
+}
 
-if [ "$DO_APT" = 1 ]; then
-    if sudo -n true 2>/dev/null || [ "$(id -u)" = 0 ]; then
-        echo ">>> installing dependencies via apt"
-        eval "$APT_LINE"
-    else
-        echo ">>> --deps requested but passwordless sudo is unavailable;"
-        echo "    run this yourself:"
-        echo "    $APT_LINE"
-    fi
+# Install dependencies when asked (--deps) or when build tools are missing.
+# sudo may prompt for a password interactively.
+if [ "$DO_APT" = 1 ] || missing_tools; then
+    echo ">>> installing dependencies via apt (sudo may ask for your password)"
+    SUDO=sudo; [ "$(id -u)" = 0 ] && SUDO=
+    $SUDO apt-get update
+    # shellcheck disable=SC2086
+    $SUDO apt-get install -y $APT_PKGS
 fi
+
+for tool in meson ninja python3 cc make bison; do
+    command -v "$tool" >/dev/null || { echo "ERROR: '$tool' not found after dependency install"; exit 1; }
+done
 
 echo ">>> configuring ($BUILDDIR -> $PREFIX, sgx=$SGX vm=$VM tdx=$TDX)"
 # On an already-configured build dir this reconfigures in place (cheap);

@@ -201,8 +201,13 @@ static int read_cache_info(struct pal_cache_info* ci, size_t thread_idx, size_t 
     if (ret < 0)
         return ret;
     ret = get_hw_resource_value(path, &ci->number_of_sets);
-    if (ret < 0)
-        return ret;
+    if (ret < 0) {
+        /* Optional like physical_line_partition below: the WSL2 aarch64 kernel exposes
+         * ways_of_associativity but not number_of_sets. Informational only. */
+        if (ret != -ENOENT)
+            return ret;
+        ci->number_of_sets = 0;
+    }
 
     ret = snprintf(path, sizeof(path),
                    "/sys/devices/system/cpu/cpu%zu/cache/index%zu/physical_line_partition",

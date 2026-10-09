@@ -6,6 +6,28 @@ example applications (redis, memcached, busybox, multi-thread) validated over re
 The follow-on plan — porting the `vm`-PAL unikernel, the actual end goal — lives in
 `ARM64_MILESTONE_B.md`.
 
+## Validated platforms
+
+Milestone A (direct PAL, `-Ddirect=enabled -Dvm=disabled -Dsgx=disabled -Dtdx=disabled
+-Dlibc=glibc`, native build) has been built and run through `run_all_tests.sh` on:
+
+| | Original dev box: ASUS Ascent GX10 (NVIDIA GB10) | Second box (2026-10-08) |
+|---|---|---|
+| CPU | NVIDIA GB10, 20 Arm cores (10x Cortex-X925 + 10x Cortex-A725, per vendor spec) | Qualcomm aarch64, 8 cores (ASIMD/AES/PMULL/SHA/CRC32/atomics; no SVE listed) |
+| Memory | 128 GB unified, per vendor spec | 7.9 GiB |
+| OS / kernel | not recorded | Ubuntu 24.04.5 LTS under WSL2, Linux 6.18.40.1-microsoft-standard-WSL2 |
+| Toolchain | not recorded | gcc 13.3.0, binutils 2.42, glibc 2.39, meson 1.3.2, Python 3.12.3, cargo 1.99.0 (rustup) |
+| `/dev/kvm` | yes | no |
+| Result | 142 passed / 36 skipped (libos), 28 passed / 8 skipped (pal) | identical counts, 0 failed; all example suites pass (helloworld, multi-thread, bash, busybox, redis, memcached, sqlite, python, lighttpd, nginx, rust, networks) |
+
+Second-box notes:
+- Needed `topo_info.c` to tolerate a missing `cache/indexN/number_of_sets` sysfs file (WSL2
+  kernel omits it; same treatment as `physical_line_partition`, finding #4).
+- Host packages beyond the base set: `bison`, `gawk`, `libevent-dev`, `sqlite3`, `automake`,
+  `autoconf`, plus user-level pip `tomli`, `tomli_w`, `numpy`, `scipy` and rustup.
+- Only the direct PAL was exercised. Nothing here covers the `vm` PAL (Milestone B), which
+  needs QEMU `virt` and was not run; without `/dev/kvm` it would run under TCG.
+
 ## End goal and the two-backend decision
 
 The actual target is **`gramine-vm` (the bare-metal unikernel PAL) working on arm64** —
