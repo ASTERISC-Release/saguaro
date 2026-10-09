@@ -42,6 +42,7 @@ const struct generated_offset generated_offsets[] = {
     /* the "GS base" role: current thread TCB slot (kernel_events.S keeps it in sync with each
      * context switch, exactly like x86_64 wrmsr(MSR_IA32_GS_BASE)) */
     OFFSET(PER_CPU_DATA_CUR_TCB, per_cpu_data, cur_tcb),
+    OFFSET(PER_CPU_DATA_DBG_IRQ_TRACE, per_cpu_data, dbg_irq_trace),
 
     /* struct pal_tcb_vm: entry to the LibOS syscall dispatcher */
     OFFSET(PAL_TCB_LIBOS, pal_tcb_vm, common.libos_tcb),

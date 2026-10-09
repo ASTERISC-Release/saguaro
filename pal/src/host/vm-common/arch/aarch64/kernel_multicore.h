@@ -51,6 +51,14 @@ struct per_cpu_data {
      * defined in pal_common.h, which is above this header's include layer; all consumers
      * immediately pass it through get_thread_ptr()/replace_with_null_if_dummy_gs_base(). */
     void* cur_tcb;
+
+    /* TODO(diag SMP B7): liveness breadcrumb. [0] = most recent execution point of
+     * the TRACE macro (any entry incl. terminal spins), [1] = most recent IRQ/exception
+     * entry point. Written from asm where x29/x30 are already saved into the ISR frame
+     * (or dead in a terminal spin), so it clobbers nothing. The stall dump prints both
+     * per CPU: a deaf CPU whose trace[1] stays 0 never entered the tick handler at all;
+     * one stuck at `hang`/el1_sync shows that terminal address instead. */
+    uint64_t dbg_irq_trace[2];
 } __attribute__((packed));
 
 extern uint32_t g_num_cpus;

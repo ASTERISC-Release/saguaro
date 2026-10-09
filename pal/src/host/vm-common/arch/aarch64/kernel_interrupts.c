@@ -82,8 +82,14 @@ volatile uint32_t g_dbg_ticks[8];
 volatile uint32_t g_dbg_events[8][16];
 volatile uint32_t g_dbg_event_idx[8];
 
-static void dbg_record_event(uint32_t intid, int is_eoi) {
-    uint32_t cpu = get_per_cpu_data()->cpu_id;
+/* TODO(diag SMP B7): the shared kernel_time.c cannot include the aarch64
+ * kernel_multicore.h (include order resolves it to the x86 implementation), so expose the
+ * current cpu id through this helper for its live-DAIF probe. */
+uint32_t dbg_this_cpu_id(void) {
+    return get_per_cpu_data()->cpu_id;
+}
+
+static void dbg_record_event(uint32_t intid, int is_eoi) {    uint32_t cpu = get_per_cpu_data()->cpu_id;
     if (cpu >= 8)
         return;
     uint32_t idx = g_dbg_event_idx[cpu]++ & 15;
@@ -106,7 +112,12 @@ void isr_c(struct isr_regs* regs) {
         case GIC_INTID_PPI_EL1_PHYS:
             /* kernel tick: same 100ms period as the x86 LAPIC timer */
             if (get_per_cpu_data()->cpu_id < 8) {
-                g_dbg_ticks[get_per_cpu_data()->cpu_id]++; /* TODO(diag SMP B7) */
+                uint32_t tc = ++g_dbg_ticks[get_per_cpu_data()->cpu_id];
+                /* TODO(diag SMP B7): tick liveness heartbeat (also fires on the EL1-int
+                 * interrupted path: the tick gate is after this). */
+                if (tc % 10 == 0)
+                    log_always("DBG: tick cpu%u n=%u",
+                               (unsigned)get_per_cpu_data()->cpu_id, tc);
             }
             if (get_per_cpu_data()->cpu_id == 0) {
                 /* only CPU0 handles timeouts and alarms */
@@ -138,6 +149,26 @@ void isr_c(struct isr_regs* regs) {
         case GIC_INTID_TLB_SHOOTDOWN_SGI: {
             /* TODO(diag SMP B7): branch counters for the shootdown hang (drop later) */
             uint32_t cpu = get_per_cpu_data()->cpu_id;
+            /* TODO(diag SMP B7): CPU-interface ground truth from this still-running CPU while
+             * shootdown rounds hang: ICC_HPPIR1_EL1 is what a future IAR1 would return (under
+             * TCG: QEMU's model state; under KVM: the hardware vGIC answers natively, no trap).
+             * hppi==30 on a tick-frozen CPU => the cpu interface owes that vCPU an undelivered
+             * INTID 30 (delivery-side wedge); hppi==1023 => the GICR_ISPENDR0 bit30 seen in the
+             * stall dump never propagates redist->cpuif. `spsr` also reports the interrupted
+             * context's EL/mask (last probe that observes the *live* PSTATE on that vCPU). */
+            {
+                uint64_t hp = 1023, pmr = 0;
+                __asm__ volatile("mrs %0, icc_hppir1_el1" : "=r"(hp));
+                __asm__ volatile("mrs %0, icc_pmr_el1" : "=r"(pmr));
+                static volatile uint32_t dbg_sgi_probe_logged;
+                if (cpu < 8 && g_dbg_ticks[cpu] >= 2 && dbg_sgi_probe_logged < 64) {
+                    dbg_sgi_probe_logged++;
+                    log_always("DBG: cpu%u SGI spsr=%08lx elr=%016lx hppi=%lu pmr=%02lx ticks=%u",
+                               cpu, (unsigned long)regs->spsr, (unsigned long)regs->elr,
+                               (unsigned long)(hp & 0x3ff), (unsigned long)(pmr & 0xff),
+                               g_dbg_ticks[cpu]);
+                }
+            }
             /* "invalidate TLB" IPI -- may be spurious/extra, check for this (the hardening
              * mirrors x86's `case 33` verbatim, down to the malicious-host comments). Unlike
              * the tick this handler NEVER reschedules -- it is the ack that releases the
@@ -466,6 +497,12 @@ int send_invalidate_tlb_ipi_and_wait(void* addr, size_t size, bool invalidate_on
                            t ? (unsigned long)t->irq_pseudo_stack.elr : 0,
                            t ? (unsigned long)t->context.pc : 0,
                            t ? (unsigned long)t->context.pstate : 0);
+                /* TODO(diag SMP B7): asm liveness breadcrumb: [0]=last TRACE point of any
+                 * kind, [1]=last exception entry. 0 => this vCPU never even reached an
+                 * instrumented entry; hang/el1_sync addresses => it vanished there. */
+                log_always("shootdown: cpu%u trace=%016lx irq=%016lx", c,
+                           (unsigned long)g_per_cpu_data[c].dbg_irq_trace[0],
+                           (unsigned long)g_per_cpu_data[c].dbg_irq_trace[1]);
             }
         }
     }

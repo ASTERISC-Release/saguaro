@@ -2,7 +2,12 @@
 # Development bring-up runner for the aarch64 vm-PAL kernel (README-vm.md).
 # Not the final launcher: tools/gramine-vm.in's arm counterpart will replace it.
 #
-# Usage: run-vm-aarch64-dev.sh [extra qemu args, e.g. "-accel kvm"]
+# Usage: run-vm-aarch64-dev.sh [extra qemu args]
+#
+# Target is **KVM on a native aarch64 host** (QEMU virt + in-kernel vGIC/VHE); TCG is
+# out of scope (see ARM64_MILESTONE_B.md): -cpu host is required (max is TCG-only) and
+# the container must expose --device /dev/kvm. Override with ACCEL=tcg/CPU=max only as
+# a debugging fallback, not a supported configuration.
 set -e
 
 REPO_ROOT=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
@@ -31,7 +36,12 @@ trap cleanup EXIT
 # -smp, because the kernel now takes its CPU count from the DTB's cpu@N nodes.
 M="-machine virt,gic-version=3,highmem-ecam=off"
 SMP=${SMP:-1}
-qemu-system-aarch64 $M -accel tcg -cpu max -m 2G -smp "$SMP" -nic none \
+ACCEL=${ACCEL:-kvm}
+CPU=${CPU:-host}
+# The dumpdtb and boot runs must agree on everything that shapes the DTB, so they
+# share $ACCEL/$CPU (the KVM machine describes its timer/vGIC topology differently
+# from TCG; the kernel takes CPU count and PSCI conduit from this blob).
+qemu-system-aarch64 $M -accel "$ACCEL" -cpu "$CPU" -m 2G -smp "$SMP" -nic none \
     -machine dumpdtb="$WORK/virt.dtb" >/dev/null
 dtc -I dtb -O dtb -o "$WORK/virt-packed.dtb" "$WORK/virt.dtb"
 

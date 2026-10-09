@@ -44,6 +44,21 @@
     .hidden \sym
     .endm
 
+    /* TODO(diag SMP B7): liveness breadcrumb into per_cpu_data->dbg_irq_trace.
+     * [0] records every trace point, [1] (both=1) only exception/IRQ entries. Only safe
+     * once the ISR frame has saved x29/x30 (they are restored from the frame afterwards)
+     * or in a terminal spin where they are dead. */
+    .macro TRACE both=0
+    mrs     x29, tpidr_el1
+    adrp    x30, .
+    add     x30, x30, :lo12:.Ltr\@
+    str     x30, [x29, #PER_CPU_DATA_DBG_IRQ_TRACE]
+    .if \both
+    str     x30, [x29, #PER_CPU_DATA_DBG_IRQ_TRACE + 8]
+    .endif
+.Ltr\@:
+    .endm
+
     .text
 
 /* ---------------------------------------------------------------------------
@@ -91,6 +106,7 @@ vectors:
     b       hang
 
 hang:
+    TRACE 1                             /* TODO(diag SMP B7): terminal silent spin */
     b       hang
 
 /* ---------------------------------------------------------------------------
@@ -128,26 +144,33 @@ el0_sync_entry:
      * stores the brk() result, which stored through a stale x2 = garbage (ELR=app+0x182b8 with
      * FAR in the EL1-only device window). Linux's aarch64 syscall path likewise does not
      * increment ELR anywhere; the "skip the svc" duty is hardware's. */
-    msr     spsr_el1, x9                      /* park the app's x9 (see snapshot comment) */
-    mrs     x16, elr_el1                      /* address right after the 4-byte `svc` */
-    mrs     x9, tpidr_el1
-    ldr     x9, [x9, #PER_CPU_DATA_CUR_TCB]   /* x86 %gs base, two loads instead */
-    cbz     x9, hang                          /* svc with no thread context: cannot happen */
-    str     x16, [x9, #PAL_TCB_VM_USER_RIP]
-    mrs     x16, spsr_el1                     /* x16 is snapshot store scratch from here on */
-    str     x16, [x9, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 8]
+    /* x16 is kernel-owned scratch from here on. The app's x9 is the only awkward one: x9
+     * becomes the TCB store base below, so its user value is stored straight into its own
+     * snapshot slot (slot 8 == the app's x9, see the slot layout below) *before* the `mrs`
+     * clobbers it, and reloaded from the slot after. It must NEVER be parked in SPSR_EL1:
+     * an IRQ taken between such a park and its readback saves the interrupted PSTATE into
+     * SPSR_EL1 and the el1_irq same-thread return restores it -- so the parked *app data*
+     * would be `eret`ed as live PSTATE. Probes caught exactly that: interrupted kernel-C
+     * contexts with spsr = app computation values (ALU flags included); one bit7 (I) set
+     * silently deafens the vCPU to every interrupt (the SMP tick/shootdown wedge: pending
+     * and enabled in the GIC, never taken, on TCG and KVM alike), and an invalid M-encoding
+     * hangs it in the EL1 sync path (the kernel-address poison crashes). Likewise the
+     * readback-after-IRQ would hand the app the IRQ's saved PSTATE instead of its x9. */
+    mrs     x16, tpidr_el1
+    ldr     x16, [x16, #PER_CPU_DATA_CUR_TCB]   /* x86 %gs base, two loads instead */
+    cbz     x16, hang                           /* svc with no thread context: cannot happen */
+    str     x9,  [x16, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 8] /* snapshot the app's x9 early */
+    mrs     x9, elr_el1                         /* address right after the 4-byte `svc` */
+    str     x9,  [x16, #PAL_TCB_VM_USER_RIP]
+    mrs     x9, tpidr_el1                       /* x9 is the snapshot store base from here */
+    ldr     x9, [x9, #PER_CPU_DATA_CUR_TCB]
     /* Snapshot the registers the Linux syscall ABI hands back to EL0. The LibOS dispatcher
      * is C at EL1 (all of x0..x18 are C-caller-saved), so x1..x15/x17/x18 would otherwise die
      * in it -- Linux takes a full pt_regs snapshot per svc and hides this; x86 needs no
      * equivalent because the x86 dispatcher never leaves user values in registers the C ABI
      * does not preserve (x0..x15 there are exactly the kernel-clobbered set). x0 is the
      * result slot (passed through), x16 stays kernel-owned scratch like x86's sysret rcx
-     * clobber that glibc declares dead. The app's x9 is the only awkward one: x9 becomes
-     * the TCB store base below, so its user value is parked in SPSR_EL1 *before* the `mrs`
-     * clobbers it and read back right after the TCB load. That parking spot is safe: the
-     * entry-time SPSR is never read back by anything (pal_syscall_return overwrites it with
-     * its eret value, pal_sigreturn_return with the frame's) and exception entry to EL1
-     * hardware-masks IRQs, so nothing can touch it between park and readback. Slot layout:
+     * clobber that glibc declares dead. Slot layout:
      * x1..x15 -> 0..14 (slot 8 = the app's x9), x18 -> 15, x17 -> 16 -- the exact set the
      * Linux syscall ABI preserves across
      * `svc`, which pal_syscall_return's ldp pairs read back. glibc on aarch64 *pins the
@@ -245,6 +268,7 @@ el0_sync_entry:
     stp     x26, x27, [x30, #ISR_REGS + 208]
     stp     x28, x29, [x30, #ISR_REGS + 224]
     mov     sp, x30
+    TRACE 1                               /* TODO(diag SMP B7): el0 memfault entry complete */
 
     ldr     x0, [sp, #ISR_FPREGS]
     bl      do_xsave                      /* the signal ucontext sees live FP state */
@@ -635,11 +659,14 @@ el0_irq_entry:
     stp     x26, x27, [x30, #ISR_REGS + 208]
     stp     x28, x29, [x30, #ISR_REGS + 224]
     mov     sp, x30                       /* sp = frame (x30's user value is saved) */
+    TRACE 1                               /* TODO(diag SMP B7): el0_irq entry complete */
 
     ldr     x0, [sp, #ISR_FPREGS]
     bl      do_xsave                      /* preempted thread's V0-V31 + FPCR/FPSR */
     mov     x0, sp
     bl      isr_c                         /* ack GIC, tick, maybe sched; may not return */
+
+    TRACE 0                               /* TODO(diag SMP B7): el0_irq same-thread epilogue */
 
     /* Same-thread return: eret consumes ELR/SPSR from sysregs; the user SP is
      * already in SP_EL0 (we never touched it) and the user GPRs come back from
@@ -714,6 +741,7 @@ el1_irq_entry:
     stp     x26, x27, [x30, #ISR_REGS + 208]
     stp     x28, x29, [x30, #ISR_REGS + 224]
     mov     sp, x30
+    TRACE 1                               /* TODO(diag SMP B7): el1_irq entry complete */
 
     ldr     x0, [sp, #ISR_FPREGS]
     bl      do_xsave                      /* kernel C never touches FP, so this records
@@ -721,6 +749,7 @@ el1_irq_entry:
     mov     x0, sp
     bl      isr_c
 
+    TRACE 0                               /* TODO(diag SMP B7): el1_irq same-thread epilogue */
     /* Restore order: the resume SP goes back first (into SP, the register eret
      * won't fix); the frame itself lives at a per-CPU-fixed address, so the
      * remaining GPRs are re-read from there through TPIDR_EL1 after the switch. */
@@ -793,6 +822,7 @@ el1_sync_entry:
     stp     x26, x27, [x30, #ISR_REGS + 208]
     stp     x28, x29, [x30, #ISR_REGS + 224]
     mov     sp, x30
+    TRACE 1                               /* TODO(diag SMP B7): el1_sync entry (kernel bug) */
     mov     x0, sp
     bl      isr_kernel_c                  /* noreturn: logs and triple_fault()s */
     udf     #0

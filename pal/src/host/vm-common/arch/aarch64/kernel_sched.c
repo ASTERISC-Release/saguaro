@@ -47,6 +47,7 @@ static spinlock_t g_thread_list_lock = INIT_SPINLOCK_UNLOCKED;
 
 /* Atomic variable used to kick sched_thread() into action (instead of waiting for some time) */
 bool g_kick_sched_thread = false;
+static void dbg_idle_scan(void); /* TODO(diag SMP B7) */
 
 /*
  * PSTATE bits of the context we are about to save. x86's `pushfq; pop` captures RFLAGS with IF
@@ -231,7 +232,10 @@ void sched_thread(uint32_t* lock_to_unlock, int* clear_child_tid) {
 
     if (next_thread == curr_thread) {
         /* re-scheduled the same thread, no need to save/restore context */
+        bool dispatched_idle = (next_thread == get_per_cpu_data()->idle_thread);
         spinlock_unlock_enable_irq(&g_thread_list_lock);
+        if (dispatched_idle)
+            dbg_idle_scan(); /* TODO(diag SMP B7) */
         return;
     }
 
@@ -279,6 +283,56 @@ void sched_thread_wait(int* futex_word, spinlock_t* lock) {
 
     /* now this thread is scheduled back, it means that it was unblocked via wakeup */
     spinlock_lock(lock);
+}
+
+/* TODO(diag SMP B7): progress-blind liveness dump. A healthy hello+pthreads run finishes
+ * all phases within ~30 ticks (each tick is 100ms and ticks are summed over all cpus), so
+ * from tick 400 onwards the guest is definitely wedged. Called from every idle dispatch
+ * (~every 10ms per idle cpu); dumps the whole thread list + per-cpu breadcrumb at most
+ * every 200 total ticks. This catches the lost-wakeup family: the hang now sits between
+ * "spin 1 done" and "threads done" with no shootdown stall and no masked DAIF anywhere,
+ * i.e. threads are BLOCKED/lost rather than the vCPUs being deaf. */
+static volatile uint64_t s_dbg_idle_iter[8];
+static uint64_t s_dbg_dump_at_ticks;
+static uint32_t s_dbg_dump_num;
+extern volatile uint32_t g_dbg_ticks[8];
+
+static void dbg_idle_scan(void) {
+    uint32_t cpu = get_per_cpu_data()->cpu_id;
+    if (cpu >= 8)
+        return;
+    s_dbg_idle_iter[cpu]++;
+
+    uint64_t total = 0;
+    for (uint32_t c = 0; c < g_num_cpus && c < 8; c++)
+        total += g_dbg_ticks[c];
+    if (total < 400 || total < s_dbg_dump_at_ticks + 200 || s_dbg_dump_num >= 5)
+        return;
+    s_dbg_dump_num++;
+    s_dbg_dump_at_ticks = total;
+
+    log_always("DBG: stall dump#%u ticks[%u %u %u %u] idle[%llu %llu %llu %llu]",
+               s_dbg_dump_num, g_dbg_ticks[0], g_dbg_ticks[1], g_dbg_ticks[2], g_dbg_ticks[3],
+               (unsigned long long)s_dbg_idle_iter[0], (unsigned long long)s_dbg_idle_iter[1],
+               (unsigned long long)s_dbg_idle_iter[2], (unsigned long long)s_dbg_idle_iter[3]);
+    for (uint32_t c = 0; c < g_num_cpus && c < 8; c++) {
+        uintptr_t gs = replace_with_null_if_dummy_gs_base(
+            (uintptr_t)g_per_cpu_data[c].cur_tcb);
+        struct thread* t = gs ? get_thread_ptr(gs) : NULL;
+        log_always("DBG:  cpu%u cur=%u(state=%u) trace=%016lx irq=%016lx", c,
+                   t ? t->thread_id : 0xffffffff, t ? (unsigned)t->state : 0xf,
+                   (unsigned long)g_per_cpu_data[c].dbg_irq_trace[0],
+                   (unsigned long)g_per_cpu_data[c].dbg_irq_trace[1]);
+    }
+    spinlock_lock_disable_irq(&g_thread_list_lock);
+    struct thread* t;
+    LISTP_FOR_EACH_ENTRY(t, &g_thread_list, list) {
+        log_always("DBG:  thr %u state=%u blocked_on=%p helper=%d mask=%016lx pc=%016lx sp=%016lx us=%016lx",
+                   t->thread_id, (unsigned)t->state, (void*)t->blocked_on, t->is_helper,
+                   t->cpu_mask[0], (unsigned long)t->context.pc, (unsigned long)t->context.sp,
+                   (unsigned long)t->irq_pseudo_stack.sp);
+    }
+    spinlock_unlock_enable_irq(&g_thread_list_lock);
 }
 
 static void sched_thread_wakeup_common(int* futex_word) {
