@@ -2,7 +2,7 @@
 Gramine Library OS with Multi-Architectural Support
 *****************************************************
 
-*A Linux-compatible library OS for multi-process applications, on x86-64 and AArch64.*
+*A Linux-compatible library OS for multi-process applications, on Intel x86_64, AMD64 and AArch64.*
 
 Status
 ======
@@ -27,19 +27,23 @@ Supported configurations
 
 .. list-table::
    :header-rows: 1
-   :widths: 30 35 35
+   :widths: 22 26 26 26
 
    * - PAL (backend)
-     - x86-64
+     - Intel x86_64
+     - AMD64
      - AArch64
    * - ``direct`` (``gramine-direct``, an ordinary Linux process)
      - inherited from upstream; being re-validated here
+     - works
      - works; regression suites and example applications pass
    * - ``vm`` (``gramine-vm``, a unikernel in a QEMU guest)
      - inherited from upstream
+     - partly validated (work in progress)
      - planned
    * - ``tdx`` (Intel TDX), ``sgx`` (Intel SGX)
      - inherited from upstream
+     - not applicable
      - not applicable
 
 Details, build options and the verification status are in
@@ -75,7 +79,7 @@ Documentation
 - `Differences from upstream gramine-tdx
   <Documentation/devel/tirith-delta.md>`__.
 - `AArch64 port notes <Documentation/devel/aarch64/>`__: design, findings, test
-  parity with x86-64.
+  parity with x86_64.
 - For features shared with Gramine in general (manifest syntax, ...), the
   `upstream documentation <https://gramine.readthedocs.io>`__ is a useful
   reference; details may differ in this tree.
