@@ -84,6 +84,17 @@ struct thread_context {
 
     uint64_t user_rip;        /* ELR_EL1 saved at `svc` entry: address to resume user at */
     uint64_t user_tls;        /* TPIDR_EL0 value belonging to this thread (x86 user_fsbase) */
+    /* Syscall snapshot of the EL0 registers that the Linux syscall ABI hands back intact:
+     * x1..x15 (slots 0..14), x18 (slot 15) and x17 (slot 16). x0 is the result slot and x16
+     * is the kernel's own scratch -- the analog of x86's syscall-instruction rcx/r11 clobber,
+     * which glibc declares dead for exactly that reason. Everything x0..x18 is *C*-ABI
+     * caller-saved and the LibOS dispatcher is C code running at EL1, so without this frame
+     * the app's live values die in the dispatcher: Linux takes a full pt_regs snapshot per
+     * svc and hides this. First two victims without it, both from glibc static-pie malloc
+     * init: ptmalloc_init poisons the heap as `mov x1,#8; svc (getrandom); add x19, sp, x1`
+     * (reusing the preserved length argument), and the tunables machinery reads
+     * `ldr x8, [x18, #200]`-style slots with x18 pinned to tunable_list across syscalls. */
+    uint64_t syscall_scratch[17];
 #endif
 }
 /* On x86_64 all members are 8-byte naturally-aligned, so packed is a no-op kept for upstream

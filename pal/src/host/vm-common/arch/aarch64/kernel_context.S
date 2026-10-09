@@ -132,10 +132,36 @@ el0_sync_entry:
     ldr     x9, [x9, #PER_CPU_DATA_CUR_TCB]   /* x86 %gs base, two loads instead */
     cbz     x9, hang                          /* svc with no thread context: cannot happen */
     str     x16, [x9, #PAL_TCB_VM_USER_RIP]
-
-    /* run the syscall on the thread's own user stack (x86: rsp never left ring-3 stack) */
-    mrs     x16, sp_el0
-    mov     sp, x16
+    /* Snapshot the registers the Linux syscall ABI hands back to EL0. The LibOS dispatcher
+     * is C at EL1 (all of x0..x18 are C-caller-saved), so x1..x15/x17/x18 would otherwise die
+     * in it -- Linux takes a full pt_regs snapshot per svc and hides this; x86 needs no
+     * equivalent because the x86 dispatcher never leaves user values in registers the C ABI
+     * does not preserve (x0..x15 there are exactly the kernel-clobbered set). x0 is the
+     * result slot (passed through), x16 stays kernel-owned scratch like x86's sysret rcx
+     * clobber that glibc declares dead. x9 (TCB base) is the only register this loop may not
+     * use as a source; it stops being needed right after the last store. */
+    str     x1,  [x9, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 0]
+    str     x2,  [x9, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 1]
+    str     x3,  [x9, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 2]
+    str     x4,  [x9, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 3]
+    str     x5,  [x9, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 4]
+    str     x6,  [x9, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 5]
+    str     x7,  [x9, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 6]
+    str     x8,  [x9, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 7]
+    str     x10, [x9, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 8]
+    str     x11, [x9, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 9]
+    str     x12, [x9, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 10]
+    str     x13, [x9, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 11]
+    str     x14, [x9, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 12]
+    str     x15, [x9, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 13]
+    str     x18, [x9, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 15]
+    /* Slot layout: x1..x15 -> 0..14, x17 -> 16, x18 -> 15. glibc on aarch64 *pins the
+     * tunable_list pointer in x18* for the whole process (static-pie startup materializes it
+     * with `mov x18,#0` + `movk x18,#0x28`-style immediates and later reads slots with
+     * `ldr x8, [x18, #200]` across syscalls without reloading -- the crash that dictated this
+     * slot), and the heap-poison pattern reuses x1, so both must survive; the trampoline
+     * adrp/add pair below clobbers only x16, so both stores here still see the app's values. */
+    str     x17, [x9, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 16]
 
     cmp     x8, #SYSCALL_RT_SIGRETURN
     adrp    x16, pal_syscall_return
@@ -144,6 +170,9 @@ el0_sync_entry:
     adrp    x16, pal_sigreturn_return
     add     x16, x16, :lo12:pal_sigreturn_return
 .Lsvc_libos:
+    /* run the syscall on the thread's own user stack (x86: rsp never left ring-3 stack) */
+    mrs     x17, sp_el0
+    mov     sp, x17
     ldr     x9, [x9, #PAL_TCB_LIBOS]          /* struct libos_tcb embedded in the PAL TCB */
     cbz     x9, hang                          /* LibOS not initialized on this thread yet */
     ldr     x9, [x9, #8]                      /* common.libos_syscall_entry (LibOS wrote it) */
@@ -211,14 +240,35 @@ el0_sync_entry:
  * "kernel runs on user stack" switch, which is balanced by C's normal returns),
  * so -- exactly like sysretq -- only the return address needs writing. SPSR for
  * the eret is 0: EL0t with all DAIF masks cleared (x86: RFLAGS |= IF).
+ * The app's live scratch registers come back from the entry-side snapshot (see the
+ * syscall_scratch note in kernel_thread.h): x1 is *not* usable as the ELR scratch
+ * here, because glibc's ptmalloc_init poisons the heap with `svc (getrandom);
+ * add x19, sp, x1` -- reusing the preserved length argument -- and storing the
+ * tunables output through x19 = sp + <the resume address we put in x1> produced a
+ * wild write (permission fault, FAR = stack + <code address>). x16/x17 are the
+ * allowed clobbers (x86 sysret rcx/r11 parity).
  * --------------------------------------------------------------------------- */
     globl pal_syscall_return
 pal_syscall_return:
     mrs     x16, tpidr_el1
     ldr     x16, [x16, #PER_CPU_DATA_CUR_TCB]
-    ldr     x1, [x16, #PAL_TCB_VM_USER_RIP]
-    msr     elr_el1, x1
+    ldr     x17, [x16, #PAL_TCB_VM_USER_RIP]
+    msr     elr_el1, x17                      /* park the resume address in the sysreg: even
+                                                 x17 must come back from the frame (only the
+                                                 user x16 dies here, as the entry path's adrp
+                                                 scratch -- x86 sysret %rcx parity) */
     msr     spsr_el1, xzr
+    add     x17, x16, #PAL_TCB_VM_SYSCALL_SCRATCH
+    ldp     x1,  x2,  [x17, #8 * 0]
+    ldp     x3,  x4,  [x17, #8 * 2]
+    ldp     x5,  x6,  [x17, #8 * 4]
+    ldp     x7,  x8,  [x17, #8 * 6]
+    ldp     x9,  x10, [x17, #8 * 8]
+    ldp     x11, x12, [x17, #8 * 10]
+    ldp     x13, x14, [x17, #8 * 12]
+    ldr     x15, [x17, #8 * 14]
+    ldr     x18, [x17, #8 * 15]
+    ldr     x17, [x17, #8 * 16]               /* frame base's own slot, restored last */
     eret
 
 /* ---------------------------------------------------------------------------

@@ -64,6 +64,8 @@ const struct generated_offset generated_offsets[] = {
     OFFSET(PAL_TCB_VM_USER_RIP, pal_tcb_vm, kernel_thread.context.user_rip),
     /* TPIDR_EL0 value belonging to this thread (x86 user_fsbase) */
     OFFSET(PAL_TCB_VM_CONTEXT_USER_TLS, pal_tcb_vm, kernel_thread.context.user_tls),
+    /* syscall snapshot of x1..x15/x18 (Linux syscall ABI preserves them; see kernel_thread.h) */
+    OFFSET(PAL_TCB_VM_SYSCALL_SCRATCH, pal_tcb_vm, kernel_thread.context.syscall_scratch),
 
     /* struct thread: the eret frames and sigreturn scratch, based at pal_tcb_vm
      * (`struct thread kernel_thread` is not its first member, so OFFSET(thread, ...) values

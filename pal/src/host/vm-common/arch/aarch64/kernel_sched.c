@@ -61,13 +61,26 @@ static uint64_t get_pstate_for_saved_context(void) {
     return result & ~(uint64_t)0x3c0; /* clear D,A,I,F (bits [9:6]) */
 }
 
+/* Read the live user TLS register (x86: rdmsr(MSR_IA32_FS_BASE)). Legal from EL1: it is the
+ * EL0-accessible register, not the EL1 kernel one (TPIDR_EL1 -- our per-CPU base). */
+static uint64_t arm_get_user_tls(void) {
+    uint64_t val;
+    __asm__ volatile("mrs %0, tpidr_el0" : "=r"(val));
+    return val;
+}
+
 static void save_userland_context(struct thread* curr_thread, struct isr_regs* userland_regs) {
     if (!curr_thread)
         return;
 
-    /* we don't save TPIDR_EL0 (the user TLS register) here because Gramine doesn't use/modify it
-     * while the thread runs in EL0; only the app uses it, and curr_thread->context.user_tls keeps
-     * the value we install on each return to EL0 (same reasoning as x86's user_fsbase above) */
+    /* Save the live TPIDR_EL0. This is *required* in a way x86's FS_BASE is not: glibc's TLS
+     * setup on aarch64 is `msr tpidr_el0` executed by the app at EL0 (there is no arch_prctl
+     * analog to trap), so the kernel's cached context.user_tls only learns the app's TCB by
+     * sampling the register at switch-out. Every sched_thread* below overwrites TPIDR_EL0
+     * with the incoming thread's cached copy, so skipping this capture silently gave the
+     * resumed app a NULL TLS base -- its next printf read a TSD slot through 0 and died with
+     * a level-2 permission fault at the low-device identity window. */
+    curr_thread->context.user_tls = arm_get_user_tls();
 
     memcpy(curr_thread->context.fpregs, userland_regs->fpregs, g_xsave_size);
 
@@ -198,11 +211,11 @@ void sched_thread(uint32_t* lock_to_unlock, int* clear_child_tid) {
         return;
     }
 
-    /* restore the incoming thread's user TLS (TPIDR_EL0) before switching; on a cooperative
-     * switch the outgoing thread is executing Gramine/PAL code, but its *user* TLS value is
-     * whatever was installed at its last return-to-EL0 (or creation), which the el0 entry asm
-     * saves into context.user_tls on the thread's first syscall. For threads that never entered
-     * EL0 yet this is 0, same as x86's freshly-created user_fsbase. */
+    /* Save the outgoing thread's live user TLS before overwriting it (see the
+     * save_userland_context comment for why the kernel cannot see app-side writes any other
+     * way); then restore the incoming thread's cached copy (x86: wrmsr(FS_BASE)). */
+    if (curr_thread)
+        curr_thread->context.user_tls = arm_get_user_tls();
     uint64_t next_user_tls = next_thread->context.user_tls;
     __asm__ volatile("msr tpidr_el0, %0" :: "r"(next_user_tls));
 
@@ -231,6 +244,7 @@ void sched_thread_wait(int* futex_word, spinlock_t* lock) {
 
     assert(next_thread != curr_thread);
 
+    curr_thread->context.user_tls = arm_get_user_tls();
     uint64_t next_user_tls = next_thread->context.user_tls;
     __asm__ volatile("msr tpidr_el0, %0" :: "r"(next_user_tls));
 
