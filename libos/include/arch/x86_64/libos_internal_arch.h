@@ -20,3 +20,8 @@ static inline bool libos_arch_repair_illegal_insn(PAL_CONTEXT* context) {
     (void)context;
     return false;
 }
+
+/* aarch64 restart mirror hook (see the aarch64 version): not needed on x86_64. */
+static inline void libos_arch_save_restart_arg0(PAL_CONTEXT* context) {
+    (void)context;
+}

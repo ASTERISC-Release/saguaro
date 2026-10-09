@@ -123,12 +123,6 @@ void restore_sigreturn_context(PAL_CONTEXT* context, __sigset_t* new_mask);
  * Used e.g. in Linux-SGX PAL to handle `syscall` instruction.
  */
 bool maybe_emulate_syscall(PAL_CONTEXT* context);
-#ifdef __aarch64__
-/* Prototype: rewrite a trapped `svc #0` site to skip the seccomp trap next time (opt-in via
- * `sys.rewrite_syscalls`). See arch/aarch64/libos_syscall_patch.c. */
-bool libos_try_patch_syscall_site(uintptr_t pc);
-bool libos_syscall_site_was_patched(uintptr_t pc);
-#endif
 
 /*!
  * \brief Handle a signal.

@@ -27,3 +27,18 @@ bool libos_arch_is_intentional_internal_insn(uintptr_t addr);
  * the application (here: stale pointer-authentication signatures in forked children). Returns
  * true if the context was repaired and execution should simply resume. */
 bool libos_arch_repair_illegal_insn(PAL_CONTEXT* context);
+
+/* Lazy rewriting of trapped `svc #0` sites (sys.rewrite_syscalls); see
+ * arch/aarch64/libos_syscall_patch.c. The first tries to rewrite the site at \p pc; the second
+ * recognizes a site that another thread rewrote between this thread's trap and its handler. */
+bool libos_try_patch_syscall_site(uintptr_t pc);
+bool libos_syscall_site_was_patched(uintptr_t pc);
+
+/* aarch64 restart mirror: x0 is both the first syscall argument and the return-value register, so
+ * the argument is saved before the return value overwrites it and restored when the syscall is
+ * restarted (mirroring the arm64 kernel's pt_regs->orig_x0). See restart_syscall(). x86_64's
+ * return register (%rax) is distinct from its first argument register (%rdi), so it needs
+ * nothing. */
+static inline void libos_arch_save_restart_arg0(PAL_CONTEXT* context) {
+    context->orig_x0 = context->regs[0];
+}

@@ -45,16 +45,9 @@ noreturn void libos_emulate_syscall(PAL_CONTEXT* context) {
         debug_print_syscall_after(sysnr, ret, ALL_SYSCALL_ARGS(context));
     }
 out:
-    /* aarch64 restart mirror: x0 is both the first syscall argument and the return-value
-     * register (on x86_64 the return slot %rax is distinct from arg0's %rdi, so restarting a
-     * syscall never disturbs its arguments there and nothing equivalent is needed). Everything
-     * downstream -- in particular handle_signal()'s -ERESTART* classification via
-     * pal_context_get_retval() -- reads the return value written below, so we must not skip
-     * that write; instead we snapshot arg0 here and aarch64's restart_syscall() restores it
-     * when the syscall is re-dispatched (mirroring the arm64 kernel's pt_regs->orig_x0). */
-#if defined(__aarch64__)
-    context->orig_x0 = context->regs[0];
-#endif
+    /* Architectures whose return register aliases the first argument register save that
+     * argument here, so that restart_syscall() can restore it (see libos_internal_arch.h). */
+    libos_arch_save_restart_arg0(context);
     pal_context_set_retval(context, ret);
 
     /* Some syscalls e.g. `sigreturn` could have changed context and in reality we might be not
