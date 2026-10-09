@@ -87,7 +87,7 @@ if [ ! -e "$WORK/vhostfs" ]; then
     exit 1
 fi
 
-timeout ${RUN_TIMEOUT:-20} qemu-system-aarch64 $M "$@" -cpu max -m 2G -smp "$SMP" -nic none \
+timeout ${RUN_TIMEOUT:-20} qemu-system-aarch64 $M "$@" -accel "$ACCEL" -cpu "$CPU" -m 2G -smp "$SMP" -nic none \
     -object memory-backend-memfd,id=ram1,size=2G,share=on -machine memory-backend=ram1 \
     -fw_cfg name=opt/gramine/unixtime_s,string="$(date +%s)" \
     -fw_cfg name=opt/gramine/args,string="-gramine-args init /bin/hello -gramine-args-end" \
