@@ -163,18 +163,38 @@ static elf_dyn_t* find_dynamic_section(elf_addr_t ehdr_addr, elf_addr_t base_dif
     return dynamic_section;
 }
 
+static int find_string_and_symbol_tables_from_dynamic(elf_dyn_t* dynamic_section,
+                                                      elf_addr_t base_diff,
+                                                      const char** out_string_table,
+                                                      elf_sym_t** out_symbol_table,
+                                                      uint32_t* out_symbol_table_cnt);
+
 int find_string_and_symbol_tables(elf_addr_t ehdr_addr, elf_addr_t base_diff,
                                   const char** out_string_table, elf_sym_t** out_symbol_table,
                                   uint32_t* out_symbol_table_cnt) {
-    const char* string_table  = NULL;
-    elf_sym_t* symbol_table   = NULL;
-    uint32_t symbol_table_cnt = 0;
-
     elf_dyn_t* dynamic_section = find_dynamic_section(ehdr_addr, base_diff);
     if (!dynamic_section) {
         log_error("Loaded binary doesn't have dynamic section (required for symbol resolution)");
         return -PAL_ERROR_DENIED;
     }
+
+    return find_string_and_symbol_tables_from_dynamic(dynamic_section, base_diff,
+                                                      out_string_table, out_symbol_table,
+                                                      out_symbol_table_cnt);
+}
+
+/* Same as above but from an already-located dynamic section. Required by the aarch64 vm PAL:
+ * its own ELF header/program headers are not mapped into memory (QEMU's arm ELF loader rejects
+ * a PT_LOAD covering the file header), so the phdr-based entry cannot run for the PAL binary
+ * itself -- the linker script exports the .dynamic address directly instead. */
+static int find_string_and_symbol_tables_from_dynamic(elf_dyn_t* dynamic_section,
+                                                      elf_addr_t base_diff,
+                                                      const char** out_string_table,
+                                                      elf_sym_t** out_symbol_table,
+                                                      uint32_t* out_symbol_table_cnt) {
+    const char* string_table  = NULL;
+    elf_sym_t* symbol_table   = NULL;
+    uint32_t symbol_table_cnt = 0;
 
     /* iterate through DSO's dynamic section to find the string table and the symbol table */
     elf_dyn_t* dynamic_section_entry = dynamic_section;
@@ -315,6 +335,14 @@ static int verify_dynamic_entries(struct link_map* map) {
                 break;
             case DT_DEBUG:
                 /* unused, semantically a no-op */
+                break;
+            case DT_RPATH:
+            case DT_RUNPATH:
+                /* Library search paths -- semantically a no-op for the self-loading PAL
+                 * binary: there is no runtime dynamic linker to consult them (we load our
+                 * own ELFs by explicit path). Emitted e.g. when the mbedtls pkg-config
+                 * dependency's "-Wl,-rpath,${libdir}" is materialized by the linker (arm64
+                 * binutils do this even for the static-only *_pal.a dependencies). */
                 break;
             case DT_PLTGOT:
                 /* address of PLT -- unused because Rela relocs include this addr in the offset */
@@ -800,9 +828,18 @@ int setup_pal_binary(bool apply_relocations) {
     if (ret < 0)
         return ret;
 
+#if defined(__aarch64__) && defined(HOST_TYPE)
+    /* the program headers are not in memory here (see above), so scan the dynamic section
+     * exported by the linker script instead of walking phdrs from l_map_start */
+    ret = find_string_and_symbol_tables_from_dynamic(dynamic_section, pal_base_diff,
+                                                     &g_pal_map.string_table,
+                                                     &g_pal_map.symbol_table,
+                                                     &g_pal_map.symbol_table_cnt);
+#else
     ret = find_string_and_symbol_tables(g_pal_map.l_map_start, g_pal_map.l_base_diff,
                                         &g_pal_map.string_table, &g_pal_map.symbol_table,
                                         &g_pal_map.symbol_table_cnt);
+#endif
     if (ret < 0)
         return ret;
 

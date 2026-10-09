@@ -322,9 +322,16 @@ save_context_and_restore_next:
     ldp     x25, x26, [x16, #25 * 8]
     ldp     x27, x28, [x16, #27 * 8]
     ldp     x29, x30, [x16, #29 * 8]
-    ldr     x16, [x1, #PAL_TCB_VM_CONTEXT_PC]    /* .Lscr_resume_yield or eret trampoline */
+    ldr     x16, [x1, #PAL_TCB_VM_CONTEXT_PC]    /* .Lscr_resume_yield or thread_main_wrapper */
     ldr     x0, [x1, #PAL_TCB_VM_CONTEXT_REGS]   /* x86 movq CONTEXT_RAX,%rax parity */
+    /* thread_main_wrapper's first start takes x1 = callback, x2 = terminate_func from
+     * regs[1]/regs[2] (thread_setup wrote them; x86 parity: wrapper args arrive in rsi/rdx
+     * from the restored frame) -- x1 held the TCB base here and regs[1] was never loaded,
+     * so freshly created threads `blr`'d into the TCB itself. Resumed (.Lscr_resume_yield)
+     * threads never read x1/x2, so clobbering them is harmless there. Load through x1 last. */
+    ldr     x2, [x1, #PAL_TCB_VM_CONTEXT_REGS + 16]
     ldr     x6, [x1, #PAL_TCB_VM_CONTEXT_SP]
+    ldr     x1, [x1, #PAL_TCB_VM_CONTEXT_REGS + 8]
     mov     sp, x6
     br      x16
 
