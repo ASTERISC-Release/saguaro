@@ -15,9 +15,7 @@
 set -uo pipefail
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 DIR=$HERE/../libos/test/regression
-GRAMINE_PREFIX=${GRAMINE_PREFIX:-$HOME/.local/gramine}
-export PATH="$GRAMINE_PREFIX/bin:$PATH"
-export PYTHONPATH="$GRAMINE_PREFIX/lib/python3.12/site-packages${PYTHONPATH:+:$PYTHONPATH}"
+. "$HERE/gramine-env.sh"   # GRAMINE_PREFIX, PATH, PYTHONPATH
 FAILDIR=${FAILDIR:-/tmp/rewrite-stress-fail}
 N=40; MODE=""; SCEN=(); TMO=${TMO:-30}
 while [ $# -gt 0 ]; do

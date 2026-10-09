@@ -23,9 +23,7 @@
 set -uo pipefail
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 ROOT=$(dirname "$HERE")
-GRAMINE_PREFIX=${GRAMINE_PREFIX:-$HOME/.local/gramine}
-export PATH="$GRAMINE_PREFIX/bin:$PATH"
-export PYTHONPATH="$GRAMINE_PREFIX/lib/python3.12/site-packages${PYTHONPATH:+:$PYTHONPATH}"
+. "$ROOT/scripts/gramine-env.sh"   # GRAMINE_PREFIX, PATH, PYTHONPATH
 ITERS=${ITERS:-300000}; REPS=${REPS:-7}
 REDIS_N=${REDIS_N:-200000}; REDIS_C=${REDIS_C:-50}
 RESULT=${RESULT:-$HERE/results/$(date +%F)_$(hostname -s)_$(uname -m).txt}

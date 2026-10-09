@@ -13,7 +13,7 @@
 #
 # Environment overrides:
 #   GRAMINE_PREFIX   install prefix (default: ~/.local/gramine)
-#   LOGDIR           per-test log directory (default: $LOGDIR)
+#   LOGDIR           per-test log directory (default: ${TMPDIR:-/tmp}/gramine-multiarch-tests)
 #
 # The script is architecture-neutral and also runs on x86_64 for parity
 # testing, given a Gramine install built for that host (set GRAMINE_PREFIX to
@@ -84,11 +84,8 @@
 
 set -u
 
-GRAMINE_PREFIX="${GRAMINE_PREFIX:-$HOME/.local/gramine}"
 REPO="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
-export PATH="$GRAMINE_PREFIX/bin:$PATH"
-export PYTHONPATH="$GRAMINE_PREFIX/lib/python3.12/site-packages${PYTHONPATH:+:$PYTHONPATH}"
-LOGDIR="${LOGDIR:-$LOGDIR}"
+. "$REPO/scripts/gramine-env.sh"   # GRAMINE_PREFIX, PATH, PYTHONPATH, LOGDIR
 mkdir -p "$LOGDIR"
 
 ALL_SUITES=(pal libos helloworld multithread busybox bash redis memcached \
