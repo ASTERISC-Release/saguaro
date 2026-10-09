@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
+/* Copyright (C) 2026 The ASTERISC Research Lab */
 /*
  * fcntl(F_DUPFD, F_DUPFD_CLOEXEC) follow the kernel "lowest free fd >= arg" (minimum)
  * semantics, including the self-referential minimum that tokio uses as an epoll probe

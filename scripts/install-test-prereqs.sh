@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
 #
 # Installs the host prerequisites for building Gramine and running ./run_all_tests.sh
 # (Debian/Ubuntu). Idempotent: only missing packages are installed; sudo may prompt for a password.

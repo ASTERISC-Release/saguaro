@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: LGPL-3.0-or-later */
+/* Copyright (C) 2026 The ASTERISC Research Lab */
 /* stub of the x86-only <asm/prctl.h> for syntax-checking x86 code on an aarch64 host */
 #define ARCH_SET_GS 0x1001
 #define ARCH_SET_FS 0x1002

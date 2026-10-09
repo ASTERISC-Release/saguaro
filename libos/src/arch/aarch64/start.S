@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: LGPL-3.0-or-later */
+/* Copyright (C) 2026 The ASTERISC Research Lab */
 /* Our PAL loader invokes this entrypoint with all registers unspecified, except SP.
  * For detailed description of the stack layout see pal/src/pal_rtld.c:start_execution().
  */

@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
+/* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /*
  * aarch64 has no CPUID-leaf equivalent of x86_64's vendor/brand/family/model/stepping scheme.

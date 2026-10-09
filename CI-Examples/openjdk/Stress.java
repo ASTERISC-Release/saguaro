@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2026 The ASTERISC Research Lab
+
 import java.io.*; import java.net.*; import java.util.*; import java.util.concurrent.*; import java.util.concurrent.atomic.*;
 public class Stress {
     static int fib(int n) { return n < 2 ? n : fib(n - 1) + fib(n - 2); }

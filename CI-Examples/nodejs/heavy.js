@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2026 The ASTERISC Research Lab
+
 const { Worker, isMainThread, parentPort, workerData } = require('worker_threads');
 const crypto = require('crypto'), http = require('http'), zlib = require('zlib'), os = require('os');
 function fib(n) { return n < 2 ? n : fib(n - 1) + fib(n - 2); }

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
 #
 # install.sh — build and install the Gramine (Tirith fork) "direct" PAL,
 # following the same steps documented in run_all_tests.sh's header, and

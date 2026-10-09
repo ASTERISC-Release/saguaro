@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
 # Usage: run_examples.sh [--prereqs] [examples-dir]   (default dir: ../../CI-Examples)
 #   --prereqs   first run CI-Examples/install-all-prereqs.sh (apt/sudo; downloads mongod)
 set -uo pipefail

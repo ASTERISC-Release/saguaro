@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: BSD-3-Clause
+# Copyright (C) 2026 The ASTERISC Research Lab
 # Runs every example's install-prereqs.sh (or only the named examples). DRY_RUN=1 to preview.
 #   CI-Examples/install-all-prereqs.sh            # curl gcc iperf mongodb nodejs openjdk pytorch r
 #   CI-Examples/install-all-prereqs.sh nodejs r

@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: BSD-3-Clause
+# Copyright (C) 2026 The ASTERISC Research Lab
 # Shared helpers for the per-example `install-prereqs.sh` scripts (source this file).
 #
 # Behaviour: idempotent; only installs what is missing; uses `sudo` (may prompt for a password)

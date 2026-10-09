@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
+/* Copyright (C) 2026 The ASTERISC Research Lab */
 /*
  * Regression test for FEAT_PAuth (branch-target/pac-ret) return addresses across fork().
  *

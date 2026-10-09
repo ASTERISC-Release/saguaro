@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (C) 2026 The ASTERISC Research Lab
+
 import sys, time, threading
 from pymongo import MongoClient, ASCENDING
 port = int(sys.argv[1]) if len(sys.argv) > 1 else 27017

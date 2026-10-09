@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (C) 2026 The ASTERISC Research Lab
 # nginx CI example on hosts without distro libssl-dev/libpcre-dev:
 #  - PCRE: built standalone into deps/pcre-install; nginx gets the bare --with-pcre
 #    (which is what sets USE_PCRE=YES and compiles src/core/ngx_regex.c into nginx;

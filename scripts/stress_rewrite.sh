@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
 #
 # stress_rewrite.sh — repeat the rewrite_stress scenarios many times (the interesting races only
 # happen on cold processes, so each run is a fresh gramine-direct).
@@ -23,7 +24,7 @@ while [ $# -gt 0 ]; do
     case "$1" in
         -n) N=$2; shift 2 ;;
         --rewrite) MODE=$2; shift 2 ;;
-        -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
+        -h|--help) sed -n '/^# stress_rewrite.sh/,/^set -/p' "$0" | sed '$d'; exit 0 ;;
         *) SCEN+=("$1"); shift ;;
     esac
 done

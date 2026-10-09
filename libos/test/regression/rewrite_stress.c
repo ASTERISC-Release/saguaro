@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
+/* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /*
  * Stress test for lazy `svc` site rewriting (sys.rewrite_syscalls, aarch64). Every scenario starts

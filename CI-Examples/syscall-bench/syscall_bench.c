@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
+/* Copyright (C) 2026 The ASTERISC Research Lab */
 /* Microbenchmark: per-call cost of raw syscalls (glibc's inline `svc #0` / `syscall`).
  * Run natively and under gramine-direct to measure the interception overhead. */
 #define _GNU_SOURCE

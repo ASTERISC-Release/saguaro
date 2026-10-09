@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
 #
 # syntax-check-x86.sh — type-check the LibOS and Linux-PAL sources against the *x86_64* arch headers
 # on an aarch64 host (no x86 toolchain needed). It reuses the compile commands of an existing

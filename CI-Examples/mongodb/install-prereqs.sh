@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: BSD-3-Clause
+# Copyright (C) 2026 The ASTERISC Research Lab
 # Installs the host prerequisites for the mongodb example (Debian/Ubuntu). Idempotent; DRY_RUN=1 to
 # preview. Instead of adding MongoDB's third-party apt repository (needs a signing key and root),
 # this downloads the official release tarball, verifies its SHA-256 and unpacks it under

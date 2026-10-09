@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: BSD-3-Clause
+# Copyright (C) 2026 The ASTERISC Research Lab
 #
 # run_benchmarks.sh — performance benchmarks for the direct PAL (native vs gramine-direct).
 #

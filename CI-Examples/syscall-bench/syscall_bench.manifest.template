@@ -1,4 +1,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
+# Copyright (C) 2026 The ASTERISC Research Lab
+
 libos.entrypoint = "/syscall_bench"
 loader.log_level = "{{ log_level }}"
 {% if rewrite == "1" %}sys.rewrite_syscalls = true{% elif rewrite == "0" %}sys.rewrite_syscalls = false{% endif %}

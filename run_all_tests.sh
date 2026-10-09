@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
 #
 # run_all_tests.sh — run the full aarch64 port test battery:
 #   PAL regression, LibOS regression, and the CI example applications
@@ -96,7 +98,7 @@ RUN=()
 declare -a REQUESTED=()
 for arg in "$@"; do
     case "$arg" in
-        -h|--help)  awk '/^set -u/{exit} /^#/{sub(/^# ?/,""); print}' "$0" | tail -n +2; exit 0 ;;
+        -h|--help)  awk '/^set -u/{exit} /^# run_all_tests.sh/{p=1} p&&/^#/{sub(/^# ?/,""); print}' "$0"; exit 0 ;;
         --list)     printf '%s\n' "${ALL_SUITES[@]}"; exit 0 ;;
         --no-build) DO_BUILD=0 ;;
         *)          matched=0
