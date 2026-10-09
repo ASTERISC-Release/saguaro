@@ -34,7 +34,7 @@ Supported configurations
      - AMD64
      - AArch64
    * - ``direct`` (``gramine-direct``, an ordinary Linux process)
-     - ⚠️ inherited from upstream; being re-validated here
+     - ✅ inherited from upstream; being re-validated here
      - ✅ inherited from upstream; being re-validated here
      - ✅ works; regression suites and example applications pass
    * - ``vm`` (``gramine-vm``, a unikernel in a QEMU guest)
