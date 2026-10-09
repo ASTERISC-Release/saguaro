@@ -119,32 +119,14 @@ Development
 Resources
 ---------
 
-The Gramine project provides resources to help you understand and develop it.
-The resources page contains a description of features of Gramine, a list of
-maintainers, a list of users of Gramine, introduction to the Intel SGX
-technology and a glossary to help you with any questions you may have.
+The resources below help you understand and develop Gramine: a description of
+its features, an introduction to the Intel SGX technology and a glossary.
 
 - :doc:`devel/features` -- This page has a comprehensive description of
   implemented and unimplemented features of Gramine, including the lists of
   available system calls and pseudo-files.
-- :doc:`management-team` - This page lists maintainers of Gramine.
-- :doc:`gramine-users` - See what companies use Gramine for their confidential
-  computing needs.
 - :doc:`sgx-intro` - Learn about the Intel SGX technology and software stack.
 - :doc:`glossary` - Become familiar with the terms used in Gramine.
-
-Getting help
-------------
-
-For any questions, please use `GitHub Discussions
-<https://github.com/gramineproject/gramine/discussions>`__ or join us on our
-`Gitter chat <https://gitter.im/gramineproject/community>`__.
-
-For bug reports and feature requests, `post an issue on our GitHub repository
-<https://github.com/gramineproject/gramine/issues>`__.
-
-If you prefer emails, please send them to users@gramineproject.io (`public
-archive <https://groups.google.com/g/gramine-users>`__).
 
 Indices and tables
 ------------------
@@ -210,7 +192,5 @@ Indices and tables
    :maxdepth: 1
 
    devel/features
-   management-team
-   gramine-users
    sgx-intro
    glossary
