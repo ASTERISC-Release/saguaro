@@ -44,7 +44,27 @@ call_elf_entry:
     mov  x8, #0
     msr  fpcr, x2
     msr  nzcv, x2
+#ifdef HOST_TYPE
+    /* VM-PAL (aarch64 Milestone B, HOST_TYPE is defined only in the vm build): we run this
+     * jump-once from pal_start_continue at EL1 (start_execution `br`'d here from kernel context,
+     * exactly like x86's `jmp rdi` in ring 0), and this is the kernel's deliberate, one-way
+     * privilege drop into userland. x86 gets its first ring-3 transition for free: ring-0
+     * `syscall` still vectoring through LSTAR plus `sysretq`'s unconditional CPL=3 return
+     * (sysret_asm) quietly drop the app to ring 3 after its first syscall. aarch64's `svc`
+     * executed at EL1 is architecturally undefined -- it never reaches the EL0 vector table --
+     * so the transition must be explicit here, at the exact point where the final user stack
+     * (argp) is installed. eret to EL0 does not reload any GPR and does not restore SP -- an
+     * EL0 target runs on SP_EL0, which must therefore be written through its sysreg directly.
+     * SPSR = 0: EL0t with DAIF unmasked (x86 parity: sysret_asm's `or $0x200, %r11`). SP_EL1
+     * intentionally keeps the stale kernel-side value: every aarch64 syscall entry (el0_sync)
+     * reloads SP from SP_EL0, so nothing depends on it across the drop. */
+    msr  sp_el0, x17  /* the app's initial stack (eret won't set it for an EL0 target) */
+    msr  elr_el1, x16
+    msr  spsr_el1, xzr
+    eret              /* now at EL0: subsequent `svc` trap to el0_sync_entry */
+#else
     mov  sp, x17      /* set stack pointer to second arg */
     br   x16          /* jump to entry point */
+#endif
 
 .section .note.GNU-stack,"",%progbits

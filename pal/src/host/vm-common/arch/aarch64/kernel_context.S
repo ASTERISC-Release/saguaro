@@ -106,6 +106,18 @@ hang:
  * --------------------------------------------------------------------------- */
     .balign 128
 el0_sync_entry:
+    /* Only `svc` (EC=0x15) has an EL0->EL1 service path. Any other EL0 synchronous exception
+     * (undefined instruction, data/instruction abort from a wild access, BRK/BKPT, ...) must NOT
+     * be misdispatched as a syscall: without this filter an instruction-fetch abort (e.g. a
+     * non-PIE binary linked below the DRAM base, where the identity map reaches only into the
+     * physical hole) reports EC=0 at ELR of the very first app instruction, and blindly
+     * "returning from the syscall" at ELR+4 walks faulting one instruction at a time forever.
+     * Full signal delivery for EL0 faults (SIGILL/SIGSEGV via LibOS) is a Milestone-B-tail item
+     * that needs the fine-grained page tables to classify faults; panic visibly until then. */
+    mrs     x16, esr_el1
+    ubfx    x16, x16, #26, #6                      /* EC */
+    cmp     x16, #0x15                             /* SVC64 from AArch64 EL0 */
+    b.ne    .Lel0_sync_unexpected
     mrs     x16, elr_el1                      /* address right after the 4-byte `svc` */
     add     x16, x16, #4
     mrs     x9, tpidr_el1
@@ -129,6 +141,18 @@ el0_sync_entry:
     ldr     x9, [x9, #8]                      /* common.libos_syscall_entry (LibOS wrote it) */
     cbz     x9, hang
     br      x9
+
+.Lel0_sync_unexpected:
+    /* Panic visibly: report ESR/ELR and stop. Scratch stack for the C call is the dead area
+     * below the per-CPU interrupt stack (same region el1_sync uses for its frame; the previous
+     * IRQ's frame is dead once its handler returned). */
+    mrs     x0, esr_el1
+    mrs     x1, elr_el1
+    mrs     x16, tpidr_el1
+    ldr     x16, [x16, #PER_CPU_DATA_INTERRUPT_STACK]
+    sub     sp, x16, #ISR_FRAME_SIZE
+    bl      el0_sync_unexpected_c
+    b       hang
 
 /* ---------------------------------------------------------------------------
  * void pal_syscall_return(void) -- x86 sysret_asm analog, entered via `br x16`

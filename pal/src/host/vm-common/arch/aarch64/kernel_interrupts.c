@@ -98,6 +98,19 @@ void isr_c(struct isr_regs* regs) {
     }
 }
 
+/* EL0 synchronous exception that is not an `svc` (see the EC filter in el0_sync_entry): a
+ * fault in user code with no service path yet (signal delivery needs the fine-grained page
+ * tables). x86 analog: an unhandled exception frame dumped before the kernel gives up.
+ * Entered from asm with x0=ESR, x1=ELR and SP on the dead area below the interrupt stack. */
+void el0_sync_unexpected_c(uint64_t esr, uint64_t elr) {
+    uint64_t far;
+    __asm__ volatile("mrs %0, far_el1" : "=r"(far));
+    log_error("Panic: unexpected EL0 synchronous exception ESR=0x%lx (EC=0x%lx) ELR=0x%lx FAR=0x%lx",
+              esr, esr >> 26, elr, far);
+    log_error("       (only svc/EC=0x15 is serviced from EL0; fault signal delivery is TODO)");
+    triple_fault();
+}
+
 /* Synchronous exception taken *inside the kernel* (EL1). Faults in the unikernel kernel are
  * bugs; report the frame and stop (x86 analog: #PF/#GP panic paths). */
 void isr_kernel_c(struct isr_regs* regs) {

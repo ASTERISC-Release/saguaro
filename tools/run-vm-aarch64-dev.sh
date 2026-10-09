@@ -36,6 +36,32 @@ dtc -I dtb -O dtb -o "$WORK/virt-packed.dtb" "$WORK/virt.dtb"
 # socket and QEMU's RAM must be a shared memfd backend for the vhost-user mapping.
 # (Ubuntu's virtiofsd package installs it under /usr/lib/qemu, off PATH.)
 VIRTIOFSD=$(command -v virtiofsd || echo /usr/lib/qemu/virtiofsd)
+
+# Stage the hello deployment into the shared filesystem (the container's / == the
+# guest's /): /bin/hello.manifest comes from tools/vm-aarch64-stage and /bin/hello
+# is the static aarch64 binary built from the neighboring hello.c. The vm kernel
+# reads argv as `init /bin/hello` (fw_cfg above), i.e. manifest path
+# /bin/hello.manifest; LibOS then loads /bin/hello per the manifest's [libos]
+# entrypoint and libsysdb.so via loader.entrypoint (referenced in place below).
+STAGE="$REPO_ROOT/tools/vm-aarch64-stage"
+if [ ! -x "$STAGE/hello" ]; then
+    if command -v cc >/dev/null; then
+        # -static-pie, not -static: a non-PIE static binary is linked at 0x400680, below the
+        # arm-virt DRAM base (0x40000000) -- the kernel's boot identity map would "back" it with
+        # the physical MMIO hole and every app instruction fetch aborts. ET_DYN makes LibOS
+        # mmap it at an ASLR'd DRAM-backed address instead (what x86 gets for free because
+        # x86 PCs have RAM under 0x400000).
+        cc -static-pie -Os -o "$STAGE/hello" "$STAGE/hello.c"
+    else
+        echo "tools/vm-aarch64-stage/hello not built; run on a host with cc:" >&2
+        echo "  cc -static-pie -Os -o $STAGE/hello $STAGE/hello.c" >&2
+        exit 1
+    fi
+fi
+install -Dm755 "$STAGE/hello" /bin/hello
+LIBSYSDB=$(readlink -f "$REPO_ROOT/build-vm-aarch64/libos/src/libsysdb.so")
+sed "s|@LIBSYSDB@|$LIBSYSDB|" "$STAGE/hello.manifest.template" > /bin/hello.manifest
+
 "$VIRTIOFSD" --socket-path "$WORK/vhostfs" --shared-dir / --log-level error \
     --sandbox none --no-announce-submounts >"$WORK/virtiofsd.log" 2>&1 &
 for _ in $(seq 50); do

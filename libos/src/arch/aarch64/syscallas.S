@@ -73,6 +73,18 @@ libos_syscall_entry:
      * pre-multi-thread design that always read g_pal_tcb_singleton here -- correct for one
      * thread, catastrophic for more (all threads then emulated syscalls on *one shared* LibOS
      * stack). */
+#ifdef HOST_TYPE
+    /* VM-PAL (Milestone B): the TLS-keyed registry above is a Linux-PAL mechanism. In the
+     * unikernel, libsysdb runs at EL0 where TPIDR_EL1 is unreadable and the kernel itself
+     * resolves `svc` dispatch; it mirrors this thread's PAL_TCB into g_pal_tcb_singleton on
+     * every context switch next to the cur_tcb store (pal_vm_tcb.c), so one GOT load IS the
+     * "which thread am I" answer. x16 (resume address) and x8 (syscall nr) are never touched
+     * here, so the prologue's stack stash below is not needed either. */
+    adrp x17, :got:g_pal_tcb_singleton
+    ldr  x17, [x17, :got_lo12:g_pal_tcb_singleton]
+    ldr  x17, [x17]
+    b    .Ltcb_tcb_ready
+#else
     .extern g_pal_tcb_registry
     stp  x16, x8, [sp, #-16]!
     mrs  x16, tpidr_el0
@@ -121,6 +133,9 @@ libos_syscall_entry:
     and  x17, x16, #-2                /* strip the pal_set_tcb() tag */
 .Ltcb_done:
     ldp  x16, x8, [sp], #16
+#endif
+
+.Ltcb_tcb_ready:
 
     /* Find the LibOS-internal stack top in the resolved PAL_TCB. */
     ldr  x17, [x17, #(LIBOS_TCB_OFF + LIBOS_TCB_LIBOS_STACK_OFF)]

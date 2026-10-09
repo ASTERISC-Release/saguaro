@@ -971,10 +971,16 @@ noreturn void start_execution(const char** arguments, const char** environs) {
                      : "r"(g_entrypoint_map.l_entry), "r"(stack_entries)
                      : "memory");
 #elif defined(__aarch64__)
-    __asm__ volatile("mov sp, %1\n"
-                     "br %0\n"
-                     :
-                     : "r"(g_entrypoint_map.l_entry), "r"(stack_entries)
+    /* aarch64 SP must be 16-byte aligned at the target's entry (AAPCS64; x86_64 only ever
+     * requires 8-byte alignment on entry, which the alloca'ed `stack_entries` always had).
+     * `alloca` already returns an aligned pointer on GCC/aarch64, but this is the one place
+     * the ABI guarantee is established for the LibOS, so enforce it explicitly -- x86 does
+     * the same thing with `and $~0xF, %rsp` in jump_into_user_mode. */
+    __asm__ volatile("and %0, %0, #-16\n"
+                     "mov sp, %0\n"
+                     "br %1\n"
+                     : "+r"(stack_entries)
+                     : "r"(g_entrypoint_map.l_entry)
                      : "memory");
 #else
 #error "unsupported architecture"

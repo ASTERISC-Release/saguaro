@@ -80,6 +80,20 @@ _start:
     orr     x2, x2, #1                /* M */
     orr     x2, x2, #4                /* C */
     orr     x2, x2, #0x1000           /* I */
+
+    /* Clear PSTATE.PAN (ARMv8.1; QEMU -cpu max boots EL1 with PAN set, as the architecture
+     * mandates) *before* sctlr_el1/M above: with PAN=1, QEMU's walker zeroes the EL1
+     * permissions of every page that is also EL0-rw (get_S1prot's `if (user_rw &&
+     * regime_is_pan(...)) prot_rw = 0`) -- and although the intent is to gate *data*
+     * accesses, result->f.prot is what the instruction-fetch path also checks for
+     * PAGE_EXEC. The kernel's DRAM blocks are EL0-rw (unikernel design), so with PAN still
+     * set the very first translated fetch after the MMU comes up takes a level-1 permission
+     * fault (observed: EC=0x21/FSC=0x0d abort at the `isb` right after `msr sctlr_el1`).
+     * PAN has no policy role here -- the kernel accesses user memory directly, exactly the
+     * `msr pan, #0` Linux's head.S performs for its identity stage. */
+    .arch_extension pan
+    msr     pan, #0
+
     msr     sctlr_el1, x2
     isb
 
@@ -120,9 +134,14 @@ _start:
     .section .data, "aw"
 
 /* L2 table for the first 1GB: 2MB blocks covering the whole QEMU virt device world
- * (512 entries exactly fill the page). Block-descriptor bits: type(01) | AttrIndx [4:2]
- * (Device = 1 -> +0x4) | SH [9:8] (inner = 0b11 -> +0x300) | AF [10] (+0x400)
- * => normal 0x701, device 0x705.
+ * (512 entries exactly fill the page). Block-descriptor bits (same layout at every level,
+ * matching Linux's PMD_* macros and QEMU's walker): valid[0] (L1/L2 blocks are bit[1] == 0,
+ * like Linux's PMD_TYPE_SECT) | AttrIndx [4:2] (Device = 1 -> +0x4) | AP[2:1] [7:6] (0b00 =
+ * EL1-only; 0b01 = EL1 rw + EL0 rw -> +0x40) | SH [9:8] (inner = 0b11 -> +0x300) | AF [10]
+ * (+0x400) => normal 0x701, device 0x705. These entries all stay EL1-only: the device world
+ * must not be reachable from userland, and the DRAM 1GB blocks below are EL1-only at boot
+ * too -- EL0 accessibility is installed per-page by memory_pagetables_init()/B4 (see the L1
+ * table's comment for why the coarse AP = 0b01 experiment cannot work).
  * WARNING: do NOT set bits [33:32] here -- that is the *TCR* SH0 position; in a block
  * descriptor those bits lie INSIDE the output address and would translate every mapping
  * to PA 0x3_0000_0000+addr (unassigned -> "sync external abort on translation walk"). */
@@ -151,8 +170,22 @@ initial_l2_low:
  * translations that the DTB-sized memory map never touches).
  * NOTE: label `2` marks entry 0 so that `(. - 2b) / 8` is the true L1 index for every entry
  * emitted by .rept below (the explicit L1[0] .quad keeps it at index 0 == base + 0).
- * 0x701 = block | AttrIndx 0 (normal WBWA) | SH inner [9:8] | AF [10]; 1GB blocks carry
- * their OA from bit 30, so the descriptor format notes in initial_l2_low apply verbatim. */
+ * 0x701 = block | AttrIndx 0 (normal WBWA) | AP[2:1] = 0b00: EL1-only | SH inner [9:8] |
+ * AF [10]. 1GB blocks carry their OA from bit 30, so the descriptor format notes in
+ * initial_l2_low apply verbatim.
+ * WHY THESE ENTRIES CANNOT SIMPLY BE 0x741 (AP=0b01, "EL1 rw + EL0 rw") -- the naive way to
+ * make userland's data accesses work: QEMU's AArch64 S1 permission model (target/arm/ptw.c
+ * get_S1prot) implements the two-range EL1&0 regime with `xn = pxn || (user_rw & PAGE_WRITE)`,
+ * i.e. an EL1 *instruction fetch* from any page that is EL0-writable permission-faults
+ * (observed: EC=0x21/FSC=0x0d Prefetch Abort at the first translated fetch right after
+ * `msr sctlr_el1` -- the kernel cannot even boot, and PSTATE.PAN=0 does not help, PAN only
+ * gates data accesses). EL0-rw (0b01) + EL1-exec is inexpressible under that rule; the only
+ * encodings that give both EL1 and EL0 execute are AP=0b11 (EL1 ro+x, EL0 ro+x) and AP=0b10
+ * (EL1 ro+x, EL0 none) -- per-page choices the bootloader's coarse 1GB blocks cannot make.
+ * So the coarse map stays EL1-only, the kernel boots on it, and memory_pagetables_init()
+ * swaps in VMSA L2/L3 tables (B4) whose exec pages are AP=0b11 (PAL text and LibOS's
+ * libos_syscall_entry: EL1 dispatches into that code at syscall time) while data/stack
+ * pages become AP=0b01 with PAN kept cleared. */
     .balign 4096
 2:  initial_l1_table:
     .quad   initial_l2_low + 3        /* table descriptor */

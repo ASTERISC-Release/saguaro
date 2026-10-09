@@ -1,0 +1,13 @@
+# Deployment manifest for the aarch64 vm-PAL bring-up (tools/run-vm-aarch64-dev.sh).
+# `@LIBSYSDB@` is replaced with the absolute in-guest path of the built libsysdb.so
+# (the container's / is virtiofs-shared, so container paths == guest paths).
+[libos]
+entrypoint = "/bin/hello"
+
+[loader]
+entrypoint = "file:@LIBSYSDB@"
+log_level = "debug"
+
+[[fs.mounts]]
+path = "/bin/hello"
+uri = "file:/bin/hello"
