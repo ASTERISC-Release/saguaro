@@ -93,8 +93,10 @@ struct thread_context {
      * svc and hides this. First two victims without it, both from glibc static-pie malloc
      * init: ptmalloc_init poisons the heap as `mov x1,#8; svc (getrandom); add x19, sp, x1`
      * (reusing the preserved length argument), and the tunables machinery reads
-     * `ldr x8, [x18, #200]`-style slots with x18 pinned to tunable_list across syscalls. */
-    uint64_t syscall_scratch[17];
+     * `ldr x8, [x18, #200]`-style slots with x18 pinned to tunable_list across syscalls. The
+     * clone3 child's `blr x11` contract (fn/arg inherited across the parent's svc) is what
+     * caught the original off-by-one that dropped x9 and shifted x10..x15 down a slot. */
+    uint64_t syscall_scratch[18];
 #endif
 }
 /* On x86_64 all members are 8-byte naturally-aligned, so packed is a no-op kept for upstream

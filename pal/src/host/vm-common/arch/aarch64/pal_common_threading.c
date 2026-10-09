@@ -81,8 +81,23 @@ int pal_common_thread_create(struct pal_handle** handle, int (*callback)(void*),
      * thread_handle jumps to the `eret`-based return-to-user trampoline (x86 `sysret_asm`), which
      * expects user_rip to point to actual EL0 rip */
     struct pal_tcb_vm* curr_tcb = (struct pal_tcb_vm*)pal_get_tcb();
-    if (curr_tcb)
+    if (curr_tcb) {
         tcb->kernel_thread.context.user_rip = curr_tcb->kernel_thread.context.user_rip;
+
+        /* Linux clone() semantics: the child resumes right after the parent's `svc` with a
+         * *copy of the parent's pt_regs* (only x0 differs: 0 for the child). On aarch64 glibc's
+         * clone keeps the thread fn in x10 and its arg in x12 *across the svc* (clone+0x58:
+         * `mov x0, x12; blr x10`) -- x86's glibc instead stashes them on the child's stack, so
+         * x86's sysret_asm trampoline (which restores no GPRs) suffices there but aarch64's
+         * cannot: an unseeded child returns through pal_syscall_return with calloc'd-zero
+         * scratch slots and jumps through x10 = 0. The creator's scratch slots hold exactly the
+         * parent snapshot the child must inherit (taken at el0_sync_entry, never written by the
+         * EL1 dispatcher), including the process-wide x18 pinning. Non-clone PAL threads get a
+         * meaningless seed -- they never eret to userland, so it is inert. */
+        memcpy(tcb->kernel_thread.context.syscall_scratch,
+               curr_tcb->kernel_thread.context.syscall_scratch,
+               sizeof(tcb->kernel_thread.context.syscall_scratch));
+    }
 
     sched_thread_add(&tcb->kernel_thread);
 

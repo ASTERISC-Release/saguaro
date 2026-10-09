@@ -127,19 +127,36 @@ el0_sync_entry:
      * stores the brk() result, which stored through a stale x2 = garbage (ELR=app+0x182b8 with
      * FAR in the EL1-only device window). Linux's aarch64 syscall path likewise does not
      * increment ELR anywhere; the "skip the svc" duty is hardware's. */
+    msr     spsr_el1, x9                      /* park the app's x9 (see snapshot comment) */
     mrs     x16, elr_el1                      /* address right after the 4-byte `svc` */
     mrs     x9, tpidr_el1
     ldr     x9, [x9, #PER_CPU_DATA_CUR_TCB]   /* x86 %gs base, two loads instead */
     cbz     x9, hang                          /* svc with no thread context: cannot happen */
     str     x16, [x9, #PAL_TCB_VM_USER_RIP]
+    mrs     x16, spsr_el1                     /* x16 is snapshot store scratch from here on */
+    str     x16, [x9, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 8]
     /* Snapshot the registers the Linux syscall ABI hands back to EL0. The LibOS dispatcher
      * is C at EL1 (all of x0..x18 are C-caller-saved), so x1..x15/x17/x18 would otherwise die
      * in it -- Linux takes a full pt_regs snapshot per svc and hides this; x86 needs no
      * equivalent because the x86 dispatcher never leaves user values in registers the C ABI
      * does not preserve (x0..x15 there are exactly the kernel-clobbered set). x0 is the
      * result slot (passed through), x16 stays kernel-owned scratch like x86's sysret rcx
-     * clobber that glibc declares dead. x9 (TCB base) is the only register this loop may not
-     * use as a source; it stops being needed right after the last store. */
+     * clobber that glibc declares dead. The app's x9 is the only awkward one: x9 becomes
+     * the TCB store base below, so its user value is parked in SPSR_EL1 *before* the `mrs`
+     * clobbers it and read back right after the TCB load. That parking spot is safe: the
+     * entry-time SPSR is never read back by anything (pal_syscall_return overwrites it with
+     * its eret value, pal_sigreturn_return with the frame's) and exception entry to EL1
+     * hardware-masks IRQs, so nothing can touch it between park and readback. Slot layout:
+     * x1..x15 -> 0..14 (slot 8 = the app's x9), x18 -> 15, x17 -> 16 -- the exact set the
+     * Linux syscall ABI preserves across
+     * `svc`, which pal_syscall_return's ldp pairs read back. glibc on aarch64 *pins the
+     * tunable_list pointer in x18* for the whole process (static-pie startup materializes it
+     * with `mov x18,#0` + `movk x18,#0x28`-style immediates and later reads slots with
+     * `ldr x8, [x18, #200]` across syscalls without reloading -- the crash that dictated
+     * this slot), the heap-poison pattern reuses x1, and glibc's clone3/clone child paths
+     * call fn with x11/x12 inherited from the parent across the svc. An off-by-one here
+     * (dropping x9 and shifting x10..x15 down a slot) is what made the clone child's
+     * `blr x11` jump to 0: the kernel's `slot[k]` must be exactly `x(k+1)` for all k. */
     str     x1,  [x9, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 0]
     str     x2,  [x9, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 1]
     str     x3,  [x9, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 2]
@@ -148,19 +165,13 @@ el0_sync_entry:
     str     x6,  [x9, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 5]
     str     x7,  [x9, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 6]
     str     x8,  [x9, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 7]
-    str     x10, [x9, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 8]
-    str     x11, [x9, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 9]
-    str     x12, [x9, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 10]
-    str     x13, [x9, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 11]
-    str     x14, [x9, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 12]
-    str     x15, [x9, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 13]
+    str     x10, [x9, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 9]
+    str     x11, [x9, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 10]
+    str     x12, [x9, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 11]
+    str     x13, [x9, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 12]
+    str     x14, [x9, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 13]
+    str     x15, [x9, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 14]
     str     x18, [x9, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 15]
-    /* Slot layout: x1..x15 -> 0..14, x17 -> 16, x18 -> 15. glibc on aarch64 *pins the
-     * tunable_list pointer in x18* for the whole process (static-pie startup materializes it
-     * with `mov x18,#0` + `movk x18,#0x28`-style immediates and later reads slots with
-     * `ldr x8, [x18, #200]` across syscalls without reloading -- the crash that dictated this
-     * slot), and the heap-poison pattern reuses x1, so both must survive; the trampoline
-     * adrp/add pair below clobbers only x16, so both stores here still see the app's values. */
     str     x17, [x9, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 16]
 
     cmp     x8, #SYSCALL_RT_SIGRETURN
@@ -235,10 +246,10 @@ el0_sync_entry:
  * void pal_syscall_return(void) -- x86 sysret_asm analog, entered via `br x16`
  * from the LibOS syscall epilogue with the syscall result in x0.
  *
- * SP_EL0 is untouched by everything we ran (svc doesn't change it and the kernel
- * only ever used SP_EL1 for its bookkeeping, with the exception of the deliberate
- * "kernel runs on user stack" switch, which is balanced by C's normal returns),
- * so -- exactly like sysretq -- only the return address needs writing. SPSR for
+ * SP_EL0 comes from the current EL1 SP: the LibOS epilogue switched to the thread's saved user
+ * stack (`mov sp, regs->sp`) before branching here, and that stack *is* the thread's SP_EL0
+ * value at svc time (the whole syscall ran on it, x86's RSP-never-leaves-ring-3 model), so the
+ * per-CPU SP_EL0 sysreg is refreshed to *this* thread's stack right before the eret. SPSR for
  * the eret is 0: EL0t with all DAIF masks cleared (x86: RFLAGS |= IF).
  * The app's live scratch registers come back from the entry-side snapshot (see the
  * syscall_scratch note in kernel_thread.h): x1 is *not* usable as the ELR scratch
@@ -258,6 +269,14 @@ pal_syscall_return:
                                                  user x16 dies here, as the entry path's adrp
                                                  scratch -- x86 sysret %rcx parity) */
     msr     spsr_el1, xzr
+    /* SP_EL0 is a *per-CPU* sysreg, not per-thread: whenever any thread eret'd to EL0 or was
+     * preempted, it left its own user stack in it. With more than one EL0 thread the resumed
+     * thread would run with the last-switched-out thread's SP_EL0. Here the EL1 SP *is* the
+     * resumed thread's user stack (_return_from_syscall does `mov sp, regs->sp` before its
+     * `br` into this trampoline), so installing it is both required and correct (Linux does
+     * the same dance in its ret-to-userspace path). */
+    mov     x17, sp
+    msr     sp_el0, x17
     add     x17, x16, #PAL_TCB_VM_SYSCALL_SCRATCH
     ldp     x1,  x2,  [x17, #8 * 0]
     ldp     x3,  x4,  [x17, #8 * 2]

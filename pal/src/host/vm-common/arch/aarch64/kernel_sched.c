@@ -182,9 +182,8 @@ void sched_thread_uninterruptable(struct isr_regs* userland_regs) {
      * userland context and rewire PC to point to a special "return via eret" assembly. */
     save_userland_context(curr_thread, userland_regs);
 
-    /* restore the user TLS register for the incoming thread (x86: wrmsr(FS_BASE)); reading the
-     * outgoing thread's EL0 TLS back into its saved context is done by the el0_irq asm handler,
-     * which stored it in curr_thread->context.user_tls */
+    /* restore the user TLS register for the incoming thread (x86: wrmsr(FS_BASE)); the outgoing
+     * thread's live value was already saved by save_userland_context() above */
     uint64_t next_user_tls = next_thread->context.user_tls;
     __asm__ volatile("msr tpidr_el0, %0" :: "r"(next_user_tls));
 
