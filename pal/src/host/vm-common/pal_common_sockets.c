@@ -227,7 +227,7 @@ int pal_common_socket_create(enum pal_socket_domain domain, enum pal_socket_type
                              pal_stream_options_t options, struct pal_handle** out_handle) {
     assert(domain == PAL_IPV4 || domain == PAL_IPV6);
 
-    /* Adil: testing for VSOCK */
+    /* Testing for VSOCK */
     log_debug("socket: domain=%d, type=%d, options=0x%x", domain, type, options);
 
     struct handle_ops* handle_ops = NULL;
@@ -260,7 +260,7 @@ int pal_common_socket_create(enum pal_socket_domain domain, enum pal_socket_type
         return -PAL_ERROR_NOMEM;
     }
 
-    /* Adil; debug log*/
+    /* Debug log */
     log_debug("socket: created with fd %d for SOCK-TYPE: %d\n", fd, type);
 
     *out_handle = handle;
@@ -429,7 +429,6 @@ static int pal_common_socket_connect(struct pal_handle* handle, struct pal_socke
         return 0;
     }
 
-    /* Adil */
     // log_always("Connecting to socket in pal_common_socket_connect...");
 
     struct sockaddr_vm addr_vm = { .svm_cid = g_vsock->host_cid };
@@ -848,7 +847,6 @@ static int pal_common_udp_delete(PAL_HANDLE handle, enum pal_delete_mode mode) {
     __UNUSED(handle);
     __UNUSED(mode);
 
-    /* Adil */
     log_always("pal_common_udp_delete: UDP delete is not implemented.");
     
     return 0;

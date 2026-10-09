@@ -513,7 +513,7 @@ int memory_pagetables_init(void* memory_address_end, bool current_page_tables_co
     if (memory_size < 4UL * 1024 * 1024 * 1024)
         memory_size = 4UL * 1024 * 1024 * 1024;
 
-    /* Adil */ 
+ 
     log_always("Memory size for page tables: %zu GB\n", memory_size / (1024 * 1024 * 1024));
 
     /* memory size must be at most 512GB in size, because the current construction of page tables
@@ -669,7 +669,6 @@ int memory_tighten_permissions(void) {
      * don't disable this hole/PCI region as it doesn't affect security.
      */
 
-    /* Adil */
     ret = memory_mark_pages_on(0xC0000000UL, 0x10000000UL, /*write=*/true,
                                /*execute=*/false, /*usermode=*/true);
     if (ret < 0) {
@@ -684,7 +683,7 @@ int memory_tighten_permissions(void) {
         return ret;
     }
 
-    // Adil: set these pages as uncacheable
+    // Set these pages as uncacheable
     ret = memory_mark_pages_strong_uncacheable(0xC0000000UL, 0x10000000UL, /*mark=*/true);
     if (ret < 0) {
         log_always("Failed to mark pages 0xC0000000-0xD0000000 as uncacheable\n");

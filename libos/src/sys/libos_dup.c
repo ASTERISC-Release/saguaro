@@ -27,7 +27,7 @@ long libos_syscall_dup(unsigned int fd) {
     /* Kept below for future testing/cleanup */
     #if 0
     if(fd < fs_offset && !get_fd_handle(fd, NULL, handle_map))
-        fd += fs_offset; // Very very hacky and unstable solution (WorkAroud? krpobe for + 500 for qemu proc)
+        fd += fs_offset; // Hacky workaround: shift a handle-less fd into the host fd range (+500); host agent only
     if(fd > fs_offset){
         log_debug("redirecting dup(%d) to host", fd);
 

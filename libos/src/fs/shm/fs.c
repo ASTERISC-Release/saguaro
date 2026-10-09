@@ -56,7 +56,6 @@ static int shm_do_open(struct libos_handle* hdl, struct libos_dentry* dent, mode
                        int flags, mode_t perm) {
     assert(locked(&g_dcache_lock));
 
-    /* Adil */
     log_always("shm_do_open: path=%s, flags=0x%x, perm=0%o", dent->name, flags, perm);
 
     char* uri;
@@ -97,7 +96,6 @@ static int shm_setup_dentry(struct libos_dentry* dent, mode_t type, mode_t perm,
     assert(locked(&g_dcache_lock));
     assert(!dent->inode);
 
-    /* Adil */
     log_always("shm_setup_dentry: path=%s, type=0%o, perm=0%o, size=%ld", dent->name, type, perm,
                size);
 
@@ -162,7 +160,6 @@ static int shm_open(struct libos_handle* hdl, struct libos_dentry* dent, int fla
     assert(locked(&g_dcache_lock));
     assert(dent->inode);
 
-    /* Adil */
     log_always("shm_open: path=%s, flags=0x%x", dent->name, flags);
 
     return shm_do_open(hdl, dent, dent->inode->type, flags, /*perm=*/0);

@@ -123,7 +123,7 @@ struct virtio_vsock_connection {
     int state_futex;
 
     UT_hash_handle hh_host_port;
-    uint64_t hash_key; /* Adil: using a guest+host port hash key to avoid collisions */
+    uint64_t hash_key; /* Using a guest+host port hash key to avoid collisions */
     uint64_t host_port;
     uint64_t guest_port;
 

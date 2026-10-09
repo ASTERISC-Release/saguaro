@@ -147,7 +147,6 @@ static int bind(struct libos_handle* handle, void* addr, size_t addrlen) {
     if (ret < 0) {
         return (ret == -PAL_ERROR_STREAMEXIST) ? -EADDRINUSE : pal_to_unix_errno(ret);
     }
-    // log_always("[SG] CP2\n");
     pal_to_linux_sockaddr(&pal_ip_addr, &sock->local_addr, &sock->local_addrlen);
     return 0;
 }
@@ -212,7 +211,7 @@ static int connect(struct libos_handle* handle, void* addr, size_t addrlen, bool
     struct libos_sock_handle* sock = &handle->info.sock;
     assert(locked(&sock->lock));
 
-    /* Adil's log for remote connection check. */
+    /* Log for remote connection check. */
     log_debug("Connecting to remote (NET) peer... (%x)", addr);
 
     int ret = verify_sockaddr(sock->domain, addr, &addrlen);
@@ -793,7 +792,6 @@ static int recv(struct libos_handle* handle, struct iovec* iov, size_t iov_len, 
     }
 
     if (addr) {
-        // log_always("[SG] CP1\n");
         struct sockaddr_storage linux_addr;
         size_t linux_addr_len = sizeof(linux_addr);
         pal_to_linux_sockaddr(&pal_ip_addr, &linux_addr, &linux_addr_len);

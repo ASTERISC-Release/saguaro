@@ -200,7 +200,6 @@ int pal_common_file_open(struct pal_handle** handle, const char* type, const cha
             goto out;
     }
 
-    /* Adil */
     // log_always("Opened file");
 
     /* now that we opened the host file, need to create and populate corresponding PAL handle */

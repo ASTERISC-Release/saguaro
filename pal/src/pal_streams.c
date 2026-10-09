@@ -88,7 +88,6 @@ int _PalStreamOpen(PAL_HANDLE* handle, const char* typed_uri, enum pal_access ac
     if (ret < 0)
         return ret;
 
-    // Adil 
     // log_always("PalStreamOpen: type=%s, uri=%s, access=0x%x, share=0x%x, create=%d, options=0x%x",
     //           type, uri, access, share, create, options);
 

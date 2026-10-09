@@ -27,7 +27,7 @@
 static uintptr_t g_console_pci_bars[6];
 static uintptr_t g_fs_pci_bars[6];
 static uintptr_t g_vsock_pci_bars[6];
-static uintptr_t g_ivshmem_pci_bars[6]; /* Adil */
+static uintptr_t g_ivshmem_pci_bars[6];
 
 static uint8_t bar_id_to_pci_addr(uint8_t bar_id) {
     assert(bar_id < 6);
@@ -143,7 +143,7 @@ static uintptr_t pci_bar_addr(uint16_t device_id, uint8_t bar_id) {
             return g_fs_pci_bars[bar_id];
         case PCI_DEVICE_ID_VSOCK:
             return g_vsock_pci_bars[bar_id];
-        case PCI_DEVICE_ID_IVSHMEM: /* Adil */
+        case PCI_DEVICE_ID_IVSHMEM:
             return g_ivshmem_pci_bars[bar_id];
     }
     return 0x0; /* cannot reach */
@@ -191,7 +191,7 @@ static int pci_bar_init_once(uint32_t bdf, uint16_t device_id, uint8_t bar_id) {
             return pci_fs_bar_alloc(bdf, bar_id, bar_desc);
         case PCI_DEVICE_ID_VSOCK:
             return pci_vsock_bar_alloc(bdf, bar_id, bar_desc);
-        case PCI_DEVICE_ID_IVSHMEM: /* Adil */
+        case PCI_DEVICE_ID_IVSHMEM:
             return pci_ivshmem_bar_alloc(bdf, bar_id, bar_desc);
     }
 
@@ -208,7 +208,7 @@ typedef struct {
     // ... rest of shared memory follows
 } ivshmem_header_t;
 
-/* Adil: initialize ivshmem device */
+/* Initialize ivshmem device */
 static int virtio_ivshmem_init(uint32_t bdf) {
     /* Determine BAR2 size */
     uint32_t bar_low = pci_config_readl(bdf, PCI_BAR2);
@@ -282,7 +282,7 @@ static int pci_dev_init(uint32_t bdf, uint16_t device_id) {
 
     /* Capabilities Pointer only used if bit 4 of the Status reg is set to 1 */
     if (device_id == PCI_DEVICE_ID_IVSHMEM) {
-        /* Adil: ivshmem does not have capabilities list */
+        /* Ivshmem does not have capabilities list */
         log_debug("pci_dev_init: device_id=%04x skipping capabilities list check", device_id);
     } else {
         uint16_t status = pci_config_readw(bdf, PCI_STATUS);
@@ -382,8 +382,8 @@ static int pci_dev_init(uint32_t bdf, uint16_t device_id) {
     }
 
     if (device_id == PCI_DEVICE_ID_IVSHMEM) {
-      // pci_bar_init_once(bdf, device_id, 0); /* Adil: ivshmem has only BAR0 */
-      goto skip_mmio_checks; /* Adil: ivshmem does not have capabilities list */
+      // ivshmem has only BAR0 (no pci_bar_init_once() call needed)
+      goto skip_mmio_checks; /* Ivshmem does not have capabilities list */
     }
 
     if (notify_off_multiplier != 0 && !IS_POWER_OF_2(notify_off_multiplier)) {
@@ -423,7 +423,7 @@ static int pci_dev_init(uint32_t bdf, uint16_t device_id) {
 
 skip_mmio_checks:
 
-    /* Adil: ivshmem does not have device status register */
+    /* Ivshmem does not have device status register */
     if (device_id != PCI_DEVICE_ID_IVSHMEM) {
       uint16_t command_reg = pci_config_readw(bdf, PCI_COMMAND);
       pci_config_writew(bdf, PCI_COMMAND, command_reg | 0x3); /* enable Memory and I/O spaces */
@@ -434,7 +434,7 @@ skip_mmio_checks:
       vm_mmio_writeb(&regs->device_status,
                     vm_mmio_readb(&regs->device_status) | VIRTIO_STATUS_DRIVER);
     } else {
-      // /* Adil: enabling memory spaces only for ivshmem */
+      // Enabling memory spaces only for ivshmem
       uint16_t command_reg = pci_config_readw(bdf, PCI_COMMAND);
       command_reg = 0; //(command_reg | 0x2); /* enable Memory space */
       pci_config_writew(bdf, PCI_COMMAND, command_reg);
@@ -451,10 +451,9 @@ skip_mmio_checks:
         case PCI_DEVICE_ID_VSOCK:
             return virtio_vsock_init(regs, device_config, notify_off_addr, notify_off_multiplier,
                                      interrupt_status_reg);
-        case PCI_DEVICE_ID_IVSHMEM: /* Adil */  
+        case PCI_DEVICE_ID_IVSHMEM:  
             return virtio_ivshmem_init(bdf);
         default:
-            /* Adil */
             log_warning("pci_dev_init: unknown device_id=%04x", device_id);
             return -PAL_ERROR_NOTSUPPORT;
     }
@@ -479,7 +478,6 @@ static int pci_bus_init(void) {
         //     (bdf >> 8) & 0xFF, (bdf >> 3) & 0x1F, bdf & 0x7, vendor_id, device_id);
 
         if (vendor_id != PCI_VENDOR_ID_VIRTIO) {
-            /* Adil */
             // log_always("Ignoring unknown device %02x:%02x.%x vendor_id=%04x", 
             //     (bdf >> 8) & 0xFF, (bdf >> 3) & 0x1F, bdf & 0x7, vendor_id);
             // log_always("device_id=%04x", device_id);
@@ -488,7 +486,7 @@ static int pci_bus_init(void) {
             continue;
         }
 
-        /* Adil: enabling ivshmem device */
+        /* Enabling ivshmem device */
         if (device_id != PCI_DEVICE_ID_CONSOLE_LEGACY &&
                 device_id != PCI_DEVICE_ID_CONSOLE &&
                 device_id != PCI_DEVICE_ID_FS &&

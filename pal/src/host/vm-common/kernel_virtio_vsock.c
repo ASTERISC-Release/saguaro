@@ -87,7 +87,7 @@
 #include "kernel_virtio_vsock.h"
 #include "vm_callbacks.h"
 
-/* Adil: enable multiple connections at the same host port */
+/* Enable multiple connections at the same host port */
 #define VIRTIO_VSOCK_ALLOW_MULTIPLE_CONNECTIONS 1
 
 #define VIRTIO_VSOCK_CONSUMER_POLL_INTERVAL_US 500
@@ -736,10 +736,10 @@ static void host_port_find(uint64_t host_port, struct virtio_vsock_connection** 
     *out_conn = conn;
 }
 
-/* Adil: finding connections with a more robust hashing scheme. */
+/* Finding connections with a more robust hashing scheme. */
 static void host_port_add_robust(struct virtio_vsock_connection* conn) {
     assert(spinlock_is_locked(&g_vsock_connections_lock));
-    /* Adil: changed the hashing scheme to use lower 32-bits of the host port and upper ones for the host. 
+    /* Changed the hashing scheme to use lower 32-bits of the host port and upper ones for the host. 
      * TODO: heuristic-based and should be checked. */
     conn->hash_key = (conn->host_port & 0xFFFFFFFF) | ((conn->guest_port & 0xFFFFFFFF) << 32);
     HASH_ADD(hh_host_port, g_vsock->conns_by_host_port, hash_key, sizeof(conn->hash_key), conn);
@@ -815,7 +815,7 @@ static struct virtio_vsock_connection* create_connection(uint64_t host_port, uin
         return NULL;
     }
     
-    /* Adil: Using the more robust hashing scheme to add the connection. */
+    /* Using the more robust hashing scheme to add the connection. */
     if (host_port) {
 #if (VIRTIO_VSOCK_ALLOW_MULTIPLE_CONNECTIONS == 0)
         host_port_add(conn);
@@ -1053,14 +1053,14 @@ static int process_packet(struct virtio_vsock_packet* packet) {
      * host's port (which is the `src_port` in the incoming packet) */
     uint64_t host_port = packet->header.src_port;
 
-    /* Adil: Using the more robust hashing scheme to find the connection. */  
+    /* Using the more robust hashing scheme to find the connection. */  
 #if (VIRTIO_VSOCK_ALLOW_MULTIPLE_CONNECTIONS == 0)
     host_port_find(host_port, &conn);
 #else
     host_port_find_robust(host_port, packet->header.dst_port, &conn);
 #endif
 
-    /* Adil: logging */
+    /* Logging */
     // log_always("Received packet: op=%d, src_cid=%lu, src_port=%u, dst_cid=%lu, dst_port=%u, size=%u",
     //            packet->header.op, packet->header.src_cid, packet->header.src_port,
     //            packet->header.dst_cid, packet->header.dst_port, packet->header.size);
@@ -1073,7 +1073,6 @@ static int process_packet(struct virtio_vsock_packet* packet) {
         for (uint32_t i = 0; i < g_vsock->conns_size; i++) {
             struct virtio_vsock_connection* check_conn = g_vsock->conns[i];
             
-            /* Adil */
             // log_always("Checking connection %u: state=%d, guest_port=%u",
             //            i, check_conn ? check_conn->state : -1,
             //            check_conn ? check_conn->guest_port : 0);
@@ -1671,7 +1670,6 @@ int virtio_vsock_connect(int sockfd, const void* addr, size_t addrlen, uint64_t 
     uint64_t timeout_absolute_us = 0;
     struct sockaddr_vm* addr_vm = (struct sockaddr_vm*)addr;
 
-    /* Adil */
     // log_always("vsock connect to port %u with timeout %lu us", addr_vm->svm_port, timeout_us);
 
     if (!addr || addrlen < sizeof(struct sockaddr_vm))
@@ -1713,11 +1711,10 @@ int virtio_vsock_connect(int sockfd, const void* addr, size_t addrlen, uint64_t 
   #if (VIRTIO_VSOCK_ALLOW_MULTIPLE_CONNECTIONS == 0)
     host_port_add(conn);
   #else
-    /* Adil: Using the more robust hashing scheme to avoid collisions */
+    /* Using the more robust hashing scheme to avoid collisions */
     host_port_add_robust(conn);
   #endif
 
-    /* Adil */
     // log_always("vsock connect picked new guest port %u", conn->guest_port);
 
     ret = send_request_packet(conn);

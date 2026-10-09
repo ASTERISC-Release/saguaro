@@ -56,7 +56,7 @@
 #define PCI_DEVICE_ID_CONSOLE        0x1043
 #define PCI_DEVICE_ID_VSOCK          0x1053
 #define PCI_DEVICE_ID_FS             0x105a
-#define PCI_DEVICE_ID_IVSHMEM        0x1110 /* Adil */
+#define PCI_DEVICE_ID_IVSHMEM        0x1110
 
 /* VIRTIO_PCI_CAP_CFG_TYPE */
 #define VIRTIO_PCI_CAP_COMMON_CFG        1

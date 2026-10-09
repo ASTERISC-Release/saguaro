@@ -339,7 +339,6 @@ int virtio_fs_fuse_open(uint64_t nodeid, uint32_t flags, uint64_t* out_fh) {
         { .addr = &open_out, .size = sizeof(open_out), .in = false },
     };
 
-    // Adil 
     // log_always("virtio_fs_fuse_open: nodeid=%lu, flags=0x%x", nodeid, flags);
 
     ret = virtio_fs_exec_request(/*count=*/4, descs);

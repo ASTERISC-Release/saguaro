@@ -386,7 +386,7 @@ long libos_syscall_lseek(int fd, off_t offset, int origin) {
         /* Only with a host agent (VM/TDX PAL): see sg_redirect_enabled(). Otherwise an invalid fd
          * would be shifted into the host fd range and fault on the unmapped comm window. */
         if (sg_redirect_enabled() && fd < fs_offset && !get_fd_handle(fd, NULL, NULL))
-            fd += fs_offset; // Very very hacky and unstable solution (WorkAroud? krpobe for + 500 for qemu proc)
+            fd += fs_offset; // Hacky workaround: shift a handle-less fd into the host fd range (+500); host agent only
         if (sg_redirect_enabled() && fd>fs_offset) {
             log_debug("lseek (fd: %d offset: %ld origin: %d)\n", fd, offset, origin);
             long _offset = libos_syscall_acquire_libos_lock();
