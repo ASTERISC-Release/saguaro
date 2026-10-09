@@ -1,5 +1,6 @@
 # Copyright (C) 2023 Gramine contributors
 # SPDX-License-Identifier: BSD-3-Clause
+# Copyright (C) 2026 The ASTERISC Research Lab
 
 CFLAGS = -Wall -Wextra
 
@@ -12,16 +13,16 @@ CFLAGS += -O3
 endif
 
 .PHONY: all
-all: helloworld helloworld.manifest
+all: align_test align_test.manifest
 ifeq ($(SGX),1)
-all: helloworld.manifest.sgx helloworld.sig
+all: align_test.manifest.sgx align_test.sig
 endif
 
-helloworld: helloworld.o
+align_test: align_test.o
 
-helloworld.o: helloworld.c
+align_test.o: align_test.c
 
-helloworld.manifest: helloworld.manifest.template
+align_test.manifest: align_test.manifest.template
 	gramine-manifest \
 		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
 		$< $@
@@ -40,11 +41,11 @@ helloworld.manifest: helloworld.manifest.template
 # that make will consider the source tree up-to-date even if the sgx_sign file doesn't exist,
 # as long as the other dependencies check out. This is in contrast to .PHONY, which would
 # be rebuilt on every invocation of make.
-helloworld.sig helloworld.manifest.sgx: sgx_sign
+align_test.sig align_test.manifest.sgx: sgx_sign
 	@:
 
 .INTERMEDIATE: sgx_sign
-sgx_sign: helloworld.manifest helloworld
+sgx_sign: align_test.manifest align_test
 	gramine-sgx-sign \
 		--manifest $< \
 		--output $<.sgx
@@ -58,13 +59,13 @@ endif
 
 .PHONY: check
 check: all
-	$(GRAMINE) helloworld > OUTPUT
+	$(GRAMINE) align_test > OUTPUT
 	echo "Hello, world" | diff OUTPUT -
 	@echo "[ Success ]"
 
 .PHONY: clean
 clean:
-	$(RM) *.token *.sig *.manifest.sgx *.manifest helloworld.o helloworld OUTPUT
+	$(RM) *.token *.sig *.manifest.sgx *.manifest align_test.o align_test OUTPUT
 
 .PHONY: distclean
 distclean: clean

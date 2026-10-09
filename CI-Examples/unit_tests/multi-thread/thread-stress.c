@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: BSD-3-Clause */
+/* Copyright (C) 2026 The ASTERISC Research Lab */
 // thread_stress_debug_grab_backtrace.c
 // Compile: gcc -O2 -std=c11 -pthread -rdynamic -g -o thread_stress_debug_grab_backtrace thread_stress_debug_grab_backtrace.c
 // -rdynamic helps backtrace() to resolve symbols. -g gives line numbers if available.

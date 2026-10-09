@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: BSD-3-Clause */
+/* Copyright (C) 2026 The ASTERISC Research Lab */
 // tls_test.c
 // Compile: gcc -O2 -std=c11 -pthread -g -o tls_test tls_test.c
 #define _GNU_SOURCE

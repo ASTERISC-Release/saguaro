@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: BSD-3-Clause */
+/* Copyright (C) 2026 The ASTERISC Research Lab */
 // rwlock_repro_musl.c
 // Musl-friendly short rwlock repro
 // Compile with musl-gcc:

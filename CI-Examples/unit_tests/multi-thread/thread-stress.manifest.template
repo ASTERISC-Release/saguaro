@@ -1,21 +1,19 @@
 # Copyright (C) 2023 Gramine contributors
 # SPDX-License-Identifier: BSD-3-Clause
+# Copyright (C) 2026 The ASTERISC Research Lab
 
 # Hello World manifest file example
 
-libos.entrypoint = "/thread-tls"
+libos.entrypoint = "/thread-stress"
 loader.log_level = "{{ log_level }}"
 # loader.log_level = "trace"
 
 loader.env.LD_LIBRARY_PATH = "/lib:/usr/lib:/usr/lib/{{ multiarch }}:/lib/{{ multiarch }}"
-# loader.env.LD_PRELOAD = "./egl_hook.so"
 loader.env.HOME = "/home/user"
 loader.env.USER = "root"
 loader.env.DISPLAY="2:0"
 loader.env.IVSHMEM_GRAMINE_VM="1"
-# loader.env.LIBGL_ALWAYS_SOFTWARE="1"
 #loader.env.SGL_NETWORK_ENDPOINT="<host-ip>:6000"
-# loader.env.Xauthority = "/home/gramine/.Xauthority"
 
 loader.insecure__use_cmdline_argv = true
 loader.insecure__use_host_env = true
@@ -23,13 +21,5 @@ loader.insecure__use_host_env = true
 fs.mounts = [
   # General libraries and hooks
   { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
-  { path = "/thread-tls", uri = "file:thread-tls" },
-]
-
-sgx.debug = true
-sgx.edmm_enable = {{ 'true' if env.get('EDMM', '0') == '1' else 'false' }}
-
-sgx.trusted_files = [
-  "file:glxgears",
-  "file:{{ gramine.runtimedir() }}/",
+  { path = "/thread-stress", uri = "file:thread-stress" },
 ]

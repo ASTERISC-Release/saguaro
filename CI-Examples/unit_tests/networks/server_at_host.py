@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (C) 2026 The ASTERISC Research Lab
+
 import socket
 
 CID = socket.VMADDR_CID_HOST   # or VMADDR_CID_ANY for guest

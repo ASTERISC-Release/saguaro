@@ -135,6 +135,7 @@ esac
 # versa). `make` in the example dir is the sanctioned download+build pipeline.
 ensure_example() {
     local dir=$REPO/CI-Examples/$1 bin=$2 man=$3 need=""
+    local log=$LOGDIR/${1//\//-}-build.log   # "unit_tests/networks" -> "unit_tests-networks"
     if [ -n "$ELF_PAT" ] && ! file -b "$dir/$bin" 2>/dev/null | grep -q "$ELF_PAT"; then
         need="binary $1/$bin missing or not $HOST_ARCH"
     elif grep -q "$FOREIGN_ARCH" "$dir/$man" 2>/dev/null; then
@@ -143,14 +144,14 @@ ensure_example() {
         need="manifest $1/$man missing or empty"
     fi
     if [ -n "$need" ]; then
-        echo "  building example '$1' ($need; log: $LOGDIR/$1-build.log)"
-        ( cd "$dir" && make >"$LOGDIR/$1-build.log" 2>&1 ) || {
+        echo "  building example '$1' ($need; log: $log)"
+        ( cd "$dir" && make >"$log" 2>&1 ) || {
             echo "  make failed for $1 — build it manually (see its README/Makefile)"
-            tail -3 "$LOGDIR/$1-build.log" | sed 's/^/    /'
+            tail -3 "$log" | sed 's/^/    /'
             return 1
         }
         # some example Makefiles stop before the final manifest step
-        [ -s "$dir/$man" ] || ( cd "$dir" && make "${bin}.manifest" >>"$LOGDIR/$1-build.log" 2>&1 ) || true
+        [ -s "$dir/$man" ] || ( cd "$dir" && make "${bin}.manifest" >>"$log" 2>&1 ) || true
     fi
     [ -x "$dir/$bin" ] && [ -s "$dir/$man" ]
 }
@@ -255,8 +256,8 @@ helloworld)
 multithread)
     rc=0
     for b in thread-tls thread-rwlock thread-stress; do
-        if ! ensure_example multi-thread "$b" "$b.manifest"; then rc=1; break; fi
-        if ! timeout -s KILL 120 sh -c "cd '$REPO/CI-Examples/multi-thread' && gramine-direct $b" \
+        if ! ensure_example unit_tests/multi-thread "$b" "$b.manifest"; then rc=1; break; fi
+        if ! timeout -s KILL 120 sh -c "cd '$REPO/CI-Examples/unit_tests/multi-thread' && gramine-direct $b" \
                 >"$LOGDIR/$b.log" 2>&1; then
             echo "  $b failed:"; tail -3 "$LOGDIR/$b.log"; rc=1
         fi
@@ -498,8 +499,8 @@ networks)
     # Self-contained UDP self-test (server thread + loopback client thread): small/
     # medium/large datagrams, ordering, burst. The Makefile drops the graphics link
     # flags automatically when ../../../sharedgl/build is absent (see its comment).
-    if ! ensure_example networks udp nw.manifest; then summary networks 1 "build"; continue; fi
-    if timeout -s KILL 120 sh -c "cd '$REPO/CI-Examples/networks' && gramine-direct nw" \
+    if ! ensure_example unit_tests/networks udp nw.manifest; then summary networks 1 "build"; continue; fi
+    if timeout -s KILL 120 sh -c "cd '$REPO/CI-Examples/unit_tests/networks' && gramine-direct nw" \
             >"$LOGDIR/networks.log" 2>&1 \
        && grep -q "UDP SOCKET TEST PASSED" "$LOGDIR/networks.log"; then
         rc=0; detail=$(grep -ao "\[server\] OK .*" "$LOGDIR/networks.log" | head -1)

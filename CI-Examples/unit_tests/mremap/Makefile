@@ -1,10 +1,8 @@
 # Copyright (C) 2023 Gramine contributors
 # SPDX-License-Identifier: BSD-3-Clause
+# Copyright (C) 2026 The ASTERISC Research Lab
 
-CC = gcc
-TLS_CC = musl-gcc
-CFLAGS = -Wall -Wextra -O2 -rdynamic -g -std=c11 -pthread -D_FORTIFY_SOURCE=0
-LDFLAGS = 
+CFLAGS = -Wall -Wextra
 
 ifeq ($(DEBUG),1)
 GRAMINE_LOG_LEVEL = debug
@@ -15,35 +13,18 @@ CFLAGS += -O3
 endif
 
 .PHONY: all
-all: thread-stress thread-rwlock thread-tls thread-stress.manifest thread-rwlock.manifest thread-tls.manifest
+all: helloworld helloworld.manifest
+ifeq ($(SGX),1)
+all: helloworld.manifest.sgx helloworld.sig
+endif
 
-thread-stress: thread-stress.o
-	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
-thread-stress.o: thread-stress.c
-thread-stress.manifest: thread-stress.manifest.template
+helloworld: helloworld.o
+
+helloworld.o: helloworld.c
+
+helloworld.manifest: helloworld.manifest.template
 	gramine-manifest \
 		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
-		-Dmultiarch=$(shell $(CC) -dumpmachine) \
-		$< $@
-	gramine-manifest-check $@
-
-thread-rwlock: thread-rwlock.o
-	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
-thread-rwlock.o: thread-rwlock.c
-thread-rwlock.manifest: thread-rwlock.manifest.template
-	gramine-manifest \
-		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
-		-Dmultiarch=$(shell $(CC) -dumpmachine) \
-		$< $@
-	gramine-manifest-check $@
-
-thread-tls: thread-tls.o
-	$(CC) -static $(CFLAGS) -o $@ $^ $(LDFLAGS)
-thread-tls.o: thread-tls.c
-thread-tls.manifest: thread-tls.manifest.template
-	gramine-manifest \
-		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
-		-Dmultiarch=$(shell $(CC) -dumpmachine) \
 		$< $@
 	gramine-manifest-check $@
 
@@ -84,7 +65,7 @@ check: all
 
 .PHONY: clean
 clean:
-	$(RM) *.token *.sig *.manifest.sgx *.manifest *.o thread-stress thread-rwlock thread-tls OUTPUT
+	$(RM) *.token *.sig *.manifest.sgx *.manifest helloworld.o helloworld OUTPUT
 
 .PHONY: distclean
 distclean: clean

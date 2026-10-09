@@ -5,7 +5,7 @@ Anything 8GB or higher should be more than enough.**
 
 - `gramine-tdx/libos/src/sys/libos_mmap.c`
 - `qemu/util/mmap-alloc.c`
-- `gramine-tdx/CI-Examples/host_to_guest/align_test.c`
+- `gramine-tdx/CI-Examples/unit_tests/host_to_guest/align_test.c`
 - `host_to_guest.sh`
 
 # Run the Test Case
@@ -16,7 +16,7 @@ Anything 8GB or higher should be more than enough.**
 ```bash
 cd gramine-tdx
 export PYTHONPATH=$PWD/built-debug/lib/python3.13/site-packages/
-cd CI-Examples/host_to_guest
+cd CI-Examples/unit_tests/host_to_guest
 make
 gramine-vm align_test
 ```

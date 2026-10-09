@@ -1,15 +1,16 @@
-# Copyright (...)
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (C) 2026 The ASTERISC Research Lab
 
 # The example's udp.c is pure sockets, but this directory also ships it linked against
 # the Tirith graphics stack (sharedgl + EGL/GL/X11) for the VM-PAL presentation plumbing.
 # When that stack is not built (and its -L directory absent), build the plain-sockets
 # variant: pass the graphics flags explicitly to get the linked variant back.
-ifeq ($(wildcard ../../../sharedgl/build),)
+ifeq ($(wildcard ../../../../sharedgl/build),)
 CFLAGS ?= -Wall -Wextra
 LDFLAGS ?= -lpthread
 else
-CFLAGS ?= -Wall -Wextra -I../../../sharedgl/inc/
-LDFLAGS ?= -ldl -lEGL -lGL -lgbm -ldrm -lxcb -lxcb-dri3 -lxcb-present -lxcb-sync -lxshmfence -lm -L../../../sharedgl/build -lX11
+CFLAGS ?= -Wall -Wextra -I../../../../sharedgl/inc/
+LDFLAGS ?= -ldl -lEGL -lGL -lgbm -ldrm -lxcb -lxcb-dri3 -lxcb-present -lxcb-sync -lxshmfence -lm -L../../../../sharedgl/build -lX11
 endif
 INCLUDES = -I/usr/include/libdrm -I./
 

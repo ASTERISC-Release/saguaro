@@ -1,3 +1,6 @@
+/* SPDX-License-Identifier: BSD-3-Clause */
+/* Copyright (C) 2026 The ASTERISC Research Lab */
+
 #define _GNU_SOURCE
 #include <arpa/inet.h>
 #include <errno.h>

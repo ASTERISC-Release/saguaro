@@ -1,5 +1,6 @@
 // /* Copyright (C) 2023 Gramine contributors
 //  * SPDX-License-Identifier: BSD-3-Clause */
+/* Copyright (C) 2026 The ASTERISC Research Lab */
 //
 // // #include <stdio.h>
 // //
