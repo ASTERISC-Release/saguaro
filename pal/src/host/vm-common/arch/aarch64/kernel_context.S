@@ -112,8 +112,9 @@ el0_sync_entry:
      * non-PIE binary linked below the DRAM base, where the identity map reaches only into the
      * physical hole) reports EC=0 at ELR of the very first app instruction, and blindly
      * "returning from the syscall" at ELR+4 walks faulting one instruction at a time forever.
-     * Full signal delivery for EL0 faults (SIGILL/SIGSEGV via LibOS) is a Milestone-B-tail item
-     * that needs the fine-grained page tables to classify faults; panic visibly until then. */
+     * Full signal delivery: .Lel0_sync_unexpected builds the full el0_irq-shaped frame and
+     * forwards it through the LibOS memfault path (x86 #PF parity); only ECs LibOS does not
+     * service (e.g. EC=0x00 `udf`, whose x86 #UD twin is likewise not forwarded) panic. */
     mrs     x16, esr_el1
     ubfx    x16, x16, #26, #6                      /* EC */
     cmp     x16, #0x15                             /* SVC64 from AArch64 EL0 */
@@ -191,56 +192,95 @@ el0_sync_entry:
     br      x9
 
 .Lel0_sync_unexpected:
-    /* Panic visibly: report ESR/ELR and stop. Scratch stack for the C call is the dead area
-     * below the per-CPU interrupt stack (same region el1_sync uses for its frame; the previous
-     * IRQ's frame is dead once its handler returned). */
-    mrs     x16, tpidr_el1
-    ldr     x16, [x16, #PER_CPU_DATA_INTERRUPT_STACK]
-    sub     sp, x16, #ISR_FRAME_SIZE
-    /* Snapshot the app's whole GPR state before the C call clobbers x0/x1: diagnosing an app
-     * fault needs exactly what signal delivery will later put into the ucontext (x16/x17 are
-     * scratch by ABI so losing them to the table walk is fine). g_el0_fault_regs[31] is
-     * SP_EL0 -- the stack the app was using. */
-    adrp    x16, g_el0_fault_regs
-    add     x16, x16, :lo12:g_el0_fault_regs
-    str     x17, [x16, #8 * 17]
-    str     x0,  [x16, #8 * 0]
-    str     x1,  [x16, #8 * 1]
-    str     x2,  [x16, #8 * 2]
-    str     x3,  [x16, #8 * 3]
-    str     x4,  [x16, #8 * 4]
-    str     x5,  [x16, #8 * 5]
-    str     x6,  [x16, #8 * 6]
-    str     x7,  [x16, #8 * 7]
-    str     x8,  [x16, #8 * 8]
-    str     x9,  [x16, #8 * 9]
-    str     x10, [x16, #8 * 10]
-    str     x11, [x16, #8 * 11]
-    str     x12, [x16, #8 * 12]
-    str     x13, [x16, #8 * 13]
-    str     x14, [x16, #8 * 14]
-    str     x15, [x16, #8 * 15]
-    mrs     x9,  sp_el0
-    str     x9,  [x16, #8 * 31]
-    mrs     x9,  elr_el1
-    str     x9,  [x16, #8 * 32]
-    str     x18, [x16, #8 * 18]
-    str     x19, [x16, #8 * 19]
-    str     x20, [x16, #8 * 20]
-    str     x21, [x16, #8 * 21]
-    str     x22, [x16, #8 * 22]
-    str     x23, [x16, #8 * 23]
-    str     x24, [x16, #8 * 24]
-    str     x25, [x16, #8 * 25]
-    str     x26, [x16, #8 * 26]
-    str     x27, [x16, #8 * 27]
-    str     x28, [x16, #8 * 28]
-    str     x29, [x16, #8 * 29]
-    str     x30, [x16, #8 * 30]
-    mrs     x0, esr_el1
-    mrs     x1, elr_el1
-    bl      el0_sync_unexpected_c
-    b       hang
+    /* EL0 fault (not `svc`): build the exact `struct isr_regs` frame that
+     * el0_irq_entry builds and hand it to the C handler, which forwards it
+     * through pal_common_perform_memfault_handling -- the same entry point the
+     * x86 #PF/#GP ISRs use (kernel_interrupts.c isr_c). LibOS's memfault upcall
+     * either fixes the fault in place (VMA bookkeeping) or rewrites the frame to
+     * deliver SIGSEGV/SIGBUS to the app's own handler; on success we resume EL0
+     * from the (possibly rewritten) frame via `eret`, exactly like el0_irq's
+     * same-thread return. Without a registered handler C reports the full
+     * diagnostic and stops (x86 #PF panic parity).
+     *
+     * Bootstrap is the el0_irq_entry one: the exception left no scratch GPR and
+     * all 31 must survive, so 48B below the *incoming* SP_EL1 (always a mapped
+     * kernel-or-user-syscall stack -- the last one EL1 code used) parks x29/x30
+     * while the frame is carved at the per-CPU interrupt stack. Trusting
+     * SP_EL0 for anything would be wrong on precisely this path: the fault may
+     * be a stack-guard page. */
+    sub     sp, sp, #48
+    stp     x29, x30, [sp]
+    mrs     x29, elr_el1
+    mrs     x30, spsr_el1
+    stp     x29, x30, [sp, #16]
+    mrs     x29, sp_el0
+    mrs     x30, tpidr_el1
+    ldr     x30, [x30, #PER_CPU_DATA_INTERRUPT_STACK]
+    sub     x30, x30, #ISR_FRAME_SIZE
+    str     x29, [x30, #ISR_SP]
+    ldr     x29, [sp]
+    str     x29, [x30, #ISR_REGS + 29 * 8]
+    ldr     x29, [sp, #16]
+    str     x29, [x30, #ISR_ELR]
+    ldr     x29, [sp, #24]
+    str     x29, [x30, #ISR_SPSR]
+    ldr     x29, [sp, #8]
+    str     x29, [x30, #ISR_REGS + 30 * 8]
+    mrs     x29, tpidr_el1
+    ldr     x29, [x29, #PER_CPU_DATA_INTERRUPT_FPSIMD_AREA]
+    str     x29, [x30, #ISR_FPREGS]
+    stp     x0,  x1,  [x30, #ISR_REGS + 0]
+    stp     x2,  x3,  [x30, #ISR_REGS + 16]
+    stp     x4,  x5,  [x30, #ISR_REGS + 32]
+    stp     x6,  x7,  [x30, #ISR_REGS + 48]
+    stp     x8,  x9,  [x30, #ISR_REGS + 64]
+    stp     x10, x11, [x30, #ISR_REGS + 80]
+    stp     x12, x13, [x30, #ISR_REGS + 96]
+    stp     x14, x15, [x30, #ISR_REGS + 112]
+    stp     x16, x17, [x30, #ISR_REGS + 128]
+    stp     x18, x19, [x30, #ISR_REGS + 144]
+    stp     x20, x21, [x30, #ISR_REGS + 160]
+    stp     x22, x23, [x30, #ISR_REGS + 176]
+    stp     x24, x25, [x30, #ISR_REGS + 192]
+    stp     x26, x27, [x30, #ISR_REGS + 208]
+    stp     x28, x29, [x30, #ISR_REGS + 224]
+    mov     sp, x30
+
+    ldr     x0, [sp, #ISR_FPREGS]
+    bl      do_xsave                      /* the signal ucontext sees live FP state */
+    mov     x0, sp
+    bl      el0_sync_unexpected_c         /* 0 = frame rewritten, resume from it */
+    cbnz    x0, hang
+
+    /* Resume EL0 from the (possibly rewritten) frame: eret consumes ELR/SPSR from
+     * the sysregs and SP_EL0 for the EL0t target, so all three are reinstalled
+     * here -- unlike el0_irq (whose C dispatcher cannot touch them), the memfault
+     * upcall may have moved pc/sp on purpose. x16/x17 are frame slots like any
+     * other, restored last from the still-live frame base. */
+    ldr     x16, [sp, #ISR_ELR]
+    msr     elr_el1, x16
+    ldr     x16, [sp, #ISR_SPSR]
+    msr     spsr_el1, x16
+    ldr     x16, [sp, #ISR_SP]
+    msr     sp_el0, x16
+    ldp     x0,  x1,  [sp, #ISR_REGS + 0]
+    ldp     x2,  x3,  [sp, #ISR_REGS + 16]
+    ldp     x4,  x5,  [sp, #ISR_REGS + 32]
+    ldp     x6,  x7,  [sp, #ISR_REGS + 48]
+    ldp     x8,  x9,  [sp, #ISR_REGS + 64]
+    ldp     x10, x11, [sp, #ISR_REGS + 80]
+    ldp     x12, x13, [sp, #ISR_REGS + 96]
+    ldp     x14, x15, [sp, #ISR_REGS + 112]
+    ldp     x18, x19, [sp, #ISR_REGS + 144]
+    ldp     x20, x21, [sp, #ISR_REGS + 160]
+    ldp     x22, x23, [sp, #ISR_REGS + 176]
+    ldp     x24, x25, [sp, #ISR_REGS + 192]
+    ldp     x26, x27, [sp, #ISR_REGS + 208]
+    ldp     x28, x29, [sp, #ISR_REGS + 224]
+    ldr     x30, [sp, #ISR_REGS + 240]
+    ldr     x17, [sp, #ISR_REGS + 136]
+    ldr     x16, [sp, #ISR_REGS + 128]
+    eret
 
 /* ---------------------------------------------------------------------------
  * void pal_syscall_return(void) -- x86 sysret_asm analog, entered via `br x16`
@@ -291,30 +331,35 @@ pal_syscall_return:
     eret
 
 /* ---------------------------------------------------------------------------
- * void pal_sigreturn_return(void) -- x86 sigreturn_asm analog.
+ * void pal_sigreturn_return(void) -- x86 sigreturn_asm analog, reached via
+ * `br x16` from _return_from_syscall (LibOS's VM/TDX branch of
+ * libos_syscall_rt_sigreturn() points context.pc back at this trampoline after
+ * copying the restored app RIP into TCB.user_rip -- the same planting x86 does).
  *
- * rt_sigreturn must resume the *interrupted* user context recorded by LibOS in
- * thread->sigreturn_pseudo_stack (an eret-consumed frame {ELR, SPSR, SP_EL0},
- * the aarch64 replacement for the iretq frame x86 pushes here). The user x0 and
- * SP_EL0 from before rt_sigreturn clobbered them were memorized in
- * sigreturn_user_rax / sigreturn_user_rsp by LibOS's epilogue on entry; we put
- * x0 back before eret (SP_EL0 comes from the frame itself).
- * --------------------------------------------------------------------------- */
+ * Unlike x86 there is no iret frame to assemble: eret consumes the sysregs
+ * directly. x86 must run on a separate pseudo-stack (sigreturn_pseudo_rsp)
+ * because building the iret frame clobbers the user RSP it is about to resume
+ * with; aarch64 sysreg writes (msr) go through registers only, so the
+ * resume-{pc,sp,regs} triple is already exactly where it needs to be:
+ *   - ELR:      TCB.user_rip, planted by LibOS (the fault-time pc, +handler edits)
+ *   - SP_EL0:   the live EL1 SP -- _return_from_syscall did `mov sp, regs->sp`
+ *               with the *restored* app stack before branching here
+ *   - GPRs/x0:  all live from the same restore (x0 = the app's fault-time x0,
+ *               the analog of x86 keeping user rax through the pseudo-stack dance)
+ * SPSR = 0: EL0t, DAIF clear (x86: iret frame RFLAGS |= IF).
+ * x16/x17 are the only scratch (the app's true values are what the restore put
+ * in them -- clobbering x16 to read the TCB is fine, x17 likewise; sigreturn's
+ * contract is the saved ucontext, and the syscall ABI declares both dead). */
     globl pal_sigreturn_return
 pal_sigreturn_return:
     mrs     x16, tpidr_el1
     ldr     x16, [x16, #PER_CPU_DATA_CUR_TCB]
-    mrs     x17, sp_el0
-    str     x17, [x16, #PAL_TCB_VM_SIGRETURN_USER_RSP]  /* "user rsp" memory, x86 parity */
-    str     x0, [x16, #PAL_TCB_VM_SIGRETURN_USER_RAX]
-
-    ldr     x1, [x16, #PAL_TCB_VM_SIGRETURN_PSEUDO_STACK]       /* frame.elr */
-    msr     elr_el1, x1
-    ldr     x1, [x16, #PAL_TCB_VM_SIGRETURN_PSEUDO_STACK + 8]   /* frame.spsr */
-    msr     spsr_el1, x1
-    ldr     x1, [x16, #PAL_TCB_VM_SIGRETURN_PSEUDO_STACK + 16]  /* frame.sp (user stack) */
-    msr     sp_el0, x1
-    ldr     x0, [x16, #PAL_TCB_VM_SIGRETURN_USER_RAX]           /* eret won't restore x0 */
+    ldr     x17, [x16, #PAL_TCB_VM_USER_RIP]   /* LibOS-planted restored pc */
+    msr     elr_el1, x17
+    msr     spsr_el1, xzr
+    mov     x17, sp                            /* restored user stack (per-CPU SP_EL0
+                                                  refresh, same requirement as pal_syscall_return) */
+    msr     sp_el0, x17
     eret
 
 /* ---------------------------------------------------------------------------
@@ -610,6 +655,7 @@ el0_irq_entry:
     ldp     x26, x27, [sp, #ISR_REGS + 208]
     ldp     x28, x29, [sp, #ISR_REGS + 224]
     ldr     x30, [sp, #ISR_REGS + 240]
+    ldr     x17, [sp, #ISR_REGS + 136]
     ldr     x16, [sp, #ISR_REGS + 128]
     eret
 
@@ -691,6 +737,7 @@ el1_irq_entry:
     ldp     x26, x27, [x16, #ISR_REGS + 208]
     ldp     x28, x29, [x16, #ISR_REGS + 224]
     ldr     x30, [x16, #ISR_REGS + 240]
+    ldr     x17, [x16, #ISR_REGS + 136]
     ldr     x16, [x16, #ISR_REGS + 128]
     eret
 

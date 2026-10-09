@@ -98,53 +98,80 @@ void isr_c(struct isr_regs* regs) {
     }
 }
 
-/* EL0 synchronous exception that is not an `svc` (see the EC filter in el0_sync_entry): a
- * fault in user code with no service path yet (signal delivery needs the fine-grained page
- * tables). x86 analog: an unhandled exception frame dumped before the kernel gives up.
- * Entered from asm with x0=ESR, x1=ELR and SP on the dead area below the interrupt stack; the
- * asm already spilled the app's x0..x31 (slot 31 = SP_EL0; slot 16 is lost to the adrp that
- * computes the table address, so it is reported as scratch) into g_el0_fault_regs.
+/* EL0 synchronous exception that is not an `svc` (see the EC filter in el0_sync_entry). The
+ * x86 analog is the #PF (cr2) / #GP IDT handlers: the frame is forwarded through
+ * pal_common_perform_memfault_handling, so LibOS's VMA layer either fixes the mapping in
+ * place or rewrites the frame to run the app's own SIGSEGV/SIGBUS handler; the asm then
+ * resumes EL0 from the rewritten frame.
  *
- * This dump doubles as the stand-in for the ucontext that fault signal delivery will carry:
- * the same fields (pc, sp, all GPRs) plus the ESR decode that Gramine's arch_signal /
- * `PalThreadContext` will consume later. */
-#define EL0_FAULT_REGS_SLOTS 33
-uint64_t g_el0_fault_regs[EL0_FAULT_REGS_SLOTS];
-
-void el0_sync_unexpected_c(uint64_t esr, uint64_t elr) {
-    uint64_t far;
+ * EC decode (ARMv8 D1.4.4): because this path is the *EL0* synchronous vector, every fault here
+ * came from EL0 ("lower EL" relative to the EL1 handler), so the abort ECs are ESR_ELx_EC_IABT_LOW
+ * = 0x20 (instruction abort from EL0) and ESR_ELx_EC_DABT_LOW = 0x24 (data abort from EL0); the
+ * 0x21/0x25 "same/current-EL" twins belong to the EL1 vector (isr_kernel_c) and are not seen
+ * here. FAR_EL1 is the analog of cr2. The DFSC then says why: 0b0001LL translation fault (level
+ * LL), 0b0010LL access-flag, 0b0011LL permission fault -- e.g. a write to EL0's NULL hits the
+ * identity-mapped device window at VA 0, which is EL1-only, so EL0 gets a level-2 permission
+ * fault (DFSC 0x0e), not a translation fault. Other ECs (notably EC=0x00 `udf`, whose x86 #UD
+ * twin the x86 vm-PAL likewise does not forward) stay a visible panic; SIGILL for those is a
+ * B-tail item. Entered with `regs` the fully populated el0_irq-shaped frame on the interrupt
+ * stack; only x16's slot holds the EC-decode scratch value rather than the app's x16 (the
+ * pre-dispatch `mrs/ubfx/cmp` has no other scratch GPR) -- harmless for C code, where x16 never
+ * lives across an instruction. */
+long el0_sync_unexpected_c(struct isr_regs* regs) {
+    uint64_t esr, far;
+    __asm__ volatile("mrs %0, esr_el1" : "=r"(esr));
     __asm__ volatile("mrs %0, far_el1" : "=r"(far));
-    log_error("Panic: unexpected EL0 synchronous exception ESR=0x%lx (EC=0x%lx) ELR=0x%lx FAR=0x%lx",
-              esr, esr >> 26, elr, far);
-    log_error("       (only svc/EC=0x15 is serviced from EL0; fault signal delivery is TODO)");
+    uint64_t ec = esr >> 26;
+
+    if ((ec == 0x20 /* IABT from EL0 */ || ec == 0x24 /* DABT from EL0 */) &&
+        pal_common_perform_memfault_handling(far, regs) == 0) {
+        return 0; /* LibOS fixed the fault or delivered a signal from the frame */
+    }
+
+    log_error("Panic: unhandled EL0 synchronous exception ESR=0x%lx (EC=0x%lx) ELR=0x%lx"
+              " FAR=0x%lx", esr, ec, regs->elr, far);
     /* ESR_EL1 detail bits for EC=0x20..0x25 (faults): DFSC/IFSC [5:0], WnR [6], S1PTW [11].
      * FSC decodes as: 0b0001LL translation fault level LL, 0b0010LL access-flag level LL,
      * 0b0011LL permission fault level LL (QEMU's get_S1prot rules, see kernel_memory.c). */
     log_error("       FSC=0x%02lx %s WnR=%lu S1PTW=%lu IL=%lu", esr & 0x3f,
               (esr & (1UL << 11)) ? "S1PTW!" : "    ", (esr >> 6) & 1, (esr >> 11) & 1,
               (esr >> 31) & 1);
-    log_error("       pc=0x%016lx sp=0x%016lx", elr, g_el0_fault_regs[31]);
+    log_error("       pc=0x%016lx sp=0x%016lx", regs->elr, regs->sp);
     for (unsigned i = 0; i < 32; i += 4) {
         if (i == 16) {
             log_error("       x16=(scratch) x17=0x%016lx x18=0x%016lx x19=0x%016lx",
-                      g_el0_fault_regs[17], g_el0_fault_regs[18], g_el0_fault_regs[19]);
+                      regs->regs[17], regs->regs[18], regs->regs[19]);
             continue;
         }
+        if (i == 28) {
+            /* regs[] has 31 slots (x0..x30); show the frame's user SP in the last column */
+            log_error("       x%02lu=0x%016lx x%02lu=0x%016lx x%02lu=0x%016lx sp =0x%016lx",
+                      i + 0UL, regs->regs[i + 0], i + 1UL, regs->regs[i + 1],
+                      i + 2UL, regs->regs[i + 2], regs->sp);
+            break;
+        }
         log_error("       x%02lu=0x%016lx x%02lu=0x%016lx x%02lu=0x%016lx x%02lu=0x%016lx",
-                  i + 0UL, g_el0_fault_regs[i + 0], i + 1UL, g_el0_fault_regs[i + 1],
-                  i + 2UL, g_el0_fault_regs[i + 2], i + 3UL, g_el0_fault_regs[i + 3]);
+                  i + 0UL, regs->regs[i + 0], i + 1UL, regs->regs[i + 1],
+                  i + 2UL, regs->regs[i + 2], i + 3UL, regs->regs[i + 3]);
     }
     /* The faulting instruction itself, so the panic is analyzable from the log alone (the app
      * is ASLR'd, but its 32-bit encoding matches the host-side disassembly verbatim). Guarded
      * by a page-table lookup: ELR itself can be unmapped (prefetch abort), and EL1 has no
-     * fixup table yet -- a fault here would triple-fault with an even less useful report. */
+     * fixup table yet -- a fault here would triple-fault with an even less useful report. The
+     * neighbors are only read when they share ELR's mapped page (an earlier version faulted on
+     * insn[-1] at 0xfffffffffffffffc while dumping a jump-to-NULL; reading off the end of the
+     * mapped page is exactly the unguarded read the guard exists to prevent). */
     uint64_t* pte;
-    if (memory_find_page_table_entry(elr, &pte) == 0) {
-        const uint32_t* insn = (const uint32_t*)(uintptr_t)elr;
+    if (memory_find_page_table_entry(regs->elr, &pte) == 0 && (regs->elr & 0xfff) >= 8
+        && (regs->elr & 0xfff) <= 0xff4) {
+        const uint32_t* insn = (const uint32_t*)(uintptr_t)regs->elr;
         log_error("       insn @ELR: 0x%08x (prev 0x%08x, next 0x%08x)", insn[0], insn[-1],
                   insn[1]);
+    } else if (memory_find_page_table_entry(regs->elr, &pte) == 0) {
+        log_error("       insn @ELR: 0x%08x", *(const uint32_t*)(uintptr_t)regs->elr);
     }
     triple_fault();
+    return -1;
 }
 
 /* Synchronous exception taken *inside the kernel* (EL1). Faults in the unikernel kernel are
