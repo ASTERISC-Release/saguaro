@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       suites:
-        description: "scripts/test.sh suites (empty = all)"
+        description: "scripts/test.sh suites (default: PAL and LibOS regression only; see scripts/test.sh --list for the application suites)"
         required: false
-        default: ""
+        default: "pal libos"
       stress:
         description: "also run scripts/stress_rewrite.sh (aarch64 only; ~10 min)"
         type: boolean
@@ -44,7 +44,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install build and test prerequisites
+      - name: Install build and test dependencies
+        run: scripts/dependencies.sh --build-only
+
+      - name: Install application prerequisites
+        if: ${{ inputs.suites != 'pal libos' }}
         run: INSTALL_RUSTUP=1 scripts/dependencies.sh
 
       - name: Build and install Gramine (direct PAL)
@@ -55,7 +59,7 @@ jobs:
           libdir=$(dirname "$(find "$GRAMINE_PREFIX" -name libsysdb.so | head -n 1)")
           scripts/ci/check-rwx.py "$libdir/libsysdb.so" "$libdir"/direct/loader "$libdir"/direct/libpal.so
 
-      - name: Run the test battery
+      - name: Run the regression tests
         env:
           SUITES: ${{ inputs.suites }}   # via env, never interpolated into the script text
         run: |
