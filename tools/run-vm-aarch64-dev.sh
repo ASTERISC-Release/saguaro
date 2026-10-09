@@ -11,7 +11,12 @@
 set -e
 
 REPO_ROOT=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
-PAL=${PAL:-$REPO_ROOT/build-vm-aarch64/pal/src/host/vm/pal}
+# BUILD names the meson build dir under the repo root: the host-configured one
+# (default build-vm-aarch64) and a container-configured one cannot share a name
+# (each build.ninja pins its own machine's meson + absolute paths), so pick one,
+# e.g. BUILD=build-vm-container inside the dev container.
+BUILD=${BUILD:-build-vm-aarch64}
+PAL=${PAL:-$REPO_ROOT/$BUILD/pal/src/host/vm/pal}
 RUN_TIMEOUT=${RUN_TIMEOUT:-8} # override to tune boot window
 WORK=$(mktemp -d /tmp/gramine-vm-aarch64.XXXXXX)
 TAIL_PID=
@@ -73,8 +78,14 @@ if [ ! -x "$STAGE/hello" ]; then
         exit 1
     fi
 fi
-install -Dm755 "$STAGE/hello" /bin/hello
-LIBSYSDB=$(readlink -f "$REPO_ROOT/build-vm-aarch64/libos/src/libsysdb.so")
+# Plain cp, NOT `install -D`: coreutils' install -D materialises leading path
+# components as real directories, which silently replaces Ubuntu's usrmerge
+# symlink /bin -> usr/bin with an empty dir and destroys /bin/sh for everything
+# else in the container (observed: mbedtls's add_install_script('/bin/sh') then
+# fails any meson reconfigure).
+cp -f "$STAGE/hello" /bin/hello
+chmod 755 /bin/hello
+LIBSYSDB=$(readlink -f "$REPO_ROOT/$BUILD/libos/src/libsysdb.so")
 sed "s|@LIBSYSDB@|$LIBSYSDB|" "$STAGE/hello.manifest.template" > /bin/hello.manifest
 
 "$VIRTIOFSD" --socket-path "$WORK/vhostfs" --shared-dir / --log-level error \

@@ -22,9 +22,15 @@ project(
 #       We can change to c2x when we drop *EL8 and Ubuntu 20.04.
 #       We can't change to c23 for any supported versions yet (requires at
 #       least gcc 14).
-if meson.get_compiler('c').has_argument('-std=c23')
+# vm build: stay on the project default c11. GCC >= 15 actually implements the
+# C23 keyword-ification of memcpy/memmove/memset ("counted-by-reference"
+# functions), which makes common/include/api.h's own declarations a syntax
+# error; the vm PAL/LibOS sources use no C23 constructs. (Historically the vm
+# build only ever saw "c23" on gcc 13, whose early mode did not reserve those
+# keywords.)
+if get_option('vm') != 'enabled' and meson.get_compiler('c').has_argument('-std=c23')
   add_project_arguments('-std=c23', language: 'c')
-elif meson.get_compiler('c').has_argument('-std=c2x')
+elif get_option('vm') != 'enabled' and meson.get_compiler('c').has_argument('-std=c2x')
   add_project_arguments('-std=c2x', language: 'c')
 endif
 

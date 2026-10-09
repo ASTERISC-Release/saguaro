@@ -736,11 +736,14 @@ out:
     return 0;
 }
 
-static ssize_t pal_common_udp_recv(struct pal_handle *handle,
-                                   struct iovec *iov, size_t iov_len,
-                                   size_t *out_total_size,
-                                   struct pal_socket_addr *addr,
-                                   bool force_nonblocking)
+/* `int`, not ssize_t: struct socket_ops.recv is declared `int` (tcp twin above)
+ * and every return here is an error code or a small byte count. gcc >= 14 made
+ * the ops-table pointer-type mismatch a hard error. */
+static int pal_common_udp_recv(struct pal_handle *handle,
+                               struct iovec *iov, size_t iov_len,
+                               size_t *out_total_size,
+                               struct pal_socket_addr *addr,
+                               bool force_nonblocking)
 {
     __UNUSED(addr);
     assert(handle->hdr.type == PAL_TYPE_SOCKET);

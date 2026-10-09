@@ -61,6 +61,7 @@ int delay(uint64_t delay_us, bool* continue_gate) {
      * the x86 implementation). delay() is the idle thread's steady state on every CPU
      * (~every 10ms); a MASKED observation on a CPU whose tick counter is frozen proves the
      * deafness is a persistently masked DAIF in this EL1 context. */
+    extern uint32_t dbg_this_cpu_id(void);
     {
         uint64_t daif_live;
         __asm__ volatile("mrs %0, daif" : "=r"(daif_live));

@@ -355,6 +355,10 @@ struct virtio_vsock {
 };
 
 int virtio_vsock_socket(int domain, int type, int protocol);
+/* lookup of the locally-allocated guest port for a vsock fd (defined in
+ * kernel_virtio_vsock.c; used by pal_common_sockets.c). Declared here since
+ * gcc >= 14 errors on implicit function declarations. */
+int fetch_guest_port_given_sockfd(int sockfd);
 int virtio_vsock_bind(int sockfd, const void* addr, size_t addrlen, uint16_t* out_new_port,
                       bool is_ipv4, bool ipv6_v6only, bool reuseport);
 int virtio_vsock_listen(int sockfd, int backlog);

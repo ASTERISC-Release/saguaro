@@ -27,6 +27,7 @@
 #include "pal_internal.h"
 
 #include "kernel_apic.h"
+#include "vm_callbacks.h" /* vm_mmio_* prototypes (gcc >= 14 errors on implicit declarations) */
 #include "kernel_virtio.h"
 
 /* QEMU virt PCIe ECAM (hw/arm/virt.c memmap[VIRT_PCIE_ECAM]) */
