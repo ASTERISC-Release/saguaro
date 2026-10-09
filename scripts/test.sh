@@ -2,16 +2,16 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
-# run_all_tests.sh — run the full aarch64 port test battery:
+# test.sh — run the full aarch64 port test battery:
 #   PAL regression, LibOS regression, and the CI example applications
 #   (helloworld, multi-thread, busybox, bash, redis, memcached, sqlite, python,
 #   lighttpd, nginx, rust, networks).
 #
 # Usage:
-#   ./run_all_tests.sh                 # everything
-#   ./run_all_tests.sh libos redis     # only the named suites
-#   ./run_all_tests.sh --list          # list suite names
-#   ./run_all_tests.sh --no-build      # skip manifest rebuilds of the pytest suites
+#   scripts/test.sh                 # everything
+#   scripts/test.sh libos redis     # only the named suites
+#   scripts/test.sh --list          # list suite names
+#   scripts/test.sh --no-build      # skip manifest rebuilds of the pytest suites
 #
 # Environment overrides:
 #   GRAMINE_PREFIX   install prefix (default: ~/.local/gramine)
@@ -42,7 +42,7 @@
 #    only imported by the SGX-signing tools, which stay disabled.)
 #
 #   # 2. Configure, build, install into a private prefix (~3 min native build).
-#   #    Or just run ./install.sh, which automates this step (and optionally
+#   #    Or just run scripts/install.sh, which automates this step (and optionally
 #   #    step 1 with --deps) and can chain into this script via --run-tests.
 #   #    `ninja install` places the CLI scripts in <prefix>/bin and the
 #   #    graminelibos package in <prefix>/lib/python3.X/site-packages — which
@@ -57,10 +57,10 @@
 #
 #   # 3. Run the battery (GRAMINE_PREFIX/PYTHONPATH are set by the script
 #   #    itself; export them manually only if you installed elsewhere):
-#   ./run_all_tests.sh
+#   scripts/test.sh
 #
 #   # Iterating on a code change afterwards:
-#   ninja -C build-$(uname -m) install && ./run_all_tests.sh --no-build
+#   ninja -C build-$(uname -m) install && scripts/test.sh --no-build
 #
 # nasm is only needed with -Dtests=enabled on x86_64 (the asm/x86_64 regression
 # module); busybox/redis/memcached fetch their upstream tarballs on their
@@ -86,7 +86,7 @@
 
 set -u
 
-REPO="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+REPO="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
 . "$REPO/scripts/gramine-env.sh"   # GRAMINE_PREFIX, PATH, PYTHONPATH, LOGDIR
 mkdir -p "$LOGDIR"
 
@@ -98,7 +98,7 @@ RUN=()
 declare -a REQUESTED=()
 for arg in "$@"; do
     case "$arg" in
-        -h|--help)  awk '/^set -u/{exit} /^# run_all_tests.sh/{p=1} p&&/^#/{sub(/^# ?/,""); print}' "$0"; exit 0 ;;
+        -h|--help)  awk '/^set -u/{exit} /^# test.sh/{p=1} p&&/^#/{sub(/^# ?/,""); print}' "$0"; exit 0 ;;
         --list)     printf '%s\n' "${ALL_SUITES[@]}"; exit 0 ;;
         --no-build) DO_BUILD=0 ;;
         *)          matched=0

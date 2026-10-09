@@ -13,7 +13,7 @@
 #   threadstorm (default: all of them; the two signals_* variants are subsets of `signals`).
 #   TMO=<s> kills a hung run (default 30).
 # Failing runs' output is kept in $FAILDIR (default /tmp/rewrite-stress-fail).
-# Needs the install from ./install.sh and `gramine-test build` prerequisites (python deps).
+# Needs the install from scripts/install.sh and `gramine-test build` prerequisites (python deps).
 set -uo pipefail
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 DIR=$HERE/../libos/test/regression

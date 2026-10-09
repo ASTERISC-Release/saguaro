@@ -18,7 +18,7 @@ set -uo pipefail
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 BUILD=${1:-$HERE/../build-aarch64}
 STUB=$HERE/syntax-check-x86          # stub of the x86-only <asm/prctl.h>
-[ -f "$BUILD/build.ninja" ] || { echo "no build.ninja in $BUILD (run install.sh first)"; exit 2; }
+[ -f "$BUILD/build.ninja" ] || { echo "no build.ninja in $BUILD (run scripts/install.sh first)"; exit 2; }
 cd "$BUILD"
 
 pass=0; fail=0; skipped=0

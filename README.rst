@@ -50,10 +50,10 @@ Quick start
 
 On Debian/Ubuntu, from the repository root::
 
-    scripts/install-test-prereqs.sh   # host packages (uses sudo)
-    ./install.sh                      # build and install into ~/.local/gramine
-    . scripts/gramine-env.sh          # put the install on PATH / PYTHONPATH
-    ./run_all_tests.sh                # regression tests and example applications
+    scripts/dependencies.sh           # host packages (uses sudo)
+    scripts/install.sh                # build, install into ~/.local/gramine, write its env.sh
+    . ~/.local/gramine/env.sh         # put the install on PATH / PYTHONPATH (this shell)
+    scripts/test.sh                   # regression tests and example applications
 
 Run an application::
 
@@ -61,7 +61,7 @@ Run an application::
     make
     gramine-direct helloworld
 
-``./install.sh --help`` lists the options (install prefix, ``--vm``, ``--graphics
+``scripts/install.sh --help`` lists the options (install prefix, ``--vm``, ``--graphics
 disabled``, ...). ``CI-Examples/`` contains ready-made applications;
 ``CI-Examples/install-all-prereqs.sh`` installs the host packages that some of them
 (curl, gcc, iperf, mongodb, nodejs, openjdk, pytorch, r) need.

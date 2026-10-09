@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       suites:
-        description: "run_all_tests.sh suites (empty = all)"
+        description: "scripts/test.sh suites (empty = all)"
         required: false
         default: ""
       stress:
@@ -45,17 +45,17 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install build and test prerequisites
-        run: INSTALL_RUSTUP=1 scripts/install-test-prereqs.sh
+        run: INSTALL_RUSTUP=1 scripts/dependencies.sh
 
       - name: Build and install Gramine (direct PAL)
-        run: ./install.sh --prefix "$GRAMINE_PREFIX"
+        run: scripts/install.sh --prefix "$GRAMINE_PREFIX"
 
       - name: Run the test battery
         env:
           SUITES: ${{ inputs.suites }}   # via env, never interpolated into the script text
         run: |
           export PATH="$HOME/.cargo/bin:$PATH"
-          ./run_all_tests.sh $SUITES
+          scripts/test.sh $SUITES
 
       - name: Rewrite stress (aarch64)
         if: ${{ inputs.stress && matrix.arch == 'aarch64' }}
