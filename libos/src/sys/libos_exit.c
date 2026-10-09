@@ -88,25 +88,7 @@ noreturn void thread_exit(int error_code, int term_signal) {
         PalThreadExit(/*clear_child_tid=*/NULL);
     }
 
-#ifdef __aarch64__
-    /* Drop this thread's TLS-keyed PAL_TCB registry binding *before* it removes itself from the
-     * thread list -- that removal is what releases the exec winner's kill_other_threads() loop,
-     * which then unmaps (and, via mmap reuse, hands to new threads) the address region this
-     * binding is keyed by -- and take TPIDR_EL0 over for Gramine's own use (tagged-PAL_TCB fast
-     * path) so every remaining lookup on this host thread (check_last_thread(), the async
-     * cleanup, _PalThreadExit()'s host-stack recycling, the wait-forever park) keeps resolving
-     * *this* thread's own PAL_TCB without a registry entry. This thread never runs guest code
-     * again from here, and a live thread's TPIDR_EL0 is unique, so nothing can legitimately
-     * collide with the abandoned TLS address anymore.
-     *
-     * Ordering matters: the own-PAL_TCB must be resolved *before* deregistering, since the
-     * deregistration makes this thread's own next pal_get_tcb() miss the registry and fall back
-     * to the singleton -- the boot/exec-winner thread's PAL_TCB, i.e. a *different* thread.
-     * The deletion itself is ownership-checked for the same reason (_PalThreadExit()'s comment). */
-    uintptr_t exiting_tcb = (uintptr_t)pal_get_tcb() | 1;
-    libos_tcb_registry_del(get_tls(), (PAL_TCB*)(exiting_tcb & ~(uintptr_t)1));
-    __asm__ volatile("msr tpidr_el0, %0" :: "r"(exiting_tcb) : "memory");
-#endif
+    libos_arch_thread_exit_release_tcb();
 
     if (cur_thread->robust_list) {
         release_robust_list(cur_thread->robust_list);

@@ -229,6 +229,21 @@ static inline void pal_tcb_singleton_snapshot_before_user_entry(void) {
 #endif
 }
 
+/* Called by _PalThreadExit() as the last moment this thread's own PAL_TCB is needed (it was
+ * resolved through the registry just before): drop the thread's registry entry, which is keyed by
+ * its app TLS pointer. From then on the abandoned TLS address may legitimately be reused by
+ * another thread's registration; a stale entry would let that thread hijack this one's (soon
+ * freed) PAL_TCB. The deletion is ownership-checked against \p tcb: a new thread born after the
+ * region's mmap reuse may already have re-registered this key, and that binding must survive.
+ * Tagged (Gramine-internal) threads have no registry entry, so they are skipped. */
+static inline void pal_arch_thread_exit_release_tcb(PAL_TCB* tcb) {
+    uintptr_t exit_tp;
+    __asm__("mrs %0, tpidr_el0" : "=r"(exit_tp));
+    if (!(exit_tp & 1)) {
+        libos_tcb_registry_del(exit_tp, tcb);
+    }
+}
+
 static inline unsigned long count_ulong_bits_set(unsigned long x) {
     return (unsigned long)__builtin_popcountl(x);
 }

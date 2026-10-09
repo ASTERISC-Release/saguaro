@@ -242,6 +242,12 @@ typedef int64_t arch_syscall_arg_t;
  * application never rewrites, so there is nothing to snapshot. */
 static inline void pal_tcb_singleton_snapshot_before_user_entry(void) {}
 
+/* aarch64-only hook (see arch/aarch64/pal_arch.h): nothing is keyed by the application's TLS
+ * pointer on x86_64, so there is no registry entry to drop at thread exit. */
+static inline void pal_arch_thread_exit_release_tcb(PAL_TCB* tcb) {
+    (void)tcb;
+}
+
 static inline void pal_context_set_ip(PAL_CONTEXT* context, uintptr_t insnptr) {
     context->rip = insnptr;
 }

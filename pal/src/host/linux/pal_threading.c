@@ -237,21 +237,7 @@ noreturn void _PalThreadExit(int* clear_child_tid) {
                   "lock is not naturally aligned in g_thread_stack_lock");
     static_assert(sizeof(*clear_child_tid) == 4, "unexpected clear_child_tid size");
 
-#ifdef __aarch64__
-    /* Drop this thread's PAL_TCB registry entry (keyed by its app TLS pointer) -- this is the
-     * last moment at which this thread's own PAL_TCB was needed (`pal_get_linux_tcb()` above
-     * resolved through the registry), and no code after the asm stub resolves anything. From now
-     * on the abandoned TLS address may legitimately be reused by another thread's registration;
-     * leaving a stale entry behind would let that thread hijack this one's (soon freed) PAL_TCB.
-     * The deletion is ownership-checked (tcb from `pal_get_linux_tcb()` above): a new thread
-     * born after the region's mmap reuse may already have re-registered this key, and that
-     * binding must survive. Tagged (Gramine-internal) threads have no registry entry, skip. */
-    uintptr_t exit_tp;
-    __asm__("mrs %0, tpidr_el0" : "=r"(exit_tp));
-    if (!(exit_tp & 1)) {
-        libos_tcb_registry_del(exit_tp, tcb);
-    }
-#endif
+    pal_arch_thread_exit_release_tcb(tcb);
 
     _PalThreadExit_asm_stub(&g_thread_stack_lock.lock, clear_child_tid);
 }

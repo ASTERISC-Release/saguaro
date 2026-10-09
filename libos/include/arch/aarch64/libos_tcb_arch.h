@@ -70,3 +70,60 @@ static inline uintptr_t get_tls(void) {
     __asm__ volatile("mrs %0, tpidr_el0" : "=r"(addr));
     return addr;
 }
+
+/*
+ * Per-thread PAL_TCB lifecycle hooks (shared code calls these; x86_64 has no equivalents because
+ * its PAL_TCB lives in a segment register the guest never touches).
+ *
+ * On aarch64 the guest owns TPIDR_EL0, so a thread's PAL_TCB is reached through a TLS-keyed
+ * registry plus a one-shot snapshot (see pal_arch.h and findings #9, #12 and #13 in
+ * Documentation/devel/aarch64/direct-pal-port-log.md).
+ */
+
+/*
+ * Called right before set_default_tls() zeroes TPIDR_EL0 in preparation for the application's own
+ * TLS setup (boot, and execve()). The thread's PAL_TCB must stay reachable via
+ * g_pal_tcb_singleton for the code between here and the application's entry point (e.g.
+ * execute_elf_object()'s own vdso_map_init()/bkeep_mmap() bookkeeping), so it is snapshotted now,
+ * while the tagged TPIDR_EL0 fast path still resolves it. See
+ * pal_tcb_singleton_snapshot_before_user_entry()'s comment in pal_arch.h.
+ */
+static inline void libos_arch_before_user_entry(void) {
+    pal_tcb_singleton_snapshot_before_user_entry();
+}
+
+/*
+ * execve(): abandon the pre-execve TLS pointer by deleting this thread's registry entry now. Its
+ * old main-stack region is about to be munmapped and routinely re-mmapped as the *new* image's
+ * main stack -- or a new pthread's stack -- by a *different* thread, which must not resolve
+ * through this stale binding (see g_pal_tcb_registry's comment in pal_arch_exception.c).
+ * Race-free: sibling threads are already killed at this point, and this thread's own
+ * registrations for the new TLS pointer happen lazily (scan miss -> singleton, which is exactly
+ * this thread thanks to libos_arch_before_user_entry()). The deletion is ownership-checked with
+ * the same pal_get_tcb() value the snapshot stored (see _PalThreadExit()'s comment).
+ */
+static inline void libos_arch_exec_abandon_old_tls(void) {
+    libos_tcb_registry_del(get_tls(), pal_get_tcb());
+}
+
+/*
+ * Thread exit: drop this thread's TLS-keyed registry binding *before* it removes itself from the
+ * thread list -- that removal is what releases the exec winner's kill_other_threads() loop, which
+ * then unmaps (and, via mmap reuse, hands to new threads) the address region this binding is
+ * keyed by -- and take TPIDR_EL0 over for Gramine's own use (tagged-PAL_TCB fast path) so every
+ * remaining lookup on this host thread (check_last_thread(), the async cleanup,
+ * _PalThreadExit()'s host-stack recycling, the wait-forever park) keeps resolving *this* thread's
+ * own PAL_TCB without a registry entry. This thread never runs guest code again from here, and a
+ * live thread's TPIDR_EL0 is unique, so nothing can legitimately collide with the abandoned TLS
+ * address anymore.
+ *
+ * Ordering matters: the own-PAL_TCB must be resolved *before* deregistering, since the
+ * deregistration makes this thread's own next pal_get_tcb() miss the registry and fall back to
+ * the singleton -- the boot/exec-winner thread's PAL_TCB, i.e. a *different* thread. The deletion
+ * itself is ownership-checked for the same reason (_PalThreadExit()'s comment).
+ */
+static inline void libos_arch_thread_exit_release_tcb(void) {
+    uintptr_t exiting_tcb = (uintptr_t)pal_get_tcb() | 1;
+    libos_tcb_registry_del(get_tls(), (PAL_TCB*)(exiting_tcb & ~(uintptr_t)1));
+    __asm__ volatile("msr tpidr_el0, %0" :: "r"(exiting_tcb) : "memory");
+}

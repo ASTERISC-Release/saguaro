@@ -19,23 +19,8 @@
 noreturn static void __libos_syscall_execve_rtld(void* new_argp, elf_auxv_t* new_auxv) {
     int ret = 0;
 
-#ifdef __aarch64__
-    /* Same reasoning as libos_init.c's call before its own set_default_tls(): this thread's
-     * PAL_TCB needs to stay reachable via g_pal_tcb_singleton for the rest of this function (and
-     * execute_elf_object() at the end of it) before TPIDR_EL0 is zeroed below and, later,
-     * overwritten by the new application image's own TLS setup. */
-    pal_tcb_singleton_snapshot_before_user_entry();
-
-    /* Abandon the pre-execve TLS pointer: delete this thread's registry entry now (its old
-     * main-stack region is about to be munmapped and routinely re-mmapped as the *new* image's
-     * main stack -- or a new pthread's stack -- by a *different* thread, which must not resolve
-     * through this stale binding; see g_pal_tcb_registry's comment in pal_arch_exception.c).
-     * Race-free: sibling threads are already killed at this point, and this thread's own
-     * registrations for the new TLS pointer happen lazily (scan miss -> singleton, which is
-     * exactly this thread thanks to the snapshot above). The deletion is ownership-checked with
-     * the same pal_get_tcb() value the snapshot stored (see _PalThreadExit()'s comment). */
-    libos_tcb_registry_del(get_tls(), pal_get_tcb());
-#endif
+    libos_arch_before_user_entry();
+    libos_arch_exec_abandon_old_tls();
 
     set_default_tls();
 

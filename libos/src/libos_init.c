@@ -515,16 +515,7 @@ noreturn void libos_init(const char* const* argv, const char* const* envp) {
         /* UNREACHABLE */
     }
 
-#ifdef __aarch64__
-    /* This thread's PAL_TCB is about to become unreachable via TPIDR_EL0: set_default_tls() right
-     * below zeroes it in preparation for the application's own TLS setup (ld.so's startup, for a
-     * dynamically-linked binary) -- and code between here and actually reaching the application's
-     * entry point (e.g. execute_elf_object()'s own vdso_map_init()/bkeep_mmap() bookkeeping) still
-     * needs to reach this thread's PAL_TCB via pal_get_tcb() in the meantime. See
-     * pal_tcb_singleton_snapshot_before_user_entry()'s comment in pal_arch.h for why this snapshot
-     * has to happen in exactly this window -- before TPIDR_EL0 is zeroed, not after. */
-    pal_tcb_singleton_snapshot_before_user_entry();
-#endif
+    libos_arch_before_user_entry();
 
     set_default_tls();
 

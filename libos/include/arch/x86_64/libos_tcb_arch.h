@@ -155,3 +155,12 @@ static inline uintptr_t get_tls(void) {
     (void)PalSegmentBaseGet(PAL_SEGMENT_FS, &addr);
     return addr;
 }
+
+/*
+ * Per-thread PAL_TCB lifecycle hooks, see the aarch64 version for what they do there. On x86_64
+ * the PAL_TCB is reached through the GS segment, which the guest never touches, so nothing needs
+ * to happen at these points.
+ */
+static inline void libos_arch_before_user_entry(void) {}
+static inline void libos_arch_exec_abandon_old_tls(void) {}
+static inline void libos_arch_thread_exit_release_tcb(void) {}
