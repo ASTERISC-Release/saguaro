@@ -92,3 +92,12 @@ examples in ``CI-Examples/`` are BSD-3-Clause unless a file says otherwise (see
 ``LICENSE.addendum.txt``). Files added in this tree carry ``Copyright (C) 2026
 The ASTERISC Research Lab``; the copyright notices of upstream Gramine and
 gramine-tdx are retained.
+
+Acknowledgements
+================
+
+This work builds on `Gramine <https://github.com/gramineproject/gramine>`__ and its
+Intel TDX and virtual-machine fork `gramine-tdx
+<https://github.com/gramineproject/gramine-tdx>`__. We thank the Gramine and
+gramine-tdx authors and contributors, whose code, design and history this tree
+retains.
