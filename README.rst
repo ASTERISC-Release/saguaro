@@ -39,8 +39,12 @@ Supported configurations
      - ✅ works; regression suites and example applications pass
    * - ``vm`` (``gramine-vm``, a unikernel in a QEMU guest)
      - ✅ inherited from upstream
-     - ⚠️ partly validated (work in progress)
+     - ⚠️ experimental
      - ❌ planned
+   * - ↳ ``vm`` with ``graphics`` (graphics host redirection)
+     - ⚠️ experimental
+     - ⚠️ experimental
+     - ❌ not supported
    * - ``tdx`` (Intel TDX), ``sgx`` (Intel SGX)
      - ✅ inherited from upstream
      - ❌ not applicable
