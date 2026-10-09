@@ -1,0 +1,75 @@
+diff --git i/gcc/Makefile w/gcc/Makefile
+index 954ae74..b1e902d 100644
+--- i/gcc/Makefile
++++ w/gcc/Makefile
+@@ -37,6 +37,7 @@ gcc.manifest: gcc.manifest.template
+ 		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
+ 		-Darch_libdir=$(ARCH_LIBDIR) \
+ 		-Dgcc_lib_path=$(GCC_LIB_PATH) \
++		-Dlib64_dir=$(wildcard /lib64) \
+ 		-Dgcc_major_version=$(GCC_MAJOR_VERSION) \
+ 		$< >$@
+ 
+diff --git i/gcc/gcc.manifest.template w/gcc/gcc.manifest.template
+index e8fb57a..d9c5a15 100644
+--- i/gcc/gcc.manifest.template
++++ w/gcc/gcc.manifest.template
+@@ -17,7 +17,9 @@ fs.mounts = [
+   { uri = "file:{{ gramine.runtimedir() }}", path = "/lib" },
+   { uri = "file:{{ arch_libdir }}", path = "{{ arch_libdir }}" },
+   { uri = "file:/usr", path = "/usr" },
+-  { uri = "file:/lib64", path = "/lib64" },
++{%- if lib64_dir %}
++  { uri = "file:{{ lib64_dir }}", path = "{{ lib64_dir }}" },
++{%- endif %}
+ 
+   # cannot replace /tmp with "tmpfs" mount because Gramine currently doesn't support multi-process
+   # "tmpfs" files (e.g., "tmpfs" files created in a child process are not visible in the parent)
+@@ -39,7 +41,9 @@ sgx.trusted_files = [
+   "file:{{ arch_libdir }}/",
+   "file:/usr/{{ arch_libdir }}/",
+   "file:{{ gcc_lib_path }}/{{ gcc_major_version }}/",
+-  "file:/lib64/",
++{%- if lib64_dir %}
++  "file:{{ lib64_dir }}/",
++{%- endif %}
+   "file:/usr/include/",
+ ]
+ 
+diff --git i/nodejs/nodejs.manifest.template w/nodejs/nodejs.manifest.template
+index 8377888..eb6681e 100644
+--- i/nodejs/nodejs.manifest.template
++++ w/nodejs/nodejs.manifest.template
+@@ -13,6 +13,7 @@ loader.insecure__use_cmdline_argv = true
+ loader.insecure__use_host_env = true
+ 
+ fs.mounts = [
++  { type = "tmpfs", path = "/tmp" },
+   { uri = "file:{{ gramine.runtimedir() }}", path = "/lib" },
+   { uri = "file:{{ arch_libdir }}", path = "{{ arch_libdir }}" },
+   { uri = "file:/usr/{{ arch_libdir }}", path = "/usr/{{ arch_libdir }}" },
+diff --git i/openjdk/java.manifest.template w/openjdk/java.manifest.template
+index 295b2de..58544fc 100644
+--- i/openjdk/java.manifest.template
++++ w/openjdk/java.manifest.template
+@@ -10,6 +10,7 @@ loader.insecure__use_cmdline_argv = true
+ loader.env.LD_LIBRARY_PATH = "/lib:{{ arch_libdir }}:/usr/lib:/usr/{{ arch_libdir }}"
+ 
+ fs.mounts = [
++  { type = "tmpfs", path = "/tmp" },
+   { uri = "file:{{ gramine.runtimedir() }}", path = "/lib" },
+   { uri = "file:{{ arch_libdir }}", path = "{{ arch_libdir }}" },
+   { uri = "file:/usr", path = "/usr" },
+diff --git i/pytorch/Makefile w/pytorch/Makefile
+index d3c72a3..9d51d21 100644
+--- i/pytorch/Makefile
++++ w/pytorch/Makefile
+@@ -27,7 +27,7 @@ endif
+ $(VENV_DIR)/.INSTALLATION_OK:
+ 	python3 -m venv $(VENV_DIR) \
+ 	&& source $(VENV_DIR)/bin/activate \
+-	&& pip3 install torchvision pillow \
++	&& pip3 install torch torchvision pillow --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple \
+ 	&& python3 download-pretrained-model.py \
+ 	&& deactivate \
+ 	&& touch $@
