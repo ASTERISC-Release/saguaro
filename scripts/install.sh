@@ -21,7 +21,8 @@
 #                          compile the Tirith graphics host-redirection paths into the LibOS
 #                          (default: enabled)
 #   -j N                   ninja parallelism (default: nproc)
-#   --run-tests [suite...] run scripts/test.sh --no-build afterwards (naming suites implies this)
+#   --run-tests [suite...] run scripts/test.sh afterwards, building the test manifests first
+#                          (naming suites implies this)
 #   -h, --help
 #
 # Environment: after installing, <prefix>/env.sh is written. A script cannot change the environment
@@ -155,7 +156,7 @@ fi
 if [ "$RUN_TESTS" = 1 ]; then
     echo ">>> running the test battery"
     export GRAMINE_PREFIX="$PREFIX"
-    exec "$script_dir/test.sh" --no-build ${TEST_SUITES[@]+"${TEST_SUITES[@]}"}
+    exec "$script_dir/test.sh" ${TEST_SUITES[@]+"${TEST_SUITES[@]}"}
 fi
 
 echo
