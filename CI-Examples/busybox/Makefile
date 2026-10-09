@@ -38,6 +38,10 @@ $(SRCDIR)/.config: $(SRCDIR)/Makefile
 	# Enable usage of Busybox's built-in applets
 	sed -e 's/.*CONFIG_FEATURE_SH_STANDALONE.*/CONFIG_FEATURE_SH_STANDALONE=y/' \
 		-i $(SRCDIR)/.config
+	# Busybox 1.32's tc/arp/arping applets do not compile against current (>= ~6.x) Linux kernel
+	# headers (missing struct tc_cbq_wrropt etc.), on any architecture. The test does not use them.
+	sed -e 's/^CONFIG_\(TC\|ARP\|ARPING\)=y/# CONFIG_\1 is not set/' \
+		-i $(SRCDIR)/.config
 
 $(SRCDIR)/busybox: $(SRCDIR)/.config
 	$(MAKE) -C $(SRCDIR)
