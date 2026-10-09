@@ -123,6 +123,7 @@ GramineManifestSchema = Schema({
         'experimental__enable_flock': bool,
         'experimental__shared_input_ring': bool,
         'insecure__allow_eventfd': bool,
+        'rewrite_syscalls': bool,
 
         # Description of this thing will be both very hard to write, and mostly useless, since
         # majority of errors will be semantic (wrong offsets), not syntactic. We'll leave it almost

@@ -1,4 +1,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
+# REWRITE=1|0 forces sys.rewrite_syscalls on/off in the manifest; empty = LibOS default
+REWRITE ?=
 ARCH_LIBDIR ?= /lib/$(shell $(CC) -dumpmachine)
 CFLAGS = -O2 -Wall -Wextra
 
@@ -7,8 +9,9 @@ all: syscall_bench syscall_bench.manifest
 
 syscall_bench: syscall_bench.c
 
+.PHONY: syscall_bench.manifest
 syscall_bench.manifest: syscall_bench.manifest.template
-	gramine-manifest -Dlog_level=error -Darch_libdir=$(ARCH_LIBDIR) $< $@
+	gramine-manifest -Dlog_level=error -Darch_libdir=$(ARCH_LIBDIR) -Drewrite=$(REWRITE) $< $@
 
 .PHONY: bench
 bench: all

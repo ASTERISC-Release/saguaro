@@ -3,6 +3,7 @@ libos_sources_arch_list = {
     'libos_context.c': {},
     'libos_cpuid.c': {},
     'libos_elf_entry.S': {},
+    'libos_syscall_patch.c': {},
     'libos_table.c': {},
     'start.S': {},
     'syscallas.S': {},

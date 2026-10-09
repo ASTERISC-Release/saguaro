@@ -260,7 +260,10 @@ bool maybe_emulate_syscall(PAL_CONTEXT* context) {
     uint8_t* pc = (uint8_t*)context->pc;
     /* `svc #0` encodes as the little-endian byte sequence 01 00 00 d4; every aarch64 instruction
      * is 4 bytes, unlike x86_64's variable-length `syscall` (2 bytes: 0f 05). */
-    if (pc[0] == 0x01 && pc[1] == 0x00 && pc[2] == 0x00 && pc[3] == 0xd4) {
+    bool is_svc = pc[0] == 0x01 && pc[1] == 0x00 && pc[2] == 0x00 && pc[3] == 0xd4;
+    /* If another thread rewrote this very site between our trap and this check, the word is now a
+     * branch to one of our stubs; the trap is still a legitimate syscall. */
+    if (is_svc || libos_syscall_site_was_patched((uintptr_t)pc)) {
         /* Put the resume address ("the instruction after the trapped svc") in X16 -- the entry
          * contract's designated carrier, matching the GRAMINE_SYSCALL path (`adr x16, 1f`) and
          * regs[16]'s new role as the resume mirror (see syscallas.S).
@@ -275,6 +278,10 @@ bool maybe_emulate_syscall(PAL_CONTEXT* context) {
          * state (ucontext_to_pal_context()/pal_context_to_ucontext() already do this). */
         context->regs[16] = (uint64_t)pc + 4;
         context->pc = (uint64_t)&libos_syscall_entry;
+        /* Prototype fast path (opt-in): rewrite this site so it stops trapping. The current
+         * trap is still serviced through the emulation entry set up above. */
+        if (is_svc)
+            libos_try_patch_syscall_site((uintptr_t)pc);
         return true;
     }
     return false;
