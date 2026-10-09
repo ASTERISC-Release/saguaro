@@ -7,9 +7,14 @@ Validated 2026-10-08 on the WSL2 aarch64 box (see `ARM64_MILESTONE_A.md`, "Valid
 Not copied (x86 / Intel-specific): `tensorflow-lite`, `openvino`, `scikit-learn-intelex`.
 
 ## Host prerequisites
-`sudo apt install nodejs openjdk-17-jdk-headless r-base-core` (plus the usual build tools);
-`pip3 install --user --break-system-packages pymongo`; for mongodb a `mongod` on `PATH` (the
-official aarch64 tarball works, e.g. 7.0.14 from fastdl.mongodb.org, ARMv8.2 CPU required).
+Every example has an idempotent `install-prereqs.sh` (Debian/Ubuntu; installs only what is missing,
+uses `sudo` for apt and may prompt; `DRY_RUN=1` previews). `CI-Examples/install-all-prereqs.sh
+[example...]` runs them all, and `run_examples.sh --prereqs` does that before running the tests.
+- curl: curl, python3, netcat-openbsd · gcc: build-essential, patch, wget · iperf: build-essential, wget
+- nodejs: nodejs · openjdk: openjdk-17 (first of 17/21/11 available) · r: r-base-core
+- pytorch: python3-venv, python3-pip, lsb-release (`WITH_NSS=1` adds libnss-mdns/libnss-myhostname)
+- mongodb: runtime libs, `pymongo`, and the official release tarball (SHA-256 checked) unpacked to
+  `~/.local/mongodb` with `mongod` linked into `~/.local/bin` (ARMv8.2 CPU required on arm64)
 `iperf` needs two processes (server under Gramine, client natively) and is not in the runner:
 `cd CI-Examples/iperf && make && gramine-direct iperf3` then
 `LD_LIBRARY_PATH=./install ./install/iperf3 -c 127.0.0.1`.

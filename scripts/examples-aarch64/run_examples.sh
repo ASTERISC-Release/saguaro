@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
-# Usage: run_examples.sh [examples-dir]   (default: ../../CI-Examples)
+# Usage: run_examples.sh [--prereqs] [examples-dir]   (default dir: ../../CI-Examples)
+#   --prereqs   first run CI-Examples/install-all-prereqs.sh (apt/sudo; downloads mongod)
 set -uo pipefail
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
+PREREQS=0; [ "${1:-}" = "--prereqs" ] && { PREREQS=1; shift; }
 EX=${1:-$HERE/../../CI-Examples}
+export PATH="$HOME/.local/bin:$PATH"
+[ "$PREREQS" = 1 ] && "$EX/install-all-prereqs.sh"
 GRAMINE_PREFIX=${GRAMINE_PREFIX:-$HOME/.local/gramine}
 export PATH="$GRAMINE_PREFIX/bin:$PATH"
 export PYTHONPATH="$GRAMINE_PREFIX/lib/python3.12/site-packages${PYTHONPATH:+:$PYTHONPATH}"
