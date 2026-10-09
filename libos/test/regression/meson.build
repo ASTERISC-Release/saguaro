@@ -3,6 +3,7 @@ fs = import('fs')
 tests = {
     'abort': {},
     'abort_multithread': {},
+    'bad_fd': {},
     'bootstrap': {},
     'bootstrap_pie': {
         'pie': true,

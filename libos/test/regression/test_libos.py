@@ -268,6 +268,10 @@ class TC_01_Bootstrap(RegressionTestCase):
         self.assertIn('child exited with status: 0', stdout)
         self.assertIn('test completed successfully', stdout)
 
+    def test_207_bad_fd(self):
+        stdout, _ = self.run_binary(['bad_fd'])
+        self.assertIn('TEST OK', stdout)
+
     def test_206_double_fork(self):
         stdout, stderr = self.run_binary(['double_fork'])
         self.assertIn('TEST OK', stdout)

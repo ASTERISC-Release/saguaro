@@ -311,17 +311,21 @@ long libos_syscall_close(int fd) {
     if (!handle)
     {
         #ifdef ENABLE_SG
-            long _offset = libos_syscall_acquire_libos_lock();
-            comm_page_t* c = comm_page(_offset);
-            c->p1 = (uint64_t) fd;
-            c->req_bit = CLOSE;
+            /* An fd with no LibOS handle may belong to the host (SG); without a host agent
+             * (plain Linux PAL, e.g. the whole aarch64 port) the comm window is unmapped and
+             * the writes below would fault, so this must be plain EBADF there. */
+            if (sg_redirect_enabled()) {
+                long _offset = libos_syscall_acquire_libos_lock();
+                comm_page_t* c = comm_page(_offset);
+                c->p1 = (uint64_t) fd;
+                c->req_bit = CLOSE;
 
-            retval = (long)comm_sync_notify(c);
-            libos_syscall_relinquish_libos_lock(_offset);
-            return retval;
-        #else
-            return -EBADF;
+                retval = (long)comm_sync_notify(c);
+                libos_syscall_relinquish_libos_lock(_offset);
+                return retval;
+            }
         #endif
+        return -EBADF;
     }
     put_handle(handle);
     return 0;
@@ -382,9 +386,11 @@ long libos_syscall_lseek(int fd, off_t offset, int origin) {
     long retval;
 
     #ifdef ENABLE_SG
-        if(fd < fs_offset && !get_fd_handle(fd, NULL, NULL))
+        /* Only with a host agent (VM/TDX PAL): see sg_redirect_enabled(). Otherwise an invalid fd
+         * would be shifted into the host fd range and fault on the unmapped comm window. */
+        if (sg_redirect_enabled() && fd < fs_offset && !get_fd_handle(fd, NULL, NULL))
             fd += fs_offset; // Very very hacky and unstable solution (WorkAroud? krpobe for + 500 for qemu proc)
-        if (fd>fs_offset) {
+        if (sg_redirect_enabled() && fd>fs_offset) {
             log_debug("lseek (fd: %d offset: %ld origin: %d)\n", fd, offset, origin);
             long _offset = libos_syscall_acquire_libos_lock();
             comm_page_t* c = comm_page(_offset);
@@ -655,7 +661,7 @@ long libos_syscall_getdents(int fd, struct linux_dirent* buf, unsigned int count
 long libos_syscall_getdents64(int fd, struct linux_dirent64* buf, size_t count) {
     long retval;
     #ifdef ENABLE_SG
-        if(fd>fs_offset){
+        if(sg_redirect_enabled() && fd>fs_offset){
             long _offset = libos_syscall_acquire_libos_lock();
             comm_page_t* c = comm_page(_offset);
             c->p1 = (uint64_t) fd;

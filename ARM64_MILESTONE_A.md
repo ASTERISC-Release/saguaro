@@ -462,6 +462,20 @@ threads`' per-LWP tpidrs, immediately shows missing/duplicate/singleton-hijacked
 bindings. (c) Never `log_always` from inside registry add/scan/del: `log_always` →
 `pal_get_tcb()` → scan/add → recursion → stack smash.
 
+### Finding #14 — SG fd-number paths in close()/lseek()/getdents64() faulted on the unmapped comm window
+
+Found by running the iperf3 example from `gramineproject/examples`: the server died right
+after its first test with `Internal memory fault at 0x00f00018`. iperf3 `close()`s an fd that
+has no LibOS handle; Tirith's `ENABLE_SG` code treats any handle-less fd as a host (SG) fd
+and writes the request into the comm window at `COMM_ADDR = 0xf00000`, which only the VM/TDX
+deployment maps (same family as finding #7). Finding #7 gated the sites keyed on
+`hdl->type == TYPE_HOST` (inert without SG handles) but three sites key on the raw fd number
+and stayed live: `close()` with no handle, `lseek()` (which even shifts an invalid fd by
+`fs_offset = 500` into the host range) and `getdents64(fd > 500)`. All three now require
+`sg_redirect_enabled()`; without a host agent they return `-EBADF`. Regression test:
+`bad_fd` (`test_207_bad_fd`), which reproduces the exact fault on the old code. Pre-existing
+(reproduces with `sys.rewrite_syscalls = false`).
+
 ### Registry invariants (violating any resurrects the singleton-hijack family)
 
 - Full-scan termination requires `sizeof(g_pal_tcb_registry) == 2048` (`aligned(2048)`

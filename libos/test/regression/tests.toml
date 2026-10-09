@@ -5,6 +5,7 @@ manifests = [
   "argv_from_manifest",
   "abort",
   "abort_multithread",
+  "bad_fd",
   "bootstrap",
   "bootstrap_pie",
   "bootstrap_static",
