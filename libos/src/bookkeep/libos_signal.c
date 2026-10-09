@@ -467,63 +467,6 @@ bool is_user_string_readable(const char* addr) {
     }
 }
 
-#ifdef __aarch64__
-/*
- * Repair stale FEAT_PAuth (pointer authentication) signatures in forked children.
- *
- * Ubuntu's arm64 toolchain builds userspace with `-mbranch-protection=standard` (gcc's
- * default since 23.04): every non-leaf function authenticates its return address with
- * `autiasp`/`autibsp` (APIA/APIB key, SP as modifier) before `ret`, and an authentication
- * failure is raised as SIGILL at that exact instruction. PAC keys are per host task, and a
- * native fork() child still authenticates the parent's pre-fork signatures because the
- * kernel delivers the child with the parent's keys (empirically on this host: a pac-ret
- * child unwinding parent-signed frames exits cleanly under native fork(), while the very
- * same frames handed to a *different* task by any other means -- e.g. resuming another
- * thread's getcontext() snapshot with swapcontext() -- die with SIGILL even on native
- * Linux; keys do not travel outside fork()).
- *
- * Gramine emulates fork() without a host fork(): the child's register state is checkpointed
- * and later resumed by `return_from_syscall()` on a Gramine host thread -- architecturally
- * the swapcontext case above, so every subsequent `autiasp` in the child authenticates a
- * pre-fork signature against different per-task keys and kills the application (this is
- * invisible in locally-built test binaries unless they too are compiled with branch
- * protection; Ubuntu distro binaries like bash/coreutils always are). There is no EL0
- * interface to copy another task's PAC keys, so we emulate the *outcome* of the kernel's
- * key-copying instead: a SIGILL taken exactly at the pac-ret epilogue authentications is
- * treated as if authentication had succeeded. Canonicalizing the target (x30) to a plain
- * user VA (bits [63:48] <- sign bit of bit [47]) is a no-op on never-signed pointers, and
- * for any VA48 PAC format the address bits live in [47:0] untouched by the signature, so
- * the result is precisely the value a successful authentication returns.
- *
- * The repair is intentionally narrow: only the two SP-modifier encodings gcc/clang emit
- * for pac-ret (they differ in one bit selecting APIA vs APIB; both authenticate x30), and
- * only on the app-delivery path of `illegal_upcall()` -- Gramine-internal SIGILLs stay
- * fatal and SIGILLs at any other instruction are delivered to the application unchanged.
- */
-static bool repair_failed_pointer_authentication(PAL_CONTEXT* context) {
-    const uint32_t autiasp = 0xd50323bf;
-    const uint32_t autibsp = 0xd50323ff;
-
-    uintptr_t rip = pal_context_get_ip(context);
-    /* `rip` just executed, so its page is readable; no extra fault-guard needed. */
-    uint32_t insn = *(const uint32_t*)rip;
-
-    if ((insn & ~0x00000040u) != autiasp) {
-        return false;
-    }
-
-    /* Sign-extend bit [47] over [63:48]: the canonical "unsigned pointer" form under a
-     * VA48 (and, for these low VAs, VA52) userspace. Well-defined unsigned arithmetic. */
-    uint64_t lr = context->regs[30];
-    uint64_t ext = ((lr >> 47) & 1) ? ~(uint64_t)0xFFFF : 0;
-    lr = (lr & 0x0000FFFFFFFFFFFFULL) | ext;
-    context->regs[30] = lr;
-    context->pc = rip + 4;
-    log_debug("Repaired failed pointer-authentication of x30 at %p;"
-              " continuing as if authentication succeeded", (void*)rip);
-    return true;
-}
-#endif
 
 static void illegal_upcall(bool is_in_pal, uintptr_t addr, PAL_CONTEXT* context) {
     __UNUSED(is_in_pal);
@@ -533,22 +476,9 @@ static void illegal_upcall(bool is_in_pal, uintptr_t addr, PAL_CONTEXT* context)
     struct libos_vma_info vma_info = {.file = NULL};
     bool internal = is_internal(get_cur_thread()) || context_is_libos(context)
                     || lookup_vma((void*)addr, &vma_info) || (vma_info.flags & VMA_INTERNAL);
-#ifdef __aarch64__
-    /* One Gramine-internal `svc` site is intentional: the restorer trampoline that
-     * prepare_sigframe() installs as every guest signal handler's return address lives in
-     * libsysdb's own text (there's no SA_RESTORER-style libc restorer to point at on this
-     * architecture -- see rt_sigreturn_trampoline()'s comment in arch/aarch64/libos_context.c).
-     * The trap's PC is already reverted to the trapping instruction (see the SIGSYS rip fix
-     * in the PAL), so whitelist precisely: address of the `svc` word inside the trampoline,
-     * discovered by checking the trampoline's own second word rather than hardcoding an
-     * instruction-size offset. Anything else in Gramine-internal memory taking an illegal
-     * instruction remains a Gramine bug. */
-    void* tramp = libos_rt_sigreturn_trampoline_addr();
-    if (addr >= (uintptr_t)tramp && addr < (uintptr_t)tramp + 16
-            && ((uint32_t*)addr)[0] == 0xd4000001 /* svc #0 */) {
+    if (libos_arch_is_intentional_internal_insn(addr)) {
         internal = false;
     }
-#endif
     if (internal) {
         internal_fault("Illegal instruction during Gramine internal execution", addr, context);
     }
@@ -559,11 +489,9 @@ static void illegal_upcall(bool is_in_pal, uintptr_t addr, PAL_CONTEXT* context)
 
     /* Emulate syscall instruction, which is prohibited in Linux-SGX PAL and raises a SIGILL. */
     if (!maybe_emulate_syscall(context)) {
-#ifdef __aarch64__
-        if (repair_failed_pointer_authentication(context)) {
+        if (libos_arch_repair_illegal_insn(context)) {
             return;
         }
-#endif
         void* rip = (void*)pal_context_get_ip(context);
         log_debug("Illegal instruction during app execution at %p; delivering to app", rip);
         siginfo_t info = {
