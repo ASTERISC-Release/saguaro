@@ -50,6 +50,11 @@ jobs:
       - name: Build and install Gramine (direct PAL)
         run: scripts/install.sh --prefix "$GRAMINE_PREFIX"
 
+      - name: Check built binaries for writable+executable segments
+        run: |
+          libdir=$(dirname "$(find "$GRAMINE_PREFIX" -name libsysdb.so | head -n 1)")
+          scripts/ci/check-rwx.py "$libdir/libsysdb.so" "$libdir"/direct/loader "$libdir"/direct/libpal.so
+
       - name: Run the test battery
         env:
           SUITES: ${{ inputs.suites }}   # via env, never interpolated into the script text

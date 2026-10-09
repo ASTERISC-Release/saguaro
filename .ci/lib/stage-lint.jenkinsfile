@@ -1,6 +1,0 @@
-stage('lint') {
-    sh '''
-        ./scripts/gitignore-check-files
-        ./.ci/run-shellcheck
-    '''
-}

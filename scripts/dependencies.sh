@@ -25,7 +25,8 @@ HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 # Build + runtime dependencies of Gramine itself (what scripts/install.sh needs) ...
 apt_install build-essential meson ninja-build pkg-config bison gawk nasm file procps iproute2 \
     linux-libc-dev python3 python3-pip python3-pytest python3-click python3-jinja2 \
-    python3-cryptography python3-voluptuous python3-toml python3-tomli python3-tomli-w
+    python3-cryptography python3-voluptuous python3-toml python3-tomli python3-tomli-w \
+    python3-pyelftools
 
 if [ "$BUILD_ONLY" = 1 ]; then
     prereq_log "build dependencies OK"
