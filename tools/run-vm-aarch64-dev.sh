@@ -14,12 +14,14 @@ REPO_ROOT=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
 PAL=${PAL:-$REPO_ROOT/build-vm-aarch64/pal/src/host/vm/pal}
 RUN_TIMEOUT=${RUN_TIMEOUT:-8} # override to tune boot window
 WORK=$(mktemp -d /tmp/gramine-vm-aarch64.XXXXXX)
+TAIL_PID=
 cleanup() {
     kill $(jobs -p) 2>/dev/null || true
     sleep 0.2
-    # virtio-serial console is where PAL's log lands (PL011 only carries pre-driver
-    # messages); dump it even when we're being terminated.
-    if [ -s "$WORK/virtconsole.log" ]; then
+    # The live tail below normally streams the log; dump any lines written after
+    # QEMU died (it is killed by RUN_TIMEOUT because the arm kernel's exit path
+    # spins instead of PSCI SYSTEM_OFF, so `wait` never returns early).
+    if [ -s "$WORK/virtconsole.log" ] && [ -z "$TAIL_PID" ]; then
         echo "=== virtconsole.log ===" >&2
         cat "$WORK/virtconsole.log" >&2
     fi
@@ -77,6 +79,13 @@ sed "s|@LIBSYSDB@|$LIBSYSDB|" "$STAGE/hello.manifest.template" > /bin/hello.mani
 
 "$VIRTIOFSD" --socket-path "$WORK/vhostfs" --shared-dir / --log-level error \
     --sandbox none --no-announce-submounts >"$WORK/virtiofsd.log" 2>&1 &
+touch "$WORK/virtconsole.log"
+# Stream the PAL console as the guest writes it: without this the log only
+# appears at trap time, which (because the guest's exit path spins instead of
+# PSCI SYSTEM_OFF'ing QEMU down) is RUN_TIMEOUT seconds after the app finished
+# -- the "hit Ctrl+C to see output" annoyance.
+tail -n +1 -F "$WORK/virtconsole.log" &
+TAIL_PID=$!
 for _ in $(seq 50); do
     [ -e "$WORK/vhostfs" ] && break
     sleep 0.1
@@ -99,8 +108,18 @@ timeout ${RUN_TIMEOUT:-20} qemu-system-aarch64 $M "$@" -accel "$ACCEL" -cpu "$CP
     -chardev socket,path="$WORK/vhostfs",id=vhostfs \
     -device vhost-user-fs-pci,iommu_platform=off,queue-size=1024,chardev=vhostfs,tag=graminefs,romfile= \
     -kernel "$PAL" -device loader,file="$WORK/virt-packed.dtb",addr=0x40000000 \
-    -nographic -monitor none &
+    -nographic -monitor none 2>"$WORK/qemu.err" &
 QPid=$!
 
-# Exits on its own under RUN_TIMEOUT (the trap above dumps the PAL console log).
-wait $QPid || true
+# The guest has no PSCI SYSTEM_OFF wiring yet (pal_exit -> triple_fault spins),
+# so `wait` normally returns only when RUN_TIMEOUT's SIGTERM lands. Announce
+# that in the exit status; the EXIT trap then sweeps up (and dumps any lines
+# tail -F lost in the kill race).
+rc=0
+wait $QPid || rc=$?
+if [ "$rc" = 124 ] || [ "$rc" = 143 ]; then
+    echo "=== qemu terminated via RUN_TIMEOUT=${RUN_TIMEOUT:-20}s (guest still running or exit-path spins) ===" >&2
+elif [ "$rc" != 0 ]; then
+    echo "=== qemu exited rc=$rc ===" >&2
+    tail -c 500 "$WORK/qemu.err" >&2
+fi
