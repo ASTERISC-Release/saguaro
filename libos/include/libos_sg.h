@@ -5,6 +5,10 @@
 #include "libos_lock.h"
 #include "log.h"
 
+/* Everything below is Tirith secure-gaming (SG) code, compiled in only with -Dsecure_gaming=enabled
+ * (which defines ENABLE_SG for the LibOS). */
+#ifdef ENABLE_SG
+
 #define SG_HOST_FD_OFFSET 500
 
 #define SG_GEM_DATA_START      0x100000000ULL
@@ -30,8 +34,6 @@ _Static_assert(offsetof(comm_page_t, p5) == 56, "common SG payload must fit one 
 _Static_assert(sizeof(comm_page_t) == 64, "SG communication ABI must fit one cache line");
 
 extern struct libos_lock sg_comm_lock;
-
-#define ENABLE_SG
 
 /* Whether the SG host comm window at COMM_ADDR can exist at all in this deployment: it is
  * attached by the host only under the VM/TDX PAL (full Tirith deployment with a qemu
@@ -109,3 +111,5 @@ static inline void ensure_lock_ready(struct libos_lock *lock){
         // log_always("[Gramine] Global lock initialized\n");
     }
 }
+
+#endif /* ENABLE_SG */

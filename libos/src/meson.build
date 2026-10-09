@@ -142,6 +142,12 @@ vdso_data_o = custom_target('vdso_data.o',
     depends: vdso_so,
 )
 
+# Compile-time switch for the Tirith secure-gaming paths (see meson_options.txt).
+cflags_secure_gaming = []
+if get_option('secure_gaming') == 'enabled'
+    cflags_secure_gaming += '-DENABLE_SG'
+endif
+
 libos = shared_library('sysdb',
     libos_sources,
     vdso_data_o,
@@ -151,6 +157,7 @@ libos = shared_library('sysdb',
     c_args: [
         cflags_libos,
         cflags_sanitizers,
+        cflags_secure_gaming,
 
         # use TLS-based stack protector of GCC (we rely on the fact that LibOS reuses the same TCB
         # as its underlying PAL which must have a canary in its PAL_TCB at offset 0x8, so no

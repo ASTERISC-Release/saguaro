@@ -2,6 +2,9 @@
 
 #include "./../../../libos/include/libos_sg.h"
 #include "libos_thread.h"
+#include "linux_abi/errors.h"
+
+#ifdef ENABLE_SG
 
 /* Set to 1 to give each thread its own slot; 0 = all threads share slot 0 */
 #define MULTI_SLOT 0
@@ -137,3 +140,18 @@ long libos_syscall_relinquish_libos_lock(long offset) {
     unlock(&comm_locks[index]);
     return 0;
 }
+
+#else /* !ENABLE_SG */
+
+/* The syscall tables always reference these two (custom) syscalls; without secure gaming they
+ * simply do not exist. */
+long libos_syscall_acquire_libos_lock(void) {
+    return -ENOSYS;
+}
+
+long libos_syscall_relinquish_libos_lock(long offset) {
+    __UNUSED(offset);
+    return -ENOSYS;
+}
+
+#endif /* ENABLE_SG */

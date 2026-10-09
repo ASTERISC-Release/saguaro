@@ -276,8 +276,8 @@ long libos_syscall_openat(int dfd, const char* filename, int flags, int mode) {
         }
         goto out_hdl;
     }
-sg_cont:
 #ifdef ENABLE_SG
+sg_cont:
     if (use_sg_host) {
         hdl->type = TYPE_HOST;
         ret = set_new_fd_handle_by_fd(retval, hdl, flags & O_CLOEXEC ? FD_CLOEXEC : 0, NULL);
@@ -291,11 +291,8 @@ sg_cont:
         }
     }
 #else
-    else{
-        ret = set_new_fd_handle(hdl, flags & O_CLOEXEC ? FD_CLOEXEC : 0, NULL);
-    }
+    ret = set_new_fd_handle(hdl, flags & O_CLOEXEC ? FD_CLOEXEC : 0, NULL);
 #endif
-    
 
 out_hdl:
     put_handle(hdl);

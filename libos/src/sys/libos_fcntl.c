@@ -166,7 +166,6 @@ long libos_syscall_fcntl(int fd, int cmd, unsigned long arg) {
         }
     #endif
 
-sg_cont:
     switch (cmd) {
         /* See `man fcntl` for the expected semantics of these commands. */
 

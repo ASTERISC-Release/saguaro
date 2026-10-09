@@ -13,6 +13,8 @@
 #   ./install.sh --prefix /opt/gramine --build-dir build-x
 #   ./install.sh --sgx | --vm | --tdx    # enable extra PAL backends (off by
 #                                    # default; "direct" is the default build)
+#   ./install.sh --secure-gaming disabled  # build the LibOS without the Tirith
+#                                    # secure-gaming (SG) host-redirection code
 #   ./install.sh -j 8                # ninja parallelism (default: nproc)
 #   ./install.sh --help
 #
@@ -40,6 +42,7 @@ DO_APT=0
 RUN_TESTS=0
 JOBS="$(nproc)"
 SGX=disabled VM=disabled TDX=disabled
+SG=enabled   # Tirith secure-gaming paths in the LibOS (see meson_options.txt)
 TEST_SUITES=()
 
 script_dir=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
@@ -56,6 +59,7 @@ while [ $# -gt 0 ]; do
         --sgx)        SGX=enabled; shift ;;
         --vm)         VM=enabled; shift ;;
         --tdx)        TDX=enabled; shift ;;
+        --secure-gaming) SG=$2; shift 2 ;;
         -j*)          JOBS=${1#-j}; [ -n "$JOBS" ] || { JOBS=$2; shift; }; shift ;;
         pal|libos|helloworld|multithread|busybox|redis|memcached)
                       [ "$RUN_TESTS" = 1 ] || RUN_TESTS=1
@@ -96,7 +100,7 @@ if ! meson setup "$BUILDDIR" \
         --prefix="$PREFIX" \
         -Dbuildtype=release \
         -Ddirect=enabled \
-        -Dsgx="$SGX" -Dvm="$VM" -Dtdx="$TDX" \
+        -Dsgx="$SGX" -Dvm="$VM" -Dtdx="$TDX" -Dsecure_gaming="$SG" \
         -Dtests=enabled \
         -Dlibc=glibc 2>"$BUILDDIR-setup.err"; then
     echo "    plain 'meson setup' failed; retrying with --reconfigure"
@@ -104,7 +108,7 @@ if ! meson setup "$BUILDDIR" \
         --prefix="$PREFIX" \
         -Dbuildtype=release \
         -Ddirect=enabled \
-        -Dsgx="$SGX" -Dvm="$VM" -Dtdx="$TDX" \
+        -Dsgx="$SGX" -Dvm="$VM" -Dtdx="$TDX" -Dsecure_gaming="$SG" \
         -Dtests=enabled \
         -Dlibc=glibc \
     || { echo "ERROR: meson setup failed:"; tail -5 "$BUILDDIR-setup.err"; exit 1; }
