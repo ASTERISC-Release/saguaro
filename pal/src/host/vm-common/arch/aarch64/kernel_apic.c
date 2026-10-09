@@ -17,8 +17,6 @@
 
 #include "kernel_apic.h"
 
-static volatile uint32_t* const gicd = (volatile uint32_t*)GICD_BASE;
-
 static bool g_gicv3 = false; /* decided in gic_init() */
 
 static inline uint32_t gicd_read(uint32_t off) {
@@ -58,14 +56,23 @@ static void gic_enable_intid(uint32_t intid) {
 }
 
 static bool gic_is_v3(void) {
-    /* GICv3's GICD_TYPER reports ITS (LPI support, bit 8); the GICv2 model never sets it.
-     * (We avoid the authoritative ICC_SRE_EL1 probe because executing an unsupported MRS before
-     * the exception vector table is installed would take a dead CPU down with it.) */
-    return gicd_read(GICD_TYPER) & (1u << 8);
+    /* The GIC architecture spec's *only* version query: GICD_PIDR2 (Peripheral ID register,
+     * offset 0xff8 in the first 64K sector), nibble ARCH_FIELD: 0b0010 = v2, 0b0011 = v3.
+     * Probing GICD_TYPER's ITS bit is wrong: QEMU's GICv3 sets it only when a GITS node was
+     * created (never on plain `-machine virt,gic-version=3`), so it misreads as v2 and the
+     * distributor-based PPI enable then silently no-ops (PPIs live on the redistributor).
+     * ICC_SRE_EL1 would be even more authoritative but traps on cores/QEMU without SRE. */
+    return ((gicd_read(GICD_PIDR2) >> 4) & 0xf) == 0x3;
 }
 
-void lapic_signal_interrupt_complete(void) {
-    __asm__ volatile("msr " ICC_EOI1_EL1 ", %0" :: "r"((uint64_t)0));
+void lapic_signal_interrupt_complete(uint32_t intid) {
+    /* GICv3 ICC_EOIR1_EL1 is a write-with-INTID register (the value must be the INTID that the
+     * last ICC_IAR1_EL1 read returned): QEMU's icc_eoir_write() performs the priority drop for
+     * the highest active group and then icc_deactivate_irq(cs, <written value>). EOI'ing with a
+     * wrong INTID (e.g. 0, the x86-style "end current interrupt" write) drops the priority but
+     * leaves the interrupt ACTIVE forever -- gicr_int_pending() then masks every subsequent
+     * pending via `pend &= ~gicr_iactiver0` and only the first tick is ever delivered. */
+    __asm__ volatile("msr " ICC_EOI1_EL1 ", %0" :: "r"((uint64_t)intid));
 }
 
 uint32_t gic_acknowledge_intid(void) {
@@ -79,6 +86,12 @@ void lapic_enable(void) {
     /* unmask Group-1 IRQs with priority <= 0xf0 (our priorities are 0x10/0x20) */
     uint64_t pmr = 0xf0;
     __asm__ volatile("msr " ICC_PMR_EL1 ", %0" :: "r"(pmr));
+    /* The CPU interface gates Group-1 delivery on ICC_IGRPEN1_EL1.Enable *in addition* to
+     * the priority mask (x86: the LAPIC has a separate spurious-interrupt enable bit; PMR
+     * alone is not enough). Its reset value of 0 silently drops every pending IRQ -- the
+     * redistributor latches PPI/SPI pendings fine, but icc_no_enabled_hppi() then reports
+     * "no enabled hppi" forever. */
+    __asm__ volatile("msr " ICC_IGRPEN1_EL1 ", %0" :: "r"((uint64_t)1));
 }
 
 int gic_spi_enable(uint32_t intid) {

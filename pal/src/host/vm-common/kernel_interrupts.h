@@ -144,5 +144,8 @@ extern bool g_interrupts_enabled;
 int pal_common_perform_memfault_handling(uint64_t faulted_addr, struct isr_regs* regs);
 
 void isr_c(struct isr_regs* regs);
+#ifdef __aarch64__
+void isr_kernel_c(struct isr_regs* regs); /* EL1 sync-exception panic path */
+#endif
 int send_invalidate_tlb_ipi_and_wait(void* addr, size_t size, bool invalidate_on_this_cpu);
 int interrupts_init(void);

@@ -85,6 +85,26 @@ int init_multicore_prepare(uint32_t num_cpus) {
     if (!scheduling_stacks)
         return -PAL_ERROR_NOMEM;
 
+    /* create per-CPU idle threads + CPU0's bottomhalves thread here (x86 creates them in
+     * init_multicore_prepare too): the LAPIC/GIC timer is already armed by gic_init() and the
+     * tick may be taken by el1_irq_entry the moment interrupts_init() unmasks DAIF, long before
+     * init_multicore() runs. find_next_thread() then needs a non-NULL idle/bottomhalves fallback
+     * (assert() is a no-op in this build, a NULL there otherwise reaches
+     * save_context_and_restore_next as next_tcb == (void*)-280 and branches to PC 0). */
+    int ret;
+    for (uint32_t i = 0; i < num_cpus; i++) {
+        struct thread* thread;
+        ret = thread_helper_create(thread_idle_run, &thread);
+        if (ret < 0)
+            return ret;
+        g_per_cpu_data[i].idle_thread = thread;
+    }
+
+    /* only CPU0 has a bottomhalves thread currently (i.e. CPU0 handles all incoming events) */
+    ret = thread_helper_create(thread_bottomhalves_run, &g_per_cpu_data[0].bottomhalves_thread);
+    if (ret < 0)
+        return ret;
+
     /* migrate the boot-time per-CPU state (cur_tcb installed by set_dummy_gs_base() during
      * pal_start_c, before any allocation was possible) into the real cpu0 slot */
     uint64_t early_cur_tcb = (uint64_t)g_early_per_cpu_data.cur_tcb;
@@ -110,12 +130,8 @@ int init_multicore_prepare(uint32_t num_cpus) {
 }
 
 int init_multicore(uint32_t num_cpus) {
-    int ret;
-
     assert(g_per_cpu_data);
 
-    /* create per-CPU idle threads (x86 does the same here; sched_thread's find_next_thread()
-     * asserts their existence before any user thread exists) */
     if (num_cpus > 1) {
         /* TODO(Milestone-B multicore): PSCI CPU_ON loop:
          *   psci_call(PSCI_FUNC_CPU_ON, target_mpidr, &pal_ap_entry, cpu_idx)
@@ -125,22 +141,6 @@ int init_multicore(uint32_t num_cpus) {
          */
         log_error("aarch64 VM PAL supports a single CPU for now (QEMU: -smp 1)");
         return -PAL_ERROR_NOTIMPLEMENTED;
-    }
-
-    for (uint32_t i = 0; i < num_cpus; i++) {
-        struct thread* thread;
-        ret = thread_helper_create(thread_idle_run, &thread);
-        if (ret < 0)
-            return ret;
-        g_per_cpu_data[i].idle_thread = thread;
-    }
-
-    if (num_cpus > 0) {
-        /* only CPU0 has a bottomhalves thread currently */
-        ret = thread_helper_create(thread_bottomhalves_run,
-                                   &g_per_cpu_data[0].bottomhalves_thread);
-        if (ret < 0)
-            return ret;
     }
 
     __atomic_store_n(&g_started_cpus, num_cpus, __ATOMIC_RELEASE);

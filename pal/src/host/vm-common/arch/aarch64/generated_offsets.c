@@ -34,6 +34,7 @@ const struct generated_offset generated_offsets[] = {
     /* struct per_cpu_data (reachable in asm via `mrs tpidr_el1`) */
     OFFSET(PER_CPU_DATA_CPU_ID, per_cpu_data, cpu_id),
     OFFSET(PER_CPU_DATA_INTERRUPT_STACK, per_cpu_data, interrupt_stack),
+    OFFSET(PER_CPU_DATA_INTERRUPT_FPSIMD_AREA, per_cpu_data, interrupt_fpsimd_area),
     OFFSET(PER_CPU_DATA_SCHEDULING_STACK, per_cpu_data, scheduling_stack),
     OFFSET(PER_CPU_DATA_IDLE_THREAD, per_cpu_data, idle_thread),
     OFFSET(PER_CPU_DATA_BOTTOMHALVES_THREAD, per_cpu_data, bottomhalves_thread),

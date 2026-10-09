@@ -35,6 +35,11 @@
 #define GICD_CTLR                   0x000
 #define GICD_TYPER                  0x004
 #define GICD_IIDR                   0x008
+/* GICD_PIDR2 (Peripheral ID 2): the ID register block of the 64K GICD frame QEMU maps sits
+ * at 0xffd0..0xffff (not the repacked 4K-page layout), PIDR2 = third word of the PID half
+ * at +0x18 (0xffe8); bits [7:4] = architecture revision (0b0010 = v2, 0b0011 = v3).
+ * Read-only. */
+#define GICD_PIDR2                  0xffe8
 #define GICD_IGROUPR(n)             (0x080 + 4 * (n)) /* v3; v2: secure-only, RAZ/WI in NS */
 #define GICD_ISENABLER(n)           (0x100 + 4 * (n))
 #define GICD_ICENABLER(n)           (0x180 + 4 * (n))
@@ -52,16 +57,18 @@
 
 /* ICC_* system registers (GIC CPU interface, mrs/msr at EL1) */
 #define ICC_PMR_EL1                 "s3_0_c4_c6_0"
+#define ICC_IGRPEN1_EL1             "s3_0_c12_c12_7"
 #define ICC_IAR1_EL1                "s3_0_c12_c12_0"
 #define ICC_EOI1_EL1                "s3_0_c12_c12_1"
 
 void lapic_enable(void);                   /* unmask Group-1 IRQs via ICC_PMR_EL1 */
 int  lapic_timer_init(void);               /* EL1 physical generic timer + its PPI line */
 void lapic_timer_rearm(void);              /* reload CNTP_TVAL_EL0 (one-shot semantics) */
-void lapic_signal_interrupt_complete(void);/* ICC_EOI1_EL1 */
+void lapic_signal_interrupt_complete(uint32_t intid); /* ICC_EOIR1_EL1, write carries INTID */
 
 /* Acknowledge the highest-priority pending Group-1 IRQ (ICC_IAR1_EL1); returns INTID
- * (1023 == spurious). Must be paired with lapic_signal_interrupt_complete(). */
+ * (1023 == spurious). Must be paired with lapic_signal_interrupt_complete(intid): GICv3's
+ * ICC_EOIR1_EL1 is write-with-INTID and deactivates exactly the INTID it is given. */
 uint32_t gic_acknowledge_intid(void);
 
 /* Enable/route an SPI for a discovered device (virtio-mmio index -> SPI 32+index, CPU0). */

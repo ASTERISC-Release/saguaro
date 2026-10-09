@@ -50,10 +50,12 @@ static void tlb_invalidate_range(void* addr, size_t size) {
 }
 
 /*
- * Dispatch of an IRQ taken while the CPU ran at EL0.
- * `regs` points at the asm-saved frame; on return the asm `eret`s to (possibly updated) ELR.
+ * Dispatch of a Group-1 IRQ. `regs` points at the asm-saved frame (from either el0_irq_entry
+ * or el1_irq_entry); on return the asm `eret`s to (possibly updated) ELR.
  * Note: unlike x86 isr_c(), the GIC acknowledge (ICC_IAR1_EL1) is done *here* in C, since the
- * asm entry must not consume IAR before reading this frame's registers.
+ * asm entry must not consume IAR before reading this frame's registers. The matching EOI must
+ * echo the INTID returned by IAR (GICv3 ICC_EOIR1_EL1 is write-with-INTID, not the x86-style
+ * "end whatever is in-service" write).
  */
 void isr_c(struct isr_regs* regs) {
     uint32_t intid = gic_acknowledge_intid();
@@ -66,7 +68,7 @@ void isr_c(struct isr_regs* regs) {
                 notify_about_timeouts_uninterruptable();
             }
             lapic_timer_rearm();
-            lapic_signal_interrupt_complete();
+            lapic_signal_interrupt_complete(intid);
 
             /* timer IRQs always arrive from EL0 in this kernel (EL1 runs with DAIF.I masked
              * across scheduler critical sections); preempt unconditionally. */
@@ -83,7 +85,7 @@ void isr_c(struct isr_regs* regs) {
                     log_error("Panic: virtio ISR failed (INTID %u)", intid);
                     triple_fault();
                 }
-                lapic_signal_interrupt_complete();
+                lapic_signal_interrupt_complete(intid);
                 break;
             }
             if (intid == 1023) {

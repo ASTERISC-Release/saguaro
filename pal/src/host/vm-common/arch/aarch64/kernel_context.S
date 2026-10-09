@@ -189,10 +189,23 @@ pal_sigreturn_return:
     globl isr_eret_to_userland
 isr_eret_to_userland:
     ldp     x1, x2, [sp]                      /* frame.elr, frame.spsr */
-    ldr     x3, [sp, #16]                     /* frame.sp: user SP_EL0 */
+    ldr     x3, [sp, #16]                     /* frame.sp: resume stack pointer */
     msr     elr_el1, x1
     msr     spsr_el1, x2
+    /* Two preempt sources share this tail: an EL0 thread preempted by el0_irq
+     * (SPSR.M = EL0t, resume SP is the *user* stack -> SP_EL0 sysreg, and eret
+     * switches which stack register SP names) and kernel code preempted by
+     * el1_irq with RFLAGS-equivalent IRQs unmasked (SPSR.M = EL1h -- eret to
+     * EL1 does not reload any GPR, unlike x86's iretq popping SS:RSP, so the
+     * interrupted kernel SP must go back into SP itself here; the save path
+     * left SP_EL1 at &irq_pseudo_stack just for this frame read). */
+    tst     x2, #0xc                          /* SPSR.M[3:2] == 0 only at EL0 */
+    b.ne    .Lieret_el1
     msr     sp_el0, x3
+    b       .Lieret_regs
+.Lieret_el1:
+    mov     sp, x3
+.Lieret_regs:
 
     mrs     x16, tpidr_el1
     ldr     x16, [x16, #PER_CPU_DATA_CUR_TCB]
@@ -357,21 +370,232 @@ thread_main_wrapper:
     udf    #0
 
 /* ---------------------------------------------------------------------------
- * EL1 exception entries (B2 bring-up stubs -- see the file header). The frame
- * layout they will use is struct isr_regs (kernel_interrupts.h); they must set
- * SP_EL1 from per_cpu_data->interrupt_stack first (the incoming SP_EL1 belongs
- * to whatever user stack the CPU happened to be running, see above).
+ * EL1 exception entries: the aarch64 counterpart of vm-common/kernel_events.S's
+ * `irq_x` stubs + isr_c dispatch. Frame layout is struct isr_regs
+ * (vm-common/kernel_interrupts.h):
+ *      +0   fpregs   (per-CPU FP/SIMD save area)
+ *      +8   regs[31] (x0..x30)
+ *      +256 elr     +264 spsr      +272 sp (the stack eret/mov restores)
+ * sizeof = 280, the frame is rounded to 288 so SP stays 16B-aligned.
+ *
+ * SP management. x86 hardware pushes the iret frame on a stack that the CPU
+ * switches to via the TSS IST entry; aarch64 switches no stack at all. We use
+ * the per-CPU `interrupt_stack` (top stored in per_cpu_data->interrupt_stack,
+ * grows down). The bootstrap cannot read ELR/SPSR/SP_EL0/TPIDR without a
+ * scratch GPR, and all 31 GPRs must survive, so -- exactly like the Linux
+ * entry macros -- the bootstrap first carves 48B of scratch below the *incoming*
+ * SP and stashes x29/x30 there. That write is safe: the incoming SP_EL1 always
+ * belongs to a mapped stack (EL0 IRQ: wherever EL1 code last left it -- some
+ * kernel or user-syscall stack; EL1 IRQ: the stack of the interrupted kernel
+ * code) and memory below SP is dead space of it. IRQs cannot nest here: the
+ * exception entry itself masks DAIF.I and no handler C code unmasks it.
  * --------------------------------------------------------------------------- */
-    .balign 128
-el0_irq_entry:
-    b       hang
+    .equ ISR_FRAME_SIZE,  288             /* sizeof(struct isr_regs) rounded up  */
+    .equ ISR_FPREGS,      0
+    .equ ISR_REGS,        8               /* regs[31]: reg N at ISR_REGS + 8*N   */
+    .equ ISR_ELR,         256
+    .equ ISR_SPSR,        264
+    .equ ISR_SP,          272             /* SP to resume (user SP_EL0 or kernel)*/
 
     .balign 128
-el1_sync_entry:
-    b       hang
+el0_irq_entry:
+    /* IRQ taken while the CPU ran at EL0 (x86: irq_x from ring 3). Once the
+     * dispatcher returns we always go back to the *same* thread -- a context
+     * switch taken by sched_thread_uninterruptable() leaves through
+     * isr_eret_to_userland() and never returns here (x86: the preempted ISR
+     * likewise never executed its iret). */
+    sub     sp, sp, #48
+    stp     x29, x30, [sp]
+    mrs     x29, elr_el1
+    mrs     x30, spsr_el1
+    stp     x29, x30, [sp, #16]
+    mrs     x29, sp_el0                   /* the preempted user stack: the SP that */
+    mrs     x30, tpidr_el1                /* eret resumes with (SP_EL0 sysreg) */
+    ldr     x30, [x30, #PER_CPU_DATA_INTERRUPT_STACK]
+    sub     x30, x30, #ISR_FRAME_SIZE
+    str     x29, [x30, #ISR_SP]
+    ldr     x29, [sp]
+    str     x29, [x30, #ISR_REGS + 29 * 8]
+    ldr     x29, [sp, #16]
+    str     x29, [x30, #ISR_ELR]
+    ldr     x29, [sp, #24]
+    str     x29, [x30, #ISR_SPSR]
+    ldr     x29, [sp, #8]
+    str     x29, [x30, #ISR_REGS + 30 * 8]
+    mrs     x29, tpidr_el1
+    ldr     x29, [x29, #PER_CPU_DATA_INTERRUPT_FPSIMD_AREA]
+    str     x29, [x30, #ISR_FPREGS]
+    stp     x0,  x1,  [x30, #ISR_REGS + 0]
+    stp     x2,  x3,  [x30, #ISR_REGS + 16]
+    stp     x4,  x5,  [x30, #ISR_REGS + 32]
+    stp     x6,  x7,  [x30, #ISR_REGS + 48]
+    stp     x8,  x9,  [x30, #ISR_REGS + 64]
+    stp     x10, x11, [x30, #ISR_REGS + 80]
+    stp     x12, x13, [x30, #ISR_REGS + 96]
+    stp     x14, x15, [x30, #ISR_REGS + 112]
+    stp     x16, x17, [x30, #ISR_REGS + 128]
+    stp     x18, x19, [x30, #ISR_REGS + 144]
+    stp     x20, x21, [x30, #ISR_REGS + 160]
+    stp     x22, x23, [x30, #ISR_REGS + 176]
+    stp     x24, x25, [x30, #ISR_REGS + 192]
+    stp     x26, x27, [x30, #ISR_REGS + 208]
+    stp     x28, x29, [x30, #ISR_REGS + 224]
+    mov     sp, x30                       /* sp = frame (x30's user value is saved) */
+
+    ldr     x0, [sp, #ISR_FPREGS]
+    bl      do_xsave                      /* preempted thread's V0-V31 + FPCR/FPSR */
+    mov     x0, sp
+    bl      isr_c                         /* ack GIC, tick, maybe sched; may not return */
+
+    /* Same-thread return: eret consumes ELR/SPSR from sysregs; the user SP is
+     * already in SP_EL0 (we never touched it) and the user GPRs come back from
+     * the frame. x16 (a frame slot like all GPRs) is restored last. */
+    ldr     x16, [sp, #ISR_ELR]
+    msr     elr_el1, x16
+    ldr     x16, [sp, #ISR_SPSR]
+    msr     spsr_el1, x16
+    ldp     x0,  x1,  [sp, #ISR_REGS + 0]
+    ldp     x2,  x3,  [sp, #ISR_REGS + 16]
+    ldp     x4,  x5,  [sp, #ISR_REGS + 32]
+    ldp     x6,  x7,  [sp, #ISR_REGS + 48]
+    ldp     x8,  x9,  [sp, #ISR_REGS + 64]
+    ldp     x10, x11, [sp, #ISR_REGS + 80]
+    ldp     x12, x13, [sp, #ISR_REGS + 96]
+    ldp     x14, x15, [sp, #ISR_REGS + 112]
+    ldp     x18, x19, [sp, #ISR_REGS + 144]
+    ldp     x20, x21, [sp, #ISR_REGS + 160]
+    ldp     x22, x23, [sp, #ISR_REGS + 176]
+    ldp     x24, x25, [sp, #ISR_REGS + 192]
+    ldp     x26, x27, [sp, #ISR_REGS + 208]
+    ldp     x28, x29, [sp, #ISR_REGS + 224]
+    ldr     x30, [sp, #ISR_REGS + 240]
+    ldr     x16, [sp, #ISR_REGS + 128]
+    eret
 
     .balign 128
 el1_irq_entry:
-    b       hang
+    /* IRQ (timer or virtio device) taken while running kernel code -- the norm
+     * once interrupts_init() ran sti() (x86: the same irq_x stubs firing with
+     * RFLAGS.IF=1 inside kernel C). Identical frame; the resume SP is the
+     * interrupted kernel stack, and unlike eret-to-EL0 we must restore SP
+     * ourselves before the eret (eret reloads no GPR, while iretq popped RSP). */
+    sub     sp, sp, #48
+    stp     x29, x30, [sp]
+    mrs     x29, elr_el1
+    mrs     x30, spsr_el1
+    stp     x29, x30, [sp, #16]
+    add     x29, sp, #48                  /* resume SP = the interrupted kernel stack */
+    mrs     x30, tpidr_el1
+    ldr     x30, [x30, #PER_CPU_DATA_INTERRUPT_STACK]
+    sub     x30, x30, #ISR_FRAME_SIZE
+    str     x29, [x30, #ISR_SP]
+    ldr     x29, [sp]
+    str     x29, [x30, #ISR_REGS + 29 * 8]
+    ldr     x29, [sp, #16]
+    str     x29, [x30, #ISR_ELR]
+    ldr     x29, [sp, #24]
+    str     x29, [x30, #ISR_SPSR]
+    ldr     x29, [sp, #8]
+    str     x29, [x30, #ISR_REGS + 30 * 8]
+    mrs     x29, tpidr_el1
+    ldr     x29, [x29, #PER_CPU_DATA_INTERRUPT_FPSIMD_AREA]
+    str     x29, [x30, #ISR_FPREGS]
+    stp     x0,  x1,  [x30, #ISR_REGS + 0]
+    stp     x2,  x3,  [x30, #ISR_REGS + 16]
+    stp     x4,  x5,  [x30, #ISR_REGS + 32]
+    stp     x6,  x7,  [x30, #ISR_REGS + 48]
+    stp     x8,  x9,  [x30, #ISR_REGS + 64]
+    stp     x10, x11, [x30, #ISR_REGS + 80]
+    stp     x12, x13, [x30, #ISR_REGS + 96]
+    stp     x14, x15, [x30, #ISR_REGS + 112]
+    stp     x16, x17, [x30, #ISR_REGS + 128]
+    stp     x18, x19, [x30, #ISR_REGS + 144]
+    stp     x20, x21, [x30, #ISR_REGS + 160]
+    stp     x22, x23, [x30, #ISR_REGS + 176]
+    stp     x24, x25, [x30, #ISR_REGS + 192]
+    stp     x26, x27, [x30, #ISR_REGS + 208]
+    stp     x28, x29, [x30, #ISR_REGS + 224]
+    mov     sp, x30
+
+    ldr     x0, [sp, #ISR_FPREGS]
+    bl      do_xsave                      /* kernel C never touches FP, so this records
+                                             the user FP state the interrupted thread owns */
+    mov     x0, sp
+    bl      isr_c
+
+    /* Restore order: the resume SP goes back first (into SP, the register eret
+     * won't fix); the frame itself lives at a per-CPU-fixed address, so the
+     * remaining GPRs are re-read from there through TPIDR_EL1 after the switch. */
+    ldr     x16, [sp, #ISR_ELR]
+    msr     elr_el1, x16
+    ldr     x16, [sp, #ISR_SPSR]
+    msr     spsr_el1, x16
+    ldr     x16, [sp, #ISR_SP]
+    mov     sp, x16                       /* back on the interrupted kernel stack */
+    mrs     x16, tpidr_el1
+    ldr     x16, [x16, #PER_CPU_DATA_INTERRUPT_STACK]
+    sub     x16, x16, #ISR_FRAME_SIZE     /* the frame we just left */
+    ldp     x0,  x1,  [x16, #ISR_REGS + 0]
+    ldp     x2,  x3,  [x16, #ISR_REGS + 16]
+    ldp     x4,  x5,  [x16, #ISR_REGS + 32]
+    ldp     x6,  x7,  [x16, #ISR_REGS + 48]
+    ldp     x8,  x9,  [x16, #ISR_REGS + 64]
+    ldp     x10, x11, [x16, #ISR_REGS + 80]
+    ldp     x12, x13, [x16, #ISR_REGS + 96]
+    ldp     x14, x15, [x16, #ISR_REGS + 112]
+    ldp     x18, x19, [x16, #ISR_REGS + 144]
+    ldp     x20, x21, [x16, #ISR_REGS + 160]
+    ldp     x22, x23, [x16, #ISR_REGS + 176]
+    ldp     x24, x25, [x16, #ISR_REGS + 192]
+    ldp     x26, x27, [x16, #ISR_REGS + 208]
+    ldp     x28, x29, [x16, #ISR_REGS + 224]
+    ldr     x30, [x16, #ISR_REGS + 240]
+    ldr     x16, [x16, #ISR_REGS + 128]
+    eret
+
+    .balign 128
+el1_sync_entry:
+    /* A synchronous exception inside the kernel proper is a kernel bug (x86:
+     * #PF/#GP/#UD panic with no fixup). Save the frame only to report it. */
+    sub     sp, sp, #48
+    stp     x29, x30, [sp]
+    mrs     x29, elr_el1
+    mrs     x30, spsr_el1
+    stp     x29, x30, [sp, #16]
+    add     x29, sp, #48
+    mrs     x30, tpidr_el1
+    ldr     x30, [x30, #PER_CPU_DATA_INTERRUPT_STACK]
+    sub     x30, x30, #ISR_FRAME_SIZE
+    str     x29, [x30, #ISR_SP]
+    ldr     x29, [sp]
+    str     x29, [x30, #ISR_REGS + 29 * 8]
+    ldr     x29, [sp, #16]
+    str     x29, [x30, #ISR_ELR]
+    ldr     x29, [sp, #24]
+    str     x29, [x30, #ISR_SPSR]
+    ldr     x29, [sp, #8]
+    str     x29, [x30, #ISR_REGS + 30 * 8]
+    mrs     x29, tpidr_el1
+    ldr     x29, [x29, #PER_CPU_DATA_INTERRUPT_FPSIMD_AREA]
+    str     x29, [x30, #ISR_FPREGS]
+    stp     x0,  x1,  [x30, #ISR_REGS + 0]
+    stp     x2,  x3,  [x30, #ISR_REGS + 16]
+    stp     x4,  x5,  [x30, #ISR_REGS + 32]
+    stp     x6,  x7,  [x30, #ISR_REGS + 48]
+    stp     x8,  x9,  [x30, #ISR_REGS + 64]
+    stp     x10, x11, [x30, #ISR_REGS + 80]
+    stp     x12, x13, [x30, #ISR_REGS + 96]
+    stp     x14, x15, [x30, #ISR_REGS + 112]
+    stp     x16, x17, [x30, #ISR_REGS + 128]
+    stp     x18, x19, [x30, #ISR_REGS + 144]
+    stp     x20, x21, [x30, #ISR_REGS + 160]
+    stp     x22, x23, [x30, #ISR_REGS + 176]
+    stp     x24, x25, [x30, #ISR_REGS + 192]
+    stp     x26, x27, [x30, #ISR_REGS + 208]
+    stp     x28, x29, [x30, #ISR_REGS + 224]
+    mov     sp, x30
+    mov     x0, sp
+    bl      isr_kernel_c                  /* noreturn: logs and triple_fault()s */
+    udf     #0
 
     .section .note.GNU-stack, "", %progbits      /* the kernel never executes the stack */
