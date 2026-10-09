@@ -433,15 +433,21 @@ class TC_01_Bootstrap(RegressionTestCase):
         # Multiple thread creation
         self.assertIn('256 Threads Created', stdout)
 
+    @unittest.skipUnless(platform.machine() == 'aarch64', 'aarch64-specific (register/flag details)')
+    def test_604_sigreturn_regs(self):
+        # An asynchronous signal can interrupt the application anywhere, e.g. inside a PLT stub
+        # where x17 is live; returning from the handler must restore x16/x17 and the condition
+        # flags exactly (previously x17 was clobbered, which made a thread spin on `br x17`).
+        stdout, _ = self.run_binary(['sigreturn_regs'], timeout=120)
+        self.assertIn('TEST OK', stdout)
+
     @unittest.skipUnless(platform.machine() == 'aarch64', 'aarch64-specific (svc site rewriting)')
     def test_603_rewrite_stress(self):
         # Lazy rewriting of trapped `svc #0` sites (sys.rewrite_syscalls): each scenario starts
         # from a cold process. See rewrite_stress.c and scripts/stress_rewrite.sh (which repeats
         # these many times, since the interesting races are cold-start races).
-        # The signal-driven scenarios (signals, signals_timer, signals_kill, restart) are left to
-        # scripts/stress_rewrite.sh: they expose a pre-existing, rare (~1-3%) hang in LibOS
-        # asynchronous-signal handling on aarch64 that also occurs with rewriting disabled.
-        for scenario in ['threads', 'fork', 'exec', 'blob', 'jit', 'mprotect', 'threadstorm']:
+        for scenario in ['threads', 'fork', 'exec', 'signals', 'restart', 'blob', 'jit', 'mprotect',
+                         'threadstorm']:
             with self.subTest(scenario=scenario):
                 stdout, _ = self.run_binary(['rewrite_stress', scenario], timeout=180)
                 self.assertIn('OK ' + scenario, stdout)

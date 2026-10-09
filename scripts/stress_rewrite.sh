@@ -9,7 +9,8 @@
 #     -n RUNS            cold runs per scenario (default 40)
 #     --rewrite on|off   force sys.rewrite_syscalls (rebuilds the test manifest; default: LibOS default)
 #   Scenarios: threads fork exec signals signals_timer signals_kill restart blob jit mprotect
-#   threadstorm (default: all but the two signals_* variants). TMO=<s> kills a hung run (default 30).
+#   threadstorm (default: all of them; the two signals_* variants are subsets of `signals`).
+#   TMO=<s> kills a hung run (default 30).
 # Failing runs' output is kept in $FAILDIR (default /tmp/rewrite-stress-fail).
 # Needs the install from ./install.sh and `gramine-test build` prerequisites (python deps).
 set -uo pipefail
@@ -26,7 +27,7 @@ while [ $# -gt 0 ]; do
         *) SCEN+=("$1"); shift ;;
     esac
 done
-[ ${#SCEN[@]} -gt 0 ] || SCEN=(threads fork exec signals restart blob jit mprotect threadstorm)
+[ ${#SCEN[@]} -gt 0 ] || SCEN=(threads fork exec signals signals_timer signals_kill restart blob jit mprotect threadstorm)
 
 cd "$DIR" || exit 1
 case "$MODE" in
