@@ -114,7 +114,7 @@ libos_sources = files(
     'sys/libos_prctl.c',
     'sys/libos_mremap.c',
     'sys/libos_getresid.c',
-    'sys/libos_sg_lock.c'
+    'sys/libos_graphics_lock.c'
 )
 
 # Arch-specific meson.build must define the following Meson variables:
@@ -142,10 +142,10 @@ vdso_data_o = custom_target('vdso_data.o',
     depends: vdso_so,
 )
 
-# Compile-time switch for the Tirith secure-gaming paths (see meson_options.txt).
-cflags_secure_gaming = []
-if get_option('secure_gaming') == 'enabled'
-    cflags_secure_gaming += '-DENABLE_SG'
+# Compile-time switch for the Tirith graphics paths (see meson_options.txt).
+cflags_graphics = []
+if get_option('graphics') == 'enabled'
+    cflags_graphics += '-DENABLE_GRAPHICS'
 endif
 
 libos = shared_library('sysdb',
@@ -157,7 +157,7 @@ libos = shared_library('sysdb',
     c_args: [
         cflags_libos,
         cflags_sanitizers,
-        cflags_secure_gaming,
+        cflags_graphics,
 
         # use TLS-based stack protector of GCC (we rely on the fact that LibOS reuses the same TCB
         # as its underlying PAL which must have a canary in its PAL_TCB at offset 0x8, so no

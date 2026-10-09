@@ -95,9 +95,9 @@
 #define VIRTIO_VSOCK_ACTIVE_POLL_US            (10 * 1000)
 #define VIRTIO_VSOCK_SHARED_INPUT_POLL_INTERVAL_US (5 * 1000)
 
-#define SG_INPUT_RING_MAGIC_ADDR   ((volatile uint64_t*)0xf00200ULL)
-#define SG_INPUT_RING_ENABLED_ADDR ((volatile uint32_t*)0xf00208ULL)
-#define SG_INPUT_RING_MAGIC        UINT64_C(0x5347494e50555431)
+#define GRAPHICS_INPUT_RING_MAGIC_ADDR   ((volatile uint64_t*)0xf00200ULL)
+#define GRAPHICS_INPUT_RING_ENABLED_ADDR ((volatile uint32_t*)0xf00208ULL)
+#define GRAPHICS_INPUT_RING_MAGIC        UINT64_C(0x5347494e50555431)
 
 #define VIRTIO_VSOCK_SHARED_BUF_SIZE (VIRTIO_VSOCK_QUEUE_SIZE * sizeof(struct virtio_vsock_packet))
 
@@ -122,13 +122,13 @@ static bool shared_input_ring_enabled(void) {
      * communication page before opening its X11 VSOCK connection; once the host enables the ring,
      * input delivery no longer depends on opportunistic VSOCK polling from the render loop. */
     uint64_t* pte;
-    if (memory_find_page_table_entry((uint64_t)SG_INPUT_RING_MAGIC_ADDR, &pte) < 0 ||
+    if (memory_find_page_table_entry((uint64_t)GRAPHICS_INPUT_RING_MAGIC_ADDR, &pte) < 0 ||
             (*pte & 1UL) == 0)
         return false;
 
-    bool ready = __atomic_load_n(SG_INPUT_RING_MAGIC_ADDR, __ATOMIC_ACQUIRE) ==
-                     SG_INPUT_RING_MAGIC &&
-                 __atomic_load_n(SG_INPUT_RING_ENABLED_ADDR, __ATOMIC_ACQUIRE) != 0;
+    bool ready = __atomic_load_n(GRAPHICS_INPUT_RING_MAGIC_ADDR, __ATOMIC_ACQUIRE) ==
+                     GRAPHICS_INPUT_RING_MAGIC &&
+                 __atomic_load_n(GRAPHICS_INPUT_RING_ENABLED_ADDR, __ATOMIC_ACQUIRE) != 0;
     if (ready)
         __atomic_store_n(&g_vsock_shared_input_ready, true, __ATOMIC_RELEASE);
     return ready;

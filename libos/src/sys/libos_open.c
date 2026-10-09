@@ -11,7 +11,7 @@
 #include <stdalign.h>
 
 #include "libos_fs.h"
-#include "libos_sg.h"
+#include "libos_graphics.h"
 #include "libos_handle.h"
 #include "libos_internal.h"
 #include "libos_lock.h"
@@ -49,7 +49,7 @@ long libos_syscall_read(int fd, void* buf, size_t count) {
     if (!hdl)
         return -EBADF;
 
-    #ifdef ENABLE_SG
+    #ifdef ENABLE_GRAPHICS
         if(hdl->type == TYPE_HOST){
             log_debug("redirecting read(%d, 0x%lx, %d) to host", fd, buf, count);
             long _offset = libos_syscall_acquire_libos_lock();
@@ -101,7 +101,7 @@ long libos_syscall_write(int fd, const void* buf, size_t count) {
     if (!hdl)
         return -EBADF;
 
-    #ifdef ENABLE_SG
+    #ifdef ENABLE_GRAPHICS
         if(hdl->type == TYPE_HOST){
             log_debug("redirecting write(%d, 0x%lx, %d) to host", fd, buf, count);
             long _offset = libos_syscall_acquire_libos_lock();
@@ -134,8 +134,8 @@ long libos_syscall_creat(const char* path, mode_t mode) {
     return libos_syscall_open(path, O_CREAT | O_TRUNC | O_WRONLY, mode);
 }
 
-#ifdef ENABLE_SG
-/* The SG comm window at COMM_ADDR (0xf00000) is a fixed host-shared page provided by the
+#ifdef ENABLE_GRAPHICS
+/* The graphics comm window at COMM_ADDR (0xf00000) is a fixed host-shared page provided by the
  * full Tirith deployment: the VM/TDX PAL guest memory map has the sg-listener's shared memory
  * attached there by the host. Under the plain `Linux` PAL (any gramine-direct run, including
  * the entire aarch64 port, where `linux` is the only PAL) no host agent exists and the page
@@ -144,17 +144,17 @@ long libos_syscall_creat(const char* path, mode_t mode) {
  * (SIGSEGV at 0xf00018) long before the magic read could answer "no listener". This used to
  * crash every openat() of any /dev or /sys path under the Linux PAL (the whole
  * shm/devfs/close_range/procstat/keys/poll regression cluster; the x86_64 CI presumably only
- * ever exercises these paths in VM/TDX deployments). SG host redirection therefore must be
+ * ever exercises these paths in VM/TDX deployments). graphics host redirection therefore must be
  * gated on the PAL host type at the single place where TYPE_HOST handles are created; every
  * other comm_page() writer in the LibOS (ioctl/fcntl/dup/mmap/stat) is keyed on
  * hdl->type == TYPE_HOST(_IDENTITY) and so becomes inert along with it. */
-bool sg_redirect_enabled(void) {
+bool graphics_redirect_enabled(void) {
     const char* host = g_pal_public_state->host_type;
     return !strcmp(host, "VM") || !strcmp(host, "TDX");
 }
 
-static bool is_sg_host_path(const char* path) {
-    if (!sg_redirect_enabled()) {
+static bool is_graphics_host_path(const char* path) {
+    if (!graphics_redirect_enabled()) {
         return false;
     }
     static const char* const roots[] = {"/dev", "/sys", "/root/.cache"};
@@ -168,7 +168,7 @@ static bool is_sg_host_path(const char* path) {
 }
 #endif
 
-/* New system call added for the secure gaming implementation */
+/* New system call added for the graphics implementation */
 long libos_syscall_register_host_identity_fd(int fd) {
     struct libos_handle* hdl;
     long ret;
@@ -197,12 +197,12 @@ long libos_syscall_openat(int dfd, const char* filename, int flags, int mode) {
     if (!is_user_string_readable(filename))
         return -EFAULT;
 
-    /* Secure gaming handle to redirect open() system call */
-#ifdef ENABLE_SG
+    /* Graphics handle to redirect open() system call */
+#ifdef ENABLE_GRAPHICS
     long retval = 0;
-    bool use_sg_host = is_sg_host_path(filename) && !strstr(filename, "devtest")
+    bool use_graphics_host = is_graphics_host_path(filename) && !strstr(filename, "devtest")
                        && !strstr(filename, "urandom");
-    if (use_sg_host) {
+    if (use_graphics_host) {
         log_debug("Device open(): %s\n", filename);
         long _offset = libos_syscall_acquire_libos_lock();
             comm_page_t* c = comm_page(_offset);
@@ -224,7 +224,7 @@ long libos_syscall_openat(int dfd, const char* filename, int flags, int mode) {
             ret = -ENOMEM;
             goto out;
         }
-        goto sg_cont;
+        goto graphics_cont;
     }
 #endif
 
@@ -276,16 +276,16 @@ long libos_syscall_openat(int dfd, const char* filename, int flags, int mode) {
         }
         goto out_hdl;
     }
-#ifdef ENABLE_SG
-sg_cont:
-    if (use_sg_host) {
+#ifdef ENABLE_GRAPHICS
+graphics_cont:
+    if (use_graphics_host) {
         hdl->type = TYPE_HOST;
         ret = set_new_fd_handle_by_fd(retval, hdl, flags & O_CLOEXEC ? FD_CLOEXEC : 0, NULL);
     } else {
         ret = set_new_fd_handle(hdl, flags & O_CLOEXEC ? FD_CLOEXEC : 0, NULL);
 
-        /* Secure gaming logic to avoid overflow into fd range. */
-        if (ret > SG_HOST_FD_OFFSET) {
+        /* Graphics logic to avoid overflow into fd range. */
+        if (ret > GRAPHICS_HOST_FD_OFFSET) {
             log_always("error: openat(..) overflowed into host fd range. (ret: %d)\n", ret);
             assert(false);
         }
@@ -307,11 +307,11 @@ long libos_syscall_close(int fd) {
     struct libos_handle* handle = detach_fd_handle(fd, NULL, NULL);
     if (!handle)
     {
-        #ifdef ENABLE_SG
-            /* An fd with no LibOS handle may belong to the host (SG); without a host agent
+        #ifdef ENABLE_GRAPHICS
+            /* An fd with no LibOS handle may belong to the host (graphics); without a host agent
              * (plain Linux PAL, e.g. the whole aarch64 port) the comm window is unmapped and
              * the writes below would fault, so this must be plain EBADF there. */
-            if (sg_redirect_enabled()) {
+            if (graphics_redirect_enabled()) {
                 long _offset = libos_syscall_acquire_libos_lock();
                 comm_page_t* c = comm_page(_offset);
                 c->p1 = (uint64_t) fd;
@@ -382,12 +382,13 @@ out:
 long libos_syscall_lseek(int fd, off_t offset, int origin) {
     long retval;
 
-    #ifdef ENABLE_SG
-        /* Only with a host agent (VM/TDX PAL): see sg_redirect_enabled(). Otherwise an invalid fd
-         * would be shifted into the host fd range and fault on the unmapped comm window. */
-        if (sg_redirect_enabled() && fd < fs_offset && !get_fd_handle(fd, NULL, NULL))
+    #ifdef ENABLE_GRAPHICS
+        /* Only with a host agent (VM/TDX PAL): see graphics_redirect_enabled(). Otherwise an
+         * invalid fd would be shifted into the host fd range and fault on the unmapped comm
+         * window. */
+        if (graphics_redirect_enabled() && fd < fs_offset && !get_fd_handle(fd, NULL, NULL))
             fd += fs_offset; // Hacky workaround: shift a handle-less fd into the host fd range (+500); host agent only
-        if (sg_redirect_enabled() && fd>fs_offset) {
+        if (graphics_redirect_enabled() && fd>fs_offset) {
             log_debug("lseek (fd: %d offset: %ld origin: %d)\n", fd, offset, origin);
             long _offset = libos_syscall_acquire_libos_lock();
             comm_page_t* c = comm_page(_offset);
@@ -657,8 +658,8 @@ long libos_syscall_getdents(int fd, struct linux_dirent* buf, unsigned int count
 
 long libos_syscall_getdents64(int fd, struct linux_dirent64* buf, size_t count) {
     long retval;
-    #ifdef ENABLE_SG
-        if(sg_redirect_enabled() && fd>fs_offset){
+    #ifdef ENABLE_GRAPHICS
+        if(graphics_redirect_enabled() && fd>fs_offset){
             long _offset = libos_syscall_acquire_libos_lock();
             comm_page_t* c = comm_page(_offset);
             c->p1 = (uint64_t) fd;
@@ -746,7 +747,7 @@ long libos_syscall_ftruncate(int fd, loff_t length) {
     if (!hdl)
         return -EBADF;
 
-#ifdef ENABLE_SG
+#ifdef ENABLE_GRAPHICS
     if (hdl->type == TYPE_HOST) {
         long offset = libos_syscall_acquire_libos_lock();
         comm_page_t* c = comm_page(offset);

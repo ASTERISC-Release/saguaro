@@ -17,7 +17,7 @@
  */
 
 #include "libos_fs.h"
-#include "libos_sg.h"
+#include "libos_graphics.h"
 #include "libos_fs_lock.h"
 #include "libos_handle.h"
 #include "libos_internal.h"
@@ -138,7 +138,7 @@ static int flock_to_file_lock(struct flock* fl, struct libos_handle* hdl,
 
 long libos_syscall_fcntl(int fd, int cmd, unsigned long arg) {
     long retval;
-    (void)retval; /* only assigned on the ENABLE_SG comm-window redirect path */
+    (void)retval; /* only assigned on the ENABLE_GRAPHICS comm-window redirect path */
     struct libos_handle* hdl;
     int ret;
     int flags;
@@ -150,7 +150,7 @@ long libos_syscall_fcntl(int fd, int cmd, unsigned long arg) {
     if (!hdl)
         return -EBADF;
 
-    #ifdef ENABLE_SG
+    #ifdef ENABLE_GRAPHICS
         if(hdl->type == TYPE_HOST)
         {
             log_debug("redirecting fcntl(%d, %d, %lu) to host", fd, cmd, arg);
@@ -346,7 +346,7 @@ long libos_syscall_flock(unsigned int fd, unsigned int cmd) {
     if (!hdl)
         return -EBADF;
 
-#ifdef ENABLE_SG
+#ifdef ENABLE_GRAPHICS
     if (hdl->type == TYPE_HOST || hdl->type == TYPE_HOST_IDENTITY) {
         long offset = libos_syscall_acquire_libos_lock();
         comm_page_t* c = comm_page(offset);

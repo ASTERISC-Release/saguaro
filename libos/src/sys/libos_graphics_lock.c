@@ -1,11 +1,11 @@
 #include <stdlib.h>
 
-#include "./../../../libos/include/libos_sg.h"
+#include "./../../../libos/include/libos_graphics.h"
 #include "libos_table.h"
 #include "libos_thread.h"
 #include "linux_abi/errors.h"
 
-#ifdef ENABLE_SG
+#ifdef ENABLE_GRAPHICS
 
 /* Set to 1 to give each thread its own slot; 0 = all threads share slot 0 */
 #define MULTI_SLOT 0
@@ -50,8 +50,8 @@ static void track_thread_tid(void) {
                                         __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
             /* Successfully claimed slot 'expected', now store our TID */
             __atomic_store_n(&tracked_tids[expected], tid, __ATOMIC_RELEASE);
-            log_always("[SG_LOCK] New thread accessing acquire: tid=%u, total_threads=%d", tid,
-                       expected + 1);
+            log_always("[GRAPHICS_LOCK] New thread accessing acquire: tid=%u, total_threads=%d",
+                       tid, expected + 1);
             return;
         }
         /* CAS failed, another thread claimed the slot - retry */
@@ -88,7 +88,8 @@ static int get_slot_for_tid(unsigned int tid) {
         int expected = __atomic_load_n(&num_assigned_slots, __ATOMIC_ACQUIRE);
 
         if (expected >= NUM_COMM_LOCKS) {
-            log_always("[SG_LOCK] ERROR: all %d slots exhausted, tid=%u", NUM_COMM_LOCKS, tid);
+            log_always("[GRAPHICS_LOCK] ERROR: all %d slots exhausted, tid=%u", NUM_COMM_LOCKS,
+                       tid);
             abort();
             return -1;
         }
@@ -105,7 +106,7 @@ static int get_slot_for_tid(unsigned int tid) {
                                         /*weak=*/0, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
             slot_tids[expected] = tid;
             __atomic_thread_fence(__ATOMIC_RELEASE);
-            log_always("[SG_LOCK] LOG: %dth slot claimed for tid = %u - %d threads in total",
+            log_always("[GRAPHICS_LOCK] LOG: %dth slot claimed for tid = %u - %d threads in total",
                        expected, tid, expected + 1);
             return expected;
         }
@@ -142,9 +143,9 @@ long libos_syscall_relinquish_libos_lock(long offset) {
     return 0;
 }
 
-#else /* !ENABLE_SG */
+#else /* !ENABLE_GRAPHICS */
 
-/* The syscall tables always reference these two (custom) syscalls; without secure gaming they
+/* The syscall tables always reference these two (custom) syscalls; without graphics they
  * simply do not exist. */
 long libos_syscall_acquire_libos_lock(void) {
     return -ENOSYS;
@@ -155,4 +156,4 @@ long libos_syscall_relinquish_libos_lock(long offset) {
     return -ENOSYS;
 }
 
-#endif /* ENABLE_SG */
+#endif /* ENABLE_GRAPHICS */

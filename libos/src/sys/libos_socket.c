@@ -145,7 +145,7 @@ long libos_syscall_socket(int family, int type, int protocol) {
     bool is_nonblocking = flags & SOCK_NONBLOCK;
 
     /* Santosh's log for nonblocking socket calls.*/
-    log_debug("[SG] Am I non-blocking: %d", is_nonblocking);
+    log_debug("[graphics] Am I non-blocking: %d", is_nonblocking);
     
     bool is_cloexec = flags & SOCK_CLOEXEC;
     if (flags & ~(SOCK_NONBLOCK | SOCK_CLOEXEC)) {
@@ -413,7 +413,7 @@ long libos_syscall_bind(int fd, void* addr, int _addrlen) {
     //     /* Create a shared region of memory*/
     //     void *region = libos_syscall_mmap(NULL, 1024*1024,  PROT_READ | PROT_WRITE, (MAP_ANONYMOUS | MAP_PRIVATE), -1, 0);
     //     if (region == MAP_FAILED){
-    //         log_always("[SG] Map failed - UDP comms cannot be done\n");
+    //         log_always("[graphics] Map failed - UDP comms cannot be done\n");
     //         return -EINVAL;
     //     }
     //     sock->ops->register_shmem(handle, region);

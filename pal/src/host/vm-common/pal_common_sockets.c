@@ -296,7 +296,7 @@ static void pal_common_socket_destroy(struct pal_handle* handle) {
 
 static int pal_common_socket_bind(struct pal_handle* handle, struct pal_socket_addr* addr) {
     /* Santosh's log for bind requests*/
-    log_debug("[SG] Bind request arrived.\n");
+    log_debug("[graphics] Bind request arrived.\n");
     
     assert(handle->hdr.type == PAL_TYPE_SOCKET);
     if (addr->domain != handle->sock.domain) {
@@ -339,7 +339,7 @@ static int pal_common_socket_bind(struct pal_handle* handle, struct pal_socket_a
         }
         spinlock_unlock(&g_sock_region_map_lock);
     }
-    log_debug("[SG] Bind request DONE.\n");
+    log_debug("[graphics] Bind request DONE.\n");
     return 0;
 }
 
@@ -578,7 +578,7 @@ static int pal_common_udp_send(struct pal_handle *handle,
     for(int idx=0; idx<current_indx_in_sock_region_map; idx++){
         // log_always("Port to send: %d\n; Current: %d\n", addr_vm.svm_port, SOCK_REGION_MAP[idx].port_num); 
         if (SOCK_REGION_MAP[idx].port_num == addr_vm.svm_port){
-            // log_always("[SG] Sending the data to port_num: %d from %d", addr_vm.svm_port, fetch_guest_port_given_sockfd(handle->sock.fd));
+            // log_always("[graphics] Sending the data to port_num: %d from %d", addr_vm.svm_port, fetch_guest_port_given_sockfd(handle->sock.fd));
             r = (struct udp_rx_ring *)(SOCK_REGION_MAP[idx].region_handle->region);
             // log_always("R = %p\n", r);
             break;

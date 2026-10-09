@@ -12,7 +12,7 @@
 #include "libos_flags_conv.h"
 #include "libos_fs_pseudo.h"
 #include "pal.h"
-#include "libos_sg.h"
+#include "libos_graphics.h"
 static ssize_t dev_null_read(struct libos_handle* hdl, void* buf, size_t count) {
     __UNUSED(hdl);
     __UNUSED(buf);
@@ -77,7 +77,7 @@ static int dev_tty_open(struct libos_handle* hdl, struct libos_dentry* dent, int
     return 0;
 }
 
-#ifdef ENABLE_SG
+#ifdef ENABLE_GRAPHICS
     static int dev_gpudev_open(struct libos_handle* hdl, struct libos_dentry* dent, int flags) {
         __UNUSED(dent);
         __UNUSED(flags);
@@ -171,7 +171,7 @@ int init_devfs(void) {
     tty->dev.dev_ops.flush = &dev_tty_flush;
     tty->dev.dev_ops.poll = &dev_tty_poll;
     
-    #ifdef ENABLE_SG
+    #ifdef ENABLE_GRAPHICS
     struct pseudo_node* driNode = pseudo_add_dir(/*parent_node=*/root, "dri");
     struct pseudo_node* gpudev = pseudo_add_dev(driNode, "renderD128");
     gpudev->perm = PSEUDO_PERM_FILE_RW;

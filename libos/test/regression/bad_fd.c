@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
 
-/* Operations on invalid fds must fail with EBADF. Regression test for the Tirith "secure gaming"
- * (SG) paths in close()/lseek()/getdents64() that keyed on the raw fd number and, without a host
- * agent (plain Linux PAL), faulted on the unmapped SG comm window (iperf3 server crash). */
+/* Operations on invalid fds must fail with EBADF. Regression test for the Tirith "graphics"
+ * (graphics) paths in close()/lseek()/getdents64() that keyed on the raw fd number and, without a host
+ * agent (plain Linux PAL), faulted on the unmapped graphics comm window (iperf3 server crash). */
 
 #define _GNU_SOURCE
 #include <dirent.h>

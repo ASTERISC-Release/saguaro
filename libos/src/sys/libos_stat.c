@@ -7,7 +7,7 @@
 
 
 #include "libos_fs.h"
-#include "libos_sg.h"
+#include "libos_graphics.h"
 #include "libos_handle.h"
 #include "libos_internal.h"
 #include "libos_process.h"
@@ -104,7 +104,7 @@ long libos_syscall_fstat(int fd, struct stat* stat) {
     if (!is_user_memory_writable(stat, sizeof(*stat)))
         return -EFAULT;
 
-    #ifdef ENABLE_SG
+    #ifdef ENABLE_GRAPHICS
         if(hdl->type == TYPE_HOST)
         {
             long _offset = libos_syscall_acquire_libos_lock();
@@ -184,8 +184,8 @@ out:
 }
 
 long libos_syscall_readlink(const char* file, char* buf, int bufsize) {
-    #ifdef ENABLE_SG
-        if(sg_redirect_enabled() && strstr(file, "/sys/")){
+    #ifdef ENABLE_GRAPHICS
+        if(graphics_redirect_enabled() && strstr(file, "/sys/")){
             long _offset = libos_syscall_acquire_libos_lock();
             comm_page_t* c = comm_page(_offset);
             c->p1 = (uint64_t) file;
@@ -277,8 +277,8 @@ out:
 }
 
 long libos_syscall_newfstatat(int dirfd, const char* pathname, struct stat* statbuf, int flags) {
-    #ifdef ENABLE_SG
-        if(sg_redirect_enabled() && (strstr(pathname, "/dev") || strstr(pathname, "/sys") || strstr(pathname, "/proc/sys"))){
+    #ifdef ENABLE_GRAPHICS
+        if(graphics_redirect_enabled() && (strstr(pathname, "/dev") || strstr(pathname, "/sys") || strstr(pathname, "/proc/sys"))){
             if(!strstr(pathname, "devtest")){
                 long _offset = libos_syscall_acquire_libos_lock();
             comm_page_t* c = comm_page(_offset);

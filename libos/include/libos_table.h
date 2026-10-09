@@ -223,7 +223,7 @@ long libos_syscall_mlock2(unsigned long start, size_t len, int flags);
 long libos_syscall_sysinfo(struct sysinfo* info);
 long libos_syscall_close_range(unsigned int first, unsigned int last, unsigned int flags);
 
-/* New system call added for the secure gaming implementation */
+/* New system call added for the graphics implementation */
 
 // Registering host-based file descriptors, so that they can be passed as-is to the host when needed.
 long libos_syscall_register_host_identity_fd(int fd);

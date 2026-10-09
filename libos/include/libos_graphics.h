@@ -5,16 +5,16 @@
 #include "libos_lock.h"
 #include "log.h"
 
-/* Everything below is Tirith secure-gaming (SG) code, compiled in only with -Dsecure_gaming=enabled
- * (which defines ENABLE_SG for the LibOS). */
-#ifdef ENABLE_SG
+/* Everything below is Tirith graphics code, compiled in only with -Dgraphics=enabled
+ * (which defines ENABLE_GRAPHICS for the LibOS). */
+#ifdef ENABLE_GRAPHICS
 
-#define SG_HOST_FD_OFFSET 500
+#define GRAPHICS_HOST_FD_OFFSET 500
 
-#define SG_GEM_DATA_START      0x100000000ULL
-#define SG_GEM_DATA_SIZE       (3ULL * 1024 * 1024 * 1024)
-#define SG_GEM_HUGEPAGE_START  0x200000000ULL
-#define SG_GEM_HUGEPAGE_SIZE   (1ULL * 1024 * 1024 * 1024)
+#define GRAPHICS_GEM_DATA_START      0x100000000ULL
+#define GRAPHICS_GEM_DATA_SIZE       (3ULL * 1024 * 1024 * 1024)
+#define GRAPHICS_GEM_HUGEPAGE_START  0x200000000ULL
+#define GRAPHICS_GEM_HUGEPAGE_SIZE   (1ULL * 1024 * 1024 * 1024)
 
 #define NUM_COMM_PAGES 1
 
@@ -29,21 +29,23 @@ typedef struct {
     volatile uint64_t p5;
 } comm_page_t;
 
-_Static_assert(offsetof(comm_page_t, ret) == 16, "SG response must stay in the hot cache line");
-_Static_assert(offsetof(comm_page_t, p5) == 56, "common SG payload must fit one cache line");
-_Static_assert(sizeof(comm_page_t) == 64, "SG communication ABI must fit one cache line");
+_Static_assert(offsetof(comm_page_t, ret) == 16,
+               "graphics response must stay in the hot cache line");
+_Static_assert(offsetof(comm_page_t, p5) == 56,
+               "common graphics payload must fit one cache line");
+_Static_assert(sizeof(comm_page_t) == 64, "graphics communication ABI must fit one cache line");
 
-extern struct libos_lock sg_comm_lock;
+extern struct libos_lock graphics_comm_lock;
 
-/* Whether the SG host comm window at COMM_ADDR can exist at all in this deployment: it is
+/* Whether the graphics host comm window at COMM_ADDR can exist at all in this deployment: it is
  * attached by the host only under the VM/TDX PAL (full Tirith deployment with a qemu
  * sg-listener); under the plain `Linux` PAL nothing ever maps it. Defined (with the full
- * rationale) in libos_open.c next to the other SG entry point. Every comm_page() writer whose
- * predicate is path-based -- openat's is_sg_host_path() (via that same helper) and
+ * rationale) in libos_open.c next to the other graphics entry point. Every comm_page() writer whose
+ * predicate is path-based -- openat's is_graphics_host_path() (via that same helper) and
  * stat()/newfstatat()'s strstr() checks -- must consult this *before* touching the window:
  * comm_sync_notify()'s `magic` check cannot cover it, because every call site writes c->p1..p3
  * first, so an unmapped window faults at COMM_ADDR + 0x18 on the first write. */
-bool sg_redirect_enabled(void);
+bool graphics_redirect_enabled(void);
 
 #define COMM_ADDR  0xf00000ULL
 #define COMM_MAGIC 0x1234567812345678ULL
@@ -78,8 +80,8 @@ static uint64_t __attribute__((unused)) fs_offset = 500;
 #define iGPUNODE_PATH "/dev/dri/renderD128"
 #define dGPUNODE_PATH "/dev/dri/renderD129"
 
-static void* __attribute__((unused)) DATA_REGION = (void*)SG_GEM_DATA_START;
-static const size_t __attribute__((unused)) DATA_SIZE = SG_GEM_DATA_SIZE;
+static void* __attribute__((unused)) DATA_REGION = (void*)GRAPHICS_GEM_DATA_START;
+static const size_t __attribute__((unused)) DATA_SIZE = GRAPHICS_GEM_DATA_SIZE;
 static inline comm_page_t* comm_page(long offset) {
     return (comm_page_t*)(uintptr_t)(COMM_ADDR + offset);
 }
@@ -95,7 +97,7 @@ static __attribute__((unused)) uint64_t comm_sync_notify(comm_page_t* c) {
     __atomic_thread_fence(__ATOMIC_RELEASE);
     /* The dedicated host listener normally completes these shared-memory requests immediately.
      * A minimal load/test loop avoids AMD KVM's PAUSE-filter path and minimizes round-trip
-     * latency; this path is used only while an SG host request is outstanding. */
+     * latency; this path is used only while an graphics host request is outstanding. */
     while (__atomic_load_n(&c->req_bit, __ATOMIC_ACQUIRE) != 0) {
     }
 
@@ -112,4 +114,4 @@ static inline __attribute__((unused)) void ensure_lock_ready(struct libos_lock *
     }
 }
 
-#endif /* ENABLE_SG */
+#endif /* ENABLE_GRAPHICS */

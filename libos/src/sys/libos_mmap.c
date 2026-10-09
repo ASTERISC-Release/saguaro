@@ -11,7 +11,7 @@
 
 #include "libos_flags_conv.h"
 #include "libos_fs.h"
-#include "libos_sg.h"
+#include "libos_graphics.h"
 #include "libos_handle.h"
 #include "libos_internal.h"
 #include "libos_table.h"
@@ -148,8 +148,8 @@ void* libos_syscall_mmap(void* addr, size_t length, int prot, int flags, int fd,
                 // log_always("mmap request (fd: %d, offset: %lu, length: %zu, prot: 0x%x, flags: 0x%x)",
                 //            fd, offset, length, prot, flags);
 
-                // Secure gaming (check the file descriptor type and have the host allocate)
-                #ifdef ENABLE_SG
+                // Graphics (check the file descriptor type and have the host allocate)
+                #ifdef ENABLE_GRAPHICS
                     if(hdl->type == TYPE_HOST)
                     {
                         long _offset = libos_syscall_acquire_libos_lock();
@@ -413,7 +413,7 @@ long libos_syscall_munmap(void* _addr, size_t length) {
     if (!IS_ALLOC_ALIGNED(length))
         length = ALLOC_ALIGN_UP(length);
 
-#ifdef ENABLE_SG
+#ifdef ENABLE_GRAPHICS
     /* Host-device mappings replace pages inside egl-redirect's permanently reserved GEM arenas,
      * but the host mmap fast path above deliberately leaves the original LibOS VMA reservation
      * intact. Releasing a subrange here would make it available to the guest allocator while
@@ -421,11 +421,11 @@ long libos_syscall_munmap(void* _addr, size_t length) {
      * corrupt an unrelated heap allocation. The host allocator is monotonic for the VM lifetime,
      * so preserve these reservations until process teardown. */
     bool in_regular_gem_arena =
-        addr >= SG_GEM_DATA_START && length <= SG_GEM_DATA_SIZE &&
-        addr - SG_GEM_DATA_START <= SG_GEM_DATA_SIZE - length;
+        addr >= GRAPHICS_GEM_DATA_START && length <= GRAPHICS_GEM_DATA_SIZE &&
+        addr - GRAPHICS_GEM_DATA_START <= GRAPHICS_GEM_DATA_SIZE - length;
     bool in_hugepage_gem_arena =
-        addr >= SG_GEM_HUGEPAGE_START && length <= SG_GEM_HUGEPAGE_SIZE &&
-        addr - SG_GEM_HUGEPAGE_START <= SG_GEM_HUGEPAGE_SIZE - length;
+        addr >= GRAPHICS_GEM_HUGEPAGE_START && length <= GRAPHICS_GEM_HUGEPAGE_SIZE &&
+        addr - GRAPHICS_GEM_HUGEPAGE_START <= GRAPHICS_GEM_HUGEPAGE_SIZE - length;
     if (in_regular_gem_arena || in_hugepage_gem_arena)
         return 0;
 #endif

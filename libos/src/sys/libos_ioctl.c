@@ -13,7 +13,7 @@
 #include "libos_table.h"
 #include "linux_abi/errors.h"
 #include "linux_abi/ioctl.h"
-#include "libos_sg.h"
+#include "libos_graphics.h"
 #include "pal.h"
 #include "stat.h"
 
@@ -40,7 +40,7 @@ long libos_syscall_ioctl(unsigned int fd, unsigned int cmd, unsigned long arg) {
     if (!hdl)
         return -EBADF;
 
-    #ifdef ENABLE_SG
+    #ifdef ENABLE_GRAPHICS
         if(hdl->type == TYPE_HOST)
         {
             long _offset = libos_syscall_acquire_libos_lock();

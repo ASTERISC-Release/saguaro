@@ -10,12 +10,12 @@ option('tdx', type: 'combo', choices: ['disabled', 'enabled'],
 option('skeleton', type: 'combo', choices: ['disabled', 'enabled'],
     description: 'Build skeleton PAL')
 
-# Tirith "secure gaming" (SG): LibOS code that forwards selected syscalls (/dev and /sys access, GPU
+# Tirith "graphics": LibOS code that forwards selected syscalls (/dev and /sys access, GPU
 # ioctls, mmap of host-device memory, ...) to a host agent through a shared communication page. It
 # only works with a host agent present (VM/TDX PAL + QEMU sg-listener); it is inert, but still
 # compiled in, under the plain Linux PAL. Disable to build the LibOS without any of it.
-option('secure_gaming', type: 'combo', choices: ['disabled', 'enabled'], value: 'enabled',
-    description: 'Compile the Tirith secure-gaming host-redirection paths into the LibOS')
+option('graphics', type: 'combo', choices: ['disabled', 'enabled'], value: 'enabled',
+    description: 'Compile the Tirith graphics host-redirection paths into the LibOS')
 
 option('libc', type: 'combo', choices: ['none', 'glibc', 'musl'],
     value: 'glibc', description: 'Choose (patched) libc that is to be built into runtime directory')

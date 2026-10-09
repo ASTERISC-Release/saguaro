@@ -6,7 +6,7 @@
  */
 
 #include "libos_handle.h"
-#include "libos_sg.h"
+#include "libos_graphics.h"
 
 #include "libos_internal.h"
 #include "libos_table.h"
@@ -23,7 +23,7 @@ long libos_syscall_dup(unsigned int fd) {
     if (!hdl)
         return -EBADF;
 
-#ifdef ENABLE_SG
+#ifdef ENABLE_GRAPHICS
     /* Kept below for future testing/cleanup */
     #if 0
     if(fd < fs_offset && !get_fd_handle(fd, NULL, handle_map))
@@ -82,9 +82,9 @@ long libos_syscall_dup(unsigned int fd) {
     int vfd = set_new_fd_handle(hdl, /*fd_flags=*/0, handle_map);
     put_handle(hdl);
 
-#ifdef ENABLE_SG
-    /* Secure gaming logic to avoid overflow into fd range. */
-    if (vfd > SG_HOST_FD_OFFSET) {
+#ifdef ENABLE_GRAPHICS
+    /* Graphics logic to avoid overflow into fd range. */
+    if (vfd > GRAPHICS_HOST_FD_OFFSET) {
         log_always("error: dup(..) overflowed into host fd range. (ret: %d)\n", vfd);
         assert(false);
     }

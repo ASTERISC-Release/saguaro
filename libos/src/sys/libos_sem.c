@@ -2,7 +2,7 @@
 
 #include "libos_lock.h"
 #include "libos_internal.h"
-#include "libos_sg.h"
+#include "libos_graphics.h"
 #include "libos_signal.h"
 #include "libos_table.h"
 #include "libos_utils.h"
@@ -44,7 +44,7 @@ static struct libos_lock g_sysv_sem_lock;
 static struct sysv_sem_set g_sysv_sem_sets[MAX_SYSV_SEM_SETS];
 static bool g_use_host_sysv_semaphores;
 
-#ifdef ENABLE_SG
+#ifdef ENABLE_GRAPHICS
 static long host_sem_request(uint64_t request, uint64_t p1, uint64_t p2, uint64_t p3,
                              uint64_t p4) {
     long offset = libos_syscall_acquire_libos_lock();
@@ -59,8 +59,8 @@ static long host_sem_request(uint64_t request, uint64_t p1, uint64_t p2, uint64_
     return ret;
 }
 #else
-/* Request ids normally come from libos_sg.h; placeholders keep the (unreachable) call sites below
- * compiling when secure gaming is not built in. */
+/* Request ids normally come from libos_graphics.h; placeholders keep the (unreachable) call sites below
+ * compiling when graphics is not built in. */
 enum { SYSV_SEMGET, SYSV_SEMCTL, SYSV_SEMOP };
 
 static long host_sem_request(uint64_t request, uint64_t p1, uint64_t p2, uint64_t p3,
@@ -81,17 +81,17 @@ int init_sysv_semaphores(void) {
         log_error("Cannot parse 'sys.experimental__enable_host_sysv_semaphores'");
         return -EINVAL;
     }
-    /* Host semaphores are forwarded to the host agent through the SG communication window, which
+    /* Host semaphores are forwarded to the host agent through the graphics communication window, which
      * only exists in the VM/TDX deployment. Elsewhere the first semget() would fault on the
      * unmapped window, so refuse the option up front. */
-#ifdef ENABLE_SG
-    bool host_agent = sg_redirect_enabled();
+#ifdef ENABLE_GRAPHICS
+    bool host_agent = graphics_redirect_enabled();
 #else
     bool host_agent = false;
 #endif
     if (g_use_host_sysv_semaphores && !host_agent) {
         log_error("'sys.experimental__enable_host_sysv_semaphores' requires a host agent (VM/TDX "
-                  "PAL with secure gaming enabled)");
+                  "PAL with graphics enabled)");
         return -EINVAL;
     }
     return create_lock(&g_sysv_sem_lock) ? 0 : -ENOMEM;
