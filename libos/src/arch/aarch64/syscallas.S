@@ -216,6 +216,17 @@ _return_from_syscall:
     msr  fpcr, x1
 
 .Lgpr_restore:
+    /* A context that came from the host (an asynchronous signal or fault interrupted the
+     * application at an arbitrary instruction) must be resumed *exactly*: the sacrificed-x17 jump
+     * below is only legitimate for syscall returns. Such contexts are tagged with bit 62 of
+     * pstate (PAL_PSTATE_EXACT_CONTEXT, pal_arch.h); for them the PAL's SIGTRAP handler restores
+     * every register and the flags through the kernel's own sigreturn. x0 = the PAL_CONTEXT. */
+    ldr  x0, [x19, #PAL_CONTEXT_PSTATE_OFF]
+    tbz  x0, #62, .Lfast_restore
+    mov  x0, x19
+    brk  #PAL_BRK_RESTORE_CONTEXT
+    brk  #0                      /* not reached: the trap handler resumes the application */
+.Lfast_restore:
     /* After this point we call nothing else. X16 and X17 have specific final values from here
      * on -- X16 = the application's (per-contract clobbered, restart-meaningful) resume mirror,
      * X17 = the branch target (context->pc) -- so the remaining scratch work has to route

@@ -137,6 +137,8 @@ struct sigframe {
  * emulation path -- indistinguishable from the glibc syscall wrapper's own `svc` at a libc
  * text address. */
 static_assert(__NR_rt_sigreturn == 139, "hard-coded mov x8 immediate below must match");
+static_assert(PAL_PSTATE_EXACT_CONTEXT == (1ULL << 62),
+              "syscallas.S tests bit 62 of pstate (_return_from_syscall exact-restore path)");
 __attribute__((naked)) static void rt_sigreturn_trampoline(void) {
     __asm__ volatile("mov x8, #139\n" /* == __NR_rt_sigreturn */
                      "svc #0\n" ::: "memory");

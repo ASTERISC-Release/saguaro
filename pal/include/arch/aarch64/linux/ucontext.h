@@ -74,7 +74,7 @@ static inline void ucontext_to_pal_context(PAL_CONTEXT* context, ucontext_t* uc)
     memcpy(context->regs, uc->uc_mcontext.regs, sizeof(context->regs));
     context->sp = uc->uc_mcontext.sp;
     context->pc = uc->uc_mcontext.pc;
-    context->pstate = uc->uc_mcontext.pstate;
+    context->pstate = uc->uc_mcontext.pstate | PAL_PSTATE_EXACT_CONTEXT; /* see pal_arch.h */
     context->fault_address = uc->uc_mcontext.fault_address;
     context->esr = 0; /* not populated: no generic (non-arch-dir) code consumes this today */
     context->oldmask = 0;
@@ -124,6 +124,10 @@ static inline void pal_context_to_ucontext(ucontext_t* uc, PAL_CONTEXT* context)
     terminator->magic = 0;
     terminator->size = 0;
 }
+
+/* Handles SIGTRAP for the exact-context-restore protocol (PAL_BRK_RESTORE_CONTEXT, pal_arch.h);
+ * defined in pal/src/host/linux/arch/aarch64/pal_arch_exception.c. */
+void pal_arch_handle_trap(ucontext_t* uc);
 
 static inline uint64_t ucontext_get_ip(ucontext_t* uc) {
     return uc->uc_mcontext.pc;

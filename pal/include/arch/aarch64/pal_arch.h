@@ -326,6 +326,26 @@ struct PAL_CONTEXT {
 };
 typedef struct PAL_CONTEXT PAL_CONTEXT;
 
+/*
+ * Exact context restore (see libos/src/arch/aarch64/syscallas.S, _return_from_syscall).
+ *
+ * A thread interrupted by an asynchronous signal (or a fault) can be at any instruction, including
+ * ones where x16/x17 (IP0/IP1, live inside PLT stubs and veneers) or the condition flags are live.
+ * Returning to such a context from user space needs a scratch register for the final jump, so the
+ * ordinary syscall-return path (which treats x17 as scratch, as the ABI allows after a call) cannot
+ * be used. Instead the LibOS executes `brk #PAL_BRK_RESTORE_CONTEXT` with x0 = the PAL_CONTEXT, and
+ * the PAL's SIGTRAP handler overwrites the host ucontext with it, so the kernel restores every
+ * register and the flags exactly, as it does for any signal frame.
+ *
+ * Contexts that came from the host (ucontext_to_pal_context()) are tagged with
+ * PAL_PSTATE_EXACT_CONTEXT in `pstate` (bit 62 is RES0 in the real PSTATE, and is cleared again by
+ * the kernel on return); contexts built by the syscall-entry path have pstate == 0 and keep the
+ * fast path.
+ */
+#define PAL_PSTATE_EXACT_CONTEXT (1ULL << 62)
+#define PAL_BRK_RESTORE_CONTEXT  0x6772 /* "gr" */
+#define PAL_HAS_CONTEXT_RESTORE_TRAP 1
+
 typedef int64_t arch_syscall_arg_t;
 
 #define ALL_SYSCALL_ARGS(context) \

@@ -138,6 +138,7 @@ tests = {
     'sighandler_sigpipe': {},
     'signal_multithread': {},
     'sigprocmask_pending': {},
+    'sigreturn_regs': {},
     'sigterm_multithread': {},
     'socket_ioctl': {},
     'spinlock': {

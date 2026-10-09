@@ -201,3 +201,22 @@ __attribute__((visibility("protected"))) bool libos_tcb_registry_scan(PAL_TCB** 
     }
     return false;
 }
+
+/*
+ * SIGTRAP handler for the exact-context-restore protocol (see PAL_BRK_RESTORE_CONTEXT in
+ * pal_arch.h). The LibOS executes `brk #PAL_BRK_RESTORE_CONTEXT` with x0 = a PAL_CONTEXT*; copying
+ * that context into the host ucontext makes the kernel's own sigreturn restore all registers and
+ * the condition flags exactly. Any other SIGTRAP (e.g. an application `brk`) keeps its previous
+ * behavior: restore the default action and return, so the instruction re-executes and the process
+ * dies as it did before this handler existed.
+ */
+void pal_arch_handle_trap(ucontext_t* uc) {
+    uint32_t insn = *(const uint32_t*)ucontext_get_ip(uc);
+    if (insn == (0xd4200000u | ((uint32_t)PAL_BRK_RESTORE_CONTEXT << 5))) {
+        PAL_CONTEXT* ctx = (PAL_CONTEXT*)uc->uc_mcontext.regs[0];
+        ctx->pstate &= ~PAL_PSTATE_EXACT_CONTEXT;
+        pal_context_to_ucontext(uc, ctx);
+        return;
+    }
+    arch_do_rt_sigaction(SIGTRAP, SIG_DFL, NULL, 0);
+}

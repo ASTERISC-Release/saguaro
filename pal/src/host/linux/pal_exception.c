@@ -85,6 +85,12 @@ static void perform_signal_handling(enum pal_event event, bool is_in_pal, uintpt
 }
 
 static void handle_sync_signal(int signum, siginfo_t* info, struct ucontext* uc) {
+#ifdef PAL_HAS_CONTEXT_RESTORE_TRAP
+    if (signum == SIGTRAP) {
+        pal_arch_handle_trap(uc);
+        return;
+    }
+#endif
     bool is_seccomp_trap = false;
     if (info->si_signo == SIGSYS && info->si_code == SYS_SECCOMP) {
         ucontext_revert_syscall(uc, info->si_arch, info->si_syscall, info->si_call_addr);
@@ -237,6 +243,12 @@ void signal_setup(bool is_first_process, uintptr_t vdso_start, uintptr_t vdso_en
     ret = set_signal_handler(SIGSYS, handle_sync_signal);
     if (ret < 0)
         goto err;
+
+#ifdef PAL_HAS_CONTEXT_RESTORE_TRAP
+    ret = set_signal_handler(SIGTRAP, handle_sync_signal);
+    if (ret < 0)
+        goto err;
+#endif
 
     /* register asynchronous signals in host Linux */
     for (size_t i = 0; i < ARRAY_SIZE(ASYNC_SIGNALS); i++) {
