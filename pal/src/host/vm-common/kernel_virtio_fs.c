@@ -238,7 +238,8 @@ int virtio_fs_fuse_init(void) {
     return 0;
 }
 
-int virtio_fs_fuse_lookup(const char* filename, uint64_t* out_nodeid) {
+int virtio_fs_fuse_lookup(const char* filename, uint64_t* out_nodeid,
+                          struct fuse_attr* out_attr) {
     int ret;
 
     if (strlen(filename) == 0)
@@ -276,10 +277,10 @@ int virtio_fs_fuse_lookup(const char* filename, uint64_t* out_nodeid) {
      *   is not sufficiently unique to identify the current file; but I haven't seen any issues yet
      *   (`generation` seems to be relevant only for network FSes which we don't use).
      * - We don't take into account cache timeouts -- Gramine-TDX never caches file data/metadata.
-     * - We don't memoize `attr` (which is an optimization to not call a separate FUSE_GETATTR op).
-     *   Gramine-TDX always calls a separate FUSE_GETATTR when it needs to learn file attributes.
      */
     *out_nodeid = entry_out.nodeid;
+    if (out_attr)
+        *out_attr = entry_out.attr;
     return 0;
 }
 
@@ -337,6 +338,9 @@ int virtio_fs_fuse_open(uint64_t nodeid, uint32_t flags, uint64_t* out_fh) {
         { .addr = &hdr_out,  .size = sizeof(hdr_out),  .in = false },
         { .addr = &open_out, .size = sizeof(open_out), .in = false },
     };
+
+    // Adil 
+    // log_always("virtio_fs_fuse_open: nodeid=%lu, flags=0x%x", nodeid, flags);
 
     ret = virtio_fs_exec_request(/*count=*/4, descs);
     if (ret < 0)

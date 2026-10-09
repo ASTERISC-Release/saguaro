@@ -13,6 +13,12 @@
 #include "libos_socket.h"
 #include "libos_table.h"
 #include "linux_abi/errors.h"
+/* Santosh changes */
+#define PROT_READ	0x1		/* Page can be read.  */
+#define PROT_WRITE	0x2		/* Page can be written.  */
+# define MAP_ANONYMOUS	0x20		/* Don't use a file.  */
+#define MAP_PRIVATE	0x02		/* Changes are private.  */
+#define MAP_FAILED	((void *) -1)
 
 /*
  * Sockets can be in 5 states: NEW, BOUND, LISTENING, CONNECTING and CONNECTED.
@@ -137,6 +143,10 @@ long libos_syscall_socket(int family, int type, int protocol) {
 
     int flags = type & ~SOCK_TYPE_MASK;
     bool is_nonblocking = flags & SOCK_NONBLOCK;
+
+    /* Santosh's log for nonblocking socket calls.*/
+    log_debug("[SG] Am I non-blocking: %d", is_nonblocking);
+    
     bool is_cloexec = flags & SOCK_CLOEXEC;
     if (flags & ~(SOCK_NONBLOCK | SOCK_CLOEXEC)) {
         return -EINVAL;
@@ -158,6 +168,24 @@ long libos_syscall_socket(int family, int type, int protocol) {
     }
 
     int ret = handle->info.sock.ops->create(handle);
+    if (ret == 0 && handle->info.sock.type == SOCK_DGRAM) {
+        /* The VM PAL emulates UDP with an in-process receive ring. One MiB is enough to queue
+         * hundreds of maximum-sized UDP datagrams without consuming 512 MiB per socket. */
+        static const size_t udp_rx_ring_size = 1024 * 1024;
+        void* region = libos_syscall_mmap(NULL, udp_rx_ring_size, PROT_READ | PROT_WRITE,
+                                          MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+        if ((intptr_t)region < 0) {
+            ret = (intptr_t)region;
+        } else {
+            ret = handle->info.sock.ops->register_shmem(handle, region);
+            if (ret < 0) {
+                (void)libos_syscall_munmap(region, udp_rx_ring_size);
+            } else {
+                handle->info.sock.udp_rx_ring = region;
+                handle->info.sock.udp_rx_ring_size = udp_rx_ring_size;
+            }
+        }
+    }
     if (ret == 0) {
         ret = set_new_fd_handle(handle, is_cloexec ? FD_CLOEXEC : 0, NULL);
     }
@@ -178,7 +206,7 @@ long libos_syscall_socketpair(int family, int type, int protocol, int* sv) {
     }
 
     type &= SOCK_TYPE_MASK;
-    if (type != SOCK_STREAM) {
+    if (type != SOCK_STREAM && type != SOCK_DGRAM) {
         log_warning("unsupported socket type %d", type);
         return -EPROTONOSUPPORT;
     }
@@ -195,12 +223,16 @@ long libos_syscall_socketpair(int family, int type, int protocol, int* sv) {
     struct libos_handle* handle1 = NULL;
     struct libos_handle* handle2 = NULL;
     struct libos_handle* handle3 = NULL;
-    handle1 = get_new_socket_handle(family, type, protocol, /*is_nonblocking=*/false);
+    /* PAL pipes are stream-oriented. Use them as the transport for connected UNIX datagram
+     * socket pairs as well. This does not preserve datagram boundaries, but it supports the
+     * common notification-socket use case without enabling general UNIX datagram sockets. */
+    int backing_type = type == SOCK_DGRAM ? SOCK_STREAM : type;
+    handle1 = get_new_socket_handle(family, backing_type, protocol, /*is_nonblocking=*/false);
     if (!handle1) {
         ret = -ENOMEM;
         goto out;
     }
-    handle2 = get_new_socket_handle(family, type, protocol, /*is_nonblocking=*/false);
+    handle2 = get_new_socket_handle(family, backing_type, protocol, /*is_nonblocking=*/false);
     if (!handle2) {
         ret = -ENOMEM;
         goto out;
@@ -273,6 +305,12 @@ long libos_syscall_socketpair(int family, int type, int protocol, int* sv) {
         goto out;
     }
 
+    if (type == SOCK_DGRAM) {
+        /* Restore the application-visible type before publishing the connected handles. */
+        handle2->info.sock.type = SOCK_DGRAM;
+        handle3->info.sock.type = SOCK_DGRAM;
+    }
+
     if (is_nonblocking) {
         ret = set_handle_nonblocking(handle2, is_nonblocking);
         if (ret < 0) {
@@ -316,36 +354,43 @@ out:
 
 long libos_syscall_bind(int fd, void* addr, int _addrlen) {
     int ret;
+    // log_always("I'm at bind, let's hope \n");
 
     if (_addrlen < 0) {
+        // log_always("RET: %ld \n", -EINVAL);
         return -EINVAL;
     }
     size_t addrlen = _addrlen;
     if (!is_user_memory_readable(addr, addrlen)) {
+        // log_always("RET: %ld \n", -EFAULT);
         return -EFAULT;
     }
 
     struct libos_handle* handle = get_fd_handle(fd, NULL, NULL);
     if (!handle) {
+        // log_always("RET: %ld \n", -EBADF);
         return -EBADF;
     }
 
     if (handle->type != TYPE_SOCK) {
         put_handle(handle);
+        // log_always("RET: %ld \n", -ENOTSOCK);
         return -ENOTSOCK;
     }
 
     struct libos_sock_handle* sock = &handle->info.sock;
-
+    // log_always("Gonna bind - before lock\n");
     lock(&sock->lock);
 
     if (sock->state != SOCK_NEW) {
         ret = -EINVAL;
+        // log_always("RET: %ld \n", -EINVAL);
         goto out;
     }
-
+    // log_always("Gonna bind\n");
     ret = sock->ops->bind(handle, addr, addrlen);
     if (ret < 0) {
+        // log_always("RET: %ld \n", ret);
         goto out;
     }
 
@@ -353,7 +398,18 @@ long libos_syscall_bind(int fd, void* addr, int _addrlen) {
     sock->was_bound = true;
     ret = 0;
 
+    // if(sock->type == SOCK_DGRAM){
+    //     /* Create a shared region of memory*/
+    //     void *region = libos_syscall_mmap(NULL, 1024*1024,  PROT_READ | PROT_WRITE, (MAP_ANONYMOUS | MAP_PRIVATE), -1, 0);
+    //     if (region == MAP_FAILED){
+    //         log_always("[SG] Map failed - UDP comms cannot be done\n");
+    //         return -EINVAL;
+    //     }
+    //     sock->ops->register_shmem(handle, region);
+    // }
+
 out:
+    log_debug("RET: %ld \n", ret);
     unlock(&sock->lock);
     put_handle(handle);
     return ret;
@@ -681,6 +737,15 @@ ssize_t do_sendmsg(struct libos_handle* handle, struct iovec* iov, size_t iov_le
      * `false`, but the handle is in nonblocking mode, this send won't block. */
     bool force_nonblocking = flags & MSG_DONTWAIT;
     struct libos_sock_handle* sock = &handle->info.sock;
+    lock(&sock->lock);
+    if (sock->type == SOCK_DGRAM) {
+        unlock(&sock->lock);
+        size_t size = 0;
+        ret = sock->ops->send(handle, iov, iov_len, msg_control, msg_controllen, &size, addr, addrlen,
+                              force_nonblocking);
+        return ret < 0 ? ret : (ssize_t)size;
+    }
+    unlock(&sock->lock);
 
     if (flags & MSG_MORE) {
         if (sock->type != SOCK_STREAM) {
@@ -851,17 +916,26 @@ ssize_t do_recvmsg(struct libos_handle* handle, struct iovec* iov, size_t iov_le
     if (handle->type != TYPE_SOCK) {
         return -ENOTSOCK;
     }
+    bool force_nonblocking = *flags & MSG_DONTWAIT;
+
+    struct libos_sock_handle* sock = &handle->info.sock;
+    lock(&sock->lock);
+    if (sock->type == SOCK_DGRAM) {
+        unlock(&sock->lock);
+        size_t size = 0;
+        ret = sock->ops->recv(handle, iov, iov_len, msg_control, msg_controllen_ptr, &size, addr,
+                              addrlen_ptr, force_nonblocking);
+        return ret < 0 ? ret : (ssize_t)size;
+    }
+    unlock(&sock->lock);
     if (!WITHIN_MASK(*flags, MSG_PEEK | MSG_DONTWAIT | MSG_TRUNC)) {
         return -EOPNOTSUPP;
     }
-
+    
     /* Note this only indicates whether this operation was requested to be nonblocking. If it's
      * `false`, but the handle is in nonblocking mode, this read won't block. */
-    bool force_nonblocking = *flags & MSG_DONTWAIT;
-    struct libos_sock_handle* sock = &handle->info.sock;
-
     lock(&sock->lock);
-    if (sock->state == SOCK_CONNECTING) {
+     if (sock->state == SOCK_CONNECTING) {
         unlock(&sock->lock);
         return -EAGAIN;
     }

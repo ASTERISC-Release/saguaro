@@ -861,9 +861,10 @@ static int handle_futex_death(uint32_t* uaddr) {
     if (!IS_ALIGNED_PTR(uaddr, alignof(*uaddr))) {
         return -EINVAL;
     }
-    int ret = check_futex_ptr(uaddr, FUTEX_CHECK_WRITE);
-    if (ret < 0) {
-        return ret;
+    /* This runs while a thread is being torn down. Always validate the user-provided robust-list
+     * pointer before dereferencing it, even when ordinary syscall pointer checks are disabled. */
+    if (!is_user_memory_writable_no_skip(uaddr, sizeof(*uaddr))) {
+        return -EFAULT;
     }
 
     /* Loop until we successfully set the futex word or see someone else taking this futex. */
@@ -898,7 +899,7 @@ static int handle_futex_death(uint32_t* uaddr) {
  * Returns 0 on success, negative value on error.
  */
 static int fetch_robust_entry(struct robust_list** entry, struct robust_list** head) {
-    if (!is_user_memory_readable(head, sizeof(*head))) {
+    if (!is_user_memory_readable_no_skip(head, sizeof(*head))) {
         return -EFAULT;
     }
 
@@ -930,7 +931,7 @@ void release_robust_list(struct robust_list_head* head) {
         return;
     }
 
-    if (!is_user_memory_readable(&head->futex_offset, sizeof(head->futex_offset))) {
+    if (!is_user_memory_readable_no_skip(&head->futex_offset, sizeof(head->futex_offset))) {
         return;
     }
     futex_offset = head->futex_offset;
@@ -978,7 +979,7 @@ void release_robust_list(struct robust_list_head* head) {
 
 void release_clear_child_tid(int* clear_child_tid) {
     if (!clear_child_tid || !IS_ALIGNED_PTR(clear_child_tid, alignof(*clear_child_tid)) ||
-        !is_user_memory_writable(clear_child_tid, sizeof(*clear_child_tid)))
+        !is_user_memory_writable_no_skip(clear_child_tid, sizeof(*clear_child_tid)))
         return;
 
     /* child thread exited, now parent can wake up */

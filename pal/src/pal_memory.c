@@ -76,7 +76,7 @@ void PalSetMemoryBookkeepingUpcalls(int (*alloc)(size_t size, uintptr_t* out_add
 }
 
 static void insert_range_at(size_t idx, uintptr_t addr, size_t size, pal_prot_flags_t prot,
-                            const char* comment) {
+                            bool is_user_reserved, const char* comment) {
     assert(idx <= g_pal_public_state.initial_mem_ranges_len);
 
     memmove(&g_initial_mem_ranges[idx + 1], &g_initial_mem_ranges[idx],
@@ -85,6 +85,7 @@ static void insert_range_at(size_t idx, uintptr_t addr, size_t size, pal_prot_fl
         .start = addr,
         .end = addr + size,
         .prot = prot,
+        .is_user_reserved = is_user_reserved,
         .is_free = false,
     };
     memcpy(&g_initial_mem_ranges[idx].comment, comment,
@@ -94,19 +95,21 @@ static void insert_range_at(size_t idx, uintptr_t addr, size_t size, pal_prot_fl
     assert(g_pal_public_state.initial_mem_ranges_len <= ARRAY_SIZE(g_initial_mem_ranges));
 }
 
-int pal_add_initial_range(uintptr_t addr, size_t size, pal_prot_flags_t prot, const char* comment) {
+int pal_add_initial_range(uintptr_t addr, size_t size, pal_prot_flags_t prot,
+                          bool is_user_reserved, const char* comment) {
     if (g_pal_public_state.initial_mem_ranges_len >= ARRAY_SIZE(g_initial_mem_ranges)) {
         return -PAL_ERROR_NOMEM;
     }
 
     for (size_t i = 0; i < g_pal_public_state.initial_mem_ranges_len; i++) {
         if (g_initial_mem_ranges[i].end <= addr) {
-            insert_range_at(i, addr, size, prot, comment);
+            insert_range_at(i, addr, size, prot, is_user_reserved, comment);
             return 0;
         }
     }
 
-    insert_range_at(g_pal_public_state.initial_mem_ranges_len, addr, size, prot, comment);
+    insert_range_at(g_pal_public_state.initial_mem_ranges_len, addr, size, prot, is_user_reserved,
+                    comment);
     return 0;
 }
 
@@ -263,7 +266,8 @@ static int initial_mem_bkeep(size_t size, uintptr_t* out_addr) {
         g_last_alloc_addr = addr;
     }
 
-    ret = pal_add_initial_range(addr, size, PAL_PROT_READ | PAL_PROT_WRITE, "PAL internal memory");
+    ret = pal_add_initial_range(addr, size, PAL_PROT_READ | PAL_PROT_WRITE,
+                                /*is_user_reserved=*/false, "PAL internal memory");
     if (ret < 0) {
         return ret;
     }

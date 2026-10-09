@@ -7,6 +7,7 @@
 
 
 #include "libos_fs.h"
+#include "libos_sg.h"
 #include "libos_handle.h"
 #include "libos_internal.h"
 #include "libos_process.h"
@@ -14,7 +15,6 @@
 #include "linux_abi/errors.h"
 #include "linux_abi/fs.h"
 #include "stat.h"
-
 static int do_stat(struct libos_dentry* dent, struct stat* stat) {
     assert(locked(&g_dcache_lock));
     assert(dent->inode);
@@ -104,6 +104,23 @@ long libos_syscall_fstat(int fd, struct stat* stat) {
     if (!is_user_memory_writable(stat, sizeof(*stat)))
         return -EFAULT;
 
+    #ifdef ENABLE_SG
+        if(hdl->type == TYPE_HOST)
+        {
+            long _offset = libos_syscall_acquire_libos_lock();
+            comm_page_t* c = comm_page(_offset);
+            c->p1 = (uint64_t) fd;
+            c->p2 = (uint64_t) stat;
+            __sync_synchronize();
+            c->req_bit = FSTAT;
+            put_handle(hdl);
+
+            long retval = comm_sync_notify(c);
+            libos_syscall_relinquish_libos_lock(_offset);
+            return retval;
+        }  
+    #endif
+
     int ret = do_hstat(hdl, stat);
     put_handle(hdl);
     return ret;
@@ -167,6 +184,21 @@ out:
 }
 
 long libos_syscall_readlink(const char* file, char* buf, int bufsize) {
+    #ifdef ENABLE_SG
+        if(strstr(file, "/sys/")){
+            long _offset = libos_syscall_acquire_libos_lock();
+            comm_page_t* c = comm_page(_offset);
+            c->p1 = (uint64_t) file;
+            c->p2 = (uint64_t) buf;
+            c->p3 = (uint64_t) bufsize;
+
+            __sync_synchronize();
+            c->req_bit = READLINK;
+            long retval = comm_sync_notify(c);
+            libos_syscall_relinquish_libos_lock(_offset);
+            return retval;
+        }
+    #endif
     return libos_syscall_readlinkat(AT_FDCWD, file, buf, bufsize);
 }
 
@@ -245,6 +277,25 @@ out:
 }
 
 long libos_syscall_newfstatat(int dirfd, const char* pathname, struct stat* statbuf, int flags) {
+    #ifdef ENABLE_SG
+        if(strstr(pathname, "/dev") || strstr(pathname, "/sys") || strstr(pathname, "/proc/sys")){
+            if(!strstr(pathname, "devtest")){
+                long _offset = libos_syscall_acquire_libos_lock();
+            comm_page_t* c = comm_page(_offset);
+                c->p1 = (uint64_t) dirfd;
+                c->p2 = (uint64_t) pathname;
+                c->p3 = (uint64_t) statbuf;
+                c->p4 = (uint64_t) flags;
+
+                __sync_synchronize();
+                c->req_bit = NEWFSTAT;
+                long retval = comm_sync_notify(c);
+                libos_syscall_relinquish_libos_lock(_offset);
+                return retval;
+            }
+        }
+    #endif
+
     if (flags & ~(AT_EMPTY_PATH | AT_NO_AUTOMOUNT | AT_SYMLINK_NOFOLLOW))
         return -EINVAL;
     if (!is_user_string_readable(pathname))

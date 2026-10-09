@@ -13,6 +13,7 @@
 #include "libos_table.h"
 #include "linux_abi/errors.h"
 #include "linux_abi/ioctl.h"
+#include "libos_sg.h"
 #include "pal.h"
 #include "stat.h"
 
@@ -32,14 +33,32 @@ static void signal_io(IDTYPE caller, void* arg) {
 }
 
 long libos_syscall_ioctl(unsigned int fd, unsigned int cmd, unsigned long arg) {
-    int ret;
-
     struct libos_handle_map* handle_map = get_thread_handle_map(NULL);
     assert(handle_map);
 
     struct libos_handle* hdl = get_fd_handle(fd, NULL, handle_map);
     if (!hdl)
         return -EBADF;
+
+    #ifdef ENABLE_SG
+        if(hdl->type == TYPE_HOST)
+        {
+            long _offset = libos_syscall_acquire_libos_lock();
+            comm_page_t* c = comm_page(_offset);
+            c->p1 = (uint64_t) fd;
+            c->p2 = (uint64_t) cmd;
+            c->p3 = (uint64_t) arg;
+
+            // TODO: check if this is needed.
+            // __sync_synchronize();
+            c->req_bit = IOCTL;
+            put_handle(hdl);
+            long retval = comm_sync_notify(c);
+            libos_syscall_relinquish_libos_lock(_offset);
+            return retval;
+        }
+    #endif
+    int ret;
 
     lock(&g_dcache_lock);
     bool is_host_dev = hdl->type == TYPE_CHROOT && hdl->dentry->inode &&

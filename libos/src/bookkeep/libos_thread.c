@@ -357,6 +357,10 @@ void get_thread(struct libos_thread* thread) {
 }
 
 void put_thread(struct libos_thread* thread) {
+    if (refcount_get(&thread->ref_count) <= 0) {
+        log_error("put_thread called with refcount %ld: thread=%p caller=%p",
+                  refcount_get(&thread->ref_count), thread, __builtin_return_address(0));
+    }
     refcount_t ref_count = refcount_dec(&thread->ref_count);
 
     if (!ref_count) {

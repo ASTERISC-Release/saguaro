@@ -77,7 +77,7 @@ static int file_or_dir_rename(const char* old, const char* new) {
         goto out;
 
     uint64_t old_dir_nodeid;
-    ret = virtio_fs_fuse_lookup(old_resolved_path, &old_dir_nodeid);
+    ret = virtio_fs_fuse_lookup(old_resolved_path, &old_dir_nodeid, /*out_attr=*/NULL);
     if (ret < 0)
         goto out;
 
@@ -92,7 +92,7 @@ static int file_or_dir_rename(const char* old, const char* new) {
         goto out;
 
     uint64_t new_dir_nodeid;
-    ret = virtio_fs_fuse_lookup(new_resolved_path, &new_dir_nodeid);
+    ret = virtio_fs_fuse_lookup(new_resolved_path, &new_dir_nodeid, /*out_attr=*/NULL);
     if (ret < 0)
         goto out;
 
@@ -126,6 +126,10 @@ int pal_common_file_open(struct pal_handle** handle, const char* type, const cha
     uint64_t created_dir_nodeid = 0;
     char* created_base_path = NULL;
 
+    // 
+    //log_always("pal_common_file_open: type=%s, uri=%s, access=0x%x, share=0x%x, create=%d, options=0x%x",
+    //            type, uri, access, share, create, options);
+
     if (strcmp(type, URI_TYPE_FILE))
         return -PAL_ERROR_INVAL;
 
@@ -143,6 +147,10 @@ int pal_common_file_open(struct pal_handle** handle, const char* type, const cha
         file_exists = true;
     else
         return ret;
+
+    // (printing resolved path for debug)
+    //log_always("Opening file: '%s' (resolved to '%s'), access=%d, share=%d, create=%d, options=0x%x",
+    //            uri, resolved_path ? resolved_path : "(not exist)", access, share, create, options);
 
     if (!file_exists && create == PAL_CREATE_NEVER)
         return -PAL_ERROR_STREAMNOTEXIST;
@@ -163,7 +171,7 @@ int pal_common_file_open(struct pal_handle** handle, const char* type, const cha
             goto out;
 
         uint64_t dir_nodeid;
-        ret = virtio_fs_fuse_lookup(parent_resolved_path, &dir_nodeid);
+        ret = virtio_fs_fuse_lookup(parent_resolved_path, &dir_nodeid, /*out_attr=*/NULL);
         if (ret < 0)
             goto out;
 
@@ -179,7 +187,7 @@ int pal_common_file_open(struct pal_handle** handle, const char* type, const cha
         created_base_path = strdup(base_path);
     } else {
         /* file exists (and was already resolved), simply open it */
-        ret = virtio_fs_fuse_lookup(resolved_path, &nodeid);
+        ret = virtio_fs_fuse_lookup(resolved_path, &nodeid, /*out_attr=*/NULL);
         if (ret < 0)
             goto out;
 
@@ -191,6 +199,9 @@ int pal_common_file_open(struct pal_handle** handle, const char* type, const cha
         if (ret < 0)
             goto out;
     }
+
+    /* Adil */
+    // log_always("Opened file");
 
     /* now that we opened the host file, need to create and populate corresponding PAL handle */
     opened = true;
@@ -510,7 +521,7 @@ int pal_common_file_delete(struct pal_handle* handle, enum pal_delete_mode delet
         goto out;
 
     uint64_t dir_nodeid;
-    ret = virtio_fs_fuse_lookup(resolved_path, &dir_nodeid);
+    ret = virtio_fs_fuse_lookup(resolved_path, &dir_nodeid, /*out_attr=*/NULL);
     if (ret < 0)
         goto out;
 
@@ -598,7 +609,7 @@ int pal_common_dir_open(struct pal_handle** handle, const char* type, const char
             goto out;
 
         uint64_t parent_dir_nodeid;
-        ret = virtio_fs_fuse_lookup(parent_resolved_path, &parent_dir_nodeid);
+        ret = virtio_fs_fuse_lookup(parent_resolved_path, &parent_dir_nodeid, /*out_attr=*/NULL);
         if (ret < 0)
             goto out;
 
@@ -610,7 +621,7 @@ int pal_common_dir_open(struct pal_handle** handle, const char* type, const char
         created_base_path = strdup(base_path);
     } else {
         /* dir exists (and was already resolved), simply look it up */
-        ret = virtio_fs_fuse_lookup(resolved_path, &nodeid);
+        ret = virtio_fs_fuse_lookup(resolved_path, &nodeid, /*out_attr=*/NULL);
         if (ret < 0)
             goto out;
     }
@@ -784,7 +795,7 @@ int pal_common_dir_delete(struct pal_handle* handle, enum pal_delete_mode delete
         goto out;
 
     uint64_t parent_dir_nodeid;
-    ret = virtio_fs_fuse_lookup(resolved_path, &parent_dir_nodeid);
+    ret = virtio_fs_fuse_lookup(resolved_path, &parent_dir_nodeid, /*out_attr=*/NULL);
     if (ret < 0)
         goto out;
 

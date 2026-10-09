@@ -117,6 +117,8 @@ struct libos_sock_ops {
     int (*recv)(struct libos_handle* handle, struct iovec* iov, size_t iov_len, void* msg_control,
                 size_t* msg_controllen_ptr, size_t* out_total_size, void* addr, size_t* addrlen_ptr,
                 bool force_nonblocking);
+    
+    int (*register_shmem)(struct libos_handle* handle, void *region);
 };
 
 struct libos_handle* get_new_socket_handle(int family, int type, int protocol,

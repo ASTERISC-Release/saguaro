@@ -118,8 +118,9 @@ static int tsc_frequency_init(void) {
     return 0;
 }
 
-static int add_preloaded_range(uintptr_t addr, size_t size, const char* comment) {
-    return pal_add_initial_range(addr, size, /*pal_prot=*/0, comment);
+static int add_preloaded_range(uintptr_t addr, size_t size, bool is_user_reserved,
+                               const char* comment) {
+    return pal_add_initial_range(addr, size, /*pal_prot=*/0, is_user_reserved, comment);
 }
 
 static void prot_none_memory(void) {
@@ -442,6 +443,14 @@ noreturn int pal_start_continue(void* cmdline_) {
                        &g_pal_public_state.extra_runtime_domain_names_conf);
     if (ret < 0)
         INIT_FAIL("Cannot parse 'sys.enable_extra_runtime_domain_names_conf'");
+
+    bool shared_input_ring;
+    ret = toml_bool_in(g_pal_public_state.manifest_root,
+                       "sys.experimental__shared_input_ring", /*defaultval=*/false,
+                       &shared_input_ring);
+    if (ret < 0)
+        INIT_FAIL("Cannot parse 'sys.experimental__shared_input_ring'");
+    virtio_vsock_set_shared_input_ring(shared_input_ring);
 
     g_pal_public_state.first_thread = g_first_thread_handle;
 

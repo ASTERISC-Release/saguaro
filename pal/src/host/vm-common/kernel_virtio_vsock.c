@@ -87,10 +87,52 @@
 #include "kernel_virtio_vsock.h"
 #include "vm_callbacks.h"
 
+/* Adil: enable multiple connections at the same host port */
+#define VIRTIO_VSOCK_ALLOW_MULTIPLE_CONNECTIONS 1
+
+#define VIRTIO_VSOCK_CONSUMER_POLL_INTERVAL_US 500
+#define VIRTIO_VSOCK_HELPER_POLL_INTERVAL_US   25
+#define VIRTIO_VSOCK_ACTIVE_POLL_US            (10 * 1000)
+#define VIRTIO_VSOCK_SHARED_INPUT_POLL_INTERVAL_US (5 * 1000)
+
+#define SG_INPUT_RING_MAGIC_ADDR   ((volatile uint64_t*)0xf00200ULL)
+#define SG_INPUT_RING_ENABLED_ADDR ((volatile uint32_t*)0xf00208ULL)
+#define SG_INPUT_RING_MAGIC        UINT64_C(0x5347494e50555431)
+
 #define VIRTIO_VSOCK_SHARED_BUF_SIZE (VIRTIO_VSOCK_QUEUE_SIZE * sizeof(struct virtio_vsock_packet))
 
 struct virtio_vsock* g_vsock = NULL;
 bool g_vsock_trigger_bottomhalf = false;
+bool g_vsock_polling = false;
+static bool g_vsock_shared_input_ring;
+static bool g_vsock_shared_input_ready;
+
+extern uint64_t g_tsc_mhz;
+static uint64_t g_vsock_last_queue_poll_tsc;
+static uint64_t g_vsock_last_consumer_poll_tsc;
+
+static bool shared_input_ring_enabled(void) {
+    if (!__atomic_load_n(&g_vsock_shared_input_ring, __ATOMIC_ACQUIRE))
+        return false;
+
+    if (__atomic_load_n(&g_vsock_shared_input_ready, __ATOMIC_ACQUIRE))
+        return true;
+
+    /* This opt-in is used only by graphics manifests. egl-redirect maps and initializes the
+     * communication page before opening its X11 VSOCK connection; once the host enables the ring,
+     * input delivery no longer depends on opportunistic VSOCK polling from the render loop. */
+    uint64_t* pte;
+    if (memory_find_page_table_entry((uint64_t)SG_INPUT_RING_MAGIC_ADDR, &pte) < 0 ||
+            (*pte & 1UL) == 0)
+        return false;
+
+    bool ready = __atomic_load_n(SG_INPUT_RING_MAGIC_ADDR, __ATOMIC_ACQUIRE) ==
+                     SG_INPUT_RING_MAGIC &&
+                 __atomic_load_n(SG_INPUT_RING_ENABLED_ADDR, __ATOMIC_ACQUIRE) != 0;
+    if (ready)
+        __atomic_store_n(&g_vsock_shared_input_ready, true, __ATOMIC_RELEASE);
+    return ready;
+}
 
 /* coarse-grained locks to sync RX, TX and connections' operations on multi-core systems, see also
  * flow diagram above and kernel_virtio.h */
@@ -189,7 +231,7 @@ static int handle_rq(uint16_t host_used_idx, bool* out_received) {
     return 0;
 }
 
-static int handle_rq_with_disabled_notifications(void) {
+static int handle_rq_with_disabled_notifications(bool reenable_notifications) {
     int ret;
     bool received = false;
 
@@ -205,6 +247,9 @@ static int handle_rq_with_disabled_notifications(void) {
             if (ret < 0)
                 goto fail;
         }
+
+        if (!reenable_notifications)
+            break;
 
         vm_shared_writew(&g_vsock->rq->avail->flags, 0); /* reenable interrupts */
         uint16_t reread_host_used_idx = vm_shared_readw(&g_vsock->rq->used->idx);
@@ -225,7 +270,7 @@ static int handle_rq_with_disabled_notifications(void) {
         thread_wakeup_vsock(/*is_read=*/true);
     }
 
-    return 0;
+    return received ? 1 : 0;
 
 fail:
     vm_shared_writew(&g_vsock->rq->avail->flags, 0); /* reenable interrupts */
@@ -418,19 +463,190 @@ out:
     return ret;
 }
 
-bool virtio_vsock_can_write(void) {
+static struct virtio_vsock_connection* get_connection(uint32_t fd);
+
+static uint32_t peer_free_space(const struct virtio_vsock_connection* conn) {
+    uint32_t outstanding = conn->tx_cnt - conn->peer_fwd_cnt;
+    return outstanding < conn->peer_buf_alloc ? conn->peer_buf_alloc - outstanding : 0;
+}
+
+bool virtio_vsock_can_write(int sockfd) {
+    spinlock_lock(&g_vsock_connections_lock);
+    struct virtio_vsock_connection* conn = get_connection(sockfd);
+
     spinlock_lock(&g_vsock_transmit_lock);
-    bool can_write = (g_vsock && g_vsock->tq->free_desc != g_vsock->tq->queue_size);
+    bool can_write = conn && conn->state == VIRTIO_VSOCK_ESTABLISHED &&
+                     peer_free_space(conn) && g_vsock &&
+                     g_vsock->tq->free_desc != g_vsock->tq->queue_size;
     spinlock_unlock(&g_vsock_transmit_lock);
+
+    spinlock_unlock(&g_vsock_connections_lock);
     return can_write;
 }
 
-/* called from the bottomhalf thread in normal context (not interrupt context) */
-int virtio_vsock_bottomhalf(void) {
-    int handle_rq_ret = handle_rq_with_disabled_notifications();
+static int process_virtio_vsock_queues(bool reenable_notifications) {
+    int handle_rq_ret = handle_rq_with_disabled_notifications(reenable_notifications);
     int cleanup_tq_ret = cleanup_tq();
     int pending_tq_ret = send_pending_tq_control_packets();
+
     return handle_rq_ret ? handle_rq_ret : (cleanup_tq_ret ? cleanup_tq_ret : pending_tq_ret);
+}
+
+static bool virtio_vsock_queues_have_work(void) {
+    bool has_work;
+
+    spinlock_lock(&g_vsock_receive_lock);
+    has_work = vm_shared_readw(&g_vsock->rq->used->idx) != g_vsock->rq->seen_used;
+    spinlock_unlock(&g_vsock_receive_lock);
+    if (has_work)
+        return true;
+
+    spinlock_lock(&g_vsock_transmit_lock);
+    has_work = vm_shared_readw(&g_vsock->tq->used->idx) != g_vsock->tq->seen_used ||
+               g_vsock->pending_tq_control_packets_cnt != 0;
+    spinlock_unlock(&g_vsock_transmit_lock);
+    return has_work;
+}
+
+/* Called from the bottomhalf thread in normal context (not interrupt context). Applications which
+ * are going to sleep need queue notifications rearmed so a later completion wakes the helper. */
+int virtio_vsock_bottomhalf(void) {
+    __atomic_store_n(&g_vsock_polling, false, __ATOMIC_RELEASE);
+    return process_virtio_vsock_queues(/*reenable_notifications=*/true);
+}
+
+/* Poll shared VSOCK rings at the application's natural event-loop boundary and leave RX
+ * notifications masked. This follows the NAPI/IRQ-suspension model: active consumers poll cheap
+ * shared memory instead of paying a VM exit for every small X11 packet. */
+static int virtio_vsock_poll_internal(bool consumer_poll, uint64_t poll_interval_us) {
+    if (!g_vsock)
+        return 0;
+
+    uint64_t now_tsc = get_tsc();
+    if (consumer_poll)
+        __atomic_store_n(&g_vsock_last_consumer_poll_tsc, now_tsc, __ATOMIC_RELEASE);
+
+    uint64_t last_tsc = __atomic_load_n(&g_vsock_last_queue_poll_tsc, __ATOMIC_RELAXED);
+    bool interrupted = __atomic_load_n(&g_vsock_trigger_bottomhalf, __ATOMIC_ACQUIRE);
+    if (!interrupted && now_tsc - last_tsc < poll_interval_us * g_tsc_mhz)
+        return 0;
+
+    if (!__atomic_compare_exchange_n(&g_vsock_last_queue_poll_tsc, &last_tsc, now_tsc,
+                                     /*weak=*/false, __ATOMIC_ACQ_REL, __ATOMIC_RELAXED))
+        return 0;
+
+    bool already_polling = __atomic_load_n(&g_vsock_polling, __ATOMIC_ACQUIRE);
+    if (already_polling && !interrupted && !virtio_vsock_queues_have_work())
+        return 0;
+
+    __atomic_store_n(&g_vsock_polling, true, __ATOMIC_RELEASE);
+    (void)__atomic_exchange_n(&g_vsock_trigger_bottomhalf, false, __ATOMIC_ACQ_REL);
+    return process_virtio_vsock_queues(/*reenable_notifications=*/false);
+}
+
+/* Input delivered through the shared ring does not need VSOCK's active-polling lease. Service
+ * infrequent residual X11/control traffic at the consumer boundary, but leave notifications
+ * armed so CPU0's helper sleeps until the host actually has more work. */
+static int virtio_vsock_poll_interrupt_driven(uint64_t poll_interval_us) {
+    if (!g_vsock)
+        return 0;
+
+    uint64_t now_tsc = get_tsc();
+    uint64_t last_tsc = __atomic_load_n(&g_vsock_last_queue_poll_tsc, __ATOMIC_RELAXED);
+    bool was_polling = __atomic_load_n(&g_vsock_polling, __ATOMIC_ACQUIRE);
+    bool interrupted = __atomic_load_n(&g_vsock_trigger_bottomhalf, __ATOMIC_ACQUIRE);
+    if (!was_polling && !interrupted &&
+            now_tsc - last_tsc < poll_interval_us * g_tsc_mhz)
+        return 0;
+
+    if (!__atomic_compare_exchange_n(&g_vsock_last_queue_poll_tsc, &last_tsc, now_tsc,
+                                     /*weak=*/false, __ATOMIC_ACQ_REL, __ATOMIC_RELAXED))
+        return 0;
+
+    __atomic_store_n(&g_vsock_last_consumer_poll_tsc, now_tsc, __ATOMIC_RELEASE);
+    __atomic_store_n(&g_vsock_polling, false, __ATOMIC_RELEASE);
+    (void)__atomic_exchange_n(&g_vsock_trigger_bottomhalf, false, __ATOMIC_ACQ_REL);
+    return process_virtio_vsock_queues(/*reenable_notifications=*/true);
+}
+
+int virtio_vsock_poll(void) {
+    if (shared_input_ring_enabled())
+        return virtio_vsock_poll_interrupt_driven(
+            VIRTIO_VSOCK_SHARED_INPUT_POLL_INTERVAL_US);
+
+    return virtio_vsock_poll_internal(/*consumer_poll=*/true,
+                                      VIRTIO_VSOCK_CONSUMER_POLL_INTERVAL_US);
+}
+
+/* Briefly poll for a synchronous response in the calling thread. This is the same bounded busy
+ * polling tradeoff used by low-latency network stacks: avoid an interrupt and two scheduler
+ * transitions when the peer is expected to answer immediately, then fall back to normal sleep. */
+bool virtio_vsock_busy_poll(uint64_t timeout_us) {
+    if (!g_vsock || !g_tsc_mhz)
+        return false;
+
+    uint64_t deadline_tsc = get_tsc() + timeout_us * g_tsc_mhz;
+    do {
+        int ret = virtio_vsock_poll_internal(/*consumer_poll=*/true, /*poll_interval_us=*/0);
+        if (ret > 0)
+            return true;
+        if (ret < 0)
+            return false;
+        __asm__ volatile("pause");
+    } while (get_tsc() < deadline_tsc);
+
+    return false;
+}
+
+/* When an active event-loop thread briefly blocks on a reply, CPU0's helper polls on its behalf.
+ * The helper does not renew the consumer lease, so a genuinely idle application still falls back
+ * to interrupt-driven delivery after the lease expires. */
+bool virtio_vsock_poll_if_active(void) {
+    if (!g_vsock || !__atomic_load_n(&g_vsock_polling, __ATOMIC_ACQUIRE))
+        return false;
+
+    if (shared_input_ring_enabled())
+        return false;
+
+    uint64_t last_consumer_tsc = __atomic_load_n(&g_vsock_last_consumer_poll_tsc,
+                                                 __ATOMIC_ACQUIRE);
+    if (get_tsc() - last_consumer_tsc >= VIRTIO_VSOCK_ACTIVE_POLL_US * g_tsc_mhz)
+        return false;
+
+    (void)virtio_vsock_poll_internal(/*consumer_poll=*/false,
+                                     VIRTIO_VSOCK_HELPER_POLL_INTERVAL_US);
+    return true;
+}
+
+/* Rearm RX notifications immediately before an application sleeps. Return true when work raced
+ * with the rearm so the caller can poll again instead of sleeping and losing a wakeup. */
+bool virtio_vsock_rearm_notifications(void) {
+    if (!g_vsock)
+        return false;
+
+    uint64_t last_poll_tsc = __atomic_load_n(&g_vsock_last_consumer_poll_tsc, __ATOMIC_ACQUIRE);
+    if (!shared_input_ring_enabled() &&
+            __atomic_load_n(&g_vsock_polling, __ATOMIC_ACQUIRE) &&
+            get_tsc() - last_poll_tsc < VIRTIO_VSOCK_ACTIVE_POLL_US * g_tsc_mhz) {
+        return false;
+    }
+
+    bool pending;
+
+    spinlock_lock(&g_vsock_receive_lock);
+    vm_shared_writew(&g_vsock->rq->avail->flags, 0);
+    pending = vm_shared_readw(&g_vsock->rq->used->idx) != g_vsock->rq->seen_used;
+    if (pending)
+        vm_shared_writew(&g_vsock->rq->avail->flags, VIRTQ_AVAIL_F_NO_INTERRUPT);
+    else
+        __atomic_store_n(&g_vsock_polling, false, __ATOMIC_RELEASE);
+    spinlock_unlock(&g_vsock_receive_lock);
+
+    return pending;
+}
+
+void virtio_vsock_set_shared_input_ring(bool enabled) {
+    __atomic_store_n(&g_vsock_shared_input_ring, enabled, __ATOMIC_RELEASE);
 }
 
 static int enlarge_conns(uint32_t new_size) {
@@ -520,6 +736,23 @@ static void host_port_find(uint64_t host_port, struct virtio_vsock_connection** 
     *out_conn = conn;
 }
 
+/* Adil: finding connections with a more robust hashing scheme. */
+static void host_port_add_robust(struct virtio_vsock_connection* conn) {
+    assert(spinlock_is_locked(&g_vsock_connections_lock));
+    /* Adil: changed the hashing scheme to use lower 32-bits of the host port and upper ones for the host. 
+     * TODO: heuristic-based and should be checked. */
+    conn->hash_key = (conn->host_port & 0xFFFFFFFF) | ((conn->guest_port & 0xFFFFFFFF) << 32);
+    HASH_ADD(hh_host_port, g_vsock->conns_by_host_port, hash_key, sizeof(conn->hash_key), conn);
+}
+
+static void host_port_find_robust(uint64_t host_port, uint64_t guest_port, struct virtio_vsock_connection** out_conn) {
+    assert(spinlock_is_locked(&g_vsock_connections_lock));
+    struct virtio_vsock_connection* conn = NULL;
+    uint64_t hash_key = (host_port & 0xFFFFFFFF) | ((guest_port & 0xFFFFFFFF) << 32);
+    HASH_FIND(hh_host_port, g_vsock->conns_by_host_port, &hash_key, sizeof(hash_key), conn);
+    *out_conn = conn;
+}
+
 /* TODO: Use a better scheme (e.g., a bitmap vector) to allow the reuse of the closed ports. */
 static uint64_t pick_new_port(void) {
     assert(spinlock_is_locked(&g_vsock_connections_lock));
@@ -581,8 +814,15 @@ static struct virtio_vsock_connection* create_connection(uint64_t host_port, uin
         free(conn);
         return NULL;
     }
-    if (host_port)
+    
+    /* Adil: Using the more robust hashing scheme to add the connection. */
+    if (host_port) {
+#if (VIRTIO_VSOCK_ALLOW_MULTIPLE_CONNECTIONS == 0)
         host_port_add(conn);
+#else
+        host_port_add_robust(conn);
+#endif
+  }
 
     return conn;
 }
@@ -702,7 +942,6 @@ static int send_response_packet(struct virtio_vsock_connection* conn) {
 }
 
 static int send_credit_update_packet(struct virtio_vsock_connection* conn) {
-    assert(spinlock_is_locked(&g_vsock_receive_lock));
     assert(spinlock_is_locked(&g_vsock_connections_lock));
 
     struct virtio_vsock_packet* packet;
@@ -762,7 +1001,6 @@ static int recv_rw_packet(struct virtio_vsock_connection* conn,
     conn->packets_for_user[idx] = packet; /* packet is now owned by conn */
     conn->prepared_for_user++;
 
-    conn->fwd_cnt += packet->header.size;
     return 0;
 }
 
@@ -814,23 +1052,45 @@ static int process_packet(struct virtio_vsock_packet* packet) {
     /* guest and host CIDs are set in stone, so it is enough to distinguish connections based on the
      * host's port (which is the `src_port` in the incoming packet) */
     uint64_t host_port = packet->header.src_port;
-    host_port_find(host_port, &conn);
 
-    if (!conn && packet->header.op == VIRTIO_VSOCK_OP_REQUEST) {
+    /* Adil: Using the more robust hashing scheme to find the connection. */  
+#if (VIRTIO_VSOCK_ALLOW_MULTIPLE_CONNECTIONS == 0)
+    host_port_find(host_port, &conn);
+#else
+    host_port_find_robust(host_port, packet->header.dst_port, &conn);
+#endif
+
+    /* Adil: logging */
+    // log_always("Received packet: op=%d, src_cid=%lu, src_port=%u, dst_cid=%lu, dst_port=%u, size=%u",
+    //            packet->header.op, packet->header.src_cid, packet->header.src_port,
+    //            packet->header.dst_cid, packet->header.dst_port, packet->header.size);
+
+    // if (!conn && packet->header.op == VIRTIO_VSOCK_OP_REQUEST) {
+    if (!conn) {
+        // log_always("Hash failed; Looking for listening connection on port %u", packet->header.dst_port);
         /* loop through all connections, trying to find a listening conn on this port; this is a
          * slow O(n) implementation but such ops should be rare */
         for (uint32_t i = 0; i < g_vsock->conns_size; i++) {
             struct virtio_vsock_connection* check_conn = g_vsock->conns[i];
-            if (check_conn && check_conn->state == VIRTIO_VSOCK_LISTEN
-                    && check_conn->guest_port == packet->header.dst_port) {
+            
+            /* Adil */
+            // log_always("Checking connection %u: state=%d, guest_port=%u",
+            //            i, check_conn ? check_conn->state : -1,
+            //            check_conn ? check_conn->guest_port : 0);
+            // if (check_conn && check_conn->state == VIRTIO_VSOCK_LISTEN
+            //        && check_conn->guest_port == packet->header.dst_port) {
+  
+            if (check_conn && check_conn->guest_port == packet->header.dst_port) {
                 conn = check_conn;
+                // log_always("Found listening connection on port %u", conn->guest_port);
                 break;
             }
         }
-    }
+    } 
 
     if (!conn) {
         ret = -PAL_ERROR_INVAL;
+        // log_always("No connection found for host port %lu", host_port);
         goto out;
     }
 
@@ -899,6 +1159,7 @@ static int process_packet(struct virtio_vsock_packet* packet) {
                     goto out;
                 case VIRTIO_VSOCK_OP_CREDIT_UPDATE:
                     /* we already updated peer_fwd_cnt and peer_buf_alloc above */
+                    thread_wakeup_vsock(/*is_read=*/false);
                     ret = 0;
                     goto out;
                 case VIRTIO_VSOCK_OP_SHUTDOWN:
@@ -1209,7 +1470,24 @@ out:
     spinlock_unlock(&g_vsock_connections_lock);
     return ret;
 }
+int fetch_guest_port_given_sockfd(int sockfd){
+    if (sockfd < 0)
+        return -PAL_ERROR_BADHANDLE;
 
+    spinlock_lock(&g_vsock_connections_lock);
+    int ret;
+
+    struct virtio_vsock_connection* conn = get_connection(sockfd);
+    if (!conn) {
+        ret = -PAL_ERROR_BADHANDLE;
+        goto out;
+    }
+    ret = conn->guest_port;
+out:
+    spinlock_unlock(&g_vsock_connections_lock);
+    return ret;
+
+}
 int virtio_vsock_bind(int sockfd, const void* addr, size_t addrlen, uint16_t* out_new_port,
                       bool is_ipv4, bool ipv6_v6only, bool reuseport) {
     int ret;
@@ -1273,6 +1551,7 @@ int virtio_vsock_bind(int sockfd, const void* addr, size_t addrlen, uint16_t* ou
         *out_new_port = bind_to_port;
 
     conn->guest_port = bind_to_port;
+    log_debug("Socket %d is assigned a port number: %d\n", sockfd, bind_to_port);
     conn->host_port  = 0;
 
     conn->ipv6_v6only = ipv6_v6only;
@@ -1392,6 +1671,9 @@ int virtio_vsock_connect(int sockfd, const void* addr, size_t addrlen, uint64_t 
     uint64_t timeout_absolute_us = 0;
     struct sockaddr_vm* addr_vm = (struct sockaddr_vm*)addr;
 
+    /* Adil */
+    // log_always("vsock connect to port %u with timeout %lu us", addr_vm->svm_port, timeout_us);
+
     if (!addr || addrlen < sizeof(struct sockaddr_vm))
         return -PAL_ERROR_INVAL;
 
@@ -1427,7 +1709,16 @@ int virtio_vsock_connect(int sockfd, const void* addr, size_t addrlen, uint64_t 
     assert(conn->host_port == 0 && conn->guest_port == 0);
     conn->host_port  = addr_vm->svm_port;
     conn->guest_port = pick_new_port();
+
+  #if (VIRTIO_VSOCK_ALLOW_MULTIPLE_CONNECTIONS == 0)
     host_port_add(conn);
+  #else
+    /* Adil: Using the more robust hashing scheme to avoid collisions */
+    host_port_add_robust(conn);
+  #endif
+
+    /* Adil */
+    // log_always("vsock connect picked new guest port %u", conn->guest_port);
 
     ret = send_request_packet(conn);
     if (ret < 0)
@@ -1625,6 +1916,17 @@ long virtio_vsock_read(int sockfd, void* buf, size_t count) {
         free(conn->packets_for_user[idx]);
     }
 
+    /* The virtio-vsock credit counter describes bytes consumed by the application, not bytes
+     * merely accepted into the guest queue. Advancing it in recv_rw_packet() lets the peer send
+     * without bound and eventually overrun packets_for_user while the application is busy (X11
+     * commonly does this during shader and font initialization). */
+    conn->fwd_cnt += copied;
+    if (send_credit_update_packet(conn) < 0) {
+        /* The data was consumed successfully. A later outgoing packet can still carry the updated
+         * counters, so do not turn a successful read into an error. */
+        log_warning("failed to send vsock credit update after consuming %zu bytes", copied);
+    }
+
     ret = (long)copied;
 out:
     spinlock_unlock(&g_vsock_connections_lock);
@@ -1667,7 +1969,13 @@ long virtio_vsock_write(int sockfd, const void* buf, size_t count) {
 
     size_t sent = 0;
     while (sent < count) {
-        size_t payload_size = MIN(count - sent, VSOCK_MAX_PAYLOAD_SIZE);
+        uint32_t available = peer_free_space(conn);
+        if (!available) {
+            ret = sent ? (long)sent : -PAL_ERROR_TRYAGAIN;
+            goto out;
+        }
+
+        size_t payload_size = MIN(MIN(count - sent, VSOCK_MAX_PAYLOAD_SIZE), available);
         ret = send_rw_packet(conn, buf + sent, payload_size);
         if (ret < 0) {
             if (ret == -PAL_ERROR_NOMEM && sent != 0) {
@@ -1681,6 +1989,7 @@ long virtio_vsock_write(int sockfd, const void* buf, size_t count) {
             }
             goto out;
         }
+        conn->tx_cnt += payload_size;
         sent += payload_size;
     }
 

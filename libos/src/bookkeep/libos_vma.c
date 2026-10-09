@@ -585,7 +585,10 @@ int init_vma(void) {
         init_vmas[1 + idx].begin  = g_pal_public_state->initial_mem_ranges[i].start;
         init_vmas[1 + idx].end    = g_pal_public_state->initial_mem_ranges[i].end;
         init_vmas[1 + idx].prot   = PAL_PROT_TO_LINUX(g_pal_public_state->initial_mem_ranges[i].prot);
-        init_vmas[1 + idx].flags  = MAP_PRIVATE | MAP_ANONYMOUS | VMA_INTERNAL;
+        init_vmas[1 + idx].flags  = MAP_PRIVATE | MAP_ANONYMOUS;
+        if (!g_pal_public_state->initial_mem_ranges[i].is_user_reserved) {
+            init_vmas[1 + idx].flags |= VMA_INTERNAL;
+        }
         init_vmas[1 + idx].file   = NULL;
         init_vmas[1 + idx].offset = 0;
         copy_comment(&init_vmas[1 + idx], g_pal_public_state->initial_mem_ranges[i].comment);
@@ -1114,18 +1117,55 @@ out:
     return ret;
 }
 
+static int bkeep_mmap_any_excluding_user_reserved(void* bottom_addr, void* top_addr, size_t length,
+                                                   int prot, int flags, struct libos_handle* file,
+                                                   uint64_t offset, const char* comment,
+                                                   void** ret_val_ptr) {
+    uintptr_t bottom = (uintptr_t)bottom_addr;
+    uintptr_t cursor = (uintptr_t)top_addr;
+
+    /* Initial memory ranges are sorted by address. Search the gaps from high to low, matching the
+     * normal VMA allocator, but permanently exclude ranges reserved for later MAP_FIXED users.
+     * Such a user may partially unmap its arena; those holes must not become general ASLR space. */
+    for (size_t i = g_pal_public_state->initial_mem_ranges_len; i > 0; i--) {
+        const struct pal_initial_mem_range* range =
+            &g_pal_public_state->initial_mem_ranges[i - 1];
+        if (!range->is_user_reserved || range->is_free || range->end <= bottom
+                || cursor <= range->start) {
+            continue;
+        }
+
+        uintptr_t gap_bottom = MAX(bottom, range->end);
+        if (gap_bottom < cursor) {
+            int ret = bkeep_mmap_any_in_range((void*)gap_bottom, (void*)cursor, length, prot, flags,
+                                               file, offset, comment, ret_val_ptr);
+            if (ret >= 0) {
+                return ret;
+            }
+        }
+        cursor = MIN(cursor, range->start);
+        if (cursor <= bottom) {
+            return -ENOMEM;
+        }
+    }
+
+    return bkeep_mmap_any_in_range((void*)bottom, (void*)cursor, length, prot, flags, file, offset,
+                                   comment, ret_val_ptr);
+}
+
 int bkeep_mmap_any(size_t length, int prot, int flags, struct libos_handle* file, uint64_t offset,
                    const char* comment, void** ret_val_ptr) {
-    return bkeep_mmap_any_in_range(g_pal_public_state->memory_address_start,
-                                   g_pal_public_state->memory_address_end,
-                                   length, prot, flags, file, offset, comment, ret_val_ptr);
+    return bkeep_mmap_any_excluding_user_reserved(g_pal_public_state->memory_address_start,
+                                                   g_pal_public_state->memory_address_end, length,
+                                                   prot, flags, file, offset, comment, ret_val_ptr);
 }
 
 int bkeep_mmap_any_aslr(size_t length, int prot, int flags, struct libos_handle* file,
                         uint64_t offset, const char* comment, void** ret_val_ptr) {
     int ret;
-    ret = bkeep_mmap_any_in_range(g_pal_public_state->memory_address_start, g_aslr_addr_top, length,
-                                  prot, flags, file, offset, comment, ret_val_ptr);
+    ret = bkeep_mmap_any_excluding_user_reserved(g_pal_public_state->memory_address_start,
+                                                  g_aslr_addr_top, length, prot, flags, file,
+                                                  offset, comment, ret_val_ptr);
     if (ret >= 0) {
         return ret;
     }

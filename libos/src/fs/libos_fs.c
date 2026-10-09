@@ -262,7 +262,7 @@ static int mount_one_nonroot(toml_table_t* mount, const char* prefix) {
                 !strncmp(mount_uri, "file:/proc/", strlen("file:/proc/")) ||
                 !strncmp(mount_uri, "file:/sys/", strlen("file:/sys/")) ||
                 !strncmp(mount_uri, "file:/dev/", strlen("file:/dev/"))) {
-            log_error("Mounting %s may expose unsanitized, unsafe files to unsuspecting "
+            log_warning("Mounting %s may expose unsanitized, unsafe files to unsuspecting "
                       "application. Gramine will continue application execution, but this "
                       "configuration is not recommended for use in production!", mount_uri);
         }

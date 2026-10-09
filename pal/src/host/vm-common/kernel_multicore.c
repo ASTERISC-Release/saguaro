@@ -275,6 +275,9 @@ __attribute_no_sanitize_address /* starts with dummy page tables w/o ASan shared
 noreturn void pal_start_ap_c(uint32_t cpu_idx) {
     set_dummy_gs_base();
 
+    /* PAT is per-CPU state; ensure WC is configured on this AP CPU as well. */
+    // memory_pat_init_for_wc(); // not needed
+
     /* BSP (main processor) created page table hierarchy, AP just needs to use it */
     __asm__ volatile("mov %%rax, %%cr3" : : "a"(g_pml4_table_base));
 

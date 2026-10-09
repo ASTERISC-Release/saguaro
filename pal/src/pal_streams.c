@@ -88,6 +88,10 @@ int _PalStreamOpen(PAL_HANDLE* handle, const char* typed_uri, enum pal_access ac
     if (ret < 0)
         return ret;
 
+    // Adil 
+    // log_always("PalStreamOpen: type=%s, uri=%s, access=0x%x, share=0x%x, create=%d, options=0x%x",
+    //           type, uri, access, share, create, options);
+
     assert(ops && ops->open);
     return ops->open(handle, type, uri, access, share, create, options);
 }
@@ -272,6 +276,9 @@ int _PalStreamMap(PAL_HANDLE handle, void* addr, pal_prot_flags_t prot, uint64_t
                   uint64_t size) {
     assert(IS_ALLOC_ALIGNED(offset));
     int ret;
+
+    // log_always("[mmap] file mapping request: addr=%p, length=%zu, prot=0x%x, offset=%lu", addr, size,
+    //            prot, offset);
 
     assert(WITHIN_MASK(prot, PAL_PROT_MASK));
 

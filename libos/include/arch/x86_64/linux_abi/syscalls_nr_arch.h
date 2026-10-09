@@ -119,6 +119,12 @@
 #ifndef __NR_set_mempolicy_home_node
 #define __NR_set_mempolicy_home_node 450
 #endif
+
+/* Secure gaming: some file descriptors are host-based, and we need to pass them as-is. */
+#ifndef __NR_register_host_identity_fd
+#define __NR_register_host_identity_fd 451
+#endif
+
 #ifndef __NR_syscalls
-#define __NR_syscalls 451
+#define __NR_syscalls 550
 #endif

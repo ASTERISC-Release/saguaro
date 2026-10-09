@@ -13,6 +13,7 @@
 
 #include "api.h"
 #include "pal_error.h"
+#include "stat.h"
 
 #include "kernel_virtio.h"
 #include "kernel_vmm_inputs.h"
@@ -109,9 +110,15 @@ int realpath(const char* path, char* got_path, char** out_got_path) {
         *new_path = '\0';
 
         uint64_t nodeid;
-        ret = virtio_fs_fuse_lookup(got_path, &nodeid);
+        struct fuse_attr attr;
+        ret = virtio_fs_fuse_lookup(got_path, &nodeid, &attr);
         if (ret < 0)
             goto out;
+
+        if (!S_ISLNK(attr.mode)) {
+            *new_path++ = '/';
+            continue;
+        }
 
         uint64_t link_len = 0;
         ret = virtio_fs_fuse_readlink(nodeid, PATH_MAX - 1, copy_path, &link_len);

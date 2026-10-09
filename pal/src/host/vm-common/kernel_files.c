@@ -28,7 +28,7 @@ int read_text_file_to_cstr(const char* path, char** out_buf, uint64_t* out_size)
     bool opened = false;
     char* buf = NULL;
 
-    ret = virtio_fs_fuse_lookup(path, &nodeid);
+    ret = virtio_fs_fuse_lookup(path, &nodeid, /*out_attr=*/NULL);
     if (ret < 0)
         goto out;
 

@@ -18,6 +18,7 @@ int _PalRandomBitsRead(void* buffer, size_t size) {
 }
 
 int _PalSystemTimeQuery(uint64_t* out_usec) {
+    // log_always("A quick check - 1\n");
     return get_time_in_us(out_usec);
 }
 

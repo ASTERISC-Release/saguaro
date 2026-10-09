@@ -1,0 +1,1 @@
+export PYTHONPATH=$PWD/built-debug/lib/python3.12/site-packages/

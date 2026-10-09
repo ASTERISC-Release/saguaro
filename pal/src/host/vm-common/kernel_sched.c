@@ -6,17 +6,19 @@
  * account CPU affinity.
  */
 
+#include "kernel_sched.h"
+
 #include <stdint.h>
 
 #include "api.h"
 #include "cpu.h"
-#include "pal_error.h"
-
 #include "kernel_interrupts.h"
 #include "kernel_multicore.h"
-#include "kernel_sched.h"
 #include "kernel_thread.h"
+#include "kernel_virtio.h"
 #include "kernel_xsave.h"
+#include "pal.h"
+#include "pal_error.h"
 
 /* below functions are located in kernel_events.S */
 noreturn void isr_iret_to_userland(void);
@@ -75,8 +77,8 @@ static void save_userland_context(struct thread* curr_thread, struct isr_regs* u
     curr_thread->irq_pseudo_stack.rsp    = userland_regs->rsp;
     curr_thread->irq_pseudo_stack.ss     = userland_regs->ss;
 
-    curr_thread->context.rip = (uint64_t)&isr_iret_to_userland;
-    curr_thread->context.rsp = (uint64_t)&curr_thread->irq_pseudo_stack;
+    curr_thread->context.rip    = (uint64_t)&isr_iret_to_userland;
+    curr_thread->context.rsp    = (uint64_t)&curr_thread->irq_pseudo_stack;
     curr_thread->context.rflags = get_rflags();
 }
 
@@ -89,7 +91,19 @@ static struct thread* find_next_thread(struct thread* curr_thread) {
         LISTP_ADD_TAIL(curr_thread, &g_thread_list, list);
     }
 
-    uint32_t cpu_id = get_per_cpu_data()->cpu_id;
+    uint32_t cpu_id            = get_per_cpu_data()->cpu_id;
+
+    /* Console input has no application event-loop path in which to process its
+     * receive queue, so ensure CPU0's helper cannot be starved by a continuously
+     * runnable user thread. VSOCK queues are normally serviced inline from the
+     * socket/event path and fall back to this helper when user threads block. */
+    if (cpu_id == 0 &&
+            __atomic_load_n(&g_console_trigger_bottomhalf, __ATOMIC_ACQUIRE)) {
+        assert(get_per_cpu_data()->bottomhalves_thread);
+        assert(get_per_cpu_data()->bottomhalves_thread->state != THREAD_BLOCKED);
+        return get_per_cpu_data()->bottomhalves_thread;
+    }
+
     struct thread* next_thread = NULL;
 
     struct thread* thread;
@@ -97,7 +111,7 @@ static struct thread* find_next_thread(struct thread* curr_thread) {
         if (thread->state != THREAD_RUNNABLE)
             continue;
 
-        size_t cpu_mask_idx = cpu_id / BITS_IN_TYPE(unsigned long);
+        size_t cpu_mask_idx        = cpu_id / BITS_IN_TYPE(unsigned long);
         unsigned long cpu_mask_bit = 1UL << (cpu_id % BITS_IN_TYPE(unsigned long));
         if (!(thread->cpu_mask[cpu_mask_idx] & cpu_mask_bit))
             continue;
@@ -130,7 +144,7 @@ static struct thread* find_next_thread(struct thread* curr_thread) {
 }
 
 void sched_thread_uninterruptable(struct isr_regs* userland_regs) {
-    uint64_t curr_gs_base = replace_with_null_if_dummy_gs_base(rdmsr(MSR_IA32_GS_BASE));
+    uint64_t curr_gs_base      = replace_with_null_if_dummy_gs_base(rdmsr(MSR_IA32_GS_BASE));
     struct thread* curr_thread = curr_gs_base ? get_thread_ptr(curr_gs_base) : NULL;
 
     spinlock_lock(&g_thread_list_lock); /* will be unlocked during save_context */
@@ -152,6 +166,21 @@ void sched_thread_uninterruptable(struct isr_regs* userland_regs) {
     save_userland_context(curr_thread, userland_regs);
 
     /* it is cumbersome to restore FSBASE in asm, so restore explicitly here */
+    /* Diagnostic logging: print FS base values we are about to install and the thread identities.
+     * This helps verify whether per-thread user_fsbase differs between threads or gets clobbered.
+     */
+    {
+        uint32_t cpu_id   = get_per_cpu_data()->cpu_id;
+        uintptr_t curr_fs = 0, next_fs = next_thread->context.user_fsbase;
+
+#if 0
+        /* Try to read current FS via Pal API (best-effort) */
+        (void)PalSegmentBaseGet(PAL_SEGMENT_FS, &curr_fs);
+        log_always("[sched] cpu=%u sched_out=%p sched_in=%p curr_fs=0x%lx next_fs=0x%lx", cpu_id,
+                   (void*)curr_thread, (void*)next_thread, (unsigned long)curr_fs,
+                   (unsigned long)next_fs);
+#endif
+    }
     wrmsr(MSR_IA32_FS_BASE, next_thread->context.user_fsbase);
 
     uint64_t next_gs_base = (uint64_t)get_gs_base(next_thread);
@@ -161,7 +190,7 @@ void sched_thread_uninterruptable(struct isr_regs* userland_regs) {
 }
 
 void sched_thread(uint32_t* lock_to_unlock, int* clear_child_tid) {
-    uint64_t curr_gs_base = replace_with_null_if_dummy_gs_base(rdmsr(MSR_IA32_GS_BASE));
+    uint64_t curr_gs_base      = replace_with_null_if_dummy_gs_base(rdmsr(MSR_IA32_GS_BASE));
     struct thread* curr_thread = curr_gs_base ? get_thread_ptr(curr_gs_base) : NULL;
 
     spinlock_lock_disable_irq(&g_thread_list_lock); /* will be unlocked during save_context */
@@ -176,6 +205,8 @@ void sched_thread(uint32_t* lock_to_unlock, int* clear_child_tid) {
         return;
     }
 
+    // log_always("Scheduling out thread %p, scheduling in thread %p\n", curr_thread, next_thread);
+
     /* it is cumbersome to restore FSBASE in asm, so restore explicitly here */
     wrmsr(MSR_IA32_FS_BASE, next_thread->context.user_fsbase);
 
@@ -188,19 +219,22 @@ void sched_thread_wait(int* futex_word, spinlock_t* lock) {
     assert(spinlock_is_locked(lock));
     assert(lock != &g_thread_list_lock);
 
+    // log_always("Thread %p going to sleep on futex word %p\n",
+    //            get_thread_ptr(rdmsr(MSR_IA32_GS_BASE)), futex_word);
+
     /* this order of locks is required to guarantee that we won't miss any wakeup on this futex word
      * (recall that each wakeup grabs g_thread_list_lock) */
     spinlock_lock_disable_irq(&g_thread_list_lock); /* will be unlocked during save_context */
     spinlock_unlock(lock);
 
-    uint64_t curr_gs_base = rdmsr(MSR_IA32_GS_BASE);
+    uint64_t curr_gs_base      = rdmsr(MSR_IA32_GS_BASE);
     struct thread* curr_thread = get_thread_ptr(curr_gs_base);
 
     curr_thread->state      = THREAD_BLOCKED;
     curr_thread->blocked_on = futex_word;
 
     struct thread* next_thread = find_next_thread(curr_thread);
-    next_thread->state = THREAD_RUNNING;
+    next_thread->state         = THREAD_RUNNING;
 
     assert(next_thread != curr_thread);
 
@@ -226,7 +260,7 @@ static void sched_thread_wakeup_common(int* futex_word) {
             if (thread->blocked_on == futex_word) {
                 thread->state      = THREAD_RUNNABLE;
                 thread->blocked_on = NULL;
-                found = true;
+                found              = true;
             }
         }
     }
@@ -256,7 +290,7 @@ void sched_thread_add(struct thread* thread) {
 void sched_thread_remove(struct thread* thread) {
     spinlock_lock_disable_irq(&g_thread_list_lock);
     LISTP_DEL(thread, &g_thread_list, list);
-    thread->state = THREAD_STOPPED;
+    thread->state      = THREAD_STOPPED;
     thread->blocked_on = NULL;
     spinlock_unlock_enable_irq(&g_thread_list_lock);
 }

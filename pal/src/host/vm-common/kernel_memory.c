@@ -24,7 +24,52 @@
 #include "kernel_multicore.h"
 #include "kernel_virtio.h"
 
+#define MSR_IA32_PAT 0x277
+
+/* PAT memory types, see Intel SDM, Vol. 3A, Chapter 12. */
+#define PAT_TYPE_WC 0x01
+
 static_assert(PAGE_SIZE == 4096, "unexpected PAGE_SIZE (expected 4K)");
+
+static const size_t DATA_REGION_SIZE        = 3ULL * 1024 * 1024 * 1024;
+static const size_t HUGEPAGE_REGION_SIZE    = 1ULL * 1024 * 1024 * 1024;
+static void* DATA_REGION                    = (void*)0x100000000ULL;
+static void* HUGEPAGE_DATA_REGION           = (void*)0x200000000ULL;
+
+static inline bool is_egl_redirect_data_region_base(void* addr, size_t size) {
+    if (addr == DATA_REGION || addr == HUGEPAGE_DATA_REGION) {
+        size_t expected_size = addr == DATA_REGION ? DATA_REGION_SIZE : HUGEPAGE_REGION_SIZE;
+        /* In our setup, these bases are reserved exclusively for egl-redirect regions and must be
+         * mapped as a single fixed-size chunk. Fail loudly if assumptions are violated. */
+        if (size != expected_size) {
+            log_error("Unexpected mapping size at special base %p: got %lu, expected %lu",
+                      addr, (unsigned long)size, (unsigned long)expected_size);
+            BUG();
+        }
+        if (!IS_ALIGNED_POW2((uintptr_t)addr, PAGE_SIZE) || !IS_ALIGNED_POW2(size, PAGE_SIZE)) {
+            log_error("Unexpected alignment for special base %p (size %lu)", addr,
+                      (unsigned long)size);
+            BUG();
+        }
+        return true;
+    }
+    return false;
+}
+
+static inline bool is_egl_redirect_data_region_range(void* addr, size_t size) {
+    uintptr_t start = (uintptr_t)addr;
+    uintptr_t end;
+    if (!size || __builtin_add_overflow(start, size, &end))
+        return false;
+
+    uintptr_t data_start = (uintptr_t)DATA_REGION;
+    uintptr_t data_end = data_start + DATA_REGION_SIZE;
+    uintptr_t huge_start = (uintptr_t)HUGEPAGE_DATA_REGION;
+    uintptr_t huge_end = huge_start + HUGEPAGE_REGION_SIZE;
+
+    return (data_start <= start && end <= data_end) ||
+           (huge_start <= start && end <= huge_end);
+}
 
 /* Beginning of the page table hierarchy */
 uint64_t g_pml4_table_base = 0;
@@ -32,6 +77,10 @@ uint64_t g_pml4_table_base = 0;
 /* Address Sanitizer shadow memory (physical memory range) */
 static uint64_t g_asan_shadow_phys_start = 0;
 static uint64_t g_asan_shadow_phys_end   = 0;
+
+/* Global memory address range */
+static uintptr_t g_memory_address_start = 0;
+static uintptr_t g_memory_address_end   = 0;
 
 void* memory_get_shared_region(size_t size) {
 	/* trivial shared memory management: allocations in the shared-memory range
@@ -150,6 +199,59 @@ int memory_mark_pages_strong_uncacheable(uint64_t addr, size_t size, bool mark) 
             *pte_addr &= ~(1UL << 4);
     }
     return send_invalidate_tlb_ipi_and_wait((void*)addr, size, /*invalidate_on_this_cpu=*/true);
+}
+
+__attribute_no_sanitize_address
+int memory_mark_pages_write_combined(uint64_t addr, size_t size, bool mark) {
+    /* Use PAT index 1 for WC, i.e. PWT=1, PCD=0, PAT=0 for 4KB pages. */
+    const uint64_t pwt_bit = 1UL << 3;
+    const uint64_t pcd_bit = 1UL << 4;
+    const uint64_t pat_bit = 1UL << 7;
+
+    for (uint64_t mark_addr = addr; mark_addr < addr + size; mark_addr += PAGE_SIZE) {
+        uint64_t* pte_addr;
+        int ret = memory_find_page_table_entry(mark_addr, &pte_addr);
+        if (ret < 0)
+            return ret;
+
+        uint64_t pte = *pte_addr;
+        pte &= ~(pwt_bit | pcd_bit | pat_bit);
+        if (mark) {
+            pte |= pwt_bit;
+        }
+        *pte_addr = pte;
+    }
+    return send_invalidate_tlb_ipi_and_wait((void*)addr, size, /*invalidate_on_this_cpu=*/true);
+}
+
+void memory_pat_init_for_wc(void) {
+    /* PAT is per-CPU state; may be called on each CPU. */
+    unsigned int words[CPUID_WORD_NUM] = {0};
+    cpuid(FEATURE_FLAGS_LEAF, /*subleaf=*/0, words);
+    if (!(words[CPUID_WORD_EDX] & (1U << 16))) { /* PAT feature bit */
+        log_error("CPU does not report PAT support; cannot configure WC");
+        BUG();
+    }
+
+    uint64_t pat = rdmsr(MSR_IA32_PAT);
+
+    if (((pat >> 8) & 0xffU) == PAT_TYPE_WC) {
+        /* Already configured on this CPU. */
+        return;
+    }
+
+    /* Program PAT entry #1 (bits 8..15) to WC. Keep all other entries intact. */
+    uint64_t new_pat = (pat & ~(0xffUL << 8)) | ((uint64_t)PAT_TYPE_WC << 8);
+    wrmsr(MSR_IA32_PAT, new_pat);
+
+    uint64_t verify_pat = rdmsr(MSR_IA32_PAT);
+    if (verify_pat != new_pat) {
+        log_error("Failed to program IA32_PAT for WC (old=0x%lx new=0x%lx readback=0x%lx)",
+                  pat, new_pat, verify_pat);
+        BUG();
+    }
+
+    log_always("IA32_PAT configured: old=0x%lx new=0x%lx (WC at index 1)", pat, new_pat);
 }
 
 /*
@@ -302,6 +404,9 @@ static int pagetables_init(size_t memory_size, uint64_t page_tables_addr, size_t
     /* all memory is initially accessible only from kernel mode (ring 0), RW and present */
     uint64_t leaf_flags = 0x3;
 
+    log_always("Initializing page tables for memory size %zu MB at addr 0x%lx",
+               memory_size / (1024 * 1024), page_tables_addr);
+
     /* for MMU traversal in user mode, mid-tree entries must be accessible also in ring-3 */
     uint64_t tree_flags = 0x7;
 
@@ -408,6 +513,9 @@ int memory_pagetables_init(void* memory_address_end, bool current_page_tables_co
     if (memory_size < 4UL * 1024 * 1024 * 1024)
         memory_size = 4UL * 1024 * 1024 * 1024;
 
+    /* Adil */ 
+    log_always("Memory size for page tables: %zu GB\n", memory_size / (1024 * 1024 * 1024));
+
     /* memory size must be at most 512GB in size, because the current construction of page tables
      * relies on a single PDP page which limits max addressable memory to 512GB */
     if (memory_size > 512UL * 1024 * 1024 * 1024)
@@ -430,7 +538,8 @@ int memory_pagetables_init(void* memory_address_end, bool current_page_tables_co
 }
 
 int memory_preload_ranges(e820_table_entry* e820_entries, size_t e820_entries_size,
-                          int (*callback)(uintptr_t addr, size_t size, const char* comment)) {
+                          int (*callback)(uintptr_t addr, size_t size, bool is_user_reserved,
+                                          const char* comment)) {
     int ret;
 
     for (size_t i = 0; i < e820_entries_size / sizeof(*e820_entries); i++) {
@@ -455,7 +564,8 @@ int memory_preload_ranges(e820_table_entry* e820_entries, size_t e820_entries_si
             return -PAL_ERROR_DENIED;
         }
 
-        ret = callback(e820_entries[i].address, e820_entries[i].size, "E820 reserved");
+        ret = callback(e820_entries[i].address, e820_entries[i].size,
+                       /*is_user_reserved=*/false, "E820 reserved");
         if (ret < 0)
             return -PAL_ERROR_NOMEM;
     }
@@ -483,25 +593,39 @@ int memory_preload_ranges(e820_table_entry* e820_entries, size_t e820_entries_si
      *     binaries we've seen in the wild have up to 300MB. Our layout allows to put such app
      *     binary at [4MB, 512MB), which is enough to host a 508MB-sized binary.
      */
-    ret = callback(0x1000UL, 0x100000UL - 0x1000UL, "dos_memory_addr");
+    ret = callback(0x1000UL, 0x100000UL - 0x1000UL, /*is_user_reserved=*/false,
+                   "dos_memory_addr");
     if (ret < 0)
         return -PAL_ERROR_NOMEM;
-    ret = callback(PAGE_TABLES_ADDR, PAGE_TABLES_SIZE, "page_tables");
+    ret = callback(PAGE_TABLES_ADDR, PAGE_TABLES_SIZE, /*is_user_reserved=*/false, "page_tables");
     if (ret < 0)
         return -PAL_ERROR_NOMEM;
-    ret = callback(SHARED_MEM_ADDR, SHARED_MEM_SIZE, "shared_memory");
+    ret = callback(SHARED_MEM_ADDR, SHARED_MEM_SIZE, /*is_user_reserved=*/false, "shared_memory");
     if (ret < 0)
         return -PAL_ERROR_NOMEM;
-    ret = callback(PCI_HOLE_ADDR, PCI_HOLE_SIZE, "qemu_pci_hole");
+    ret = callback(PCI_HOLE_ADDR, PCI_HOLE_SIZE, /*is_user_reserved=*/false, "qemu_pci_hole");
     if (ret < 0)
         return -PAL_ERROR_NOMEM;
 
     if (g_asan_shadow_phys_start && g_asan_shadow_phys_end) {
         ret = callback(g_asan_shadow_phys_start, g_asan_shadow_phys_end - g_asan_shadow_phys_start,
-                       "asan_shadow_memory");
+                       /*is_user_reserved=*/false, "asan_shadow_memory");
         if (ret < 0)
             return -PAL_ERROR_DENIED;
     }
+
+    /* egl-redirect maps these buffers at fixed addresses after program startup. Keep PAL and
+     * LibOS ASLR allocations out of the ranges, but allow those deliberate user mappings to
+     * replace the reservations. */
+    ret = callback((uintptr_t)DATA_REGION, DATA_REGION_SIZE, /*is_user_reserved=*/true,
+                   "egl_redirect_data");
+    if (ret < 0)
+        return -PAL_ERROR_NOMEM;
+    ret = callback((uintptr_t)HUGEPAGE_DATA_REGION, HUGEPAGE_REGION_SIZE,
+                   /*is_user_reserved=*/true,
+                   "egl_redirect_huge");
+    if (ret < 0)
+        return -PAL_ERROR_NOMEM;
 
     return 0;
 }
@@ -545,6 +669,44 @@ int memory_tighten_permissions(void) {
      * don't disable this hole/PCI region as it doesn't affect security.
      */
 
+    /* Adil */
+    ret = memory_mark_pages_on(0xC0000000UL, 0x10000000UL, /*write=*/true,
+                               /*execute=*/false, /*usermode=*/true);
+    if (ret < 0) {
+        log_always("Failed to mark pages 0xC0000000-0xD0000000 as RW and Usermode\n");
+        return ret;
+    }
+
+    ret = memory_mark_pages_on(0x100000000UL, 0x10000000UL, /*write=*/true,
+                               /*execute=*/false, /*usermode=*/true);
+    if (ret < 0) {
+        log_always("Failed to mark pages 0x0x100000000-0x200000000 as RW and Usermode\n");
+        return ret;
+    }
+
+    // Adil: set these pages as uncacheable
+    ret = memory_mark_pages_strong_uncacheable(0xC0000000UL, 0x10000000UL, /*mark=*/true);
+    if (ret < 0) {
+        log_always("Failed to mark pages 0xC0000000-0xD0000000 as uncacheable\n");
+        return ret;
+    } 
+
+#if 0
+    log_always("Marking data pages as uncacheable");
+    ret = memory_mark_pages_strong_uncacheable(DATA_REGION, DATA_SIZE, /*mark=*/true);
+    if (ret < 0) {
+        log_always("Failed to mark pages as uncacheable");
+        return ret;
+    }
+
+    log_always("Marking hugepage data pages as uncacheable");
+    ret = memory_mark_pages_strong_uncacheable(HUGEPAGE_DATA_REGION, DATA_SIZE, /*mark=*/true);
+    if (ret < 0) {
+        log_always("Failed to mark pages as uncacheable");
+        return ret;
+    }
+#endif 
+
     /*
      * "Normal" page tables must disable "normal" virtual mappings to the physical-shadow memory
      * pages reserved for Address Sanitizer (otherwise normal memory would alias ASan shadow
@@ -556,6 +718,9 @@ int memory_tighten_permissions(void) {
         if (ret < 0)
             return -PAL_ERROR_DENIED;
     }
+
+    // TODO: check why this returns incorrect values..
+    log_always("(PAL) Physical Memory Range (%p -- %p)", g_memory_address_start, g_memory_address_end);
 
     return 0;
 }
@@ -571,11 +736,32 @@ int memory_init(e820_table_entry* e820_entries, size_t e820_entries_size,
         if (e820_entries[i].type != E820_ADDRESS_RANGE_MEMORY)
             continue;
 
-        if (memory_address_start > e820_entries[i].address)
-            memory_address_start = e820_entries[i].address;
+        // if (memory_address_start > e820_entries[i].address)
+        //     memory_address_start = e820_entries[i].address;
 
-        if (memory_address_end < e820_entries[i].address + e820_entries[i].size)
-            memory_address_end = e820_entries[i].address + e820_entries[i].size;
+        // if (memory_address_end < e820_entries[i].address + e820_entries[i].size)
+        //     memory_address_end = e820_entries[i].address + e820_entries[i].size;
+
+        uint64_t addr = e820_entries[i].address;
+        uint64_t sz   = e820_entries[i].size;
+
+        /* ignore empty regions */
+        if (sz == 0)
+            continue;
+
+        /* detect overflow on addr + sz (we keep end as exclusive) */
+        if (addr > UINT64_MAX - sz) {
+            /* handle as error or clamp to UINT64_MAX */
+            memory_address_end = UINT64_MAX;
+        } else {
+            uint64_t end = addr + sz; /* exclusive end */
+            if (memory_address_end < end)
+                memory_address_end = end;
+        }
+
+        if (memory_address_start > addr)
+            memory_address_start = addr;
+
     }
 
     /* never start at 0x0, see explanation in memory_preload_ranges() */
@@ -595,6 +781,12 @@ int memory_init(e820_table_entry* e820_entries, size_t e820_entries_size,
 
     *out_memory_address_start = (void*)memory_address_start;
     *out_memory_address_end   = (void*)memory_address_end;
+
+    // VERY BAD: hardcode memory end to 10GiB
+    // *out_memory_address_end   = (void*) (10*1024*1024*1024);
+
+    g_memory_address_start = (void*)memory_address_start;
+    g_memory_address_end   = (void*)memory_address_end;
     return 0;
 }
 
@@ -616,6 +808,7 @@ int memory_alloc(void* addr, size_t size, bool read, bool write, bool execute) {
     /* we rely on CR0.WP == 0 (Write Protect disabled), which allows to write even into read-only
      * pages in ring 0 (otherwise for read-only allocs, we would need to call below function twice:
      * once with W permission, and after memset-to-zero again, without W permission) */
+    // log_always("Marking pages on: %p -- %p", addr, (void*) (((uint64_t)addr)+size));
     int ret = memory_mark_pages_on((uint64_t)addr, size, write, execute, /*usermode=*/true);
     if (ret < 0)
         return ret;
@@ -623,7 +816,15 @@ int memory_alloc(void* addr, size_t size, bool read, bool write, bool execute) {
 #ifdef ASAN
     asan_unpoison_region((uintptr_t)addr, size);
 #endif
+    /* Keep the whole egl-redirect reservation write-back cacheable. GEM mmap
+     * requests change only the ranges they actually consume to write-combining
+     * through memory_protect() below. Marking all 4 GiB write-combining here
+     * needlessly splits and invalidates page mappings that may never be used. */
+    bool is_egl_redirect_region = is_egl_redirect_data_region_base(addr, size);
     memset(addr, 0, size);
+    if (is_egl_redirect_region)
+        log_always("Reserved GEM arena %p (size %lu); marking allocations WC on demand",
+                   addr, (unsigned long)size);
     return 0;
 }
 
@@ -645,7 +846,19 @@ int memory_protect(void* addr, size_t size, bool read, bool write, bool execute)
 #ifdef ASAN
     asan_unpoison_region((uintptr_t)addr, size);
 #endif
-    return memory_mark_pages_on((uint64_t)addr, size, write, execute, /*usermode=*/true);
+    int ret = memory_mark_pages_on((uint64_t)addr, size, write, execute, /*usermode=*/true);
+    if (ret < 0)
+        return ret;
+
+    if (is_egl_redirect_data_region_range(addr, size)) {
+        ret = memory_mark_pages_write_combined((uint64_t)addr, size, /*mark=*/true);
+        if (ret < 0) {
+            log_error("Failed to mark GEM range at %p (size %lu) as write-combining: %d",
+                      addr, (unsigned long)size, ret);
+            BUG();
+        }
+    }
+    return 0;
 }
 
 int memory_free(void* addr, size_t size) {

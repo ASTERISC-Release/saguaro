@@ -420,7 +420,7 @@ struct parser_table {
     [__NR_set_tid_address] = {.slow = false, .name = "set_tid_address", .parser = {parse_long_arg,
                               parse_pointer_arg}},
     [__NR_restart_syscall] = {.slow = false, .name = "restart_syscall", .parser = {NULL}},
-    [__NR_semtimedop] = {.slow = false, .name = "semtimedop", .parser = {parse_long_arg,
+    [__NR_semtimedop] = {.slow = true, .name = "semtimedop", .parser = {parse_long_arg,
                          parse_integer_arg, parse_pointer_arg, parse_integer_arg,
                          parse_pointer_arg}},
     [__NR_fadvise64] = {.slow = false, .name = "fadvise64", .parser = {NULL}},
@@ -593,7 +593,8 @@ struct parser_table {
                           parse_integer_arg, parse_integer_arg, parse_close_range_flags}},
     [__NR_openat2] = {.slow = false, .name = "openat2", .parser = {NULL}},
     [__NR_pidfd_getfd] = {.slow = false, .name = "pidfd_getfd", .parser = {NULL}},
-    [__NR_faccessat2] = {.slow = false, .name = "faccessat2", .parser = {NULL}},
+    [__NR_faccessat2] = {.slow = false, .name = "faccessat2", .parser = {parse_long_arg,
+                         parse_at_fdcwd, parse_string_arg, parse_integer_arg, parse_integer_arg}},
     [__NR_process_madvise] = {.slow = false, .name = "process_madvise", .parser = {NULL}},
     [__NR_epoll_pwait2] = {.slow = false, .name = "epoll_pwait2", .parser = {NULL}},
     [__NR_mount_setattr] = {.slow = false, .name = "mount_setattr", .parser = {NULL}},
@@ -1681,6 +1682,8 @@ void debug_print_syscall_before(unsigned long sysno, ...) {
     if (g_log_level < LOG_LEVEL_TRACE)
         return;
 
+    if (sysno == __NR_clock_gettime || sysno == __NR_clock_nanosleep)
+        return;
     struct parser_table* parser = &syscall_parser_table[sysno];
 
     if (!parser->slow)
@@ -1715,6 +1718,8 @@ void debug_print_syscall_after(unsigned long sysno, ...) {
     if (g_log_level < LOG_LEVEL_TRACE)
         return;
 
+    if (sysno == __NR_clock_gettime || sysno == __NR_clock_nanosleep)
+        return;
     struct parser_table* parser = &syscall_parser_table[sysno];
 
     struct print_buf buf = INIT_PRINT_BUF(buf_write_all);

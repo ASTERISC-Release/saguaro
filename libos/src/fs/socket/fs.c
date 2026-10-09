@@ -7,6 +7,7 @@
 #include "libos_fs.h"
 #include "libos_lock.h"
 #include "libos_socket.h"
+#include "libos_table.h"
 #include "linux_abi/fs.h"
 #include "linux_abi/ioctl.h"
 #include "pal.h"
@@ -24,6 +25,13 @@ static int close(struct libos_handle* handle) {
     /* No need for atomics - we are releasing the last reference, nothing can access it anymore. */
     if (handle->info.sock.pal_handle) {
         PalObjectDestroy(handle->info.sock.pal_handle);
+    }
+    if (handle->info.sock.udp_rx_ring) {
+        long ret = libos_syscall_munmap(handle->info.sock.udp_rx_ring,
+                                        handle->info.sock.udp_rx_ring_size);
+        if (ret < 0) {
+            log_warning("failed to release VM UDP receive ring: %s", unix_strerror(ret));
+        }
     }
     return 0;
 }
@@ -202,6 +210,8 @@ static int checkout(struct libos_handle* handle) {
     sock->peek.buf = NULL;
     sock->peek.buf_size = 0;
     sock->peek.data_size = 0;
+    sock->udp_rx_ring = NULL;
+    sock->udp_rx_ring_size = 0;
     return 0;
 }
 

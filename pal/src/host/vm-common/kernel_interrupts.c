@@ -85,6 +85,17 @@ void isr_c(struct isr_regs* regs) {
     uint64_t kernel_cs = (uint64_t)(gdt_entry_kernel_cs - gdt_start);
 
     switch (regs->int_number) {
+        case 13:
+            /* Linux reports user-mode #GP as SIGSEGV with si_addr == NULL. Applications use
+             * this behavior to probe instructions such as RDPMC and recover in a signal handler.
+             * Forward the fault through the normal LibOS memory-fault path instead of treating
+             * it as a fatal PAL exception. */
+            ret = pal_common_perform_memfault_handling(/*faulted_addr=*/0, regs);
+            if (ret < 0) {
+                log_error("Panic: #GP handler failed");
+                triple_fault();
+            }
+            break;
         case 14: ;
             /* below code is currently only for diagnostics; we always panic on PFs */
             uint64_t faulted_addr;

@@ -37,6 +37,8 @@ int pal_common_event_wait(struct pal_handle* handle, uint64_t* timeout_us);
 int pal_common_streams_wait_events(size_t count, struct pal_handle** handle_array,
                                    pal_wait_flags_t* events, pal_wait_flags_t* ret_events,
                                    uint64_t* timeout_us);
+int pal_common_socket_wait_events(struct pal_handle* handle, pal_wait_flags_t events,
+                                  pal_wait_flags_t* out_events);
 
 int pal_common_console_open(struct pal_handle** handle, const char* type, const char* uri,
                             enum pal_access access, pal_share_flags_t share,

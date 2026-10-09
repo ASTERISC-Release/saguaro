@@ -214,6 +214,10 @@ noreturn int thread_bottomhalves_run(void* args) {
         /* FIXME: triple fault on errors? */
         if (vsock_trigger)
             (void)virtio_vsock_bottomhalf();
+        else if (__atomic_load_n(&g_vsock_polling, __ATOMIC_ACQUIRE)) {
+            if (!virtio_vsock_poll_if_active() && virtio_vsock_rearm_notifications())
+                (void)virtio_vsock_bottomhalf();
+        }
         if (console_trigger)
             (void)virtio_console_bottomhalf();
 

@@ -424,6 +424,7 @@ static int __set_new_fd_handle(uint32_t fd, struct libos_handle* hdl, int fd_fla
     }
 
     if (fd >= get_rlimit_cur(RLIMIT_NOFILE)) {
+        // log_always("FD: %d;  get_rlimit_cur(RLIMIT_NOFILE)=%d\n", fd,  get_rlimit_cur(RLIMIT_NOFILE));
         ret = -EMFILE;
         goto out;
     }
@@ -516,6 +517,10 @@ static int clear_flock_locks(struct libos_handle* hdl) {
 }
 
 void put_handle(struct libos_handle* hdl) {
+    if (refcount_get(&hdl->ref_count) <= 0) {
+        log_error("put_handle called with refcount %ld: handle=%p caller=%p",
+                  refcount_get(&hdl->ref_count), hdl, __builtin_return_address(0));
+    }
     refcount_t ref_count = refcount_dec(&hdl->ref_count);
 
     if (!ref_count) {
@@ -810,7 +815,9 @@ BEGIN_CP_FUNC(handle) {
         clear_lock(&new_hdl->lock);
         clear_lock(&new_hdl->pos_lock);
 
-        DO_CP(fs, hdl->fs, &new_hdl->fs);
+        /* Host-redirection handles intentionally have no LibOS filesystem. */
+        if (hdl->fs)
+            DO_CP(fs, hdl->fs, &new_hdl->fs);
 
         if (hdl->uri)
             DO_CP_MEMBER(str, hdl, new_hdl, uri);

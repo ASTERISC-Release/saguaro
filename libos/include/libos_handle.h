@@ -46,6 +46,10 @@ enum libos_handle_type {
     /* Special handles: */
     TYPE_EPOLL,      /* epoll handles, see `libos_epoll.c` */
     TYPE_EVENTFD,    /* eventfd handles, used by `eventfd` filesystem */
+
+    /* Host redirection handle */
+    TYPE_HOST,              /* handle redirected to host OS, used by `host` filesystem */
+    TYPE_HOST_IDENTITY,     /* handle redirected to host OS (in an identity format) */
 };
 
 struct libos_pipe_handle {
@@ -96,6 +100,9 @@ struct libos_sock_handle {
     struct libos_lock recv_lock;
     /* This field is only used by UNIX sockets. */
     size_t force_nonblocking_users_count;
+    /* VM PAL UDP emulation owns this anonymous receive-ring mapping. */
+    void* udp_rx_ring;
+    size_t udp_rx_ring_size;
     uint64_t sendtimeout_us;
     uint64_t receivetimeout_us;
     unsigned int last_error;

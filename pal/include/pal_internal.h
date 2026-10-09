@@ -124,6 +124,8 @@ struct socket_ops {
                 struct pal_socket_addr* addr, bool force_nonblocking);
     int (*recv)(PAL_HANDLE handle, struct iovec* iov, size_t iov_len, size_t* out_size,
                 struct pal_socket_addr* addr, bool force_nonblocking);
+    int (*register_shmem)(PAL_HANDLE handle, void *region);
+
 };
 
 /*
@@ -195,6 +197,8 @@ int _PalSocketSend(PAL_HANDLE handle, struct iovec* iov, size_t iov_len, size_t*
                    struct pal_socket_addr* addr, bool force_nonblocking);
 int _PalSocketRecv(PAL_HANDLE handle, struct iovec* iov, size_t iov_len, size_t* out_total_size,
                    struct pal_socket_addr* addr, bool force_nonblocking);
+int _PalSocketRegisterShmem(PAL_HANDLE handle, void *region);
+                   
 
 /* PalProcess and PalThread calls */
 int _PalThreadCreate(PAL_HANDLE* handle, int (*callback)(void*), void* param);
@@ -276,11 +280,13 @@ void pal_read_next_reserved_range(uintptr_t last_range_start, uintptr_t* out_nex
  * \param addr     Address of the start of the range.
  * \param size     Size of the range.
  * \param prot     Memory protection of the range.
+ * \param is_user_reserved Whether the range is reserved for a later user mapping.
  * \param comment  Comment associated with this memory range.
  *
  * Caller must make sure that the new range does not overlap any previously added range.
  */
-int pal_add_initial_range(uintptr_t addr, size_t size, pal_prot_flags_t prot, const char* comment);
+int pal_add_initial_range(uintptr_t addr, size_t size, pal_prot_flags_t prot,
+                          bool is_user_reserved, const char* comment);
 int pal_internal_memory_bkeep(size_t size, uintptr_t* out_addr);
 int pal_internal_memory_alloc(size_t size, void** out_addr);
 int pal_internal_memory_free(void* addr, size_t size);

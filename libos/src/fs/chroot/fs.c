@@ -260,6 +260,9 @@ static int chroot_mmap(struct libos_handle* hdl, void* addr, size_t size, int pr
     assert(hdl->type == TYPE_CHROOT);
     assert(addr);
 
+    // log_always("[mmap] file mapping request: addr=%p, length=%zu, prot=%d, flags=%d, offset=%lu",
+    //            addr, size, prot, flags, offset);
+
     pal_prot_flags_t pal_prot = LINUX_PROT_TO_PAL(prot, flags);
 
     if (flags & MAP_ANONYMOUS)

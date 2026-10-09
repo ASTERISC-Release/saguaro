@@ -36,7 +36,7 @@ static int clone_implementation_wrapper(void* arg_) {
 
     /* We acquired ownership of arg->thread from the caller, hence there is
      * no need to call get_thread. */
-    struct libos_clone_args* arg = (struct libos_clone_args*)arg_;
+    struct libos_clone_args* arg   = (struct libos_clone_args*)arg_;
     struct libos_thread* my_thread = arg->thread;
     assert(my_thread);
 
@@ -56,7 +56,7 @@ static int clone_implementation_wrapper(void* arg_) {
 
     if (my_thread->set_child_tid) {
         *(my_thread->set_child_tid) = my_thread->tid;
-        my_thread->set_child_tid = NULL;
+        my_thread->set_child_tid    = NULL;
     }
 
     void* stack = arg->stack;
@@ -78,7 +78,26 @@ static int clone_implementation_wrapper(void* arg_) {
     pal_context_copy(&regs, arg->regs);
     pal_context_set_sp(&regs, (unsigned long)stack);
     tcb->context.regs = &regs;
-    tcb->context.tls = arg->tls;
+    tcb->context.tls  = arg->tls;
+
+    /* Set TLS for this new thread early so the PAL-level thread context (user FS base)
+     * reflects the intended TLS before the parent is notified. This prevents a race where
+     * the scheduler might try to restore the thread on another vCPU and install an
+     * uninitialized FS base. */
+    set_tls(arg->tls);
+
+    /* Diagnostic: log the TLS values we just set so we can verify per-thread FS base.
+     * The user will run the test and paste logs if the problem persists. */
+    {
+        uintptr_t fsbase = 0;
+        (void)PalSegmentBaseGet(PAL_SEGMENT_FS, &fsbase);
+
+        /* Adil; log added to debug the clone problems (already solved) */
+        log_debug(
+            "[libos_clone] pid(tid)=%u pal_tcb=%p libos_tcb=%p context.tls=0x%lx fsbase=0x%lx",
+            my_thread->tid, (void*)pal_get_tcb(), (void*)tcb, (unsigned long)tcb->context.tls,
+            (unsigned long)fsbase);
+    }
 
     /* Inform the parent thread that we finished initialization. */
     PalEventSet(arg->initialize_event);
@@ -137,12 +156,12 @@ static long do_clone_new_vm(IDTYPE child_vmid, unsigned long flags, struct libos
 
     /* Associate new cpu context to the new process (its main and only thread) for migration
      * since we might need to modify some registers. */
-    libos_tcb_t libos_tcb = { 0 };
+    libos_tcb_t libos_tcb = {0};
     __libos_tcb_init(&libos_tcb);
     /* We are copying our own tcb, which should be ok to do, even without any locks. Note this is
      * a shallow copy, so `libos_tcb.context.regs` will be shared with the parent. */
     libos_tcb.context.regs = self->libos_tcb->context.regs;
-    libos_tcb.context.tls = tls;
+    libos_tcb.context.tls  = tls;
 
     thread->libos_tcb = &libos_tcb;
 
@@ -155,7 +174,7 @@ static long do_clone_new_vm(IDTYPE child_vmid, unsigned long flags, struct libos
         }
         thread->stack_top = (char*)vma_info.addr + vma_info.length;
         thread->stack_red = thread->stack = vma_info.addr;
-        parent_stack = pal_context_get_sp(self->libos_tcb->context.regs);
+        parent_stack                      = pal_context_get_sp(self->libos_tcb->context.regs);
         pal_context_set_sp(thread->libos_tcb->context.regs, user_stack_addr);
 
         if (vma_info.file) {
@@ -166,14 +185,14 @@ static long do_clone_new_vm(IDTYPE child_vmid, unsigned long flags, struct libos
     lock(&g_process.fs_lock);
     rwlock_read_lock(&g_process_id_lock);
     struct libos_process process_description = {
-        .pid = thread->tid,
-        .ppid = g_process.pid,
-        .pgid = g_process.pgid,
-        .sid = g_process.sid,
-        .root = g_process.root,
-        .cwd = g_process.cwd,
+        .pid   = thread->tid,
+        .ppid  = g_process.pid,
+        .pgid  = g_process.pgid,
+        .sid   = g_process.sid,
+        .root  = g_process.root,
+        .cwd   = g_process.cwd,
         .umask = g_process.umask,
-        .exec = g_process.exec,
+        .exec  = g_process.exec,
     };
     rwlock_read_unlock(&g_process_id_lock);
 
@@ -189,10 +208,10 @@ static long do_clone_new_vm(IDTYPE child_vmid, unsigned long flags, struct libos
     clear_lock(&process_description.fs_lock);
     clear_lock(&process_description.children_lock);
 
-    child_process->pid = process_description.pid;
+    child_process->pid                      = process_description.pid;
     child_process->child_termination_signal = flags & CSIGNAL;
-    child_process->uid = thread->uid;
-    child_process->vmid = child_vmid;
+    child_process->uid                      = thread->uid;
+    child_process->vmid                     = child_vmid;
 
     long ret = create_process_and_send_checkpoint(&migrate_fork, child_process,
                                                   &process_description, thread);
@@ -231,21 +250,9 @@ long libos_syscall_clone(unsigned long flags, unsigned long user_stack_addr, int
      * CLONE_NEWNS and friends
      */
     const unsigned long supported_flags =
-        CLONE_CHILD_CLEARTID |
-        CLONE_CHILD_SETTID |
-        CLONE_DETACHED |
-        CLONE_FILES |
-        CLONE_FS |
-        CLONE_PARENT_SETTID |
-        CLONE_PTRACE |
-        CLONE_SETTLS |
-        CLONE_SIGHAND |
-        CLONE_SYSVSEM |
-        CLONE_THREAD |
-        CLONE_UNTRACED |
-        CLONE_VFORK |
-        CLONE_VM |
-        CSIGNAL;
+        CLONE_CHILD_CLEARTID | CLONE_CHILD_SETTID | CLONE_DETACHED | CLONE_FILES | CLONE_FS |
+        CLONE_PARENT_SETTID | CLONE_PTRACE | CLONE_SETTLS | CLONE_SIGHAND | CLONE_SYSVSEM |
+        CLONE_THREAD | CLONE_UNTRACED | CLONE_VFORK | CLONE_VM | CSIGNAL;
 
     if (flags & ~supported_flags) {
         log_warning("clone called with unsupported flags argument.");
@@ -278,8 +285,9 @@ long libos_syscall_clone(unsigned long flags, unsigned long user_stack_addr, int
          * corner-cases in signal handling and syscalls -- we simply treat vfork() as fork(). We
          * assume that performance hit is negligible (Gramine has to migrate internal state anyway
          * which is slow) and apps do not rely on insane Linux-specific semantics of vfork().  */
-        log_warning("vfork was called by the application, implemented as an alias to fork in "
-                    "Gramine");
+        log_warning(
+            "vfork was called by the application, implemented as an alias to fork in "
+            "Gramine");
         flags &= ~(CLONE_VFORK | CLONE_VM);
     }
 
@@ -318,14 +326,16 @@ long libos_syscall_clone(unsigned long flags, unsigned long user_stack_addr, int
         ret = toml_bool_in(g_manifest_root, "sys.disallow_subprocesses", /*defaultval=*/false,
                            &disallow_subprocesses);
         if (ret < 0) {
-            log_error("Cannot parse \'sys.disallow_subprocesses\' (the value must be `true` or "
-                      "`false`)");
+            log_error(
+                "Cannot parse \'sys.disallow_subprocesses\' (the value must be `true` or "
+                "`false`)");
             return -ENOSYS;
         }
         if (disallow_subprocesses) {
             if (FIRST_TIME()) {
-                log_warning("The app tried to create a subprocess, but this is disabled "
-                            "(sys.disallow_subprocesses = true)");
+                log_warning(
+                    "The app tried to create a subprocess, but this is disabled "
+                    "(sys.disallow_subprocesses = true)");
             }
             return -EAGAIN;
         }
@@ -348,6 +358,7 @@ long libos_syscall_clone(unsigned long flags, unsigned long user_stack_addr, int
         thread->clear_child_tid = child_tidptr;
 
     if (!(flags & CLONE_SETTLS)) {
+        log_always("Getting TLS from current thread");
         tls = get_tls();
     }
 
@@ -424,12 +435,12 @@ long libos_syscall_clone(unsigned long flags, unsigned long user_stack_addr, int
      * implies CLONE_SIGHAND). */
     assert(flags & CLONE_SIGHAND);
 
-    struct libos_thread* self = get_cur_thread();
+    struct libos_thread* self        = get_cur_thread();
     struct libos_clone_args new_args = {
         .is_thread_initialized = false,
-        .stack = (void*)(user_stack_addr ?: pal_context_get_sp(self->libos_tcb->context.regs)),
-        .tls = tls,
-        .regs = self->libos_tcb->context.regs,
+        .stack  = (void*)(user_stack_addr ?: pal_context_get_sp(self->libos_tcb->context.regs)),
+        .tls    = tls,
+        .regs   = self->libos_tcb->context.regs,
         .thread = thread,
     };
 
@@ -450,7 +461,7 @@ long libos_syscall_clone(unsigned long flags, unsigned long user_stack_addr, int
     }
 
     PAL_HANDLE pal_handle = NULL;
-    ret = PalThreadCreate(clone_implementation_wrapper, &new_args, &pal_handle);
+    ret                   = PalThreadCreate(clone_implementation_wrapper, &new_args, &pal_handle);
     if (ret < 0) {
         ret = pal_to_unix_errno(ret);
         goto clone_thread_failed;
@@ -490,4 +501,22 @@ clone_thread_failed:
 failed:
     put_thread(thread);
     return ret;
+}
+
+long libos_syscall_clone3(struct clone_args* args, size_t size) {
+    if (!args)
+        return -EINVAL;
+
+    /* Forward flags and tls provided by the caller (clone3). */
+    unsigned long flags = (unsigned long)args->flags;
+
+    unsigned long child_stack = args->stack + args->stack_size;
+    int* parent_tidptr        = (int*)args->parent_tid;
+    int* child_tidptr         = (int*)args->child_tid;
+    unsigned long tls         = (unsigned long)args->tls;
+    return libos_syscall_clone(flags, child_stack, parent_tidptr, child_tidptr, tls);
+}
+
+long libos_syscall_kcmp(pid_t pid1, pid_t pid2, int type, unsigned long idx1, unsigned long idx2) {
+    return 0;  // Always return 0
 }

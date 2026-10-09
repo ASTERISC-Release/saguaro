@@ -17,6 +17,7 @@
  */
 
 #include "libos_fs.h"
+#include "libos_sg.h"
 #include "libos_fs_lock.h"
 #include "libos_handle.h"
 #include "libos_internal.h"
@@ -27,7 +28,6 @@
 #include "linux_abi/errors.h"
 #include "linux_abi/fs.h"
 #include "toml_utils.h"
-
 #define FCNTL_SETFL_MASK (O_APPEND | O_DIRECT | O_NOATIME | O_NONBLOCK)
 
 static int generic_set_flags(struct libos_handle* handle, unsigned int flags, unsigned int mask) {
@@ -137,16 +137,35 @@ static int flock_to_file_lock(struct flock* fl, struct libos_handle* hdl,
 }
 
 long libos_syscall_fcntl(int fd, int cmd, unsigned long arg) {
+    long retval;
+    struct libos_handle* hdl;
     int ret;
     int flags;
 
     struct libos_handle_map* handle_map = get_thread_handle_map(NULL);
     assert(handle_map);
 
-    struct libos_handle* hdl = get_fd_handle(fd, &flags, handle_map);
+    hdl = get_fd_handle(fd, &flags, handle_map);
     if (!hdl)
         return -EBADF;
 
+    #ifdef ENABLE_SG
+        if(hdl->type == TYPE_HOST)
+        {
+            log_debug("redirecting fcntl(%d, %d, %lu) to host", fd, cmd, arg);
+            long _offset = libos_syscall_acquire_libos_lock();
+            comm_page_t* c = comm_page(_offset);
+            c->p1 = (uint64_t) fd;
+            c->p2 = (uint64_t) cmd;
+            c->p3 = (uint64_t) arg;
+            c->req_bit = FCNTL;
+
+            retval = comm_sync_notify(c);
+            libos_syscall_relinquish_libos_lock(_offset);
+        }
+    #endif
+
+sg_cont:
     switch (cmd) {
         /* See `man fcntl` for the expected semantics of these commands. */
 
@@ -159,7 +178,15 @@ long libos_syscall_fcntl(int fd, int cmd, unsigned long arg) {
         /* F_DUPFD_CLOEXEC (int) */
         case F_DUPFD_CLOEXEC: {
             flags |= FD_CLOEXEC;
-            ret = set_new_fd_handle_above_fd(arg, hdl, flags, handle_map);
+            #ifdef ENABLE_SG
+                if(hdl->type == TYPE_HOST) {
+                    ret = set_new_fd_handle_by_fd(retval, hdl, flags, handle_map);
+                } else
+                    ret = set_new_fd_handle_by_fd(arg, hdl, flags, handle_map);
+                return ret;
+            #else
+                ret = set_new_fd_handle_by_fd(arg, hdl, flags, handle_map);
+            #endif
             break;
         }
 
@@ -320,6 +347,27 @@ long libos_syscall_flock(unsigned int fd, unsigned int cmd) {
     struct libos_handle* hdl = get_fd_handle(fd, /*fd_flags=*/NULL, /*map=*/NULL);
     if (!hdl)
         return -EBADF;
+
+#ifdef ENABLE_SG
+    if (hdl->type == TYPE_HOST || hdl->type == TYPE_HOST_IDENTITY) {
+        long offset = libos_syscall_acquire_libos_lock();
+        comm_page_t* c = comm_page(offset);
+        c->p1 = fd;
+        c->p2 = cmd;
+        c->req_bit = HOST_FLOCK;
+
+        ret = (long)comm_sync_notify(c);
+        libos_syscall_relinquish_libos_lock(offset);
+        goto out;
+    }
+#endif
+
+    if (!hdl->dentry) {
+        /* File-lock bookkeeping currently requires a filesystem dentry. This matches the
+         * existing fcntl(F_SETLK) behavior for device, pipe, and other synthetic handles. */
+        ret = -EINVAL;
+        goto out;
+    }
 
     int lock_type;
     switch (cmd & ~LOCK_NB) {

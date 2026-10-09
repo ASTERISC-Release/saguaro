@@ -38,3 +38,7 @@ int _PalSocketRecv(PAL_HANDLE handle, struct iovec* iov, size_t iov_len, size_t*
                    struct pal_socket_addr* addr, bool force_nonblocking) {
     return -PAL_ERROR_NOTIMPLEMENTED;
 }
+int _PalSocketRegisterShmem(PAL_HANDLE handle, void *region) {
+    return -PAL_ERROR_NOTIMPLEMENTED;
+}
+

@@ -7,11 +7,11 @@
  */
 
 #define _POSIX_C_SOURCE 200809L  /* for SSIZE_MAX */
-
 #include <limits.h>
 #include <stdalign.h>
 
 #include "libos_fs.h"
+#include "libos_sg.h"
 #include "libos_handle.h"
 #include "libos_internal.h"
 #include "libos_lock.h"
@@ -21,7 +21,6 @@
 #include "linux_abi/fs.h"
 #include "linux_abi/memory.h"
 #include "stat.h"
-
 ssize_t do_handle_read(struct libos_handle* hdl, void* buf, size_t count) {
     if (!(hdl->acc_mode & MAY_READ))
         return -EBADF;
@@ -42,12 +41,29 @@ ssize_t do_handle_read(struct libos_handle* hdl, void* buf, size_t count) {
 }
 
 long libos_syscall_read(int fd, void* buf, size_t count) {
+    long retval;
     if (!is_user_memory_writable(buf, count))
         return -EFAULT;
 
     struct libos_handle* hdl = get_fd_handle(fd, NULL, NULL);
     if (!hdl)
         return -EBADF;
+
+    #ifdef ENABLE_SG
+        if(hdl->type == TYPE_HOST){
+            log_debug("redirecting read(%d, 0x%lx, %d) to host", fd, buf, count);
+            long _offset = libos_syscall_acquire_libos_lock();
+            comm_page_t* c = comm_page(_offset);
+            c->p1 = (uint64_t) fd;
+            c->p2 = (uint64_t) buf;
+            c->p3 = (uint64_t) count;
+            c->req_bit = READ;
+            put_handle(hdl);
+            retval = (long)comm_sync_notify(c);
+            libos_syscall_relinquish_libos_lock(_offset);
+            return retval;
+        }
+    #endif
 
     ssize_t ret = do_handle_read(hdl, buf, count);
     put_handle(hdl);
@@ -77,12 +93,30 @@ ssize_t do_handle_write(struct libos_handle* hdl, const void* buf, size_t count)
 }
 
 long libos_syscall_write(int fd, const void* buf, size_t count) {
+    long retval;
     if (!is_user_memory_readable((void*)buf, count))
         return -EFAULT;
 
     struct libos_handle* hdl = get_fd_handle(fd, NULL, NULL);
     if (!hdl)
         return -EBADF;
+
+    #ifdef ENABLE_SG
+        if(hdl->type == TYPE_HOST){
+            log_debug("redirecting write(%d, 0x%lx, %d) to host", fd, buf, count);
+            long _offset = libos_syscall_acquire_libos_lock();
+            comm_page_t* c = comm_page(_offset);
+            c->p1 = (uint64_t) fd;
+            c->p2 = (uint64_t) buf;
+            c->p3 = (uint64_t) count;
+            c->req_bit = WRITE;
+            put_handle(hdl);
+
+            retval = (long)comm_sync_notify(c);
+            libos_syscall_relinquish_libos_lock(_offset);
+            return retval;
+        }
+    #endif
 
     ssize_t ret = do_handle_write(hdl, buf, count);
     put_handle(hdl);
@@ -100,7 +134,79 @@ long libos_syscall_creat(const char* path, mode_t mode) {
     return libos_syscall_open(path, O_CREAT | O_TRUNC | O_WRONLY, mode);
 }
 
+#ifdef ENABLE_SG
+static bool is_sg_host_path(const char* path) {
+    static const char* const roots[] = {"/dev", "/sys", "/root/.cache"};
+
+    for (size_t i = 0; i < ARRAY_SIZE(roots); i++) {
+        size_t len = strlen(roots[i]);
+        if (strncmp(path, roots[i], len) == 0 && (path[len] == '\0' || path[len] == '/'))
+            return true;
+    }
+    return false;
+}
+#endif
+
+/* New system call added for the secure gaming implementation */
+long libos_syscall_register_host_identity_fd(int fd) {
+    struct libos_handle* hdl;
+    long ret;
+    log_always("Registering host fd=%d with Gramine", fd);
+
+    /* Get a new handle for the provided fd*/
+    hdl = get_new_handle();
+    if (!hdl) {
+        ret = -ENOMEM;
+        goto out;
+    }
+
+    /* Mark this as a host identity handle type */
+    hdl->type = TYPE_HOST_IDENTITY;
+    ret = set_new_fd_handle_by_fd(fd, hdl, 0, NULL);
+    put_handle(hdl);
+
+out:
+    return ret;
+}
+
 long libos_syscall_openat(int dfd, const char* filename, int flags, int mode) {
+    struct libos_handle* hdl;
+    int ret = 0;
+
+    if (!is_user_string_readable(filename))
+        return -EFAULT;
+
+    /* Secure gaming handle to redirect open() system call */
+#ifdef ENABLE_SG
+    long retval = 0;
+    bool use_sg_host = is_sg_host_path(filename) && !strstr(filename, "devtest")
+                       && !strstr(filename, "urandom");
+    if (use_sg_host) {
+        log_debug("Device open(): %s\n", filename);
+        long _offset = libos_syscall_acquire_libos_lock();
+            comm_page_t* c = comm_page(_offset);
+        c->p1 = (uint64_t)filename;
+        c->p2 = (uint64_t)flags;
+        c->p3 = (uint64_t)mode;
+        c->req_bit = OPEN;
+
+        retval = (long)comm_sync_notify(c);
+        libos_syscall_relinquish_libos_lock(_offset);
+
+        if (retval < 0) {
+            ret = retval;
+            goto out;
+        }
+
+        hdl = get_new_handle();
+        if (!hdl) {
+            ret = -ENOMEM;
+            goto out;
+        }
+        goto sg_cont;
+    }
+#endif
+
     /* Clear invalid flags. */
     flags &= O_ACCMODE | O_APPEND |  O_CLOEXEC | O_CREAT | O_DIRECT | O_DIRECTORY | O_DSYNC | O_EXCL
              | O_LARGEFILE | O_NOATIME | O_NOCTTY | O_NOFOLLOW | O_NONBLOCK | O_PATH | O_SYNC
@@ -117,9 +223,6 @@ long libos_syscall_openat(int dfd, const char* filename, int flags, int mode) {
         flags &= O_PATH | O_CLOEXEC | O_DIRECTORY | O_NOFOLLOW;
     }
 
-    if (!is_user_string_readable(filename))
-        return -EFAULT;
-
     if (!(flags & O_CREAT)) {
         /* `mode` should be ignored if O_CREAT is not specified, according to man */
         mode = 0;
@@ -135,17 +238,15 @@ long libos_syscall_openat(int dfd, const char* filename, int flags, int mode) {
     }
 
     struct libos_dentry* dir = NULL;
-    int ret = 0;
 
     if (*filename != '/' && (ret = get_dirfd_dentry(dfd, &dir)) < 0)
         return ret;
 
-    struct libos_handle* hdl = get_new_handle();
+    hdl = get_new_handle();
     if (!hdl) {
         ret = -ENOMEM;
         goto out;
     }
-
     ret = open_namei(hdl, dir, filename, flags, mode, NULL);
     if (ret < 0) {
         /* If this was blocking `open` (e.g. on FIFO), it might have returned `-EINTR`. */
@@ -154,8 +255,26 @@ long libos_syscall_openat(int dfd, const char* filename, int flags, int mode) {
         }
         goto out_hdl;
     }
+sg_cont:
+#ifdef ENABLE_SG
+    if (use_sg_host) {
+        hdl->type = TYPE_HOST;
+        ret = set_new_fd_handle_by_fd(retval, hdl, flags & O_CLOEXEC ? FD_CLOEXEC : 0, NULL);
+    } else {
+        ret = set_new_fd_handle(hdl, flags & O_CLOEXEC ? FD_CLOEXEC : 0, NULL);
 
-    ret = set_new_fd_handle(hdl, flags & O_CLOEXEC ? FD_CLOEXEC : 0, NULL);
+        /* Secure gaming logic to avoid overflow into fd range. */
+        if (ret > SG_HOST_FD_OFFSET) {
+            log_always("error: openat(..) overflowed into host fd range. (ret: %d)\n", ret);
+            assert(false);
+        }
+    }
+#else
+    else{
+        ret = set_new_fd_handle(hdl, flags & O_CLOEXEC ? FD_CLOEXEC : 0, NULL);
+    }
+#endif
+    
 
 out_hdl:
     put_handle(hdl);
@@ -166,10 +285,23 @@ out:
 }
 
 long libos_syscall_close(int fd) {
+    long retval;
     struct libos_handle* handle = detach_fd_handle(fd, NULL, NULL);
     if (!handle)
-        return -EBADF;
+    {
+        #ifdef ENABLE_SG
+            long _offset = libos_syscall_acquire_libos_lock();
+            comm_page_t* c = comm_page(_offset);
+            c->p1 = (uint64_t) fd;
+            c->req_bit = CLOSE;
 
+            retval = (long)comm_sync_notify(c);
+            libos_syscall_relinquish_libos_lock(_offset);
+            return retval;
+        #else
+            return -EBADF;
+        #endif
+    }
     put_handle(handle);
     return 0;
 }
@@ -226,6 +358,25 @@ out:
 
 /* lseek is simply doing arithmetic on the offset, no PAL call here */
 long libos_syscall_lseek(int fd, off_t offset, int origin) {
+    long retval;
+
+    #ifdef ENABLE_SG
+        if(fd < fs_offset && !get_fd_handle(fd, NULL, NULL))
+            fd += fs_offset; // Very very hacky and unstable solution (WorkAroud? krpobe for + 500 for qemu proc)
+        if (fd>fs_offset) {
+            log_debug("lseek (fd: %d offset: %ld origin: %d)\n", fd, offset, origin);
+            long _offset = libos_syscall_acquire_libos_lock();
+            comm_page_t* c = comm_page(_offset);
+            c->p1 = (uint64_t) fd;
+            c->p2 = (uint64_t) offset;
+            c->p3 = (uint64_t) origin;
+            c->req_bit = LSEEK;
+            retval = (long)comm_sync_notify(c);
+            libos_syscall_relinquish_libos_lock(_offset);
+            return retval;
+        }
+    #endif
+
     if (origin != SEEK_SET && origin != SEEK_CUR && origin != SEEK_END)
         return -EINVAL;
 
@@ -481,6 +632,20 @@ long libos_syscall_getdents(int fd, struct linux_dirent* buf, unsigned int count
 }
 
 long libos_syscall_getdents64(int fd, struct linux_dirent64* buf, size_t count) {
+    long retval;
+    #ifdef ENABLE_SG
+        if(fd>fs_offset){
+            long _offset = libos_syscall_acquire_libos_lock();
+            comm_page_t* c = comm_page(_offset);
+            c->p1 = (uint64_t) fd;
+            c->p2 = (uint64_t) buf;
+            c->p3 = (uint64_t) count;
+            c->req_bit = GETDENT;
+            retval = (long)comm_sync_notify(c);
+            libos_syscall_relinquish_libos_lock(_offset);
+            return retval;
+        }
+    #endif
     return do_getdents(fd, (uint8_t*)buf, count, /*is_getdents64=*/true);
 }
 
@@ -556,6 +721,21 @@ long libos_syscall_ftruncate(int fd, loff_t length) {
     struct libos_handle* hdl = get_fd_handle(fd, NULL, NULL);
     if (!hdl)
         return -EBADF;
+
+#ifdef ENABLE_SG
+    if (hdl->type == TYPE_HOST) {
+        long offset = libos_syscall_acquire_libos_lock();
+        comm_page_t* c = comm_page(offset);
+        c->p1 = fd;
+        c->p2 = length;
+        c->req_bit = HOST_FTRUNCATE;
+        put_handle(hdl);
+
+        long ret = (int64_t)comm_sync_notify(c);
+        libos_syscall_relinquish_libos_lock(offset);
+        return ret;
+    }
+#endif
 
     struct libos_fs* fs = hdl->fs;
     int ret;

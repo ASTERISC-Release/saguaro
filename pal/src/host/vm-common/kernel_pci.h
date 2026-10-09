@@ -19,7 +19,8 @@
 
 /* hard-code to 3GB, so that our used PCI BARs' MMIO space spawns [3GB, 3GB+16MB) */
 #define PCI_MMIO_START_ADDR 0xC0000000UL
-#define PCI_MMIO_END_ADDR   0xC1000000UL
+// #define PCI_MMIO_END_ADDR   0xC1000000UL
+#define PCI_MMIO_END_ADDR   0xD0000000UL
 
 #define PCI_CONFIG_SPACE_ADDR_IO_PORT 0xCF8
 #define PCI_CONFIG_SPACE_DATA_IO_PORT 0xCFC
@@ -55,6 +56,7 @@
 #define PCI_DEVICE_ID_CONSOLE        0x1043
 #define PCI_DEVICE_ID_VSOCK          0x1053
 #define PCI_DEVICE_ID_FS             0x105a
+#define PCI_DEVICE_ID_IVSHMEM        0x1110 /* Adil */
 
 /* VIRTIO_PCI_CAP_CFG_TYPE */
 #define VIRTIO_PCI_CAP_COMMON_CFG        1

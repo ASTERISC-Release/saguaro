@@ -26,6 +26,7 @@ int init_random(void) {
 }
 
 int _PalSystemTimeQuery(uint64_t* out_usec) {
+    log_always("A quick check.\n");
     struct timespec time;
     int ret;
 

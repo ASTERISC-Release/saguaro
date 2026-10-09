@@ -16,6 +16,8 @@
 
 extern void syscall_asm(void);
 
+#define AMD_CPU_FIX
+
 int syscalls_init(void) {
     extern char gdt_start[1];
     extern char gdt_entry_kernel_cs[1];
@@ -35,8 +37,16 @@ int syscalls_init(void) {
      * not really load selectors from GDT but instead load fixed values (including switching to
      * 64-bit-mode), so our layout of GDT entries still works.
      */
+
+#ifdef AMD_CPU_FIX
+    /* STAR wants user CS selector minus 16, with RPL=3 set (sysretq will load CS=+16, SS=+8) */
+    uint64_t user_cs_sel = (uint64_t)(gdt_entry_user_cs - gdt_start) | 0x3;
+    wrmsr(MSR_STAR,
+        (user_cs_sel << 48) | ((gdt_entry_kernel_cs - gdt_start) << 32));
+#else 
     wrmsr(MSR_STAR,
         ((gdt_entry_user_cs - gdt_start) << 48) | ((gdt_entry_kernel_cs - gdt_start) << 32));
+#endif 
 
     /* IA32_LSTAR MSR simply contains the 64-bit address of the syscall entry */
     wrmsr(MSR_LSTAR, (uint64_t)&syscall_asm);

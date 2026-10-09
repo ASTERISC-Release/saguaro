@@ -414,10 +414,8 @@ static int send(struct libos_handle* handle, struct iovec* iov, size_t iov_len, 
     __UNUSED(addr);
     __UNUSED(addrlen);
 
-    if (handle->info.sock.type == SOCK_DGRAM) {
-        /* We do not support datagram UNIX sockets. */
-        BUG();
-    }
+    /* Connected SOCK_DGRAM pairs use this stream-oriented PAL pipe path. General UNIX datagram
+     * sockets are still rejected by create(). */
 
     struct cmsghdr* cmsg = (struct cmsghdr*)msg_control;
     size_t rest_msg_controllen = msg_controllen;
@@ -491,10 +489,8 @@ static int recv(struct libos_handle* handle, struct iovec* iov, size_t iov_len, 
     __UNUSED(addr);
     __UNUSED(addrlen_ptr);
 
-    if (handle->info.sock.type == SOCK_DGRAM) {
-        /* We do not support datagram UNIX sockets. */
-        BUG();
-    }
+    /* Connected SOCK_DGRAM pairs use this stream-oriented PAL pipe path. General UNIX datagram
+     * sockets are still rejected by create(). */
 
     PAL_HANDLE pal_handle = __atomic_load_n(&handle->info.sock.pal_handle, __ATOMIC_ACQUIRE);
     if (!pal_handle) {

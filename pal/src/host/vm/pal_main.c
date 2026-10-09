@@ -103,8 +103,9 @@ static int switch_apic_to_x2_mode(void) {
     return 0;
 }
 
-static int add_preloaded_range(uintptr_t addr, size_t size, const char* comment) {
-    return pal_add_initial_range(addr, size, /*pal_prot=*/0, comment);
+static int add_preloaded_range(uintptr_t addr, size_t size, bool is_user_reserved,
+                               const char* comment) {
+    return pal_add_initial_range(addr, size, /*pal_prot=*/0, is_user_reserved, comment);
 }
 
 static void zero_out_memory_and_prot_none(void) {
@@ -195,7 +196,7 @@ noreturn void pal_start_c(void) {
     /* PAL binary is located at 1MB and may occupy until 4MB, see pal.lds */
     /* FIXME: whole PAL binary is RWX because memory_pagetables_init() marked everything as RWX and
      *        zero_out_memory_and_prot_none() did *not* modify perms for PAL binary memory pages */
-    ret = add_preloaded_range(0x100000UL, 0x300000UL, "pal_binary");
+    ret = add_preloaded_range(0x100000UL, 0x300000UL, /*is_user_reserved=*/false, "pal_binary");
     if (ret < 0)
         INIT_FAIL("Failed to preload PAL-binary memory range");
 
@@ -203,6 +204,10 @@ noreturn void pal_start_c(void) {
      * This is not true for common hypervisors like QEMU/KVM, so must do it ourselves. Also,
      * memory_pagetables_init() marked all pages as RWX, now is good time to revert to NONE. */
     zero_out_memory_and_prot_none();
+
+    /* Configure PAT so that index 1 is Write-Combining (WC). Must be after multicore init because
+     * PAT is per-CPU state and AP CPUs will also need it set. */
+    memory_pat_init_for_wc();
 
     call_init_array();
 
@@ -342,6 +347,14 @@ noreturn int pal_start_continue(void* cmdline_) {
                        &g_pal_public_state.extra_runtime_domain_names_conf);
     if (ret < 0)
         INIT_FAIL("Cannot parse 'sys.enable_extra_runtime_domain_names_conf'");
+
+    bool shared_input_ring;
+    ret = toml_bool_in(g_pal_public_state.manifest_root,
+                       "sys.experimental__shared_input_ring", /*defaultval=*/false,
+                       &shared_input_ring);
+    if (ret < 0)
+        INIT_FAIL("Cannot parse 'sys.experimental__shared_input_ring'");
+    virtio_vsock_set_shared_input_ring(shared_input_ring);
 
     g_pal_public_state.first_thread = g_first_thread_handle;
 

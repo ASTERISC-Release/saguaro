@@ -118,7 +118,10 @@ GramineManifestSchema = Schema({
         'disallow_subprocesses': bool,
         'enable_extra_runtime_domain_names_conf': bool,
         'enable_sigterm_injection': bool,
+        'experimental__assume_external_processes_alive': bool,
+        'experimental__enable_host_sysv_semaphores': bool,
         'experimental__enable_flock': bool,
+        'experimental__shared_input_ring': bool,
         'insecure__allow_eventfd': bool,
 
         # Description of this thing will be both very hard to write, and mostly useless, since

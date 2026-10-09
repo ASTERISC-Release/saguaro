@@ -111,8 +111,10 @@ static int pseudo_open(struct libos_handle* hdl, struct libos_dentry* dent, int 
     assert(dent->inode);
 
     struct pseudo_node* node = dent->inode->data;
-
     int ret;
+
+    /* Log the node being opened for debugging purposes. */
+    log_debug("Opening pseudofs node: %s (type=%d)", dent->name, node->type);
 
     switch (node->type) {
         case PSEUDO_DIR:

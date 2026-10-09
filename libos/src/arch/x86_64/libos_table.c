@@ -13,6 +13,10 @@
 #include "libos_table.h"
 #include "linux_abi/syscalls_nr_arch.h"
 
+/* Secure gaming, syscall no. for acquiring lock from gramine to synchronize egl-redirect comms*/
+#define __NR_ACQUIRE_LLOCK 500
+#define __NR_RELINQUISH_LLOCK 501
+
 libos_syscall_t libos_syscall_table[LIBOS_SYSCALL_BOUND] = {
     [__NR_read]                    = (libos_syscall_t)libos_syscall_read,
     [__NR_write]                   = (libos_syscall_t)libos_syscall_write,
@@ -39,7 +43,7 @@ libos_syscall_t libos_syscall_table[LIBOS_SYSCALL_BOUND] = {
     [__NR_pipe]                    = (libos_syscall_t)libos_syscall_pipe,
     [__NR_select]                  = (libos_syscall_t)libos_syscall_select,
     [__NR_sched_yield]             = (libos_syscall_t)libos_syscall_sched_yield,
-    [__NR_mremap]                  = (libos_syscall_t)0, // libos_syscall_mremap
+    [__NR_mremap]                  = (libos_syscall_t)libos_syscall_mremap, // libos_syscall_mremap
     [__NR_msync]                   = (libos_syscall_t)libos_syscall_msync,
     [__NR_mincore]                 = (libos_syscall_t)libos_syscall_mincore,
     [__NR_madvise]                 = (libos_syscall_t)libos_syscall_madvise,
@@ -78,9 +82,9 @@ libos_syscall_t libos_syscall_table[LIBOS_SYSCALL_BOUND] = {
     [__NR_wait4]                   = (libos_syscall_t)libos_syscall_wait4,
     [__NR_kill]                    = (libos_syscall_t)libos_syscall_kill,
     [__NR_uname]                   = (libos_syscall_t)libos_syscall_uname,
-    [__NR_semget]                  = (libos_syscall_t)0, // libos_syscall_semget,
-    [__NR_semop]                   = (libos_syscall_t)0, // libos_syscall_semop,
-    [__NR_semctl]                  = (libos_syscall_t)0, // libos_syscall_semctl,
+    [__NR_semget]                  = (libos_syscall_t)libos_syscall_semget,
+    [__NR_semop]                   = (libos_syscall_t)libos_syscall_semop,
+    [__NR_semctl]                  = (libos_syscall_t)libos_syscall_semctl,
     [__NR_shmdt]                   = (libos_syscall_t)0, // libos_syscall_shmdt
     [__NR_msgget]                  = (libos_syscall_t)0, // libos_syscall_msgget,
     [__NR_msgsnd]                  = (libos_syscall_t)0, // libos_syscall_msgsnd,
@@ -112,7 +116,7 @@ libos_syscall_t libos_syscall_table[LIBOS_SYSCALL_BOUND] = {
     [__NR_umask]                   = (libos_syscall_t)libos_syscall_umask,
     [__NR_gettimeofday]            = (libos_syscall_t)libos_syscall_gettimeofday,
     [__NR_getrlimit]               = (libos_syscall_t)libos_syscall_getrlimit,
-    [__NR_getrusage]               = (libos_syscall_t)0, // libos_syscall_getrusage
+    [__NR_getrusage]               = (libos_syscall_t) libos_syscall_getrusage,
     [__NR_sysinfo]                 = (libos_syscall_t)libos_syscall_sysinfo,
     [__NR_times]                   = (libos_syscall_t)0, // libos_syscall_times
     [__NR_ptrace]                  = (libos_syscall_t)0, // libos_syscall_ptrace
@@ -132,9 +136,9 @@ libos_syscall_t libos_syscall_table[LIBOS_SYSCALL_BOUND] = {
     [__NR_getgroups]               = (libos_syscall_t)libos_syscall_getgroups,
     [__NR_setgroups]               = (libos_syscall_t)libos_syscall_setgroups,
     [__NR_setresuid]               = (libos_syscall_t)0, // libos_syscall_setresuid
-    [__NR_getresuid]               = (libos_syscall_t)0, // libos_syscall_getresuid
+    [__NR_getresuid]               = (libos_syscall_t)libos_syscall_getresuid, // libos_syscall_getresuid
     [__NR_setresgid]               = (libos_syscall_t)0, // libos_syscall_setresgid
-    [__NR_getresgid]               = (libos_syscall_t)0, // libos_syscall_getresgid
+    [__NR_getresgid]               = (libos_syscall_t)libos_syscall_getresgid, // libos_syscall_getresgid
     [__NR_getpgid]                 = (libos_syscall_t)libos_syscall_getpgid,
     [__NR_setfsuid]                = (libos_syscall_t)0, // libos_syscall_setfsuid
     [__NR_setfsgid]                = (libos_syscall_t)0, // libos_syscall_setfsgid
@@ -171,7 +175,7 @@ libos_syscall_t libos_syscall_table[LIBOS_SYSCALL_BOUND] = {
     [__NR_modify_ldt]              = (libos_syscall_t)0, // libos_syscall_modify_ldt
     [__NR_pivot_root]              = (libos_syscall_t)0, // libos_syscall_pivot_root
     [__NR__sysctl]                 = (libos_syscall_t)0, // libos_syscall__sysctl
-    [__NR_prctl]                   = (libos_syscall_t)0, // libos_syscall_prctl
+    [__NR_prctl]                   = (libos_syscall_t)libos_syscall_prctl, // libos_syscall_prctl
     [__NR_arch_prctl]              = (libos_syscall_t)libos_syscall_arch_prctl,
     [__NR_adjtimex]                = (libos_syscall_t)0, // libos_syscall_adjtimex
     [__NR_setrlimit]               = (libos_syscall_t)libos_syscall_setrlimit,
@@ -234,7 +238,7 @@ libos_syscall_t libos_syscall_table[LIBOS_SYSCALL_BOUND] = {
     [__NR_getdents64]              = (libos_syscall_t)libos_syscall_getdents64,
     [__NR_set_tid_address]         = (libos_syscall_t)libos_syscall_set_tid_address,
     [__NR_restart_syscall]         = (libos_syscall_t)0, // libos_syscall_restart_syscall
-    [__NR_semtimedop]              = (libos_syscall_t)0, // libos_syscall_semtimedop,
+    [__NR_semtimedop]              = (libos_syscall_t)libos_syscall_semtimedop,
     [__NR_fadvise64]               = (libos_syscall_t)libos_syscall_fadvise64,
     [__NR_timer_create]            = (libos_syscall_t)0, // libos_syscall_timer_create
     [__NR_timer_settime]           = (libos_syscall_t)0, // libos_syscall_timer_settime
@@ -326,7 +330,7 @@ libos_syscall_t libos_syscall_table[LIBOS_SYSCALL_BOUND] = {
     [__NR_getcpu]                  = (libos_syscall_t)libos_syscall_getcpu,
     [__NR_process_vm_readv]        = (libos_syscall_t)0, // libos_syscall_process_vm_readv
     [__NR_process_vm_writev]       = (libos_syscall_t)0, // libos_syscall_process_vm_writev
-    [__NR_kcmp]                    = (libos_syscall_t)0, // libos_syscall_kcmp
+    [__NR_kcmp]                    = (libos_syscall_t) libos_syscall_kcmp,
     [__NR_finit_module]            = (libos_syscall_t)0, // libos_syscall_finit_module
     [__NR_sched_setattr]           = (libos_syscall_t)0, // libos_syscall_sched_setattr
     [__NR_sched_getattr]           = (libos_syscall_t)0, // libos_syscall_sched_getattr
@@ -360,11 +364,11 @@ libos_syscall_t libos_syscall_table[LIBOS_SYSCALL_BOUND] = {
     [__NR_fsmount]                 = (libos_syscall_t)0, // libos_syscall_fsmount
     [__NR_fspick]                  = (libos_syscall_t)0, // libos_syscall_fspick
     [__NR_pidfd_open]              = (libos_syscall_t)0, // libos_syscall_pidfd_open
-    [__NR_clone3]                  = (libos_syscall_t)0, // libos_syscall_clone3
+    [__NR_clone3]                  = (libos_syscall_t)libos_syscall_clone3,
     [__NR_close_range]             = (libos_syscall_t)libos_syscall_close_range,
     [__NR_openat2]                 = (libos_syscall_t)0, // libos_syscall_openat2
     [__NR_pidfd_getfd]             = (libos_syscall_t)0, // libos_syscall_pidfd_getfd
-    [__NR_faccessat2]              = (libos_syscall_t)0, // libos_syscall_faccessat2
+    [__NR_faccessat2]              = (libos_syscall_t)libos_syscall_faccessat2,
     [__NR_process_madvise]         = (libos_syscall_t)0, // libos_syscall_process_madvise
     [__NR_epoll_pwait2]            = (libos_syscall_t)0, // libos_syscall_epoll_pwait2
     [__NR_mount_setattr]           = (libos_syscall_t)0, // libos_syscall_mount_setattr
@@ -376,4 +380,10 @@ libos_syscall_t libos_syscall_table[LIBOS_SYSCALL_BOUND] = {
     [__NR_process_mrelease]        = (libos_syscall_t)0, // libos_syscall_process_mrelease
     [__NR_futex_waitv]             = (libos_syscall_t)0, // libos_syscall_futex_waitv
     [__NR_set_mempolicy_home_node] = (libos_syscall_t)0, // libos_syscall_set_mempolicy_home_node
+
+    /* Secure gaming: some file descriptors are host-based, and we need to pass them as-is. */
+    [__NR_register_host_identity_fd] = (libos_syscall_t)libos_syscall_register_host_identity_fd, 
+    // libos_syscall_register_host_identity_fd
+    [__NR_ACQUIRE_LLOCK]             = (libos_syscall_t)libos_syscall_acquire_libos_lock,
+    [__NR_RELINQUISH_LLOCK]          = (libos_syscall_t)libos_syscall_relinquish_libos_lock,
 };

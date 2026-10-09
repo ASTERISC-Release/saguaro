@@ -263,7 +263,8 @@ struct virtio_fs {
 
 int virtio_fs_fuse_init(void);
 
-int virtio_fs_fuse_lookup(const char* filename, uint64_t* out_nodeid);
+int virtio_fs_fuse_lookup(const char* filename, uint64_t* out_nodeid,
+                          struct fuse_attr* out_attr);
 int virtio_fs_fuse_readlink(uint64_t nodeid, uint64_t size, char* out_buf, uint64_t* out_size);
 
 int virtio_fs_fuse_open(uint64_t nodeid, uint32_t flags, uint64_t* out_fh);
@@ -369,10 +370,16 @@ int virtio_vsock_set_socket_options(int sockfd, bool ipv6_v6only, bool reuseport
 
 int virtio_vsock_isr(void);
 int virtio_vsock_bottomhalf(void);
-bool virtio_vsock_can_write(void);
+int virtio_vsock_poll(void);
+bool virtio_vsock_busy_poll(uint64_t timeout_us);
+bool virtio_vsock_poll_if_active(void);
+bool virtio_vsock_rearm_notifications(void);
+void virtio_vsock_set_shared_input_ring(bool enabled);
+bool virtio_vsock_can_write(int sockfd);
 int virtio_vsock_init(struct virtio_pci_regs* pci_regs, struct virtio_vsock_config* pci_config,
                       uint64_t notify_off_addr, uint32_t notify_off_multiplier,
                       uint32_t* interrupt_status_reg);
 
 extern struct virtio_vsock* g_vsock;
 extern bool g_vsock_trigger_bottomhalf;
+extern bool g_vsock_polling;

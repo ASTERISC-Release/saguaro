@@ -56,10 +56,15 @@ static int shm_do_open(struct libos_handle* hdl, struct libos_dentry* dent, mode
                        int flags, mode_t perm) {
     assert(locked(&g_dcache_lock));
 
+    /* Adil */
+    log_always("shm_do_open: path=%s, flags=0x%x, perm=0%o", dent->name, flags, perm);
+
     char* uri;
     int ret = dentry_uri(dent, type, &uri);
     if (ret < 0)
         return ret;
+
+    log_always("Opening shared memory file: %s", uri);
 
     PAL_HANDLE palhdl;
     enum pal_access access = LINUX_OPEN_FLAGS_TO_PAL_ACCESS(flags);
@@ -91,6 +96,10 @@ static int shm_setup_dentry(struct libos_dentry* dent, mode_t type, mode_t perm,
                             file_off_t size) {
     assert(locked(&g_dcache_lock));
     assert(!dent->inode);
+
+    /* Adil */
+    log_always("shm_setup_dentry: path=%s, type=0%o, perm=0%o, size=%ld", dent->name, type, perm,
+               size);
 
     struct libos_inode* inode = get_new_inode(dent->mount, type, perm);
     if (!inode)
@@ -152,6 +161,9 @@ out:
 static int shm_open(struct libos_handle* hdl, struct libos_dentry* dent, int flags) {
     assert(locked(&g_dcache_lock));
     assert(dent->inode);
+
+    /* Adil */
+    log_always("shm_open: path=%s, flags=0x%x", dent->name, flags);
 
     return shm_do_open(hdl, dent, dent->inode->type, flags, /*perm=*/0);
 }

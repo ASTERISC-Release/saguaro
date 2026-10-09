@@ -27,6 +27,7 @@ PalSocketAccept
 PalSocketConnect
 PalSocketSend
 PalSocketRecv
+PalSocketRegisterShmem
 PalSendHandle
 PalReceiveHandle
 PalStreamWaitForClient

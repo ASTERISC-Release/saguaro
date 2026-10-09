@@ -22,6 +22,19 @@
 #include "linux_abi/errors.h"
 #include "linux_abi/signals.h"
 #include "pal.h"
+#include "toml_utils.h"
+
+static bool g_assume_external_processes_alive;
+
+int init_external_process_liveness_mode(void) {
+    int ret = toml_bool_in(g_manifest_root, "sys.experimental__assume_external_processes_alive",
+                           /*defaultval=*/false, &g_assume_external_processes_alive);
+    if (ret < 0) {
+        log_error("Cannot parse 'sys.experimental__assume_external_processes_alive'");
+        return -EINVAL;
+    }
+    return 0;
+}
 
 long libos_syscall_rt_sigaction(int signum, const struct __kernel_sigaction* act,
                                 struct __kernel_sigaction* oldact, size_t sigsetsize) {
@@ -406,7 +419,10 @@ long libos_syscall_kill(pid_t pid, int sig) {
 
     if (pid > 0) {
         /* If `pid` is positive, then signal is sent to the process with that pid. */
-        return do_kill_proc(g_process.pid, pid, sig);
+        int ret = do_kill_proc(g_process.pid, pid, sig);
+        if (!sig && ret == -ESRCH && g_assume_external_processes_alive)
+            return 0;
+        return ret;
     } else if (pid == -1) {
         /* If `pid` equals -1, then signal is sent to every process for which the calling process
          * has permission to send, which means all processes in Gramine. NOTE: On Linux, kill(-1)

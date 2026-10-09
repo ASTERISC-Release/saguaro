@@ -25,13 +25,13 @@
 #define VSOCK_MAX_PENDING_CONNS 256
 
 /* Max number of packets stored per connection. The corresponding array is a circular buffer, so
- * this macro must be a power of 2. */
-#define VSOCK_MAX_PACKETS 256
+ * this macro must be a power of 2. Graphics protocols such as X11 can deliver multi-megabyte
+ * bursts; dropping one packet corrupts the byte stream, so keep enough receive credit for them. */
+#define VSOCK_MAX_PACKETS 4096
 
 /* For simplicity, each packet has statically allocated buffer for recv/send data. We choose the
  * size such that the total vsock packet size (44B header + payload) is a power of 2. The total
- * send/recv buffer size becomes then 1024 * 256 = 262144, which corresponds to the default Linux
- * buffer size. */
+ * send/recv buffer size becomes then 1024 * VSOCK_MAX_PACKETS. */
 #define VSOCK_MAX_PAYLOAD_SIZE 980U
 
 /* Sizes of RX and TX virtio queues. */
@@ -123,6 +123,7 @@ struct virtio_vsock_connection {
     int state_futex;
 
     UT_hash_handle hh_host_port;
+    uint64_t hash_key; /* Adil: using a guest+host port hash key to avoid collisions */
     uint64_t host_port;
     uint64_t guest_port;
 

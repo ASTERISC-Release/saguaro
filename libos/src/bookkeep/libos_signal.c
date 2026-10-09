@@ -420,6 +420,10 @@ bool is_user_memory_writable(const void* addr, size_t size) {
     return test_user_memory(addr, size, /*writable=*/true);
 }
 
+bool is_user_memory_readable_no_skip(const void* addr, size_t size) {
+    return test_user_memory(addr, size, /*writable=*/false);
+}
+
 bool is_user_memory_writable_no_skip(const void* addr, size_t size) {
     return test_user_memory(addr, size, /*writable=*/true);
 }

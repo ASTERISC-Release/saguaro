@@ -18,14 +18,13 @@ if [ "$GDB" == "1" ]; then
     QEMU_GDB="-gdb tcp::9000 -S"
 fi
 
-while [ "$1" != "" ];
-do
+while [ "$1" != "" ]; do
     if [ "$APPLICATION" == "" ]; then
         APPLICATION=$1
         shift
         continue
     fi
-
+    
     break
 done
 
@@ -88,20 +87,56 @@ QEMU_MEM_SIZE=${QEMU_MEM_SIZE:-"8G"}
 QEMU_CPU_NUM=${QEMU_CPU_NUM:-$GRAMINE_CPU_NUM}
 QEMU_CPU_NUM=${QEMU_CPU_NUM:-"1"}
 
-QEMU_PATH="qemu"
+# GRAMINE_CPU_NUM="7"
+# QEMU_CPU_NUM=$GRAMINE_CPU_NUM
+
+REPO=$(python3 -c "import os, re; print(re.sub(r'^(.*?(Tirith|gramine-gaming)).*', r'\1', os.getcwd()))")
+QEMU_PATH="$REPO/qemu/build/qemu-system-x86_64"
+
 QEMU_VM="-cpu host,host-phys-bits,-kvm-steal-time,pmu=off,+tsc-deadline,+invtsc \
-    -m $QEMU_MEM_SIZE -smp $QEMU_CPU_NUM"
-QEMU_OPTS="-enable-kvm -vga none -display none -no-reboot -monitor none \
-    -object memory-backend-memfd,id=mem,size=$QEMU_MEM_SIZE,private=on \
-    -M memory-backend=mem,hpet=off"
+-m $QEMU_MEM_SIZE -smp $QEMU_CPU_NUM"
+QEMU_OPTS="-enable-kvm -vga none -display none -no-reboot -monitor none "
+
+RAW_MEM_SIZE=$(echo $QEMU_MEM_SIZE | tr -d 'G')
+REM_MEM_SIZE=$((RAW_MEM_SIZE - 4))
+if [ "$GRAMINE_HUGEPAGES" == "1" ]; then
+    echo "Configuring Gramine VM with hugepages support."
+    if [ "$(echo $QEMU_MEM_SIZE | tr -d 'G')" -lt 8 ]; then
+        echo "Error: Gramine hugepages mode requires at least 8GB of VM memory."
+        exit 2
+    fi
+
+    REM_MEM_SIZE="$((REM_MEM_SIZE))G"
+    echo "REM_MEM_SIZE = $REM_MEM_SIZE"
+
+    # 3 separate DIMMs (0 - 4GB hugepages, 4GB - 5GB normal, 5GB - rest hugepages)
+    QEMU_OPTS+="-object memory-backend-memfd,id=huge0,size=2G,hugetlb=on,hugetlbsize=2M \
+    -object memory-backend-memfd,id=ram1,size=2G \
+    -object memory-backend-memfd,id=huge2,size=$REM_MEM_SIZE,hugetlb=on,hugetlbsize=2M \
+    -numa node,memdev=huge0,nodeid=0 \
+    -numa node,memdev=ram1,nodeid=1 \
+    -numa node,memdev=huge2,nodeid=2 "
+else
+    echo "Configuring Gramine VM without hugepages."
+
+    # 3 separate DIMMs (0 - 4GB hugepages, 4GB - 5GB normal, 5GB - rest hugepages)
+    REM_MEM_SIZE="$((REM_MEM_SIZE))G"
+    echo "REM_MEM_SIZE = $REM_MEM_SIZE"
+    QEMU_OPTS+="-object memory-backend-memfd,id=huge0,size=2G \
+    -object memory-backend-memfd,id=ram1,size=2G \
+    -object memory-backend-memfd,id=huge2,size=$REM_MEM_SIZE \
+    -numa node,memdev=huge0,nodeid=0 \
+    -numa node,memdev=ram1,nodeid=1 \
+    -numa node,memdev=huge2,nodeid=2 "
+fi
 
 if [ "$TDSHIM_PAL_PATH" == "" ]; then
-QEMU_MACHINE="-M q35,kernel_irqchip=split"
-QEMU_BINARIES="-kernel $LIBPAL_PATH -device loader,file=$BIOS_PATH"
+    QEMU_MACHINE="-M q35,kernel_irqchip=on"
+    QEMU_BINARIES="-kernel $LIBPAL_PATH -device loader,file=$BIOS_PATH"
 else
-QEMU_MACHINE="-M q35,kernel_irqchip=split,confidential-guest-support=tdx \
+    QEMU_MACHINE="-M q35,kernel_irqchip=split,confidential-guest-support=tdx \
     -object tdx-guest,id=tdx,quote-generation-service=vsock:2:4050"
-QEMU_BINARIES="-bios $TDSHIM_PAL_PATH"
+    QEMU_BINARIES="-bios $TDSHIM_PAL_PATH"
 fi
 
 # We need to specify a Gramine VM ID to be able to run two independent Gramine instances at the
@@ -150,10 +185,10 @@ if [ $EXIT_STATUS -ne 0 ]; then
 fi
 
 QEMU_VIRTIO_CONSOLE="-device virtio-serial,iommu_platform=off,romfile= \
-                     -chardev stdio,id=virtioconsole0 \
-                     -device virtconsole,chardev=virtioconsole0"
+-chardev stdio,id=virtioconsole0 \
+-device virtconsole,chardev=virtioconsole0"
 QEMU_VIRTIO_FS="-chardev socket,path=/tmp/gramine_vhostfs_"$GRAMINE_VM_ID",id=vhostfs \
-                -device vhost-user-fs-pci,iommu_platform=off,queue-size=1024,chardev=vhostfs,tag=graminefs"
+-device vhost-user-fs-pci,iommu_platform=off,queue-size=1024,chardev=vhostfs,tag=graminefs"
 QEMU_VIRTIO_VSOCK="-device vhost-vsock-pci,iommu_platform=off,guest-cid="$GRAMINE_VM_ID",id=vsockdev"
 
 # Due to QEMU syntax, commas in the QEMU cmdline need to be escaped using an additional comma.
@@ -171,20 +206,27 @@ GRAMINE_ENVS="-gramine-envs $GRAMINE_ENVS -gramine-envs-end"
 
 CMD=("${ENVS[@]}")
 CMD+=("${PREFIX[@]}")
-CMD+=($QEMU_PATH $QEMU_GDB $QEMU_VM $QEMU_OPTS $QEMU_MACHINE \
-        $QEMU_VIRTIO_CONSOLE $QEMU_VIRTIO_FS $QEMU_VIRTIO_VSOCK $QEMU_BINARIES \
-        -fw_cfg name=opt/gramine/pwd,string="$PWD" \
-        -fw_cfg name=opt/gramine/args,string="$GRAMINE_ARGS" \
-        -fw_cfg name=opt/gramine/envs,string="$GRAMINE_ENVS" \
-        -fw_cfg name=opt/gramine/unixtime_s,string="$EPOCHSECONDS")
+CMD+=($QEMU_PATH $QEMU_GDB $QEMU_VM $QEMU_OPTS $QEMU_MACHINE
+    $QEMU_VIRTIO_CONSOLE $QEMU_VIRTIO_FS $QEMU_VIRTIO_VSOCK $QEMU_BINARIES
+    -fw_cfg name=opt/gramine/pwd,string="$PWD"
+    -fw_cfg name=opt/gramine/args,string="$GRAMINE_ARGS"
+    -fw_cfg name=opt/gramine/envs,string="$GRAMINE_ENVS"
+-fw_cfg name=opt/gramine/unixtime_s,string="$EPOCHSECONDS")
 
 # Check if the Gramine vhostfs pid file is already in use by another process
-if lsof /tmp/gramine_vhostfs_"$GRAMINE_VM_ID".pid 2> /dev/null; then
+if lsof /tmp/gramine_vhostfs_"$GRAMINE_VM_ID".pid 2>/dev/null; then
     echo "Error: /tmp/gramine_vhostfs_"$GRAMINE_VM_ID".pid is already in use."
     exit 2
 fi
 virtiofsd --socket-path /tmp/gramine_vhostfs_"$GRAMINE_VM_ID" --shared-dir / --log-level error \
-    --sandbox none --no-announce-submounts &
-while [ ! -e /tmp/gramine_vhostfs_"$GRAMINE_VM_ID" ]; do sleep 0.1; done;
+--sandbox none --no-announce-submounts &
+while [ ! -e /tmp/gramine_vhostfs_"$GRAMINE_VM_ID" ]; do sleep 0.1; done
+
+# echo "${CMD[@]}"
 
 exec env "${CMD[@]}"
+# env "${CMD[@]}"
+# CHILD_STATUS=$?
+#
+# # normal exit: cleanup trap will run due to EXIT
+# exit "$CHILD_STATUS"

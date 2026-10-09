@@ -3,6 +3,7 @@
 #include <netinet/tcp.h>
 #include <stdio.h>
 #include <sys/socket.h>
+#include <unistd.h>
 
 #include "common.h"
 
@@ -13,6 +14,11 @@
 
 int main(void) {
     socklen_t optlen; /* Option length */
+
+    int udp_fd = CHECK(socket(AF_INET, SOCK_DGRAM, 0));
+    int enable = 1;
+    CHECK(setsockopt(udp_fd, IPPROTO_IP, IP_RECVTOS, &enable, sizeof(enable)));
+    CHECK(close(udp_fd));
 
     int fd = CHECK(socket(AF_INET, SOCK_STREAM, 0));
 

@@ -728,3 +728,7 @@ int _PalSocketRecv(PAL_HANDLE handle, struct iovec* iov, size_t iov_len, size_t*
     }
     return handle->sock.ops->recv(handle, iov, iov_len, out_total_size, addr, force_nonblocking);
 }
+int _PalSocketRegisterShmem(PAL_HANDLE handle, void *region) {
+    return -PAL_ERROR_NOTIMPLEMENTED;
+}
+

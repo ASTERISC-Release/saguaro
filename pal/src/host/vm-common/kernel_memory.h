@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <stddef.h>
 #include <stdint.h>
 
 #define PAGE_TABLES_ADDR 0x20000000UL          /* page tables occupy [512MB, 658MB) */
@@ -40,10 +41,15 @@ int memory_find_page_table_entry(uint64_t addr, uint64_t** out_pte_addr);
 int memory_mark_pages_on(uint64_t addr, size_t size, bool write, bool execute, bool usermode);
 int memory_mark_pages_off(uint64_t addr, size_t size);
 int memory_mark_pages_strong_uncacheable(uint64_t addr, size_t size, bool mark);
+int memory_mark_pages_write_combined(uint64_t addr, size_t size, bool mark);
 
 int memory_pagetables_init(void* memory_address_end, bool current_page_tables_cover_1gb);
+
+/* Ensures IA32_PAT has Write-Combining at index 1 (fatal on failure). */
+void memory_pat_init_for_wc(void);
 int memory_preload_ranges(e820_table_entry* e820_entries, size_t e820_entries_size,
-                          int (*callback)(uintptr_t addr, size_t size, const char* comment));
+                          int (*callback)(uintptr_t addr, size_t size, bool is_user_reserved,
+                                          const char* comment));
 int memory_tighten_permissions(void);
 
 int memory_alloc(void* addr, size_t size, bool read, bool write, bool execute);

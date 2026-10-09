@@ -100,6 +100,7 @@ libos_sources = files(
     'sys/libos_pipe.c',
     'sys/libos_poll.c',
     'sys/libos_sched.c',
+    'sys/libos_sem.c',
     'sys/libos_sigaction.c',
     'sys/libos_sleep.c',
     'sys/libos_socket.c',
@@ -109,6 +110,11 @@ libos_sources = files(
     'sys/libos_wait.c',
     'sys/libos_wrappers.c',
     'utils/log.c',
+
+    'sys/libos_prctl.c',
+    'sys/libos_mremap.c',
+    'sys/libos_getresid.c',
+    'sys/libos_sg_lock.c'
 )
 
 # Arch-specific meson.build must define the following Meson variables:

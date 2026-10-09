@@ -148,7 +148,8 @@ static int proc_maps_info_callback(struct proc_maps_range* r, void* arg) {
         proc_maps_info->highest_addr = r->end;
     }
 
-    return pal_add_initial_range(r->start, r->end - r->start, r->prot, r->name ?: "");
+    return pal_add_initial_range(r->start, r->end - r->start, r->prot,
+                                 /*is_user_reserved=*/false, r->name ?: "");
 }
 
 int init_memory_bookkeeping(void) {
@@ -176,7 +177,8 @@ int init_memory_bookkeeping(void) {
         return unix_to_pal_error(ret);
     }
     assert(mmap_ret == ptr);
-    ret = pal_add_initial_range((uintptr_t)ptr, PAGE_SIZE, /*prot=*/0, "stack guard");
+    ret = pal_add_initial_range((uintptr_t)ptr, PAGE_SIZE, /*prot=*/0,
+                                /*is_user_reserved=*/false, "stack guard");
     if (ret < 0) {
         return ret;
     }

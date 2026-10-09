@@ -5,8 +5,8 @@
 
 [wrap-file]
 directory = glibc-2.39-1
-source_url = https://ftp.gnu.org/gnu/glibc/glibc-2.39.tar.gz
-source_fallback_url = https://packages.gramineproject.io/distfiles/glibc-2.39.tar.gz
+source_url = https://packages.gramineproject.io/distfiles/glibc-2.39.tar.gz
+source_fallback_url = https://ftp.gnu.org/gnu/glibc/glibc-2.39.tar.gz
 source_filename = glibc-2.39.tar.gz
 source_hash = 97f84f3b7588cd54093a6f6389b0c1a81e70d99708d74963a2e3eab7c7dc942d
 patch_directory = glibc-2.39

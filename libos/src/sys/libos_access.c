@@ -16,7 +16,7 @@ long libos_syscall_access(const char* file, mode_t mode) {
     return libos_syscall_faccessat(AT_FDCWD, file, mode);
 }
 
-long libos_syscall_faccessat(int dfd, const char* filename, mode_t mode) {
+static long do_faccessat(int dfd, const char* filename, mode_t mode, int flags) {
     if (!is_user_string_readable(filename))
         return -EFAULT;
 
@@ -29,7 +29,8 @@ long libos_syscall_faccessat(int dfd, const char* filename, mode_t mode) {
 
     lock(&g_dcache_lock);
 
-    ret = path_lookupat(dir, filename, LOOKUP_FOLLOW, &dent);
+    int lookup_flags = flags & AT_SYMLINK_NOFOLLOW ? 0 : LOOKUP_FOLLOW;
+    ret = path_lookupat(dir, filename, lookup_flags, &dent);
     if (ret < 0)
         goto out;
 
@@ -44,4 +45,16 @@ out:
         put_dentry(dent);
     }
     return ret;
+}
+
+long libos_syscall_faccessat(int dfd, const char* filename, mode_t mode) {
+    return do_faccessat(dfd, filename, mode, /*flags=*/0);
+}
+
+long libos_syscall_faccessat2(int dfd, const char* filename, mode_t mode, int flags) {
+    if (flags & ~(AT_EACCESS | AT_SYMLINK_NOFOLLOW))
+        return -EINVAL;
+
+    /* Gramine exposes a single fixed identity, so AT_EACCESS and real-ID checks are equivalent. */
+    return do_faccessat(dfd, filename, mode, flags);
 }

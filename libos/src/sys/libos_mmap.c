@@ -11,6 +11,7 @@
 
 #include "libos_flags_conv.h"
 #include "libos_fs.h"
+#include "libos_sg.h"
 #include "libos_handle.h"
 #include "libos_internal.h"
 #include "libos_table.h"
@@ -19,7 +20,9 @@
 #include "linux_abi/memory.h"
 #include "pal.h"
 #include "pal_error.h"
-
+#include <endian.h>
+#include <stdint.h>
+#include <stddef.h>
 #ifdef MAP_32BIT /* x86_64-specific */
 #define MAP_32BIT_IF_SUPPORTED MAP_32BIT
 #else
@@ -44,6 +47,10 @@
                        | MAP_HUGE_2MB           \
                        | MAP_HUGE_1GB)
 
+#include <stdatomic.h>
+#include <stdbool.h>
+
+
 static int check_prot(int prot) {
     if (prot & ~(PROT_NONE | PROT_READ | PROT_WRITE | PROT_EXEC | PROT_GROWSDOWN | PROT_GROWSUP |
                  PROT_SEM)) {
@@ -62,8 +69,19 @@ static int check_prot(int prot) {
     return 0;
 }
 
+bool unmapped_data = false;
 void* libos_syscall_mmap(void* addr, size_t length, int prot, int flags, int fd,
                          unsigned long offset) {
+
+    static bool isMappedComms = false;
+
+    // // // Logging
+    // if(isMappedComms)
+    //   comm_sync_notify(LOG_MMAP_EVENT, addr, length, prot, flags, fd, offset, 0);
+
+    // First allocation maps comms, then rest of setup hits on next allocation
+
+
     struct libos_handle* hdl = NULL;
     long ret = 0;
 
@@ -112,6 +130,7 @@ void* libos_syscall_mmap(void* addr, size_t length, int prot, int flags, int fd,
             case MAP_SHARED_VALIDATE:
                 /* Currently we do not support additional flags like MAP_SYNC */
                 if (flags & ~LEGACY_MAP_MASK) {
+                    log_always("error: mmap with unsupported flags (flags: 0x%x)", flags);
                     return (void*)-EOPNOTSUPP;
                 }
                 /* fall through */
@@ -122,20 +141,63 @@ void* libos_syscall_mmap(void* addr, size_t length, int prot, int flags, int fd,
 
                 hdl = get_fd_handle(fd, NULL, NULL);
                 if (!hdl) {
+                    log_always("error: mmap with invalid fd (fd: %d)", fd);
                     return (void*)-EBADF;
                 }
 
+                // log_always("mmap request (fd: %d, offset: %lu, length: %zu, prot: 0x%x, flags: 0x%x)",
+                //            fd, offset, length, prot, flags);
+
+                // Secure gaming (check the file descriptor type and have the host allocate)
+                #ifdef ENABLE_SG
+                    if(hdl->type == TYPE_HOST)
+                    {
+                        long _offset = libos_syscall_acquire_libos_lock();
+            comm_page_t* c = comm_page(_offset);
+
+                        // Notify that this object should be mapped from host to guest
+                        /* The listener chooses the next identity-mapped arena address, so the
+                         * requested guest address is not part of the host ABI. */
+                        c->p1 = (uint64_t)length;
+                        c->p2 = (uint64_t)prot;
+                        c->p3 = (uint64_t)flags;
+                        c->p4 = (uint64_t)fd;
+                        c->p5 = (uint64_t)offset;
+
+                        __sync_synchronize();
+                        c->req_bit = GEM_ALLOCATION;
+
+                        void* retval = (void*)comm_sync_notify(c);
+                        libos_syscall_relinquish_libos_lock(_offset);
+
+                        /* QEMU replaced this identity-mapped arena slice with
+                         * the GEM object. Apply the requested permissions and
+                         * mark only this live slice write-combining in the VM
+                         * PAL, rather than making the entire multi-GiB arena WC. */
+                        ret = PalVirtualMemoryProtect(retval, length,
+                                                      LINUX_PROT_TO_PAL(prot, flags));
+                        if (ret < 0)
+                            retval = (void*)pal_to_unix_errno(ret);
+
+                        put_handle(hdl);
+                        return retval;
+                   }
+                #endif
+
                 if (!hdl->fs || !hdl->fs->fs_ops || !hdl->fs->fs_ops->mmap) {
+                    log_always("error: mmap of fd without mmap support (fd: %d)", fd);
                     ret = -ENODEV;
                     goto out_handle;
                 }
 
                 if (hdl->flags & O_WRONLY) {
+                    log_always("error: mmap of write-only fd is not allowed (fd: %d)", fd);
                     ret = -EACCES;
                     goto out_handle;
                 }
 
                 if ((flags & MAP_SHARED) && (prot & PROT_WRITE) && !(hdl->flags & O_RDWR)) {
+                    log_always("error: mmap with MAP_SHARED and PROT_WRITE requires fd with O_RDWR (fd: %d)", fd);
                     ret = -EACCES;
                     goto out_handle;
                 }
@@ -164,6 +226,7 @@ void* libos_syscall_mmap(void* addr, size_t length, int prot, int flags, int fd,
         memory_range_start = g_pal_public_state->memory_address_start;
         memory_range_end = g_pal_public_state->memory_address_end;
     }
+
     if (flags & (MAP_FIXED | MAP_FIXED_NOREPLACE)) {
         /* We know that `addr + length` does not overflow (`access_ok` above). */
         if (addr < memory_range_start || (uintptr_t)memory_range_end < (uintptr_t)addr + length) {
@@ -276,6 +339,7 @@ out_handle:
     if (ret < 0) {
         return (void*)ret;
     }
+
     return addr;
 }
 
@@ -348,6 +412,23 @@ long libos_syscall_munmap(void* _addr, size_t length) {
 
     if (!IS_ALLOC_ALIGNED(length))
         length = ALLOC_ALIGN_UP(length);
+
+#ifdef ENABLE_SG
+    /* Host-device mappings replace pages inside egl-redirect's permanently reserved GEM arenas,
+     * but the host mmap fast path above deliberately leaves the original LibOS VMA reservation
+     * intact. Releasing a subrange here would make it available to the guest allocator while
+     * QEMU and the GPU still use the same identity-mapped addresses, allowing GPU writes to
+     * corrupt an unrelated heap allocation. The host allocator is monotonic for the VM lifetime,
+     * so preserve these reservations until process teardown. */
+    bool in_regular_gem_arena =
+        addr >= SG_GEM_DATA_START && length <= SG_GEM_DATA_SIZE &&
+        addr - SG_GEM_DATA_START <= SG_GEM_DATA_SIZE - length;
+    bool in_hugepage_gem_arena =
+        addr >= SG_GEM_HUGEPAGE_START && length <= SG_GEM_HUGEPAGE_SIZE &&
+        addr - SG_GEM_HUGEPAGE_START <= SG_GEM_HUGEPAGE_SIZE - length;
+    if (in_regular_gem_arena || in_hugepage_gem_arena)
+        return 0;
+#endif
 
     int ret;
 

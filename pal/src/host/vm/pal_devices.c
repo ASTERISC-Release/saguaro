@@ -18,6 +18,8 @@ static int dev_open(PAL_HANDLE* handle, const char* type, const char* uri, enum 
     __UNUSED(share);
     __UNUSED(create);
     __UNUSED(options);
+
+    log_always("Device operations are not supported in VM PAL\n");
     return -PAL_ERROR_NOTIMPLEMENTED;
 }
 

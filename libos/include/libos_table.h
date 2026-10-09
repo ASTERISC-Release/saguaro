@@ -29,6 +29,7 @@ long libos_syscall_poll(struct pollfd* fds, unsigned int nfds, int timeout);
 long libos_syscall_lseek(int fd, off_t offset, int origin);
 void* libos_syscall_mmap(void* addr, size_t length, int prot, int flags, int fd,
                          unsigned long offset);
+int libos_syscall_getrusage(int who, struct rusage* usage);
 long libos_syscall_mprotect(void* addr, size_t len, int prot);
 long libos_syscall_munmap(void* addr, size_t len);
 void* libos_syscall_brk(void* brk);
@@ -79,6 +80,7 @@ long libos_syscall_setsockopt(int fd, int level, int optname, char* optval, int 
 long libos_syscall_getsockopt(int fd, int level, int optname, char* optval, int* optlen);
 long libos_syscall_clone(unsigned long flags, unsigned long user_stack_addr, int* parent_tidptr,
                          int* child_tidptr, unsigned long tls);
+long libos_syscall_clone3(struct clone_args *args, size_t size);
 long libos_syscall_fork(void);
 long libos_syscall_vfork(void);
 long libos_syscall_execve(const char* file, const char* const* argv, const char* const* envp);
@@ -88,6 +90,12 @@ long libos_syscall_waitid(int which, pid_t id, siginfo_t* infop, int options,
 long libos_syscall_wait4(pid_t pid, int* stat_addr, int options, struct __kernel_rusage* ru);
 long libos_syscall_kill(pid_t pid, int sig);
 long libos_syscall_uname(struct linux_new_utsname* buf);
+long libos_syscall_semget(int key, int nsems, int semflg);
+struct linux_sembuf;
+long libos_syscall_semop(int semid, const struct linux_sembuf* sops, size_t nsops);
+long libos_syscall_semtimedop(int semid, const struct linux_sembuf* sops, size_t nsops,
+                              const struct __kernel_timespec* timeout);
+long libos_syscall_semctl(int semid, int semnum, int cmd, unsigned long arg);
 long libos_syscall_fcntl(int fd, int cmd, unsigned long arg);
 long libos_syscall_flock(unsigned int fd, unsigned int cmd);
 long libos_syscall_fsync(int fd);
@@ -180,6 +188,7 @@ long libos_syscall_renameat(int olddfd, const char* pathname, int newdfd, const 
 long libos_syscall_fchmodat(int dfd, const char* filename, mode_t mode);
 long libos_syscall_fchownat(int dfd, const char* filename, uid_t user, gid_t group, int flags);
 long libos_syscall_faccessat(int dfd, const char* filename, mode_t mode);
+long libos_syscall_faccessat2(int dfd, const char* filename, mode_t mode, int flags);
 long libos_syscall_pselect6(int nfds, struct linux_fd_set* readfds, struct linux_fd_set* writefds,
                             struct linux_fd_set* exceptfds, struct __kernel_timespec* tsp,
                             void* sigmask_argpack);
@@ -207,3 +216,21 @@ long libos_syscall_getrandom(char* buf, size_t count, unsigned int flags);
 long libos_syscall_mlock2(unsigned long start, size_t len, int flags);
 long libos_syscall_sysinfo(struct sysinfo* info);
 long libos_syscall_close_range(unsigned int first, unsigned int last, unsigned int flags);
+
+/* New system call added for the secure gaming implementation */
+
+// Registering host-based file descriptors, so that they can be passed as-is to the host when needed.
+long libos_syscall_register_host_identity_fd(int fd);
+
+// New system calls implemented to support different applications
+long libos_syscall_mremap(void* old_address, size_t old_size, size_t new_size, int flags,
+                          void* new_address);
+long libos_syscall_prctl(int option, unsigned long arg2, unsigned long arg3, unsigned long arg4,
+                         unsigned long arg5);
+long libos_syscall_getresuid(uid_t* ruid, uid_t* euid, uid_t* suid);
+long libos_syscall_getresgid(gid_t* rgid, gid_t* egid, gid_t* sgid);
+
+long libos_syscall_kcmp(pid_t pid1, pid_t pid2, int type, unsigned long idx1, unsigned long idx2);
+
+long libos_syscall_acquire_libos_lock(void);
+long libos_syscall_relinquish_libos_lock(long offset);

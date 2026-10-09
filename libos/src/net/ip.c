@@ -147,7 +147,7 @@ static int bind(struct libos_handle* handle, void* addr, size_t addrlen) {
     if (ret < 0) {
         return (ret == -PAL_ERROR_STREAMEXIST) ? -EADDRINUSE : pal_to_unix_errno(ret);
     }
-
+    // log_always("[SG] CP2\n");
     pal_to_linux_sockaddr(&pal_ip_addr, &sock->local_addr, &sock->local_addrlen);
     return 0;
 }
@@ -211,6 +211,9 @@ static int accept(struct libos_handle* handle, bool is_nonblocking,
 static int connect(struct libos_handle* handle, void* addr, size_t addrlen, bool* out_inprogress) {
     struct libos_sock_handle* sock = &handle->info.sock;
     assert(locked(&sock->lock));
+
+    /* Adil's log for remote connection check. */
+    log_debug("Connecting to remote (NET) peer... (%x)", addr);
 
     int ret = verify_sockaddr(sock->domain, addr, &addrlen);
     if (ret < 0) {
@@ -312,15 +315,13 @@ static int set_tcp_option(struct libos_handle* handle, int optname, void* optval
 static int set_ipv4_option(struct libos_handle* handle, int optname, void* optval, size_t len) {
     __UNUSED(handle);
     __UNUSED(optval);
-    if (optname == IP_RECVERR) {
+    if (optname == IP_RECVERR || optname == IP_RECVTOS) {
         if (len < sizeof(int)) {
             return -EINVAL;
         }
-        /* We ignore this option. Full support would require handling `MSG_ERRQUEUE` in `recvmsg`
-         * syscall (which now fails with `-EOPNOTSUPP` if this flag is passed), which would be hard
-         * to implement. This basically defers the moment the app notices this error reporting
-         * mechanism is not supported from `setsockopt` call to when actual error condition on
-         * the socket happens (which might be never). */
+        /* Ignore optional receive metadata that the LibOS cannot currently return. IP_RECVERR
+         * requires MSG_ERRQUEUE support, while IP_RECVTOS requires generating an IP_TOS ancillary
+         * message from the PAL receive path. Applications can still receive the packet payload. */
         return 0;
     }
 
@@ -792,6 +793,7 @@ static int recv(struct libos_handle* handle, struct iovec* iov, size_t iov_len, 
     }
 
     if (addr) {
+        // log_always("[SG] CP1\n");
         struct sockaddr_storage linux_addr;
         size_t linux_addr_len = sizeof(linux_addr);
         pal_to_linux_sockaddr(&pal_ip_addr, &linux_addr, &linux_addr_len);
@@ -803,6 +805,13 @@ static int recv(struct libos_handle* handle, struct iovec* iov, size_t iov_len, 
     return 0;
 }
 
+static int register_shmem(struct libos_handle* handle, void *region){
+    int ret = PalSocketRegisterShmem(handle->info.sock.pal_handle, region);
+    if (ret < 0) {
+        return pal_to_unix_errno(ret);
+    }
+    return ret;
+}
 struct libos_sock_ops sock_ip_ops = {
     .create = create,
     .bind = bind,
@@ -814,4 +823,5 @@ struct libos_sock_ops sock_ip_ops = {
     .setsockopt = setsockopt,
     .send = send,
     .recv = recv,
+    .register_shmem = register_shmem,
 };

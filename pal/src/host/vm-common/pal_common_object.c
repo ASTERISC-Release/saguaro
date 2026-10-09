@@ -96,28 +96,7 @@ out:
 
 static int check_socket_handle(struct pal_handle* handle, pal_wait_flags_t events,
                                pal_wait_flags_t* out_events) {
-    pal_wait_flags_t revents = 0;
-
-    spinlock_lock(&handle->sock.lock);
-
-    long peeked = virtio_vsock_peek(handle->sock.fd);
-    if (peeked < 0) {
-        /* socket is invalid or was shutdown or in the process of closing */
-        handle->flags |= PAL_HANDLE_FD_ERROR;
-        *out_events = PAL_WAIT_ERROR;
-        spinlock_unlock(&handle->sock.lock);
-        return 0;
-    }
-
-    if ((events & PAL_WAIT_READ) && peeked)
-        revents |= PAL_WAIT_READ;
-
-    if ((events & PAL_WAIT_WRITE) && virtio_vsock_can_write())
-        revents |= PAL_WAIT_WRITE;
-
-    *out_events = revents;
-    spinlock_unlock(&handle->sock.lock);
-    return 0;
+    return pal_common_socket_wait_events(handle, events, out_events);
 }
 
 static int check_eventfd_handle(struct pal_handle* handle, pal_wait_flags_t events,
@@ -188,6 +167,10 @@ int pal_common_streams_wait_events(size_t count, struct pal_handle** handle_arra
     }
 
     while (!any_event_found) {
+        /* Active event loops poll shared VSOCK rings with notifications masked, avoiding a VM exit
+         * per X11 packet. Notifications are rearmed below only if this wait must sleep. */
+        (void)virtio_vsock_poll();
+
         for (size_t i = 0; i < count; i++) {
             ret_events[i] = 0;
 
@@ -226,6 +209,8 @@ int pal_common_streams_wait_events(size_t count, struct pal_handle** handle_arra
         }
 
         /* no events found, need to sleep for any new events */
+        if (virtio_vsock_rearm_notifications())
+            continue;
         sched_thread_wait(&g_streams_waiting_events_futex, &g_streams_waiting_events_lock);
     }
 

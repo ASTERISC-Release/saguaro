@@ -12,7 +12,7 @@
 #include "libos_flags_conv.h"
 #include "libos_fs_pseudo.h"
 #include "pal.h"
-
+#include "libos_sg.h"
 static ssize_t dev_null_read(struct libos_handle* hdl, void* buf, size_t count) {
     __UNUSED(hdl);
     __UNUSED(buf);
@@ -76,6 +76,15 @@ static int dev_tty_open(struct libos_handle* hdl, struct libos_dentry* dent, int
     hdl->pal_handle = palhdl;
     return 0;
 }
+
+#ifdef ENABLE_SG
+    static int dev_gpudev_open(struct libos_handle* hdl, struct libos_dentry* dent, int flags) {
+        __UNUSED(dent);
+        __UNUSED(flags);
+        log_debug("\"/dev\" device open completed.");
+        return 0;
+    }
+#endif
 
 static ssize_t dev_tty_read(struct libos_handle* hdl, void* buf, size_t count) {
     size_t actual_count = count;
@@ -161,7 +170,22 @@ int init_devfs(void) {
     tty->dev.dev_ops.write = &dev_tty_write;
     tty->dev.dev_ops.flush = &dev_tty_flush;
     tty->dev.dev_ops.poll = &dev_tty_poll;
+    
+    #ifdef ENABLE_SG
+    struct pseudo_node* driNode = pseudo_add_dir(/*parent_node=*/root, "dri");
+    struct pseudo_node* gpudev = pseudo_add_dev(driNode, "renderD128");
+    gpudev->perm = PSEUDO_PERM_FILE_RW;
+    gpudev->dev.major = 226; // Official kernel mandates for /dri major #
+    gpudev->dev.minor = 128;
+    gpudev->dev.dev_ops.open = &dev_gpudev_open;
 
+    struct pseudo_node* discrete_gpudev = pseudo_add_dev(driNode, "renderD129");
+    discrete_gpudev->perm = PSEUDO_PERM_FILE_RW;
+    discrete_gpudev->dev.major = 226; // Official kernel mandates for /dri major #
+    discrete_gpudev->dev.minor = 128;
+    discrete_gpudev->dev.dev_ops.open = &dev_gpudev_open;
+    #endif
+    
     struct pseudo_node* fd_link = pseudo_add_link(root, "fd", NULL);
     fd_link->link.target = "/proc/self/fd";
 

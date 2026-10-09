@@ -153,6 +153,8 @@ int set_hostname(const char* name, size_t len);
 
 extern bool g_eventfd_passthrough_mode;
 int init_eventfd_mode(void);
+int init_external_process_liveness_mode(void);
+int init_sysv_semaphores(void);
 
 void warn_unsupported_syscall(unsigned long sysno);
 void debug_print_syscall_before(unsigned long sysno, ...);
@@ -195,6 +197,7 @@ int init_rlimit(void);
 bool is_user_memory_readable(const void* addr, size_t size);
 bool is_user_memory_writable(const void* addr, size_t size);
 bool is_user_string_readable(const char* addr);
+bool is_user_memory_readable_no_skip(const void* addr, size_t size);
 bool is_user_memory_writable_no_skip(const void* addr, size_t size);
 
 uint64_t get_rlimit_cur(int resource);

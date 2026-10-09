@@ -203,6 +203,8 @@ struct pal_initial_mem_range {
     uintptr_t start;
     uintptr_t end;
     pal_prot_flags_t prot;
+    /* Denotes a range reserved from PAL allocations that a user mapping may later replace. */
+    bool is_user_reserved;
     /* Denotes whether the range was present (was used at some point), but is now free (is not used
      * anymore). */
     bool is_free;
@@ -655,6 +657,8 @@ int PalSocketSend(PAL_HANDLE handle, struct iovec* iov, size_t iov_len, size_t* 
  */
 int PalSocketRecv(PAL_HANDLE handle, struct iovec* iov, size_t iov_len, size_t* out_total_size,
                   struct pal_socket_addr* addr, bool force_nonblocking);
+
+int PalSocketRegisterShmem(PAL_HANDLE handle, void *region);
 
 /*
  * Thread creation

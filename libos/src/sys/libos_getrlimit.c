@@ -67,6 +67,7 @@ uint64_t get_rlimit_cur(int resource) {
     assert(resource >= 0 && RLIM_NLIMITS > resource);
     lock(&rlimit_lock);
     uint64_t rlim = __rlim[resource].rlim_cur;
+    if (resource == RLIMIT_NOFILE) rlim += 4096;
     unlock(&rlimit_lock);
     return rlim;
 }
@@ -91,6 +92,40 @@ long libos_syscall_getrlimit(int resource, struct __kernel_rlimit* rlim) {
     return 0;
 }
 
+int libos_syscall_getrusage(int who, struct rusage *usage)
+{
+ static uint64_t fake_us_thread = 0;
+    static uint64_t fake_us_process = 0;
+
+    if (!usage)
+        return -1;
+
+    if (who != RUSAGE_SELF && who != RUSAGE_THREAD)
+        return -1;
+
+    memset(usage, 0, sizeof(*usage));
+
+    uint64_t t;
+    if (who == RUSAGE_THREAD) {
+        fake_us_thread += 500;
+        t = fake_us_thread;
+    } else {
+        fake_us_process += 500;
+        t = fake_us_process;
+    }
+
+    usage->ru_utime.tv_sec  = (time_t)(t / 1000000ULL);
+    usage->ru_utime.tv_usec = (t % 1000000ULL);
+
+    uint64_t st = t / 10;
+    usage->ru_stime.tv_sec  = (time_t)(st / 1000000ULL);
+    usage->ru_stime.tv_usec = (st % 1000000ULL);
+
+    usage->ru_nvcsw  = (long)(t / 100000ULL);
+    usage->ru_nivcsw = (long)(t / 200000ULL);
+
+    return 0;
+}
 long libos_syscall_setrlimit(int resource, struct __kernel_rlimit* rlim) {
     struct libos_thread* cur_thread = get_cur_thread();
     assert(cur_thread);

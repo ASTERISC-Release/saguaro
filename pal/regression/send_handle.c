@@ -4,7 +4,7 @@
 #include "socket_utils.h"
 
 #define MSG "Some message."
-#define MSG_SIZE (static_strlen(MSG))
+#define MSG_SIZE (static_strlen(MSG)+2)
 #define PORT 1337
 
 static void write_all(PAL_HANDLE handle, int type, char* buf, size_t size) {
