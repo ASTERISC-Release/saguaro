@@ -142,10 +142,28 @@ int lapic_timer_init(void) {
         gicr_write(rdbase, GICR_WAKER, 0); /* clear Sleep bit; wake this CPU interface */
         while (gicr_read(rdbase, GICR_WAKER) & (1u << 2)) /* ChildrenAsleep */
             ;
-        /* PPI 30 on the redistributor SGI_base mirror: group non-secure, priority, enable */
-        gicr_write(rdbase, GICR_SGI_BASE + GICD_IGROUPR(30 / 32), 1u << (30 % 32));
-        gicr_write(rdbase, GICR_SGI_BASE + GICD_IPRIORITYR(30 / 4), 0x10u << (8 * (30 % 4)));
+        /* PPI 30 (and SGI 1, the TLB-shootdown IPI) on the redistributor SGI_base mirror.
+         * IGROUPR is a *plain bitmask* register (unlike the ISENABLER set/clear pairs): the
+         * word covering INTID 30 also covers SGIs 0..15, whose reset state is Group-0. A
+         * write of only (1u << 30) therefore re-groups every SGI into Group 0 -- where
+         * ICC_IAR1_EL1 (Group 1) never sees them -- so this must be a read-modify-write
+         * that sets exactly the bits we want in addition to whatever the reset set. */
+        uint32_t grp = gicr_read(rdbase, GICR_SGI_BASE + GICD_IGROUPR(30 / 32));
+        gicr_write(rdbase, GICR_SGI_BASE + GICD_IGROUPR(30 / 32),
+                   grp | (1u << (30 % 32)) | (1u << GIC_INTID_TLB_SHOOTDOWN_SGI));
+        /* priorities are byte-per-INTID (lower value = higher priority; both under PMR 0xf0);
+         * RMW so neighboring INTIDs keep their bytes (a plain word write zeroes theirs) */
+        uint32_t prio = gicr_read(rdbase, GICR_SGI_BASE + GICD_IPRIORITYR(30 / 4));
+        prio = (prio & ~(0xffu << (8 * (30 % 4)))) | (0x10u << (8 * (30 % 4)));
+        gicr_write(rdbase, GICR_SGI_BASE + GICD_IPRIORITYR(30 / 4), prio);
+        prio = gicr_read(rdbase, GICR_SGI_BASE + GICD_IPRIORITYR(GIC_INTID_TLB_SHOOTDOWN_SGI / 4));
+        unsigned b8 = 8 * (GIC_INTID_TLB_SHOOTDOWN_SGI % 4);
+        prio = (prio & ~(0xffu << b8)) | (0x20u << b8);
+        gicr_write(rdbase, GICR_SGI_BASE + GICD_IPRIORITYR(GIC_INTID_TLB_SHOOTDOWN_SGI / 4), prio);
+        /* enables are write-1-to-set (reset already enables the SGIs, but set it explicitly) */
         gicr_write(rdbase, GICR_SGI_BASE + GICD_ISENABLER(30 / 32), 1u << (30 % 32));
+        gicr_write(rdbase, GICR_SGI_BASE + GICD_ISENABLER(GIC_INTID_TLB_SHOOTDOWN_SGI / 32),
+                   1u << (GIC_INTID_TLB_SHOOTDOWN_SGI % 32));
     } else {
         gic_set_priority(GIC_INTID_PPI_EL1_PHYS, 0x10);
         gic_enable_intid(GIC_INTID_PPI_EL1_PHYS);

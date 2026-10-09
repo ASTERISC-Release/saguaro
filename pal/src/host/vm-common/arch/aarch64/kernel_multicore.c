@@ -56,18 +56,38 @@ struct per_cpu_data g_early_per_cpu_data = { .cpu_id = 0 };
  * conduit is firmware policy, not kernel policy: QEMU virt's DTB advertises `method = "hvc"`
  * for TCG direct-boot (UEFI-backed machines use smc), and calling the wrong one just traps
  * as an undefined instruction, so the DTB-parsed choice from dtb_init() drives it.
+ *
+ * The conduit must be decided *before* the register-argument pinning and the two conduits
+ * must stay in separate noinline functions: an earlier revision branched on
+ * dtb_psci_conduit_hvc() *between* the x0-x3 initializations and the asm, and GCC's
+ * register-variable handling let that call's return value (1) survive in x0 at the hvc --
+ * every call reached QEMU as function-id 1 and returned PSCI NOT_SUPPORTED (-1). Same law
+ * as arm_smccc_smc() in Linux or any svc-adjacent asm: no C in the register window.
  */
-long psci_call(uint64_t func_id, uint64_t arg0, uint64_t arg1, uint64_t arg2) {
+static long __attribute__((noinline)) psci_call_hvc(uint64_t func_id, uint64_t arg0,
+                                                    uint64_t arg1, uint64_t arg2) {
     register uint64_t x0 __asm__("x0") = func_id;
     register uint64_t x1 __asm__("x1") = arg0;
     register uint64_t x2 __asm__("x2") = arg1;
     register uint64_t x3 __asm__("x3") = arg2;
-    if (dtb_psci_conduit_hvc()) {
-        __asm__ volatile("hvc #0" : "+r"(x0), "+r"(x1), "+r"(x2), "+r"(x3) : : "memory");
-    } else {
-        __asm__ volatile("smc #0" : "+r"(x0), "+r"(x1), "+r"(x2), "+r"(x3) : : "memory");
-    }
+    __asm__ volatile("hvc #0" : "+r"(x0), "+r"(x1), "+r"(x2), "+r"(x3) : : "memory");
     return (long)x0;
+}
+
+static long __attribute__((noinline)) psci_call_smc(uint64_t func_id, uint64_t arg0,
+                                                    uint64_t arg1, uint64_t arg2) {
+    register uint64_t x0 __asm__("x0") = func_id;
+    register uint64_t x1 __asm__("x1") = arg0;
+    register uint64_t x2 __asm__("x2") = arg1;
+    register uint64_t x3 __asm__("x3") = arg2;
+    __asm__ volatile("smc #0" : "+r"(x0), "+r"(x1), "+r"(x2), "+r"(x3) : : "memory");
+    return (long)x0;
+}
+
+long psci_call(uint64_t func_id, uint64_t arg0, uint64_t arg1, uint64_t arg2) {
+    if (dtb_psci_conduit_hvc())
+        return psci_call_hvc(func_id, arg0, arg1, arg2);
+    return psci_call_smc(func_id, arg0, arg1, arg2);
 }
 
 /* PSCI v0.2/v1.0 64-bit function ids (arm DEN 0022A); the DTB's /psci properties carry the
@@ -148,6 +168,9 @@ int init_multicore_prepare(uint32_t num_cpus) {
 
     /* from now on TPIDR_EL1 points at the dynamic array */
     __asm__ volatile("msr tpidr_el1, %0" :: "r"(&g_per_cpu_data[0]));
+    /* keep this CPU's EL0-readable TCB cell pointing at the upgraded slot (installed in
+     * vm_bootloader.S at the early static instance; APs install theirs in pal_ap_entry) */
+    __asm__ volatile("msr tpidrro_el0, %0" :: "r"(&g_per_cpu_data[0].cur_tcb));
 
     g_num_cpus = num_cpus;
     return 0;
@@ -177,6 +200,13 @@ int init_multicore(uint32_t num_cpus) {
      * carries in cpu@N's reg, entry = pal_ap_entry (identity-mapped, so link address == PA
      * even with the AP's MMU off), context id = our cpu index — the PSCI spec boots the CPU
      * with x0 = context id, which is how pal_ap_entry learns which slot is its own. */
+    /* The APs' trampoline installs g_page_table_root into their TTBR0 (see vm_bootloader.S):
+     * the fine tables must exist before any CPU_ON, i.e. memory_pagetables_init() (early in
+     * pal_start_c) must have run. It always has -- this assert documents the ordering for
+     * anyone who ever moves init_multicore() earlier or makes the switch conditional. */
+    extern uint64_t* g_page_table_root;
+    assert(g_page_table_root);
+
     for (uint32_t i = 1; i < num_cpus; i++) {
         long ret = psci_call(PSCI_FUNC_CPU_ON, dtb_cpu_on_id(i),
                              (uint64_t)(uintptr_t)&pal_ap_entry, /*context id=*/i);

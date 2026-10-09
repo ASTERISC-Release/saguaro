@@ -148,8 +148,14 @@ int memory_free_shared_region(void* addr, size_t size) {
 static uint64_t g_pt_pool[PT_POOL_TABLES][512] __attribute__((aligned(PAGE_SIZE)));
 static size_t g_pt_pool_used;
 
-/* installed TTBR0_EL1 root (NULL before memory_pagetables_init() switched) */
-static uint64_t* g_page_table_root;
+/* Installed TTBR0_EL1 root (NULL before memory_pagetables_init() switched).
+ * Hidden-visibility but not static: the pal_ap_entry trampoline in vm_bootloader.S installs
+ * *this* live root on every PSCI-brought-up CPU, and init_multicore() asserts it is
+ * non-NULL before issuing any CPU_ON. The bootloader's coarse initial_l1_table maps DRAM
+ * as EL1-only 1GB blocks, so an AP running on those tables permission-faults at EL0 the
+ * first moment a scheduler-migrated thread touches memory there -- the live root is the
+ * one with the EL0-accessible leaves memory_mark_pages_on() installs. */
+__attribute__((visibility("hidden"))) uint64_t* g_page_table_root;
 
 static uint64_t* pt_alloc_table(const char* what) {
     if (g_pt_pool_used >= PT_POOL_TABLES) {
@@ -159,10 +165,40 @@ static uint64_t* pt_alloc_table(const char* what) {
     return &g_pt_pool[g_pt_pool_used++][0];
 }
 
-/* The kernel runs with a single identity context and the boot CPU alone until PSCI SMP lands;
- * `tlbi vmalle1` + `dsb ish` is sufficient (no ASID, no second stage, no other cores). */
+/*
+ * Mutating the identity page tables is *shared-state work*: pt_get_leaf(create=true) allocates
+ * an L3 table and swaps it into an L2 block descriptor (l3_from_block), and a second CPU
+ * splitting the same block concurrently would re-swap in its own replacement table, detaching
+ * the first CPU's half-populated one -- mappings vanish silently and the victims fault at EL0
+ * (observed on PSCI SMP as a SIGSEGV at a valid stack address the moment LibOS ran on >1 CPU).
+ * One global lock is the architecturally correct granularity here: splits and whole-block
+ * teardown can touch the same descriptors from any CPU, so finer (per-L2) locking would need
+ * per-descriptor state the tables themselves do not keep. Read-only lookups
+ * (memory_find_page_table_entry, and l3_from_block's snapshot read inside the lock) stay
+ * lock-free deliberately: their caller -- the panic/instruction-dump diagnostic path -- can run
+ * at EL1 with IRQs masked *on a CPU that may itself have been preempted while holding this
+ * lock*, where taking it would self-deadlock; and word-sized descriptor reads can only show
+ * either the old block or the new table, both of which are walkable (the diagnostics path also
+ * tolerates a stale answer: worst case it reports "unmapped" about a mapped page).
+ */
+static spinlock_t g_page_table_lock = INIT_SPINLOCK_UNLOCKED;
+
+/* Flush this CPU's entries and complete the broadcast with the SGI shootdown protocol:
+ * QEMU's TCG treats tlbi vmalle1is as a *local* flush (no cross-vCPU shootdown in the
+ * emulator -- see the long comment in arch/aarch64/kernel_interrupts.c), so the other CPUs
+ * are dropped via send_invalidate_tlb_ipi_and_wait() instead of trusting the DSB. Must be
+ * called with g_page_table_lock held: page_table_lock -> request_lock is the one and only
+ * lock order in this subsystem (the SGI receiver takes neither). No-ops during boot and on
+ * a single-CPU kernel, where this CPU is by definition the only one that can run. */
 static void tlb_flush_all(void) {
     __asm__ volatile("tlbi vmalle1\n\tdsb ish\n\tisb" ::: "memory");
+    int ret = send_invalidate_tlb_ipi_and_wait(NULL, 0, /*invalidate_on_this_cpu=*/false);
+    if (ret < 0) {
+        /* cannot happen: every sender goes through g_page_table_lock, so no protocol run
+         * can be in progress on another CPU while we hold it */
+        log_warning("tlb_flush_all: TLB shootdown IPI failed (%d); other CPUs may keep "
+                    "stale entries", ret);
+    }
 }
 
 static bool l1_range_built(uint64_t va) {
@@ -245,16 +281,19 @@ int memory_mark_pages_on(uint64_t addr, size_t size, bool write, bool execute, b
     uint64_t start = ALIGN_DOWN(addr, PAGE_SIZE);
     uint64_t end = ALIGN_UP(addr + size, PAGE_SIZE);
 
+    spinlock_lock(&g_page_table_lock);
     for (uint64_t va = start; va < end; va += PAGE_SIZE) {
         uint64_t* leaf = pt_get_leaf(va, /*create=*/true);
         if (!leaf) {
             log_warning("memory_mark_pages_on: no page-table backing for %p (range %p-%p)",
                         (void*)va, (void*)start, (void*)end);
+            spinlock_unlock(&g_page_table_lock);
             return -PAL_ERROR_DENIED;
         }
         *leaf = (va & PT_ADDR_MASK) | prot; /* identity: output address == virtual address */
     }
     tlb_flush_all();
+    spinlock_unlock(&g_page_table_lock);
     return 0;
 }
 
@@ -266,6 +305,7 @@ int memory_mark_pages_off(uint64_t addr, size_t size) {
     uint64_t start = ALIGN_DOWN(addr, PAGE_SIZE);
     uint64_t end = ALIGN_UP(addr + size, PAGE_SIZE);
 
+    spinlock_lock(&g_page_table_lock);
     for (uint64_t va = start; va < end;) {
         /* whole-block fast path: take down the 2MB descriptor itself instead of promoting the
          * block just to clear every leaf in it (a large munmap must not burn the table pool).
@@ -287,6 +327,7 @@ int memory_mark_pages_off(uint64_t addr, size_t size) {
         va += PAGE_SIZE;
     }
     tlb_flush_all();
+    spinlock_unlock(&g_page_table_lock);
     return 0;
 }
 

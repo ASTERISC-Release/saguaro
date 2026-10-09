@@ -162,18 +162,23 @@ static inline PAL_TCB* pal_get_tcb(void) {
      * TLS and says nothing about PAL state.
      *
      * Two sides of the same truth: inside the kernel (IN_PAL) the authoritative slot is
-     * per_cpu_data->cur_tcb, reached via TPIDR_EL1 (`pal_get_tcb_vm()`, EL1-only). The same
-     * value is mirrored into g_pal_tcb_singleton by the context-switch asm (`str` next to the
-     * cur_tcb store), because EL0 cannot read TPIDR_EL1 -- LibOS and its stack protector then
-     * do one GOT-relative load of that exported cell, which is the closest aarch64 equivalent
-     * of x86_64's ring-3-visible `%gs:` addressing (the cell always holds the running thread's
-     * TCB while that thread runs, EL0 or EL1; multi-CPU would need one cell per CPU, matching
-     * the kernel's current single-CPU policy).
+     * per_cpu_data->cur_tcb, reached via TPIDR_EL1 (`pal_get_tcb_vm()`, EL1-only). The EL0
+     * side reads the very same cell through TPIDRRO_EL0 -- an EL1-writable, EL0-read-only
+     * register (exactly how Linux's vDSO exposes the cpu id) preloaded per CPU at boot with
+     * `&per_cpu_data[cpu].cur_tcb`, which the context-switch asm writes on every switch.
+     * One `mrs`+`ldr` always yields *this CPU's* running thread: the closest aarch64
+     * equivalent of x86_64's ring-3-visible `%gs:` addressing, correct on any number of
+     * CPUs. (The historical single global `g_pal_tcb_singleton` cell served that role while
+     * the kernel was single-CPU; a second CPU could stomp it with its own thread's TCB --
+     * or NULL while parking an AP boot context -- poisoning every other CPU's
+     * pal_get_tcb(), which is what Milestone-B SMP brought down.)
      */
 #ifdef IN_PAL
     return pal_get_tcb_vm();
 #else
-    return g_pal_tcb_singleton;
+    PAL_TCB** cell;
+    __asm__ volatile("mrs %0, tpidrro_el0" : "=r"(cell));
+    return *cell;
 #endif
 #else
     PAL_TCB* tcb;

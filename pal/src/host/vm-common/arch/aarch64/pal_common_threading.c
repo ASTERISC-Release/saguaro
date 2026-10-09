@@ -170,9 +170,9 @@ __attribute_no_stack_protector
 __attribute_no_sanitize_address
 void set_dummy_gs_base(void) {
     get_per_cpu_data()->cur_tcb = &g_dummy_tcb;
-    /* keep the EL0-readable singleton mirror (arch/aarch64/pal_vm_tcb.c) in sync with the
-     * cur_tcb slot, just like save_context_and_restore_next() asm does on every switch */
-    g_pal_tcb_singleton = &g_dummy_tcb.common;
+    /* no separate EL0-readable mirror to keep in sync: TPIDRRO_EL0 already points at this
+     * exact cur_tcb slot (installed per CPU at boot), so the store above is simultaneously
+     * the kernel-side and the EL0-side "current TCB" update */
 }
 
 __attribute_no_stack_protector

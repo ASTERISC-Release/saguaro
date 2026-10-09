@@ -76,12 +76,16 @@ libos_syscall_entry:
 #ifdef HOST_TYPE
     /* VM-PAL (Milestone B): the TLS-keyed registry above is a Linux-PAL mechanism. In the
      * unikernel, libsysdb runs at EL0 where TPIDR_EL1 is unreadable and the kernel itself
-     * resolves `svc` dispatch; it mirrors this thread's PAL_TCB into g_pal_tcb_singleton on
-     * every context switch next to the cur_tcb store (pal_vm_tcb.c), so one GOT load IS the
-     * "which thread am I" answer. x16 (resume address) and x8 (syscall nr) are never touched
-     * here, so the prologue's stack stash below is not needed either. */
-    adrp x17, :got:g_pal_tcb_singleton
-    ldr  x17, [x17, :got_lo12:g_pal_tcb_singleton]
+     * resolves `svc` dispatch. The EL0-readable answer to "which thread am I" is TPIDRRO_EL0
+     * (EL1-writable, EL0-read-only -- the same register Linux's vDSO parks the cpu id in):
+     * each CPU's copy is preloaded at boot (and on every AP's startup) with the address of
+     * *that CPU's* per_cpu_data->cur_tcb cell, which save_context_and_restore_next() writes
+     * on every context switch (pal_vm_tcb.c). One mrs+ldr is therefore per-CPU exact --
+     * unlike the former global singleton, which any second CPU could overwrite with its own
+     * current thread's TCB (or NULL while parking an AP boot context). x16 (resume address)
+     * and x8 (syscall nr) are never touched here, so the prologue's stack stash below is not
+     * needed either. */
+    mrs  x17, tpidrro_el0
     ldr  x17, [x17]
     b    .Ltcb_tcb_ready
 #else

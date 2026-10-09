@@ -481,12 +481,14 @@ save_context_and_restore_next:
      * reloaded it), x2-x5 likewise */
     mrs     x16, tpidr_el1
     str     x1, [x16, #PER_CPU_DATA_CUR_TCB]     /* wrmsr(MSR_IA32_GS_BASE, next_gs_base) */
-    /* mirror the TCB into the EL0-readable singleton (pal_vm_tcb.c) with the same address
-     * arithmetic x86 gets from gsbase being ring-3-readable; no EL0 code can observe the
-     * cur_tcb/singleton pair half-updated -- we are still in EL1 asm */
-    adrp    x17, g_pal_tcb_singleton
-    add     x17, x17, :lo12:g_pal_tcb_singleton
-    str     x1, [x17]
+    /* This very per-CPU slot IS the EL0-readable TCB cell: each CPU's TPIDRRO_EL0 (EL0-read-
+     * only, set once at boot/AP-startup -- see vm_bootloader.S) holds &per_cpu_data[cpu].
+     * cur_tcb, so the store above simultaneously performs the x86 "make gsbase ring-3
+     * readable" mirror with no second memory location, no second write, and no possibility
+     * of a half-updated pair. (The former global g_pal_tcb_singleton mirror broke on SMP:
+     * another CPU's switch would write its own thread -- or NULL parking an AP boot context
+     * -- into the cell this CPU's EL0 pal_get_tcb() was about to read.)
+     */
 
     cbz     x2, .Lscr_unlock_done
     str     wzr, [x2]                            /* spinlock_unlock(lock_to_unlock) */

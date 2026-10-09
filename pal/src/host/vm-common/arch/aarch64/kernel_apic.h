@@ -25,6 +25,9 @@
 
 /* Interrupt numbers (INTIDs) as routed on QEMU virt */
 #define GIC_INTID_PPI_EL1_PHYS      30 /* per-CPU private physical timer (PPI) */
+#define GIC_INTID_TLB_SHOOTDOWN_SGI  1 /* software TLB shootdown IPI (SGI #1, see the
+                                        * send_invalidate_tlb_ipi_and_wait protocol; SGI #0
+                                        * stays untouched for firmware/debug use) */
 #define GIC_INTID_SPI_VIRTIO1       32 /* virtio-mmio devices start here (offset by index) */
 #define GIC_INTID_SPI_UART0         33 /* PL011 (unused by the kernel: PL011 is polled) */
 
@@ -60,6 +63,7 @@
 #define ICC_IGRPEN1_EL1             "s3_0_c12_c12_7"
 #define ICC_IAR1_EL1                "s3_0_c12_c12_0"
 #define ICC_EOI1_EL1                "s3_0_c12_c12_1"
+#define ICC_SGI1R_EL1               "s3_0_c12_c11_5"
 
 void lapic_enable(void);                   /* unmask Group-1 IRQs via ICC_PMR_EL1 */
 int  lapic_timer_init(void);               /* EL1 physical generic timer + its PPI line */

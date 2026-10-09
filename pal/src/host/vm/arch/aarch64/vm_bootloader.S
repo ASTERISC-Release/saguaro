@@ -120,6 +120,13 @@ _start:
     add     x1, x1, :lo12:g_early_per_cpu_data
     msr     tpidr_el1, x1
 
+    /* TPIDRRO_EL0 (EL0-read-only) = &this CPU's cur_tcb cell, so EL0's pal_get_tcb() has a
+     * per-CPU "which thread am I" answer from the very first instruction that runs at EL0
+     * (Linux vDSO uses the same register for the cpu id). Never rewritten by switches: the
+     * cell holds the *current* thread, per CPU. Upgraded in init_multicore_prepare(). */
+    add     x1, x1, #PER_CPU_DATA_CUR_TCB
+    msr     tpidrro_el0, x1
+
     mov     x29, xzr
     mov     x30, xzr
     mov     x0, x20                   /* pal_start_c(const void* fdt) */
@@ -157,6 +164,9 @@ pal_ap_entry:
     madd    x3, x0, x2, x1
     mov     x20, x0                     /* survives the sysreg sequence for the C call */
     msr     tpidr_el1, x3               /* per-CPU data singleton, set once and forever */
+    /* EL0-readable TCB cell for this CPU, same contract as _start installs for the BSP */
+    add     x4, x3, #PER_CPU_DATA_CUR_TCB
+    msr     tpidrro_el0, x4
     ldr     x2, [x3, #PER_CPU_DATA_INTERRUPT_STACK]
     mov     sp, x2
 
@@ -170,8 +180,18 @@ pal_ap_entry:
     lsl     x3, x3, #32
     orr     x2, x2, x3
     msr     tcr_el1, x2
-    adrp    x2, initial_l1_table
-    add     x2, x2, :lo12:initial_l1_table
+    /* TTBR0 := the *live* root table, NOT this file's initial_l1_table.
+     * memory_pagetables_init() (pal_start_c, long before PSCI CPU_ON) replaced these coarse
+     * boot tables -- whose DRAM entries are 1GB blocks mapped EL1-only -- with the fine
+     * tables that carry the EL0-accessible leaves (PTE_DATA/PTE_EXEC) the kernel installs
+     * for libsysdb and the app. An AP installed on initial_l1_table therefore runs its EL1
+     * kernel code fine but permission-faults at walk level 1 (DFSC 0x0d) on the *first EL0
+     * access* of any scheduler-migrated thread there: with per-CPU TLBIs and shootdown now
+     * in place, every CPU must walk the one root the kernel mutates. init_multicore()
+     * asserts g_page_table_root is non-NULL before issuing any CPU_ON. */
+    adrp    x2, g_page_table_root
+    add     x2, x2, :lo12:g_page_table_root
+    ldr     x2, [x2]
     msr     ttbr0_el1, x2
     isb
     tlbi    vmalle1

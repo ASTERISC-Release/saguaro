@@ -33,13 +33,18 @@
 
 bool g_interrupts_enabled = false;
 
-/* TLB-invalidation broadcast. The x86 version of this file assembles a software shootdown
- * (IPI + num_responses handshake) because INVLPG is local-only; aarch64 TLBIs have the
- * broadcast in the *instruction set*: the `...is` (inner-shareable) variants invalidate on
- * every PE in the shareable domain, and `dsb ish` waits for completion on all of them. So
- * one core's tlb_invalidate_range() below already implements "shootdown on all CPUs" --
- * that is what send_invalidate_tlb_ipi_and_wait() exploits instead of an SGI protocol.
- * (QEMU TCG semantics match: its IS-TLBI emulation flushes the matching TLBs on all vCPUs.) */
+/* TLB-invalidation bookkeeping for the software shootdown protocol below.
+ *
+ * The architecture's inner-shareable TLBI (`tlbi vmalle1is` + `dsb ish`) would be sufficient
+ * on real hardware -- but QEMU's TCG implements every TLBI, shareable flavors included, as a
+ * flush of the *executing vCPU's* TLB only (target/arm/tcg/tlb-insns.c: tlbi_aa64_vmalle1is
+ * calls the local tlb_flush; there is no cross-vCPU shootdown anywhere in the emulator). A
+ * guest that trusts the broadcast therefore keeps stale -- or, after a block-split race is
+ * fixed, simply *missing-permission* -- entries on every other core; Milestone-B SMP proved
+ * exactly this by losing freshly mmap'd thread-stack pages on non-mapping CPUs. So the arm
+ * port runs the same `num_responses` handshake the x86 port assembles for INVLPG, with GIC
+ * SGI #1 as the IPI transport; on real hardware the extra per-CPU flushes are redundant but
+ * harmless (flushing twice never leaves a stale entry). */
 static void tlb_invalidate_range(void* addr, size_t size) {
     uint64_t start = ALIGN_DOWN((uint64_t)addr, PAGE_SIZE);
     uint64_t end   = ALIGN_UP((uint64_t)addr + size, PAGE_SIZE);
@@ -52,6 +57,17 @@ static void tlb_invalidate_range(void* addr, size_t size) {
     __asm__ volatile("dsb ish" ::: "memory");
     __asm__ volatile("isb" ::: "memory");
 }
+
+/* Shootdown protocol state; same fields, same locking discipline as the x86
+ * `g_invalidate_tlb_request` (vm-common/kernel_interrupts.c). Declared before isr_c because
+ * the SGI receive case runs this handshake from interrupt context. */
+static spinlock_t g_invalidate_tlb_request_lock = INIT_SPINLOCK_UNLOCKED;
+static struct {
+    volatile bool in_progress;
+    volatile void* addr;
+    volatile size_t size;
+    volatile uint32_t num_responses;
+} g_invalidate_tlb_request;
 
 /*
  * Dispatch of a Group-1 IRQ. `regs` points at the asm-saved frame (from either el0_irq_entry
@@ -77,6 +93,37 @@ void isr_c(struct isr_regs* regs) {
             /* timer IRQs always arrive from EL0 in this kernel (EL1 runs with DAIF.I masked
              * across scheduler critical sections); preempt unconditionally. */
             sched_thread_uninterruptable(regs);
+            break;
+        case GIC_INTID_TLB_SHOOTDOWN_SGI:
+            /* "invalidate TLB" IPI -- may be spurious/extra, check for this (the hardening
+             * mirrors x86's `case 33` verbatim, down to the malicious-host comments). Unlike
+             * the tick this handler NEVER reschedules -- it is the ack that releases the
+             * waiting CPU, and descheduling here could strand the protocol behind an idle
+             * loop. Unlike x86 the EOI must run even for a dropped SGI: GICv3 keeps an
+             * acknowledged INTID ACTIVE until ICC_EOIR1_EL1 echoes it, so skipping the EOI
+             * would permanently wedge future shootdown IPIs. */
+            if (get_per_cpu_data()->invalidate_tlb_ipi_received) {
+                /* ignore extra IPI (most probably there is a malicious host) */
+            } else if (!__atomic_load_n(&g_invalidate_tlb_request.in_progress,
+                                        __ATOMIC_ACQUIRE)) {
+                /* ignore spurious IPI (most probably there is a malicious host) */
+            } else if (!__atomic_load_n(&g_invalidate_tlb_request.num_responses,
+                                        __ATOMIC_ACQUIRE)) {
+                /* now this is weird -- some vCPU started the protocol but num of responses is 0 */
+                log_error("Panic: `invalidate TLB` IPI received, but state is inconsistent");
+                triple_fault();
+            } else {
+                /* Drop this CPU's entries. x86 invlpg()'s the request's page range; we flush
+                 * all EL1 entries (the same operation the sender performs locally --
+                 * tlb_invalidate_range ignores the range and flushes everything, see its
+                 * comment; a *narrower* receiver flush against a full sender flush would be
+                 * the actual bug). */
+                tlb_invalidate_range(NULL, 0);
+                get_per_cpu_data()->invalidate_tlb_ipi_received = 1;
+                __atomic_fetch_add(&g_invalidate_tlb_request.num_responses, 1,
+                                   __ATOMIC_ACQ_REL);
+            }
+            lapic_signal_interrupt_complete(intid);
             break;
         default:
             if (intid >= GIC_INTID_SPI_VIRTIO1 && intid < GIC_INTID_SPI_VIRTIO1 + 16) {
@@ -127,9 +174,10 @@ long el0_sync_unexpected_c(struct isr_regs* regs) {
     __asm__ volatile("mrs %0, far_el1" : "=r"(far));
     uint64_t ec = esr >> 26;
 
-    if ((ec == 0x20 /* IABT from EL0 */ || ec == 0x24 /* DABT from EL0 */) &&
-        pal_common_perform_memfault_handling(far, regs) == 0) {
-        return 0; /* LibOS fixed the fault or delivered a signal from the frame */
+    if (ec == 0x20 /* IABT from EL0 */ || ec == 0x24 /* DABT from EL0 */) {
+        if (pal_common_perform_memfault_handling(far, regs) == 0) {
+            return 0; /* LibOS fixed the fault or delivered a signal from the frame */
+        }
     }
 
     log_error("Panic: unhandled EL0 synchronous exception ESR=0x%lx (EC=0x%lx) ELR=0x%lx"
@@ -195,21 +243,66 @@ void isr_kernel_c(struct isr_regs* regs) {
 int send_invalidate_tlb_ipi_and_wait(void* addr, size_t size, bool invalidate_on_this_cpu) {
     assert(IS_ALIGNED_PTR(addr, PAGE_SIZE) && IS_ALIGNED(size, PAGE_SIZE));
 
-    /* No software shootdown protocol exists (or is needed) on aarch64: the invalidation
-     * issued here is `tlbi vmalle1is` + `dsb ish` (see tlb_invalidate_range), which the
-     * architecture guarantees to complete on every CPU in the inner-shareable domain
-     * before the DSB completes. The x86 callers' requirement -- "every core has dropped
-     * the stale entry by the time this returns" -- is met by one core executing it, which
-     * is exactly what invalidate_on_this_cpu requests (all vm-common callers pass true).
-     * The only way it could NOT be met is invalidate_on_this_cpu == false, i.e. the caller
-     * wants a remote-core-only invalidate; that has no caller and the assert documents it
-     * rather than silently doing the broadcast anyway (the hardware already covers the
-     * other cores whether they are asked or not). */
-    assert(invalidate_on_this_cpu);
+    int ret;
 
+    /* step 1: drop this CPU's own entries (IS flavor: a superset of local on real hardware,
+     * exactly local under QEMU; the tlb_flush_all() callers pass addr=NULL/size=0, i.e. the
+     * "flush everything" convention the full-EL1 flush implements regardless of range) */
     if (invalidate_on_this_cpu)
         tlb_invalidate_range(addr, size);
-    return 0;
+
+    if (!g_interrupts_enabled) {
+        /* boot path: this CPU is the only one that can run yet (x86 comment verbatim: the
+         * function may be called from bootstrap code before interrupts are truly enabled) */
+        return 0;
+    }
+
+    spinlock_lock(&g_invalidate_tlb_request_lock);
+
+    if (g_invalidate_tlb_request.in_progress || g_invalidate_tlb_request.num_responses) {
+        /* sanity check that a previous "invalidate TLB" protocol run is finished */
+        ret = -PAL_ERROR_DENIED;
+        goto out;
+    }
+
+    for (uint32_t i = 0; i < g_num_cpus; i++) {
+        /* reset the "IPI received" flag on each vCPU */
+        g_per_cpu_data[i].invalidate_tlb_ipi_received = 0;
+    }
+
+    g_invalidate_tlb_request.in_progress = true;
+    g_invalidate_tlb_request.addr = addr;
+    g_invalidate_tlb_request.size = size;
+    g_invalidate_tlb_request.num_responses = 1; /* this vCPU already invalidated */
+
+    /* ICC_SGI1R_EL1 (GICv3 original-spec layout, which QEMU's icc_generate_sgi decodes):
+     * INTID [27:24], IRM [40] = interrupt-routing-mode "all CPUs excluding self" (the
+     * TargetList/Affinity fields are then ignored), TargetList [15:0]. Delivered as
+     * non-secure Group-1 -- the group our ICC_IAR1/EOI1 pair consumes -- by QEMU's
+     * icc_sgi1r_write. SGI #1 was enabled + grouped G1NS on every CPU's redistributor in
+     * lapic_timer_init(). */
+    uint64_t sgi = (1ULL << 40) | ((uint64_t)GIC_INTID_TLB_SHOOTDOWN_SGI << 24);
+    __asm__ volatile("msr " ICC_SGI1R_EL1 ", %0" :: "r"(sgi));
+
+    while (__atomic_load_n(&g_invalidate_tlb_request.num_responses, __ATOMIC_ACQUIRE)
+            != g_num_cpus) {
+        /* Waiting for the other CPUs' EL1 IRQ dispatch (isr_c SGI case) to flush and
+         * acknowledge. Every target unmasks IRQs in bounded time: EL1 C runs with DAIF.I
+         * masked only inside the scheduler's own save/restore windows, and the SGI handler
+         * itself never blocks nor schedules (it is the SGI path *checking* this counter,
+         * so it must not run on this CPU -- and by definition it cannot: we are that CPU).
+         * A CPU stuck in the page-table lock is no problem either: the lock holder here is
+         * about to finish as soon as the last ack lands. */
+        CPU_RELAX();
+    }
+
+    g_invalidate_tlb_request.num_responses = 0;
+    g_invalidate_tlb_request.in_progress = false;
+    ret = 0;
+
+out:
+    spinlock_unlock(&g_invalidate_tlb_request_lock);
+    return ret;
 }
 
 int interrupts_init(void) {
