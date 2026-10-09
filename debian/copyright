@@ -51,10 +51,6 @@ Files: python/graminelibos/ninja_syntax.py
 Copyright: 2011 Google Inc.
 License: Apache-2.0
 
-Files: DCO
-Copyright: 2004, 2006 The Linux Foundation and its contributors
-License: Verbatim
-
 Files: LICENSE.txt
 Copyright: 2007 Free Software Foundation, Inc. <https://fsf.org/>
 License: Verbatim

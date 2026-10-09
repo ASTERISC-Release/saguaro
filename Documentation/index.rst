@@ -106,25 +106,15 @@ debugging and other processes necessary for Gramine development.
 
 We also provide :doc:`manual pages for Gramine tools<manpages/index>`.
 
-Contribute to Gramine
----------------------
+Development
+-----------
 
-We encourage anyone who is interested to contribute to Gramine. The below
-articles contain helpful material for prospective contributors:
-
-- :doc:`devel/onboarding` - This page describes the knowledge needed to
-  efficiently contribute high-quality PRs to the Gramine project. This page
-  also describes typical flows that Gramine developers should follow to make
-  the process of PR review consistent for everyone involved.
 - :doc:`devel/setup` - Learn the Emacs and Vim configurations used for Gramine.
 - :doc:`devel/coding-style` - This document describes coding conventions and
   formatting styles we use in Gramine. All newly committed code must conform
   to them to pass a review.
 - :doc:`devel/howto-doc` - This section describes how the Gramine documentation
-  is constructed and provides directions on how to contribute to it.
-- :doc:`devel/DCO/index` - Affirm that the source code you will submit was
-  originated by you and/or that you have permission to submit it to the Gramine
-  project.
+  is constructed.
 
 Resources
 ---------
@@ -207,15 +197,12 @@ Indices and tables
 
 .. toctree::
    :hidden:
-   :caption: Contribute to Gramine
+   :caption: Development
    :maxdepth: 1
 
-   devel/onboarding
    devel/setup
    devel/coding-style
    devel/howto-doc
-   devel/charter
-   devel/DCO/index
 
 .. toctree::
    :hidden:
