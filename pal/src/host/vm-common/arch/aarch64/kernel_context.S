@@ -377,7 +377,6 @@ isr_eret_to_userland:
     ldp     x1, x2, [sp]                      /* frame.elr, frame.spsr */
     ldr     x3, [sp, #16]                     /* frame.sp: resume stack pointer */
     msr     elr_el1, x1
-    msr     spsr_el1, x2
     /* Two preempt sources share this tail: an EL0 thread preempted by el0_irq
      * (SPSR.M = EL0t, resume SP is the *user* stack -> SP_EL0 sysreg, and eret
      * switches which stack register SP names) and kernel code preempted by
@@ -387,9 +386,16 @@ isr_eret_to_userland:
      * left SP_EL1 at &irq_pseudo_stack just for this frame read). */
     tst     x2, #0xc                          /* SPSR.M[3:2] == 0 only at EL0 */
     b.ne    .Lieret_el1
+    bic     x2, x2, #0x3c0                    /* EL0 invariant: PSTATE.DAIF is clear at
+                                               * EL0 (EL0 cannot write DAIF, so restoring a
+                                               * frame with mask bits would make the thread
+                                               * permanently deaf to ticks and shootdown SGIs;
+                                               * Linux's ret-to-userspace enforces the same) */
+    msr     spsr_el1, x2
     msr     sp_el0, x3
     b       .Lieret_regs
 .Lieret_el1:
+    msr     spsr_el1, x2
     mov     sp, x3
 .Lieret_regs:
 
@@ -641,6 +647,9 @@ el0_irq_entry:
     ldr     x16, [sp, #ISR_ELR]
     msr     elr_el1, x16
     ldr     x16, [sp, #ISR_SPSR]
+    bic     x16, x16, #0x3c0      /* EL0 invariant: never eret to EL0 with DAIF masked
+                                   * (see isr_eret_to_userland; this is the same-thread
+                                   * return path after irq_c, e.g. after a plain tick) */
     msr     spsr_el1, x16
     ldp     x0,  x1,  [sp, #ISR_REGS + 0]
     ldp     x2,  x3,  [sp, #ISR_REGS + 16]

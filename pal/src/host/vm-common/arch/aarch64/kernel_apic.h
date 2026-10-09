@@ -60,6 +60,7 @@
 
 /* ICC_* system registers (GIC CPU interface, mrs/msr at EL1) */
 #define ICC_PMR_EL1                 "s3_0_c4_c6_0"
+#define ICC_CTLR_EL1                "s3_0_c12_c12_5" /* PRI_BITS/BPR/EOIM fields */
 #define ICC_IGRPEN1_EL1             "s3_0_c12_c12_7"
 #define ICC_IAR1_EL1                "s3_0_c12_c12_0"
 #define ICC_EOI1_EL1                "s3_0_c12_c12_1"
@@ -77,6 +78,15 @@ uint32_t gic_acknowledge_intid(void);
 
 /* Enable/route an SPI for a discovered device (virtio-mmio index -> SPI 32+index, CPU0). */
 int gic_spi_enable(uint32_t intid);
+
+/* TODO(diag SMP B7): cross-CPU redistributor dump (drop with the hang debugging) */
+uint32_t gic_redist_sgi1_state(uint32_t cpu);
+uint32_t gic_redist_pend30(uint32_t cpu);
+uint32_t gic_redist_en30(uint32_t cpu);
+uint32_t gic_redist_grp30(uint32_t cpu);
+uint32_t gic_redist_prio0(uint32_t cpu);
+uint32_t gic_redist_act30(uint32_t cpu);
+void gic_redist_nudge_sgi1(uint32_t cpu);
 
 /* Initialize the distributor: the aarch64 analog of x86 `apic_init()`. */
 int gic_init(void);

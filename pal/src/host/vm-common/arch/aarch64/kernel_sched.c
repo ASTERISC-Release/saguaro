@@ -90,6 +90,16 @@ static void save_userland_context(struct thread* curr_thread, struct isr_regs* u
     curr_thread->irq_pseudo_stack.elr  = userland_regs->elr;
     curr_thread->irq_pseudo_stack.spsr = userland_regs->spsr;
     curr_thread->irq_pseudo_stack.sp   = userland_regs->sp;
+    /* TODO(diag SMP B7): catch whoever first leaves an EL0 frame carrying DAIF bits */
+    if ((userland_regs->spsr & 0xc) == 0 && (userland_regs->spsr & 0x3c0)) {
+        static volatile uint32_t dbg_masked_logged;
+        if (dbg_masked_logged < 4) {
+            dbg_masked_logged++;
+            log_always("DBG: preempt-save MASKED EL0 spsr=%lx elr=%lx cpu=%u thr=%p",
+                       (unsigned long)userland_regs->spsr, (unsigned long)userland_regs->elr,
+                       (unsigned)get_per_cpu_data()->cpu_id, (void*)curr_thread);
+        }
+    }
 
     curr_thread->context.pc    = (uint64_t)&isr_eret_to_userland;
     /* just like x86 points context.rsp at the iret frame: save_context_and_restore_next()
@@ -194,6 +204,21 @@ void sched_thread_uninterruptable(struct isr_regs* userland_regs) {
 }
 
 void sched_thread(uint32_t* lock_to_unlock, int* clear_child_tid) {
+    /* TODO(diag SMP B7): deaf-EL1-context probe: the idle loop calls this forever at EL1
+     * without ever eret'ing, so a masked PSTATE here is permanent for this CPU. */
+    {
+        uint64_t daif_live;
+        __asm__ volatile("mrs %0, daif" : "=r"(daif_live));
+        if (daif_live & 0x3c0) {
+            static volatile uint32_t dbg_deaf_logged;
+            if (dbg_deaf_logged < 4) {
+                dbg_deaf_logged++;
+                log_always("DBG: sched_thread on cpu%u runs MASKED daif=%lx",
+                           (unsigned)get_per_cpu_data()->cpu_id, (unsigned long)daif_live);
+            }
+        }
+    }
+
     uint64_t curr_tcb_base     = replace_with_null_if_dummy_gs_base(
                                      (uintptr_t)get_per_cpu_data()->cur_tcb);
     struct thread* curr_thread = curr_tcb_base ? get_thread_ptr(curr_tcb_base) : NULL;
