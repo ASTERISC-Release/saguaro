@@ -1,0 +1,182 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2023 Intel Corporation
+
+# aarch64 counterpart of `gramine-vm.in` (installed as `gramine-vm` on aarch64 hosts): boots the
+# vm-PAL unikernel (@LIBPAL_PATH@) under QEMU `virt` + KVM and runs <application>.manifest in it.
+# Usage is the same as on x86:   gramine-vm <application> [args...]
+#
+# Differences from the x86 launcher (see ARM64_MILESTONE_B.md):
+#   * machine `virt,gic-version=3`, no BIOS blob; the kernel image is loaded with `-kernel`
+#   * QEMU does not hand an ELF `-kernel` a device tree, so the machine DTB is dumped with the
+#     *same* -smp/-m/-accel/-cpu, repacked with dtc and loaded as a RAM blob at the DRAM base
+#     (the kernel takes its RAM size, CPU count and PSCI conduit from it)
+#   * KVM + `-cpu host` is the target (TCG is out of scope); no NUMA/hugepage DIMM split
+#   * the guest powers itself off with PSCI SYSTEM_OFF, so QEMU's exit status is always 0: the
+#     guest's exit code is recovered from the "[ VM exited with code N ]" console line
+#
+# Environment knobs:
+#   GRAMINE_RAM_SIZE (default 2G; a manifest's sgx/tdx.enclave_size wins, floor 1G)
+#   GRAMINE_CPU_NUM  (default 1)          GRAMINE_ACCEL (kvm)     GRAMINE_CPU (host)
+#   QEMU_PATH        (qemu-system-aarch64 from PATH)
+#   GRAMINE_VSOCK=1  add a vhost-vsock device (guest-cid = the VM id)
+#   GRAMINE_VM_CONSOLE_LOG=<file>  keep a copy of the console log
+#   GDB=1            -gdb tcp::9000 -S
+
+LIBPAL_PATH=@LIBPAL_PATH@
+HOST_PAL_PATH=@HOST_PAL_PATH@
+
+APPLICATION=
+QEMU_GDB=
+
+if [ "$GDB" == "1" ]; then
+    QEMU_GDB="-gdb tcp::9000 -S"
+fi
+
+if [ "$1" == "" ]; then
+    echo "Usage: $0 <application> [args...]"
+    exit 2
+fi
+APPLICATION=$1
+shift
+
+# VM memory: the manifest's `<sgx|tdx>.enclave_size` (so existing manifests keep working), else
+# GRAMINE_RAM_SIZE, else 2G; never below 1G (the kernel reserves ~512MB for virtio queues, page
+# tables and the PAL itself). Parsing needs the `graminelibos` python package; without it we
+# silently fall back.
+export GRAMINE_MANIFEST=$APPLICATION.manifest
+QEMU_MEM_SIZE=$(python3 -c "
+import os
+import re
+import sys
+from graminelibos import Manifest
+
+size_str = ''
+for type, suffix in (('tdx', '.tdx'), ('sgx', '.sgx')):
+    try:
+        with open(os.environ['GRAMINE_MANIFEST'] + suffix, 'rb') as f:
+            size_str = Manifest.loads(f.read().decode('utf-8'))[type]['enclave_size']
+        break
+    except Exception:
+        continue
+else:
+    sys.exit(1)
+
+unit = {'G': 1 << 30, 'M': 1 << 20, 'K': 1 << 10}.get(size_str[-1:], 1)
+size = int(re.search(r'\d+', size_str).group())
+print(size_str if unit * size > (1 << 30) else '1G')
+" 2>/dev/null)
+QEMU_MEM_SIZE=${QEMU_MEM_SIZE:-$GRAMINE_RAM_SIZE}
+QEMU_MEM_SIZE=${QEMU_MEM_SIZE:-"2G"}
+QEMU_CPU_NUM=${GRAMINE_CPU_NUM:-1}
+
+QEMU_PATH=${QEMU_PATH:-$(command -v qemu-system-aarch64)}
+if [ -z "$QEMU_PATH" ]; then
+    echo "gramine-vm: qemu-system-aarch64 not found (set QEMU_PATH)" >&2
+    exit 2
+fi
+VIRTIOFSD=$(command -v virtiofsd || echo /usr/lib/qemu/virtiofsd)
+if [ ! -x "$VIRTIOFSD" ]; then
+    echo "gramine-vm: virtiofsd not found" >&2
+    exit 2
+fi
+if ! command -v dtc >/dev/null; then
+    echo "gramine-vm: dtc (device-tree-compiler) not found" >&2
+    exit 2
+fi
+if [ ! -f "$LIBPAL_PATH" ]; then
+    echo "gramine-vm: vm-PAL kernel $LIBPAL_PATH not found" >&2
+    exit 2
+fi
+
+ACCEL=${GRAMINE_ACCEL:-kvm}
+CPU=${GRAMINE_CPU:-host}
+QEMU_MACHINE="-machine virt,gic-version=3,highmem-ecam=off"
+# everything that shapes the DTB; the dump and the boot must agree on all of it
+QEMU_SHAPE="-accel $ACCEL -cpu $CPU -m $QEMU_MEM_SIZE -smp $QEMU_CPU_NUM"
+
+# Gramine VM id: names the virtiofs socket (and the vsock guest-cid), so two instances can run
+# side by side. Claimed atomically with mkdir.
+GRAMINE_VM_ID=10
+while ! mkdir "/tmp/gramine_vm_$GRAMINE_VM_ID.lock" 2>/dev/null; do
+    GRAMINE_VM_ID=$((GRAMINE_VM_ID + 1))
+done
+VHOSTFS_SOCKET=/tmp/gramine_vhostfs_$GRAMINE_VM_ID
+WORK=$(mktemp -d /tmp/gramine-vm.XXXXXX)
+VIRTIOFSD_PID=
+cleanup() {
+    [ -n "$VIRTIOFSD_PID" ] && kill "$VIRTIOFSD_PID" 2>/dev/null
+    rm -rf "$WORK" "$VHOSTFS_SOCKET" "$VHOSTFS_SOCKET.pid" "/tmp/gramine_vm_$GRAMINE_VM_ID.lock"
+}
+trap cleanup EXIT
+trap 'exit 130' INT TERM
+
+$QEMU_PATH $QEMU_MACHINE $QEMU_SHAPE -nic none -machine dumpdtb="$WORK/virt.dtb" >/dev/null 2>&1 \
+    && dtc -I dtb -O dtb -o "$WORK/virt-packed.dtb" "$WORK/virt.dtb" 2>/dev/null
+if [ ! -s "$WORK/virt-packed.dtb" ]; then
+    echo "gramine-vm: could not generate the machine DTB (is /dev/kvm available?)" >&2
+    exit 2
+fi
+
+"$VIRTIOFSD" --socket-path "$VHOSTFS_SOCKET" --shared-dir / --log-level error \
+    --sandbox none --no-announce-submounts >"$WORK/virtiofsd.log" 2>&1 &
+VIRTIOFSD_PID=$!
+for _ in $(seq 100); do
+    [ -e "$VHOSTFS_SOCKET" ] && break
+    sleep 0.1
+done
+if [ ! -e "$VHOSTFS_SOCKET" ]; then
+    echo "gramine-vm: virtiofsd failed to start:" >&2
+    cat "$WORK/virtiofsd.log" >&2
+    exit 2
+fi
+
+# Due to QEMU syntax, commas in the QEMU cmdline need to be escaped using an additional comma.
+APPLICATION=${APPLICATION//","/",,"}
+GRAMINE_ARGS="-gramine-args init \"$APPLICATION\" $@ -gramine-args-end"
+GRAMINE_ENVS=$(python3 -c "
+import os
+env_str = ''
+for name, value in os.environ.items():
+    env_str += ('\"{0}={1}\" '.format(name, value).replace(',', ',,'))
+print(env_str)
+")
+GRAMINE_ENVS="-gramine-envs $GRAMINE_ENVS -gramine-envs-end"
+
+# console: stdio, with a log copy so the guest's exit code can be recovered afterwards
+CONSOLE_LOG=$WORK/console.log
+QEMU_VIRTIO_CONSOLE="-device virtio-serial-pci,iommu_platform=off,romfile= \
+-chardev stdio,id=virtioconsole0,logfile=$CONSOLE_LOG \
+-device virtconsole,chardev=virtioconsole0"
+QEMU_VIRTIO_FS="-chardev socket,path=$VHOSTFS_SOCKET,id=vhostfs \
+-device vhost-user-fs-pci,iommu_platform=off,queue-size=1024,chardev=vhostfs,tag=graminefs,romfile="
+QEMU_VIRTIO_VSOCK=
+if [ "$GRAMINE_VSOCK" == "1" ]; then
+    QEMU_VIRTIO_VSOCK="-device vhost-vsock-pci,iommu_platform=off,guest-cid=$GRAMINE_VM_ID,id=vsockdev"
+fi
+
+# virtiofsd needs shared guest RAM (vhost-user maps it)
+QEMU_RAM="-object memory-backend-memfd,id=ram1,size=$QEMU_MEM_SIZE,share=on -machine memory-backend=ram1"
+
+# `-serial none`/`-display none`: the only console is the virtconsole above
+$QEMU_PATH $QEMU_GDB $QEMU_MACHINE $QEMU_SHAPE $QEMU_RAM -nic none \
+    -display none -monitor none -serial none -no-reboot \
+    $QEMU_VIRTIO_CONSOLE $QEMU_VIRTIO_FS $QEMU_VIRTIO_VSOCK \
+    -kernel "$LIBPAL_PATH" -device loader,file="$WORK/virt-packed.dtb",addr=0x40000000 \
+    -fw_cfg name=opt/gramine/pwd,string="$PWD" \
+    -fw_cfg name=opt/gramine/args,string="$GRAMINE_ARGS" \
+    -fw_cfg name=opt/gramine/envs,string="$GRAMINE_ENVS" \
+    -fw_cfg name=opt/gramine/unixtime_s,string="$EPOCHSECONDS"
+QEMU_RC=$?
+
+[ -n "$GRAMINE_VM_CONSOLE_LOG" ] && cp "$CONSOLE_LOG" "$GRAMINE_VM_CONSOLE_LOG" 2>/dev/null
+
+# The guest powers off with PSCI SYSTEM_OFF (QEMU exits 0 whatever happened), so the
+# exit code comes from the console: `_PalProcessExit` logs "[ VM exited with code N ]".
+GUEST_RC=$(sed -n 's/.*VM exited with code \([0-9]*\).*/\1/p' "$CONSOLE_LOG" 2>/dev/null | tail -1)
+if [ -n "$GUEST_RC" ]; then
+    exit "$GUEST_RC"
+elif grep -q "Panic" "$CONSOLE_LOG" 2>/dev/null; then
+    exit 134            # kernel panic before the guest could report an exit code
+fi
+exit "$QEMU_RC"

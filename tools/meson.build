@@ -64,11 +64,14 @@ if vm
     conf_gramine_vm.set_quoted('BIOS_PATH', join_paths(hostpalpath_vm, 'bios'))
     conf_gramine_vm.set_quoted('LIBPAL_PATH', join_paths(hostpalpath_vm, 'pal'))
 
+    # The x86 launcher (q35, BIOS blob, NUMA DIMMs, vhost-vsock) cannot work on aarch64: the
+    # arm one boots the kernel under QEMU `virt` with a dumped DTB. Both install as `gramine-vm`.
     configure_file(
-        input: 'gramine-vm.in',
+        input: host_machine.cpu_family() == 'aarch64' ? 'gramine-vm-aarch64.in' : 'gramine-vm.in',
         output: 'gramine-vm',
         configuration: conf_gramine_vm,
         install_dir: get_option('bindir'),
+        install_mode: 'rwxr-xr-x',
     )
 endif
 
