@@ -1,10 +1,11 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
-# Multi-architecture build + test matrix for the direct PAL (x86_64 and aarch64).
+# Build + test matrix for the DIRECT PAL only (x86_64 and aarch64). The vm PAL (gramine-vm) is not
+# covered by CI yet: it needs KVM (see test/test-vm.sh).
 #
-# Manual trigger only for now (Actions tab -> "Multi-arch CI" -> Run workflow). Enable automatic
+# Manual trigger only for now (Actions tab -> "Direct PAL CI (x86_64 + aarch64)" -> Run workflow). Enable automatic
 # runs by adding `pull_request:` / `push:` below once the matrix has proven stable on both runners.
-name: Multi-arch CI
+name: Direct PAL CI (x86_64 + aarch64)
 
 on:
   workflow_dispatch:
@@ -22,12 +23,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: multiarch-${{ github.ref }}
+  group: direct-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   direct-pal:
-    name: direct PAL (${{ matrix.arch }})
+    name: direct PAL tests (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     strategy:
@@ -59,7 +60,7 @@ jobs:
           libdir=$(dirname "$(find "$GRAMINE_PREFIX" -name libsysdb.so | head -n 1)")
           scripts/ci/check-rwx.py "$libdir/libsysdb.so" "$libdir"/direct/loader "$libdir"/direct/libpal.so
 
-      - name: Run the regression tests
+      - name: Run the direct-PAL regression tests
         env:
           SUITES: ${{ inputs.suites }}   # via env, never interpolated into the script text
         run: |

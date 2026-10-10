@@ -9,7 +9,7 @@
 #
 # This catches typos, missing declarations and signature mismatches in shared code and in the
 # x86_64 arch headers after refactors made on aarch64. It is NOT a substitute for a real x86_64
-# build and test run (see .github/workflows/multiarch.yml).
+# build and test run (see .github/workflows/direct.yml).
 #
 # Usage: scripts/syntax-check-x86.sh [build-dir]     (default: build-aarch64)
 # Known, expected skips: aarch64-only sources, and libos_table.c (needs the x86 kernel's syscall
