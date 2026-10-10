@@ -91,10 +91,7 @@ sed "s|@LIBSYSDB@|$LIBSYSDB|" "$STAGE/hello.manifest.template" > /bin/hello.mani
 "$VIRTIOFSD" --socket-path "$WORK/vhostfs" --shared-dir / --log-level error \
     --sandbox none --no-announce-submounts >"$WORK/virtiofsd.log" 2>&1 &
 touch "$WORK/virtconsole.log"
-# Stream the PAL console as the guest writes it, so output appears live and not
-# only at trap time.
-tail -n +1 -F -s 0.05 "$WORK/virtconsole.log" &
-TAIL_PID=$!
+# The PAL console is streamed live by a `tail` started right after QEMU (below).
 for _ in $(seq 50); do
     [ -e "$WORK/vhostfs" ] && break
     sleep 0.1
@@ -119,6 +116,10 @@ timeout ${RUN_TIMEOUT:-20} qemu-system-aarch64 $M "$@" -accel "$ACCEL" -cpu "$CP
     -kernel "$PAL" -device loader,file="$WORK/virt-packed.dtb",addr=0x40000000 \
     -nographic -monitor none 2>"$WORK/qemu.err" &
 QPid=$!
+# --pid makes tail exit only after QEMU is gone *and* the file has been read to the end, so
+# the guest's last console lines (written right before it powers off) are never lost.
+tail -n +1 -f -s 0.05 --pid=$QPid "$WORK/virtconsole.log" &
+TAIL_PID=$!
 
 # The guest powers itself off with PSCI SYSTEM_OFF on exit/panic (triple_fault), which
 # makes QEMU exit, so `wait` normally returns as soon as the app is done. RUN_TIMEOUT is
@@ -126,7 +127,7 @@ QPid=$!
 # unavailable); its SIGTERM is reported below. The EXIT trap then sweeps up.
 rc=0
 wait $QPid || rc=$?
-sleep 0.3 # let the live tail drain the console's last lines before the trap kills it
+wait $TAIL_PID 2>/dev/null || true # drains the console's last lines (see --pid above)
 if [ "$rc" = 124 ] || [ "$rc" = 143 ]; then
     echo "=== qemu terminated via RUN_TIMEOUT=${RUN_TIMEOUT:-20}s (guest hung, or its exit path spun without PSCI SYSTEM_OFF) ===" >&2
 elif [ "$rc" != 0 ]; then

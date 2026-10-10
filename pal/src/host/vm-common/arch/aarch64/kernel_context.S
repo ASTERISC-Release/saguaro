@@ -212,6 +212,14 @@ el0_sync_entry:
     cbz     x9, hang                          /* LibOS not initialized on this thread yet */
     ldr     x9, [x9, #8]                      /* common.libos_syscall_entry (LibOS wrote it) */
     cbz     x9, hang
+    /* The LibOS syscall path runs here at EL1 on the user stack, so it must stay
+     * interruptible: exception entry masked DAIF.I and nothing else would ever clear it, which
+     * made every syscall run deaf -- two CPUs in mprotect() then deadlock (one spins masked on
+     * the LibOS VMA lock while the lock holder waits for its TLB-shootdown SGI ack). x86 keeps
+     * IF set on `syscall` for the same reason ("our kernel is ok to be interrupted";
+     * kernel_syscalls.c leaves it out of IA32_SYSCALL_MASK). The return trampolines below mask
+     * again before touching ELR/SPSR. */
+    msr     daifclr, #2
     br      x9
 
 .Lel0_sync_unexpected:
@@ -266,6 +274,9 @@ el0_sync_entry:
     stp     x22, x23, [x30, #ISR_REGS + 176]
     stp     x24, x25, [x30, #ISR_REGS + 192]
     stp     x26, x27, [x30, #ISR_REGS + 208]
+    ldr     x29, [sp]                     /* x29 was FP-area scratch above: re-fetch the
+                                             interrupted code's x29 from the entry scratch
+                                             (else every IRQ replaced it with a kernel ptr) */
     stp     x28, x29, [x30, #ISR_REGS + 224]
     mov     sp, x30
     TRACE 1                               /* TODO(diag SMP B7): el0 memfault entry complete */
@@ -325,6 +336,10 @@ el0_sync_entry:
  * --------------------------------------------------------------------------- */
     globl pal_syscall_return
 pal_syscall_return:
+    msr     daifset, #2                       /* an IRQ between the ELR/SPSR writes and the eret
+                                                 would clobber both (exception entry rewrites
+                                                 them): the syscall ran interruptible, the
+                                                 return must not */
     mrs     x16, tpidr_el1
     ldr     x16, [x16, #PER_CPU_DATA_CUR_TCB]
     ldr     x17, [x16, #PAL_TCB_VM_USER_RIP]
@@ -376,6 +391,7 @@ pal_syscall_return:
  * contract is the saved ucontext, and the syscall ABI declares both dead). */
     globl pal_sigreturn_return
 pal_sigreturn_return:
+    msr     daifset, #2                       /* see pal_syscall_return */
     mrs     x16, tpidr_el1
     ldr     x16, [x16, #PER_CPU_DATA_CUR_TCB]
     ldr     x17, [x16, #PAL_TCB_VM_USER_RIP]   /* LibOS-planted restored pc */
@@ -657,6 +673,9 @@ el0_irq_entry:
     stp     x22, x23, [x30, #ISR_REGS + 176]
     stp     x24, x25, [x30, #ISR_REGS + 192]
     stp     x26, x27, [x30, #ISR_REGS + 208]
+    ldr     x29, [sp]                     /* x29 was FP-area scratch above: re-fetch the
+                                             interrupted code's x29 from the entry scratch
+                                             (else every IRQ replaced it with a kernel ptr) */
     stp     x28, x29, [x30, #ISR_REGS + 224]
     mov     sp, x30                       /* sp = frame (x30's user value is saved) */
     TRACE 1                               /* TODO(diag SMP B7): el0_irq entry complete */
@@ -739,6 +758,9 @@ el1_irq_entry:
     stp     x22, x23, [x30, #ISR_REGS + 176]
     stp     x24, x25, [x30, #ISR_REGS + 192]
     stp     x26, x27, [x30, #ISR_REGS + 208]
+    ldr     x29, [sp]                     /* x29 was FP-area scratch above: re-fetch the
+                                             interrupted code's x29 from the entry scratch
+                                             (else every IRQ replaced it with a kernel ptr) */
     stp     x28, x29, [x30, #ISR_REGS + 224]
     mov     sp, x30
     TRACE 1                               /* TODO(diag SMP B7): el1_irq entry complete */
@@ -841,6 +863,9 @@ el1_sync_entry:
     stp     x22, x23, [x30, #ISR_REGS + 176]
     stp     x24, x25, [x30, #ISR_REGS + 192]
     stp     x26, x27, [x30, #ISR_REGS + 208]
+    ldr     x29, [sp]                     /* x29 was FP-area scratch above: re-fetch the
+                                             interrupted code's x29 from the entry scratch
+                                             (else every IRQ replaced it with a kernel ptr) */
     stp     x28, x29, [x30, #ISR_REGS + 224]
     mov     sp, x30
     TRACE 1                               /* TODO(diag SMP B7): el1_sync entry (kernel bug) */
