@@ -40,18 +40,9 @@ static void* worker(void* arg) {
     long id = (long)arg;
     tid_local = (unsigned long)id * 1000;
     for (int i = 0; i < ITERS; i++) {
-        /* TODO(diag SMP B7): capture lock return codes and raw lock word (drop later) */
-        int rc = pthread_mutex_lock(&mtx);
-        if (rc) {
-            fprintf(stderr, "T%ld lock rc=%d word=%u mtx@%p iter=%d\n", id, rc,
-                    *(unsigned*)&mtx, (void*)&mtx, i);
-        }
+        pthread_mutex_lock(&mtx);
         counter += tid_local + 1;
-        rc = pthread_mutex_unlock(&mtx);
-        if (rc) {
-            fprintf(stderr, "T%ld unlock rc=%d word=%u mtx@%p iter=%d\n", id, rc,
-                    *(unsigned*)&mtx, (void*)&mtx, i);
-        }
+        pthread_mutex_unlock(&mtx);
     }
     return (void*)(tid_local + ITERS);
 }
@@ -63,11 +54,6 @@ int main(int argc, char** argv) {
     bad_addr = argc < 0 ? (volatile int*)&counter : NULL;
     printf("Hello world from Gramine VM-PAL on aarch64!\n");
     fflush(stdout);
-
-    /* TODO(diag SMP B7): ground-truth addresses to correlate kernel-side futex/panic logs
-     * with the app's ASLR'd image (drop once the futex-op corruption is root-caused). */
-    fprintf(stderr, "SYM mtx=%p counter=%p worker=%p pmutex=%p\n", (void*)&mtx,
-            (void*)&counter, (void*)worker, (void*)pthread_mutex_lock);
 
     /* B3/B4 acceptance: spend some time executing in EL0 so the 100ms periodic timer tick
      * arrives while the *user* thread is running -- the el0_irq preemption path
