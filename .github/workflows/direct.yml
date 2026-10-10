@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 # Build + test matrix for the DIRECT PAL only (x86_64 and aarch64). The vm PAL (gramine-vm) is not
-# covered here: it needs KVM (see test/test-vm.sh and vm.yml, which probes the hosted runners for it).
+# covered here: it needs KVM (see vm.yml for the x86_64 vm job and test/test-vm.sh for aarch64).
 #
 # Manual trigger only for now (Actions tab -> "Direct PAL CI (x86_64 + aarch64)" -> Run workflow). Enable automatic
 # runs by adding `pull_request:` / `push:` below once the matrix has proven stable on both runners.

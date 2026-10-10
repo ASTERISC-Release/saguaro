@@ -3,15 +3,14 @@
 # VM PAL (gramine-vm) CI.
 #
 # gramine-vm needs hardware virtualization (/dev/kvm) on a machine of the same architecture, and
-# on x86_64 also /dev/vhost-vsock.
+# on x86_64 also /dev/vhost-vsock. Hosted x86_64 runners provide both; the hosted aarch64 runners have
+# no usable KVM, so the aarch64 vm PAL is not tested in CI (it needs a self-hosted aarch64 runner with
+# /dev/kvm; see test/test-vm.sh).
 #
-#   x86_64-vm   builds the vm PAL on a hosted x86_64 runner (KVM is available there) and runs
-#               gramine-vm: a smoke test (helloworld, a multi-threaded example) that must pass, then
-#               the LibOS regression suite under the VM harness (informational at first: the skip
-#               list was measured on aarch64 and x86_64 results may differ; see the job summary).
-#   kvm-probe   reports what the hosted x86_64 and aarch64 runners offer (/dev/kvm, vhost-vsock, a
-#               KVM guest). The hosted aarch64 runners have no usable KVM, so the aarch64 vm PAL is not
-#               tested in CI; it needs a self-hosted aarch64 runner with /dev/kvm (see test/test-vm.sh).
+#   x86_64-vm   builds the vm PAL on a hosted x86_64 runner and runs gramine-vm: a smoke test
+#               (helloworld, a multi-threaded example) that must pass, then the LibOS regression suite
+#               under the VM harness (informational at first: the skip list was measured on aarch64 and
+#               x86_64 results may differ; see the job summary).
 #
 # Manual trigger only (Actions tab -> "VM PAL CI" -> Run workflow).
 name: VM PAL CI
@@ -143,104 +142,3 @@ jobs:
           path: |
             vm-*.log
             build-vm-x86_64/subprojects/glibc-2.39-1/glibc-build.log
-
-  kvm-probe:
-    name: KVM probe (${{ matrix.arch }})
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: x86_64
-            runner: ubuntu-24.04
-            qemu_pkg: qemu-system-x86
-            qemu_bin: qemu-system-x86_64
-            qemu_args: "-M q35 -cpu host"
-          - arch: aarch64
-            runner: ubuntu-24.04-arm
-            qemu_pkg: qemu-system-arm
-            qemu_bin: qemu-system-aarch64
-            qemu_args: "-M virt,gic-version=3 -cpu host"
-    steps:
-      - name: Machine
-        continue-on-error: true
-        run: |
-          {
-            echo "### KVM probe: ${{ matrix.arch }} (${{ matrix.runner }})"
-            echo '```'
-            uname -a
-            echo "cpus: $(nproc)  mem: $(free -h | awk '/^Mem:/{print $2}')"
-            grep -m1 -E 'model name|Model name|^CPU implementer' /proc/cpuinfo || true
-            grep -m1 -o -w -E 'vmx|svm' /proc/cpuinfo | sed 's/^/cpu virtualization flag: /' || true
-            echo '```'
-          } | tee -a "$GITHUB_STEP_SUMMARY"
-
-      - name: Device nodes
-        continue-on-error: true
-        run: |
-          {
-            echo "#### /dev nodes (before any change)"
-            echo '```'
-            ls -l /dev/kvm /dev/vhost-vsock /dev/vhost-net /dev/net/tun 2>&1 || true
-            lsmod | grep -E '^(kvm|vhost|vsock|vmw_vsock)' || echo "(no kvm/vhost modules listed)"
-            echo '```'
-          } | tee -a "$GITHUB_STEP_SUMMARY"
-
-      - name: Make /dev/kvm usable by the runner user
-        continue-on-error: true
-        run: |
-          # the udev rule GitHub documents for hardware-accelerated Android emulation
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
-            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-          sleep 1
-          if [ -c /dev/kvm ] && [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
-            echo "KVM_USABLE=yes" >> "$GITHUB_ENV"
-          else
-            echo "KVM_USABLE=no" >> "$GITHUB_ENV"
-          fi
-          ls -l /dev/kvm || true
-
-      - name: vhost-vsock (needed by the x86_64 launcher)
-        continue-on-error: true
-        run: |
-          sudo modprobe vhost_vsock 2>&1 || echo "modprobe vhost_vsock failed"
-          ls -l /dev/vhost-vsock 2>&1 || true
-          if [ -c /dev/vhost-vsock ]; then echo "VSOCK_AVAILABLE=yes" >> "$GITHUB_ENV"
-          else echo "VSOCK_AVAILABLE=no" >> "$GITHUB_ENV"; fi
-
-      - name: Install QEMU, virtiofsd and dtc
-        continue-on-error: true
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq ${{ matrix.qemu_pkg }} virtiofsd device-tree-compiler
-          ${{ matrix.qemu_bin }} --version | head -1
-          ls /usr/libexec/virtiofsd /usr/lib/qemu/virtiofsd 2>&1 || true
-
-      - name: Start a KVM guest (smoke test)
-        continue-on-error: true
-        run: |
-          # paused guest (-S) with no kernel: succeeds iff QEMU can create the KVM VM and vCPU
-          # (exit 124 = still running when the timeout hit = KVM works)
-          set +e
-          timeout 8 ${{ matrix.qemu_bin }} -accel kvm ${{ matrix.qemu_args }} -m 256 -smp 2 \
-            -display none -serial none -monitor none -S > qemu-probe.log 2>&1
-          rc=$?
-          cat qemu-probe.log
-          if [ $rc = 124 ]; then echo "KVM_GUEST=yes" >> "$GITHUB_ENV"
-          else echo "KVM_GUEST=no (qemu exit $rc)" >> "$GITHUB_ENV"; fi
-
-      - name: Result
-        if: always()
-        run: |
-          {
-            echo "#### Result (${{ matrix.arch }})"
-            echo
-            echo "| check | result |"
-            echo "|---|---|"
-            echo "| /dev/kvm readable and writable | ${KVM_USABLE:-not checked} |"
-            echo "| /dev/vhost-vsock | ${VSOCK_AVAILABLE:-not checked} |"
-            echo "| QEMU starts a KVM guest | ${KVM_GUEST:-not checked} |"
-          } | tee -a "$GITHUB_STEP_SUMMARY"
