@@ -1,18 +1,36 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
-# VM PAL (gramine-vm) CI -- currently only a PROBE of what the GitHub-hosted runners offer.
+# VM PAL (gramine-vm) CI.
 #
 # gramine-vm needs hardware virtualization (/dev/kvm) on a machine of the same architecture, and
-# on x86_64 also /dev/vhost-vsock. This workflow reports whether the hosted x86_64 and aarch64 Linux
-# runners provide them, and whether QEMU can start a KVM guest. It never fails on a missing feature
-# (the answer is the result: see the job summary). If it works, the build and test steps for
-# `scripts/install.sh --vm` / `test/test-vm.sh` go into this file.
+# on x86_64 also /dev/vhost-vsock.
 #
-# Manual trigger only (Actions tab -> "VM PAL CI (KVM probe)" -> Run workflow).
-name: VM PAL CI (KVM probe)
+#   x86_64-vm   builds the vm PAL on a hosted x86_64 runner (KVM is available there) and runs
+#               gramine-vm: a smoke test (helloworld, a multi-threaded example) that must pass, then
+#               the LibOS regression suite under the VM harness (informational at first: the skip
+#               list was measured on aarch64 and x86_64 results may differ; see the job summary).
+#   kvm-probe   reports what the hosted x86_64 and aarch64 runners offer (/dev/kvm, vhost-vsock, a
+#               KVM guest). The hosted aarch64 runners have no usable KVM, so the aarch64 vm PAL is not
+#               tested in CI; it needs a self-hosted aarch64 runner with /dev/kvm (see test/test-vm.sh).
+#
+# Manual trigger only (Actions tab -> "VM PAL CI" -> Run workflow).
+name: VM PAL CI
 
 on:
   workflow_dispatch:
+    inputs:
+      run_suite:
+        description: "x86_64-vm: also run the LibOS regression suite under gramine-vm (informational)"
+        type: boolean
+        default: true
+      ram:
+        description: "x86_64-vm: guest RAM (GRAMINE_RAM_SIZE; the launcher needs >= 5G)"
+        required: false
+        default: "8G"
+      cpus:
+        description: "x86_64-vm: guest vCPUs (GRAMINE_CPU_NUM)"
+        required: false
+        default: "2"
 
 permissions:
   contents: read
@@ -22,6 +40,91 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  x86_64-vm:
+    name: x86_64 vm PAL
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      GRAMINE_PREFIX: ${{ github.workspace }}/.install-vm
+      GRAMINE_RAM_SIZE: ${{ inputs.ram }}
+      GRAMINE_CPU_NUM: ${{ inputs.cpus }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable KVM and vhost-vsock
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          sudo modprobe vhost_vsock
+          ls -l /dev/kvm /dev/vhost-vsock
+          test -r /dev/kvm && test -w /dev/kvm
+          test -c /dev/vhost-vsock
+
+      - name: Install build dependencies, QEMU and virtiofsd
+        run: |
+          scripts/dependencies.sh --build-only
+          sudo apt-get install -y -qq qemu-system-x86 virtiofsd lsof
+          # gramine-vm starts `virtiofsd` by name; Ubuntu installs it off PATH
+          for d in /usr/lib/qemu /usr/libexec; do
+            [ -x "$d/virtiofsd" ] && echo "$d" >> "$GITHUB_PATH"
+          done
+          qemu-system-x86_64 --version | head -1
+
+      - name: Build and install Gramine (direct + vm PALs, graphics disabled)
+        run: scripts/install.sh --vm --graphics disabled --prefix "$GRAMINE_PREFIX" -j "$(nproc)"
+
+      - name: Smoke test - helloworld under gramine-vm
+        run: |
+          . "$GRAMINE_PREFIX/env.sh"
+          cd CI-Examples/helloworld
+          make
+          # virtiofsd serves / and runs with --sandbox none: run as root like the container does
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" timeout 300 gramine-vm helloworld \
+            2>&1 | tee ../../vm-hello.log
+          grep -q "Hello, world" ../../vm-hello.log
+
+      - name: Smoke test - multi-threaded example under gramine-vm
+        run: |
+          . "$GRAMINE_PREFIX/env.sh"
+          cd CI-Examples/unit_tests/multi-thread
+          make thread-tls thread-tls.manifest
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" timeout 300 gramine-vm thread-tls \
+            2>&1 | tee ../../../vm-threads.log
+          grep -q "(again)" ../../../vm-threads.log   # printed by every thread at the end of its TLS check
+
+      - name: LibOS regression suite under gramine-vm (informational)
+        if: ${{ inputs.run_suite }}
+        continue-on-error: true
+        run: |
+          . "$GRAMINE_PREFIX/env.sh"
+          cd libos/test/regression
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" GRAMINE_VM=1 \
+            gramine-test pytest -- -q -rfEsxX --tb=short -p no:cacheprovider test_libos.py \
+            2>&1 | tee ../../../vm-libos.log
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### x86_64 vm PAL"
+            echo '```'
+            tail -n 3 vm-hello.log 2>/dev/null || echo "(no helloworld log)"
+            echo '--- libos suite'
+            tail -n 1 vm-libos.log 2>/dev/null || echo "(suite not run)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-vm-x86_64
+          if-no-files-found: ignore
+          path: |
+            vm-*.log
+
   kvm-probe:
     name: KVM probe (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
