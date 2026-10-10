@@ -94,6 +94,13 @@ When one is fixed, delete its `vm_skip.toml` entry (an xfail that starts passing
 - **Launcher environment**: `gramine-vm` is a bash script, so it cannot forward the caller's environment
   faithfully (`PWD`, `_`, `SHLVL` are rewritten); `test_103_env_from_host` is skipped for that reason.
   The guest hostname is always `localhost`.
+- **Minimal install without the bundled glibc (`-Dlibc=none`).** The default `-Dlibc=glibc` builds glibc 2.39
+  (the slowest part of a fresh build) only to provide the guest's `/lib` runtime directory and loader
+  (`gramine.runtimedir()`); on aarch64 it carries no fast path (the patched syscall path is x86-only, and vm/tdx
+  builds use `compile-no-patches.sh`). Try `-Dlibc=none` and see what survives: manifests that mount
+  `gramine.runtimedir()` (most tests and examples) would need to mount the host's `/lib/aarch64-linux-gnu`
+  instead, and results then depend on the host glibc. Decide whether a "minimal" install mode (faster build,
+  host libc) is worth offering. Untested.
 
 ## Cross-checks waiting on x86 / other QEMU
 
