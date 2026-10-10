@@ -90,6 +90,18 @@ long psci_call(uint64_t func_id, uint64_t arg0, uint64_t arg1, uint64_t arg2) {
     return psci_call_smc(func_id, arg0, arg1, arg2);
 }
 
+#define PSCI_FUNC_SYSTEM_OFF 0x84000008ULL
+
+/* Power the whole machine off (QEMU exits). Called from triple_fault(), i.e. from exit and
+ * panic paths that may run before the DTB is parsed or re-enter via a fault in this very
+ * call, so: refuse without a DTB-advertised PSCI, and only ever try once. */
+void arm_psci_system_off(void) {
+    static volatile int attempted = 0;
+    if (!dtb_psci_available() || __atomic_exchange_n(&attempted, 1, __ATOMIC_ACQ_REL))
+        return;
+    psci_call(PSCI_FUNC_SYSTEM_OFF, 0, 0, 0);
+}
+
 /* PSCI v0.2/v1.0 64-bit function ids (arm DEN 0022A); the DTB's /psci properties carry the
  * same values -- dtb_cpu_on_id() reads *cpu ids* from cpu@N reg, this is the *function id*. */
 #define PSCI_FUNC_CPU_ON 0xc4000003ULL

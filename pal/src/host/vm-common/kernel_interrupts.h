@@ -112,6 +112,10 @@ static inline void spinlock_unlock_enable_irq(spinlock_t* lock) {
     sti();
 }
 
+#ifdef __aarch64__
+void arm_psci_system_off(void); /* arch/aarch64/kernel_multicore.c; returns only on failure */
+#endif
+
 static inline noreturn void triple_fault(void) {
 #ifdef __x86_64__
     /* This IDT has a limit of 1 byte, hence #UD with this IDT loaded will result in #DF then triple
@@ -125,9 +129,11 @@ static inline noreturn void triple_fault(void) {
         "lgdt %0; ud2\n"
         : : "m"(invalid_idtr));
 #else /* __aarch64__ */
-    /* No triple fault on aarch64: mask all exceptions (so even a misbehaving GIC can't get us)
-     * and spin. QEMU shows this as a hung vCPU at a known address in the debugger, the closest
-     * observable equivalent of "machine shutdown on triple fault". */
+    /* No triple fault on aarch64: the equivalent of "QEMU shuts down on triple fault" is PSCI
+     * SYSTEM_OFF (a no-op if the DTB has no PSCI node or it is already in flight). If that
+     * returns, mask all exceptions (so even a misbehaving GIC can't get us) and spin: QEMU shows
+     * this as a hung vCPU at a known address in the debugger. */
+    arm_psci_system_off();
     __asm__ volatile(
 #ifdef C_NO_3F
         "wfi\n"

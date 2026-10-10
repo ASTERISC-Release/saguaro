@@ -24,8 +24,8 @@ cleanup() {
     kill $(jobs -p) 2>/dev/null || true
     sleep 0.2
     # The live tail below normally streams the log; dump any lines written after
-    # QEMU died (it is killed by RUN_TIMEOUT because the arm kernel's exit path
-    # spins instead of PSCI SYSTEM_OFF, so `wait` never returns early).
+    # QEMU died (it is killed by RUN_TIMEOUT only if the guest hangs; a normal exit or
+    # panic powers off via PSCI SYSTEM_OFF, so `wait` returns early).
     if [ -s "$WORK/virtconsole.log" ] && [ -z "$TAIL_PID" ]; then
         echo "=== virtconsole.log ===" >&2
         cat "$WORK/virtconsole.log" >&2
@@ -91,11 +91,9 @@ sed "s|@LIBSYSDB@|$LIBSYSDB|" "$STAGE/hello.manifest.template" > /bin/hello.mani
 "$VIRTIOFSD" --socket-path "$WORK/vhostfs" --shared-dir / --log-level error \
     --sandbox none --no-announce-submounts >"$WORK/virtiofsd.log" 2>&1 &
 touch "$WORK/virtconsole.log"
-# Stream the PAL console as the guest writes it: without this the log only
-# appears at trap time, which (because the guest's exit path spins instead of
-# PSCI SYSTEM_OFF'ing QEMU down) is RUN_TIMEOUT seconds after the app finished
-# -- the "hit Ctrl+C to see output" annoyance.
-tail -n +1 -F "$WORK/virtconsole.log" &
+# Stream the PAL console as the guest writes it, so output appears live and not
+# only at trap time.
+tail -n +1 -F -s 0.05 "$WORK/virtconsole.log" &
 TAIL_PID=$!
 for _ in $(seq 50); do
     [ -e "$WORK/vhostfs" ] && break
@@ -122,15 +120,18 @@ timeout ${RUN_TIMEOUT:-20} qemu-system-aarch64 $M "$@" -accel "$ACCEL" -cpu "$CP
     -nographic -monitor none 2>"$WORK/qemu.err" &
 QPid=$!
 
-# The guest has no PSCI SYSTEM_OFF wiring yet (pal_exit -> triple_fault spins),
-# so `wait` normally returns only when RUN_TIMEOUT's SIGTERM lands. Announce
-# that in the exit status; the EXIT trap then sweeps up (and dumps any lines
-# tail -F lost in the kill race).
+# The guest powers itself off with PSCI SYSTEM_OFF on exit/panic (triple_fault), which
+# makes QEMU exit, so `wait` normally returns as soon as the app is done. RUN_TIMEOUT is
+# only the backstop for a guest that hangs (or whose exit path spins because PSCI is
+# unavailable); its SIGTERM is reported below. The EXIT trap then sweeps up.
 rc=0
 wait $QPid || rc=$?
+sleep 0.3 # let the live tail drain the console's last lines before the trap kills it
 if [ "$rc" = 124 ] || [ "$rc" = 143 ]; then
-    echo "=== qemu terminated via RUN_TIMEOUT=${RUN_TIMEOUT:-20}s (guest still running or exit-path spins) ===" >&2
+    echo "=== qemu terminated via RUN_TIMEOUT=${RUN_TIMEOUT:-20}s (guest hung, or its exit path spun without PSCI SYSTEM_OFF) ===" >&2
 elif [ "$rc" != 0 ]; then
     echo "=== qemu exited rc=$rc ===" >&2
     tail -c 500 "$WORK/qemu.err" >&2
+else
+    echo "=== guest exited (powered off) ===" >&2
 fi
