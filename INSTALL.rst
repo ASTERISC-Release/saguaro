@@ -73,8 +73,7 @@ x86_64::
 
 The x86_64 vm PAL is inherited from upstream gramine-tdx. ``gramine-vm`` uses the repository's QEMU fork
 (``qemu/build/qemu-system-x86_64``) when it exists and otherwise a stock ``qemu-system-x86_64`` from
-``PATH``; set ``QEMU_PATH`` to choose one. TDX and the graphics redirection need the fork. This
-combination has not been re-validated from this tree yet (no automated test script exists for it).
+``PATH``; set ``QEMU_PATH`` to choose one. TDX and the graphics redirection need the fork.
 
 Running an application under the VM PAL is described in ``Documentation/devel/vm.md``: the manifest's
 loader entrypoint must point at the VM ``libsysdb.so`` (``make`` against the VM install does this) and
@@ -115,8 +114,6 @@ Notes:
   and ``seccomp=unconfined`` (the direct PAL calls ``personality()``, which the default profile blocks).
 - A changed Containerfile triggers a rebuild, and a container created from an older image is recreated;
   that discards the container's ``/tmp`` (files in the repository survive).
-- The aarch64 container is the tested one. The x86_64 recipe was written but has not been built or run
-  yet (it was prepared on an aarch64 machine), so expect to adjust it on first use.
 
 Building by hand
 ----------------
