@@ -1,7 +1,7 @@
 # Container for the aarch64 `vm` PAL
 
 Native **aarch64 host with working KVM** required (TCG is out of scope). The image is Ubuntu 24.04
-with stock QEMU 8.2.x, virtiofsd, dtc, gdb and the meson/gcc toolchain; see `README-vm.md` for the
+with stock QEMU 8.2.x, virtiofsd, dtc, gdb and the meson/gcc toolchain; see `Documentation/devel/vm.md` for the
 QEMU requirement and the build/run recipe.
 
 ```sh

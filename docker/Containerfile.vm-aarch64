@@ -1,4 +1,4 @@
-# Development container for the aarch64 vm-PAL unikernel (README-vm.md / Documentation/devel/aarch64/vm-pal-plan.md). Parallel to the x86 `Containerfile`
+# Development container for the aarch64 vm-PAL unikernel (Documentation/devel/vm.md / Documentation/devel/aarch64/vm-pal-plan.md). Parallel to the x86 `Containerfile`
 # (which targets the GPU/KVM/TDX Steam workflow); nothing here is shared.
 #
 # Target runtime is **KVM on a native aarch64 host** (`-accel kvm -cpu host`);
@@ -38,7 +38,7 @@ RUN apt-get update && \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Build layer: meson/ninja/gcc toolchain for the vm PAL + LibOS
-# (`meson setup build-vm-container -Dvm=enabled ...` + ninja; see README-vm.md).
+# (`meson setup build-vm-container -Dvm=enabled ...` + ninja; see Documentation/devel/vm.md).
 # The python3-* modules are Gramine's meson-time deps; patch/pkg-config feed the
 # vendored subprojects (mbedtls's meson.build probes pkg-config). gawk+bison are
 # glibc 2.39's configure requirements (fatal without them).
@@ -51,7 +51,7 @@ RUN apt-get update && \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Test layer: the libos regression suite (`gramine-test` + pytest) run under `gramine-vm`
-# (-Dtests=enabled -Dtests_pie=true; see README-vm.md). procps/file/iproute2 are
+# (-Dtests=enabled -Dtests_pie=true; see Documentation/devel/vm.md). procps/file/iproute2 are
 # used by individual tests.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \

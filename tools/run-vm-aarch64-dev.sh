@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Development bring-up runner for the aarch64 vm-PAL kernel (README-vm.md).
+# Development bring-up runner for the aarch64 vm-PAL kernel (Documentation/devel/vm.md).
 # Not the final launcher: tools/gramine-vm.in's arm counterpart will replace it.
 #
 # Usage: run-vm-aarch64-dev.sh [extra qemu args]

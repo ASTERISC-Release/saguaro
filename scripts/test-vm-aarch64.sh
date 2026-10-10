@@ -12,7 +12,7 @@
 # Usage: scripts/test-vm-aarch64.sh [--prefix DIR] [--build-dir DIR] [suite...]   (default: all)
 # Prerequisite: a vm build installed with `scripts/install.sh --vm` (its default prefix/build dir
 # are used unless overridden); the libos suite needs the build to have -Dtests=enabled -Dtests_pie=true
-# (see README-vm.md, "Regression suite").
+# (see Documentation/devel/vm.md, "Regression suite").
 set -u
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 REPO=$(dirname "$HERE")

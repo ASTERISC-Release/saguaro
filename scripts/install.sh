@@ -33,7 +33,7 @@
 #
 # --vm builds the vm-PAL unikernel ("the correct vm version for this machine"): the default build
 # dir becomes build-vm-<arch> so it never reconfigures a direct-PAL build dir, and on aarch64 the
-# option set is fixed to the README-vm.md recipe (-Dvm=enabled, direct/sgx/tdx/tests all disabled --
+# option set is fixed to the Documentation/devel/vm.md recipe (-Dvm=enabled, direct/sgx/tdx/tests all disabled --
 # the aarch64 vm kernel replaces the direct PAL entirely, so a direct-PAL test battery does not
 # apply). On x86_64 your --sgx/--tdx choices are kept.
 #
@@ -101,7 +101,7 @@ if [ "$VM" = enabled ]; then
         BUILDDIR="build-vm-$ARCH"
     fi
     if [ "$ARCH" = aarch64 ]; then
-        # aarch64 recipe (README-vm.md): the vm kernel *is* the PAL here; the direct PAL and
+        # aarch64 recipe (Documentation/devel/vm.md): the vm kernel *is* the PAL here; the direct PAL and
         # SGX/TDX hosts do not exist in this build, and the PAL regression battery is built
         # against the direct PAL.
         if [ "$SGX" = enabled ] || [ "$TDX" = enabled ]; then

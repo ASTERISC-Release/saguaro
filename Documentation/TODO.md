@@ -1,7 +1,7 @@
 # TODO — aarch64 VM PAL (`gramine-vm`)
 
 Open items as of 2026-10-10 (HEAD `fc009987`). Context: `Documentation/devel/aarch64/vm-pal-plan.md` (history),
-`x86-parity-vm.md` (results), `README-vm.md` (how to run). Test ids refer to
+`x86-parity-vm.md` (results), `Documentation/devel/vm.md` (how to run). Test ids refer to
 `libos/test/regression/test_libos.py`; the skip/xfail entries live in
 `libos/test/regression/vm_skip.toml`.
 

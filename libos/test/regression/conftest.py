@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 """
-Under the VM PAL (`GRAMINE_VM=1`, see README-vm.md) tests listed in `vm_skip.toml` are skipped
+Under the VM PAL (`GRAMINE_VM=1`, see Documentation/devel/vm.md) tests listed in `vm_skip.toml` are skipped
 (platform limitation) or marked xfail (known failure, cause not yet understood), each with a reason
 category, so that the remaining result is a meaningful pass/fail signal for the VM PAL.
 """
