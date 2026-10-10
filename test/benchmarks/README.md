@@ -3,12 +3,12 @@
 Performance measurements for the direct PAL: native execution versus `gramine-direct`.
 
 ```
-./benchmarks/run_benchmarks.sh            # syscall microbenchmark + redis-benchmark
-./benchmarks/run_benchmarks.sh syscall    # per-syscall cost only
-./benchmarks/run_benchmarks.sh redis      # redis-server native vs gramine-direct
+./test/benchmarks/run_benchmarks.sh            # syscall microbenchmark + redis-benchmark
+./test/benchmarks/run_benchmarks.sh syscall    # per-syscall cost only
+./test/benchmarks/run_benchmarks.sh redis      # redis-server native vs gramine-direct
 ```
 
-Outputs are appended to `benchmarks/results/<date>_<arch>.txt` (git-ignored). Each file starts with a
+Outputs are appended to `test/benchmarks/results/<date>_<arch>.txt` (git-ignored). Each file starts with a
 header recording the kernel, CPU, memory, OS and git revision of the machine it ran on, so runs can
 be compared before and after a change. Compare the min/median of repeated runs, not single runs;
 server and client are pinned with `taskset` (see the script header for the environment knobs).
@@ -45,4 +45,4 @@ first trap at each `svc` site rewrites it into a branch to a per-site stub that 
 directly (`libos/src/arch/aarch64/libos_syscall_patch.c`), so later executions skip the trap.
 `getpid` and `getuid` come out faster than native because the LibOS answers them without entering
 the host kernel. To measure the trap path, set `sys.rewrite_syscalls = false` in the manifest
-(`make REWRITE=0` in `benchmarks/syscall-bench`).
+(`make REWRITE=0` in `test/benchmarks/syscall-bench`).

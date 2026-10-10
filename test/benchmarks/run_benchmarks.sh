@@ -16,14 +16,14 @@
 #   REDIS_N / REDIS_C   redis-benchmark requests / clients (default 200000 / 50)
 #   SERVER_CPU / CLIENT_CPUS   taskset CPU lists (default: 2 / 4-7, if that many CPUs exist)
 #
-# Results are appended to benchmarks/results/<date>_<arch>.txt (git-ignored) together with a machine
+# Results are appended to test/benchmarks/results/<date>_<arch>.txt (git-ignored) together with a machine
 # header, so runs on different boxes (or before/after a change) can be diffed. Prerequisites:
-# benchmarks/syscall-bench and the redis example must be buildable (test/test-direct.sh builds redis).
+# test/benchmarks/syscall-bench and the redis example must be buildable (test/test-direct.sh builds redis).
 # Re-run with the same settings before and after a change; compare min/median, not single runs.
 
 set -uo pipefail
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
-ROOT=$(dirname "$HERE")
+ROOT=$(dirname "$(dirname "$HERE")")
 . "$ROOT/scripts/gramine-env.sh"   # GRAMINE_PREFIX, PATH, PYTHONPATH
 ITERS=${ITERS:-300000}; REPS=${REPS:-7}
 REDIS_N=${REDIS_N:-200000}; REDIS_C=${REDIS_C:-50}

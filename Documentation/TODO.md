@@ -90,7 +90,7 @@ When one is fixed, delete its `vm_skip.toml` entry (an xfail that starts passing
 - **`large_mmap`** needs a larger page-table pool / block (2 MB) mappings instead of 4 KB pages
   (`PT_POOL_TABLES` is 2048 tables ≈ 4 GB) and a guest with > 6 GB RAM.
 - **Python CI example** needs a PIE `python3` (Ubuntu's is a non-PIE `ET_EXEC` at 0x400000); the
-  example runner currently skips it. **`host_to_guest`** (Tirith VM hook) has never been run on aarch64.
+  example runner currently skips it.
 - **Launcher environment**: `gramine-vm` is a bash script, so it cannot forward the caller's environment
   faithfully (`PWD`, `_`, `SHLVL` are rewritten); `test_103_env_from_host` is skipped for that reason.
   The guest hostname is always `localhost`.
