@@ -149,3 +149,19 @@ reason = "Maps 2 GB and then 4 GB of a file: needs a guest with well over 6 GB o
 tests = [
   "TC_30_Syscall::test_054_large_mmap",
 ]
+
+[[group]]
+kind = "skip"
+category = "no-svc-rewrite"
+reason = "Lazy `svc #0` rewriting (sys.rewrite_syscalls) is a seccomp-trap mechanism of the Linux PAL; the VM PAL dispatches `svc` itself, so there is nothing to rewrite."
+tests = [
+  "TC_01_Bootstrap::test_603_rewrite_stress",
+]
+
+[[group]]
+kind = "xfail"
+category = "investigate"
+reason = "Reading a 3000-entry virtiofs directory exceeds the 40 s test timeout (getdents on virtiofs is slow or stalls); related to the readdir xfail, cause not yet understood."
+tests = [
+  "TC_30_Syscall::test_021_getdents_large_dir",
+]

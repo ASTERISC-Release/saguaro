@@ -34,7 +34,7 @@ Build (native aarch64, or cross; needs meson ≥ 1.x + gcc):
 ```sh
 cd <repo>/gramine-tdx
 meson setup build-vm-aarch64 -Dvm=enabled -Ddirect=disabled -Dsgx=disabled \
-    -Dtdx=disabled -Dtests=disabled --prefix=/tmp/vm-prefix
+    -Dtdx=disabled -Dgraphics=disabled -Dtests=disabled --prefix=/tmp/vm-prefix
 ninja -C build-vm-aarch64          # kernel: build-vm-aarch64/pal/src/host/vm/pal
 ```
 
@@ -49,7 +49,9 @@ newer stock releases are expected to behave the same but are unverified). The QE
 x86 `vm`/`tdx` and graphics work does **not** build for aarch64 (it contains x86-only code, e.g.
 `egl-redirect/xcb.c` inline asm and `util/sg-listener.c` with `KVM_VCPU_TSC_CTRL`) and is not needed:
 the aarch64 `vm` PAL uses only upstream machine features (`virt` with `gic-version=3`, KVM,
-`vhost-user-fs`, fw_cfg, PSCI). Select another binary with `QEMU_PATH=...`.
+`vhost-user-fs`, fw_cfg, PSCI). Select another binary with `QEMU_PATH=...`. Build the aarch64 `vm` PAL with `-Dgraphics=disabled`:
+the graphics host redirection needs that fork's `sg-listener` agent, and without one the redirected
+fd paths misbehave (`scripts/install.sh --vm` sets it for you).
 
 ### `gramine-vm`
 

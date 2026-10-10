@@ -110,6 +110,10 @@ if [ "$VM" = enabled ]; then
         SGX=disabled TDX=disabled
         DIRECT=disabled
         TESTS=disabled
+        # graphics redirection needs the QEMU fork's host agent (sg-listener), which does not exist
+        # for aarch64 (stock QEMU is the requirement): without an agent the redirected fd paths
+        # misbehave (e.g. close() of an invalid fd returns 0 instead of EBADF).
+        GRAPHICS=disabled
     fi
 fi
 
