@@ -258,7 +258,7 @@ endif
 
 foreach conf: configurations
     foreach name, params : conf['tests']
-        pie = params.get('pie', false)
+        pie = params.get('pie', get_option('tests_pie'))
         static = params.get('static', false)
 
         c_args = [

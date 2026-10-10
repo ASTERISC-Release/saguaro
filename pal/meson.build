@@ -1,7 +1,9 @@
 subdir('include')
 subdir('src')
 
-if enable_tests
+# the PAL regression tests are Linux processes linked against libpal, which only the direct/SGX
+# PALs provide as a library (the VM PAL is a bare-metal kernel image)
+if enable_tests and (direct or sgx)
     subdir('regression')
 endif
 

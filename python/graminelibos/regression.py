@@ -4,6 +4,7 @@ import os
 import pathlib
 import resource
 import select
+import shutil
 import signal
 import subprocess
 import sys
@@ -20,6 +21,9 @@ HAS_AVX = os.environ.get('AVX') == '1'
 HAS_EDMM = os.environ.get('EDMM') == '1'
 HAS_SGX = os.environ.get('SGX') == '1'
 IS_VM = os.environ.get('IS_VM') == '1'
+# Run the tests under the VM PAL (`gramine-vm`) instead of Linux-direct/SGX. Note this is not IS_VM,
+# which says the *test machine* is a VM.
+USE_GRAMINE_VM = os.environ.get('GRAMINE_VM') == '1'
 ON_X86 = os.uname().machine in ['x86_64']
 USES_MUSL = os.environ.get('GRAMINE_MUSL') == '1'
 
@@ -176,11 +180,13 @@ class RegressionTestCase(unittest.TestCase):
     @property
     def pal_path(self):
         # pylint: disable=protected-access
-        return pathlib.Path(graminelibos._CONFIG_PKGLIBDIR) / ('sgx' if HAS_SGX else 'direct')
+        host = 'sgx' if HAS_SGX else 'vm' if USE_GRAMINE_VM else 'direct'
+        return pathlib.Path(graminelibos._CONFIG_PKGLIBDIR) / host
 
     @property
     def libpal_path(self):
-        return self.pal_path / 'libpal.so'
+        # the VM PAL is a kernel image, not a shared library
+        return self.pal_path / ('pal' if USE_GRAMINE_VM else 'libpal.so')
 
     @property
     def loader_path(self):
@@ -212,13 +218,25 @@ class RegressionTestCase(unittest.TestCase):
         timeout = (max(self.DEFAULT_TIMEOUT, timeout) if timeout is not None
             else self.DEFAULT_TIMEOUT)
 
+        if prefix is None:
+            prefix = []
+
+        if USE_GRAMINE_VM:
+            if not self.libpal_path.exists():
+                self.fail('vm-PAL kernel ({}) not found'.format(self.libpal_path))
+            # `gramine-vm` exits with the guest's exit code. The guest has a single (virtio)
+            # console carrying application stdout/stderr and Gramine's log, so both streams
+            # are that console.
+            # absolute path: tests that pass a custom `env=` may not carry our PATH
+            gramine_vm = shutil.which('gramine-vm') or 'gramine-vm'
+            _returncode, stdout, stderr = run_command([*prefix, gramine_vm, *args],
+                                                      timeout=timeout, **kwds)
+            return stdout + stderr, stdout + stderr
+
         if not self.loader_path.exists():
             self.fail('loader ({}) not found'.format(self.loader_path))
         if not self.libpal_path.exists():
             self.fail('libpal ({}) not found'.format(self.libpal_path))
-
-        if prefix is None:
-            prefix = []
 
         cmd = [*prefix, fspath(self.loader_path), fspath(self.libpal_path), 'init', *args]
         _returncode, stdout, stderr = run_command(cmd, timeout=timeout, **kwds)

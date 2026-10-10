@@ -68,6 +68,29 @@ the guest's DRAM starts at `0x40000000` and the kernel maps memory 1:1, so
 mapped (`Failed to map file ... EINVAL`); `tools/vm-aarch64-stage/hello` is built
 `-static-pie` for this reason.
 
+### Running the libos regression suite in the VM
+
+The existing pytest suite runs unchanged against the VM PAL; `GRAMINE_VM=1` makes the
+harness (`python/graminelibos/regression.py`, `gramine-test run`) launch `gramine-vm`
+instead of `gramine-direct`:
+
+```sh
+meson setup build-vm-container -Dvm=enabled -Ddirect=disabled -Dsgx=disabled -Dtdx=disabled \
+    -Dtests=enabled -Dtests_pie=true --prefix=/tmp/vm-prefix     # tests_pie: see above
+ninja -C build-vm-container install
+export PATH=/tmp/vm-prefix/bin:$PATH PYTHONPATH=/tmp/vm-prefix/lib/python3.12/site-packages
+export GRAMINE_VM=1 GRAMINE_CPU_NUM=2
+cd libos/test/regression
+gramine-test run helloworld                    # one test, manifest rebuilt on the fly
+gramine-test pytest -- -q -rfEs test_libos.py  # the whole suite (~2 min)
+```
+
+(`-Dtests=enabled` skips the PAL regression tests unless direct/SGX is also enabled: they link
+against `libpal.so`, which the bare-metal VM PAL does not provide.) The guest has one virtio
+console, so the harness gets stdout+stderr+Gramine's log as one stream and uses it for both.
+Baseline (2026-10-10, SMP=2, KVM): 69 passed / 74 failed / 34 skipped; see
+`ARM64_MILESTONE_B.md` for the breakdown.
+
 ### Development runner
 
 `tools/run-vm-aarch64-dev.sh` is the original bring-up script (hello only, console to a

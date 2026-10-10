@@ -97,8 +97,19 @@ QEMU_SHAPE="-accel $ACCEL -cpu $CPU -m $QEMU_MEM_SIZE -smp $QEMU_CPU_NUM"
 
 # Gramine VM id: names the virtiofs socket (and the vsock guest-cid), so two instances can run
 # side by side. Claimed atomically with mkdir.
+# A lock whose owner is gone (killed -9, e.g. by a test harness timeout) is reclaimed.
 GRAMINE_VM_ID=10
-while ! mkdir "/tmp/gramine_vm_$GRAMINE_VM_ID.lock" 2>/dev/null; do
+while true; do
+    LOCK=/tmp/gramine_vm_$GRAMINE_VM_ID.lock
+    if mkdir "$LOCK" 2>/dev/null; then
+        echo $$ > "$LOCK/pid"
+        break
+    fi
+    OWNER=$(cat "$LOCK/pid" 2>/dev/null)
+    if [ -n "$OWNER" ] && ! kill -0 "$OWNER" 2>/dev/null; then
+        rm -rf "$LOCK" "/tmp/gramine_vhostfs_$GRAMINE_VM_ID" "/tmp/gramine_vhostfs_$GRAMINE_VM_ID.pid"
+        continue
+    fi
     GRAMINE_VM_ID=$((GRAMINE_VM_ID + 1))
 done
 VHOSTFS_SOCKET=/tmp/gramine_vhostfs_$GRAMINE_VM_ID

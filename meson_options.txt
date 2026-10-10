@@ -22,6 +22,9 @@ option('libc', type: 'combo', choices: ['none', 'glibc', 'musl'],
 
 option('tests', type: 'combo', choices: ['disabled', 'enabled'],
     description: 'Build test binaries')
+option('tests_pie', type: 'boolean', value: false,
+    description: 'Build the regression test binaries as PIE (required for the aarch64 VM PAL, ' +
+                 'whose DRAM starts at 0x40000000 so a non-PIE binary at 0x400000 cannot be mapped)')
 
 option('dcap', type: 'combo', choices: ['disabled', 'enabled'],
     description: 'Build additional utilities linked against DCAP library')
