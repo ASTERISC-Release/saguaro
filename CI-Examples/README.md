@@ -1,7 +1,8 @@
 # Example Integrations
 
 This folder contains application integration examples. They are tested on
-Ubuntu 24.04 (aarch64 and x86_64) with `gramine-direct`.
+Ubuntu 24.04 (aarch64 and x86_64) with `gramine-direct`; on aarch64 a subset also runs under
+`gramine-vm` (see `tools/run-vm-aarch64-examples.sh`).
 
 For instructions how to build and run each application under Gramine, please
 see the README.md in each subdirectory.
@@ -14,7 +15,7 @@ and harden the configurations.
 ## Prerequisites
 
 Install and enable Gramine first (`scripts/dependencies.sh`, `scripts/install.sh`
-and `. ~/.local/gramine/env.sh`, see the top-level README). Some examples need
+and `. ~/.local/gramine/env.sh`, see `INSTALL.rst` in the repository root). Some examples need
 extra host packages: each has an `install-prereqs.sh`, and
 `install-all-prereqs.sh` runs all of them.
 
@@ -32,6 +33,6 @@ remove all build artifacts (if applicable).
 
 ## Testing
 
-`test/test-direct.sh` (in the top-level `scripts/` directory) builds and runs most
+`test/test-direct.sh` (in the top-level `test/` directory) builds and runs most
 of the examples as part of the test battery; `test/test-direct.sh --list` shows the
-suites. `unit_tests/` holds small test programs for LibOS and PAL behavior.
+suites. `test/test-vm.sh examples` runs the aarch64 subset under `gramine-vm`. `unit_tests/` holds small test programs for LibOS and PAL behavior.

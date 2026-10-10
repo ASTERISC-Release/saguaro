@@ -31,6 +31,3 @@ which the default profile blocks).
 
 QEMU: stock distribution QEMU only (see `Documentation/devel/vm.md`). The TDX and graphics paths need the
 repository's QEMU fork, which is not in these images: build it separately and set `QEMU_PATH`.
-
-The x86_64 recipe has been written but **not built or run** (the development host is aarch64); treat it as
-untested until it has been exercised on an x86_64 machine.

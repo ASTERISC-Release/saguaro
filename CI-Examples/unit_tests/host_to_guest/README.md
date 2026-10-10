@@ -3,19 +3,19 @@
 Anything 8GB or higher should be more than enough.**
 # Relevant Files
 
-- `gramine-tdx/libos/src/sys/libos_mmap.c`
-- `qemu/util/mmap-alloc.c`
-- `gramine-tdx/CI-Examples/unit_tests/host_to_guest/align_test.c`
-- `host_to_guest.sh`
+- `libos/src/sys/libos_mmap.c`
+- `util/mmap-alloc.c` in the QEMU fork (not part of this repository)
+- `CI-Examples/unit_tests/host_to_guest/align_test.c`
 
 # Run the Test Case
 
-- Update your `PYTHONPATH` to correct one
+- Install the vm PAL and put it on your path (see `INSTALL.rst`; this test needs the x86_64 VM PAL and
+  the QEMU fork).
 
-**Assuming in project's root dir.**
+**Assuming in the repository root.**
 ```bash
-cd gramine-tdx
-export PYTHONPATH=$PWD/built-debug/lib/python3.13/site-packages/
+scripts/install.sh --vm
+. ~/.local/gramine-vm/env.sh   # the default prefix with --vm on aarch64; ~/.local/gramine on x86_64
 cd CI-Examples/unit_tests/host_to_guest
 make
 gramine-vm align_test
