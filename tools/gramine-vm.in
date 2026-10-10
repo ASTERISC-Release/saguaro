@@ -91,7 +91,10 @@ QEMU_CPU_NUM=${QEMU_CPU_NUM:-"1"}
 # QEMU_CPU_NUM=$GRAMINE_CPU_NUM
 
 REPO=$(python3 -c "import os, re; print(re.sub(r'^(.*?(Tirith|gramine-gaming)).*', r'\1', os.getcwd()))")
-QEMU_PATH="$REPO/qemu/build/qemu-system-x86_64"
+# QEMU: the repository's QEMU fork if built (needed for TDX and the graphics redirection), else a stock
+# qemu-system-x86_64 from PATH; QEMU_PATH in the environment overrides both.
+QEMU_PATH=${QEMU_PATH:-"$REPO/qemu/build/qemu-system-x86_64"}
+[ -x "$QEMU_PATH" ] || QEMU_PATH=$(command -v qemu-system-x86_64 || echo "$QEMU_PATH")
 
 QEMU_VM="-cpu host,host-phys-bits,-kvm-steal-time,pmu=off,+tsc-deadline,+invtsc \
 -m $QEMU_MEM_SIZE -smp $QEMU_CPU_NUM"

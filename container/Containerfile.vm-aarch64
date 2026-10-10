@@ -6,7 +6,7 @@
 # the VM on x86 -- it exists to give a headless aarch64 box the QEMU/virtiofsd
 # stack that the distro host does not ship.
 #
-# Build + start with docker/build-vm-aarch64.sh and docker/exec-vm-aarch64.sh
+# Build + start with container/build-vm-aarch64.sh and container/exec-vm-aarch64.sh
 # (they pass `--device /dev/kvm` which is mandatory for the runner).
 #
 # Ubuntu 24.04 (noble), matching the x86 Containerfile's pinned base image:

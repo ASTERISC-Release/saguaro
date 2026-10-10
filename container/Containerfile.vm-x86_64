@@ -1,0 +1,38 @@
+# Development container for the x86_64 builds: the direct PAL and the vm-PAL unikernel (gramine-vm)
+# under QEMU/KVM. Counterpart of Containerfile.vm-aarch64.
+#
+# Requires an x86_64 host with working KVM (`/dev/kvm`) and `vhost-vsock` for the vm PAL; the direct
+# PAL needs neither. Stock Ubuntu QEMU is used; TDX and the graphics redirection need the QEMU fork,
+# which is not part of this image (build it separately and point QEMU_PATH at it).
+#
+# Build + start with container/build-vm-x86_64.sh and container/exec-vm-x86_64.sh.
+FROM ubuntu:noble
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Run layer: QEMU for the vm PAL (virtiofsd is shipped at /usr/lib/qemu/virtiofsd; gramine-vm needs
+# it on PATH, lsof for its pid-file check).
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      qemu-system-x86 virtiofsd lsof kmod iproute2 iputils-ping gdb ca-certificates \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+ENV PATH="${PATH}:/usr/lib/qemu"
+
+# Build layer: toolchain for LibOS + PALs (nasm is needed by the x86 tests).
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      build-essential gcc make cmake patch git pkg-config gawk bison nasm \
+      meson ninja-build python3 python3-click python3-jinja2 python3-pyelftools \
+      python3-tomli python3-tomli-w python3-voluptuous \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Test layer: regression suites and example applications.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      python3-pytest python3-cryptography python3-toml procps file sqlite3 wget \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+RUN touch /var/lib/gramine-vm-x86_64
+WORKDIR /root
+
+CMD ["bash"]

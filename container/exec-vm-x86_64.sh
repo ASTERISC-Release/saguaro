@@ -1,13 +1,13 @@
 #!/bin/bash -e
 
-# Attach to (or one-shot command inside) the aarch64 vm-PAL dev container
-# created by ./build-vm-aarch64.sh. Counterpart of ./exec.sh for the arm64
-# workflow; runnable repeatedly for extra shells.
+# Attach to (or one-shot command inside) the x86_64 dev container created by
+# ./build-vm-x86_64.sh. Counterpart of ./exec-vm-aarch64.sh; runnable repeatedly
+# for extra shells.
 #
-#   ./exec-vm-aarch64.sh                  # interactive bash in the container
-#   ./exec-vm-aarch64.sh '<command>'      # one-shot: bash -c '<command>'
-#   ./exec-vm-aarch64.sh down             # stop and remove the container
-CONTAINER=gramine-vm-aarch64
+#   ./exec-vm-x86_64.sh                  # interactive bash in the container
+#   ./exec-vm-x86_64.sh '<command>'      # one-shot: bash -c '<command>'
+#   ./exec-vm-x86_64.sh down             # stop and remove the container
+CONTAINER=gramine-vm-x86_64
 
 if [ "${1:-}" == "down" ]; then
     echo "Container being stopped"
@@ -21,7 +21,7 @@ if ! podman ps --format "{{.Names}}" | grep -q "^${CONTAINER}$"; then
         echo "Starting existing container..."
         podman start "$CONTAINER" >/dev/null
     else
-        echo "Container doesn't exist; run ./build-vm-aarch64.sh first." >&2
+        echo "Container doesn't exist; run ./build-vm-x86_64.sh first." >&2
         exit 1
     fi
 fi
