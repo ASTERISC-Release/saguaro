@@ -137,6 +137,22 @@ tests = [
 [[group]]
 kind = "xfail"
 category = "investigate"
+reason = "readdir fails with 'Bad file descriptor' when run standalone (0/20) but passed inside one full-suite run, so it depends on state/ordering; not caused by the graphics redirection; cause not yet understood."
+tests = [
+  "TC_30_Syscall::test_023_readdir",
+]
+
+[[group]]
+kind = "xfail"
+category = "investigate"
+reason = "Reading a 3000-entry virtiofs directory is slow: it exceeded the 40 s test timeout in one run and passed in another (getdents on virtiofs; related to the readdir xfail)."
+tests = [
+  "TC_30_Syscall::test_021_getdents_large_dir",
+]
+
+[[group]]
+kind = "xfail"
+category = "investigate"
 reason = "SIGPIPE behaviour differs from direct: the test expects a nonzero exit but the guest exits 0; cause not yet understood."
 tests = [
   "TC_30_Syscall::test_092_sighandler_sigpipe",
