@@ -558,10 +558,10 @@ save_context_and_restore_next:
      */
 
     cbz     x2, .Lscr_unlock_done
-    str     wzr, [x2]                            /* spinlock_unlock(lock_to_unlock) */
+    stlr    wzr, [x2]                            /* spinlock_unlock(lock_to_unlock): a *release* store -- see below */
 .Lscr_unlock_done:
     cbz     x3, .Lscr_child_done
-    str     wzr, [x3]                            /* *clear_child_tid = 0 (parent futex-wake
+    stlr    wzr, [x3]                            /* *clear_child_tid = 0 (parent futex-wake
                                                     side is LibOS's, done at el0 return) */
 .Lscr_child_done:
     /* move to the per-CPU "scheduling" stack before unlocking the critical section, so
@@ -570,7 +570,13 @@ save_context_and_restore_next:
     cbz     x5, .Lscr_stack_done
     mov     sp, x5
 .Lscr_stack_done:
-    str     wzr, [x4]                            /* leave the critical section */
+    /* RELEASE store, like the C spinlock_unlock(): everything this CPU wrote while saving the
+     * outgoing context (regs, sp, pc, pstate, thread state, FP area) must be visible to any CPU
+     * that acquires g_thread_list_lock after this store. x86's plain `mov` is a release under TSO;
+     * a plain `str` here let another CPU take the lock, see the thread RUNNABLE with a stale or
+     * half-written context and dispatch it while this CPU's save was still in flight -- the
+     * thread then ran on two CPUs at once on one stack (SMP>=2 only; SMP=1 has no second CPU). */
+    stlr    wzr, [x4]                            /* leave the critical section */
 
     ldr     x0, [x1, #PAL_TCB_VM_CONTEXT_FPREGS]
     bl      do_xrstor                            /* C: clobbers x1 too, reload below */
