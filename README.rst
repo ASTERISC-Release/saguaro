@@ -45,7 +45,7 @@ Supported configurations
    * - ``vm`` (``gramine-vm``, a unikernel in a QEMU guest)
      - ✅ inherited from upstream
      - ⚠️ experimental
-     - ❌ planned
+     - ⚠️ experimental (QEMU ``virt`` + KVM, SMP; single-process, no TCP/IP)
    * - ↳ ``vm`` with ``graphics`` (graphics host redirection)
      - ⚠️ experimental
      - ⚠️ experimental

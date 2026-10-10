@@ -49,12 +49,14 @@ only; decide whether that stays.
 **Done when.** `rwlock` (`5 100 10 3 100`) finishes well inside the 40 s test timeout and the
 `slow-timer` entry can be removed; `hello` (SMP=2/4, 150 runs) and `spinlock` still pass.
 
-## 3. The three xfails (`[VM:investigate]`)
+## 3. The xfails (`[VM:investigate]`)
 
-Cause not yet understood; each is a plausible real bug.
+Cause not yet understood; each is a plausible real bug. (`test_021_getdents_large_dir`, a 3000-entry
+virtiofs directory read, is also listed: it timed out in one run and passed in another.)
 
 - **`test_023_readdir`** — `readdir failed: Bad file descriptor`,
-  `file __testfile__ was not found: Bad file descriptor`, exit 1. Looks like `getdents`/`open` on a
+  `file __testfile__ was not found: Bad file descriptor`, exit 1. Fails 0/20 standalone but passed inside one full-suite run (state/ordering
+  dependent); building with `-Dgraphics=disabled` does not fix it. Looks like `getdents`/`open` on a
   virtiofs directory returning `EBADF`. Start in `pal/src/host/vm-common/pal_common_files.c` and the
   virtio-fs directory path. Repro: `gramine-test build readdir; GRAMINE_VM=1 gramine-vm readdir`.
 - **`test_030_fdleak`** — `error at open(fname, O_RDONLY) (line 31): Permission denied`, exit 1
@@ -102,3 +104,12 @@ When one is fixed, delete its `vm_skip.toml` entry (an xfail that starts passing
   aarch64 (`egl-redirect/xcb.c` x86 asm, `util/sg-listener.c` `KVM_VCPU_TSC_CTRL`). To rule out a QEMU
   version effect, build a newer stock QEMU (10.x) in the container and run the suite with
   `QEMU_PATH=...`; porting the fork's two x86-only files is the alternative.
+
+## Notes for this tree (gramine-multiarch)
+
+- The aarch64 `vm` PAL must be built with `-Dgraphics=disabled` (`scripts/install.sh --vm` does it): the
+  graphics redirection assumes the QEMU fork's host agent, which does not exist for aarch64.
+- The aarch64 VM-only guard macro is `PAL_HOST_VM` (not `HOST_TYPE`, which is defined for every PAL flavor).
+- The x86_64 builds were not run from this branch (no x86 host); the shared sources were type-checked
+  against the x86_64 headers on aarch64 and the aarch64 direct PAL suites were re-run (145/36, 28/8).
+  A real x86_64 `vm`/`tdx` build and test run is still to be done.
