@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       suites:
-        description: "scripts/test.sh suites (default: PAL and LibOS regression only; see scripts/test.sh --list for the application suites)"
+        description: "test/test-direct.sh suites (default: PAL and LibOS regression only; see test/test-direct.sh --list for the application suites)"
         required: false
         default: "pal libos"
       stress:
@@ -64,7 +64,7 @@ jobs:
           SUITES: ${{ inputs.suites }}   # via env, never interpolated into the script text
         run: |
           export PATH="$HOME/.cargo/bin:$PATH"
-          scripts/test.sh $SUITES
+          test/test-direct.sh $SUITES
 
       - name: Rewrite stress (aarch64)
         if: ${{ inputs.stress && matrix.arch == 'aarch64' }}

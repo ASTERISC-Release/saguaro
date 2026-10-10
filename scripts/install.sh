@@ -21,14 +21,14 @@
 #                          compile the Tirith graphics host-redirection paths into the LibOS
 #                          (default: enabled)
 #   -j N                   ninja parallelism (default: nproc)
-#   --run-tests [suite...] run scripts/test.sh afterwards, building the test manifests first
+#   --run-tests [suite...] run test/test-direct.sh afterwards, building the test manifests first
 #                          (naming suites implies this)
 #   -h, --help
 #
 # Environment: after installing, <prefix>/env.sh is written. A script cannot change the environment
 # of the shell that started it, so use the install in your current shell with
 #     . <prefix>/env.sh
-# (or pass --add-to-profile to get it in every new shell). scripts/test.sh and the other scripts
+# (or pass --add-to-profile to get it in every new shell). test/test-direct.sh and the other scripts
 # in this directory find the install by themselves (GRAMINE_PREFIX, default ~/.local/gramine).
 #
 # --vm builds the vm-PAL unikernel ("the correct vm version for this machine"): the default build
@@ -195,7 +195,7 @@ if [ "$RUN_TESTS" = 1 ]; then
     else
         echo ">>> running the test battery"
         export GRAMINE_PREFIX="$PREFIX"
-        exec "$script_dir/test.sh" ${TEST_SUITES[@]+"${TEST_SUITES[@]}"}
+        exec "$REPO/test/test-direct.sh" ${TEST_SUITES[@]+"${TEST_SUITES[@]}"}
     fi
 fi
 
@@ -207,4 +207,4 @@ if [ "$VM" = enabled ] && [ "$ARCH" = aarch64 ]; then
 fi
 echo "Done. To use this install in the current shell:   . \"$PREFIX/env.sh\""
 [ "$ADD_TO_PROFILE" = 1 ] || echo "(or rerun with --add-to-profile to get it in every new shell)"
-echo "Test with:  GRAMINE_PREFIX=\"$PREFIX\" scripts/test.sh"
+echo "Test with:  GRAMINE_PREFIX=\"$PREFIX\" test/test-direct.sh"

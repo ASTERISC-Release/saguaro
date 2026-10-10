@@ -12,7 +12,7 @@ Outputs are appended to `benchmarks/results/<date>_<arch>.txt` (git-ignored). Ea
 header recording the kernel, CPU, memory, OS and git revision of the machine it ran on, so runs can
 be compared before and after a change. Compare the min/median of repeated runs, not single runs;
 server and client are pinned with `taskset` (see the script header for the environment knobs).
-The Redis mode needs Redis built first (`scripts/test.sh redis`); no Redis results are published
+The Redis mode needs Redis built first (`test/test-direct.sh redis`); no Redis results are published
 here.
 
 ## Layout

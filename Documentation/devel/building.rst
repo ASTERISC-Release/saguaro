@@ -32,7 +32,7 @@ Common dependencies
 
 .. NOTE to anyone who will be sorting this list: build-essential should not be
    sorted together with others, because it is implicit when specifying package
-   dependecies, so when copying to debian/control, it should be omitted
+   dependecies,, so it is listed separately
 
 Run the following command on Ubuntu LTS to install dependencies::
 
@@ -223,7 +223,7 @@ Additional build options
 
 - To build test binaries, run :command:`meson -Dtests=enabled`. This is
   necessary if you will be running regression tests (then run
-  :command:`scripts/test.sh` from the repository root).
+  :command:`test/test-direct.sh` from the repository root).
 
 - In order to run SGX tools with DCAP version of RA-TLS library
   (``ra_tls_verify_dcap.so``), build with :command:`meson -Ddcap=enabled` option.

@@ -66,7 +66,7 @@ On Debian/Ubuntu, from the repository root::
     scripts/dependencies.sh           # host packages (uses sudo)
     scripts/install.sh                # build, install into ~/.local/gramine, write its env.sh
     . ~/.local/gramine/env.sh         # put the install on PATH / PYTHONPATH (this shell)
-    scripts/test.sh                   # regression tests and example applications
+    test/test-direct.sh                   # regression tests and example applications
 
 Run an application::
 

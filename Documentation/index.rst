@@ -98,7 +98,6 @@ debugging and other processes necessary for Gramine development.
 - :doc:`Build Gramine from source files<devel/building>` - Build Gramine and
   ensure all the dependencies are installed.
 - :doc:`Set up debugging<devel/debugging>` - Run Gramine with GDB.
-- :doc:`Learn about packaging<devel/packaging>` - Package and distribute Gramine
   on different Linux distributions.
 - :doc:`Use Python API<python/api>` - Use Python API provided by Gramine.
 - :doc:`python/writing-sgx-sign-plugins` - Write plugins for SGX signing tool
@@ -169,7 +168,6 @@ Indices and tables
 
    devel/building
    devel/debugging
-   devel/packaging
    python/api
    python/writing-sgx-sign-plugins
    devel/new-syscall

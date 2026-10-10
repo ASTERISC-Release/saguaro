@@ -2,14 +2,14 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
-# test-vm-aarch64.sh — the aarch64 `vm` PAL test battery (run it where /dev/kvm and stock
+# test-vm.sh — the aarch64 `vm` PAL test battery (run it where /dev/kvm and stock
 # qemu-system-aarch64 are available, e.g. the container from docker/build-vm-aarch64.sh).
 #
 #   libos     the LibOS regression suite under gramine-vm (GRAMINE_VM=1, libos/test/regression/vm_skip.toml)
 #   examples  CI-Examples applications (tools/run-vm-aarch64-examples.sh)
 #   hello     the bring-up soak test (tools/vm-aarch64-stage/hello.c, SMP=2 and SMP=4)
 #
-# Usage: scripts/test-vm-aarch64.sh [--prefix DIR] [--build-dir DIR] [suite...]   (default: all)
+# Usage: test/test-vm.sh [--prefix DIR] [--build-dir DIR] [suite...]   (default: all)
 # Prerequisite: a vm build installed with `scripts/install.sh --vm` (its default prefix/build dir
 # are used unless overridden); the libos suite needs the build to have -Dtests=enabled -Dtests_pie=true
 # (see Documentation/devel/vm.md, "Regression suite").

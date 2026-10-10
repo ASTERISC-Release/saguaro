@@ -32,6 +32,6 @@ remove all build artifacts (if applicable).
 
 ## Testing
 
-`scripts/test.sh` (in the top-level `scripts/` directory) builds and runs most
-of the examples as part of the test battery; `scripts/test.sh --list` shows the
+`test/test-direct.sh` (in the top-level `scripts/` directory) builds and runs most
+of the examples as part of the test battery; `test/test-direct.sh --list` shows the
 suites. `unit_tests/` holds small test programs for LibOS and PAL behavior.
