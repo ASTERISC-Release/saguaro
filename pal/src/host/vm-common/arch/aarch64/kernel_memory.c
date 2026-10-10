@@ -358,9 +358,21 @@ int memory_mark_pages_write_combined(uint64_t addr, size_t size, bool mark) {
     return 0;
 }
 
+/* Guest-visible RAM is [g_dram_base, g_dram_end); everything below it is flash/MMIO windows of the
+ * `virt` machine. Handing such a range to an application (e.g. LibOS mapping a non-PIE ET_EXEC linked
+ * at 0x400000) used to "succeed" and then memset megabytes of emulated flash/device space at MMIO
+ * speed, i.e. look like a hang. Refuse it up front; the boot-time DRAM window is unknown (== 0)
+ * only before memory_pagetables_init(). */
+static bool range_outside_dram(uint64_t addr, size_t size) {
+    return g_dram_end && (addr < g_dram_base || addr + size < addr || addr + size > g_dram_end);
+}
+
 int memory_alloc(void* addr, size_t size, bool read, bool write, bool execute) {
     if (!read && !write && !execute) {
         return memory_mark_pages_off((uint64_t)addr, size);
+    }
+    if (range_outside_dram((uint64_t)addr, size)) {
+        return -PAL_ERROR_INVAL;
     }
 
     /* The x86 version maps with the final protection and memsets directly, relying on CR0.WP ==
@@ -386,6 +398,9 @@ int memory_alloc(void* addr, size_t size, bool read, bool write, bool execute) {
 int memory_protect(void* addr, size_t size, bool read, bool write, bool execute) {
     if (!read && !write && !execute) {
         return memory_mark_pages_off((uint64_t)addr, size);
+    }
+    if (range_outside_dram((uint64_t)addr, size)) {
+        return -PAL_ERROR_INVAL;
     }
     return memory_mark_pages_on((uint64_t)addr, size, write, execute, /*usermode=*/true);
 }

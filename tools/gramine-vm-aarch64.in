@@ -142,9 +142,15 @@ if [ ! -e "$VHOSTFS_SOCKET" ]; then
     exit 2
 fi
 
+# The guest splits this string on whitespace but keeps "double-quoted" tokens whole (no escapes), so
+# quote every argument: `gramine-vm app -c "echo hi"` must reach the app as two arguments.
+GRAMINE_ARGS="-gramine-args init \"$APPLICATION\""
+for arg in "$@"; do
+    GRAMINE_ARGS+=" \"$arg\""
+done
+GRAMINE_ARGS+=" -gramine-args-end"
 # Due to QEMU syntax, commas in the QEMU cmdline need to be escaped using an additional comma.
-APPLICATION=${APPLICATION//","/",,"}
-GRAMINE_ARGS="-gramine-args init \"$APPLICATION\" $@ -gramine-args-end"
+GRAMINE_ARGS=${GRAMINE_ARGS//","/",,"}
 GRAMINE_ENVS=$(python3 -c "
 import os
 env_str = ''
