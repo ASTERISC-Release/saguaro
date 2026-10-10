@@ -24,7 +24,10 @@
 #include "kernel_sched.h"
 #include "kernel_thread.h"
 
-#define SCHEDULING_STACK_SIZE    128     /* temp stack used by save_context_and_restore_next() */
+/* Temp stack used by save_context_and_restore_next(). x86's 128 bytes fit its hand-written asm; here
+ * the same stack also runs the C do_xrstor() (+ write_fpsr/fpcr frames, ~100 bytes at -O0) and takes
+ * the 48-byte scratch of an IRQ landing right after the DAIF restore. */
+#define SCHEDULING_STACK_SIZE    4096
 
 /* aarch64 secondary CPUs are started by firmware (PSCI `CPU_ON` SMC call), not by an INIT-SIPI
  * triple with a trampoline page at 32K; there is no equivalent of the x86 AP startup page or of

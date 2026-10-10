@@ -144,7 +144,11 @@ libos_syscall_entry:
     /* Find the LibOS-internal stack top in the resolved PAL_TCB. */
     ldr  x17, [x17, #(LIBOS_TCB_OFF + LIBOS_TCB_LIBOS_STACK_OFF)]
     and  x17, x17, #0xfffffffffffffff0   /* defensive 16-byte realign */
-    sub  x17, x17, #PAL_CONTEXT_SIZE
+    /* The context size is not a multiple of 16 (0x148), but SP is checked for 16-byte alignment
+     * (SCTLR.SA/SA0) and `mov sp, x17` below makes this very address the stack pointer: an
+     * unrounded size left SP 8 mod 16 for the whole register-spill sequence, so any interrupt
+     * taken there (the VM PAL runs syscalls interruptible) faulted in its own entry code. */
+    sub  x17, x17, #((PAL_CONTEXT_SIZE + 15) & ~15)
 
     /* Stash the two values that only the application's view of the machine holds. X16 is spent
      * on the resume address first (its only carrier), then reused as the one scratch needed to

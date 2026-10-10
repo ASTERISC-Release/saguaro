@@ -44,6 +44,21 @@
     .hidden \sym
     .endm
 
+    /* EL0-bound returns must leave SP_EL1 on the per-CPU interrupt stack. An exception taken from
+     * EL0 (tick, fault) carves its 48-byte scratch *below the incoming SP_EL1*, and eret keeps
+     * SP_EL1 as it was: after a syscall return that is the user's stale stack pointer (the app has
+     * since grown its stack below it, so the scratch overwrote live user frames -- saved x29/x30,
+     * even the SPSR word, which later `ret`ed to 0x20000000), and after isr_eret_to_userland it is
+     * &thread->irq_pseudo_stack (inside struct thread). The frame base below is where the
+     * el0_irq same-thread epilogue already leaves it. */
+    .macro SET_EL1_SP_FOR_EL0 tmp
+    mrs     \tmp, tpidr_el1
+    ldr     \tmp, [\tmp, #PER_CPU_DATA_INTERRUPT_STACK]
+    sub     \tmp, \tmp, #ISR_FRAME_SIZE
+    mov     sp, \tmp
+    .endm
+
+
     /* TODO(diag SMP B7): liveness breadcrumb into per_cpu_data->dbg_irq_trace.
      * [0] records every trace point, [1] (both=1) only exception/IRQ entries. Only safe
      * once the ISR frame has saved x29/x30 (they are restored from the frame afterwards)
@@ -356,6 +371,7 @@ pal_syscall_return:
      * the same dance in its ret-to-userspace path). */
     mov     x17, sp
     msr     sp_el0, x17
+    SET_EL1_SP_FOR_EL0 x17
     add     x17, x16, #PAL_TCB_VM_SYSCALL_SCRATCH
     ldp     x1,  x2,  [x17, #8 * 0]
     ldp     x3,  x4,  [x17, #8 * 2]
@@ -400,6 +416,7 @@ pal_sigreturn_return:
     mov     x17, sp                            /* restored user stack (per-CPU SP_EL0
                                                   refresh, same requirement as pal_syscall_return) */
     msr     sp_el0, x17
+    SET_EL1_SP_FOR_EL0 x17
     eret
 
 /* ---------------------------------------------------------------------------
@@ -414,6 +431,9 @@ pal_sigreturn_return:
  * --------------------------------------------------------------------------- */
     globl isr_eret_to_userland
 isr_eret_to_userland:
+    msr     daifset, #2                       /* save_context_and_restore_next unmasked IRQs; an
+                                                 IRQ here would carve its frame on SP_EL1 =
+                                                 &irq_pseudo_stack and rewrite ELR/SPSR */
     ldp     x1, x2, [sp]                      /* frame.elr, frame.spsr */
     ldr     x3, [sp, #16]                     /* frame.sp: resume stack pointer */
     msr     elr_el1, x1
@@ -433,6 +453,7 @@ isr_eret_to_userland:
                                                * Linux's ret-to-userspace enforces the same) */
     msr     spsr_el1, x2
     msr     sp_el0, x3
+    SET_EL1_SP_FOR_EL0 x1                     /* x1 (elr) is already in the sysreg */
     b       .Lieret_regs
 .Lieret_el1:
     msr     spsr_el1, x2
