@@ -184,6 +184,20 @@ void prepare_sigframe(PAL_CONTEXT* context, siginfo_t* siginfo, void* handler, v
      * fpsimd_context record inside uc_mcontext.__reserved[] (see the function's own comment). */
     pal_context_to_ucontext(&sigframe->uc, context);
 
+    /* FIXME: make this VM/TDX PAL logic more generic */
+    const bool is_vm = !strcmp(g_pal_public_state->host_type, "VM") ||
+                       !strcmp(g_pal_public_state->host_type, "TDX");
+    void* user_rip_ptr = NULL;
+    if (is_vm) {
+        /* Under the VM PAL `context->pc` is the PAL's return trampoline, not the application's
+         * resume address (that lives in the PAL TCB, see libos_syscall_rt_sigreturn()): record the
+         * real resume address in the frame so rt_sigreturn goes back to the interrupted code. */
+        uint64_t user_rip;
+        user_rip_ptr = (char*)pal_get_tcb() + g_pal_public_state->vm_user_rip_offset;
+        memcpy(&user_rip, user_rip_ptr, sizeof(user_rip));
+        sigframe->uc.uc_mcontext.pc = user_rip;
+    }
+
     sigframe->uc.uc_sigmask = *old_mask;
 
     /* We always set all 3 arguments, even if it is not `SA_SIGINFO` handler. We can and it is
@@ -208,7 +222,17 @@ void prepare_sigframe(PAL_CONTEXT* context, siginfo_t* siginfo, void* handler, v
     __UNUSED(restorer);
     context->regs[30] = (uint64_t)&rt_sigreturn_trampoline;
 
-    context->pc = (uint64_t)handler;
+    if (is_vm) {
+        /* LibOS itself runs at EL1 here, so jumping to `handler` would execute application code
+         * at EL1 (and its `ret` into a non-executable trampoline would fault). Hand the handler
+         * to the PAL as the EL0 resume address instead and return through the trampoline that
+         * erets there with the registers prepared above intact. */
+        uint64_t handler_rip = (uint64_t)handler;
+        memcpy(user_rip_ptr, &handler_rip, sizeof(handler_rip));
+        context->pc = (uint64_t)g_pal_public_state->vm_signal_return_trampoline;
+    } else {
+        context->pc = (uint64_t)handler;
+    }
     context->sp = stack;
     /* AAPCS64 flags (NZCV in PSTATE) are caller-saved, not preserved across a function call --
      * same reasoning x86_64 uses for setting a fixed default EFLAGS here instead of carrying the

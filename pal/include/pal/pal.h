@@ -162,6 +162,15 @@ struct pal_public_state {
     uint64_t vm_user_rip_offset;
 
     /*
+     * aarch64 VM PAL only (0 elsewhere): address of the trampoline that `eret`s to the TCB's
+     * `user_rip` at EL0 *keeping the registers LibOS just restored*. LibOS runs at EL1 under the
+     * VM PAL, so it must not jump to a signal handler itself: it stores the handler in `user_rip`
+     * and returns through this trampoline (the normal syscall-return trampoline reloads x1..x15
+     * from the syscall snapshot, which would clobber the handler's siginfo/ucontext arguments).
+     */
+    uintptr_t vm_signal_return_trampoline;
+
+    /*
      * Host information
      */
 
