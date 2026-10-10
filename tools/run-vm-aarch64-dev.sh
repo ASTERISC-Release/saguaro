@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
+#
 # Development bring-up runner for the aarch64 vm-PAL kernel (Documentation/devel/vm.md).
 # Not the final launcher: tools/gramine-vm.in's arm counterpart will replace it.
 #

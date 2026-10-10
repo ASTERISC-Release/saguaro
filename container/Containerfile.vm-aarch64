@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
+
 # Development container for the aarch64 vm-PAL unikernel (Documentation/devel/vm.md / Documentation/devel/aarch64/vm-pal-plan.md). Parallel to the x86 `Containerfile`
 # (which targets the GPU/KVM/TDX Steam workflow); nothing here is shared.
 #

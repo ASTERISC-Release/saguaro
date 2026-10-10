@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
 """
 Under the VM PAL (`GRAMINE_VM=1`, see Documentation/devel/vm.md) tests listed in `vm_skip.toml` are skipped
 (platform limitation) or marked xfail (known failure, cause not yet understood), each with a reason

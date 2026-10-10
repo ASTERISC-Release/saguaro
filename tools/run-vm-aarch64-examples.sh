@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
+#
 # Run CI-Examples applications under `gramine-vm` on aarch64 (inside the gramine-vm-aarch64 container,
 # with the VM build installed; see Documentation/devel/vm.md) and check their output.
 #
