@@ -169,7 +169,10 @@ def run_command(cmd, *, timeout, open_fds_limit=None, can_fail=False, **kwds):
 
 
 class RegressionTestCase(unittest.TestCase):
-    DEFAULT_TIMEOUT = (20 if HAS_SGX else 10)
+    # The VM PAL boots a whole guest per run and services timed waits from a 100 ms tick, so its runs
+    # need more headroom; GRAMINE_TEST_TIMEOUT overrides any default.
+    DEFAULT_TIMEOUT = int(os.environ.get('GRAMINE_TEST_TIMEOUT',
+                                         20 if HAS_SGX else 40 if USE_GRAMINE_VM else 10))
 
     def get_env(self, name):
         try:
@@ -229,8 +232,14 @@ class RegressionTestCase(unittest.TestCase):
             # are that console.
             # absolute path: tests that pass a custom `env=` may not carry our PATH
             gramine_vm = shutil.which('gramine-vm') or 'gramine-vm'
-            _returncode, stdout, stderr = run_command([*prefix, gramine_vm, *args],
-                                                      timeout=timeout, **kwds)
+            try:
+                _returncode, stdout, stderr = run_command([*prefix, gramine_vm, *args],
+                                                          timeout=timeout, **kwds)
+            except subprocess.CalledProcessError as e:
+                # same merged console for tests that inspect `e.stderr` / `e.output`
+                merged = (e.output or b'') + (e.stderr or b'')
+                e.output = e.stdout = e.stderr = merged
+                raise
             return stdout + stderr, stdout + stderr
 
         if not self.loader_path.exists():

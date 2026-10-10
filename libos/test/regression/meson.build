@@ -271,7 +271,8 @@ foreach conf: configurations
         ]
 
         if static
-            link_args += '-static'
+            # a PIE build has to be `-static-pie` (plain `-static` is non-PIE, see `tests_pie`)
+            link_args += pie ? '-static-pie' : '-static'
         endif
 
         # Note that we cannot use `pie: true/false`, because this doesn't properly disable PIE if the

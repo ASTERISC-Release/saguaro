@@ -144,7 +144,9 @@ int memory_free_shared_region(void* addr, size_t size) {
  * i.e. per straddled 2MB boundary): libsysdb + app + mprotect churn need far fewer than the 512
  * tables (~2MB of .bss) reserved here. The pool is pre-zeroed .bss and bump-allocated, so new
  * tables need no init; identity mapping makes `ptr` its own physical address. */
-#define PT_POOL_TABLES 512
+/* Each 4KB table maps 2MB of fine-grained (4KB-page) mappings, so 2048 tables cover ~4GB of
+ * application mappings (512 covered 1GB, and a large mmap() then aborted the whole VM). */
+#define PT_POOL_TABLES 2048
 static uint64_t g_pt_pool[PT_POOL_TABLES][512] __attribute__((aligned(PAGE_SIZE)));
 static size_t g_pt_pool_used;
 
@@ -157,10 +159,15 @@ static size_t g_pt_pool_used;
  * one with the EL0-accessible leaves memory_mark_pages_on() installs. */
 __attribute__((visibility("hidden"))) uint64_t* g_page_table_root;
 
+/* Boot-time exhaustion (memory_pagetables_init) is fatal; once the live root is installed, running
+ * out is just "the guest asked for too much" and must fail the mapping with ENOMEM, not abort the
+ * VM. Returns NULL in that case. */
 static uint64_t* pt_alloc_table(const char* what) {
     if (g_pt_pool_used >= PT_POOL_TABLES) {
-        /* no allocation during an exception-safe context below; boot-early failure only */
-        INIT_FAIL("out of page-table pool while creating %s table", what);
+        if (!g_page_table_root) {
+            INIT_FAIL("out of page-table pool while creating %s table", what);
+        }
+        return NULL;
     }
     return &g_pt_pool[g_pt_pool_used++][0];
 }
@@ -214,6 +221,9 @@ static uint64_t* l3_from_block(uint64_t* l2e) {
     uint64_t inherit = *l2e & PTE_INHERIT;
     uint64_t base = *l2e & PT_ADDR_MASK;
     uint64_t* l3 = pt_alloc_table("L3 (split)");
+    if (!l3) {
+        return NULL;
+    }
     for (unsigned i = 0; i < 512; i++) {
         l3[i] = PT_PAGE | base + i * PAGE_SIZE + inherit;
     }
@@ -245,13 +255,18 @@ static uint64_t* pt_get_leaf(uint64_t va, bool create) {
             return &l3[PT_INDEX_L3(va)];
         }
         if ((*l2e & PT_TYPE_MASK) == PT_BLOCK) {
-            return create ? &l3_from_block(l2e)[PT_INDEX_L3(va)] : l2e;
+            if (!create) {
+                return l2e;
+            }
+            uint64_t* l3 = l3_from_block(l2e);
+            return l3 ? &l3[PT_INDEX_L3(va)] : NULL;
         }
         if (create && va >= g_dram_base && va < g_dram_end) {
             /* the whole 2MB block was marked off: reinstate it, then split */
             *l2e = (va & ~(0x00200000ULL - 1)) | PTE_DATA;
             __asm__ volatile("dsb ishst" ::: "memory");
-            return &l3_from_block(l2e)[PT_INDEX_L3(va)];
+            uint64_t* l3 = l3_from_block(l2e);
+            return l3 ? &l3[PT_INDEX_L3(va)] : NULL;
         }
         return NULL; /* invalid block/table slot */
     }
