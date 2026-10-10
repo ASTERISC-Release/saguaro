@@ -31,6 +31,12 @@
 # (or pass --add-to-profile to get it in every new shell). scripts/test.sh and the other scripts
 # in this directory find the install by themselves (GRAMINE_PREFIX, default ~/.local/gramine).
 #
+# --vm builds the vm-PAL unikernel ("the correct vm version for this machine"): the default build
+# dir becomes build-vm-<arch> so it never reconfigures a direct-PAL build dir, and on aarch64 the
+# option set is fixed to the README-vm.md recipe (-Dvm=enabled, direct/sgx/tdx/tests all disabled --
+# the aarch64 vm kernel replaces the direct PAL entirely, so a direct-PAL test battery does not
+# apply). On x86_64 your --sgx/--tdx choices are kept.
+#
 # Defaults match this repo's tested configuration:
 #   -Ddirect=enabled -Dsgx=disabled -Dvm=disabled -Dtdx=disabled -Dgraphics=enabled
 #   -Dtests=enabled -Dlibc=glibc -Dbuildtype=release
@@ -42,6 +48,8 @@
 #  * Dependencies come from scripts/dependencies.sh (apt, sudo, may prompt for a password).
 #  * vm/tdx are Tirith forks of the PAL that need extra system dependencies (and SGX/TDX hardware);
 #    they stay disabled for the direct-PAL battery.
+#  * --vm on aarch64 is self-contained: no SGX/TDX packages are needed, and the build runs wherever
+#    meson/gcc exist; only *running* the resulting kernel needs QEMU with KVM.
 
 set -euo pipefail
 
@@ -50,7 +58,9 @@ REPO=$(dirname "$script_dir")
 cd "$REPO"
 
 PREFIX="$HOME/.local/gramine"
-BUILDDIR="build-$(uname -m)"
+ARCH=$(uname -m)
+BUILDDIR="build-$ARCH"
+BUILDDIR_EXPLICIT=0
 DO_DEPS=0
 ADD_TO_PROFILE=0
 RUN_TESTS=0
@@ -65,7 +75,7 @@ while [ $# -gt 0 ]; do
     case "$1" in
         -h|--help)        usage; exit 0 ;;
         --prefix)         PREFIX=$2; shift 2 ;;
-        --build-dir)      BUILDDIR=$2; shift 2 ;;
+        --build-dir)      BUILDDIR=$2; BUILDDIR_EXPLICIT=1; shift 2 ;;
         --deps)           DO_DEPS=1; shift ;;
         --add-to-profile) ADD_TO_PROFILE=1; shift ;;
         --run-tests)      RUN_TESTS=1; shift ;;
@@ -81,6 +91,27 @@ while [ $# -gt 0 ]; do
 done
 
 PREFIX=$(realpath -m "$PREFIX")
+
+# --vm: build the vm-PAL unikernel ("the correct vm version" for this machine).
+DIRECT=enabled
+TESTS=enabled
+if [ "$VM" = enabled ]; then
+    # Never share (and thus never reconfigure) a direct-PAL build dir.
+    if [ "$BUILDDIR_EXPLICIT" = 0 ]; then
+        BUILDDIR="build-vm-$ARCH"
+    fi
+    if [ "$ARCH" = aarch64 ]; then
+        # aarch64 recipe (README-vm.md): the vm kernel *is* the PAL here; the direct PAL and
+        # SGX/TDX hosts do not exist in this build, and the PAL regression battery is built
+        # against the direct PAL.
+        if [ "$SGX" = enabled ] || [ "$TDX" = enabled ]; then
+            echo "note: --sgx/--tdx have no aarch64 vm host; forcing them off"
+        fi
+        SGX=disabled TDX=disabled
+        DIRECT=disabled
+        TESTS=disabled
+    fi
+fi
 
 missing_tools() {
     for tool in meson ninja python3 cc make pkg-config bison; do
@@ -99,23 +130,23 @@ for tool in meson ninja python3 cc make bison; do
     command -v "$tool" >/dev/null || { echo "ERROR: '$tool' not found after dependency install"; exit 1; }
 done
 
-echo ">>> configuring ($BUILDDIR -> $PREFIX, sgx=$SGX vm=$VM tdx=$TDX graphics=$GRAPHICS)"
+echo ">>> configuring ($BUILDDIR -> $PREFIX, direct=$DIRECT sgx=$SGX vm=$VM tdx=$TDX graphics=$GRAPHICS tests=$TESTS)"
 # On an already-configured build dir this reconfigures in place (cheap);
 # --reconfigure covers the case where meson insists on regeneration.
 if ! meson setup "$BUILDDIR" \
         --prefix="$PREFIX" \
         -Dbuildtype=release \
-        -Ddirect=enabled \
+        -Ddirect="$DIRECT" \
         -Dsgx="$SGX" -Dvm="$VM" -Dtdx="$TDX" -Dgraphics="$GRAPHICS" \
-        -Dtests=enabled \
+        -Dtests="$TESTS" \
         -Dlibc=glibc 2>"$BUILDDIR-setup.err"; then
     echo "    plain 'meson setup' failed; retrying with --reconfigure"
     meson setup --reconfigure "$BUILDDIR" \
         --prefix="$PREFIX" \
         -Dbuildtype=release \
-        -Ddirect=enabled \
+        -Ddirect="$DIRECT" \
         -Dsgx="$SGX" -Dvm="$VM" -Dtdx="$TDX" -Dgraphics="$GRAPHICS" \
-        -Dtests=enabled \
+        -Dtests="$TESTS" \
         -Dlibc=glibc \
     || { echo "ERROR: meson setup failed:"; tail -5 "$BUILDDIR-setup.err"; exit 1; }
 fi
@@ -154,12 +185,22 @@ if [ "$ADD_TO_PROFILE" = 1 ]; then
 fi
 
 if [ "$RUN_TESTS" = 1 ]; then
-    echo ">>> running the test battery"
-    export GRAMINE_PREFIX="$PREFIX"
-    exec "$script_dir/test.sh" ${TEST_SUITES[@]+"${TEST_SUITES[@]}"}
+    if [ "$VM" = enabled ] && [ "$ARCH" = aarch64 ]; then
+        echo "note: --run-tests skipped -- the regression battery needs the direct PAL,"
+        echo "      which a --vm aarch64 build does not build."
+    else
+        echo ">>> running the test battery"
+        export GRAMINE_PREFIX="$PREFIX"
+        exec "$script_dir/test.sh" ${TEST_SUITES[@]+"${TEST_SUITES[@]}"}
+    fi
 fi
 
 echo
+if [ "$VM" = enabled ] && [ "$ARCH" = aarch64 ]; then
+    echo "VM artifacts:"
+    echo "  kernel: $REPO/$BUILDDIR/pal/src/host/vm/pal"
+    echo "  LibOS:  $REPO/$BUILDDIR/libos/src/libsysdb.so"
+fi
 echo "Done. To use this install in the current shell:   . \"$PREFIX/env.sh\""
 [ "$ADD_TO_PROFILE" = 1 ] || echo "(or rerun with --add-to-profile to get it in every new shell)"
 echo "Test with:  GRAMINE_PREFIX=\"$PREFIX\" scripts/test.sh"
