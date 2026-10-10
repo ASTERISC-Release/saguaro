@@ -22,6 +22,7 @@
 #                          (default: enabled)
 #   -j N                   ninja parallelism (default: nproc)
 #   --run-tests [suite...] run test/test-direct.sh afterwards, building the test manifests first
+#                          (with --vm on aarch64: test/test-vm.sh, suites libos|examples|hello)
 #                          (naming suites implies this)
 #   -h, --help
 #
@@ -58,6 +59,8 @@ REPO=$(dirname "$script_dir")
 cd "$REPO"
 
 PREFIX="$HOME/.local/gramine"
+PREFIX_EXPLICIT=0
+TESTS_PIE=false
 ARCH=$(uname -m)
 BUILDDIR="build-$ARCH"
 BUILDDIR_EXPLICIT=0
@@ -74,7 +77,7 @@ usage() { sed -n '/^# install.sh/,/^# Notes:/p' "$0" | sed 's/^# \{0,1\}//'; }
 while [ $# -gt 0 ]; do
     case "$1" in
         -h|--help)        usage; exit 0 ;;
-        --prefix)         PREFIX=$2; shift 2 ;;
+        --prefix)         PREFIX=$2; PREFIX_EXPLICIT=1; shift 2 ;;
         --build-dir)      BUILDDIR=$2; BUILDDIR_EXPLICIT=1; shift 2 ;;
         --deps)           DO_DEPS=1; shift ;;
         --add-to-profile) ADD_TO_PROFILE=1; shift ;;
@@ -84,13 +87,14 @@ while [ $# -gt 0 ]; do
         --tdx)            TDX=enabled; shift ;;
         --graphics)       GRAPHICS=$2; shift 2 ;;
         -j*)              JOBS=${1#-j}; [ -n "$JOBS" ] || { JOBS=$2; shift; }; shift ;;
-        pal|libos|helloworld|multithread|busybox|redis|memcached)
+        pal|libos|helloworld|multithread|busybox|redis|memcached|examples|hello)
                           RUN_TESTS=1; TEST_SUITES+=("$1"); shift ;;
         *)                echo "unknown option: $1 (see --help)"; exit 2 ;;
     esac
 done
 
-PREFIX=$(realpath -m "$PREFIX")
+# --vm: build the vm-PAL unikernel ("the correct vm version" for this machine).
+# (PREFIX is normalized below, after the vm default is applied.)
 
 # --vm: build the vm-PAL unikernel ("the correct vm version" for this machine).
 DIRECT=enabled
@@ -100,22 +104,30 @@ if [ "$VM" = enabled ]; then
     if [ "$BUILDDIR_EXPLICIT" = 0 ]; then
         BUILDDIR="build-vm-$ARCH"
     fi
+    # ...and never overwrite a direct-PAL install either (same file names, different PAL)
+    if [ "$PREFIX_EXPLICIT" = 0 ]; then
+        PREFIX="$HOME/.local/gramine-vm"
+    fi
     if [ "$ARCH" = aarch64 ]; then
         # aarch64 recipe (Documentation/devel/vm.md): the vm kernel *is* the PAL here; the direct PAL and
-        # SGX/TDX hosts do not exist in this build, and the PAL regression battery is built
-        # against the direct PAL.
+        # SGX/TDX hosts do not exist in this build. The PAL regression battery is built against
+        # the direct PAL and is not built; the LibOS regression suite runs under gramine-vm
+        # (test/test-vm.sh), which needs PIE test binaries (the guest maps DRAM at 0x40000000).
         if [ "$SGX" = enabled ] || [ "$TDX" = enabled ]; then
             echo "note: --sgx/--tdx have no aarch64 vm host; forcing them off"
         fi
         SGX=disabled TDX=disabled
         DIRECT=disabled
-        TESTS=disabled
+        TESTS=enabled
+        TESTS_PIE=true
         # graphics redirection needs the QEMU fork's host agent (sg-listener), which does not exist
         # for aarch64 (stock QEMU is the requirement): without an agent the redirected fd paths
         # misbehave (e.g. close() of an invalid fd returns 0 instead of EBADF).
         GRAPHICS=disabled
     fi
 fi
+
+PREFIX=$(realpath -m "$PREFIX")
 
 missing_tools() {
     for tool in meson ninja python3 cc make pkg-config bison; do
@@ -142,7 +154,7 @@ if ! meson setup "$BUILDDIR" \
         -Dbuildtype=release \
         -Ddirect="$DIRECT" \
         -Dsgx="$SGX" -Dvm="$VM" -Dtdx="$TDX" -Dgraphics="$GRAPHICS" \
-        -Dtests="$TESTS" \
+        -Dtests="$TESTS" -Dtests_pie="$TESTS_PIE" \
         -Dlibc=glibc 2>"$BUILDDIR-setup.err"; then
     echo "    plain 'meson setup' failed; retrying with --reconfigure"
     meson setup --reconfigure "$BUILDDIR" \
@@ -150,7 +162,7 @@ if ! meson setup "$BUILDDIR" \
         -Dbuildtype=release \
         -Ddirect="$DIRECT" \
         -Dsgx="$SGX" -Dvm="$VM" -Dtdx="$TDX" -Dgraphics="$GRAPHICS" \
-        -Dtests="$TESTS" \
+        -Dtests="$TESTS" -Dtests_pie="$TESTS_PIE" \
         -Dlibc=glibc \
     || { echo "ERROR: meson setup failed:"; tail -5 "$BUILDDIR-setup.err"; exit 1; }
 fi
@@ -189,12 +201,12 @@ if [ "$ADD_TO_PROFILE" = 1 ]; then
 fi
 
 if [ "$RUN_TESTS" = 1 ]; then
+    export GRAMINE_PREFIX="$PREFIX"
     if [ "$VM" = enabled ] && [ "$ARCH" = aarch64 ]; then
-        echo "note: --run-tests skipped -- the regression battery needs the direct PAL,"
-        echo "      which a --vm aarch64 build does not build."
+        echo ">>> running the vm test battery"
+        exec "$REPO/test/test-vm.sh" --build-dir "$BUILDDIR" ${TEST_SUITES[@]+"${TEST_SUITES[@]}"}
     else
         echo ">>> running the test battery"
-        export GRAMINE_PREFIX="$PREFIX"
         exec "$REPO/test/test-direct.sh" ${TEST_SUITES[@]+"${TEST_SUITES[@]}"}
     fi
 fi
@@ -207,4 +219,8 @@ if [ "$VM" = enabled ] && [ "$ARCH" = aarch64 ]; then
 fi
 echo "Done. To use this install in the current shell:   . \"$PREFIX/env.sh\""
 [ "$ADD_TO_PROFILE" = 1 ] || echo "(or rerun with --add-to-profile to get it in every new shell)"
-echo "Test with:  GRAMINE_PREFIX=\"$PREFIX\" test/test-direct.sh"
+if [ "$VM" = enabled ] && [ "$ARCH" = aarch64 ]; then
+    echo "Test with:  test/test-vm.sh --prefix \"$PREFIX\" --build-dir $BUILDDIR"
+else
+    echo "Test with:  GRAMINE_PREFIX=\"$PREFIX\" test/test-direct.sh"
+fi

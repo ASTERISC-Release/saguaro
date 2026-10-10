@@ -10,14 +10,13 @@
 #   hello     the bring-up soak test (tools/vm-aarch64-stage/hello.c, SMP=2 and SMP=4)
 #
 # Usage: test/test-vm.sh [--prefix DIR] [--build-dir DIR] [suite...]   (default: all)
-# Prerequisite: a vm build installed with `scripts/install.sh --vm` (its default prefix/build dir
-# are used unless overridden); the libos suite needs the build to have -Dtests=enabled -Dtests_pie=true
-# (see Documentation/devel/vm.md, "Regression suite").
+# Prerequisite: a vm build installed with `scripts/install.sh --vm` (default prefix ~/.local/gramine-vm,
+# build dir build-vm-<arch>; it builds the PIE test binaries the libos suite needs).
 set -u
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 REPO=$(dirname "$HERE")
-PREFIX=${GRAMINE_PREFIX:-/tmp/vm-prefix}
-BUILD=build-vm-container
+PREFIX=${GRAMINE_PREFIX:-$HOME/.local/gramine-vm}
+BUILD=build-vm-$(uname -m)
 SUITES=()
 while [ $# -gt 0 ]; do
     case $1 in
