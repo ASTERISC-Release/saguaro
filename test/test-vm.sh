@@ -3,7 +3,7 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
 # test-vm.sh — the aarch64 `vm` PAL test battery (run it where /dev/kvm and stock
-# qemu-system-aarch64 are available, e.g. the container from container/build-vm-aarch64.sh).
+# qemu-system-aarch64 are available, e.g. the container from container/run.sh).
 #
 #   libos     the LibOS regression suite under gramine-vm (GRAMINE_VM=1, libos/test/regression/vm_skip.toml)
 #   examples  CI-Examples applications (tools/run-vm-aarch64-examples.sh)

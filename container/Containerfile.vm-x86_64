@@ -5,7 +5,7 @@
 # PAL needs neither. Stock Ubuntu QEMU is used; TDX and the graphics redirection need the QEMU fork,
 # which is not part of this image (build it separately and point QEMU_PATH at it).
 #
-# Build + start with container/build-vm-x86_64.sh and container/exec-vm-x86_64.sh.
+# Build + start with container/run.sh.
 FROM ubuntu:noble
 
 ENV DEBIAN_FRONTEND=noninteractive
