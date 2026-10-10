@@ -79,16 +79,6 @@ static bool gic_is_v3(void) {
 }
 
 void lapic_signal_interrupt_complete(uint32_t intid) {
-    /* TODO(diag SMP B7): record every EOI (pair with the IAR ring in kernel_interrupts.c) */
-    {
-        extern volatile uint32_t g_dbg_events[8][16];
-        extern volatile uint32_t g_dbg_event_idx[8];
-        uint32_t cpu = get_per_cpu_data()->cpu_id;
-        if (cpu < 8) {
-            uint32_t idx = g_dbg_event_idx[cpu]++ & 15;
-            g_dbg_events[cpu][idx] = intid | 0x400;
-        }
-    }
     /* GICv3 ICC_EOIR1_EL1 is a write-with-INTID register (the value must be the INTID that the
      * last ICC_IAR1_EL1 read returned): QEMU's icc_eoir_write() performs the priority drop for
      * the highest active group and then icc_deactivate_irq(cs, <written value>). EOI'ing with a
@@ -115,54 +105,6 @@ void lapic_enable(void) {
      * redistributor latches PPI/SPI pendings fine, but icc_no_enabled_hppi() then reports
      * "no enabled hppi" forever. */
     __asm__ volatile("msr " ICC_IGRPEN1_EL1 ", %0" :: "r"((uint64_t)1));
-}
-
-/* TODO(diag SMP B7): cross-CPU redistributor probe for the shootdown stall. Reading *another*
- * CPU's redistributor frame from MMIO is legal (the frames are just device memory) and tells us
- * whether QEMU even recorded the SGI pending there (pend), whether our enable/group config is
- * still in place, and whether that redistributor is awake. Bit0 = SGI #0, bit1 = our shootdown
- * SGI. Drop with the hang debugging. */
-uint32_t gic_redist_sgi1_state(uint32_t cpu) {
-    uintptr_t rdbase = GICR_BASE + (uintptr_t)cpu * GICR_SIZE;
-    uint32_t pend = gicr_read(rdbase, GICR_SGI_BASE + GICD_ICPENDR(0));
-    uint32_t ena = gicr_read(rdbase, GICR_SGI_BASE + GICD_ISENABLER(0));
-    uint32_t grp = gicr_read(rdbase, GICR_SGI_BASE + GICD_IGROUPR(0));
-    uint32_t waker = gicr_read(rdbase, GICR_WAKER) & ((1u << 2) | (1u << 3));
-    /* [1:0]=pend [3:2]=enable [5:4]=group [7:6]=waker(ChildrenAsleep|Sleep) */
-    return (pend & 0x3) | ((ena & 0x3) << 1) | ((grp & 0x3) << 2) | (waker << 4);
-}
-
-/* TODO(diag SMP B7): raw full words covering INTID 0..31 (bit 30 = the timer PPI!) */
-uint32_t gic_redist_pend30(uint32_t cpu) {
-    return gicr_read(GICR_BASE + (uintptr_t)cpu * GICR_SIZE, GICR_SGI_BASE + GICD_ICPENDR(0));
-}
-uint32_t gic_redist_en30(uint32_t cpu) {
-    return gicr_read(GICR_BASE + (uintptr_t)cpu * GICR_SIZE, GICR_SGI_BASE + GICD_ISENABLER(0));
-}
-uint32_t gic_redist_grp30(uint32_t cpu) {
-    return gicr_read(GICR_BASE + (uintptr_t)cpu * GICR_SIZE, GICR_SGI_BASE + GICD_IGROUPR(0));
-}
-
-/* raw IPRIORITYR word0: bytes = INTIDs 0..3 (SGI #0, shootdown SGI #1, ...) */
-uint32_t gic_redist_prio0(uint32_t cpu) {
-    return gicr_read(GICR_BASE + (uintptr_t)cpu * GICR_SIZE, GICR_SGI_BASE + GICD_IPRIORITYR(0));
-}
-
-/* ICACTIVER0 reads return the ACTIVE bits (QEMU arm_gicv3_redist.c gicr_sgi_read).
- * QEMU hides pending-while-active IRQs from hppi (`pend &= ~iactiver`), so a stuck
- * active bit reproduces "pending forever, never delivered" exactly. */
-uint32_t gic_redist_act30(uint32_t cpu) {
-    return gicr_read(GICR_BASE + (uintptr_t)cpu * GICR_SIZE, GICR_SGI_BASE + 0x380 /* ICACTIVER0 */);
-}
-
-/* TODO(diag SMP B7): corrective nudge for a lost shootdown SGI: clear ACTIVE (write-1-to-
- * clear) and set PENDING (no-op if already pending; the MMIO path always ORs the latch in
- * QEMU). Both writes funnel through gicv3_redist_update -> gicv3_cpuif_update, so the
- * target's IRQ line is re-asserted if the redistributor state was wedged. */
-void gic_redist_nudge_sgi1(uint32_t cpu) {
-    uintptr_t rdbase = GICR_BASE + (uintptr_t)cpu * GICR_SIZE;
-    gicr_write(rdbase, GICR_SGI_BASE + 0x380 /* ICACTIVER0 */, 1u << 1);
-    gicr_write(rdbase, GICR_SGI_BASE + 0x200 /* ISPENDR0 */, 1u << 1);
 }
 
 int gic_spi_enable(uint32_t intid) {
@@ -218,21 +160,6 @@ int lapic_timer_init(void) {
         unsigned b8 = 8 * (GIC_INTID_TLB_SHOOTDOWN_SGI % 4);
         prio = (prio & ~(0xffu << b8)) | (0x20u << b8);
         gicr_write(rdbase, GICR_SGI_BASE + GICD_IPRIORITYR(GIC_INTID_TLB_SHOOTDOWN_SGI / 4), prio);
-        /* TODO(diag SMP B7): readback the priority/group config we just wrote (drop later).
-         * Also dump the per-CPU CPU-interface control fields that shape the APR bit positions
-         * (BPR) and the EOI semantics (EOIM): byte0 = SGI #1 priority, word0 of IGROUPR /
-         * ISENABLER, plus ICC_CTLR_EL1 (BPR bits 10:8, EOIM bit 13) and ICC_PMR_EL1. */
-        {
-            uint64_t ctroller, pmr;
-            __asm__ volatile("mrs %0, " ICC_CTLR_EL1 : "=r"(ctroller));
-            __asm__ volatile("mrs %0, " ICC_PMR_EL1 : "=r"(pmr));
-            log_always("DBG: cpu%u redist=%lx sgi_prio_rb=%02x grp_rb=%08x en_rb=%08x ctz=%08x pmr=%02x",
-                       (unsigned)get_per_cpu_data()->cpu_id, (unsigned long)rdbase,
-                       (unsigned)(gicr_read(rdbase, GICR_SGI_BASE + GICD_IPRIORITYR(0)) >> 8 & 0xff),
-                       gicr_read(rdbase, GICR_SGI_BASE + GICD_IGROUPR(0)),
-                       gicr_read(rdbase, GICR_SGI_BASE + GICD_ISENABLER(0)),
-                       (unsigned)ctroller, (unsigned)pmr);
-        }
         /* enables are write-1-to-set (reset already enables the SGIs, but set it explicitly) */
         gicr_write(rdbase, GICR_SGI_BASE + GICD_ISENABLER(30 / 32), 1u << (30 % 32));
         gicr_write(rdbase, GICR_SGI_BASE + GICD_ISENABLER(GIC_INTID_TLB_SHOOTDOWN_SGI / 32),

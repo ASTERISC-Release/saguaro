@@ -71,10 +71,14 @@ When one is fixed, delete its `vm_skip.toml` entry (an xfail that starts passing
 
 ## Smaller known gaps (not scheduled)
 
-- **Diagnostic probes** tagged `TODO(diag SMP B7)` are still in the kernel (`kernel_interrupts.c`
-  shootdown dump, `kernel_sched.c` `dbg_idle_scan`, `kernel_time.c`, `generated_offsets`
-  breadcrumbs `dbg_irq_trace`, `g_dbg_*` counters); strip them (or keep behind a debug option) before
-  B7 is declared closed. The stash `probes3` (`git stash list`) holds older probe work.
+- **Latent bug masked by the `TRACE` breadcrumb.** The C-level probes are gone; what remains is the
+  `TRACE` asm macro (`kernel_context.S`), the `dbg_irq_trace` per-CPU field and its offset. Removing the
+  `TRACE 1` at the `el1_irq_entry` entry (asm only, or also the field) makes `sched_set_get_affinity`
+  panic deterministically (LibOS `Reference count dropped below 0` at `libos_dcache.c:132`, opening
+  `/sys/devices/system/cpu/online`) and 5 suite tests fail (OpenMP simple_for_loop, cpuaffinity x2,
+  flock_lock, procstat). Not layout/timing (5 `nop`s fail), not `x29`/`x30` alone, not the stored values
+  (zero stores fail). Find the real cause (gdb on the gdbstub around `el1_irq_entry`), then drop `TRACE`.
+  The stash `probes3` (`git stash list`) holds older probe work.
 - **AF_INET sockets trip an assert** in `kernel_virtio_vsock.c:709` (`idx < g_vsock->conns_size`)
   instead of failing with `EAFNOSUPPORT`; the 8 `[VM:no-tcpip]` tests hit it. A clean error would be
   better than a kernel assert.

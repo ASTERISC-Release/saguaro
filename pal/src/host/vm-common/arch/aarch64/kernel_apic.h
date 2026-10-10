@@ -79,14 +79,5 @@ uint32_t gic_acknowledge_intid(void);
 /* Enable/route an SPI for a discovered device (virtio-mmio index -> SPI 32+index, CPU0). */
 int gic_spi_enable(uint32_t intid);
 
-/* TODO(diag SMP B7): cross-CPU redistributor dump (drop with the hang debugging) */
-uint32_t gic_redist_sgi1_state(uint32_t cpu);
-uint32_t gic_redist_pend30(uint32_t cpu);
-uint32_t gic_redist_en30(uint32_t cpu);
-uint32_t gic_redist_grp30(uint32_t cpu);
-uint32_t gic_redist_prio0(uint32_t cpu);
-uint32_t gic_redist_act30(uint32_t cpu);
-void gic_redist_nudge_sgi1(uint32_t cpu);
-
 /* Initialize the distributor: the aarch64 analog of x86 `apic_init()`. */
 int gic_init(void);

@@ -714,12 +714,6 @@ static int check_futex_ptr(uint32_t* ptr, bool check_write) {
 static int _libos_syscall_futex(uint32_t* uaddr, int op, uint32_t val, void* utime, uint32_t* uaddr2,
                                 uint32_t val3) {
     int cmd = op & FUTEX_CMD_MASK;
-    /* TODO(diag SMP B7): drop once the futex-op corruption is root-caused */
-    {
-        volatile int* w = (volatile int*)uaddr;
-        log_warning("DBG futex: op=0x%x uaddr=%p [w0]=%x [w1]=%x [wm1]=%x val=%u tcb=%p",
-                    op, (void*)uaddr, w[0], w[1], w[-1], val, pal_get_tcb());
-    }
     bool no_timeout = true;
     uint64_t timeout = 0;
     uint32_t val2 = 0;

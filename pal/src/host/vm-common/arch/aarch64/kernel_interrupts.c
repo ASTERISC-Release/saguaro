@@ -69,33 +69,6 @@ static struct {
     volatile uint32_t num_responses;
 } g_invalidate_tlb_request;
 
-/* TODO(diag SMP B7): per-CPU SGI handler branch history (drop with the hang debugging) */
-volatile uint32_t g_dbg_sgi_branch[8 * 3]; /* per cpu: extra, spurious, responded */
-
-/* TODO(diag SMP B7): per-CPU tick liveness: if a stalled run's non-responder stops counting
- * ticks, that CPU is stuck with IRQs masked (not an SGI delivery problem). */
-volatile uint32_t g_dbg_ticks[8];
-
-/* TODO(diag SMP B7): event ring per CPU: low 10 bits = INTID, bit 10 = 1 for EOI (vs IAR).
- * An IAR with no following EOI entry = CPU-interface active-priority wedge; an SGI IAR missing
- * entirely = masked/deaf CPU. */
-volatile uint32_t g_dbg_events[8][16];
-volatile uint32_t g_dbg_event_idx[8];
-
-/* TODO(diag SMP B7): the shared kernel_time.c cannot include the aarch64
- * kernel_multicore.h (include order resolves it to the x86 implementation), so expose the
- * current cpu id through this helper for its live-DAIF probe. */
-uint32_t dbg_this_cpu_id(void) {
-    return get_per_cpu_data()->cpu_id;
-}
-
-static void dbg_record_event(uint32_t intid, int is_eoi) {    uint32_t cpu = get_per_cpu_data()->cpu_id;
-    if (cpu >= 8)
-        return;
-    uint32_t idx = g_dbg_event_idx[cpu]++ & 15;
-    g_dbg_events[cpu][idx] = intid | (is_eoi ? 0x400 : 0);
-}
-
 /*
  * Dispatch of a Group-1 IRQ. `regs` points at the asm-saved frame (from either el0_irq_entry
  * or el1_irq_entry); on return the asm `eret`s to (possibly updated) ELR.
@@ -106,16 +79,10 @@ static void dbg_record_event(uint32_t intid, int is_eoi) {    uint32_t cpu = get
  */
 void isr_c(struct isr_regs* regs) {
     uint32_t intid = gic_acknowledge_intid();
-    dbg_record_event(intid, /*is_eoi=*/0); /* TODO(diag SMP B7) */
 
     switch (intid) {
         case GIC_INTID_PPI_EL1_PHYS:
             /* kernel tick: same 100ms period as the x86 LAPIC timer */
-            if (get_per_cpu_data()->cpu_id < 8) {
-                /* tick liveness counter only: logging from IRQ context takes the (non-IRQ-safe)
-                 * console lock and self-deadlocks against interrupted code holding it */
-                ++g_dbg_ticks[get_per_cpu_data()->cpu_id];
-            }
             if (get_per_cpu_data()->cpu_id == 0) {
                 /* only CPU0 handles timeouts and alarms */
                 notify_about_timeouts_uninterruptable();
@@ -144,8 +111,6 @@ void isr_c(struct isr_regs* regs) {
             }
             break;
         case GIC_INTID_TLB_SHOOTDOWN_SGI: {
-            /* TODO(diag SMP B7): branch counters for the shootdown hang (drop later) */
-            uint32_t cpu = get_per_cpu_data()->cpu_id;
             /* "invalidate TLB" IPI -- may be spurious/extra, check for this (the hardening
              * mirrors x86's `case 33` verbatim, down to the malicious-host comments). Unlike
              * the tick this handler NEVER reschedules -- it is the ack that releases the
@@ -155,13 +120,9 @@ void isr_c(struct isr_regs* regs) {
              * would permanently wedge future shootdown IPIs. */
             if (get_per_cpu_data()->invalidate_tlb_ipi_received) {
                 /* ignore extra IPI (most probably there is a malicious host) */
-                if (cpu < 8)
-                    g_dbg_sgi_branch[cpu * 3 + 0]++;
             } else if (!__atomic_load_n(&g_invalidate_tlb_request.in_progress,
                                         __ATOMIC_ACQUIRE)) {
                 /* ignore spurious IPI (most probably there is a malicious host) */
-                if (cpu < 8)
-                    g_dbg_sgi_branch[cpu * 3 + 1]++;
             } else if (!__atomic_load_n(&g_invalidate_tlb_request.num_responses,
                                         __ATOMIC_ACQUIRE)) {
                 /* now this is weird -- some vCPU started the protocol but num of responses is 0 */
@@ -173,8 +134,6 @@ void isr_c(struct isr_regs* regs) {
                  * tlb_invalidate_range ignores the range and flushes everything, see its
                  * comment; a *narrower* receiver flush against a full sender flush would be
                  * the actual bug). */
-                if (cpu < 8)
-                    g_dbg_sgi_branch[cpu * 3 + 2]++;
                 tlb_invalidate_range(NULL, 0);
                 get_per_cpu_data()->invalidate_tlb_ipi_received = 1;
                 __atomic_fetch_add(&g_invalidate_tlb_request.num_responses, 1,
@@ -233,35 +192,6 @@ long el0_sync_unexpected_c(struct isr_regs* regs) {
     uint64_t ec = esr >> 26;
 
     if (ec == 0x20 /* IABT from EL0 */ || ec == 0x24 /* DABT from EL0 */) {
-        /* TODO(diag SMP B7): full app-register dump (drop after the clone-child pointer
-         * corruption is root-caused): the app's x1/x2/x5 hold kernel-code addresses (PAL asm
-         * PCs inside el1_sync_entry/dtb_init) when glibc heap-atomics fault, so pin down
-         * which slot carries the kernel pointer and where it came from (x30 = caller). */
-        if (far >= 0x40080000 && far < 0x44329000) {
-            uintptr_t gs = replace_with_null_if_dummy_gs_base(
-                (uintptr_t)get_per_cpu_data()->cur_tcb);
-            struct thread* t = gs ? get_thread_ptr(gs) : NULL;
-            log_always("DBG: EL0 fault far=0x%lx elr=0x%lx cpu=%u thr=%p sp=0x%lx",
-                       far, regs->elr, get_per_cpu_data()->cpu_id, (void*)t, regs->sp);
-            log_always("DBG:  x0=0x%lx x1=0x%lx x2=0x%lx x3=0x%lx x4=0x%lx x5=0x%lx x8=0x%lx",
-                       regs->regs[0], regs->regs[1], regs->regs[2], regs->regs[3],
-                       regs->regs[4], regs->regs[5], regs->regs[8]);
-            log_always("DBG:  x19=0x%lx x20=0x%lx x21=0x%lx x24=0x%lx x29=0x%lx x30=0x%lx",
-                       regs->regs[19], regs->regs[20], regs->regs[21], regs->regs[24],
-                       regs->regs[29], regs->regs[30]);
-            /* kernel-side context image vs the live frame: if the tcb's regs hold the same
-             * kernel values as the fault frame, the poison was in the TCB and the preemptive
-             * resume loaded it; if the tcb holds sane user values, the poison appeared after
-             * the eret. */
-            if (t) {
-                log_always("DBG: tcb ctx r19=0x%lx r20=0x%lx r21=0x%lx r24=0x%lx r29=0x%lx",
-                           t->context.regs[19], t->context.regs[20], t->context.regs[21],
-                           t->context.regs[24], t->context.regs[29]);
-                log_always("DBG: tcb ctx pc=0x%lx sp=0x%lx pstate=0x%lx tls=0x%lx urip=0x%lx",
-                           t->context.pc, t->context.sp, t->context.pstate,
-                           t->context.user_tls, t->context.user_rip);
-            }
-        }
         if (pal_common_perform_memfault_handling(far, regs) == 0) {
             return 0; /* LibOS fixed the fault or delivered a signal from the frame */
         }
@@ -391,7 +321,7 @@ int send_invalidate_tlb_ipi_and_wait(void* addr, size_t size, bool invalidate_on
     __asm__ volatile("dsb ish\n\tisb" ::: "memory");
     __asm__ volatile("msr " ICC_SGI1R_EL1 ", %0" :: "r"(sgi));
 
-    unsigned tries = 0; /* TODO(diag SMP B7): drop with the hang debugging */
+    unsigned tries = 0;
     while (__atomic_load_n(&g_invalidate_tlb_request.num_responses, __ATOMIC_ACQUIRE)
             != g_num_cpus) {
         /* Waiting for the other CPUs' EL1 IRQ dispatch (isr_c SGI case) to flush and
@@ -403,85 +333,10 @@ int send_invalidate_tlb_ipi_and_wait(void* addr, size_t size, bool invalidate_on
          * about to finish as soon as the last ack lands. */
         CPU_RELAX();
         if (++tries == 20000000) {
-            tries = 0;
-            log_always("shootdown: resp=%u/%u recv[%u %u %u %u]",
-                       __atomic_load_n(&g_invalidate_tlb_request.num_responses,
-                                       __ATOMIC_RELAXED),
-                       g_num_cpus,
-                       g_num_cpus > 0 ? g_per_cpu_data[0].invalidate_tlb_ipi_received : 0,
-                       g_num_cpus > 1 ? g_per_cpu_data[1].invalidate_tlb_ipi_received : 0,
-                       g_num_cpus > 2 ? g_per_cpu_data[2].invalidate_tlb_ipi_received : 0,
-                       g_num_cpus > 3 ? g_per_cpu_data[3].invalidate_tlb_ipi_received : 0);
-            /* TODO(diag SMP B7): liveness + redistributor ground truth per CPU */
-            log_always("shootdown: ticks[%u %u %u %u]",
-                       g_dbg_ticks[0], g_dbg_ticks[1], g_dbg_ticks[2], g_dbg_ticks[3]);
-            log_always("shootdown: redist[0=%02x 1=%02x 2=%02x 3=%02x] (pend|en<<1|grp<<2|wake<<4)",
-                       gic_redist_sgi1_state(0), gic_redist_sgi1_state(1),
-                       gic_redist_sgi1_state(2), gic_redist_sgi1_state(3));
-            /* raw INTID0..31 words: bit1 = shootdown SGI, bit30 = timer PPI */
-            log_always("shootdown: pend[%08x %08x %08x %08x] en[%08x %08x %08x %08x]",
-                       gic_redist_pend30(0), gic_redist_pend30(1),
-                       gic_redist_pend30(2), gic_redist_pend30(3),
-                       gic_redist_en30(0), gic_redist_en30(1),
-                       gic_redist_en30(2), gic_redist_en30(3));
-            /* IPRIORITYR word0: byte1 = shootdown SGI prio (0x20 = configured,
-             * 0xff/0x00 = never written by lapic_timer_init on this CPU) */
-            log_always("shootdown: prio[%08x %08x %08x %08x]",
-                       gic_redist_prio0(0), gic_redist_prio0(1),
-                       gic_redist_prio0(2), gic_redist_prio0(3));
-            /* ACTIVE bits: QEMU's hppi skips pending-while-active, so act bit1 set on a
-             * non-responder with pend bit1 = the exact wedge. */
-            log_always("shootdown: act[%08x %08x %08x %08x]",
-                       gic_redist_act30(0), gic_redist_act30(1),
-                       gic_redist_act30(2), gic_redist_act30(3));
-            /* Corrective nudge (diag): after a few settled dumps, force-clear ACTIVE and
-             * re-pend the shootdown SGI on every non-responder (not this CPU) that has it
-             * pending. If the round then completes, the loss was redistributor state. */
-            {
-                static uint32_t dbg_dump_no;
-                static uint32_t dbg_nudged_mask;
-                uint32_t self = get_per_cpu_data()->cpu_id;
-                if (++dbg_dump_no >= 3) {
-                    for (uint32_t c = 0; c < g_num_cpus && c < 8; c++) {
-                        if (c == self || (dbg_nudged_mask & (1u << c)))
-                            continue;
-                        if (g_per_cpu_data[c].invalidate_tlb_ipi_received)
-                            continue;
-                        uint32_t pend = gic_redist_pend30(c);
-                        if (pend & 0x2) {
-                            dbg_nudged_mask |= 1u << c;
-                            log_always("shootdown: nudging cpu%u (pend=%08x act=%08x)",
-                                       c, pend, gic_redist_act30(c));
-                            gic_redist_nudge_sgi1(c);
-                        }
-                    }
-                }
-            }
-            /* last 8 IAR/EOI events per cpu (bit10=EOI, low bits=INTID), oldest first */
-            for (uint32_t c = 0; c < g_num_cpus && c < 8; c++) {
-                uint32_t base = g_dbg_event_idx[c];
-                log_always("shootdown: cpu%u ev[%x %x %x %x %x %x %x %x]", c,
-                           g_dbg_events[c][(base - 8) & 15], g_dbg_events[c][(base - 7) & 15],
-                           g_dbg_events[c][(base - 6) & 15], g_dbg_events[c][(base - 5) & 15],
-                           g_dbg_events[c][(base - 4) & 15], g_dbg_events[c][(base - 3) & 15],
-                           g_dbg_events[c][(base - 2) & 15], g_dbg_events[c][(base - 1) & 15]);
-                /* what a preemptive resume would eret to on this cpu: poisoned (masked) spsr
-                 * there = the CPU runs its EL0 thread deaf */
-                uintptr_t gs = replace_with_null_if_dummy_gs_base(
-                    (uintptr_t)g_per_cpu_data[c].cur_tcb);
-                struct thread* t = gs ? get_thread_ptr(gs) : NULL;
-                log_always("shootdown: cpu%u cur spsr=%08lx elr=%08lx kpc=%08lx daif=%lx",
-                           c, t ? (unsigned long)t->irq_pseudo_stack.spsr : 0xfffffff0UL,
-                           t ? (unsigned long)t->irq_pseudo_stack.elr : 0,
-                           t ? (unsigned long)t->context.pc : 0,
-                           t ? (unsigned long)t->context.pstate : 0);
-                /* TODO(diag SMP B7): asm liveness breadcrumb: [0]=last TRACE point of any
-                 * kind, [1]=last exception entry. 0 => this vCPU never even reached an
-                 * instrumented entry; hang/el1_sync addresses => it vanished there. */
-                log_always("shootdown: cpu%u trace=%016lx irq=%016lx", c,
-                           (unsigned long)g_per_cpu_data[c].dbg_irq_trace[0],
-                           (unsigned long)g_per_cpu_data[c].dbg_irq_trace[1]);
-            }
+            /* a silent hang would be worse: say which acks are missing, once */
+            log_error("shootdown: still waiting for acks (%u/%u responded)",
+                      __atomic_load_n(&g_invalidate_tlb_request.num_responses, __ATOMIC_RELAXED),
+                      g_num_cpus);
         }
     }
 
