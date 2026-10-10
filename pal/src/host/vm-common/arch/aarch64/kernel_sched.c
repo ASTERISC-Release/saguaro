@@ -205,21 +205,6 @@ void sched_thread_uninterruptable(struct isr_regs* userland_regs) {
 }
 
 void sched_thread(uint32_t* lock_to_unlock, int* clear_child_tid) {
-    /* TODO(diag SMP B7): deaf-EL1-context probe: the idle loop calls this forever at EL1
-     * without ever eret'ing, so a masked PSTATE here is permanent for this CPU. */
-    {
-        uint64_t daif_live;
-        __asm__ volatile("mrs %0, daif" : "=r"(daif_live));
-        if (daif_live & 0x3c0) {
-            static volatile uint32_t dbg_deaf_logged;
-            if (dbg_deaf_logged < 4) {
-                dbg_deaf_logged++;
-                log_always("DBG: sched_thread on cpu%u runs MASKED daif=%lx",
-                           (unsigned)get_per_cpu_data()->cpu_id, (unsigned long)daif_live);
-            }
-        }
-    }
-
     uint64_t curr_tcb_base     = replace_with_null_if_dummy_gs_base(
                                      (uintptr_t)get_per_cpu_data()->cur_tcb);
     struct thread* curr_thread = curr_tcb_base ? get_thread_ptr(curr_tcb_base) : NULL;

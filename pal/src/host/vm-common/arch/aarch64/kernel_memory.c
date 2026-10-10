@@ -191,7 +191,9 @@ static spinlock_t g_page_table_lock = INIT_SPINLOCK_UNLOCKED;
  * lock order in this subsystem (the SGI receiver takes neither). No-ops during boot and on
  * a single-CPU kernel, where this CPU is by definition the only one that can run. */
 static void tlb_flush_all(void) {
-    __asm__ volatile("tlbi vmalle1\n\tdsb ish\n\tisb" ::: "memory");
+    /* the PTE/descriptor stores must be observable by every walker before the invalidate
+     * (Linux: dsb(ishst) before tlbi); then broadcast (the receivers' IS flush is the same) */
+    __asm__ volatile("dsb ishst\n\ttlbi vmalle1is\n\tdsb ish\n\tisb" ::: "memory");
     int ret = send_invalidate_tlb_ipi_and_wait(NULL, 0, /*invalidate_on_this_cpu=*/false);
     if (ret < 0) {
         /* cannot happen: every sender goes through g_page_table_lock, so no protocol run
@@ -215,7 +217,13 @@ static uint64_t* l3_from_block(uint64_t* l2e) {
     for (unsigned i = 0; i < 512; i++) {
         l3[i] = PT_PAGE | base + i * PAGE_SIZE + inherit;
     }
+    /* The L3 entries must be visible to every CPU's table walker *before* the L2 descriptor
+     * that points at them is: the walker is not ordered against our plain stores, so without
+     * this DSB another CPU can see the new table slot with still-zero entries and take a
+     * translation fault on a page that is (and always was) mapped. */
+    __asm__ volatile("dsb ishst" ::: "memory");
     *l2e = ((uint64_t)(uintptr_t)l3 & PT_ADDR_MASK) | PT_TABLE;
+    __asm__ volatile("dsb ishst" ::: "memory");
     return l3;
 }
 
@@ -242,6 +250,7 @@ static uint64_t* pt_get_leaf(uint64_t va, bool create) {
         if (create && va >= g_dram_base && va < g_dram_end) {
             /* the whole 2MB block was marked off: reinstate it, then split */
             *l2e = (va & ~(0x00200000ULL - 1)) | PTE_DATA;
+            __asm__ volatile("dsb ishst" ::: "memory");
             return &l3_from_block(l2e)[PT_INDEX_L3(va)];
         }
         return NULL; /* invalid block/table slot */

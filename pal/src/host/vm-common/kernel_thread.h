@@ -155,6 +155,15 @@ struct thread {
      * execution (when it is interrupted by IRQ); XSAVE is always stored in a preallocated region */
     struct thread_context context;
 
+#ifdef __aarch64__
+    /* isr_eret_to_userland runs with SP_EL1 = &irq_pseudo_stack and IRQs already unmasked by the
+     * context switch. aarch64 has no IST: el1_irq_entry carves its 48-byte scratch *below the
+     * incoming SP*, so an IRQ (shootdown SGI, virtio) landing in that window would write over the
+     * 48 bytes preceding this field -- i.e. the tail of `context` (pc/sp/pstate/user_tls/
+     * fpregs): garbage callback, wrong sp, corrupted registers on the thread's next dispatch.
+     * Keep dead space under the pseudo stack for that scratch. */
+    uint8_t irq_pseudo_stack_scratch[64] __attribute__((aligned(16)));
+#endif
     struct thread_irq_pseudo_stack irq_pseudo_stack;
 
     /* per-thread scratch registers for returning to userspace from rt_sigreturn() syscall;

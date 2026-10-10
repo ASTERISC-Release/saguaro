@@ -55,29 +55,6 @@ int get_time_in_us(uint64_t* out_us) {
 }
 
 int delay(uint64_t delay_us, bool* continue_gate) {
-#ifdef __aarch64__
-    /* TODO(diag SMP B7): live-PSTATE probe (arm-only; `dbg_this_cpu_id` is the aarch64
-     * kernel_interrupts.c helper because include order here resolves kernel_multicore.h to
-     * the x86 implementation). delay() is the idle thread's steady state on every CPU
-     * (~every 10ms); a MASKED observation on a CPU whose tick counter is frozen proves the
-     * deafness is a persistently masked DAIF in this EL1 context. */
-    extern uint32_t dbg_this_cpu_id(void);
-    {
-        uint64_t daif_live;
-        __asm__ volatile("mrs %0, daif" : "=r"(daif_live));
-        uint32_t cpu = dbg_this_cpu_id();
-        extern volatile uint32_t g_dbg_ticks[8];
-        if ((daif_live & 0x3c0) && cpu < 8) {
-            static volatile uint32_t dbg_delay_masked_logged;
-            if (dbg_delay_masked_logged < 8) {
-                dbg_delay_masked_logged++;
-                log_always("DBG: delay() cpu%u MASKED daif=%lx ticks=%u",
-                           (unsigned)cpu, (unsigned long)daif_live, g_dbg_ticks[cpu]);
-            }
-        }
-    }
-#endif
-
     uint64_t curr_tsc = get_tsc();
     uint64_t wait_until_tsc = curr_tsc + delay_us * g_tsc_mhz;
 

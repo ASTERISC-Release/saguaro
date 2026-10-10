@@ -112,12 +112,9 @@ void isr_c(struct isr_regs* regs) {
         case GIC_INTID_PPI_EL1_PHYS:
             /* kernel tick: same 100ms period as the x86 LAPIC timer */
             if (get_per_cpu_data()->cpu_id < 8) {
-                uint32_t tc = ++g_dbg_ticks[get_per_cpu_data()->cpu_id];
-                /* TODO(diag SMP B7): tick liveness heartbeat (also fires on the EL1-int
-                 * interrupted path: the tick gate is after this). */
-                if (tc % 10 == 0)
-                    log_always("DBG: tick cpu%u n=%u",
-                               (unsigned)get_per_cpu_data()->cpu_id, tc);
+                /* tick liveness counter only: logging from IRQ context takes the (non-IRQ-safe)
+                 * console lock and self-deadlocks against interrupted code holding it */
+                ++g_dbg_ticks[get_per_cpu_data()->cpu_id];
             }
             if (get_per_cpu_data()->cpu_id == 0) {
                 /* only CPU0 handles timeouts and alarms */
@@ -149,26 +146,6 @@ void isr_c(struct isr_regs* regs) {
         case GIC_INTID_TLB_SHOOTDOWN_SGI: {
             /* TODO(diag SMP B7): branch counters for the shootdown hang (drop later) */
             uint32_t cpu = get_per_cpu_data()->cpu_id;
-            /* TODO(diag SMP B7): CPU-interface ground truth from this still-running CPU while
-             * shootdown rounds hang: ICC_HPPIR1_EL1 is what a future IAR1 would return (under
-             * TCG: QEMU's model state; under KVM: the hardware vGIC answers natively, no trap).
-             * hppi==30 on a tick-frozen CPU => the cpu interface owes that vCPU an undelivered
-             * INTID 30 (delivery-side wedge); hppi==1023 => the GICR_ISPENDR0 bit30 seen in the
-             * stall dump never propagates redist->cpuif. `spsr` also reports the interrupted
-             * context's EL/mask (last probe that observes the *live* PSTATE on that vCPU). */
-            {
-                uint64_t hp = 1023, pmr = 0;
-                __asm__ volatile("mrs %0, icc_hppir1_el1" : "=r"(hp));
-                __asm__ volatile("mrs %0, icc_pmr_el1" : "=r"(pmr));
-                static volatile uint32_t dbg_sgi_probe_logged;
-                if (cpu < 8 && g_dbg_ticks[cpu] >= 2 && dbg_sgi_probe_logged < 64) {
-                    dbg_sgi_probe_logged++;
-                    log_always("DBG: cpu%u SGI spsr=%08lx elr=%016lx hppi=%lu pmr=%02lx ticks=%u",
-                               cpu, (unsigned long)regs->spsr, (unsigned long)regs->elr,
-                               (unsigned long)(hp & 0x3ff), (unsigned long)(pmr & 0xff),
-                               g_dbg_ticks[cpu]);
-                }
-            }
             /* "invalidate TLB" IPI -- may be spurious/extra, check for this (the hardening
              * mirrors x86's `case 33` verbatim, down to the malicious-host comments). Unlike
              * the tick this handler NEVER reschedules -- it is the ack that releases the
@@ -180,17 +157,11 @@ void isr_c(struct isr_regs* regs) {
                 /* ignore extra IPI (most probably there is a malicious host) */
                 if (cpu < 8)
                     g_dbg_sgi_branch[cpu * 3 + 0]++;
-                log_always("DBG: cpu%u SGI EXTRA (flag still 1, resp=%u ip=%d)", cpu,
-                           __atomic_load_n(&g_invalidate_tlb_request.num_responses,
-                                           __ATOMIC_RELAXED),
-                           (int)__atomic_load_n(&g_invalidate_tlb_request.in_progress,
-                                                __ATOMIC_RELAXED));
             } else if (!__atomic_load_n(&g_invalidate_tlb_request.in_progress,
                                         __ATOMIC_ACQUIRE)) {
                 /* ignore spurious IPI (most probably there is a malicious host) */
                 if (cpu < 8)
                     g_dbg_sgi_branch[cpu * 3 + 1]++;
-                log_always("DBG: cpu%u SGI SPURIOUS (in_progress=0)", cpu);
             } else if (!__atomic_load_n(&g_invalidate_tlb_request.num_responses,
                                         __ATOMIC_ACQUIRE)) {
                 /* now this is weird -- some vCPU started the protocol but num of responses is 0 */
@@ -353,6 +324,13 @@ void isr_kernel_c(struct isr_regs* regs) {
     log_error("Panic: EL1 sync exception ESR=0x%lx FAR=0x%lx", esr, far);
     log_error("       elr=0x%lx sp=0x%lx x0=0x%lx x30=0x%lx", regs->elr, regs->sp, regs->regs[0],
               regs->regs[30]);
+    /* full frame of the faulting context (where the first fault hid behind a nested one, the
+     * interrupted GPRs are the only record of what code was running) */
+    log_error("       spsr=0x%lx", regs->spsr);
+    for (int r = 0; r < 30; r += 5)
+        log_error("       x%d=%lx x%d=%lx x%d=%lx x%d=%lx x%d=%lx", r, regs->regs[r], r + 1,
+                  regs->regs[r + 1], r + 2, regs->regs[r + 2], r + 3, regs->regs[r + 3], r + 4,
+                  regs->regs[r + 4]);
     triple_fault();
 }
 
