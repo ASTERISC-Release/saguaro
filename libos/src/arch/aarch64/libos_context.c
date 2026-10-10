@@ -185,8 +185,14 @@ void prepare_sigframe(PAL_CONTEXT* context, siginfo_t* siginfo, void* handler, v
     pal_context_to_ucontext(&sigframe->uc, context);
 
     /* FIXME: make this VM/TDX PAL logic more generic */
-    const bool is_vm = !strcmp(g_pal_public_state->host_type, "VM") ||
-                       !strcmp(g_pal_public_state->host_type, "TDX");
+    /* Only when we are returning from a *syscall*: then `context->pc` is one of the PAL's EL1
+     * return trampolines. A synchronous-fault frame (memfault upcall) instead carries the real EL0
+     * pc and is resumed by the PAL itself, so there the handler address goes straight into
+     * `context->pc` as on any other PAL. */
+    const bool is_vm = (!strcmp(g_pal_public_state->host_type, "VM") ||
+                        !strcmp(g_pal_public_state->host_type, "TDX")) &&
+                       (context->pc == g_pal_public_state->vm_syscall_return_trampoline ||
+                        context->pc == g_pal_public_state->vm_signal_return_trampoline);
     void* user_rip_ptr = NULL;
     if (is_vm) {
         /* Under the VM PAL `context->pc` is the PAL's return trampoline, not the application's

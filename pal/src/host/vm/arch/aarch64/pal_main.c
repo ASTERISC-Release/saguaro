@@ -325,7 +325,9 @@ noreturn int pal_start_continue(void* cmdline_) {
     g_pal_public_state.vm_user_rip_offset = offsetof(struct pal_tcb_vm,
                                                      kernel_thread.context.user_rip);
     extern void pal_sigreturn_return(void); /* arch/aarch64/kernel_context.S */
+    extern void pal_syscall_return(void);
     g_pal_public_state.vm_signal_return_trampoline = (uintptr_t)&pal_sigreturn_return;
+    g_pal_public_state.vm_syscall_return_trampoline = (uintptr_t)&pal_syscall_return;
 
     ret = pal_common_get_topo_info(&g_pal_public_state.topo_info);
     if (ret < 0)

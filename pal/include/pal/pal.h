@@ -169,6 +169,10 @@ struct pal_public_state {
      * from the syscall snapshot, which would clobber the handler's siginfo/ucontext arguments).
      */
     uintptr_t vm_signal_return_trampoline;
+    /* ...and the ordinary syscall-return trampoline (reloads x1..x15 from the syscall snapshot).
+     * LibOS tells "returning from a syscall" (context->pc is one of the two trampolines) from "a
+     * synchronous fault frame" (context->pc is the real EL0 pc, resumed by the PAL itself). */
+    uintptr_t vm_syscall_return_trampoline;
 
     /*
      * Host information
