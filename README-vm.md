@@ -4,8 +4,8 @@ The `vm` PAL (`pal/src/host/vm/` + `pal/src/host/vm-common/`) is a bare-metal un
 a ring-0 Gramine kernel (own scheduler, page tables, GIC/PL011/fw_cfg/ECAM-PCI/virtio
 drivers) that boots directly in QEMU and runs the LibOS + application at ring-3 — no
 host OS underneath. On x86 it is the engine behind the `gramine-vm` launcher used by
-the game examples; the aarch64 port is in progress (see `ARM64_MILESTONE_B.md` for the
-design history and `ARM64_MILESTONE_A.md` for the LibOS/PAL arch-layer groundwork).
+the game examples; the aarch64 port is in progress (see `Documentation/devel/aarch64/vm-pal-plan.md` for the
+design history and `Documentation/devel/aarch64/direct-pal-port-log.md` for the LibOS/PAL arch-layer groundwork).
 
 ## x86-64 (status: works, used by all game examples)
 
@@ -27,7 +27,7 @@ vhost-user-fs via `virtiofsd`, vsock, fw_cfg args/envs/unixtime, and the fork's
 cd CI-Examples/graphics/<example> && make && gramine-vm <example>
 ```
 
-## aarch64 (status: runs LibOS applications under KVM at SMP=1..4; see `ARM64_MILESTONE_B.md`)
+## aarch64 (status: runs LibOS applications under KVM at SMP=1..4; see `Documentation/devel/aarch64/vm-pal-plan.md`)
 
 Build (native aarch64, or cross; needs meson ≥ 1.x + gcc):
 
@@ -39,9 +39,17 @@ ninja -C build-vm-aarch64          # kernel: build-vm-aarch64/pal/src/host/vm/pa
 ```
 
 `qemu-system-aarch64`, `dtc`, `virtiofsd` (Ubuntu ships it at `/usr/lib/qemu/virtiofsd`) and
-`/dev/kvm` must be available -- in practice that is the `tirith-arm-qemu` container
+`/dev/kvm` must be available -- in practice that is the `gramine-vm-aarch64` container
 (`docker/build-vm-aarch64.sh`, `docker/exec-vm-aarch64.sh`), which also has the python
 modules `gramine-manifest` needs.
+
+**QEMU requirement (aarch64).** Use a **stock distribution QEMU** (`qemu-system-aarch64` from Ubuntu
+24.04's `qemu-system-arm`, 8.2.x, is what every aarch64 result in this repository was measured with;
+newer stock releases are expected to behave the same but are unverified). The QEMU fork used for the
+x86 `vm`/`tdx` and graphics work does **not** build for aarch64 (it contains x86-only code, e.g.
+`egl-redirect/xcb.c` inline asm and `util/sg-listener.c` with `KVM_VCPU_TSC_CTRL`) and is not needed:
+the aarch64 `vm` PAL uses only upstream machine features (`virt` with `gic-version=3`, KVM,
+`vhost-user-fs`, fw_cfg, PSCI). Select another binary with `QEMU_PATH=...`.
 
 ### `gramine-vm`
 
@@ -119,5 +127,5 @@ debugging. The non-obvious parts both encode (all requirements, not choices):
 - **`-m 2G` minimum**: the kernel carries a 64 MB static shared-memory pool in `.bss`
   and keeps its allocator floor above the image (`__text_end`).
 
-Boot and bring-up history lives in `ARM64_MILESTONE_B.md`. `VM exited with code 1` with a
+Boot and bring-up history lives in `Documentation/devel/aarch64/vm-pal-plan.md`. `VM exited with code 1` with a
 `error: PAL failed ...` line means an early boot `INIT_FAIL` -- the message names the failing step.

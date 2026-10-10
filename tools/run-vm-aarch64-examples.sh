@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run CI-Examples applications under `gramine-vm` on aarch64 (inside the tirith-arm-qemu container,
+# Run CI-Examples applications under `gramine-vm` on aarch64 (inside the gramine-vm-aarch64 container,
 # with the VM build installed; see README-vm.md) and check their output.
 #
 # Usage: tools/run-vm-aarch64-examples.sh [example ...]        (default: all below)

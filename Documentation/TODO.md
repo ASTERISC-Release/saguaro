@@ -1,7 +1,7 @@
 # TODO — aarch64 VM PAL (`gramine-vm`)
 
-Open items as of 2026-10-10 (HEAD `fc009987`). Context: `ARM64_MILESTONE_B.md` (history),
-`ARM64_X86_COMPARISON_VM.md` (results), `README-vm.md` (how to run). Test ids refer to
+Open items as of 2026-10-10 (HEAD `fc009987`). Context: `Documentation/devel/aarch64/vm-pal-plan.md` (history),
+`x86-parity-vm.md` (results), `README-vm.md` (how to run). Test ids refer to
 `libos/test/regression/test_libos.py`; the skip/xfail entries live in
 `libos/test/regression/vm_skip.toml`.
 
@@ -95,7 +95,7 @@ When one is fixed, delete its `vm_skip.toml` entry (an xfail that starts passing
 
 ## Cross-checks waiting on x86 / other QEMU
 
-- Fill the `TBD (x86)` cells in `ARM64_X86_COMPARISON_VM.md`; confirm on x86 that (a) non-PIE binaries
+- Fill the `TBD (x86)` cells in `x86-parity-vm.md`; confirm on x86 that (a) non-PIE binaries
   work (no `tests_pie` needed) and (b) `gramine-vm` propagates the application's exit status (the
   aarch64 launcher recovers it from the console; the x86 launcher `exec`s QEMU — unverified).
 - QEMU: the aarch64 numbers use stock Ubuntu QEMU 8.2.2; the repo's fork (10.1.50) does not build for
