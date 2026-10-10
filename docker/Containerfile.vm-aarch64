@@ -1,0 +1,65 @@
+# Development container for the aarch64 vm-PAL unikernel (README-vm.md / Documentation/devel/aarch64/vm-pal-plan.md). Parallel to the x86 `Containerfile`
+# (which targets the GPU/KVM/TDX Steam workflow); nothing here is shared.
+#
+# Target runtime is **KVM on a native aarch64 host** (`-accel kvm -cpu host`);
+# TCG is out of scope. The container is therefore useless for building/running
+# the VM on x86 -- it exists to give a headless aarch64 box the QEMU/virtiofsd
+# stack that the distro host does not ship.
+#
+# Build + start with docker/build-vm-aarch64.sh and docker/exec-vm-aarch64.sh
+# (they pass `--device /dev/kvm` which is mandatory for the runner).
+#
+# Ubuntu 24.04 (noble), matching the x86 Containerfile's pinned base image:
+# the vm-PAL/LibOS build and the glibc/mbedtls subprojects are validated on
+# noble's toolchain (gcc 13.3). Newer Ubuntu (26.04) ships gcc 15, which turns
+# long-tolerated patterns into hard errors (C23 keyword-ifies memcpy/memmove in
+# common/include/api.h; -Werror'd OPEN_TREE_CLONE clash building glibc 2.39
+# against new kernel UAPI headers) -- deliberately not chased here.
+#
+# QEMU: stock noble qemu-system-arm (8.2.x) -- this is the documented requirement for the aarch64
+# vm PAL (the numbers in Documentation/devel/aarch64/x86-parity-vm.md use it). It is older than the
+# 10.2.1 the initial bring-up ran on; virt/gic-version=3/KVM/vhost-user-fs behave the same for the
+# vm kernel's needs, but if a future machine-shape dependency shows up, pin a
+# newer QEMU in this layer (the kernel reads CPU count and PSCI conduit from
+# the DTB, which both versions shape identically).
+FROM ubuntu:noble
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Run layer: everything tools/run-vm-aarch64-dev.sh invokes.
+#   qemu-system-arm    -> /usr/bin/qemu-system-aarch64
+#   virtiofsd          -> /usr/lib/qemu/virtiofsd (off PATH; the runner probes)
+#   device-tree-compiler -> dtc, for the dumpdtb re-pack step
+#   gdb                -> guest debugging (native aarch64 ELF, no gdb-multiarch)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      qemu-system-arm virtiofsd device-tree-compiler \
+      kmod iproute2 iputils-ping gdb ca-certificates \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Build layer: meson/ninja/gcc toolchain for the vm PAL + LibOS
+# (`meson setup build-vm-container -Dvm=enabled ...` + ninja; see README-vm.md).
+# The python3-* modules are Gramine's meson-time deps; patch/pkg-config feed the
+# vendored subprojects (mbedtls's meson.build probes pkg-config). gawk+bison are
+# glibc 2.39's configure requirements (fatal without them).
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      build-essential gcc make cmake patch git pkg-config \
+      gawk bison \
+      meson ninja-build python3 python3-click python3-jinja2 \
+      python3-tomli python3-tomli-w python3-voluptuous python3-pyelftools \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Test layer: the libos regression suite (`gramine-test` + pytest) run under `gramine-vm`
+# (-Dtests=enabled -Dtests_pie=true; see README-vm.md). procps/file/iproute2 are
+# used by individual tests.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      python3-pytest python3-cryptography python3-toml procps file sqlite3 \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Marker + WORKDIR parity with the x86 image (repo mounts at /root/gramine-multiarch).
+RUN touch /var/lib/gramine-vm-aarch64
+WORKDIR /root
+
+CMD ["bash"]
