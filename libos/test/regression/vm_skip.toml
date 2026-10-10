@@ -28,6 +28,7 @@ tests = [
   "TC_30_Syscall::test_090_sighandler_reset",
   "TC_30_Syscall::test_095_kill_all",
   "TC_30_Syscall::test_100_get_set_groups",
+  "TC_30_Syscall::test_140_flock_lock",
   "TC_30_Syscall::test_110_fcntl_lock",
   "TC_30_Syscall::test_111_fcntl_lock_child_only",
   "TC_30_Syscall::test_120_gethostname_default",
@@ -130,7 +131,6 @@ kind = "xfail"
 category = "investigate"
 reason = "Fails with a Bad file descriptor / permission error on a virtiofs file operation; cause not yet understood."
 tests = [
-  "TC_30_Syscall::test_023_readdir",
   "TC_40_FileSystem::test_030_fdleak",
 ]
 
@@ -156,12 +156,4 @@ category = "no-svc-rewrite"
 reason = "Lazy `svc #0` rewriting (sys.rewrite_syscalls) is a seccomp-trap mechanism of the Linux PAL; the VM PAL dispatches `svc` itself, so there is nothing to rewrite."
 tests = [
   "TC_01_Bootstrap::test_603_rewrite_stress",
-]
-
-[[group]]
-kind = "xfail"
-category = "investigate"
-reason = "Reading a 3000-entry virtiofs directory exceeds the 40 s test timeout (getdents on virtiofs is slow or stalls); related to the readdir xfail, cause not yet understood."
-tests = [
-  "TC_30_Syscall::test_021_getdents_large_dir",
 ]
