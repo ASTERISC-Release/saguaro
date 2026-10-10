@@ -9,7 +9,6 @@ reason = "The VM PAL is single-process (no PalProcessCreate / IPC): the test nee
 tests = [
   "TC_01_Bootstrap::test_010_console",
   "TC_01_Bootstrap::test_202_fork_and_exec",
-  "TC_01_Bootstrap::test_203_fork_disallowed",
   "TC_01_Bootstrap::test_2045_fork_pacret",
   "TC_01_Bootstrap::test_204_vfork_and_exec",
   "TC_01_Bootstrap::test_205_exec_fork",

@@ -27,6 +27,10 @@ def _load_vm_entries():
 def pytest_collection_modifyitems(config, items):  # pylint: disable=unused-argument
     if os.environ.get('GRAMINE_VM') != '1':
         return
+    # GRAMINE_VM_SKIPLIST=0 runs everything (raw pass/fail numbers, e.g. to compare architectures
+    # or to see which listed tests have started passing)
+    if os.environ.get('GRAMINE_VM_SKIPLIST', '1') == '0':
+        return
 
     entries = _load_vm_entries()
     seen = set()

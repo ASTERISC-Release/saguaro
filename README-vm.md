@@ -91,8 +91,8 @@ console, so the harness gets stdout+stderr+Gramine's log as one stream and uses 
 With `GRAMINE_VM=1`, `libos/test/regression/conftest.py` applies `vm_skip.toml`: tests that cannot run
 on the VM PAL are skipped, and failures whose cause is not yet understood are marked xfail, each with a
 `[VM:<category>]` reason, so a plain `gramine-test pytest` is a usable pass/fail gate. Baseline
-(2026-10-10, SMP=2, KVM): **78 passed, 96 skipped (34 SGX-only + 62 VM), 3 xfailed, 0 failed** in about a
-minute. `-rs` lists the skip reasons; a skip that no longer applies (the platform grew the feature) is
+(2026-10-10, SMP=2, KVM): **79 passed, 95 skipped (34 suite-guard + 61 VM), 3 xfailed, 0 failed** in about a
+minute (raw run without the list, `GRAMINE_VM_SKIPLIST=0`: 79 passed / 64 failed / 34 skipped). `-rs` lists the skip reasons; a skip that no longer applies (the platform grew the feature) is
 removed from `vm_skip.toml`, and an xfail that starts passing shows up as XPASS. `GRAMINE_TEST_TIMEOUT`
 overrides the per-run timeout (default 40 s under the VM, 10 s otherwise).
 
