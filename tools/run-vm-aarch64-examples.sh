@@ -33,6 +33,10 @@ run_example() {
     if ! make -B "$target" > "$OUT/$name.make.log" 2>&1; then
         echo "SKIP  $name (make $target failed, see $OUT/$name.make.log)"; skip=$((skip+1)); return
     fi
+    # a fresh checkout has no built application binary yet
+    if [ -n "$binary" ] && [ ! -e "$binary" ]; then
+        make "$binary" > "$OUT/$name.build.log" 2>&1 || true
+    fi
     if [ -n "$binary" ] && [ -e "$binary" ] && ! file -L "$binary" | grep -q "pie executable\|shared object"; then
         echo "SKIP  $name ($binary is not PIE)"; skip=$((skip+1)); return
     fi
@@ -59,13 +63,14 @@ for ex in $SEL; do
     helloworld)
         run_example helloworld helloworld helloworld.manifest helloworld "Hello, world" - helloworld ;;
     mremap)
-        run_example mremap mremap helloworld.manifest helloworld "ALL IN-PLACE TESTS PASSED" - helloworld ;;
+        run_example mremap unit_tests/mremap helloworld.manifest helloworld "ALL IN-PLACE TESTS PASSED" - helloworld ;;
     multi-thread)
-        run_example thread-rwlock multi-thread thread-rwlock.manifest thread-rwlock "" - thread-rwlock
-        # the example links thread-tls with plain -static (non-PIE); the VM needs static-pie
-        (cd "$ROOT/CI-Examples/multi-thread" && gcc -static-pie -fPIE -O2 -pthread -o thread-tls \
-            thread-tls.c) > "$OUT/thread-tls.build.log" 2>&1
-        run_example thread-tls multi-thread thread-tls.manifest thread-tls "" - thread-tls ;;
+        # the example links thread-tls with plain -static (non-PIE) and thread-rwlock mounts the
+        # thread-stress binary too; the VM needs static-pie for all of them
+        (cd "$ROOT/CI-Examples/unit_tests/multi-thread" && for b in thread-tls thread-stress; do
+            gcc -static-pie -fPIE -O2 -pthread -o $b $b.c; done) > "$OUT/thread-tls.build.log" 2>&1
+        run_example thread-rwlock unit_tests/multi-thread thread-rwlock.manifest thread-rwlock "" - thread-rwlock
+        run_example thread-tls unit_tests/multi-thread thread-tls.manifest thread-tls "" - thread-tls ;;
     bash)
         run_example bash-echo bash bash.manifest bash "gramine-vm-ok" - bash -c "echo gramine-vm-ok"
         run_example bash-ls bash bash.manifest bash "Makefile" - bash -c "ls" ;;

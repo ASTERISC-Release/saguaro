@@ -165,7 +165,7 @@ libos = shared_library('sysdb',
         # tagged-TPIDR/registry machinery of the Linux PAL; see
         # pal/src/host/vm-common/arch/aarch64/pal_vm_tcb.c for the contract the kernel keeps.
         # (x86_64 needs nothing of the sort: %gs-relative addressing works at ring-3.)
-        vm and host_machine.cpu_family() == 'aarch64' ? ['-DHOST_TYPE=VM'] : [],
+        vm and host_machine.cpu_family() == 'aarch64' ? ['-DHOST_TYPE=VM', '-DPAL_HOST_VM=1'] : [],
 
         # aarch64 + VM PAL (Milestone B): common_dep passes its sources (memcpy/memset/etc.)
         # through to this target, so they are compiled with these flags. -O3 would

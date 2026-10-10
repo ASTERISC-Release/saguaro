@@ -73,7 +73,7 @@ libos_syscall_entry:
      * pre-multi-thread design that always read g_pal_tcb_singleton here -- correct for one
      * thread, catastrophic for more (all threads then emulated syscalls on *one shared* LibOS
      * stack). */
-#ifdef HOST_TYPE
+#ifdef PAL_HOST_VM
     /* VM-PAL (Milestone B): the TLS-keyed registry above is a Linux-PAL mechanism. In the
      * unikernel, libsysdb runs at EL0 where TPIDR_EL1 is unreadable and the kernel itself
      * resolves `svc` dispatch. The EL0-readable answer to "which thread am I" is TPIDRRO_EL0
@@ -245,7 +245,7 @@ _return_from_syscall:
      * below is only legitimate for syscall returns. Such contexts are tagged with bit 62 of
      * pstate (PAL_PSTATE_EXACT_CONTEXT, pal_arch.h); for them the PAL's SIGTRAP handler restores
      * every register and the flags through the kernel's own sigreturn. x0 = the PAL_CONTEXT. */
-#ifndef HOST_TYPE
+#ifndef PAL_HOST_VM
     ldr  x0, [x19, #PAL_CONTEXT_PSTATE_OFF]
     tbz  x0, #62, .Lfast_restore
     mov  x0, x19
@@ -253,7 +253,7 @@ _return_from_syscall:
     brk  #0                      /* not reached: the trap handler resumes the application */
 .Lfast_restore:
 #endif
-    /* (VM PAL builds, i.e. HOST_TYPE: there is no SIGTRAP handler and no host kernel sigreturn to
+    /* (VM PAL builds, i.e. PAL_HOST_VM: there is no SIGTRAP handler and no host kernel sigreturn to
      * restore through -- the PAL resumes the application itself through its own EL1 return
      * trampolines -- so the exact-restore tag set by ucontext_to_pal_context() is ignored.) */
     /* After this point we call nothing else. X16 and X17 have specific final values from here

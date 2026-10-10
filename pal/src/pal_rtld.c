@@ -147,7 +147,7 @@ static pal_prot_flags_t elf_segment_prot_to_pal_prot(int elf_segment_prot) {
 
 /* iterate through DSO's program headers to find dynamic section (for dynamic linking) */
 static elf_dyn_t* find_dynamic_section(elf_addr_t ehdr_addr, elf_addr_t base_diff)
-    __attribute__((unused)); /* unused in the aarch64+HOST_TYPE branch of setup_pal_binary() */
+    __attribute__((unused)); /* unused in the aarch64+PAL_HOST_VM branch of setup_pal_binary() */
 static elf_dyn_t* find_dynamic_section(elf_addr_t ehdr_addr, elf_addr_t base_diff) {
     const elf_ehdr_t* header = (const elf_ehdr_t*)ehdr_addr;
     const elf_phdr_t* phdr   = (const elf_phdr_t*)(ehdr_addr + header->e_phoff);
@@ -785,7 +785,7 @@ int setup_pal_binary(bool apply_relocations) {
     g_pal_map.l_prev = NULL;
     g_pal_map.l_next = NULL;
 
-#if defined(__aarch64__) && defined(HOST_TYPE)
+#if defined(__aarch64__) && defined(PAL_HOST_VM)
     /*
      * aarch64 unikernel PAL (vm): the kernel is a fixed-address EXEC ELF handed straight to
      * QEMU's `-kernel` loader, which *refuses* any PT_LOAD that maps the file header (that
@@ -828,7 +828,7 @@ int setup_pal_binary(bool apply_relocations) {
     if (ret < 0)
         return ret;
 
-#if defined(__aarch64__) && defined(HOST_TYPE)
+#if defined(__aarch64__) && defined(PAL_HOST_VM)
     /* the program headers are not in memory here (see above), so scan the dynamic section
      * exported by the linker script instead of walking phdrs from l_map_start */
     ret = find_string_and_symbol_tables_from_dynamic(dynamic_section, pal_base_diff,

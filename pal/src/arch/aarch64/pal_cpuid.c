@@ -85,7 +85,7 @@ int _PalGetCPUInfo(struct pal_cpu_info* ci) {
     ci->cpu_model    = partnum;
     ci->cpu_stepping = (variant << 4) | revision;
 
-#ifdef HOST_TYPE
+#ifdef PAL_HOST_VM
     /* vm kernel (aarch64): -mgeneral-regs-only, so _PalGetBogomips() returns the IEEE-754
      * bit pattern of the double in a GPR; reinterpret it with an integer copy. */
     uint64_t bogomips_bits = _PalGetBogomips();

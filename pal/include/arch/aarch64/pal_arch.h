@@ -77,9 +77,9 @@ static_assert(offsetof(PAL_TCB, stack_protector_canary) == 0x8,
  */
 extern __attribute__((visibility("protected"))) PAL_TCB* g_pal_tcb_singleton;
 
-/* Implemented by the vm/tdx unikernel PALs (HOST_TYPE builds, see pal/src/host/vm-common/
+/* Implemented by the vm/tdx unikernel PALs (PAL_HOST_VM builds, see pal/src/host/vm-common/
  * arch/aarch64/); declared unconditionally so the inline pal_get_tcb() below can branch on it.
- * Never referenced in Linux PAL or LibOS builds (the branch is dead code without -DHOST_TYPE). */
+ * Never referenced in Linux PAL or LibOS builds (the branch is dead code without -DPAL_HOST_VM). */
 PAL_TCB* pal_get_tcb_vm(void);
 
 #include "pal_host_arch.h"
@@ -149,9 +149,9 @@ static inline bool pal_tcb_from_tagged_tpidr(PAL_TCB** out_tcb) {
  * Hand-written direct addressing sidesteps that compiler policy entirely.
  */
 static inline PAL_TCB* pal_get_tcb(void) {
-#ifdef HOST_TYPE
+#ifdef PAL_HOST_VM
     /*
-     * Unikernel PAL (vm/tdx HOST_TYPE builds; Milestone B aarch64): there is no host OS, the
+     * Unikernel PAL (vm/tdx PAL_HOST_VM builds; Milestone B aarch64): there is no host OS, the
      * kernel itself maintains the "current thread PAL_TCB" exactly like x86_64 keeps it in the
      * GS base MSR -- on aarch64 that register role is played by a per-CPU slot maintained by
      * the context-switch asm (see vm-common/arch/aarch64/kernel_multicore.h `cur_tcb` and the

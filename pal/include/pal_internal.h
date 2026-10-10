@@ -238,7 +238,7 @@ int _PalSystemTimeQuery(uint64_t* out_usec);
  */
 int _PalRandomBitsRead(void* buffer, size_t size);
 
-#if defined(__aarch64__) && defined(HOST_TYPE)
+#if defined(__aarch64__) && defined(PAL_HOST_VM)
 /* the vm kernel is built -mgeneral-regs-only: this returns the IEEE-754 bit pattern of the
  * double that the other flavors return in their FP return register (see vm meson.build) */
 uint64_t _PalGetBogomips(void);

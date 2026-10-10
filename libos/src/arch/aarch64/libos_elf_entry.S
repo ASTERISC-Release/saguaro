@@ -44,8 +44,8 @@ call_elf_entry:
     mov  x8, #0
     msr  fpcr, x2
     msr  nzcv, x2
-#ifdef HOST_TYPE
-    /* VM-PAL (aarch64 Milestone B, HOST_TYPE is defined only in the vm build): we run this
+#ifdef PAL_HOST_VM
+    /* VM-PAL (aarch64 Milestone B, PAL_HOST_VM is defined only in the vm build): we run this
      * jump-once from pal_start_continue at EL1 (start_execution `br`'d here from kernel context,
      * exactly like x86's `jmp rdi` in ring 0), and this is the kernel's deliberate, one-way
      * privilege drop into userland. x86 gets its first ring-3 transition for free: ring-0

@@ -82,6 +82,7 @@ libpal_vm = executable('pal',
     c_args: [
         cflags_pal_common,
         '-DHOST_TYPE=VM',
+        '-DPAL_HOST_VM=1',
 
         # instruct GCC not to use the AMD64 ABI 128B redzone which resides below the stack
         # pointer, or kernel will be interrupt unsafe
