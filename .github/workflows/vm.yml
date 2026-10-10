@@ -72,8 +72,26 @@ jobs:
           done
           qemu-system-x86_64 --version | head -1
 
+      - name: Toolchain and header versions (for diagnosing build failures)
+        run: |
+          gcc --version | head -1; make --version | head -1; ld --version | head -1
+          dpkg -l linux-libc-dev libc6-dev bison gawk | awk '/^ii/{print $2, $3}'
+          uname -r
+
       - name: Build and install Gramine (direct + vm PALs, graphics disabled)
         run: scripts/install.sh --vm --graphics disabled --prefix "$GRAMINE_PREFIX" -j "$(nproc)"
+
+      - name: Show the glibc build log (build failed)
+        if: failure()
+        run: |
+          # compile-no-patches.sh sends all glibc output to this file; ninja only prints its path
+          log=build-vm-x86_64/subprojects/glibc-2.39-1/glibc-build.log
+          if [ -f "$log" ]; then
+            echo "--- first errors"; grep -n -m 10 -E "error|Error|\*\*\*" "$log" || true
+            echo "--- last 80 lines"; tail -n 80 "$log"
+          else
+            echo "no $log"
+          fi
 
       - name: Smoke test - helloworld under gramine-vm
         run: |
@@ -124,6 +142,7 @@ jobs:
           if-no-files-found: ignore
           path: |
             vm-*.log
+            build-vm-x86_64/subprojects/glibc-2.39-1/glibc-build.log
 
   kvm-probe:
     name: KVM probe (${{ matrix.arch }})
