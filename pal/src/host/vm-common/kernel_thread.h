@@ -127,7 +127,17 @@ struct thread_irq_pseudo_stack {
     uint64_t spsr;   /* SPSR_EL1: saved user PSTATE (x86 rflags; cs/ss have no analog) */
     uint64_t sp;     /* SP_EL0: user stack pointer (x86 rsp) */
 #endif
-} __attribute__((packed));
+}
+#ifdef __aarch64__
+/* isr_eret_to_userland points SP_EL1 at this struct and reads it with ldp [sp]: with
+ * SP alignment checking on, a frame at an address that is 8 (mod 16) takes an
+ * SP-alignment fault, and which side of 16 it lands on depends on the layout of
+ * struct thread. (Size 24 pads to 32; asm only touches offsets 0..23.) */
+__attribute__((packed, aligned(16)))
+#else
+__attribute__((packed))
+#endif
+;
 
 DEFINE_LIST(thread);
 struct thread {

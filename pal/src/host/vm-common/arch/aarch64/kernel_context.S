@@ -784,7 +784,28 @@ el1_irq_entry:
     .balign 128
 el1_sync_entry:
     /* A synchronous exception inside the kernel proper is a kernel bug (x86:
-     * #PF/#GP/#UD panic with no fixup). Save the frame only to report it. */
+     * #PF/#GP/#UD panic with no fixup). Save the frame only to report it.
+     * If SP is poisoned (top byte set -- every real pointer is < 256TB; e.g.
+     * a wild `mov sp,xN` from a corrupt context slot), the 48-byte scratch must
+     * NOT touch the bad SP: that faulted -> re-entered this vector with DAIF
+     * masked = an infinite silent storm that starves the tick. Redirect the
+     * scratch under our per-CPU interrupt stack instead, so isr_kernel_c gets
+     * to report the original ELR/ESR/FAR and the full register state. */
+    mov     x17, sp
+    tst     x17, #0xff00000000000000
+    b.ne    .Lel1_sync_sp_bad
+    tst     x17, #0xffffffffc0000000          /* below DRAM base (0x40000000): a NULL-ish
+                                               * SP (e.g. 0x18) is just as unusable */
+    b.eq    .Lel1_sync_sp_bad
+    tst     x17, #0xf                         /* misaligned SP: the 48-byte stp below would
+                                               * itself take an SP-alignment fault */
+    b.eq    .Lel1_sync_sp_ok
+.Lel1_sync_sp_bad:
+    mrs     x17, tpidr_el1
+    ldr     x17, [x17, #PER_CPU_DATA_INTERRUPT_STACK]
+    sub     x17, x17, #(ISR_FRAME_SIZE + 48)
+    mov     sp, x17
+.Lel1_sync_sp_ok:
     sub     sp, sp, #48
     stp     x29, x30, [sp]
     mrs     x29, elr_el1
