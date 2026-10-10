@@ -131,3 +131,10 @@ debugging. The non-obvious parts both encode (all requirements, not choices):
 
 Boot and bring-up history lives in `Documentation/devel/aarch64/vm-pal-plan.md`. `VM exited with code 1` with a
 `error: PAL failed ...` line means an early boot `INIT_FAIL` -- the message names the failing step.
+
+### aarch64 test battery
+
+`scripts/test-vm-aarch64.sh [libos|examples|hello]` runs the LibOS regression suite under `gramine-vm`
+(with `libos/test/regression/vm_skip.toml`), the CI-Examples runner and the `hello` SMP soak, in the
+container from `docker/`. Last measured: libos 79 passed / 97 skipped / 3 xfailed / 0 failed, examples
+9 passed / 1 skipped, hello 20/20 at SMP=2 and SMP=4.
