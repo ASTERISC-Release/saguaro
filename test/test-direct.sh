@@ -237,7 +237,7 @@ run_pytest() {
     return $rc
 }
 
-echo "=== Gramine aarch64 test battery — suites: ${RUN[*]} ==="
+echo "=== Gramine $HOST_ARCH test battery — suites: ${RUN[*]} ==="
 
 for suite in "${RUN[@]}"; do
 echo

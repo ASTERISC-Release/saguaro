@@ -190,6 +190,8 @@ long libos_syscall_mbind(void* start, unsigned long len, int mode, unsigned long
 long libos_syscall_openat(int dfd, const char* filename, int flags, int mode);
 long libos_syscall_mkdirat(int dfd, const char* pathname, int mode);
 long libos_syscall_newfstatat(int dirfd, const char* pathname, struct stat* statbuf, int flags);
+long libos_syscall_statx(int dirfd, const char* pathname, unsigned int flags, unsigned int mask,
+                         void* buf);
 long libos_syscall_unlinkat(int dfd, const char* pathname, int flag);
 long libos_syscall_readlinkat(int dirfd, const char* file, char* buf, int bufsize);
 long libos_syscall_renameat(int olddfd, const char* pathname, int newdfd, const char* newname);

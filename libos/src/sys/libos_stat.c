@@ -343,3 +343,100 @@ out:
         put_dentry(dir);
     return ret;
 }
+
+/*
+ * `statx` is `newfstatat` with a different result layout. It is needed on architectures whose glibc
+ * assumes the kernel has it and so does not fall back to `newfstatat` on ENOSYS (riscv64); see the
+ * syscall tables for where it is enabled. The structures are spelled out here because
+ * <linux/stat.h> cannot be included together with our "stat.h".
+ */
+struct libos_statx_timestamp {
+    int64_t tv_sec;
+    uint32_t tv_nsec;
+    int32_t __reserved;
+};
+
+struct libos_statx {
+    uint32_t stx_mask;
+    uint32_t stx_blksize;
+    uint64_t stx_attributes;
+    uint32_t stx_nlink;
+    uint32_t stx_uid;
+    uint32_t stx_gid;
+    uint16_t stx_mode;
+    uint16_t __spare0[1];
+    uint64_t stx_ino;
+    uint64_t stx_size;
+    uint64_t stx_blocks;
+    uint64_t stx_attributes_mask;
+    struct libos_statx_timestamp stx_atime;
+    struct libos_statx_timestamp stx_btime;
+    struct libos_statx_timestamp stx_ctime;
+    struct libos_statx_timestamp stx_mtime;
+    uint32_t stx_rdev_major;
+    uint32_t stx_rdev_minor;
+    uint32_t stx_dev_major;
+    uint32_t stx_dev_minor;
+    uint64_t __spare2[14];
+};
+static_assert(sizeof(struct libos_statx) == 256, "struct statx is 256 bytes in the Linux ABI");
+
+#define LIBOS_STATX_BASIC_STATS   0x000007ffU
+#define LIBOS_STATX__RESERVED     0x80000000U
+#define LIBOS_AT_STATX_SYNC_TYPE  0x6000
+
+/* The encoding of `dev_t` that the kernel hands to userspace (new_encode_dev() in Linux). */
+static uint32_t dev_major(uint64_t dev) {
+    return (dev & 0xfff00) >> 8;
+}
+
+static uint32_t dev_minor(uint64_t dev) {
+    return (dev & 0xff) | ((dev >> 12) & 0xfff00);
+}
+
+long libos_syscall_statx(int dirfd, const char* pathname, unsigned int flags, unsigned int mask,
+                         void* buf) {
+    struct libos_statx* statxbuf = buf;
+
+    if (flags & ~(AT_EMPTY_PATH | AT_NO_AUTOMOUNT | AT_SYMLINK_NOFOLLOW | LIBOS_AT_STATX_SYNC_TYPE))
+        return -EINVAL;
+    if ((flags & LIBOS_AT_STATX_SYNC_TYPE) == LIBOS_AT_STATX_SYNC_TYPE)
+        return -EINVAL;
+    if (mask & LIBOS_STATX__RESERVED)
+        return -EINVAL;
+    if (!is_user_memory_writable(statxbuf, sizeof(*statxbuf)))
+        return -EFAULT;
+
+    /* Automount is not supported and the sync type has no meaning here, so both are dropped.
+     * `newfstatat` only accepts a buffer in application memory, so it first writes its (smaller)
+     * result into the caller's buffer, from where it is copied out and converted. */
+    static_assert(sizeof(struct stat) <= sizeof(*statxbuf), "struct stat must fit into statx");
+    long ret = libos_syscall_newfstatat(dirfd, pathname, (struct stat*)statxbuf,
+                                        flags & (AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW));
+    if (ret < 0)
+        return ret;
+    struct stat st;
+    memcpy(&st, statxbuf, sizeof(st));
+
+    memset(statxbuf, 0, sizeof(*statxbuf));
+    statxbuf->stx_mask          = LIBOS_STATX_BASIC_STATS;
+    statxbuf->stx_blksize       = st.st_blksize;
+    statxbuf->stx_nlink         = st.st_nlink;
+    statxbuf->stx_uid           = st.st_uid;
+    statxbuf->stx_gid           = st.st_gid;
+    statxbuf->stx_mode          = st.st_mode;
+    statxbuf->stx_ino           = st.st_ino;
+    statxbuf->stx_size          = st.st_size;
+    statxbuf->stx_blocks        = st.st_blocks;
+    statxbuf->stx_atime.tv_sec  = st.st_atime;
+    statxbuf->stx_atime.tv_nsec = st.st_atime_nsec;
+    statxbuf->stx_ctime.tv_sec  = st.st_ctime;
+    statxbuf->stx_ctime.tv_nsec = st.st_ctime_nsec;
+    statxbuf->stx_mtime.tv_sec  = st.st_mtime;
+    statxbuf->stx_mtime.tv_nsec = st.st_mtime_nsec;
+    statxbuf->stx_rdev_major    = dev_major(st.st_rdev);
+    statxbuf->stx_rdev_minor    = dev_minor(st.st_rdev);
+    statxbuf->stx_dev_major     = dev_major(st.st_dev);
+    statxbuf->stx_dev_minor     = dev_minor(st.st_dev);
+    return 0;
+}

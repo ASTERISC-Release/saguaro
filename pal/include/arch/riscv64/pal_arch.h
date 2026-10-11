@@ -381,7 +381,7 @@ typedef struct PAL_CONTEXT PAL_CONTEXT;
 
 /* Resumes `context` exactly through rt_sigreturn(); the LibOS's only way back to the application.
  * Defined in pal/src/host/linux/arch/riscv64/pal_arch_exception.c and exported from libpal.so. */
-__attribute__((noreturn)) void pal_arch_restore_context(struct PAL_CONTEXT* context);
+__attribute__((__noreturn__)) void pal_arch_restore_context(struct PAL_CONTEXT* context);
 
 typedef int64_t arch_syscall_arg_t;
 
