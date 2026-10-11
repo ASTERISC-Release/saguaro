@@ -1,0 +1,64 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (C) 2026 The ASTERISC Research Lab
+
+# Yamagi Quake II under gramine-vm with the Tirith graphics redirection (x86_64).
+
+libos.entrypoint = "/quake2_bin/release/quake2"
+
+sys.stack.size = "32M"
+libos.check_invalid_pointers = false
+{% if shared_input|string != "0" %}
+# Key, button and pointer events come through the shared-memory ring in the comm page; build with
+# SHARED_INPUT=0 to receive them over the X connection instead (see
+# Documentation/devel/graphics/running.md).
+sys.experimental__shared_input_ring = true
+{% endif %}
+
+loader.log_level = "{{ log_level }}"
+loader.insecure__use_host_env = true
+loader.argv = ["quake2", "+vid_maxfps", "999", "+toggleconsole"]
+loader.uid = 1000
+loader.gid = 1000
+
+loader.env.LD_LIBRARY_PATH = "/lib:/usr/lib:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu"
+loader.env.LD_PRELOAD = "./libgraphics.so"
+loader.env.HOME = "/root"
+loader.env.USER = "root_user"
+loader.env.DISPLAY = "2:0"
+loader.env.IVSHMEM_GRAMINE_VM = "1"
+loader.env.HOST_SDL_WINDOW = "1"
+loader.env.GALLIUM_THREAD = "0"
+loader.env.GLIBC_TUNABLES = "glibc.pthread.rseq=0"
+loader.env.__GL_SYNC_TO_VBLANK = "0"
+loader.env.vblank_mode = "0"
+loader.env.ALSOFT_DRIVERS = "null"
+loader.env.SDL_AUDIODRIVER = "dummy"
+loader.env.PULSE_SERVER = "none"
+loader.env.PIPEWIRE_REMOTE = "none"
+loader.env.GBM_BACKEND = "dri"
+loader.env.EGL_GRAMINE = "1"
+loader.env.EGL_DISCRETE = "0"
+loader.env.EGL_SHARED_INPUT = "{{ '0' if shared_input|string == '0' else '1' }}"
+
+fs.mounts = [
+  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "/libgraphics.so", uri = "file:{{ gramine.libgraphics }}" },
+
+  # Stock Mesa, SDL and X libraries from the host root
+  { path = "/usr", type = "chroot", uri = "file:/usr" },
+
+  { path = "/etc/ld.so.cache", uri = "file:/etc/ld.so.cache" },
+  { path = "/sys", type = "chroot", uri = "file:/sys" },
+  { path = "/sys/dev", type = "chroot", uri = "file:/sys/dev" },
+  { path = "/sys/devices", type = "chroot", uri = "file:/sys/devices" },
+  { path = "/sys/bus/pci", type = "chroot", uri = "file:/sys/bus/pci" },
+
+  # The game and its configuration and shader-cache directories. The guest paths under /root are
+  # fixed: the LibOS forwards /root/.cache to the host by that name.
+  { path = "/quake2_bin", type = "chroot", uri = "file:{{ q2_dir }}" },
+  { path = "/root/.yq2", type = "chroot", uri = "file:{{ home }}/.yq2" },
+  { path = "/root/.cache", type = "chroot", uri = "file:{{ home }}/.cache" },
+]
+
+sgx.debug = true
+sgx.edmm_enable = {{ 'true' if env.get('EDMM', '0') == '1' else 'false' }}
