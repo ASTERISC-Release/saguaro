@@ -64,7 +64,7 @@ Symbol      Meaning
    * - ↳ ``vm`` with ``graphics`` (host redirection)
      - ⚠️
      - ⚠️
-     - ❌
+     - 🛫
      - ❌
    * - ``tdx`` (Intel TDX) and ``sgx`` (Intel SGX)
      - ✅
