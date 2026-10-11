@@ -1,0 +1,70 @@
+##############################################
+# LibOS Settings
+##############################################
+libos.entrypoint = "/glxgears"
+
+##############################################
+# Loader
+##############################################
+
+sys.stack.size = "32M"
+# sys.brk.max_size = "2G"
+
+
+
+# Loader configuration
+loader.insecure__use_host_env = true
+
+loader.insecure__use_cmdline_argv = true
+
+loader.log_level = "{{ log_level }}"
+# Loader environment overrides
+loader.env.LD_LIBRARY_PATH = "/lib:/usr/lib:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu"
+loader.env.LD_PRELOAD = "./egl_redirect.so"
+loader.env.DISPLAY = "2:0"
+loader.env.IVSHMEM_GRAMINE_VM = "1"
+loader.env.HOST_SDL_WINDOW = "1"
+loader.env.GALLIUM_THREAD="0"
+loader.env.GLIBC_TUNABLES = "glibc.pthread.rseq=0"
+loader.env.__GL_SYNC_TO_VBLANK="0"
+loader.env.vblank_mode="0"
+loader.env.GBM_BACKEND="dri"
+loader.env.EGL_GRAMINE="1"
+loader.env.EGL_DISCRETE="0"
+loader.env.EGL_SYSCALL_LOG="0"
+loader.env.EGL_IOCTL_LOG="0"
+loader.env.MESA_LOG="0"
+
+# loader.env.XDG_CACHE_HOME="/.cache"
+
+##############################################
+# Core mounts
+##############################################
+##############################################
+# Filesystem Mounts (ALL in one array)
+##############################################
+
+fs.mounts = [
+  # entry point
+  { path = "/glxgears", uri = "file:glxgears" },
+
+  # Core system dirs
+  { path = "/egl_redirect.so", uri = "file:{{ egl_redirect }}" },
+
+  # Stock Mesa, glibc and X libraries from the host root
+  { path = "/usr", type = "chroot", uri = "file:/usr"},
+
+  # Config files + Mesa shader cache
+  { path = "/etc/ld.so.cache", uri = "file:/etc/ld.so.cache" },
+  { path = "/sys", type = "chroot", uri = "file:/sys" },
+  { path = "/sys/dev", type = "chroot", uri = "file:/sys/dev"},
+  { path = "/sys/devices", type = "chroot", uri = "file:/sys/devices"},
+  { path = "/sys/bus/pci", type = "chroot", uri = "file:/sys/bus/pci"},
+
+  # { path = "/root/.cache", type = "chroot", uri = "file:/root/.cache"},
+  { path = "/root/.cache", type = "chroot", uri = "file:/root/.cache"},
+]
+sgx.debug = true
+sgx.edmm_enable = {{ 'true' if env.get('EDMM', '0') == '1' else 'false' }}
+
+
