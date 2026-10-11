@@ -4,16 +4,6 @@ Gramine Library OS with Multi-Architectural Support
 
 *A Linux-compatible library OS for multi-process applications, on Intel x86_64, AMD64 and AArch64.*
 
-Status
-======
-
-This project is, at this point, a system designed for **research and teaching
-purposes**. It is **experimental** and **must not be used in production
-environments**. It comes with no warranty.
-
-What is it?
-===========
-
 Gramine is a lightweight library OS: it runs an unmodified Linux application
 in an isolated environment, with its own implementation of the Linux system
 call interface (the *LibOS*) on top of a small host abstraction layer (the
@@ -26,6 +16,33 @@ Gramine (formerly *Graphene*) was designed and built by a diverse group of
 researchers and engineers from universities and industry (the retained copyright
 notices include Stony Brook University, Texas A&M University, Intel and Invisible
 Things Lab).
+
+Status
+======
+
+This project is a Gramine fork adapted for development, research, and teaching purposes.
+
+It is **experimental** and **must not be used in production environments**; it comes with no
+warranty. What it already lets you do:
+
+- **Sandbox applications** on a personal or cloud machine: an unmodified Linux application runs on
+  Gramine's own implementation of the Linux system call interface, either as an ordinary process
+  (``gramine-direct``) or, with the ``vm`` PAL, inside a minimal virtual machine (a *microVM*) that
+  contains only the application, the library OS and a small kernel.
+- **Run applications in microVM environments**, such as games with the (experimental) graphics host
+  redirection, or services that should not see the host operating system.
+- **Run the same application stack on x86_64 and on AArch64**, for example to compare behaviour and
+  performance across architectures.
+- **Study and teach operating-system design**: a Linux-compatible library OS and a small bare-metal
+  kernel (page tables, scheduler, interrupts, virtio drivers, SMP bring-up) that fit in a readable code
+  base, with design logs and test-parity notes under ``Documentation/devel/``.
+- **Use the inherited confidential-computing back ends** (Intel TDX and SGX) on x86_64.
+
+Several features are **planned** and not available yet (see the platform matrix below and
+`Documentation/TODO.md <Documentation/TODO.md>`__): a RISC-V (RV64) port of the ``direct`` and ``vm``
+PALs, the graphics host redirection on AArch64, delivery of asynchronous signals to blocked threads in
+the ``vm`` PAL, a finer-grained timer, and closing the known gaps of the AArch64 ``vm`` PAL (it currently
+runs single-process applications without TCP/IP).
 
 Platform support
 ================
