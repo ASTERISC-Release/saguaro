@@ -124,7 +124,8 @@ if grep -Eq '^DISPLAY[^=]*=[[:space:]]*"2:' "$GRAMINE_MANIFEST" 2>/dev/null; the
     fi
     # Where the hugepage GEM arena lives: in a hugepages deployment, at the dedicated 1G hugetlb
     # bucket backend at guest 6G (so a data arena larger than ram1's 2G cannot be used there);
-    # otherwise it follows the data arena directly.
+    # otherwise it follows the data arena directly. The PAL gets both numbers over fw_cfg and the
+    # guest library over its environment, so they are exported for exactly one knob in.
     if [ "${GRAMINE_HUGEPAGES:-0}" = "1" ]; then
         if [ "$GRAPHICS_DATA_BYTES" -gt 2147483648 ]; then
             echo "Error: GRAMINE_HUGEPAGES=1 serves the hugepage GEM bucket from a dedicated 1G" \
@@ -136,9 +137,12 @@ if grep -Eq '^DISPLAY[^=]*=[[:space:]]*"2:' "$GRAMINE_MANIFEST" 2>/dev/null; the
     else
         GRAPHICS_HUGE_ADDR=$((4294967296 + GRAPHICS_DATA_BYTES))   # 4G + data size
     fi
-    GRAMINE_HUGEPAGE_ADDR=$GRAPHICS_HUGE_ADDR  # reaches the guest env via opt/gramine/envs
     echo "Graphics data arena: $GRAPHICS_DATA_SIZE ($GRAPHICS_DATA_BYTES bytes; guest RAM floor ${NEED_RAM}G; hugepage arena at 0x$(printf %x $GRAPHICS_HUGE_ADDR))"
+    GRAMINE_HUGEPAGE_ADDR=$GRAPHICS_HUGE_ADDR
+    GRAMINE_DATA_SIZE=$GRAPHICS_DATA_SIZE
 fi
+[ -n "${GRAPHICS_HUGE_ADDR:-}" ] && export GRAMINE_HUGEPAGE_ADDR
+[ -n "${GRAPHICS_DATA_SIZE:-}" ] && export GRAMINE_DATA_SIZE
 if [ "$GRAMINE_HUGEPAGES" == "1" ]; then
     echo "Configuring Gramine VM with hugepages support."
     if [ "$RAW_MEM_SIZE" -lt 5 ]; then
