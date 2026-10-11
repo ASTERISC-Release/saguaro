@@ -108,9 +108,16 @@ static int add_preloaded_range(uintptr_t addr, size_t size, bool is_user_reserve
     return pal_add_initial_range(addr, size, /*pal_prot=*/0, is_user_reserved, comment);
 }
 
-static void zero_out_memory_and_prot_none(void) {
+static void prot_none_free_memory(void) {
     extern struct pal_initial_mem_range g_initial_mem_ranges[];
 
+    /* Free guest RAM is inaccessible (PROT_NONE in the guest page tables) until
+     * the allocator hands pages out. The pages are deliberately NOT written
+     * zero here: the memfd (and hugetlbfs) backends are zero by construction,
+     * anything the boot wrote lives in the reserved ranges skipped below, and
+     * later allocations re-zero through memory_alloc(). Writing zero into every
+     * free page used to cost a whole-guest-RAM memset and committed all of it
+     * physically, defeating lazy allocation of the "rest" backends. */
     uint64_t cur_mem_range_idx = 0;
     uintptr_t addr = (uintptr_t)g_pal_public_state.memory_address_end;
     while (true) {
@@ -138,7 +145,6 @@ static void zero_out_memory_and_prot_none(void) {
         if (addr < (uintptr_t)g_pal_public_state.memory_address_start)
             return;
 
-        memset((void*)addr, 0, PAGE_SIZE);
         int ret = memory_protect((void*)addr, PAGE_SIZE, /*read=*/false, /*write=*/false,
                                  /*execute=*/false);
         if (ret < 0)
@@ -227,7 +233,7 @@ noreturn void pal_start_c(void) {
 
     /* PAL binary is located at 1MB and may occupy until 4MB, see pal.lds */
     /* FIXME: whole PAL binary is RWX because memory_pagetables_init() marked everything as RWX and
-     *        zero_out_memory_and_prot_none() did *not* modify perms for PAL binary memory pages */
+     *        prot_none_free_memory() did *not* modify perms for PAL binary memory pages */
     ret = add_preloaded_range(0x100000UL, 0x300000UL, /*is_user_reserved=*/false, "pal_binary");
     if (ret < 0)
         INIT_FAIL("Failed to preload PAL-binary memory range");
@@ -235,8 +241,10 @@ noreturn void pal_start_c(void) {
     /* Common memory-allocation logic relies on all memory pages to be zeroed out after boot.
      * This is not true for common hypervisors like QEMU/KVM, so must do it ourselves. Also,
      * memory_pagetables_init() marked all pages as RWX, now is good time to revert to NONE. */
-    zero_out_memory_and_prot_none();
-    boot_stamp("memory zeroed, PROT_NONE");
+    /* Free guest RAM is inaccessible until the allocator hands pages out. See
+     * prot_none_free_memory() for why the old whole-RAM zero-fill is gone. */
+    prot_none_free_memory();
+    boot_stamp("free memory PROT_NONE");
 
     /* Configure PAT so that index 1 is Write-Combining (WC). Must be after multicore init because
      * PAT is per-CPU state and AP CPUs will also need it set. */
