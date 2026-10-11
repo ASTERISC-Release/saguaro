@@ -44,26 +44,31 @@ Symbol      Meaning
 
 .. list-table::
    :header-rows: 1
-   :widths: 40 20 20 20
+   :widths: 36 16 16 16 16
 
    * - PAL (backend)
      - Intel x86_64
      - AMD64
      - AArch64
+     - RISC-V (RV64)
    * - ``direct`` (``gramine-direct``): an ordinary Linux process
      - ✅
      - ✅
      - ✅
+     - 🛫
    * - ``vm`` (``gramine-vm``): a unikernel in a QEMU guest
      - ✅
      - ⚠️
      - ⚠️
+     - 🛫
    * - ↳ ``vm`` with ``graphics`` (host redirection)
      - ⚠️
      - ⚠️
      - ❌
+     - ❌
    * - ``tdx`` (Intel TDX) and ``sgx`` (Intel SGX)
      - ✅
+     - ➖
      - ➖
      - ➖
 
