@@ -12,12 +12,12 @@ endif
 
 INCLUDES = -I/usr/include/libdrm -Wno-error=implicit-function-declaration
 
-all: egl_redirect.so
+all: egl_backend.so
 
 %.o: %.c
 	$(CC) $(CFLAGS) -fPIC $(INCLUDES) -c $< -o $@ $(LDFLAGS)
 
-egl_redirect.so: main.o egl.o gramine.o log.o glx.o xcb.o
+egl_backend.so: main.o egl.o gramine.o log.o glx.o xcb.o
 	$(CC) -shared -o $@  $^ $(LDFLAGS)
 
 clean:	

@@ -423,7 +423,7 @@ long libos_syscall_munmap(void* _addr, size_t length) {
         length = ALLOC_ALIGN_UP(length);
 
 #ifdef ENABLE_GRAPHICS
-    /* Host-device mappings replace pages inside egl-redirect's permanently reserved GEM arenas,
+    /* Host-device mappings replace pages inside egl-backend's permanently reserved GEM arenas,
      * but the host mmap fast path above deliberately leaves the original LibOS VMA reservation
      * intact. Releasing a subrange here would make it available to the guest allocator while
      * QEMU and the GPU still use the same identity-mapped addresses, allowing GPU writes to

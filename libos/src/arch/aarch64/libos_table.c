@@ -31,7 +31,7 @@
 #include "libos_table.h"
 #include "linux_abi/syscalls_nr_arch.h"
 
-/* Graphics, syscall no. for acquiring lock from gramine to synchronize egl-redirect comms*/
+/* Graphics, syscall no. for acquiring lock from gramine to synchronize egl-backend comms*/
 #define __NR_ACQUIRE_LLOCK 500
 #define __NR_RELINQUISH_LLOCK 501
 

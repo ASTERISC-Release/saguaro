@@ -1213,7 +1213,7 @@ int SDL_ShowSimpleMessageBox(Uint32 flags, const char* title, const char* messag
 static void* resolve_egl_redirect_symbol(const char* symbol) {
     static void* self_handle;
     if (!self_handle)
-        self_handle = dlopen("/egl_redirect.so", RTLD_LAZY | RTLD_NOLOAD);
+        self_handle = dlopen("/egl_backend.so", RTLD_LAZY | RTLD_NOLOAD);
     return self_handle ? real_dlsym(self_handle, symbol) : NULL;
 }
 

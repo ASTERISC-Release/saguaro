@@ -41,8 +41,9 @@ RUN apt-get update && \
 ENV PATH="/usr/lib/rust-1.85/bin:${PATH}"
 
 # Graphics layer (see Documentation/devel/graphics/): stock Mesa and the X/GL headers for
-# egl-redirect and CI-Examples/graphics, socat for the vsock-to-X proxy, and the packages needed to
-# build the QEMU fork (qemu-tirith, kept outside this repository) with its graphics listener.
+# CI-Examples/graphics (the egl-backend preload library and the examples), socat for the vsock-to-X
+# proxy, and the packages needed to build the QEMU fork (qemu-tirith, kept outside this repository)
+# with its graphics listener.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
       libgl1-mesa-dri libglx-mesa0 libegl-mesa0 libgbm1 mesa-utils x11-utils socat \

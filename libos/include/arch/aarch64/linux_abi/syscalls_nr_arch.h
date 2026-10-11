@@ -23,7 +23,7 @@
  * mknod/arch_prctl/...) -- see libos_table.c for how each of those maps onto the *at()/generic
  * replacement Gramine already implements. */
 
-/* Graphics, syscall no. for acquiring lock from gramine to synchronize egl-redirect comms.
+/* Graphics, syscall no. for acquiring lock from gramine to synchronize egl-backend comms.
  * Picked comfortably above the highest real aarch64 syscall number (461) so it can never collide
  * with a future kernel addition; mirrors __NR_ACQUIRE_LLOCK/__NR_RELINQUISH_LLOCK in
  * libos_table.c, which are defined directly there (same as the x86_64 port) rather than here. */
