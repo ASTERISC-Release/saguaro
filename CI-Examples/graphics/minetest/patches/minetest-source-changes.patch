@@ -1,0 +1,232 @@
+--- a/src/client/gameui.cpp
++++ b/src/client/gameui.cpp
+@@ -21,6 +21,10 @@
+ #include "gameui.h"
+ #include <irrlicht_changes/static_text.h>
+ #include <gettext.h>
++#include <algorithm>
++#include <cstddef>
++#include <cstdio>
++#include <vector>
+ #include "gui/mainmenumanager.h"
+ #include "gui/guiChatConsole.h"
+ #include "util/pointedthing.h"
+@@ -95,18 +99,207 @@
+ 		g_fontengine->getDefaultFontSize() * 0.9f, FM_Mono));
+ 	m_guitext_profiler->setVisible(false);
+ }
++inline unsigned long sg_rdtscp(void)
++{
++	unsigned int lo, hi;
++	__asm__ volatile("rdtscp" : "=a" (lo), "=d" (hi)::"memory");
++	return ((unsigned long)hi << 32) | lo;
++}
++
++namespace
++{
++
++constexpr long long FPS_PRINT_PERIOD_US = 60LL * 1000LL * 1000LL;
++
++double frameTimeToFps(double frame_time_us)
++{
++	return frame_time_us > 0.0 ? 1000.0 * 1000.0 / frame_time_us : 0.0;
++}
++
++double onePercentLowFps(std::vector<int> frametimes)
++{
++	if (frametimes.empty())
++		return 0.0;
++
++	std::sort(frametimes.begin(), frametimes.end());
++	size_t slow_frame_count = std::max<size_t>(1, (frametimes.size() + 99) / 100);
++	double slow_frame_total = 0.0;
++
++	for (size_t i = frametimes.size() - slow_frame_count; i < frametimes.size(); i++)
++		slow_frame_total += frametimes[i];
++
++	return frameTimeToFps(slow_frame_total / slow_frame_count);
++}
++
++void printFrameStats(const std::vector<int> &frametimes,
++		const std::vector<unsigned long> &frametimes_cycles)
++{
++	double avg = 0.0;
++	for (int frametime : frametimes)
++		avg += frametime;
++	avg /= frametimes.size();
++
++	int max_frame_time = *std::max_element(frametimes.begin(), frametimes.end());
++	int min_frame_time = *std::min_element(frametimes.begin(), frametimes.end());
++
++	double avg_c = 0.0;
++	for (unsigned long frametime_cycle : frametimes_cycles)
++		avg_c += frametime_cycle;
++	avg_c /= frametimes_cycles.size();
++
++	unsigned long max_frame_cycles = *std::max_element(
++			frametimes_cycles.begin(), frametimes_cycles.end());
++	unsigned long min_frame_cycles = *std::min_element(
++			frametimes_cycles.begin(), frametimes_cycles.end());
++
++	printf("FPS: avg %.2f, 1%% low %.2f, min %.2f\n",
++			frameTimeToFps(avg), onePercentLowFps(frametimes),
++			frameTimeToFps(max_frame_time));
++	printf("Frame time: avg %.3f ms, max %.3f ms, min %.3f ms\n",
++			0.001f * avg, 0.001f * max_frame_time, 0.001f * min_frame_time);
++	printf("Cycles: avg %.0f, max %lu, min %lu\n",
++			avg_c, max_frame_cycles, min_frame_cycles);
++}
++
++}
++
++long long
++Sys_Microseconds(void)
++{
++#ifdef __APPLE__
++	// OSX didn't have clock_gettime() until recently, so use Mach's clock_get_time()
++	// instead. fortunately its mach_timespec_t seems identical to POSIX struct timespec
++	// so lots of code can be shared
++	clock_serv_t cclock;
++	mach_timespec_t now;
++	static mach_timespec_t first;
++
++	host_get_clock_service(mach_host_self(), SYSTEM_CLOCK, &cclock);
++	clock_get_time(cclock, &now);
++	mach_port_deallocate(mach_task_self(), cclock);
++
++#else // not __APPLE__ - other Unix-likes will hopefully support clock_gettime()
++
++	struct timespec now;
++	static struct timespec first;
++#ifdef _POSIX_MONOTONIC_CLOCK
++	clock_gettime(CLOCK_MONOTONIC, &now);
++#else
++	clock_gettime(CLOCK_REALTIME, &now);
++#endif
++
++#endif // not __APPLE__
++
++	if(first.tv_sec == 0)
++	{
++		long long nsec = now.tv_nsec;
++		long long sec = now.tv_sec;
++		// set back first by 1ms so neither this function nor Sys_Milliseconds()
++		// (which calls this) will ever return 0
++		nsec -= 1000000;
++		if(nsec < 0)
++		{
++			nsec += 1000000000ll; // 1s in ns => definitely positive now
++			--sec;
++		}
++
++		first.tv_sec = sec;
++		first.tv_nsec = nsec;
++	}
++
++	long long sec = now.tv_sec - first.tv_sec;
++	long long nsec = now.tv_nsec - first.tv_nsec;
++
++	if(nsec < 0)
++	{
++		nsec += 1000000000ll; // 1s in ns
++		--sec;
++	}
++
++	return sec*1000000ll + nsec/1000ll;
++}
++void
++frame_stats(void)
++{
++	long long newtime;
++	unsigned long newtime_cycles;
++	static long long oldtime = 0;
++	static unsigned long oldtime_cycles = 0;
++	static long long next_print_time = 0;
++	static size_t elapsed_minutes = 0;
++	static bool printed_once = false;
++	static std::vector<int> minute_frametimes;
++	static std::vector<unsigned long> minute_frametimes_cycles;
++	static std::vector<int> lifetime_frametimes;
++	static std::vector<unsigned long> lifetime_frametimes_cycles;
++
++	newtime = Sys_Microseconds();
++	newtime_cycles = sg_rdtscp();
++
++	if (oldtime == 0) {
++		oldtime = newtime;
++		oldtime_cycles = newtime_cycles;
++		next_print_time = newtime + FPS_PRINT_PERIOD_US;
++		return;
++	}
++
++	int frametime = (int)(newtime - oldtime);
++	unsigned long frametime_cycles = newtime_cycles - oldtime_cycles;
++	oldtime = newtime;
++	oldtime_cycles = newtime_cycles;
++
++	if (frametime <= 0)
++		return;
++
++	if (minute_frametimes.capacity() == 0) {
++		minute_frametimes.reserve(360000);
++		minute_frametimes_cycles.reserve(360000);
++		lifetime_frametimes.reserve(360000);
++		lifetime_frametimes_cycles.reserve(360000);
++	}
++
++	minute_frametimes.push_back(frametime);
++	minute_frametimes_cycles.push_back(frametime_cycles);
++	lifetime_frametimes.push_back(frametime);
++	lifetime_frametimes_cycles.push_back(frametime_cycles);
++
++	if (newtime < next_print_time)
++		return;
++
++	do {
++		next_print_time += FPS_PRINT_PERIOD_US;
++		elapsed_minutes++;
++	} while (newtime >= next_print_time);
++
++	if (printed_once)
++		printf("\n");
++
++	printf("STATS FOR LAST MINUTE\n");
++	printFrameStats(minute_frametimes, minute_frametimes_cycles);
++	printf("\n");
++	printf("STATS FOR LIFETIME (%zu MINUTES)\n", elapsed_minutes);
++	printFrameStats(lifetime_frametimes, lifetime_frametimes_cycles);
++	fflush(stdout);
++
++	minute_frametimes.clear();
++	minute_frametimes_cycles.clear();
++	printed_once = true;
++}
+ 
+ void GameUI::update(const RunStats &stats, Client *client, MapDrawControl *draw_control,
+ 	const CameraOrientation &cam, const PointedThing &pointed_old,
+ 	const GUIChatConsole *chat_console, float dtime)
+ {
++
+ 	v2u32 screensize = RenderingEngine::getWindowSize();
++	m_flags.show_minimal_debug = 1;
+ 
+ 	// Minimal debug text must only contain info that can't give a gameplay advantage
+ 	if (m_flags.show_minimal_debug) {
+ 		const u16 fps = 1.0 / stats.dtime_jitter.avg;
+ 		m_drawtime_avg *= 0.95f;
+ 		m_drawtime_avg += 0.05f * (stats.drawtime / 1000);
++		frame_stats();
+ 
+ 		std::ostringstream os(std::ios_base::binary);
+ 		os << std::fixed
+--- a/src/content/subgames.cpp
++++ b/src/content/subgames.cpp
+@@ -384,7 +384,7 @@
+ 
+ 		conf.set("world_name", name);
+ 		conf.set("gameid", gamespec.id);
+-		conf.set("backend", "sqlite3");
++		conf.set("backend", "dummy");
+ 		conf.set("player_backend", "sqlite3");
+ 		conf.set("auth_backend", "sqlite3");
+ 		conf.set("mod_storage_backend", "sqlite3");
