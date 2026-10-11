@@ -98,10 +98,15 @@ extern bool in_gramine_vm;
 
 static const size_t THREE_GIGABYTES = 3ULL * 1024 * 1024 * 1024;
 static const size_t ONE_GIGABYTE = 1ULL * 1024 * 1024 * 1024;
-static const size_t DATA_SIZE = THREE_GIGABYTES;
+/* Default arena geometry: the data-arena size is runtime-configurable via the
+ * GRAMINE_DATA_SIZE env var (gramine.c), and the hugepage arena follows the
+ * data arena directly (data_size is computed there). The values below are the
+ * compiled fallbacks; they must match sys.experimental__graphics_data_size in
+ * the manifest and the QEMU listener's defaults. */
+static const size_t DATA_SIZE = ONE_GIGABYTE;
 static const size_t HUGE_DATA_SIZE = ONE_GIGABYTE;
 static void *DATA_REGION = (void *)0x100000000ULL;
-static void *HUGEPAGE_DATA_REGION = (void *)0x200000000ULL;
+static void *HUGEPAGE_DATA_REGION = (void *)0x140000000ULL;
 
 static const uint64_t X11_SETUP = 12;
 static const uint64_t X11_PRESENT = 13;

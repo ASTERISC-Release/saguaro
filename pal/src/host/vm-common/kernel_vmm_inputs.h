@@ -82,6 +82,11 @@ int cmdline_init_args(char* cmdline_args, size_t cmdline_args_size);
 int cmdline_read_gramine_envs(const char* envs, int* out_envp_cnt, const char** out_envp);
 int cmdline_init_envs(char* cmdline_envs, size_t cmdline_envs_size);
 
+/* Size of the graphics GEM data arena in bytes, from the VMM's
+ * opt/gramine/graphics_data_size fw_cfg file. Fails when absent (deployments
+ * without graphics). */
+int graphics_data_size_init(uint64_t* out_graphics_data_size);
+
 int unixtime_init(char* unixtime_s, size_t unixtime_size);
 
 int e820_table_init(char* e820_table, size_t* e820_size, size_t max_e820_size);

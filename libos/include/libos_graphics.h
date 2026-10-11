@@ -13,9 +13,13 @@
 
 #define GRAPHICS_HOST_FD_OFFSET 500
 
+/* Data arena: [GRAPHICS_GEM_DATA_START, + size). The size defaults to 1G and is
+ * runtime-configurable via the manifest key sys.experimental__graphics_data_size
+ * (see libos_mmap.c for the LibOS side and kernel_memory.c for the PAL side);
+ * this macro is the compiled fallback/default. The hugepage arena follows the
+ * data arena directly, so its address is GRAPHICS_GEM_DATA_START + data size. */
 #define GRAPHICS_GEM_DATA_START      0x100000000ULL
-#define GRAPHICS_GEM_DATA_SIZE       (3ULL * 1024 * 1024 * 1024)
-#define GRAPHICS_GEM_HUGEPAGE_START  0x200000000ULL
+#define GRAPHICS_GEM_DATA_SIZE       (1ULL * 1024 * 1024 * 1024)
 #define GRAPHICS_GEM_HUGEPAGE_SIZE   (1ULL * 1024 * 1024 * 1024)
 
 #define NUM_COMM_PAGES 1

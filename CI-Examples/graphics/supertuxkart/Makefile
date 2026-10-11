@@ -14,6 +14,7 @@ STK_ARGS ?= --race-now --screensize=1920x1080 --seed=11 --track=abyss --kart=kon
 PROFILE_TIME ?= 1
 # Input goes through the shared-memory ring in the comm page; 0 falls back to the X connection.
 SHARED_INPUT ?= 1
+
 STK_STARTUP_ARGS = --race-now --benchmark --profile-time=$(PROFILE_TIME) --screensize=1920x1080 \
 	--windowed --seed=11 --track=abyss --kart=konqi
 

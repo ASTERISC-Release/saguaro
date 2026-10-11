@@ -193,6 +193,18 @@ noreturn void pal_start_c(void) {
     if (ret < 0)
         INIT_FAIL("Failed to initialize preloaded ranges");
 
+    /* Graphics GEM arenas: size from the VMM (opt/gramine/graphics_data_size, absent without
+     * graphics). Reserved NOW -- before zero_out and all kernel init -- so that no boot-time
+     * allocator can ever claim pages inside the arenas. The manifest itself is only readable
+     * once virtio-fs is up, so the size travels through fw_cfg instead. */
+    uint64_t graphics_data_size = 0;
+    if (graphics_data_size_init(&graphics_data_size) == 0 && graphics_data_size)
+        graphics_arenas_set_data_size((size_t)graphics_data_size);
+
+    ret = memory_reserve_graphics_arenas(&add_preloaded_range);
+    if (ret < 0)
+        INIT_FAIL("Failed to reserve the graphics arenas (arena size or VM memory size)");
+
     /* PAL binary is located at 1MB and may occupy until 4MB, see pal.lds */
     /* FIXME: whole PAL binary is RWX because memory_pagetables_init() marked everything as RWX and
      *        zero_out_memory_and_prot_none() did *not* modify perms for PAL binary memory pages */

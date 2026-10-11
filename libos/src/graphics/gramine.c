@@ -45,23 +45,61 @@ void disable_syscall_logging(void) {
     relinquish_libos_lock(_offset);
 }
 
+/* Parse a size string like "1G", "512M" or a plain byte count; returns the
+ * fallback when unset or malformed. */
+static size_t parse_graphics_size(const char* value, size_t fallback) {
+    if (!value || !*value) {
+        return fallback;
+    }
+    char* end;
+    unsigned long long v = strtoull(value, &end, 0);
+    if (end == value || v == 0) {
+        fprintf(stderr, "[.] bad GRAMINE_DATA_SIZE '%s'; using the default %lu\n",
+                value, (unsigned long)fallback);
+        return fallback;
+    }
+    if (*end == 'G' || *end == 'g') {
+        v *= 1024ULL * 1024 * 1024;
+        end++;
+    } else if (*end == 'M' || *end == 'm') {
+        v *= 1024ULL * 1024;
+        end++;
+    } else if (*end == 'K' || *end == 'k') {
+        v *= 1024ULL;
+        end++;
+    }
+    if (*end != '\0') {
+        fprintf(stderr, "[.] bad GRAMINE_DATA_SIZE '%s'; using the default %lu\n",
+                value, (unsigned long)fallback);
+        return fallback;
+    }
+    return (size_t)v;
+}
+
 void setup_syscall_comms(void) {
     fprintf(stderr, "\n========COMMS========\n");
 
+    /* Data-arena size, from the GRAMINE_DATA_SIZE env var (rendered into
+     * loader.env from the manifest's sys.experimental__graphics_data_size; the
+     * two must match, since the PAL reserves the ranges from the manifest
+     * value). The hugepage arena follows the data arena directly. */
+    size_t data_size = parse_graphics_size(getenv("GRAMINE_DATA_SIZE"), DATA_SIZE);
+    HUGEPAGE_DATA_REGION = (void *)((uintptr_t)DATA_REGION + data_size);
+
     long _offset = acquire_libos_lock();
     /* Setup the communication region. */
-    comm_page_t *addr = (comm_page_t*) mmap((void*)SYS_COMMS_ADDR, SYS_COMMS_SIZE, 
-            PROT_READ | PROT_WRITE, 
+    comm_page_t *addr = (comm_page_t*) mmap((void*)SYS_COMMS_ADDR, SYS_COMMS_SIZE,
+            PROT_READ | PROT_WRITE,
             (MAP_ANONYMOUS | MAP_FIXED | MAP_PRIVATE), -1, 0);
     if (addr == MAP_FAILED) {
         perror("mmap COMMS_REGION");
         assert(0);
     }
     memset(addr, 0, SYS_COMMS_SIZE);
-    
+
     addr[0].magic = 0x1234567812345678ULL;
     __sync_synchronize();
-    
+
     while (addr[0].magic != 0x2) {
         __sync_synchronize();
         usleep(1000);
@@ -72,7 +110,7 @@ void setup_syscall_comms(void) {
     comm_page_t *c = comm_page(_offset);
 
     /* Setup the data region. */
-    void* data = mmap(DATA_REGION, DATA_SIZE, 
+    void* data = mmap(DATA_REGION, data_size,
                         PROT_READ | PROT_WRITE,
                         MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
     if (data == MAP_FAILED) {
@@ -99,9 +137,15 @@ void setup_syscall_comms(void) {
         perror("mmap HUGEPAGE_DATA_REGION");
         assert(0);
     }
-    fprintf(stderr, "[*] HUGEPAGE DATA: 0x%lx\n", (uint64_t)hugepage_data);
+    fprintf(stderr, "[*] HUGEPAGE DATA: 0x%lx (data arena %lu MiB)\n",
+            (uint64_t)hugepage_data, (unsigned long)(data_size / 1024 / 1024));
 
-    // Send hugepage data region address to listener
+    /* Send the geometry to the listener: p1 = hugepage guest address, p2 =
+     * data-arena size, p3 = hugepage-arena size. p1 is written last; the
+     * listener waits for it before reading the sizes. */
+    c->p2 = (uint64_t)data_size;
+    c->p3 = (uint64_t)HUGE_DATA_SIZE;
+    __sync_synchronize();
     c->p1 = (uint64_t)hugepage_data;
     /* Anonymous mappings are already zero-filled; avoid large memset which is very slow once PAL
      * marks this region as UC/WC. */

@@ -50,6 +50,14 @@ void memory_pat_init_for_wc(void);
 int memory_preload_ranges(e820_table_entry* e820_entries, size_t e820_entries_size,
                           int (*callback)(uintptr_t addr, size_t size, bool is_user_reserved,
                                           const char* comment));
+
+/* Graphics GEM arenas: applies the manifest-configured data-arena size (hugepage arena
+ * follows it) and reserves both ranges through `callback`. Call after the manifest is
+ * parsed (vm/pal_main.c does this right after sys.experimental__shared_input_ring). */
+void graphics_arenas_set_data_size(size_t data_size);
+int memory_reserve_graphics_arenas(int (*callback)(uintptr_t addr, size_t size,
+                                                   bool is_user_reserved,
+                                                   const char* comment));
 int memory_tighten_permissions(void);
 
 int memory_alloc(void* addr, size_t size, bool read, bool write, bool execute);

@@ -31,10 +31,54 @@
 
 static_assert(PAGE_SIZE == 4096, "unexpected PAGE_SIZE (expected 4K)");
 
-static const size_t DATA_REGION_SIZE        = 3ULL * 1024 * 1024 * 1024;
-static const size_t HUGEPAGE_REGION_SIZE    = 1ULL * 1024 * 1024 * 1024;
-static void* DATA_REGION                    = (void*)0x100000000ULL;
-static void* HUGEPAGE_DATA_REGION           = (void*)0x200000000ULL;
+/* Graphics GEM arenas (libgraphics maps its buffers here at fixed guest
+ * addresses). The data-arena size comes from the manifest key
+ * sys.experimental__graphics_data_size, parsed in pal_main and applied by
+ * graphics_arenas_set_data_size(); the hugepage arena follows the data arena
+ * directly. See also memory_reserve_graphics_arenas(); both must stay in sync
+ * with the LibOS (libos_mmap.c) and QEMU (sg-listener.c). The compiled values
+ * below are the defaults. */
+static void* DATA_REGION                  = (void*)0x100000000ULL;
+static size_t DATA_REGION_SIZE            = 1ULL * 1024 * 1024 * 1024;
+static void* HUGEPAGE_DATA_REGION         = (void*)0x140000000ULL;
+static size_t HUGEPAGE_REGION_SIZE        = 1ULL * 1024 * 1024 * 1024;
+
+void graphics_arenas_set_data_size(size_t data_size) {
+    assert(data_size);
+    DATA_REGION_SIZE     = data_size;
+    HUGEPAGE_DATA_REGION = (void*)((uintptr_t)DATA_REGION + data_size);
+    log_always("Graphics arenas: data at %p (%lu MiB), hugepage at %p (%lu MiB)",
+               DATA_REGION, (unsigned long)(DATA_REGION_SIZE / 1024 / 1024),
+               HUGEPAGE_DATA_REGION, (unsigned long)(HUGEPAGE_REGION_SIZE / 1024 / 1024));
+}
+
+int memory_reserve_graphics_arenas(
+        int (*callback)(uintptr_t addr, size_t size, bool is_user_reserved,
+                        const char* comment)) {
+    /* Graphics is a VM feature; a guest whose RAM does not reach the arena
+     * window (possible for a non-graphics guest started at a small memory size)
+     * simply gets no reservation -- its allocator could not use that physical
+     * range anyway. Graphics guests that configure an arena past the end of RAM
+     * are stopped here too, and the launcher enforces the RAM floor up front. */
+    if ((uintptr_t)HUGEPAGE_DATA_REGION + HUGEPAGE_REGION_SIZE >
+            (uintptr_t)g_pal_public_state.memory_address_end) {
+        log_always("Graphics arenas at %p (%lu B + hugepage) fall outside guest RAM "
+                   "(end %p); not reserved",
+                   DATA_REGION, (unsigned long)DATA_REGION_SIZE,
+                   g_pal_public_state.memory_address_end);
+        return 0;
+    }
+
+    int ret = callback((uintptr_t)DATA_REGION, DATA_REGION_SIZE,
+                       /*is_user_reserved=*/true, "egl_redirect_data");
+    if (ret < 0)
+        return -PAL_ERROR_NOMEM;
+    ret = callback((uintptr_t)HUGEPAGE_DATA_REGION, HUGEPAGE_REGION_SIZE,
+                   /*is_user_reserved=*/true, "egl_redirect_huge");
+    if (ret < 0)
+        return -PAL_ERROR_NOMEM;
+    return 0;
+}
 
 static inline bool is_egl_redirect_data_region_base(void* addr, size_t size) {
     if (addr == DATA_REGION || addr == HUGEPAGE_DATA_REGION) {
@@ -614,18 +658,10 @@ int memory_preload_ranges(e820_table_entry* e820_entries, size_t e820_entries_si
             return -PAL_ERROR_DENIED;
     }
 
-    /* libgraphics maps these buffers at fixed addresses after program startup. Keep PAL and
-     * LibOS ASLR allocations out of the ranges, but allow those deliberate user mappings to
-     * replace the reservations. */
-    ret = callback((uintptr_t)DATA_REGION, DATA_REGION_SIZE, /*is_user_reserved=*/true,
-                   "egl_redirect_data");
-    if (ret < 0)
-        return -PAL_ERROR_NOMEM;
-    ret = callback((uintptr_t)HUGEPAGE_DATA_REGION, HUGEPAGE_REGION_SIZE,
-                   /*is_user_reserved=*/true,
-                   "egl_redirect_huge");
-    if (ret < 0)
-        return -PAL_ERROR_NOMEM;
+    /* The libgraphics GEM arenas are reserved separately in
+     * memory_reserve_graphics_arenas(), after the manifest has been parsed in
+     * pal_main (their geometry depends on the manifest) -- not here, where the
+     * manifest is not yet available. */
 
     return 0;
 }

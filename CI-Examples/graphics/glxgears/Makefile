@@ -14,6 +14,7 @@ LDLIBS = -lGL -lX11 -lm
 # Input goes through the shared-memory ring in the comm page; 0 falls back to the X connection.
 SHARED_INPUT ?= 1
 
+
 ifeq ($(DEBUG),1)
 GRAMINE_LOG_LEVEL = debug
 CFLAGS += -g

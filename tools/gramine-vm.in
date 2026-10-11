@@ -100,6 +100,30 @@ QEMU_OPTS="-enable-kvm -vga none -display none -no-reboot -monitor none "
 
 RAW_MEM_SIZE=$(echo $QEMU_MEM_SIZE | tr -d 'G')
 REM_MEM_SIZE=$((RAW_MEM_SIZE - 4))
+
+# Graphics applications (see Documentation/devel/graphics/): a manifest with loader.env.DISPLAY
+# set to the host ("2:N") marks one. The GEM arenas -- the data arena (size from
+# GRAMINE_DATA_SIZE, default 1G) plus the fixed 1G hugepage arena -- start at guest physical 4G
+# and must fit inside guest RAM: data + 1G <= 2G (ram1) + REM, i.e. RAM >= 3G + data, and at
+# least 5G so that a non-empty huge2 backs the application itself. (The rendered manifest lists
+# the environment keys inside the [loader.env] table, hence the bare DISPLAY match.)
+if grep -Eq '^DISPLAY[^=]*=[[:space:]]*"2:' "$GRAMINE_MANIFEST" 2>/dev/null; then
+    GRAPHICS_DATA_SIZE=${GRAMINE_DATA_SIZE:-1G}
+    case "$GRAPHICS_DATA_SIZE" in
+        *G) GRAPHICS_DATA_BYTES=$(( ${GRAPHICS_DATA_SIZE%G} * 1073741824 )) ;;
+        *M) GRAPHICS_DATA_BYTES=$(( ${GRAPHICS_DATA_SIZE%M} * 1048576 )) ;;
+        *)  GRAPHICS_DATA_BYTES=$(( ${GRAPHICS_DATA_SIZE:-0} + 0 )) ;;
+    esac
+    DATA_SIZE_NUM=$(( (GRAPHICS_DATA_BYTES + 1073741823) / 1073741824 ))
+    NEED_RAM=$(( 3 + DATA_SIZE_NUM ))
+    if [ "$NEED_RAM" -lt 5 ]; then NEED_RAM=5; fi
+    if [ "$RAW_MEM_SIZE" -lt "$NEED_RAM" ]; then
+        echo "Error: this graphics application needs at least ${NEED_RAM}G of guest RAM for" \
+             "GRAMINE_DATA_SIZE=$GRAPHICS_DATA_SIZE (got ${QEMU_MEM_SIZE})."
+        exit 2
+    fi
+    echo "Graphics data arena: $GRAPHICS_DATA_SIZE ($GRAPHICS_DATA_BYTES bytes; guest RAM floor ${NEED_RAM}G)"
+fi
 if [ "$GRAMINE_HUGEPAGES" == "1" ]; then
     echo "Configuring Gramine VM with hugepages support."
     if [ "$(echo $QEMU_MEM_SIZE | tr -d 'G')" -lt 8 ]; then
@@ -218,6 +242,10 @@ GRAMINE_ARGS+=" -gramine-args-end"
 # Due to QEMU syntax, commas in the QEMU cmdline need to be escaped using an additional comma.
 GRAMINE_ARGS=${GRAMINE_ARGS//","/",,"}
 
+# Size (in bytes) of the graphics GEM data arena; set and validated in the graphics block above,
+# empty for non-graphics applications.
+GRAPHICS_DATA_BYTES=${GRAPHICS_DATA_BYTES:-""}
+
 GRAMINE_ENVS=$(python3 -c "
 import os
 env_str = ''
@@ -235,6 +263,12 @@ CMD+=($QEMU_PATH $QEMU_GDB $QEMU_VM $QEMU_OPTS $QEMU_MACHINE
     -fw_cfg name=opt/gramine/args,string="$GRAMINE_ARGS"
     -fw_cfg name=opt/gramine/envs,string="$GRAMINE_ENVS"
 -fw_cfg name=opt/gramine/unixtime_s,string="$EPOCHSECONDS")
+
+# The graphics data-arena size, passed to the PAL over fw_cfg so that the arenas are reserved
+# before the guest's boot-time allocator runs (the manifest is not readable that early).
+if [ -n "$GRAPHICS_DATA_BYTES" ]; then
+    CMD+=("-fw_cfg" "name=opt/gramine/graphics_data_size,string=$GRAPHICS_DATA_BYTES")
+fi
 
 # X proxy for graphics applications. A manifest that sets `loader.env.DISPLAY = "2:N"` points the
 # application at the X server of the host (vsock CID 2), which the guest reaches on vsock port
