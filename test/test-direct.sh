@@ -142,6 +142,16 @@ ensure_example() {
         need="manifest $1/$man embeds $FOREIGN_ARCH paths"
     elif [ ! -s "$dir/$man" ]; then
         need="manifest $1/$man missing or empty"
+    else
+        # A manifest records the LibOS it was rendered for. After the install prefix changed or
+        # went away (another prefix, a recreated container) it has to be rendered again, or the
+        # PAL fails with "Unable to load loader.entrypoint".
+        local libos
+        libos=$(sed -n 's/^entrypoint = "file:\(.*libsysdb\.so\)"$/\1/p' "$dir/$man" | head -1)
+        if [ -n "$libos" ] && { [ ! -f "$libos" ] || [ "${libos#"$GRAMINE_PREFIX"/}" = "$libos" ]; }; then
+            need="manifest $1/$man was rendered for another Gramine install ($libos)"
+            rm -f "$dir/$man"
+        fi
     fi
     if [ -n "$need" ]; then
         echo "  building example '$1' ($need; log: $log)"
@@ -505,7 +515,7 @@ networks)
        && grep -q "UDP SOCKET TEST PASSED" "$LOGDIR/networks.log"; then
         rc=0; detail=$(grep -ao "\[server\] OK .*" "$LOGDIR/networks.log" | head -1)
     else
-        rc=1; tail -3 "$LOGDIR/networks.log"
+        rc=1; detail=""; tail -3 "$LOGDIR/networks.log"
     fi
     kill_strays
     summary networks $rc "$detail"
