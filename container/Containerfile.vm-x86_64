@@ -14,10 +14,10 @@ FROM ubuntu:noble
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Run layer: QEMU for the vm PAL (virtiofsd is shipped at /usr/lib/qemu/virtiofsd; gramine-vm needs
-# it on PATH, lsof for its pid-file check).
+# it on PATH, lsof for its pid-file check, python3-psutil for its VM-id allocation).
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-      qemu-system-x86 virtiofsd lsof kmod iproute2 iputils-ping gdb ca-certificates \
+      qemu-system-x86 virtiofsd lsof python3-psutil kmod iproute2 iputils-ping gdb ca-certificates \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 ENV PATH="${PATH}:/usr/lib/qemu"
 

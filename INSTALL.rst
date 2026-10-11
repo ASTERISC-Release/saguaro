@@ -69,7 +69,9 @@ VM PAL runs single-process applications (no ``fork``/``exec``), with vsock but n
 
 x86_64::
 
-    scripts/install.sh --vm [--tdx] [--sgx]
+    sudo apt install qemu-system-x86 virtiofsd lsof python3-psutil
+    scripts/install.sh --vm --graphics disabled [--tdx] [--sgx]
+    sudo ln -sf /usr/libexec/virtiofsd /usr/local/bin/virtiofsd    # if `command -v virtiofsd` finds nothing
 
 The x86_64 vm PAL is inherited from upstream gramine-tdx. ``gramine-vm`` uses the repository's QEMU fork
 (``qemu/build/qemu-system-x86_64``) when it exists and otherwise a stock ``qemu-system-x86_64`` from

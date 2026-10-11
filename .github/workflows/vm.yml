@@ -64,7 +64,7 @@ jobs:
       - name: Install build dependencies, QEMU and virtiofsd
         run: |
           scripts/dependencies.sh --build-only
-          sudo apt-get install -y -qq qemu-system-x86 virtiofsd lsof
+          sudo apt-get install -y -qq qemu-system-x86 virtiofsd lsof python3-psutil
           # gramine-vm starts `virtiofsd` by name; Ubuntu installs it off PATH. Symlink it instead of
           # putting /usr/libexec on PATH: that directory contains a `gcc` *directory*, which GNU make
           # picks over /usr/bin/gcc and then fails with "gcc: Permission denied" (glibc build).
