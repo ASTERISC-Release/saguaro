@@ -57,3 +57,6 @@ cscope.*
 ncscope.*
 *cscope*
 built-debug
+
+# RISC-V test guest state (scripts/riscv64/guest.sh): image download, disk, ssh key
+/.riscv64-guest/

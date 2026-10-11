@@ -13,6 +13,7 @@
 #   container/run.sh '<command>'      # one-shot: bash -c '<command>' (no tty, pipes cleanly)
 #   container/run.sh --rebuild        # force an image rebuild and container recreation, then shell
 #   container/run.sh down             # stop and remove the container (the image is kept)
+#   container/run.sh --target riscv64 [...]   # the RISC-V cross-development container instead
 #
 # Environment: CONTAINER_NAME / IMAGE_NAME override the default gramine-vm-<arch> names.
 #
@@ -30,9 +31,23 @@ case $(uname -m) in
     x86_64|amd64)  ARCH=x86_64 ;;
     *) echo "unsupported architecture: $(uname -m) (need aarch64 or x86_64)" >&2; exit 1 ;;
 esac
-CONTAINERFILE=$HERE/Containerfile.vm-$ARCH
-IMAGE=${IMAGE_NAME:-gramine-vm-$ARCH}
-CONTAINER=${CONTAINER_NAME:-gramine-vm-$ARCH}
+# `--target riscv64` (first argument) selects the cross-development container of the RISC-V port
+# instead of the native one: an x86_64 image with the riscv64 cross toolchain and
+# qemu-system-riscv64 (Documentation/devel/riscv/plan.md).
+TARGET=
+if [ "${1:-}" = "--target" ]; then TARGET=${2:-}; shift 2; fi
+case $TARGET in
+    "")
+        CONTAINERFILE=$HERE/Containerfile.vm-$ARCH
+        NAME=gramine-vm-$ARCH ;;
+    riscv64)
+        [ "$ARCH" = x86_64 ] || { echo "the riscv64 cross container needs an x86_64 host" >&2; exit 1; }
+        CONTAINERFILE=$HERE/Containerfile.riscv64-cross
+        NAME=gramine-riscv64-cross ;;
+    *) echo "unknown --target '$TARGET' (known: riscv64)" >&2; exit 1 ;;
+esac
+IMAGE=${IMAGE_NAME:-$NAME}
+CONTAINER=${CONTAINER_NAME:-$NAME}
 command -v podman >/dev/null || { echo "podman is required" >&2; exit 1; }
 [ -f "$CONTAINERFILE" ] || { echo "missing $CONTAINERFILE" >&2; exit 1; }
 
