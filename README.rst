@@ -27,58 +27,62 @@ researchers and engineers from universities and industry (the retained copyright
 notices include Stony Brook University, Texas A&M University, Intel and Invisible
 Things Lab).
 
-Supported configurations
-========================
+Platform support
+================
+
+Legend:
+
+==========  ===================================================================
+Symbol      Meaning
+==========  ===================================================================
+✅          supported: works and is covered by tests
+⚠️          experimental: runs, but incomplete, with known limits, or not yet fully validated
+🛫          planned: on the roadmap, not started or not usable yet
+❌          not supported: possible in principle, but it does not work (yet)
+➖          not applicable: the combination does not exist
+==========  ===================================================================
 
 .. list-table::
    :header-rows: 1
-   :widths: 22 26 26 26
+   :widths: 40 20 20 20
 
    * - PAL (backend)
      - Intel x86_64
      - AMD64
      - AArch64
-   * - ``direct`` (``gramine-direct``, an ordinary Linux process)
-     - ✅ inherited from upstream; being re-validated here
-     - ✅ inherited from upstream; being re-validated here
-     - ✅ works; regression suites and example applications pass
-   * - ``vm`` (``gramine-vm``, a unikernel in a QEMU guest)
-     - ✅ inherited from upstream
-     - ⚠️ experimental
-     - ⚠️ experimental (QEMU ``virt`` + KVM, SMP; single-process, no TCP/IP)
-   * - ↳ ``vm`` with ``graphics`` (graphics host redirection)
-     - ⚠️ experimental
-     - ⚠️ experimental
-     - ❌ not supported
-   * - ``tdx`` (Intel TDX), ``sgx`` (Intel SGX)
-     - ✅ inherited from upstream
-     - ❌ not applicable
-     - ❌ not applicable
+   * - ``direct`` (``gramine-direct``): an ordinary Linux process
+     - ✅
+     - ✅
+     - ✅
+   * - ``vm`` (``gramine-vm``): a unikernel in a QEMU guest
+     - ✅
+     - ⚠️
+     - ⚠️
+   * - ↳ ``vm`` with ``graphics`` (host redirection)
+     - ⚠️
+     - ⚠️
+     - ❌
+   * - ``tdx`` (Intel TDX) and ``sgx`` (Intel SGX)
+     - ✅
+     - ➖
+     - ➖
 
-Details, build options and the verification status are in
+Per-cell details, build options and the verification status are in
 `Documentation/devel/multiarch.md <Documentation/devel/multiarch.md>`__.
 
-Quick start
-===========
+Installation
+============
 
-On Debian/Ubuntu, from the repository root::
+See `INSTALL.rst <INSTALL.rst>`__ for how to build and install Gramine on a host or in
+the supplied containers, for the direct and the ``vm`` PAL, on x86_64 and AArch64.
 
-    scripts/dependencies.sh           # host packages (uses sudo)
-    scripts/install.sh                # build, install into ~/.local/gramine, write its env.sh
-    . ~/.local/gramine/env.sh         # put the install on PATH / PYTHONPATH (this shell)
-    test/test-direct.sh               # regression tests and example applications
-
-Full instructions (host install, the ``vm`` PAL, and the container route) are in
-`INSTALL.rst <INSTALL.rst>`__.
-
-Run an application::
+Once installed, run an application::
 
     cd CI-Examples/helloworld
     make
     gramine-direct helloworld
 
-``scripts/install.sh --help`` lists the options (install prefix, ``--vm``, ``--graphics
-disabled``, ...). ``CI-Examples/`` contains ready-made applications;
+``CI-Examples/`` contains ready-made applications;
 ``CI-Examples/install-all-prereqs.sh`` installs the host packages that some of them
 (curl, gcc, iperf, mongodb, nodejs, openjdk, pytorch, r) need.
 
@@ -118,5 +122,5 @@ Acknowledgements
 This work builds on `Gramine <https://github.com/gramineproject/gramine>`__ and its
 Intel TDX and virtual-machine fork `gramine-tdx
 <https://github.com/gramineproject/gramine-tdx>`__. We thank the Gramine and
-gramine-tdx authors and contributors, whose code, design and history this tree
-retains.
+gramine-tdx authors and contributors; the organizations and individuals are listed in
+`ACKNOWLEDGEMENTS.rst <ACKNOWLEDGEMENTS.rst>`__.
