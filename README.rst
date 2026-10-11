@@ -13,9 +13,7 @@ virtual-machine backends -- so that it also runs on AArch64, and keeps
 upstream's full history.
 
 Gramine (formerly *Graphene*) was designed and built by a diverse group of
-researchers and engineers from universities and industry (the retained copyright
-notices include Stony Brook University, Texas A&M University, Intel and Invisible
-Things Lab).
+researchers and engineers from universities and industry. Please see acknowledgements section below.
 
 Status
 ======
@@ -23,13 +21,13 @@ Status
 This project is a Gramine fork adapted for development, research, and teaching purposes.
 
 It is **experimental** and **must not be used in production environments**; it comes with no
-warranty. What it already lets you do:
+warranty. What it is ultimately intended to do:
 
 - **Sandbox applications** on a personal or cloud machine: an unmodified Linux application runs on
   Gramine's own implementation of the Linux system call interface, either as an ordinary process
   (``gramine-direct``) or, with the ``vm`` PAL, inside a minimal virtual machine (a *microVM*) that
   contains only the application, the library OS and a small kernel.
-- **Run applications in microVM environments**, such as games with the (experimental) graphics host
+- **Run applications in microVM environments**, such as video games with the (experimental) graphics host
   redirection, or services that should not see the host operating system.
 - **Run the same application stack on x86_64 and on AArch64**, for example to compare behaviour and
   performance across architectures.
@@ -47,7 +45,6 @@ runs single-process applications without TCP/IP).
 Platform support
 ================
 
-Legend:
 
 ==========  ===================================================================
 Symbol      Meaning
