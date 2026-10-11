@@ -129,3 +129,4 @@ Intel TDX and virtual-machine fork `gramine-tdx
 <https://github.com/gramineproject/gramine-tdx>`__. We thank the Gramine and
 gramine-tdx authors and contributors; the organizations and individuals are listed in
 `ACKNOWLEDGEMENTS.rst <ACKNOWLEDGEMENTS.rst>`__.
+
