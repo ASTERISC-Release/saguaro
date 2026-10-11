@@ -121,10 +121,11 @@ done
 python3 -c 'import graminelibos' 2>/dev/null || { echo "ERROR: graminelibos not on PYTHONPATH"; exit 1; }
 
 # --- architecture plumbing (script is arch-neutral: works on x86_64 too) ----
-HOST_ARCH=$(uname -m)                    # "aarch64" | "x86_64"
+HOST_ARCH=$(uname -m)                    # "aarch64" | "x86_64" | "riscv64"
 case "$HOST_ARCH" in
     aarch64) ELF_PAT="ARM aarch64"; FOREIGN_ARCH="x86_64" ;;
     x86_64)  ELF_PAT="x86-64";    FOREIGN_ARCH="aarch64" ;;
+    riscv64) ELF_PAT="UCB RISC-V"; FOREIGN_ARCH="x86_64" ;;
     *)       ELF_PAT="";          FOREIGN_ARCH="" ;;
 esac
 
