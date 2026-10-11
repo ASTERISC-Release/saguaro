@@ -29,5 +29,8 @@ Each needs a **native** host of the same architecture (no emulation) with workin
 the container's `/` as the guest's `/`) and `seccomp=unconfined` (the direct PAL calls `personality()`,
 which the default profile blocks).
 
-QEMU: stock distribution QEMU only (see `Documentation/devel/vm.md`). The TDX and graphics paths need the
-repository's QEMU fork, which is not in these images: build it separately and set `QEMU_PATH`.
+QEMU: the images contain stock distribution QEMU only (see `Documentation/devel/vm.md`). TDX and the graphics
+redirection need a QEMU fork kept outside this repository. For graphics on x86_64, `run.sh` mounts a
+`qemu-tirith` checkout found next to this repository (or at `QEMU_TIRITH_DIR`) at `/root/qemu-tirith`, and
+passes the DRM render nodes, the host X socket and `DISPLAY` into the container; the image has the packages
+to build it. See `Documentation/devel/graphics/running.md`.

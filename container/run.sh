@@ -68,12 +68,21 @@ if podman container exists "$CONTAINER"; then
 fi
 if ! podman container exists "$CONTAINER"; then
     DEVICES=()
-    for d in /dev/kvm /dev/vhost-vsock /dev/vhost-net /dev/net/tun; do
+    for d in /dev/kvm /dev/vhost-vsock /dev/vhost-net /dev/net/tun /dev/dri/renderD*; do
         [ -e "$d" ] && DEVICES+=(--device "$d:$d")
     done
+    # Graphics (x86_64, see Documentation/devel/graphics/): the host X socket and DISPLAY for the
+    # QEMU listener's window, and the QEMU fork when it is checked out next to this repository.
+    GRAPHICS=()
+    if [ -d /tmp/.X11-unix ] && [ -n "${DISPLAY:-}" ]; then
+        GRAPHICS+=(-v /tmp/.X11-unix:/tmp/.X11-unix:ro -e "DISPLAY=$DISPLAY")
+    fi
+    QEMU_TIRITH=${QEMU_TIRITH_DIR:-$(dirname "$REPO_ROOT")/qemu-tirith}
+    [ -d "$QEMU_TIRITH" ] && GRAPHICS+=(-v "$QEMU_TIRITH:/root/qemu-tirith:rw")
     echo ">>> creating container $CONTAINER"
     podman run -d --name "$CONTAINER" --cap-add ALL --security-opt seccomp=unconfined \
-        ${DEVICES[@]+"${DEVICES[@]}"} -v "$REPO_ROOT:/root/gramine-multiarch:rw" \
+        ${DEVICES[@]+"${DEVICES[@]}"} ${GRAPHICS[@]+"${GRAPHICS[@]}"} \
+        -v "$REPO_ROOT:/root/gramine-multiarch:rw" \
         "$IMAGE" sleep infinity >/dev/null
 elif [ "$(podman container inspect "$CONTAINER" --format '{{.State.Running}}')" != true ]; then
     echo ">>> starting container $CONTAINER"

@@ -40,6 +40,19 @@ RUN apt-get update && \
 # The rust example's dependencies need a cargo newer than noble's default 1.75 (edition2024).
 ENV PATH="/usr/lib/rust-1.85/bin:${PATH}"
 
+# Graphics layer (see Documentation/devel/graphics/): stock Mesa and the X/GL headers for
+# egl-redirect and CI-Examples/graphics, socat for the vsock-to-X proxy, and the packages needed to
+# build the QEMU fork (qemu-tirith, kept outside this repository) with its graphics listener.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      libgl1-mesa-dri libglx-mesa0 libegl-mesa0 libgbm1 mesa-utils x11-utils socat \
+      libgl-dev libegl-dev libgbm-dev libdrm-dev libx11-dev libx11-xcb-dev libxshmfence-dev \
+      libxcb1-dev libxcb-dri3-dev libxcb-present-dev libxcb-sync-dev libxcb-xfixes0-dev \
+      libxcb-shape0-dev libxcb-randr0-dev libxcb-shm0-dev libxcb-render0-dev \
+      libglib2.0-dev libpixman-1-dev libfdt-dev libcap-ng-dev libseccomp-dev libslirp-dev \
+      python3-venv flex libsdl2-dev \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
 RUN touch /var/lib/gramine-vm-x86_64
 WORKDIR /root
 
