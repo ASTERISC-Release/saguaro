@@ -15,6 +15,7 @@
 #define VSOCK_HOST_CID 2
 
 #define VSOCK_STARTING_PORT 1000 /* start port numbering from 1000, for no particular reason */
+#define VSOCK_STARTING_PORT_SPREAD 0x10000 /* the first port of a boot is picked from this many */
 
 /* Initial size of g_vsock->conns array. */
 #define VIRTIO_VSOCK_CONNS_INIT_SIZE 4

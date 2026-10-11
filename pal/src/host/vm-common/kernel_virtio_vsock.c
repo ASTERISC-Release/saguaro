@@ -761,7 +761,16 @@ static void host_port_find_robust(uint64_t host_port, uint64_t guest_port, struc
 static uint64_t pick_new_port(void) {
     assert(spinlock_is_locked(&g_vsock_connections_lock));
 
-    uint64_t max_port = VSOCK_STARTING_PORT;
+    /* Start each boot at a different port. The host keeps a connection of a guest that died
+     * without closing it for several seconds (the vsock close timeout); a new guest that gets the
+     * same CID and then reuses the same first port has its connection attempt collide with that
+     * stale socket and fail. The TSC value at the first allocation is enough to tell boots apart;
+     * this is not a security measure. */
+    static uint64_t first_port = 0;
+    if (!first_port)
+        first_port = VSOCK_STARTING_PORT + get_tsc() % VSOCK_STARTING_PORT_SPREAD;
+
+    uint64_t max_port = first_port;
     for (uint32_t i = 0; i < g_vsock->conns_size; i++) {
         struct virtio_vsock_connection* conn = g_vsock->conns[i];
         if (conn && conn->guest_port > max_port)

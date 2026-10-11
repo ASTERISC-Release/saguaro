@@ -20,11 +20,11 @@ scripts/install.sh --vm --graphics enabled    # Gramine; also builds libgraphics
 ```sh
 . ~/.local/gramine-vm/env.sh
 export QEMU_PATH=/root/qemu-tirith/build/qemu-system-x86_64
-
-# X proxy: guest vsock port 6000 -> host X socket (adjust X0 to match DISPLAY)
-socat -b 1048576 VSOCK-LISTEN:6000,fork,reuseaddr,max-children=50 \
-      UNIX-CONNECT:/tmp/.X11-unix/X0 &
 ```
+
+`gramine-vm` relays the application's X connection to the host X server by itself (it starts
+`socat` for the run and stops it afterwards), so `DISPLAY` has to name a local X display in the
+shell that runs it.
 
 ## Running an example
 
@@ -74,4 +74,4 @@ vCPU count with every number.
 
 Copy the Makefile and manifest template of the closest example. The manifest has to mount the
 preload library at `/libgraphics.so` (`{{ gramine.libgraphics }}`) and preload it, set
-`EGL_GRAMINE=1` and `DISPLAY=2:0`, and mount `/usr`, `/sys` and `/root/.cache` as the examples do.
+`EGL_GRAMINE=1` and `DISPLAY=2:0` (which is also what makes `gramine-vm` start the X relay), and mount `/usr`, `/sys` and `/root/.cache` as the examples do.

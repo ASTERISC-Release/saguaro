@@ -32,7 +32,8 @@ documents, not something verified in this tree.
    `make TF2_DIR="$HOME/.local/share/Steam/steamapps/common/Team Fortress 2"`.
 2. **A logged-in desktop Steam client on the host.** The client talks to it over local IPC even
    for this offline match.
-3. **The Steam relay**, next to the usual X proxy: `./steam-proxy.sh` forwards guest vsock port
+3. **The Steam relay.** `gramine-vm` starts the X relay itself, but this one is manual:
+   `./steam-proxy.sh` forwards guest vsock port
    57343 to the Steam client on `127.0.0.1:57343`.
 4. **`xdotool`**, used by `auto-input.sh` to get through the Welcome and class-selection panels
    (`TF2_AUTOINPUT=0` disables it).

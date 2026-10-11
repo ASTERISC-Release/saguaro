@@ -80,7 +80,11 @@ if ! podman container exists "$CONTAINER"; then
     QEMU_TIRITH=${QEMU_TIRITH_DIR:-$(dirname "$REPO_ROOT")/qemu-tirith}
     [ -d "$QEMU_TIRITH" ] && GRAPHICS+=(-v "$QEMU_TIRITH:/root/qemu-tirith:rw")
     echo ">>> creating container $CONTAINER"
-    podman run -d --name "$CONTAINER" --cap-add ALL --security-opt seccomp=unconfined \
+    # --init: a minimal init as PID 1 reaps orphaned helper processes (e.g. of gramine-vm) when the
+    # host has one (catatonit); without it they stay around as zombies until the container stops.
+    INIT=()
+    command -v catatonit >/dev/null 2>&1 && INIT=(--init)
+    podman run -d --name "$CONTAINER" ${INIT[@]+"${INIT[@]}"} --cap-add ALL --security-opt seccomp=unconfined \
         ${DEVICES[@]+"${DEVICES[@]}"} ${GRAPHICS[@]+"${GRAPHICS[@]}"} \
         -v "$REPO_ROOT:/root/gramine-multiarch:rw" \
         "$IMAGE" sleep infinity >/dev/null

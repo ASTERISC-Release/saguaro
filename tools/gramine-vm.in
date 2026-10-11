@@ -188,7 +188,18 @@ fi
 # The console is stdio, with a log copy so the guest's exit code can be recovered afterwards: the
 # guest ends with a triple fault, so QEMU's own exit status says nothing about the application.
 CONSOLE_LOG=$(mktemp /tmp/gramine-vm-console.XXXXXX)
-trap 'rm -f "$CONSOLE_LOG"; [ -n "${VIRTIOFSD_PID:-}" ] && kill "$VIRTIOFSD_PID" 2>/dev/null' EXIT
+XPROXY_LOG=
+cleanup() {
+    rm -f "$CONSOLE_LOG" ${XPROXY_LOG:+"$XPROXY_LOG"}
+    [ -n "${VIRTIOFSD_PID:-}" ] && kill "$VIRTIOFSD_PID" 2>/dev/null
+    # the X proxy forks one child per connection; stop those along with the listener
+    if [ -n "${XPROXY_PID:-}" ]; then
+        pkill -P "$XPROXY_PID" 2>/dev/null
+        kill "$XPROXY_PID" 2>/dev/null
+        wait "$XPROXY_PID" 2>/dev/null
+    fi
+}
+trap cleanup EXIT
 trap 'exit 130' INT TERM
 QEMU_VIRTIO_CONSOLE="-device virtio-serial,iommu_platform=off,romfile= \
 -chardev stdio,id=virtioconsole0,logfile=$CONSOLE_LOG \
@@ -224,6 +235,74 @@ CMD+=($QEMU_PATH $QEMU_GDB $QEMU_VM $QEMU_OPTS $QEMU_MACHINE
     -fw_cfg name=opt/gramine/args,string="$GRAMINE_ARGS"
     -fw_cfg name=opt/gramine/envs,string="$GRAMINE_ENVS"
 -fw_cfg name=opt/gramine/unixtime_s,string="$EPOCHSECONDS")
+
+# X proxy for graphics applications. A manifest that sets `loader.env.DISPLAY = "2:N"` points the
+# application at the X server of the host (vsock CID 2), which the guest reaches on vsock port
+# 6000+N. Relay that port to the X socket named by this launcher's own DISPLAY for as long as the VM
+# runs. GRAMINE_VM_X_PROXY=0 disables this (e.g. when the relay runs elsewhere), and
+# GRAMINE_VM_X_DISPLAY names another local display. A listener that is already there is reused and
+# left running.
+X_DISPLAY_NUM=$(python3 -c "
+import os, re, sys
+try:
+    import tomli as tomllib
+except ImportError:
+    import tomllib
+try:
+    with open(os.environ['GRAMINE_MANIFEST'], 'rb') as f:
+        display = tomllib.load(f).get('loader', {}).get('env', {}).get('DISPLAY', '')
+except Exception:
+    sys.exit(0)
+if isinstance(display, dict):
+    display = display.get('value', '')
+m = re.fullmatch(r'2:(\\d+)(\\.\\d+)?', str(display))
+if m:
+    print(m.group(1))
+" 2>/dev/null)
+if [ -n "$X_DISPLAY_NUM" ] && [ "${GRAMINE_VM_X_PROXY:-1}" != "0" ]; then
+    XPROXY_PORT=$((6000 + X_DISPLAY_NUM))
+    HOST_DISPLAY=${GRAMINE_VM_X_DISPLAY:-$DISPLAY}
+    if [[ ! "$HOST_DISPLAY" =~ ^(unix)?:([0-9]+)(\.[0-9]+)?$ ]]; then
+        echo "Error: the manifest uses the host display (DISPLAY=2:$X_DISPLAY_NUM) but this" \
+             "environment has no local X display (DISPLAY='$HOST_DISPLAY')." >&2
+        echo "Set DISPLAY or GRAMINE_VM_X_DISPLAY to a local display such as :0, or set" \
+             "GRAMINE_VM_X_PROXY=0 and provide the vsock relay yourself." >&2
+        exit 2
+    fi
+    HOST_X_SOCKET=/tmp/.X11-unix/X${BASH_REMATCH[2]}
+    if command -v ss >/dev/null 2>&1 \
+            && ss -H -ln --vsock "sport = :$XPROXY_PORT" 2>/dev/null | grep -q .; then
+        echo "gramine-vm: using the X proxy already listening on vsock port $XPROXY_PORT" >&2
+    else
+        if ! command -v socat >/dev/null 2>&1; then
+            echo "Error: socat is needed to relay the application's X connection" \
+                 "(vsock port $XPROXY_PORT -> $HOST_X_SOCKET)." >&2
+            exit 2
+        fi
+        if [ ! -S "$HOST_X_SOCKET" ]; then
+            echo "Error: the X socket $HOST_X_SOCKET does not exist (DISPLAY='$HOST_DISPLAY')." >&2
+            exit 2
+        fi
+        XPROXY_LOG=$(mktemp /tmp/gramine-vm-xproxy.XXXXXX)
+        socat -b 1048576 "VSOCK-LISTEN:$XPROXY_PORT,fork,reuseaddr,max-children=50" \
+            "UNIX-CONNECT:$HOST_X_SOCKET" >"$XPROXY_LOG" 2>&1 &
+        XPROXY_PID=$!
+        # wait until it listens (or has failed) before booting the guest
+        for _ in $(seq 30); do
+            kill -0 "$XPROXY_PID" 2>/dev/null || break
+            if command -v ss >/dev/null 2>&1; then
+                ss -H -ln --vsock "sport = :$XPROXY_PORT" 2>/dev/null | grep -q . && break
+            fi
+            sleep 0.1
+        done
+        if ! kill -0 "$XPROXY_PID" 2>/dev/null; then
+            echo "Error: could not start the X proxy on vsock port $XPROXY_PORT:" >&2
+            grep -v '/dev/vsock' "$XPROXY_LOG" >&2
+            XPROXY_PID=
+            exit 2
+        fi
+    fi
+fi
 
 # Check if the Gramine vhostfs pid file is already in use by another process
 if lsof /tmp/gramine_vhostfs_"$GRAMINE_VM_ID".pid 2>/dev/null; then
