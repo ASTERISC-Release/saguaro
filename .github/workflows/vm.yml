@@ -65,10 +65,13 @@ jobs:
         run: |
           scripts/dependencies.sh --build-only
           sudo apt-get install -y -qq qemu-system-x86 virtiofsd lsof
-          # gramine-vm starts `virtiofsd` by name; Ubuntu installs it off PATH
-          for d in /usr/lib/qemu /usr/libexec; do
-            [ -x "$d/virtiofsd" ] && echo "$d" >> "$GITHUB_PATH"
+          # gramine-vm starts `virtiofsd` by name; Ubuntu installs it off PATH. Symlink it instead of
+          # putting /usr/libexec on PATH: that directory contains a `gcc` *directory*, which GNU make
+          # picks over /usr/bin/gcc and then fails with "gcc: Permission denied" (glibc build).
+          for d in /usr/libexec /usr/lib/qemu; do
+            if [ -x "$d/virtiofsd" ]; then sudo ln -sf "$d/virtiofsd" /usr/local/bin/virtiofsd; break; fi
           done
+          command -v virtiofsd
           qemu-system-x86_64 --version | head -1
 
       - name: Toolchain and header versions (for diagnosing build failures)
