@@ -88,6 +88,22 @@ done
 
 # committed (non-compiled) data files the tests read from CWD (e.g. scripts/*.sh for the
 # exec_script test).
+# Manifests that have no test binary of the same name (they name their entrypoint themselves,
+# e.g. toml_parsing, env_from_host, debug_log_inline).
+for tpl in "$SRC"/*.manifest.template; do
+    [ -f "$tpl" ] || continue
+    name=$(basename "$tpl" .manifest.template)
+    [ -e "$RUN/$name.manifest" ] && continue
+    "$MANIFEST" $NO_CHECK \
+        -Dbinary_dir="$RUN" \
+        -Dentrypoint="$name" \
+        -Darch_libdir="$ARCH_LIBDIR" \
+        -Dlibc=glibc \
+        -Dcoreutils_libdir=lib \
+        "$tpl" "$RUN/$name.manifest"
+    rendered=$((rendered + 1))
+done
+
 (cd "$SRC" && git ls-files 2>/dev/null || true) | while read -r f; do
     case "$f" in
         *.c|*.h|*.cpp|*.py|*.toml|*.template|*.S|*.nasm|Makefile|meson.build|*.gdb|*.md) ;;

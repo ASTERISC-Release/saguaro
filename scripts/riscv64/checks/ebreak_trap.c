@@ -55,7 +55,7 @@ static void handler(int sig, siginfo_t* si, void* ucv) {
     uintptr_t pc = gregs[REG_PC];
     uint32_t insn_at_pc = *(uint32_t*)pc;
     uint16_t insn16 = *(uint16_t*)pc;
-    if (insn_at_pc == 0x00000073) {          /* 4-byte ebreak at pc */
+    if (insn_at_pc == 0x00100073) {          /* 4-byte ebreak at pc */
         gregs[REG_PC] = pc + 4;
     } else if (insn16 == 0x9002) {           /* compressed c.ebreak at pc */
         gregs[REG_PC] = pc + 2;
