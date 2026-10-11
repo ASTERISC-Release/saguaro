@@ -9,6 +9,8 @@ STK_BIN = stk-build/stk-code/cmake_build/bin/supertuxkart
 STK_ARGS ?= --race-now --screensize=1920x1080 --seed=11 --track=abyss --kart=konqi
 # Length in seconds of the automatic race run by `run-startup` and `run-native-startup`.
 PROFILE_TIME ?= 1
+# Input goes through the shared-memory ring in the comm page; 0 falls back to the X connection.
+SHARED_INPUT ?= 1
 STK_STARTUP_ARGS = --race-now --benchmark --profile-time=$(PROFILE_TIME) --screensize=1920x1080 \
 	--windowed --seed=11 --track=abyss --kart=konqi
 
@@ -23,7 +25,8 @@ MANIFEST_ARGS = \
 	-Degl_backend=$(EGL_BACKEND_DIR)/egl_backend.so \
 	-Dstk_dir=$(STK_DIR) \
 	-Dhome=$(HOME) \
-	-Dprofile_time=$(PROFILE_TIME)
+	-Dprofile_time=$(PROFILE_TIME) \
+	-Dshared_input=$(SHARED_INPUT)
 
 .PHONY: all
 all: egl_backend supertuxkart.manifest supertuxkart-startup.manifest
@@ -35,7 +38,7 @@ egl_backend:
 $(STK_BIN):
 	@echo "SuperTuxKart is not built: run ./install-stk.sh first" >&2; exit 1
 
-supertuxkart.manifest: supertuxkart.manifest.template $(STK_BIN)
+supertuxkart.manifest: supertuxkart.manifest.template $(STK_BIN) FORCE
 	gramine-manifest $(MANIFEST_ARGS) $< $@
 	gramine-manifest-check $@
 

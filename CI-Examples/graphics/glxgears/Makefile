@@ -8,6 +8,9 @@ EGL_BACKEND_DIR = $(abspath ../egl-backend)
 CFLAGS = -Wall -Wextra
 LDLIBS = -lGL -lX11 -lm
 
+# Input goes through the shared-memory ring in the comm page; 0 falls back to the X connection.
+SHARED_INPUT ?= 1
+
 ifeq ($(DEBUG),1)
 GRAMINE_LOG_LEVEL = debug
 CFLAGS += -g
@@ -29,10 +32,12 @@ glxgears: glxgears.o
 glxgears.o: main.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
-glxgears.manifest: glxgears.manifest.template
+.PHONY: FORCE
+glxgears.manifest: glxgears.manifest.template FORCE
 	gramine-manifest \
 		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
 		-Degl_backend=$(EGL_BACKEND_DIR)/egl_backend.so \
+		-Dshared_input=$(SHARED_INPUT) \
 		$< $@
 	gramine-manifest-check $@
 

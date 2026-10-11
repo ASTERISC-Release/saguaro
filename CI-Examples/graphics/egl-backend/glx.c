@@ -623,11 +623,13 @@ void resolve_dlsym(void){
     }
 }
 
+/* Under the VM, key, button and pointer events come through the shared ring in the comm page by
+ * default. EGL_SHARED_INPUT=0 falls back to receiving them over the application's X connection. */
 static bool shared_input_requested(void) {
     static int enabled = -1;
     if (enabled < 0) {
         const char *value = getenv("EGL_SHARED_INPUT");
-        enabled = value && strcmp(value, "1") == 0;
+        enabled = !(value && strcmp(value, "0") == 0);
     }
     return in_gramine_vm && enabled;
 }
@@ -938,6 +940,53 @@ int XNextEvent(Display *display, XEvent *event) {
     if (!real_XNextEvent)
         real_XNextEvent = (x_next_event_t)real_dlsym(RTLD_NEXT, "XNextEvent");
     return real_XNextEvent ? real_XNextEvent(display, event) : 0;
+}
+
+/* SDL's X11 backend only calls XNextEvent() when XEventsQueued() reports queued events or the
+ * connection is readable, so shared-ring events have to be counted here as well. */
+int XEventsQueued(Display *display, int mode) {
+    typedef int (*x_events_queued_t)(Display *, int);
+    static x_events_queued_t real_XEventsQueued;
+    resolve_dlsym();
+    if (!real_XEventsQueued)
+        real_XEventsQueued = (x_events_queued_t)real_dlsym(RTLD_NEXT, "XEventsQueued");
+    return shared_input_pending() + (real_XEventsQueued ? real_XEventsQueued(display, mode) : 0);
+}
+
+/* SDL detects key auto-repeat by scanning the queue for the KeyPress that pairs with a KeyRelease.
+ * Offer the predicate the discrete events waiting in the shared ring first; without this every
+ * auto-repeat would reach the application as a real release followed by a press. An event the
+ * predicate accepts is consumed only when it is the oldest one, to keep the ring ordered. */
+Bool XCheckIfEvent(Display *display, XEvent *event,
+                   Bool (*predicate)(Display *, XEvent *, XPointer), XPointer arg) {
+    typedef Bool (*x_check_if_event_t)(Display *, XEvent *,
+                                       Bool (*)(Display *, XEvent *, XPointer), XPointer);
+    static x_check_if_event_t real_XCheckIfEvent;
+
+    if (shared_input_requested() && predicate) {
+        sg_input_ring_t *ring = guest_input_ring();
+        if (__atomic_load_n(&ring->magic, __ATOMIC_ACQUIRE) == SG_INPUT_RING_MAGIC &&
+                __atomic_load_n(&ring->enabled, __ATOMIC_ACQUIRE) != 0) {
+            uint32_t head = __atomic_load_n(&ring->head, __ATOMIC_RELAXED);
+            uint32_t tail = __atomic_load_n(&ring->tail, __ATOMIC_ACQUIRE);
+            for (uint32_t i = head; i != tail; i++) {
+                sg_input_event_t input = ring->events[i % SG_INPUT_RING_CAPACITY];
+                XEvent queued;
+                fill_xevent(display, &input, &queued);
+                if (predicate(display, &queued, arg) && i == head) {
+                    *event = queued;
+                    __atomic_store_n(&ring->head, head + 1, __ATOMIC_RELEASE);
+                    mark_shared_input_delivered(&input);
+                    return True;
+                }
+            }
+        }
+    }
+
+    resolve_dlsym();
+    if (!real_XCheckIfEvent)
+        real_XCheckIfEvent = (x_check_if_event_t)real_dlsym(RTLD_NEXT, "XCheckIfEvent");
+    return real_XCheckIfEvent ? real_XCheckIfEvent(display, event, predicate, arg) : False;
 }
 
 int XPeekEvent(Display *display, XEvent *event) {

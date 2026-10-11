@@ -3,6 +3,12 @@
 libos.entrypoint = "/supertuxkart/stk-build/stk-code/cmake_build/bin/supertuxkart"
 
 sys.stack.size = "32M"
+{% if shared_input|string != "0" %}
+# Key, button and pointer events come through the shared-memory ring in the comm page; build with
+# SHARED_INPUT=0 to receive them over the X connection instead (see
+# Documentation/devel/graphics/running.md).
+sys.experimental__shared_input_ring = true
+{% endif %}
 libos.check_invalid_pointers = false
 
 loader.log_level = "{{ log_level }}"
@@ -35,6 +41,7 @@ loader.env.PULSE_SERVER = "none"
 loader.env.PIPEWIRE_REMOTE = "none"
 loader.env.EGL_GRAMINE = "1"
 loader.env.EGL_DISCRETE = "0"
+loader.env.EGL_SHARED_INPUT = "{{ '0' if shared_input|string == '0' else '1' }}"
 
 fs.mounts = [
   { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
