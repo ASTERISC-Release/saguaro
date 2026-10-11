@@ -187,16 +187,27 @@ if [ $EXIT_STATUS -ne 0 ]; then
     exit $EXIT_STATUS
 fi
 
+# The console is stdio, with a log copy so the guest's exit code can be recovered afterwards: the
+# guest ends with a triple fault, so QEMU's own exit status says nothing about the application.
+CONSOLE_LOG=$(mktemp /tmp/gramine-vm-console.XXXXXX)
+trap 'rm -f "$CONSOLE_LOG"; [ -n "${VIRTIOFSD_PID:-}" ] && kill "$VIRTIOFSD_PID" 2>/dev/null' EXIT
+trap 'exit 130' INT TERM
 QEMU_VIRTIO_CONSOLE="-device virtio-serial,iommu_platform=off,romfile= \
--chardev stdio,id=virtioconsole0 \
+-chardev stdio,id=virtioconsole0,logfile=$CONSOLE_LOG \
 -device virtconsole,chardev=virtioconsole0"
 QEMU_VIRTIO_FS="-chardev socket,path=/tmp/gramine_vhostfs_"$GRAMINE_VM_ID",id=vhostfs \
 -device vhost-user-fs-pci,iommu_platform=off,queue-size=1024,chardev=vhostfs,tag=graminefs"
 QEMU_VIRTIO_VSOCK="-device vhost-vsock-pci,iommu_platform=off,guest-cid="$GRAMINE_VM_ID",id=vsockdev"
 
+# The guest splits this string on whitespace but keeps "double-quoted" tokens whole (no escapes), so
+# quote every argument: `gramine-vm app -c "echo hi"` must reach the app as two arguments.
+GRAMINE_ARGS="-gramine-args init \"$APPLICATION\""
+for arg in "$@"; do
+    GRAMINE_ARGS+=" \"$arg\""
+done
+GRAMINE_ARGS+=" -gramine-args-end"
 # Due to QEMU syntax, commas in the QEMU cmdline need to be escaped using an additional comma.
-APPLICATION=${APPLICATION//","/",,"}
-GRAMINE_ARGS="-gramine-args init \"$APPLICATION\" $@ -gramine-args-end"
+GRAMINE_ARGS=${GRAMINE_ARGS//","/",,"}
 
 GRAMINE_ENVS=$(python3 -c "
 import os
@@ -223,13 +234,21 @@ if lsof /tmp/gramine_vhostfs_"$GRAMINE_VM_ID".pid 2>/dev/null; then
 fi
 virtiofsd --socket-path /tmp/gramine_vhostfs_"$GRAMINE_VM_ID" --shared-dir / --log-level error \
 --sandbox none --no-announce-submounts &
+VIRTIOFSD_PID=$!
 while [ ! -e /tmp/gramine_vhostfs_"$GRAMINE_VM_ID" ]; do sleep 0.1; done
 
-# echo "${CMD[@]}"
+# (not `exec`: the exit code has to be recovered from the console log after QEMU is gone)
+env "${CMD[@]}"
+QEMU_RC=$?
 
-exec env "${CMD[@]}"
-# env "${CMD[@]}"
-# CHILD_STATUS=$?
-#
-# # normal exit: cleanup trap will run due to EXIT
-# exit "$CHILD_STATUS"
+[ -n "$GRAMINE_VM_CONSOLE_LOG" ] && cp "$CONSOLE_LOG" "$GRAMINE_VM_CONSOLE_LOG" 2>/dev/null
+
+# `_PalProcessExit` logs "[ VM exited with code N ]" just before the guest triple-faults (QEMU then
+# exits 0 because of -no-reboot, whatever the application did).
+GUEST_RC=$(sed -n 's/.*VM exited with code \([0-9]*\).*/\1/p' "$CONSOLE_LOG" 2>/dev/null | tail -1)
+if [ -n "$GUEST_RC" ]; then
+    exit "$GUEST_RC"
+elif grep -q "Panic" "$CONSOLE_LOG" 2>/dev/null; then
+    exit 134            # kernel panic before the guest could report an exit code
+fi
+exit "$QEMU_RC"

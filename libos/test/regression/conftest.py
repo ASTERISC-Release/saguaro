@@ -8,6 +8,7 @@ category, so that the remaining result is a meaningful pass/fail signal for the 
 
 import os
 import pathlib
+import platform
 import warnings
 
 import pytest
@@ -19,7 +20,12 @@ def _load_vm_entries():
     with open(path, 'rb') as f:
         data = tomli.load(f)
     entries = {}
+    machine = platform.machine()
     for group in data.get('group', []):
+        # optional `arch = "x86_64"` (or a list): the group applies only on that architecture
+        arch = group.get('arch')
+        if arch is not None and machine not in ([arch] if isinstance(arch, str) else arch):
+            continue
         for test in group['tests']:
             entries[test] = group
     return entries

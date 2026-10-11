@@ -101,6 +101,14 @@ When one is fixed, delete its `vm_skip.toml` entry (an xfail that starts passing
   `gramine.runtimedir()` (most tests and examples) would need to mount the host's `/lib/aarch64-linux-gnu`
   instead, and results then depend on the host glibc. Decide whether a "minimal" install mode (faster build,
   host libc) is worth offering. Untested.
+- **x86_64 VM PAL does not forward CPU exceptions.** A divide error (`#DE`) panics the guest
+  (`unhandled exception (vector nr. 0)`) instead of reaching LibOS as `SIGFPE`; `test_093_sighandler_divbyzero`
+  is xfailed on x86_64. The aarch64 PAL delivers its faults, so compare `pal_common_exception.c` /
+  `kernel_interrupts.c` for the vectors the x86 kernel forwards (page faults only today).
+- **x86_64 `test_010_gramine_run_test`** hits `Internal memory fault with VMA at 0x17ce00` in LibOS under the VM PAL
+  (xfailed on x86_64, passes on aarch64); not investigated.
+- **x86_64 guest boot is ~12 s per run** on a hosted runner (8 GB guest), which makes the LibOS suite ~18 minutes.
+  Check where the time goes (QEMU memory backends, BIOS, page-table setup) before shrinking `GRAMINE_RAM_SIZE`.
 
 ## Cross-checks waiting on x86 / other QEMU
 

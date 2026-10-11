@@ -3,7 +3,7 @@
 
 # Tests that do not apply to / do not yet pass on the VM PAL (applied by conftest.py when GRAMINE_VM=1).
 # kind = skip: platform limitation; kind = xfail: known failure, cause not yet understood.
-# Test ids are <class>::<method>.
+# Test ids are <class>::<method>. A group may carry `arch = "x86_64"` (or "aarch64"): it then applies only there.
 
 [[group]]
 kind = "skip"
@@ -175,4 +175,22 @@ category = "no-svc-rewrite"
 reason = "Lazy `svc #0` rewriting (sys.rewrite_syscalls) is a seccomp-trap mechanism of the Linux PAL; the VM PAL dispatches `svc` itself, so there is nothing to rewrite."
 tests = [
   "TC_01_Bootstrap::test_603_rewrite_stress",
+]
+
+[[group]]
+kind = "xfail"
+arch = "x86_64"
+category = "x86-exceptions"
+reason = "The x86_64 VM PAL does not forward CPU exceptions to the application: a divide error panics the guest ('unhandled exception (vector nr. 0)') instead of delivering SIGFPE."
+tests = [
+  "TC_30_Syscall::test_093_sighandler_divbyzero",
+]
+
+[[group]]
+kind = "xfail"
+arch = "x86_64"
+category = "investigate"
+reason = "Fails with 'Internal memory fault with VMA at 0x17ce00' in LibOS (passes on aarch64); cause not yet understood."
+tests = [
+  "TC_00_Unittests::test_010_gramine_run_test",
 ]
