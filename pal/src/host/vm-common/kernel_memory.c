@@ -43,10 +43,22 @@ static size_t DATA_REGION_SIZE            = 1ULL * 1024 * 1024 * 1024;
 static void* HUGEPAGE_DATA_REGION         = (void*)0x140000000ULL;
 static size_t HUGEPAGE_REGION_SIZE        = 1ULL * 1024 * 1024 * 1024;
 
-void graphics_arenas_set_data_size(size_t data_size) {
+void graphics_arenas_set_data_size(size_t data_size, uintptr_t huge_addr) {
     assert(data_size);
     DATA_REGION_SIZE     = data_size;
-    HUGEPAGE_DATA_REGION = (void*)((uintptr_t)DATA_REGION + data_size);
+    if (huge_addr) {
+        if (huge_addr < (uintptr_t)DATA_REGION + data_size) {
+            log_error("Hugepage graphics arena 0x%lx does not follow the data arena "
+                      "(end 0x%lx); falling back to computing it",
+                      (unsigned long long)huge_addr,
+                      (unsigned long long)((uintptr_t)DATA_REGION + data_size));
+        } else {
+            HUGEPAGE_DATA_REGION = (void*)huge_addr;
+        }
+    } else {
+        /* Layout not supplied by the VMM (older launcher): follow the data arena. */
+        HUGEPAGE_DATA_REGION = (void*)((uintptr_t)DATA_REGION + data_size);
+    }
     log_always("Graphics arenas: data at %p (%lu MiB), hugepage at %p (%lu MiB)",
                DATA_REGION, (unsigned long)(DATA_REGION_SIZE / 1024 / 1024),
                HUGEPAGE_DATA_REGION, (unsigned long)(HUGEPAGE_REGION_SIZE / 1024 / 1024));
@@ -853,13 +865,19 @@ int memory_alloc(void* addr, size_t size, bool read, bool write, bool execute) {
 #endif
     /* Keep the whole libgraphics reservation write-back cacheable. GEM mmap
      * requests change only the ranges they actually consume to write-combining
-     * through memory_protect() below. Marking all 4 GiB write-combining here
-     * needlessly splits and invalidates page mappings that may never be used. */
+     * through memory_protect() below.
+     *
+     * The arenas deliberately skip the zero-fill: they are fresh memfd pages,
+     * which are zero on first touch anyway, and writing the whole arena zero
+     * would pin arena_size bytes of physical RAM (and cost a multi-GiB memset
+     * at boot) for nothing. GEM buffer mappings replace arena slices outright. */
     bool is_egl_redirect_region = is_egl_redirect_data_region_base(addr, size);
-    memset(addr, 0, size);
-    if (is_egl_redirect_region)
-        log_always("Reserved GEM arena %p (size %lu); marking allocations WC on demand",
+    if (is_egl_redirect_region) {
+        log_always("Reserved GEM arena %p (size %lu); fresh memfd pages, allocations marked WC on demand",
                    addr, (unsigned long)size);
+    } else {
+        memset(addr, 0, size);
+    }
     return 0;
 }
 

@@ -22,6 +22,7 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <time.h>
 #include <sys/syscall.h>
 #include <dirent.h>
 #include <time.h>
@@ -61,8 +62,22 @@ xcb_sync_fence_t prev_present_fence = XCB_NONE;
 bool in_gramine_vm = false;
 bool dump_png = false;
 char *drm_node = "/dev/dri/renderD128";
+static int64_t boot_t0_ms = -1;
+/* Guest-side boot instrumentation: ms since the preload-library constructor ran. */
+static long boot_elapsed_ms(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    int64_t now = (int64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+    if (boot_t0_ms < 0) {
+        boot_t0_ms = now;
+        return 0;
+    }
+    return (long)(now - boot_t0_ms);
+}
+
 void __attribute__((constructor)) sharedgl_entry(void) {
     fprintf(stderr, "[.] Bypass EGL Shared Library\n");
+    boot_elapsed_ms(); /* arms the [boot] clock at the library constructor */
 
     /* Check environment variables for logging */
     const char *ioctl_log = getenv("EGL_IOCTL_LOG");
@@ -97,6 +112,7 @@ void __attribute__((constructor)) sharedgl_entry(void) {
         in_gramine_vm = true;
         fprintf(stderr, "[.] RUNTIME: Gramine VM\n");
         setup_syscall_comms();
+        fprintf(stderr, "[boot] guest comms ready +%ld ms\n", boot_elapsed_ms());
     } else {
         fprintf(stderr, "[.] RUNTIME: Process\n");
     }
@@ -120,6 +136,7 @@ void __attribute__((constructor)) sharedgl_entry(void) {
         close(drm_fd);
         return;
     }
+    fprintf(stderr, "[boot] GPU/GBM ready +%ld ms\n", boot_elapsed_ms());
 
     if (!in_gramine_vm) {
         create_and_setup_xcb_window();

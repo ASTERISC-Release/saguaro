@@ -51,10 +51,10 @@ int memory_preload_ranges(e820_table_entry* e820_entries, size_t e820_entries_si
                           int (*callback)(uintptr_t addr, size_t size, bool is_user_reserved,
                                           const char* comment));
 
-/* Graphics GEM arenas: applies the manifest-configured data-arena size (hugepage arena
- * follows it) and reserves both ranges through `callback`. Call after the manifest is
- * parsed (vm/pal_main.c does this right after sys.experimental__shared_input_ring). */
-void graphics_arenas_set_data_size(size_t data_size);
+/* Graphics GEM arenas: applies the geometry (data-arena size; hugepage arena address, computed
+ * when not supplied) and reserves both ranges through `callback`. Call before any boot-time
+ * allocator activity (vm/pal_main.c does this right after the e820 pass, from fw_cfg input). */
+void graphics_arenas_set_data_size(size_t data_size, uintptr_t huge_addr);
 int memory_reserve_graphics_arenas(int (*callback)(uintptr_t addr, size_t size,
                                                    bool is_user_reserved,
                                                    const char* comment));

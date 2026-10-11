@@ -154,11 +154,24 @@ noreturn static void print_usage_and_exit(void) {
 
 noreturn int pal_start_continue(void* cmdline_);
 
+/* Boot-time instrumentation: relative stamps against the first instruction of the
+ * kernel, in TSC ticks and (once the TSC frequency is known) milliseconds. */
+static uint64_t boot_tsc0;
+static void boot_stamp(const char* what) {
+    uint64_t t = get_tsc() - boot_tsc0;
+    if (g_tsc_mhz) {
+        log_always("[boot] +%lu ms: %s", (unsigned long)(t / (g_tsc_mhz * 1000)), what);
+    } else {
+        log_always("[boot] +%llu ticks: %s", (unsigned long long)t, what);
+    }
+}
+
 /* called by `vm_bootloader.S` on kernel startup */
 __attribute_no_stack_protector  /* starts with zero GS base register */
 __attribute_no_sanitize_address /* starts with dummy page tables w/o ASan shared memory */
 noreturn void pal_start_c(void) {
     int ret;
+    boot_tsc0 = get_tsc();
 
     set_dummy_gs_base();
 
@@ -193,17 +206,24 @@ noreturn void pal_start_c(void) {
     if (ret < 0)
         INIT_FAIL("Failed to initialize preloaded ranges");
 
-    /* Graphics GEM arenas: size from the VMM (opt/gramine/graphics_data_size, absent without
-     * graphics). Reserved NOW -- before zero_out and all kernel init -- so that no boot-time
-     * allocator can ever claim pages inside the arenas. The manifest itself is only readable
-     * once virtio-fs is up, so the size travels through fw_cfg instead. */
+    /* Graphics GEM arenas: geometry from the VMM (opt/gramine/graphics_data_size and
+     * opt/gramine/graphics_huge_addr, absent without graphics). Reserved NOW -- before zero_out
+     * and all kernel init -- so that no boot-time allocation can ever claim pages inside the
+     * arenas. The manifest itself is only readable once virtio-fs is up, so the geometry travels
+     * through fw_cfg instead. */
     uint64_t graphics_data_size = 0;
-    if (graphics_data_size_init(&graphics_data_size) == 0 && graphics_data_size)
-        graphics_arenas_set_data_size((size_t)graphics_data_size);
+    uint64_t graphics_huge_addr = 0;
+    if (graphics_data_size_init(&graphics_data_size) == 0 && graphics_data_size) {
+        graphics_huge_addr_init(&graphics_huge_addr); /* optional; 0 = follow the data arena */
+        graphics_arenas_set_data_size((size_t)graphics_data_size, (uintptr_t)graphics_huge_addr);
+        boot_stamp("graphics arenas reserved");
+    }
 
     ret = memory_reserve_graphics_arenas(&add_preloaded_range);
     if (ret < 0)
         INIT_FAIL("Failed to reserve the graphics arenas (arena size or VM memory size)");
+
+    boot_stamp("initial ranges set");
 
     /* PAL binary is located at 1MB and may occupy until 4MB, see pal.lds */
     /* FIXME: whole PAL binary is RWX because memory_pagetables_init() marked everything as RWX and
@@ -216,6 +236,7 @@ noreturn void pal_start_c(void) {
      * This is not true for common hypervisors like QEMU/KVM, so must do it ourselves. Also,
      * memory_pagetables_init() marked all pages as RWX, now is good time to revert to NONE. */
     zero_out_memory_and_prot_none();
+    boot_stamp("memory zeroed, PROT_NONE");
 
     /* Configure PAT so that index 1 is Write-Combining (WC). Must be after multicore init because
      * PAT is per-CPU state and AP CPUs will also need it set. */
@@ -269,6 +290,7 @@ noreturn void pal_start_c(void) {
     ret = init_multicore(num_cpus, /*hob_list_addr=*/NULL);
     if (ret < 0)
         INIT_FAIL("Failed to initialize multicore (BSP CPU couldn't init AP CPUs)");
+    boot_stamp("multicore up");
 
     if (!g_console)
         INIT_FAIL("Failed to initialize virtio-console driver");

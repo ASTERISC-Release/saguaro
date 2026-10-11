@@ -76,15 +76,37 @@ static size_t parse_graphics_size(const char* value, size_t fallback) {
     return (size_t)v;
 }
 
+/* Parse a plain decimal or 0x-prefixed address; returns the fallback when unset
+ * or malformed. */
+static uint64_t parse_graphics_u64(const char* value, uint64_t fallback) {
+    if (!value || !*value) {
+        return fallback;
+    }
+    char* end;
+    uint64_t v = (uint64_t)strtoull(value, &end, 0);
+    if (end == value || *end != '\0' || v == 0) {
+        fprintf(stderr, "[.] bad GRAMINE_HUGEPAGE_ADDR '%s'; ignoring it\n", value);
+        return fallback;
+    }
+    return v;
+}
+
 void setup_syscall_comms(void) {
     fprintf(stderr, "\n========COMMS========\n");
 
-    /* Data-arena size, from the GRAMINE_DATA_SIZE env var (rendered into
-     * loader.env from the manifest's sys.experimental__graphics_data_size; the
-     * two must match, since the PAL reserves the ranges from the manifest
-     * value). The hugepage arena follows the data arena directly. */
+    /* Geometry, from the launcher environment: GRAMINE_DATA_SIZE sizes the data
+     * arena (the launcher also passes it to the PAL over fw_cfg, so the PAL's
+     * reservation matches), and GRAMINE_HUGEPAGE_ADDR gives the hugepage
+     * arena's guest physical address directly -- a hugepages deployment points
+     * it at the dedicated hugetlb bucket backend; when unset the hugepage
+     * arena follows the data arena. */
     size_t data_size = parse_graphics_size(getenv("GRAMINE_DATA_SIZE"), DATA_SIZE);
-    HUGEPAGE_DATA_REGION = (void *)((uintptr_t)DATA_REGION + data_size);
+    uint64_t huge_addr = parse_graphics_u64(getenv("GRAMINE_HUGEPAGE_ADDR"), 0);
+    if (huge_addr && huge_addr >= (uint64_t)(uintptr_t)DATA_REGION + data_size) {
+        HUGEPAGE_DATA_REGION = (void *)huge_addr;
+    } else {
+        HUGEPAGE_DATA_REGION = (void *)((uintptr_t)DATA_REGION + data_size);
+    }
 
     long _offset = acquire_libos_lock();
     /* Setup the communication region. */

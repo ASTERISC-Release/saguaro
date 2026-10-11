@@ -122,25 +122,56 @@ if grep -Eq '^DISPLAY[^=]*=[[:space:]]*"2:' "$GRAMINE_MANIFEST" 2>/dev/null; the
              "GRAMINE_DATA_SIZE=$GRAPHICS_DATA_SIZE (got ${QEMU_MEM_SIZE})."
         exit 2
     fi
-    echo "Graphics data arena: $GRAPHICS_DATA_SIZE ($GRAPHICS_DATA_BYTES bytes; guest RAM floor ${NEED_RAM}G)"
+    # Where the hugepage GEM arena lives: in a hugepages deployment, at the dedicated 1G hugetlb
+    # bucket backend at guest 6G (so a data arena larger than ram1's 2G cannot be used there);
+    # otherwise it follows the data arena directly.
+    if [ "${GRAMINE_HUGEPAGES:-0}" = "1" ]; then
+        if [ "$GRAPHICS_DATA_BYTES" -gt 2147483648 ]; then
+            echo "Error: GRAMINE_HUGEPAGES=1 serves the hugepage GEM bucket from a dedicated 1G" \
+                 "hugetlb backend at guest 6G, so GRAMINE_DATA_SIZE must be at most 2G (got" \
+                 "$GRAPHICS_DATA_SIZE). Reduce it or unset GRAMINE_HUGEPAGES."
+            exit 2
+        fi
+        GRAPHICS_HUGE_ADDR=6442450944          # guest physical 6G
+    else
+        GRAPHICS_HUGE_ADDR=$((4294967296 + GRAPHICS_DATA_BYTES))   # 4G + data size
+    fi
+    GRAMINE_HUGEPAGE_ADDR=$GRAPHICS_HUGE_ADDR  # reaches the guest env via opt/gramine/envs
+    echo "Graphics data arena: $GRAPHICS_DATA_SIZE ($GRAPHICS_DATA_BYTES bytes; guest RAM floor ${NEED_RAM}G; hugepage arena at 0x$(printf %x $GRAPHICS_HUGE_ADDR))"
 fi
 if [ "$GRAMINE_HUGEPAGES" == "1" ]; then
     echo "Configuring Gramine VM with hugepages support."
-    if [ "$(echo $QEMU_MEM_SIZE | tr -d 'G')" -lt 8 ]; then
-        echo "Error: Gramine hugepages mode requires at least 8GB of VM memory."
+    if [ "$RAW_MEM_SIZE" -lt 5 ]; then
+        echo "Error: Gramine hugepages mode requires at least 5GB of VM memory" \
+             "(4G app memory below and at guest 4-6G, a 1G hugetlb bucket at 6-7G)."
         exit 2
     fi
 
-    REM_MEM_SIZE="$((REM_MEM_SIZE))G"
-    echo "REM_MEM_SIZE = $REM_MEM_SIZE"
-
-    # 3 separate DIMMs (0 - 4GB hugepages, 4GB - 5GB normal, 5GB - rest hugepages)
-    QEMU_OPTS+="-object memory-backend-memfd,id=huge0,size=2G,hugetlb=on,hugetlbsize=2M \
+    # 4 backends (or 3 at RAM=5G): 2G hugetlb below 4G for kernel+app, 2G normal at 4-6G
+    # (GEM data arena), a dedicated 1G hugetlb bucket at 6-7G (GEM hugepage bucket -- this is
+    # the only hugetlb memory the guest cannot live without), and normal pages for the rest.
+    # Only the 3G of fixed backends is committed up front; REM_MEM_SIZE pages are lazy.
+    REM_MEM_SIZE=$((RAW_MEM_SIZE - 5))
+    if [ "$REM_MEM_SIZE" -gt 0 ]; then
+        REM_MEM_SIZE="${REM_MEM_SIZE}G"
+        echo "REM_MEM_SIZE = $REM_MEM_SIZE"
+        QEMU_OPTS+="-object memory-backend-memfd,id=huge0,size=2G,hugetlb=on,hugetlbsize=2M \
     -object memory-backend-memfd,id=ram1,size=2G \
-    -object memory-backend-memfd,id=huge2,size=$REM_MEM_SIZE,hugetlb=on,hugetlbsize=2M \
+    -object memory-backend-memfd,id=huge_bucket,size=1G,hugetlb=on,hugetlbsize=2M \
+    -object memory-backend-memfd,id=ram2,size=$REM_MEM_SIZE \
     -numa node,memdev=huge0,nodeid=0 \
     -numa node,memdev=ram1,nodeid=1 \
-    -numa node,memdev=huge2,nodeid=2 "
+    -numa node,memdev=huge_bucket,nodeid=2 \
+    -numa node,memdev=ram2,nodeid=3 "
+    else
+        echo "REM_MEM_SIZE = 0 (RAM=5G; no fourth backend)"
+        QEMU_OPTS+="-object memory-backend-memfd,id=huge0,size=2G,hugetlb=on,hugetlbsize=2M \
+    -object memory-backend-memfd,id=ram1,size=2G \
+    -object memory-backend-memfd,id=huge_bucket,size=1G,hugetlb=on,hugetlbsize=2M \
+    -numa node,memdev=huge0,nodeid=0 \
+    -numa node,memdev=ram1,nodeid=1 \
+    -numa node,memdev=huge_bucket,nodeid=2 "
+    fi
 else
     echo "Configuring Gramine VM without hugepages."
 
@@ -268,6 +299,7 @@ CMD+=($QEMU_PATH $QEMU_GDB $QEMU_VM $QEMU_OPTS $QEMU_MACHINE
 # before the guest's boot-time allocator runs (the manifest is not readable that early).
 if [ -n "$GRAPHICS_DATA_BYTES" ]; then
     CMD+=("-fw_cfg" "name=opt/gramine/graphics_data_size,string=$GRAPHICS_DATA_BYTES")
+    CMD+=("-fw_cfg" "name=opt/gramine/graphics_huge_addr,string=$GRAPHICS_HUGE_ADDR")
 fi
 
 # X proxy for graphics applications. A manifest that sets `loader.env.DISPLAY = "2:N"` points the
