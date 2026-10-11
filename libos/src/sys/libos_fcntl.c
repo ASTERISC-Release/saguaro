@@ -184,6 +184,16 @@ long libos_syscall_fcntl(int fd, int cmd, unsigned long arg) {
              * `arg` is occupied, which is common: callers pass small minimums, e.g. tokio's
              * epoll probe `fcntl(epfd, F_DUPFD_CLOEXEC, epfd)`.) The TYPE_HOST comm-window
              * handle was redirected to the host before the switch above. */
+#ifdef ENABLE_GRAPHICS
+            if (hdl->type == TYPE_HOST) {
+                /* The host duplicated its descriptor and returned the new one in the host fd
+                 * range; a TYPE_HOST handle is identified by that number, so the guest fd has to
+                 * be exactly it. */
+                ret = retval < 0 ? (int)retval : set_new_fd_handle_by_fd(retval, hdl, flags,
+                                                                         handle_map);
+                break;
+            }
+#endif
             ret = set_new_fd_handle_above_fd(arg, hdl, flags, handle_map);
             break;
         }

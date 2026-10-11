@@ -148,7 +148,15 @@ long libos_syscall_creat(const char* path, mode_t mode) {
  * gated on the PAL host type at the single place where TYPE_HOST handles are created; every
  * other comm_page() writer in the LibOS (ioctl/fcntl/dup/mmap/stat) is keyed on
  * hdl->type == TYPE_HOST(_IDENTITY) and so becomes inert along with it. */
+bool g_graphics_comm_mapped = false;
+
 bool graphics_redirect_enabled(void) {
+    /* The window is application memory until the graphics preload library maps it (see
+     * libos_syscall_mmap()): an application that never does so, i.e. any non-graphics one, must
+     * not have its /dev and /sys accesses redirected, or the first write to the window faults. */
+    if (!__atomic_load_n(&g_graphics_comm_mapped, __ATOMIC_ACQUIRE)) {
+        return false;
+    }
     const char* host = g_pal_public_state->host_type;
     return !strcmp(host, "VM") || !strcmp(host, "TDX");
 }

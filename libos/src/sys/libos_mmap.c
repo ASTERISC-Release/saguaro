@@ -340,6 +340,15 @@ out_handle:
         return (void*)ret;
     }
 
+#ifdef ENABLE_GRAPHICS
+    /* The application (its graphics preload library) maps the comm window itself before the
+     * handshake with the host listener; only from then on may the LibOS write to it. */
+    if ((flags & MAP_FIXED) && (uintptr_t)addr <= COMM_ADDR
+            && COMM_ADDR < (uintptr_t)addr + length) {
+        __atomic_store_n(&g_graphics_comm_mapped, true, __ATOMIC_RELEASE);
+    }
+#endif
+
     return addr;
 }
 

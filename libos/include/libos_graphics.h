@@ -49,6 +49,9 @@ extern struct libos_lock graphics_comm_lock;
  * first, so an unmapped window faults at COMM_ADDR + 0x18 on the first write. */
 bool graphics_redirect_enabled(void);
 
+/* Set once the application has mapped the comm window at COMM_ADDR (libos_syscall_mmap()). */
+extern bool g_graphics_comm_mapped;
+
 #define COMM_ADDR  0xf00000ULL
 #define COMM_MAGIC 0x1234567812345678ULL
 static uint64_t __attribute__((unused)) LOG_MMAP_EVENT = 1;
