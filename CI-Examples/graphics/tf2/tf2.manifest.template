@@ -1,0 +1,102 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (C) 2026 The ASTERISC Research Lab
+# Team Fortress 2 Linux client under gramine-vm with the Tirith graphics redirection (x86_64),
+# configured for a local offline workload. Not yet run in this tree; see README.md.
+
+libos.entrypoint = "/tf2/tf_linux64"
+fs.start_dir = "/tf2"
+
+loader.log_level = "error"
+loader.insecure__use_host_env = true
+sys.experimental__enable_flock = true
+sys.experimental__assume_external_processes_alive = true
+sys.experimental__enable_host_sysv_semaphores = true
+{% if shared_input|string == "1" %}
+sys.experimental__shared_input_ring = true
+{% endif %}
+loader.argv = [
+  "tf_linux64",
+  "-game", "tf",
+  "-steam",
+  "-insecure",
+  "-novid",
+  "-nobreakpad",
+  "-nominidumps",
+  "-nojoy",
+  "-nosteamcontroller",
+  "-nohltv",
+  "-noip",
+  "-nosound",
+  "-gl",
+  "-windowed",
+  "-w", "{{ width }}",
+  "-h", "{{ height }}",
+  "+exec", "gramine_workload",
+]
+
+loader.env.LD_LIBRARY_PATH = "/tf2/bin/linux64:/tf2/tf/bin/linux64:/tf2:/lib:/usr/lib:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu"
+loader.env.LD_PRELOAD = "/fps_metrics.so:/libgraphics.so"
+loader.env.HOME = "/tf2-home"
+loader.env.USER = "root"
+loader.env.XDG_CONFIG_HOME = "/tf2-home/.config"
+loader.env.XDG_DATA_HOME = "/tf2-home/.local/share"
+loader.env.XDG_CACHE_HOME = "/tf2-home/.cache"
+loader.env.FONTCONFIG_FILE = "/etc/fonts/fonts.conf"
+loader.env.FONTCONFIG_PATH = "/etc/fonts"
+loader.env.DISPLAY = "{{ display }}"
+loader.env.SteamAppId = "440"
+loader.env.SteamGameId = "440"
+loader.env.SteamNoOverlayUIDrawing = "1"
+loader.env.IVSHMEM_GRAMINE_VM = "1"
+loader.env.HOST_SDL_WINDOW = "1"
+loader.env.GALLIUM_THREAD = "0"
+loader.env.GLIBC_TUNABLES = "glibc.pthread.rseq=0"
+loader.env.__GL_SYNC_TO_VBLANK = "0"
+loader.env.vblank_mode = "0"
+loader.env.SDL_AUDIODRIVER = "dummy"
+loader.env.SDL_VIDEODRIVER = "x11"
+loader.env.PULSE_SERVER = "none"
+loader.env.PIPEWIRE_REMOTE = "none"
+loader.env.GBM_BACKEND = "dri"
+loader.env.EGL_GRAMINE = "1"
+loader.env.EGL_DISCRETE = "0"
+# Input over the X connection, as in Tirith: the game ships its own SDL2, and whether that works
+# with the shared input ring has not been tested (build with SHARED_INPUT=1 to try).
+loader.env.EGL_SHARED_INPUT = "{{ '1' if shared_input|string == '1' else '0' }}"
+loader.env.EGL_SYSCALL_LOG = "0"
+loader.env.EGL_SANITY_FULL = "0"
+loader.env.EGL_IOCTL_LOG = "0"
+loader.env.EGL_DUMP_PNG = "0"
+loader.env.MESA_LOG = "0"
+loader.env.FPS_STATS_INTERVAL_SEC = "{{ env.get('FPS_STATS_INTERVAL_SEC', '60') }}"
+loader.env.FPS_STATS_WARMUP_SEC = "{{ env.get('FPS_STATS_WARMUP_SEC', '45') }}"
+
+libos.check_invalid_pointers = false
+sys.stack.size = "32M"
+sgx.enclave_size = "12G"
+sgx.debug = true
+sgx.edmm_enable = {{ 'true' if env.get('EDMM', '0') == '1' else 'false' }}
+
+fs.mounts = [
+  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "/usr", type = "chroot", uri = "file:/usr" },
+  { path = "/etc/ld.so.cache", uri = "file:/etc/ld.so.cache" },
+  { path = "/etc/localtime", uri = "file:/etc/localtime" },
+  { path = "/etc/fonts", type = "chroot", uri = "file:/etc/fonts" },
+  { path = "/etc/ssl/certs", type = "chroot", uri = "file:/etc/ssl/certs" },
+  { path = "/var/cache/fontconfig", type = "chroot", uri = "file:/var/cache/fontconfig" },
+  { path = "/tmp", type = "tmpfs" },
+
+  { path = "/libgraphics.so", uri = "file:{{ gramine.libgraphics }}" },
+  { path = "/fps_metrics.so", uri = "file:{{ integration_dir }}/fps_metrics.so" },
+
+  { path = "/sys", type = "chroot", uri = "file:/sys" },
+  { path = "/sys/dev", type = "chroot", uri = "file:/sys/dev" },
+  { path = "/sys/devices", type = "chroot", uri = "file:/sys/devices" },
+  { path = "/sys/bus/pci", type = "chroot", uri = "file:/sys/bus/pci" },
+
+  { path = "/tf2", type = "chroot", uri = "file:{{ tf2_dir }}" },
+  { path = "/tf2-home", type = "chroot", uri = "file:{{ integration_dir }}/home" },
+  { path = "/tf2-home/.steam", type = "chroot", uri = "file:{{ steam_home }}/.steam" },
+  { path = "{{ steam_home }}/.local/share/Steam", type = "chroot", uri = "file:{{ steam_home }}/.local/share/Steam" },
+]

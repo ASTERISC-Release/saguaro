@@ -1,0 +1,6 @@
+/game/
+/.steamcmd/
+/home/*
+!/home/.gitkeep
+/tf2.manifest
+/fps_metrics.so
