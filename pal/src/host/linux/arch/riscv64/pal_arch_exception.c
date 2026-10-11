@@ -217,9 +217,18 @@ __attribute__((visibility("protected"))) bool libos_tcb_registry_scan(PAL_TCB** 
  * it did before this handler existed (core dump, like a plain ebreak without Gramine).
  */
 void pal_arch_handle_trap(ucontext_t* uc) {
-    uint32_t insn = *(const uint32_t*)ucontext_get_ip(uc);
-    if (insn == 0x00000007u /* ebreak */
-            && uc->uc_mcontext.sc_regs.a7 == PAL_BRK_RESTORE_CONTEXT) {
+    /* Both widths of `ebreak` must be recognized. RISC-V's `ebreak` is `0x00000073`, but under
+     * the toolchain's default `-march` (rv64imafdc, i.e. with the C extension) both gas and the
+     * linker RELAX a plain `ebreak` mnemonic to the 2-byte compressed encoding `c.ebreak`
+     * (`0x9002`) -- measured in the guest with scripts/riscv64/checks/ebreak_trap.c, which also
+     * measured that the saved pc sits *at* the trapping instruction for both widths. A 32-bit
+     * fetch at a compressed site would therefore read `{next insn's low half}<<16 | 0x9002` and
+     * miss the protocol. Reading 16 bits first is always in-bounds: pc is 2-byte aligned (all
+     * RISC-V instructions are), so a 2-byte load never straddles a page edge. */
+    uint16_t insn16 = *(const uint16_t*)ucontext_get_ip(uc);
+    bool is_ebreak = insn16 == 0x9002 /* c.ebreak */
+                     || (insn16 == 0x0073 && *(const uint32_t*)ucontext_get_ip(uc) == 0x00000073);
+    if (is_ebreak && uc->uc_mcontext.sc_regs.a7 == PAL_BRK_RESTORE_CONTEXT) {
         PAL_CONTEXT* ctx = (PAL_CONTEXT*)uc->uc_mcontext.sc_regs.a0;
         ctx->pstate &= ~PAL_PSTATE_EXACT_CONTEXT;
         pal_context_to_ucontext(uc, ctx);
