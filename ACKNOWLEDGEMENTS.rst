@@ -26,7 +26,7 @@ The organizations below hold copyright in code that this tree retains (taken fro
 notices in the source files):
 
 - Intel Corporation and Intel Labs
-- Stony Brook University (including the OSCAR lab)
+- Stony Brook University
 - Invisible Things Lab
 - Texas A&M University
 - University of North Carolina at Chapel Hill
