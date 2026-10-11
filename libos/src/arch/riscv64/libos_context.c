@@ -138,6 +138,14 @@ noreturn void restore_child_context_after_clone(struct libos_context* context) {
      * happen before return_from_syscall(), whose entry code may resolve pal_get_tcb(). */
     set_tls(context->tls);
 
+    /* `tp` is a GPR on riscv64, so the saved context carries it too: regs[4] is a copy of the
+     * *parent's* TLS pointer (the context was copied at the parent's syscall entry), and
+     * _return_from_syscall() reloads `tp` from it, undoing the set_tls() above. The child would
+     * then run on the parent's TLS and, through the PAL_TCB registry, on the parent's LibOS stack.
+     * context->tls is the right value in every case (without CLONE_SETTLS it is the parent's own
+     * pointer). x86_64 and aarch64 keep the TLS pointer outside the saved registers. */
+    context->regs->regs[4] = context->tls;
+
     PAL_CONTEXT* regs = context->regs;
     context->regs = NULL;
 
