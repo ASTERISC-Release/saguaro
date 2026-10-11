@@ -62,7 +62,7 @@ users:
     ssh_authorized_keys:
       - $(cat "$KEY.pub")
 mounts:
-  - [ repo, $REPO, 9p, "trans=virtio,version=9p2000.L,msize=1048576,nofail", "0", "0" ]
+  - [ repo, $REPO, 9p, "trans=virtio,version=9p2000.L,msize=1048576,nofail,cache=none", "0", "0" ]
 package_update: true
 packages: [ python3-click, python3-jinja2, python3-pyelftools, python3-tomli, python3-tomli-w,
             python3-voluptuous, python3-pytest, python3-cryptography, python3-toml, file, strace, gdb ]

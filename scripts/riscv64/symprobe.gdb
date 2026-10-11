@@ -126,6 +126,47 @@ for reg in ("$s2", "$s3"):
     if 0x1000 < v < 0x7fffffffffff:
         hexdump(v - 128, 256, "%s (qword view)" % reg)
 
+# Dump the PAL_TCB registry (128 x {key, tcb}) via libpal's own symbols: shows which
+# application-TLS keys are bound to which PAL_TCBs and their LibOS stack bottoms.
+print("\n=== TCB registry ===")
+try:
+    rsym = gdb.lookup_global_symbol("g_pal_tcb_registry")
+    raddr = int(rsym.value().address) if rsym else None
+    if not raddr:
+        out = gdb.execute("info address g_pal_tcb_registry", to_string=True)
+        import re
+        m = re.search(r"0x([0-9a-f]+)", out)
+        raddr = int(m.group(1), 16) if m else None
+    if raddr:
+        raw = inf.read_memory(raddr, 128 * 16).tobytes()
+        for i in range(128):
+            key, tcbp = struct.unpack_from("<QQ", raw, i * 16)
+            if key == 0 and tcbp == 0:
+                continue
+            info = ""
+            if tcbp:
+                try:
+                    f0 = struct.unpack("<Q", inf.read_memory(tcbp + 0x10, 8))[0]  # libos_tcb.self
+                    # libos_tcb: { self, syscall_entry, tp, stack_bottom }: stack_bottom at +24
+                    fields = struct.unpack("<4Q", inf.read_memory(tcbp + 0x10, 32))
+                    info = " tcb[+0x10..]=%s" % [hex(x) for x in fields]
+                except gdb.error as e:
+                    info = " unreadable: %s" % e
+            print("  reg[%03d] key=%#lx tcb=%#lx%s" % (i, key, tcbp, info))
+    else:
+        print("  g_pal_tcb_registry symbol not found")
+except gdb.error as e:
+    print("  registry dump failed: %s" % e)
+
+# Optional caller-supplied dump windows: set $hd1 / $hd2 to an address to hexdump around it.
+for name in ("$hd1", "$hd2"):
+    try:
+        v = int(gdb.parse_and_eval(name))
+    except gdb.error:
+        continue
+    if v > 0x1000:
+        hexdump(v - 64, 512, "%s (caller window)" % name)
+
 # Scan the faulting stack for C strings (log buffers / format strings in flight).
 print("\n=== strings on stack ===")
 for off in range(0, len(mem) - 7, 8):
