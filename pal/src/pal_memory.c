@@ -113,6 +113,34 @@ int pal_add_initial_range(uintptr_t addr, size_t size, pal_prot_flags_t prot,
     return 0;
 }
 
+/*
+ * Clamp registered initial ranges whose `end` lies above the usable memory window
+ * (`memory_address_end`) to the window top. This exists because of riscv64's kernel: its
+ * `[stack]` VMA extends all the way to TASK_SIZE (measured: `7ffffffdf000-800000000000` in
+ * /proc/self/maps on sv48), whereas x86_64's and AArch64's kernels bound the stack VMA at the
+ * (rounded-up) initial stack top. Ranges like that poison every consumer that computes free gaps
+ * between consecutive registered ranges as `begin[i - 1] - end[i]`: the subtraction wraps to a
+ * huge unsigned value, the "gap" is accepted, and the allocation lands on top of the live stack
+ * (measured on riscv64: `mmap(..., MAP_FIXED_NOREPLACE) = -EEXIST` for both the LibOS-less PAL
+ * regression bookkeeping client (pal/regression/memory_management.c) and the PAL's own initial
+ * allocator feeding it -- which is how `printf_test`/`memory` exited 1 and `Event`/`Thread2`
+ * failed with `PAL_ERROR_STREAMEXIST`). Clamping only touches ranges that *begin* inside the
+ * window (the ones consumers actually consider live -- x86_64's `[vsyscall]` range begins above
+ * it and is deliberately left untouched), never the `start` values the ranges are sorted by, so
+ * the descending-by-start invariant holds. Where no range exceeds the window (x86_64, AArch64)
+ * this is a no-op.
+ */
+void pal_clamp_initial_ranges_to_window(void) {
+    uintptr_t window_end = (uintptr_t)g_pal_public_state.memory_address_end;
+
+    for (size_t i = 0; i < g_pal_public_state.initial_mem_ranges_len; i++) {
+        if (g_initial_mem_ranges[i].end > window_end &&
+                g_initial_mem_ranges[i].start < window_end) {
+            g_initial_mem_ranges[i].end = window_end;
+        }
+    }
+}
+
 static void mark_range_free(size_t idx) {
     g_initial_mem_ranges[idx].is_free = true;
 

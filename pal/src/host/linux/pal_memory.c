@@ -214,6 +214,10 @@ int init_memory_bookkeeping(void) {
     g_pal_public_state.memory_address_start = (void*)start_addr;
     g_pal_public_state.memory_address_end = (void*)end_addr;
 
+    /* Must run as soon as the window top is known: some kernels (riscv64) register a stack VMA
+     * reaching TASK_SIZE, see pal/src/pal_memory.c pal_clamp_initial_ranges_to_window(). */
+    pal_clamp_initial_ranges_to_window();
+
     g_pal_public_state.shared_address_start = g_pal_public_state.memory_address_start;
     g_pal_public_state.shared_address_end = g_pal_public_state.memory_address_end;
 

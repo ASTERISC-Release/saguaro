@@ -293,6 +293,7 @@ void pal_read_next_reserved_range(uintptr_t last_range_start, uintptr_t* out_nex
  */
 int pal_add_initial_range(uintptr_t addr, size_t size, pal_prot_flags_t prot,
                           bool is_user_reserved, const char* comment);
+void pal_clamp_initial_ranges_to_window(void);
 int pal_internal_memory_bkeep(size_t size, uintptr_t* out_addr);
 int pal_internal_memory_alloc(size_t size, void** out_addr);
 int pal_internal_memory_free(void* addr, size_t size);
