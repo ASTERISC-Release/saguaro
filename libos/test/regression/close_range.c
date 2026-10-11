@@ -16,7 +16,7 @@
 #define CLOSE_RANGE_CLOEXEC     (1U << 2)
 
 #ifndef __NR_close_range
-#if defined(__x86_64__) || defined(__aarch64__)
+#if defined(__x86_64__) || defined(__aarch64__) || defined(__riscv)
 #define __NR_close_range 436
 #else
 #error "unknown close_range syscall number for this architecture"

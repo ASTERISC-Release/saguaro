@@ -10,8 +10,15 @@
 #
 # Options:
 #   --prefix DIR           install prefix (default: $HOME/.local/gramine; no root needed)
+#   --target ARCH          cross-build for ARCH instead of the build machine's own
+#                          architecture (riscv64; see Documentation/devel/riscv/plan.md).
+#                          Requires the matching cross toolchain to be installed -- for
+#                          riscv64 that is the `container/run.sh --target riscv64` container
+#                          (or the same packages on a native-capable distro). The default
+#                          build dir and prefix gain a -riscv64 suffix so a cross build can
+#                          never clobber the native one.
 #   --build-dir DIR        meson build directory, relative to the repository root
-#                          (default: build-$(uname -m))
+#                          (default: build-$(uname -m), or build-riscv64 with --target)
 #   --deps                 install the build dependencies first (scripts/dependencies.sh
 #                          --build-only; done automatically if build tools are missing)
 #   --add-to-profile       also source <prefix>/env.sh from ~/.bashrc, so new shells have Gramine
@@ -51,6 +58,11 @@
 #    they stay disabled for the direct-PAL battery.
 #  * --vm on aarch64 is self-contained: no SGX/TDX packages are needed, and the build runs wherever
 #    meson/gcc exist; only *running* the resulting kernel needs QEMU with KVM.
+#  * --target riscv64 only *builds* (and installs); riscv64 binaries cannot run on this build
+#    machine's kernel. Run the test battery inside the RISC-V guest instead
+#    (scripts/riscv64/guest.sh + test/test-direct.sh there, see the plan's Phase 0 notes).
+#    --deps is skipped for cross builds: the cross toolchain comes from the container image,
+#    not from scripts/dependencies.sh.
 
 set -euo pipefail
 
@@ -61,6 +73,7 @@ cd "$REPO"
 PREFIX="$HOME/.local/gramine"
 PREFIX_EXPLICIT=0
 TESTS_PIE=false
+TARGET_ARCH=""
 ARCH=$(uname -m)
 BUILDDIR="build-$ARCH"
 BUILDDIR_EXPLICIT=0
@@ -78,6 +91,7 @@ while [ $# -gt 0 ]; do
     case "$1" in
         -h|--help)        usage; exit 0 ;;
         --prefix)         PREFIX=$2; PREFIX_EXPLICIT=1; shift 2 ;;
+        --target)         TARGET_ARCH=$2; shift 2 ;;
         --build-dir)      BUILDDIR=$2; BUILDDIR_EXPLICIT=1; shift 2 ;;
         --deps)           DO_DEPS=1; shift ;;
         --add-to-profile) ADD_TO_PROFILE=1; shift ;;
@@ -92,6 +106,26 @@ while [ $# -gt 0 ]; do
         *)                echo "unknown option: $1 (see --help)"; exit 2 ;;
     esac
 done
+
+# --target: cross-build. Only riscv64 (the direct PAL port,
+# Documentation/devel/riscv/plan.md) is supported here.
+CROSS_ARGS=()
+if [ -n "$TARGET_ARCH" ]; then
+    if [ "$TARGET_ARCH" != riscv64 ]; then
+        echo "ERROR: --target only supports 'riscv64' (got '$TARGET_ARCH')"
+        exit 2
+    fi
+    ARCH=$TARGET_ARCH
+    if [ "$BUILDDIR_EXPLICIT" = 0 ]; then
+        # never share (and thus never reconfigure) the native build dir
+        BUILDDIR="build-riscv64"
+    fi
+    if [ "$PREFIX_EXPLICIT" = 0 ]; then
+        # ...and never overwrite a native install either (same file names)
+        PREFIX="$HOME/.local/gramine-riscv64"
+    fi
+    CROSS_ARGS=(--cross-file "$script_dir/riscv64/meson-cross.ini")
+fi
 
 # --vm: build the vm-PAL unikernel ("the correct vm version" for this machine).
 # (PREFIX is normalized below, after the vm default is applied.)
@@ -137,6 +171,13 @@ missing_tools() {
 }
 
 # Install build dependencies when asked (--deps) or when build tools are missing.
+# Cross builds get their toolchain from the cross container image (or an equivalently
+# provisioned machine); scripts/dependencies.sh only knows the build machine's distro
+# packages, so it is skipped.
+if [ -n "$TARGET_ARCH" ] && [ "$DO_DEPS" = 1 ]; then
+    echo "note: --deps is a no-op for --target $TARGET_ARCH (toolchain comes from the container)"
+    DO_DEPS=0
+fi
 if [ "$DO_DEPS" = 1 ] || missing_tools; then
     echo ">>> installing build dependencies (sudo may ask for your password)"
     "$script_dir/dependencies.sh" --build-only
@@ -155,7 +196,8 @@ if ! meson setup "$BUILDDIR" \
         -Ddirect="$DIRECT" \
         -Dsgx="$SGX" -Dvm="$VM" -Dtdx="$TDX" -Dgraphics="$GRAPHICS" \
         -Dtests="$TESTS" -Dtests_pie="$TESTS_PIE" \
-        -Dlibc=glibc 2>"$BUILDDIR-setup.err"; then
+        -Dlibc=glibc ${CROSS_ARGS[@]+"${CROSS_ARGS[@]}"} \
+        2>"$BUILDDIR-setup.err"; then
     echo "    plain 'meson setup' failed; retrying with --reconfigure"
     meson setup --reconfigure "$BUILDDIR" \
         --prefix="$PREFIX" \
@@ -163,7 +205,7 @@ if ! meson setup "$BUILDDIR" \
         -Ddirect="$DIRECT" \
         -Dsgx="$SGX" -Dvm="$VM" -Dtdx="$TDX" -Dgraphics="$GRAPHICS" \
         -Dtests="$TESTS" -Dtests_pie="$TESTS_PIE" \
-        -Dlibc=glibc \
+        -Dlibc=glibc ${CROSS_ARGS[@]+"${CROSS_ARGS[@]}"} \
     || { echo "ERROR: meson setup failed:"; tail -5 "$BUILDDIR-setup.err"; exit 1; }
 fi
 rm -f "$BUILDDIR-setup.err"
@@ -200,6 +242,13 @@ if [ "$ADD_TO_PROFILE" = 1 ]; then
     echo ">>> added $PREFIX/env.sh to $PROFILE (open a new shell, or run:  . \"$PREFIX/env.sh\")"
 fi
 
+if [ "$RUN_TESTS" = 1 ] && [ -n "$TARGET_ARCH" ]; then
+    echo "note: skipping --run-tests: $TARGET_ARCH binaries cannot run on this build machine;"
+    echo "      run the battery inside the RISC-V guest instead (scripts/riscv64/guest.sh,"
+    echo "      then test/test-direct.sh there -- see Documentation/devel/riscv/plan.md Phase 0)"
+    RUN_TESTS=0
+fi
+
 if [ "$RUN_TESTS" = 1 ]; then
     export GRAMINE_PREFIX="$PREFIX"
     if [ "$VM" = enabled ] && [ "$ARCH" = aarch64 ]; then
@@ -216,6 +265,10 @@ if [ "$VM" = enabled ] && [ "$ARCH" = aarch64 ]; then
     echo "VM artifacts:"
     echo "  kernel: $REPO/$BUILDDIR/pal/src/host/vm/pal"
     echo "  LibOS:  $REPO/$BUILDDIR/libos/src/libsysdb.so"
+fi
+if [ -n "$TARGET_ARCH" ]; then
+    echo "Done (cross $TARGET_ARCH build). Artifacts live in $REPO/$BUILDDIR; use them in the"
+    echo "RISC-V guest (install there or export $BUILDDIR over 9p), not on this machine."
 fi
 echo "Done. To use this install in the current shell:   . \"$PREFIX/env.sh\""
 [ "$ADD_TO_PROFILE" = 1 ] || echo "(or rerun with --add-to-profile to get it in every new shell)"

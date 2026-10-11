@@ -249,6 +249,8 @@ typedef struct {
 
 #define EM_AARCH64  183 /* ARM AARCH64 */
 
+#define EM_RISCV    243 /* RISC-V */
+
 /* If it is necessary to assign new unofficial EM_* values, please
    pick large random numbers (0x8523, 0xa7f2, etc.) to minimize the
    chances of collision with official or non-GNU unofficial values.  */
@@ -2535,6 +2537,15 @@ typedef Elf32_Addr Elf32_Conflict;
 #define R_AARCH64_GLOB_DAT       1025 /* Create GOT entry */
 #define R_AARCH64_JUMP_SLOT      1026 /* Create PLT entry */
 #define R_AARCH64_RELATIVE       1027 /* Adjust by program base */
+
+/* RISC-V relocations (same "only what perform_relocations() dispatches on" policy; numbers
+ * from the riscv64 psABI relocation table). Note there is *no* R_RISCV_GLOB_DAT in the
+ * ABI at all -- GOT-slot data relocations are plain R_RISCV_64 / R_RISCV_RELATIVE. */
+#define R_RISCV_32               1
+#define R_RISCV_64               2
+#define R_RISCV_RELATIVE         3
+#define R_RISCV_COPY             4
+#define R_RISCV_JUMP_SLOT        5
 
 /* AMD x86-64 relocations.  */
 #define R_X86_64_NONE            0  /* No reloc */

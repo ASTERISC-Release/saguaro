@@ -53,6 +53,19 @@ elif host_machine.cpu_family() == 'aarch64'
         'mathvec/libmvec.so',
         'mathvec/libmvec.so.1',
     ]
+elif host_machine.cpu_family() == 'riscv64'
+    # The loader (same find_interp()/runtime-chroot reasoning as the other two branches;
+    # glibc's riscv64 loader carries the ABI in its soname -- lp64d, the only ABI Gramine
+    # targets, see Documentation/devel/riscv/plan.md decisions).
+    #
+    # No mathvec/ entries, unlike both other branches: glibc 2.39 only builds libmvec on
+    # x86_64 and aarch64 (`SUBDIRS-maths` in sysdeps/meson configure machinery); riscv64
+    # libmvec support landed in much later glibc releases only. riscv64 glibc's math.h
+    # therefore has no vectorized entry points for Gramine's chroot to be missing.
+    glibc_output_paths += [
+        'elf/ld-linux-riscv64-lp64d.so.1',
+        'elf/ld.so',
+    ]
 endif
 
 glibc_output = []
@@ -71,7 +84,34 @@ else
     compile_prog = find_program('compile.sh')
 endif
 
+# Cross-building (riscv64 port, see Documentation/devel/riscv/plan.md): custom targets
+# always run on the *build* machine, so compile.sh would default to the native x86_64 gcc
+# and build an x86_64 glibc. Pass the cross C/C++ compilers (from the cross file's
+# [binaries]) and a --host triple through the environment; compile.sh's `CC=gcc` etc. are
+# `:=`-style defaults precisely so this env wins, and `CONFIGURE_HOST` makes glibc's
+# configure switch to cross mode (it is then careful never to *run* any built target
+# binary, only compile-test -- and `--disable-test` drops the test suite entirely).
+glibc_env = []
+if meson.is_cross_build()
+    glibc_cc = meson.get_compiler('c')
+    glibc_env = [
+        'CC=' + ' '.join(glibc_cc.cmd_array()),
+        'AS=' + ' '.join(glibc_cc.cmd_array()),
+    ]
+    # CXX unconditionally: glibc still *compiles* (never runs) its C++ support
+    # programs, and without it make would fall back to the native g++ and fail on
+    # the riscv sysdeps headers. No `required:` kwarg on get_compiler() (meson
+    # >=1.4 only; Gramine's floor is 0.56); the top-level project declares C++
+    # anyway, so a host cpp always exists in any Gramine build.
+    glibc_env += 'CXX=' + ' '.join(meson.get_compiler('cpp').cmd_array())
+    # riscv64-linux-gnu is the canonical --host triple for riscv64 glibc; deriving it from
+    # cpu_family happens to spell exactly the right triple for riscv64 (and would for
+    # aarch64/x86_64 too, should those ever be cross-built from here).
+    glibc_env += 'CONFIGURE_HOST=' + host_machine.cpu_family() + '-linux-gnu'
+endif
+
 glibc = custom_target('glibc',
+    env: glibc_env,
     command: [
         compile_prog,
         host_machine.cpu_family(),

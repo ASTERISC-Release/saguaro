@@ -1,0 +1,107 @@
+OUTPUT_FORMAT("elf64-littleriscv", "elf64-littleriscv", "elf64-littleriscv")
+OUTPUT_ARCH(riscv)
+ENTRY(libos_start)
+
+SECTIONS
+{
+  /* Read-only sections, merged into text segment; */
+  __load_address = .;
+  . = SEGMENT_START("text-segment", 0) + SIZEOF_HEADERS;
+  .note.gnu.build-id : { *(.note.gnu.build-id) }
+  .hash          : { *(.hash) }
+  .gnu.hash      : { *(.gnu.hash) }
+  .dynsym        : { *(.dynsym) }
+  .dynstr        : { *(.dynstr) }
+  .gnu.version   : { *(.gnu.version) }
+  .gnu.version_d : { *(.gnu.version_d) }
+  .gnu.version_r : { *(.gnu.version_r) }
+  .rela.dyn       :
+     {
+      *(.rela.init)
+      *(.rela.text .rela.text.* .rela.gnu.linkonce.t.*)
+      *(.rela.fini)
+      *(.rela.rodata .rela.rodata.* .rela.gnu.linkonce.r.*)
+      *(.rela.data .rela.data.* .rela.gnu.linkonce.d.*)
+      *(.rela.tdata .rela.tdata.* .rela.gnu.linkonce.td.*)
+      *(.rela.tbss .rela.tbss.* .rela.gnu.linkonce.tb.*)
+      *(.rela.ctors)
+      *(.rela.dtors)
+      *(.rela.got)
+      *(.rela.bss .rela.bss.* .rela.gnu.linkonce.b.*)
+      *(.rela.ldata .rela.ldata.* .rela.gnu.linkonce.l.*)
+      *(.rela.lbss .rela.lbss.* .rela.gnu.linkonce.lb.*)
+      *(.rela.lrodata .rela.lrodata.* .rela.gnu.linkonce.lr.*)
+      *(.rela.ifunc)
+    }
+  .rela.plt      :
+    {
+      *(.rela.plt)
+      *(.rela.iplt)
+    }
+  .init          : { *(.init) }
+  .plt           : { *(.plt) *(.iplt) }
+  .text :
+  {
+    /* the rest of text segments */
+    *(.text .stub .text.*);
+  }
+  .fini          : { *(.fini) }
+  .rodata :
+  {
+    /* the rest of rodata */
+    *(.rodata .rodata.*)
+  }
+  .eh_frame_hdr  : { *(.eh_frame_hdr) }
+  .eh_frame      : ONLY_IF_RO { *(.eh_frame) }
+
+  /* now adjust the address for the data segment */
+  . = DATA_SEGMENT_ALIGN (CONSTANT (MAXPAGESIZE), CONSTANT (COMMONPAGESIZE));
+  .eh_frame      : ONLY_IF_RW { *(.eh_frame) }
+  .ctors         : { *(.ctors) }
+  .dtors         : { *(.dtors) }
+  .jcr           : { *(.jcr) }
+  .dynamic       : { *(.dynamic) }
+  .got           : { *(.got) *(.igot) }
+  .got.plt       : { *(.got.plt) *(.igot.plt) }
+  .init_array    : {
+    __init_array_start = .;
+    KEEP (*(SORT_BY_INIT_PRIORITY(.init_array.*) .init_array))
+    __init_array_end = .;
+  }
+  .data.rel.ro :
+  {
+    /* the rest of RELRO data segment */
+    *(.data.rel.ro .data.rel.ro.*)
+    . = ALIGN(8);
+    __cp_name = .;
+    *(SORT(.cp_name.*));
+    __cp_func = .;
+    *(SORT(.cp_func.*));
+    __rs_func = .;
+    *(SORT(.rs_func.*));
+  }
+  . = DATA_SEGMENT_RELRO_END (0, .);
+  .data :
+  {
+    /* the rest of data segment */
+    *(.data .data.*)
+    /* RISC-V small data -- see the same addition in pal.lds for why `.data.*` does not match
+     * `.sdata*` and why the globs are added even though ET_DYN objects use no gp relaxation. */
+    *(.sdata .sdata.*)
+    . = ALIGN(CONSTANT(COMMONPAGESIZE));
+    __migratable = .;
+    *(.migratable);
+    __migratable_end = .;
+    . = ALIGN(CONSTANT(COMMONPAGESIZE));
+  }
+  .bss            :
+  {
+    *(.bss .bss.*)
+    /* RISC-V small BSS -- see pal.lds. */
+    *(.sbss .sbss.* .scommon)
+    *(COMMON)
+  }
+  __load_address_end = .;
+  . = DATA_SEGMENT_END(.);
+}
+

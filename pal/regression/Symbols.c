@@ -24,6 +24,21 @@
             : "=r"(_sym));                                            \
         _sym;                                                        \
     })
+#elif defined(__riscv)
+/* Same reasoning as the aarch64 branch: each Pal* symbol lives in libpal.so, a different
+ * shared object, so its address must come from the GOT. riscv64's `la` pseudo-op for an
+ * undefined symbol *is* the GOT-indirect pair (`%pcrel_hi(:got:sym)` + `%pcrel_lo` load);
+ * the linker cannot relax it away here because the symbol stays undefined in this
+ * executable (unlike same-object symbols, where `la` would fold to a plain auipc+addi).
+ * As in the other two branches, the GOT slot of a function symbol holds the function
+ * address itself, so no second dereference (contrast g_pal_tcb_singleton in
+ * libos/src/arch/riscv64/syscallas.S, a data symbol needing one). */
+#define SYMBOL_ADDR(sym)                                              \
+    ({                                                                \
+        void* _sym;                                                   \
+        __asm__ volatile("la %0, " #sym : "=r"(_sym));                 \
+        _sym;                                                         \
+    })
 #else
 #error "Unsupported architecture"
 #endif

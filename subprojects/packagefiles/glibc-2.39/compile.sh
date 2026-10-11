@@ -16,9 +16,12 @@ LIBDIR="$7"
 EXTRA_CFLAGS="$8"
 shift 8
 
-CC=gcc
-CXX=g++
-AS=gcc
+# Defaults for native builds; a cross build (see the `env:` of the `glibc` custom target in
+# packagefiles/glibc-2.39/meson.build) overrides all of these: the custom target's command
+# always runs on the build machine, so without this the riscv64 cross-build would silently
+# build an x86_64 glibc with the host gcc. `${VAR:=default}` (rather than plain `VAR=default`)
+# because the environment may already carry them; empty CONFIGURE_HOST means "native".
+: "${CC:=gcc}" "${CXX:=g++}" "${AS:=$CC}" "${CONFIGURE_HOST:=}"
 CFLAGS="-O2 -Wno-unused-value $EXTRA_CFLAGS"
 CPPFLAGS="\
     -I$(realpath "$CURRENT_SOURCE_DIR")/../../libos/include \
@@ -52,6 +55,7 @@ mkdir -p "$BUILDDIR"
     ../configure \
         --prefix="$PREFIX" \
         --libdir="$PREFIX"/"$LIBDIR"/gramine/runtime/glibc \
+        ${CONFIGURE_HOST:+--host="$CONFIGURE_HOST"} \
         --with-tls \
         --without-gd \
         --without-selinux \

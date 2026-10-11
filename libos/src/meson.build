@@ -148,6 +148,21 @@ if get_option('graphics') == 'enabled'
     cflags_graphics += '-DENABLE_GRAPHICS'
 endif
 
+# riscv64: riscv gcc compiles __builtin_bswap32/64 (used heavily by mbedtls's
+# big-endian wire-format code) into libgcc helper calls -- `__bswapsi2`/`__bswapdi2`
+# -- because the tree is compiled for the baseline riscv ISA (the toolchain's
+# default `-march`, rv64imafdc_zicsr_zifencei, has no byte-swap instruction; the
+# Zbb extension that provides them is not part of the default -- even where the
+# test guest's CPU implements it, see the Phase 0 log). Gramine links libsysdb.so
+# with -nostdlib, which excludes even libgcc.a -- so it must be linked explicitly. This pulls in only the few
+# helper objects actually referenced (static archive semantics); it does not drag
+# in any libc (libgcc.a is compiler-internal, has no libc dependencies). x86_64 and
+# aarch64 have byte-swap instructions (bswap on x86; rev on aarch64), never emit
+# these calls, and keep an empty list here.
+libsysdb_gcc_deps = host_machine.cpu_family() == 'riscv64' ? [
+    cc.find_library('gcc', static: true),
+] : []
+
 libos = shared_library('sysdb',
     libos_sources,
     vdso_data_o,
@@ -220,6 +235,7 @@ libos = shared_library('sysdb',
         cryptoadapter_dep,
         protected_files_dep,
         libpal,
+        libsysdb_gcc_deps,
     ],
 
     include_directories: includes_libos,

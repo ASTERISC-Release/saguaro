@@ -275,7 +275,15 @@ static long do_clone_new_vm(IDTYPE child_vmid, unsigned long flags, struct libos
  * flags there set no CLONE_*_TID/SETTLS bits, so those slots are never dereferenced and the
  * swap is inert for vfork (which is also what the kernel itself does).
  */
-#if defined(__aarch64__)
+#if defined(__aarch64__) || defined(__riscv)
+/* riscv64 has the identical trap: its generic-ABI clone syscall also places tls in the 4th
+ * raw-argument slot (a3) and child_tidptr in the 5th (a4) -- verified against the running
+ * kernel in Phase 0 (Documentation/devel/riscv/plan.md) -- while the C-level
+ * libos_syscall_clone() above (and the whole LibOS-internal caller set) keeps x86_64's
+ * historical slot order. Same swap-only wrapper, same "guest-side table registers *this* at
+ * __NR_clone" scheme (see libos_table.c; the PAL's *host*-side clone in
+ * pal/src/host/linux-common/arch/riscv64/syscall.S is separate and was written with the raw
+ * order directly). */
 long libos_syscall_clone_raw(unsigned long flags, unsigned long user_stack_addr,
                              int* parent_tidptr, unsigned long tls, int* child_tidptr) {
     return libos_syscall_clone(flags, user_stack_addr, parent_tidptr, child_tidptr, tls);

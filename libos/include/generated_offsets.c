@@ -33,6 +33,27 @@ const struct generated_offset generated_offsets[] = {
     DEFINE(PAL_CONTEXT_SIZE, sizeof(struct PAL_CONTEXT)),
     /* immediate of the `brk` that asks the PAL to restore a context exactly (pal_arch.h) */
     DEFINE(PAL_BRK_RESTORE_CONTEXT, PAL_BRK_RESTORE_CONTEXT),
+#elif defined(__riscv)
+    /* riscv64's PAL_CONTEXT is the same flat-array shape as aarch64's (see pal_arch.h):
+     * syscallas.S indexes `regs` off one base offset and needs whole-struct allocation offsets
+     * rather than one named offset per register. riscv64 has no named `sp` field (SP lives at
+     * regs[2] like every other GPR -- there is no save/restore-stack-pointer instruction to
+     * justify carving it out, aarch64's only reason for a separate `sp`). */
+    OFFSET_T(PAL_CONTEXT_REGS_OFF, struct PAL_CONTEXT, regs),
+    OFFSET_T(PAL_CONTEXT_PC_OFF, struct PAL_CONTEXT, pc),
+    OFFSET_T(PAL_CONTEXT_PSTATE_OFF, struct PAL_CONTEXT, pstate),
+    OFFSET_T(PAL_CONTEXT_FAULT_ADDRESS_OFF, struct PAL_CONTEXT, fault_address),
+    OFFSET_T(PAL_CONTEXT_ESR_OFF, struct PAL_CONTEXT, esr),
+    OFFSET_T(PAL_CONTEXT_OLDMASK_OFF, struct PAL_CONTEXT, oldmask),
+    OFFSET_T(PAL_CONTEXT_FCSR_OFF, struct PAL_CONTEXT, fcsr),
+    OFFSET_T(PAL_CONTEXT_ORIG_A0_OFF, struct PAL_CONTEXT, orig_a0),
+    /* syscallas.S allocates the whole struct with one addi/sub of PAL_CONTEXT_SIZE and fills it
+     * via offset-based stores (same reason as aarch64 above). */
+    DEFINE(PAL_CONTEXT_SIZE, sizeof(struct PAL_CONTEXT)),
+    /* a7 payload of the `ebreak` that asks the PAL to restore a context exactly (pal_arch.h;
+     * riscv64's ebreak has no immediate field, so the discriminator rides in a7 instead --
+     * see PAL_BRK_RESTORE_CONTEXT's comment there) */
+    DEFINE(PAL_BRK_RESTORE_CONTEXT, PAL_BRK_RESTORE_CONTEXT),
 #endif
 
     DEFINE(LIBOS_XSTATE_ALIGN, LIBOS_XSTATE_ALIGN),

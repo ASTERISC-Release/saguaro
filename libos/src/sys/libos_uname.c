@@ -27,6 +27,8 @@ static struct linux_new_utsname g_current_uname = {
     .machine  = "x86_64",
 #elif defined(__aarch64__)
     .machine  = "aarch64",
+#elif defined(__riscv)
+    .machine  = "riscv64",
 #else
 #error "Not implemented"
 #endif

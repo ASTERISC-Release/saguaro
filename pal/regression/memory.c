@@ -65,6 +65,33 @@ __asm__ (
 ".popsection\n"
 );
 
+#elif defined(__riscv)
+void ret(void) __attribute__((visibility("internal")));
+void end_of_ret(void) __attribute__((visibility("internal")));
+__asm__ (
+".pushsection .text\n"
+".type mem_write, %function\n"
+".type mem_read, %function\n"
+".type ret, %function\n"
+".type end_of_ret, %function\n"
+"mem_write:\n"
+    "sb a1, 0(a0)\n"
+    "ret\n"
+"mem_read:\n"
+    "lb a0, 0(a0)\n"
+    "ret\n"
+/* The three-byte x86 / four-byte aarch64/riscv64 "return" stub, delimited by end_of_ret:
+ * the test memcpy's [ret, end_of_ret) into a page it then (un)protects, so its size is
+ * exactly one instruction on all three architectures. `ret` here is GAS's riscv64
+ * pseudo-op (`jalr zero, ra, 0`) *under* a label that happens to be spelled `ret` --
+ * gas parses the line-start `ret:` as a label definition and the following bare `ret`
+ * as the pseudo-op, no ambiguity. */
+"ret:\n"
+    "ret\n"
+"end_of_ret:\n"
+".popsection\n"
+);
+
 #else
 #error Unsupported architecture
 #endif

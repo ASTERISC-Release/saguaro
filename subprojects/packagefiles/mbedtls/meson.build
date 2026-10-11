@@ -3,6 +3,17 @@ project('mbedtls', 'c', version: '3.6.0')
 cc = meson.get_compiler('c')
 host_has_glibc = cc.get_define('__GLIBC__', prefix: '#include <features.h>') != ''
 
+# Cross builds (riscv64 port, Documentation/devel/riscv/plan.md): all three targets below
+# run compile*.sh -> mbedTLS's own Makefiles on the *build* machine, and those Makefiles
+# compile with $(CC), whose default is the native cc. Same scheme as the glibc subproject:
+# pass the cross C compiler through the custom target's env (make gives environment
+# variables precedence over built-in defaults, and the Makefiles have no plain `CC =`
+# assignment that would win).
+mbedtls_env = []
+if meson.is_cross_build()
+    mbedtls_env = ['CC=' + ' '.join(meson.get_compiler('c').cmd_array())]
+endif
+
 pkgconfig = import('pkgconfig')
 
 mbedtls_libs_output = [
@@ -20,6 +31,7 @@ mbedtls_libs_output = [
 # TODO: This is custom_target, because we need to patch mbedtls before compiling.
 # PR for patch support in wraps: https://github.com/mesonbuild/meson/pull/4570
 mbedtls_libs = custom_target('mbedtls',
+    env: mbedtls_env,
     command: [
         find_program('compile-gramine.sh'),
         '@CURRENT_SOURCE_DIR@',
@@ -73,6 +85,7 @@ install_subdir('mbedtls-3.6.0/include/mbedtls', install_dir: get_option('include
 install_subdir('mbedtls-3.6.0/include/psa', install_dir: get_option('includedir') / 'gramine')
 
 mbedtls_pal_libs = custom_target('mbedtls_pal',
+    env: mbedtls_env,
     command: [
         find_program('compile-pal.sh'),
         '@CURRENT_SOURCE_DIR@',
@@ -96,6 +109,7 @@ mbedtls_pal_libs = custom_target('mbedtls_pal',
 )
 
 mbedtls_curl_libs = custom_target('mbedtls_curl',
+    env: mbedtls_env,
     command: [
         find_program('compile-curl.sh'),
         '@CURRENT_SOURCE_DIR@',

@@ -594,8 +594,10 @@ struct parser_table {
                          parse_at_fdcwd, parse_string_arg, parse_pointer_arg, parse_integer_arg}},
     [__NR_unlinkat] = {.slow = false, .name = "unlinkat", .parser = {parse_long_arg, parse_at_fdcwd,
                        parse_string_arg, parse_integer_arg}},
+#ifdef __NR_renameat /* riscv64's asm-generic table has no renameat (see pal_files.c) */
     [__NR_renameat] = {.slow = false, .name = "renameat", .parser = {parse_long_arg, parse_at_fdcwd,
                        parse_string_arg, parse_integer_arg, parse_string_arg}},
+#endif
     [__NR_linkat] = {.slow = false, .name = "linkat", .parser = {NULL}},
     [__NR_symlinkat] = {.slow = false, .name = "symlinkat", .parser = {NULL}},
     [__NR_readlinkat] = {.slow = false, .name = "readlinkat", .parser = {parse_long_arg,

@@ -184,7 +184,15 @@ static int file_rename(PAL_HANDLE handle, const char* type, const char* uri) {
     if (!tmp)
         return -PAL_ERROR_NOMEM;
 
+#ifdef __NR_renameat
     int ret = DO_SYSCALL(renameat, AT_FDCWD, handle->file.realpath, AT_FDCWD, uri);
+#else
+    /* riscv64's asm/unistd.h (plain asm-generic, without the kernel's
+     * __ARCH_WANT_RENAMEAT that x86_64/aarch64 opt into) has no renameat at all; the
+     * ABI-sanctioned replacement is renameat2 with flags == 0, which is by definition
+     * exactly renameat (see the comment in <asm-generic/unistd.h>). */
+    int ret = DO_SYSCALL(renameat2, AT_FDCWD, handle->file.realpath, AT_FDCWD, uri, 0);
+#endif
     if (ret < 0) {
         free(tmp);
         return unix_to_pal_error(ret);
@@ -356,7 +364,15 @@ static int dir_rename(PAL_HANDLE handle, const char* type, const char* uri) {
     if (!tmp)
         return -PAL_ERROR_NOMEM;
 
+#ifdef __NR_renameat
     int ret = DO_SYSCALL(renameat, AT_FDCWD, handle->dir.realpath, AT_FDCWD, uri);
+#else
+    /* riscv64's asm/unistd.h (plain asm-generic, without the kernel's
+     * __ARCH_WANT_RENAMEAT that x86_64/aarch64 opt into) has no renameat at all; the
+     * ABI-sanctioned replacement is renameat2 with flags == 0, which is by definition
+     * exactly renameat (see the comment in <asm-generic/unistd.h>). */
+    int ret = DO_SYSCALL(renameat2, AT_FDCWD, handle->dir.realpath, AT_FDCWD, uri, 0);
+#endif
     if (ret < 0) {
         free(tmp);
         return unix_to_pal_error(ret);

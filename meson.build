@@ -63,6 +63,24 @@ cc = meson.get_compiler('c')
 host_has_glibc = cc.get_define('__GLIBC__', prefix: '#include <features.h>') != ''
 objcopy = find_program('objcopy')
 
+# Cross builds (riscv64 port, Documentation/devel/riscv/plan.md Phase 1): some build steps
+# *execute* binaries compiled for the target machine -- notably the generated-offsets
+# printers, whose stdout is captured into `asm_offsets.h`. Meson's `custom_target()` runs
+# its command on the build machine *without* applying the cross file's `exe_wrapper`
+# (only `test()` gets that), so build files that exec a target binary must prepend the
+# wrapper themselves. Native builds get an empty prefix. (Requires meson >= 0.57 for
+# get_external_property; that is only evaluated under is_cross_build(), and the riscv64
+# cross container ships meson 1.x; the >=0.56 floor above stays for native users.)
+if meson.is_cross_build()
+    gramine_exe_wrapper = meson.get_external_property('exe_wrapper', [])
+    if gramine_exe_wrapper == []
+        error('cross build requires an `exe_wrapper` property in the cross file ' +
+              '(see scripts/riscv64/meson-cross.ini)')
+    endif
+else
+    gramine_exe_wrapper = []
+endif
+
 pythonmod = import('python')
 python3 = pythonmod.find_installation('python3')
 # TODO: after meson 0.60 (already in Debian, Ubuntu from jammy, not yet in RHEL), use
@@ -209,12 +227,15 @@ if host_machine.cpu_family() == 'x86_64'
         '-mstack-protector-guard-offset=8',
     ]
 else
-    # aarch64 (Milestone A, single-threaded stopgap): PAL_TCB is reached via a plain exported
-    # global (g_pal_tcb_singleton, see pal_get_tcb() in pal/include/arch/aarch64/pal_arch.h), not
-    # a dedicated system register -- aarch64 has no spare EL0-writable register the way x86_64
-    # has %gs free alongside %fs, since TPIDR_EL0 is the one register the real ABI requires for
-    # the application's own libc TLS. So there's no register-relative canary scheme to wire up
-    # here; fall back to the generic (per-TU global canary) stack protector.
+    # aarch64 (Milestone A, single-threaded stopgap) and riscv64: PAL_TCB is reached via a plain
+    # exported global (g_pal_tcb_singleton, see pal_get_tcb() in
+    # pal/include/arch/<arch>/pal_arch.h), not a dedicated system register -- neither has a spare
+    # EL0-writable register the way x86_64 has %gs free alongside %fs, since TPIDR_EL0 (aarch64)
+    # and the user-writeable `tp` (riscv64) are the one register the real ABI requires for the
+    # application's own libc TLS. So there's no register-relative canary scheme to wire up here;
+    # fall back to the generic (per-TU global canary) stack protector. On riscv64 the cross gcc
+    # also defaults to `-mstack-protector-guard=global`, i.e. exactly the canary-from-
+    # `__stack_chk_guard`-global codegen this scheme provides (stack_protector.c).
     cflags_custom_stack_protector = [
         '-fstack-protector-strong',
     ]

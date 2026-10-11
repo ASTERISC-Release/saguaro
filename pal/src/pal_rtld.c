@@ -39,14 +39,16 @@
 #include "pal_internal.h"
 #include "pal_rtld.h"
 
-#ifdef __aarch64__
+#if defined(__aarch64__) || defined(__riscv)
 /*
  * This whole file is, by construction, the code that runs *before* libpal.so's own GOT is
  * populated: setup_pal_binary() -> perform_relocations(&g_pal_map) is exactly the self-relocation
  * step (see the RELOC_TYPE_* comment below). aarch64's generic (non-register-relative) stack
- * protector reads its canary from the `__stack_chk_guard` global via a GOT-indirect load (see
- * common/src/stack_protector.c's comment on why aarch64 has no %gs-like register-relative
- * scheme), which crashes the exact same way g_pal_tcb_singleton did before pal_arch.h's fix: the
+ * protector (riscv64 too: same generic global-canary scheme, see the top-level meson.build's
+ * cflags_custom_stack_protector else-branch and common/src/stack_protector.c's comment on why
+ * neither has a %gs-like register-relative scheme) reads its canary from the
+ * `__stack_chk_guard` global via a GOT-indirect load, which crashes the exact same way
+ * g_pal_tcb_singleton did before pal_arch.h's fix: the
  * GOT slot isn't populated yet, so the load returns NULL and the dereference faults. Unlike
  * g_pal_tcb_singleton, there's no "direct addressing" fix available here -- GCC, not hand-written
  * asm, emits the canary check at every protected function's prologue/epilogue -- so the only way
@@ -81,6 +83,18 @@ extern const elf_ehdr_t __ehdr_start __attribute__((visibility("hidden")));
 #define RELOC_TYPE_RELATIVE  R_AARCH64_RELATIVE
 #define RELOC_TYPE_GLOB_DAT  R_AARCH64_GLOB_DAT
 #define RELOC_TYPE_JUMP_SLOT R_AARCH64_JUMP_SLOT
+#elif defined(__riscv)
+/* riscv64 has *no* GLOB_DAT relocation type at all: ordinary GOT-slot data relocations are
+ * R_RISCV_64 (symbol+addend, exactly aarch64's R_AARCH64_ABS64 role) -- see the GLOB_DAT
+ * comment above; binding the name to it means the one accept-branch below covers riscv64's
+ * GOT entries with no extra #ifdef, and find_symbol_in_loaded_maps() resolves their symbol
+ * index the same way. R_RISCV_RELATIVE/R_RISCV_JUMP_SLOT have the usual meaning. (This assumes
+ * the linker emits RELA, which riscv64's psABI does for the ET_DYN/PIE objects Gramine builds;
+ * a REL-format `--emit-relocs` oddity would be rejected loudly by the loop below, not
+ * silently misapplied.) */
+#define RELOC_TYPE_RELATIVE  R_RISCV_RELATIVE
+#define RELOC_TYPE_GLOB_DAT  R_RISCV_64
+#define RELOC_TYPE_JUMP_SLOT R_RISCV_JUMP_SLOT
 #else
 #error "Unsupported architecture"
 #endif
@@ -981,6 +995,19 @@ noreturn void start_execution(const char** arguments, const char** environs) {
                      "br %1\n"
                      : "+r"(stack_entries)
                      : "r"(g_entrypoint_map.l_entry)
+                     : "memory");
+#elif defined(__riscv)
+    /* Same 16-byte-alignment requirement as the aarch64 branch above (riscv64 psABI mandates it
+     * unconditionally, at every point, not just at entry -- unlike x86_64's 8-byte entry-only
+     * rule, which is why x86's version above just does `movq rsp`). `andi` reaches the -16 mask
+     * as a 12-bit sign-extended immediate (aarch64 needed the `and` with its logical-imm
+     * encoding); `jr` is the register-indirect jump (`call`/`jal` would *write* ra, which the
+     * loaded program must not observe as leftover Gramine state -- aarch64's `br` has the same
+     * non-clobbering property for a reason). */
+    __asm__ volatile("andi sp, %0, -16\n"
+                     "jr %1\n"
+                     :
+                     : "r"(stack_entries), "r"(g_entrypoint_map.l_entry)
                      : "memory");
 #else
 #error "unsupported architecture"

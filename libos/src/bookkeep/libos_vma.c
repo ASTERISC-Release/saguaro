@@ -369,9 +369,9 @@ static MEM_MGR vma_mgr = NULL;
  * the pointer (small optimization not to add more fields to TCB - can be removed if the max list
  * size needs to be increased or any supported architecture does not allow for it).
  */
-#if !defined(__x86_64__) && !defined(__aarch64__)
+#if !defined(__x86_64__) && !defined(__aarch64__) && !defined(__riscv)
 /* If this optimization will work on the architecture you port Gramine to, add it to the check
- * above. aarch64 qualifies the same way x86_64 does: `struct libos_vma` is naturally
+ * above. aarch64 and riscv64 qualify the same way x86_64 does: `struct libos_vma` is naturally
  * pointer-aligned (>= 4 bytes), so its low 2 bits are always zero and free to repurpose. */
 #error "This optimization requires specific representation of pointers."
 #endif

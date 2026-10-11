@@ -854,9 +854,21 @@ bool handle_signal(PAL_CONTEXT* context) {
         set_sig_mask(current, &new_mask);
         unlock(&current->lock);
 
+#ifdef SA_RESTORER
         prepare_sigframe(context, &signal.siginfo, handler,
                          sa->sa_flags & SA_RESTORER ? sa->sa_restorer : NULL,
                          !!(sa->sa_flags & SA_ONSTACK), &old_mask);
+#else
+        /* riscv64: the kernel ABI has no SA_RESTORER mechanism at all (unlike x86_64, and
+         * unlike aarch64 whose own asm/signal.h -- not asm-generic -- defines the flag;
+         * asm-generic only mentions SA_RESTORER in a comment and guards its uses with
+         * #ifdef). The guest libc therefore never passes a restorer, and prepare_sigframe()
+         * must install the return path itself -- via libos_rt_sigreturn_trampoline_addr(),
+         * the riscv64 counterpart of aarch64 finding #5. Passing NULL here matches what the
+         * aarch64 code path does for a handler registered *without* SA_RESTORER. */
+        prepare_sigframe(context, &signal.siginfo, handler, NULL,
+                         !!(sa->sa_flags & SA_ONSTACK), &old_mask);
+#endif
 
         if (sa->sa_flags & SA_RESETHAND) {
             /* borysp: In my opinion it should be `sigaction_make_defaults(sa);`, but Linux does

@@ -481,6 +481,43 @@ static inline void erase_memory(void* buffer, size_t size) {
         p[i] = 0;
 }
 
+#elif defined(__riscv)
+/* Same logic as the aarch64 branch above (duplicated for the same reason: not touching the
+ * already-ported paths while porting). The "last page" check is a property of Gramine's own
+ * address-space policy, not of x86_64: it refers to the top of the *userspace* VA range, which
+ * on riscv64 sv48 ends at (1 << 47) - 1 -- well below the UINTPTR_MAX-ish `~(PAGE_SIZE-1)`
+ * pattern matched here. riscv64 sv57 would in principle extend the unusable-top window, but
+ * Gramine's own ARCH_HIGHEST_ADDR clamp (pal_host_arch.h) keeps mappings out of that region
+ * regardless, so the check stays both correct and conservative. */
+static inline bool __range_not_ok(uintptr_t addr, size_t size) {
+    addr += size;
+    if (addr < size) {
+        /* pointer arithmetic overflow */
+        return true;
+    }
+    if ((addr & ~(PAGE_SIZE - 1)) == ~(PAGE_SIZE - 1)) {
+        /* Disallow the very last page of memory. In C it's legal to have a pointer to the byte
+         * after an object (end), yet that would wrap the pointer, which would be wrong. Also it
+         * could be dangerous to map stuff there. */
+        return true;
+    }
+    return false;
+}
+
+/* Check if pointer to memory region is valid. Return true if the memory
+ * region may be valid, false if it is definitely invalid. */
+static inline bool access_ok(const volatile void* addr, size_t size) {
+    return !__range_not_ok((uintptr_t)addr, size);
+}
+
+/* `rep stosb` has no riscv64 equivalent; same volatile-byte-store-loop reasoning as the aarch64
+ * branch (volatile accesses are never dead-store-eliminated). */
+static inline void erase_memory(void* buffer, size_t size) {
+    volatile uint8_t* p = (volatile uint8_t*)buffer;
+    for (size_t i = 0; i < size; i++)
+        p[i] = 0;
+}
+
 #else
 #error "Unsupported architecture"
 #endif /* __x86_64__ */
