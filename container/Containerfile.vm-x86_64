@@ -54,6 +54,14 @@ RUN apt-get update && \
       python3-venv flex libsdl2-dev \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# Build dependencies of the larger graphics examples (CI-Examples/graphics/supertuxkart).
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      subversion libbluetooth-dev libcurl4-openssl-dev libenet-dev libfreetype-dev \
+      libharfbuzz-dev libjpeg-dev libogg-dev libopenal-dev libpng-dev libssl-dev libvorbis-dev \
+      libmbedtls-dev libsqlite3-dev \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
 RUN touch /var/lib/gramine-vm-x86_64
 WORKDIR /root
 

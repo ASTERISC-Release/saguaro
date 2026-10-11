@@ -1,0 +1,30 @@
+diff --git a/src/input/input_manager.cpp b/src/input/input_manager.cpp
+index 2ba106af7..1ba5fcfd3 100644
+--- a/src/input/input_manager.cpp
++++ b/src/input/input_manager.cpp
+@@ -110,6 +110,9 @@ InputManager::InputManager() : m_mode(BOOTSTRAP),
+
+     m_master_player_only = false;
+ #ifndef SERVER_ONLY
++    const bool gramine_vm = SDL_getenv("EGL_GRAMINE") != NULL ||
++                            SDL_getenv("IVSHMEM_GRAMINE_VM") != NULL;
++
+ #ifdef __SWITCH__
+     padConfigureInput(8, HidNpadStyleSet_NpadStandard);
+     // Otherwise we report 'B' as 'A' (like Xbox controller)
+@@ -118,13 +121,13 @@ InputManager::InputManager() : m_mode(BOOTSTRAP),
+         "53776974636820436F6E74726F6C6C65,Switch Controller,a:b0,b:b1,back:b11,dpdown:b15,dpleft:b12,dpright:b14,dpup:b13,leftshoulder:b6,leftstick:b4,lefttrigger:b8,leftx:a0,lefty:a1,rightshoulder:b7,rightstick:b5,righttrigger:b9,rightx:a2,righty:a3,start:b10,x:b2,y:b3,\n"
+     );
+ #endif // __SWITCH__
+-    if (SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER) != 0)
++    if (!gramine_vm && SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER) != 0)
+     {
+         Log::error("InputManager", "Failed to init SDL game controller: %s",
+             SDL_GetError());
+     }
+
+-    if (SDL_InitSubSystem(SDL_INIT_HAPTIC) != 0)
++    if (!gramine_vm && SDL_InitSubSystem(SDL_INIT_HAPTIC) != 0)
+     {
+         Log::error("InputManager", "Failed to init SDL haptics: %s",
+             SDL_GetError());

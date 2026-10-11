@@ -1,0 +1,140 @@
+diff --git a/src/modes/profile_world.cpp b/src/modes/profile_world.cpp
+index 1c6f6d198..d9472602d 100644
+--- a/src/modes/profile_world.cpp
++++ b/src/modes/profile_world.cpp
+@@ -28,6 +28,7 @@
+ #include <ISceneManager.h>
+ #include <IVideoDriver.h>
+ 
++#include <algorithm>
+ #include <iomanip>
+ #include <iostream>
+ #include <sstream>
+@@ -51,6 +52,7 @@ ProfileWorld::ProfileWorld()
+     setPhase(RACE_PHASE);
+     m_frame_count      = 0;
+     m_start_time       = irr_driver->getRealTime();
++    m_last_frame_time  = std::chrono::steady_clock::now();
+     m_num_triangles    = 0;
+     m_num_culls        = 0;
+     m_num_solid        = 0;
+@@ -156,7 +158,11 @@ void ProfileWorld::update(int ticks)
+ {
+     StandardRace::update(ticks);
+ 
+-    m_frame_count++;
++    if (GUIEngine::isNoGraphics())
++    {
++        recordFrameTime();
++        m_frame_count++;
++    }
+     video::IVideoDriver *driver = irr_driver->getVideoDriver();
+     io::IAttributes   *attr = irr_driver->getSceneManager()->getParameters();
+     m_num_triangles    += (int)(driver->getPrimitiveCountDrawn( 0 )
+@@ -169,6 +175,29 @@ void ProfileWorld::update(int ticks)
+ 
+ }   // update
+ 
++//-----------------------------------------------------------------------------
++void ProfileWorld::recordFrameTime()
++{
++    const std::chrono::steady_clock::time_point current_time =
++        std::chrono::steady_clock::now();
++    const std::chrono::duration<double> frame_time =
++        current_time - m_last_frame_time;
++
++    if (m_frame_count > 0 && frame_time.count() > 0.0)
++        m_frame_times.push_back(frame_time.count());
++
++    m_last_frame_time = current_time;
++}   // recordFrameTime
++
++//-----------------------------------------------------------------------------
++/** Counts rendered frames for profile FPS statistics. */
++void ProfileWorld::updateGraphics(float dt)
++{
++    StandardRace::updateGraphics(dt);
++    recordFrameTime();
++    m_frame_count++;
++}   // updateGraphics
++
+ //-----------------------------------------------------------------------------
+ /** This function is called when the race is finished, but end-of-race
+  *  animations have still to be played. In the case of profiling,
+@@ -203,8 +232,27 @@ void ProfileWorld::enterRaceOverState()
+ 
+     // Print framerate statistics
+     float runtime = (irr_driver->getRealTime()-m_start_time)*0.001f;
+-    Log::verbose("profile", "Number of frames: %d time %f, Average FPS: %f",
+-                 m_frame_count, runtime, (float)m_frame_count/runtime);
++    float one_percent_low_fps = 0.0f;
++    float min_fps = 0.0f;
++    if (!m_frame_times.empty())
++    {
++        std::vector<double> sorted_frame_times = m_frame_times;
++        std::sort(sorted_frame_times.rbegin(), sorted_frame_times.rend());
++
++        size_t one_percent_frame_count =
++            std::max<size_t>(1, (sorted_frame_times.size() + 99) / 100);
++        double one_percent_frame_time = 0.0;
++        for (size_t i = 0; i < one_percent_frame_count; i++)
++            one_percent_frame_time += sorted_frame_times[i];
++
++        one_percent_low_fps =
++            (float)(one_percent_frame_count / one_percent_frame_time);
++        min_fps = (float)(1.0 / sorted_frame_times[0]);
++    }
++
++    Log::verbose("profile", "Number of frames: %d time %f, Average FPS: %f, 1%% Low FPS: %f, Min FPS: %f",
++                 m_frame_count, runtime, (float)m_frame_count/runtime,
++                 one_percent_low_fps, min_fps);
+ 
+     // Print geometry statistics if we're not in no-graphics mode
+     if(!GUIEngine::isNoGraphics())
+diff --git a/src/modes/profile_world.hpp b/src/modes/profile_world.hpp
+index ff90a07cf..ab6705915 100644
+--- a/src/modes/profile_world.hpp
++++ b/src/modes/profile_world.hpp
+@@ -21,6 +21,9 @@
+ 
+ #include "modes/standard_race.hpp"
+ 
++#include <chrono>
++#include <vector>
++
+ class Kart;
+ 
+ /**
+@@ -42,9 +45,15 @@ private:
+     /** Return value of real time at start of race. */
+     unsigned int m_start_time;
+ 
++    /** Wall-clock time of the previous frame. */
++    std::chrono::steady_clock::time_point m_last_frame_time;
++
+     /** Number of frames. For statistics only. */
+     int          m_frame_count;
+ 
++    /** Rendered frame durations, in seconds, for FPS statistics. */
++    std::vector<double> m_frame_times;
++
+     /** Number of primitives drawn (in 1000). */
+     long long    m_num_triangles;
+ 
+@@ -63,6 +72,8 @@ private:
+     /** Number of calls to draw. */
+     long long    m_num_calls;
+ 
++    void recordFrameTime();
++
+ protected:
+     /** In laps based profiling: number of laps to run. Also
+      *  used by DemoWorld. */
+@@ -79,6 +90,7 @@ public:
+     /** Returns identifier for this world. */
+     virtual  std::string getInternalCode() const {return "PROFILE"; }
+     virtual  void        update(int ticks);
++    virtual  void        updateGraphics(float dt) OVERRIDE;
+     virtual  bool        isRaceOver();
+     virtual  void        enterRaceOverState();
+ 

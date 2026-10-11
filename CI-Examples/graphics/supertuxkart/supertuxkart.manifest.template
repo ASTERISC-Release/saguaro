@@ -1,0 +1,63 @@
+# SuperTuxKart under gramine-vm with the Tirith graphics redirection (x86_64).
+
+libos.entrypoint = "/supertuxkart/stk-build/stk-code/cmake_build/bin/supertuxkart"
+
+sys.stack.size = "32M"
+libos.check_invalid_pointers = false
+
+loader.log_level = "{{ log_level }}"
+loader.insecure__use_host_env = true
+{% if startup_probe is defined and startup_probe %}
+loader.argv = ["supertuxkart", "--race-now", "--benchmark", "--profile-time={{ profile_time }}", "--screensize=1920x1080", "--windowed", "--seed=11", "--track=abyss", "--kart=konqi"]
+{% else %}
+loader.argv = ["supertuxkart", "--race-now", "--screensize=1920x1080", "--seed=11", "--track=abyss", "--kart=konqi"]
+{% endif %}
+
+loader.env.LD_LIBRARY_PATH = "/lib:/usr/lib:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu"
+loader.env.LD_PRELOAD = "./egl_backend.so"
+loader.env.HOME = "/root"
+loader.env.XDG_CONFIG_HOME = "/root/.config"
+loader.env.XDG_DATA_HOME = "/root/.local/share"
+loader.env.XDG_CACHE_HOME = "/root/.cache"
+loader.env.USER = "root"
+loader.env.DISPLAY = "2:0"
+loader.env.IVSHMEM_GRAMINE_VM = "1"
+loader.env.HOST_SDL_WINDOW = "1"
+loader.env.GALLIUM_THREAD = "0"
+loader.env.GLIBC_TUNABLES = "glibc.pthread.rseq=0"
+loader.env.__GL_SYNC_TO_VBLANK = "0"
+loader.env.vblank_mode = "0"
+loader.env.SUPERTUXKART_DATADIR = "/supertuxkart/stk-build/stk-code/"
+loader.env.ALSOFT_DRIVERS = "alsa"
+loader.env.SDL_AUDIODRIVER = "dummy"
+loader.env.SDL_VIDEODRIVER = "x11"
+loader.env.PULSE_SERVER = "none"
+loader.env.PIPEWIRE_REMOTE = "none"
+loader.env.EGL_GRAMINE = "1"
+loader.env.EGL_DISCRETE = "0"
+
+fs.mounts = [
+  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "/egl_backend.so", uri = "file:{{ egl_backend }}" },
+
+  # Stock Mesa, SDL and X libraries from the host root
+  { path = "/usr", type = "chroot", uri = "file:/usr" },
+
+  { path = "/etc/ld.so.cache", uri = "file:/etc/ld.so.cache" },
+  { path = "/etc/localtime", uri = "file:/etc/localtime" },
+  { path = "/sys", type = "chroot", uri = "file:/sys" },
+  { path = "/sys/dev", type = "chroot", uri = "file:/sys/dev" },
+  { path = "/sys/devices", type = "chroot", uri = "file:/sys/devices" },
+  { path = "/sys/bus/pci", type = "chroot", uri = "file:/sys/bus/pci" },
+
+  # The game, its assets, and its configuration, data and shader-cache directories. The guest
+  # paths under /root are fixed: the LibOS forwards /root/.cache to the host by that name.
+  { path = "/supertuxkart", type = "chroot", uri = "file:{{ stk_dir }}" },
+  { path = "/supertuxkart/stk-build/stk-code/stk-assets", type = "chroot", uri = "file:{{ stk_dir }}/stk-build/stk-assets" },
+  { path = "/root/.config", type = "chroot", uri = "file:{{ home }}/.config" },
+  { path = "/root/.local/share", type = "chroot", uri = "file:{{ home }}/.local/share" },
+  { path = "/root/.cache", type = "chroot", uri = "file:{{ home }}/.cache" },
+]
+
+sgx.debug = true
+sgx.edmm_enable = {{ 'true' if env.get('EDMM', '0') == '1' else 'false' }}
