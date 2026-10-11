@@ -73,9 +73,10 @@ x86_64::
     scripts/install.sh --vm --graphics disabled [--tdx] [--sgx]
     sudo ln -sf /usr/libexec/virtiofsd /usr/local/bin/virtiofsd    # if `command -v virtiofsd` finds nothing
 
-The x86_64 vm PAL is inherited from upstream gramine-tdx. ``gramine-vm`` uses the repository's QEMU fork
-(``qemu/build/qemu-system-x86_64``) when it exists and otherwise a stock ``qemu-system-x86_64`` from
-``PATH``; set ``QEMU_PATH`` to choose one. TDX and the graphics redirection need the fork.
+The x86_64 vm PAL is inherited from upstream gramine-tdx. ``gramine-vm`` runs the QEMU named by
+``QEMU_PATH`` and otherwise a stock ``qemu-system-x86_64`` from ``PATH``. TDX and the graphics
+redirection need a QEMU fork that is kept outside this repository; for graphics see
+``Documentation/devel/graphics/running.md``.
 
 Running an application under the VM PAL is described in ``Documentation/devel/vm.md``: the manifest's
 loader entrypoint must point at the VM ``libsysdb.so`` (``make`` against the VM install does this) and
