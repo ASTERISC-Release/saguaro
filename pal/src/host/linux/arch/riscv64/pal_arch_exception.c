@@ -21,8 +21,11 @@
 
 #include <assert.h>  /* static_assert for the PAL_TCB registry layout */
 #include <stdatomic.h>
+#include <stdnoreturn.h>
 
 #include "pal_internal.h"
+#include "pal_linux.h"
+#include "pal_linux_defs.h"
 
 #include "sigreturn.h"
 #include "sigset.h"
@@ -231,8 +234,98 @@ void pal_arch_handle_trap(ucontext_t* uc) {
     if (is_ebreak && uc->uc_mcontext.sc_regs.a7 == PAL_BRK_RESTORE_CONTEXT) {
         PAL_CONTEXT* ctx = (PAL_CONTEXT*)uc->uc_mcontext.sc_regs.a0;
         ctx->pstate &= ~PAL_PSTATE_EXACT_CONTEXT;
+        /* A syscall-entry context carries no F/D register file, only fcsr (the LibOS saves no
+         * FP registers at syscall entry). The live registers in `uc` are then the ones to
+         * resume with; pal_context_to_ucontext() would zero them. */
+        bool has_fpregs = ctx->is_fpregs_used && ctx->fpregs;
+        struct riscv_d_ext_state live_fp = uc->uc_mcontext.sc_fpregs.d;
         pal_context_to_ucontext(uc, ctx);
+        if (!has_fpregs) {
+            live_fp.fcsr = ctx->fcsr;
+            uc->uc_mcontext.sc_fpregs.d = live_fp;
+        }
         return;
     }
     arch_do_rt_sigaction(SIGTRAP, SIG_DFL, NULL, 0);
+}
+
+/*
+ * Resumes `ctx` exactly: all 31 general-purpose registers, the pc and the F/D state at once. Used
+ * by the LibOS for every return to the application (libos/src/arch/riscv64/syscallas.S explains
+ * why no register can be given up for a user-mode jump).
+ *
+ * Only the kernel can install a full register set, and rt_sigreturn() is the interface for it:
+ * it takes the state from a signal frame at `sp`, whoever built that frame. We build one on the
+ * current stack. Compared to the `ebreak` protocol above, which reaches the same sigreturn through
+ * a trap and a signal delivery, this costs two plain syscalls.
+ *
+ * Besides the registers, sigreturn installs the signal mask and the alternate stack from the
+ * frame, so both are filled with their current values.
+ */
+struct pal_rt_sigframe {
+    siginfo_t info;
+    ucontext_t uc;
+};
+
+noreturn void pal_arch_sigreturn_frame(void* rt_sigframe);
+
+__asm__(
+".pushsection .text\n"
+".type pal_arch_save_fpregs, @function\n"
+"pal_arch_save_fpregs:\n" /* a0: uint64_t f[32] */
+    "fsd  f0,  0(a0)\n"  "fsd  f1,  8(a0)\n"  "fsd  f2, 16(a0)\n"  "fsd  f3, 24(a0)\n"
+    "fsd  f4, 32(a0)\n"  "fsd  f5, 40(a0)\n"  "fsd  f6, 48(a0)\n"  "fsd  f7, 56(a0)\n"
+    "fsd  f8, 64(a0)\n"  "fsd  f9, 72(a0)\n"  "fsd f10, 80(a0)\n"  "fsd f11, 88(a0)\n"
+    "fsd f12, 96(a0)\n"  "fsd f13,104(a0)\n"  "fsd f14,112(a0)\n"  "fsd f15,120(a0)\n"
+    "fsd f16,128(a0)\n"  "fsd f17,136(a0)\n"  "fsd f18,144(a0)\n"  "fsd f19,152(a0)\n"
+    "fsd f20,160(a0)\n"  "fsd f21,168(a0)\n"  "fsd f22,176(a0)\n"  "fsd f23,184(a0)\n"
+    "fsd f24,192(a0)\n"  "fsd f25,200(a0)\n"  "fsd f26,208(a0)\n"  "fsd f27,216(a0)\n"
+    "fsd f28,224(a0)\n"  "fsd f29,232(a0)\n"  "fsd f30,240(a0)\n"  "fsd f31,248(a0)\n"
+    "ret\n"
+".popsection\n"
+);
+void pal_arch_save_fpregs(uint64_t* f);
+
+__attribute__((visibility("protected"))) noreturn void pal_arch_restore_context(PAL_CONTEXT* ctx) {
+    struct pal_rt_sigframe frame __attribute__((aligned(16)));
+
+    /* A syscall-entry context carries no F/D register file, only fcsr (the LibOS saves no FP
+     * registers at syscall entry, and neither it nor the PAL computes in floating point). The
+     * live registers are then the application's, and go into the frame first thing. */
+    bool has_fpregs = ctx->is_fpregs_used && ctx->fpregs;
+    struct riscv_d_ext_state* fp = &frame.uc.uc_mcontext.sc_fpregs.d;
+    if (!has_fpregs)
+        pal_arch_save_fpregs(fp->f);
+
+    frame.uc.uc_flags = 0;
+    frame.uc.uc_link = NULL;
+
+    PAL_LINUX_TCB* tcb = pal_get_linux_tcb();
+    if (tcb->alt_stack) {
+        frame.uc.uc_stack.ss_sp    = tcb->alt_stack;
+        frame.uc.uc_stack.ss_flags = 0;
+        frame.uc.uc_stack.ss_size  = ALT_STACK_SIZE - sizeof(*tcb);
+    } else {
+        frame.uc.uc_stack.ss_sp    = NULL;
+        frame.uc.uc_stack.ss_flags = SS_DISABLE;
+        frame.uc.uc_stack.ss_size  = 0;
+    }
+
+    DO_SYSCALL(rt_sigprocmask, SIG_SETMASK, NULL, &frame.uc.uc_sigmask, sizeof(__sigset_t));
+
+    ctx->pstate &= ~PAL_PSTATE_EXACT_CONTEXT;
+    if (has_fpregs) {
+        pal_context_to_ucontext(&frame.uc, ctx);
+    } else {
+        riscv_user_regs_from_array(&frame.uc.uc_mcontext.sc_regs, ctx->regs);
+        frame.uc.uc_mcontext.sc_regs.pc = ctx->pc;
+        fp->fcsr = ctx->fcsr;
+    }
+
+    /* No extension records (the kernel rejects a frame whose `reserved` word is not zero, and
+     * stops at an all-zero header). Vector state is out of scope for this port. */
+    frame.uc.uc_mcontext.sc_extdesc.reserved = 0;
+    frame.uc.uc_mcontext.sc_extdesc.hdr = (struct riscv_ctx_hdr){0};
+
+    pal_arch_sigreturn_frame(&frame);
 }

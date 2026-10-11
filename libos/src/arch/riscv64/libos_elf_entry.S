@@ -9,10 +9,12 @@
  * stack), fcsr cleared, and a 16-byte-aligned sp.
  *
  * RISC-V-specific notes vs the aarch64 sibling:
- * - The jump target survives the register sweep in a0 itself (the analog of aarch64's IP0/IP1
- *   X16/X17 choice): `jr a0` is the last instruction, so no scratch register is left clobbered,
- *   and riscv64 application startup code (crt1) reads argc/argv/envp from the *stack* and never
- *   inspects a0 anyway (same contract as the kernel's own execve entry).
+ * - `a0` must be zero: it is the one register the entry contract gives a meaning to. glibc's
+ *   _start passes it to __libc_start_main() as `rtld_fini`, which registers a non-zero value as
+ *   an exit handler. A dynamic executable is entered through ld.so, which sets it itself, but a
+ *   static one sees our value: with the entry address left in a0, exit() called _start again.
+ *   The jump target therefore travels in t1, a temporary no startup code reads (riscv64 has no
+ *   register-free indirect jump, so one register cannot be zero).
  * - `gp` is zeroed exactly like the kernel's trapframe does at exec. Applications must NOT
  *   depend on any pre-set gp: static non-PIE glibc/riscv64 crt1.S installs __global_pointer$
  *   itself as its very first act (`REGISTER_GP`), and PIE/ET_DYN images never use gp-relative
@@ -33,7 +35,9 @@
 call_elf_entry:
     mv   sp, a1           /* initial stack: argc/argv/envp/auxv live there */
     csrw fcsr, zero       /* fcsr = 0: nearest analog of "FPCR/NZCV zeroed" */
-    /* Zero every GPR except sp and a0 (which carries the jump target). */
+    /* Zero every GPR except sp and t1 (which carries the jump target). */
+    mv   t1, a0
+    li   a0, 0
     li   ra, 0
     li   gp, 0
     li   tp, 0
@@ -45,7 +49,6 @@ call_elf_entry:
     li   a6, 0
     li   a7, 0
     li   t0, 0
-    li   t1, 0
     li   t2, 0
     li   s0, 0
     li   s1, 0
@@ -63,6 +66,6 @@ call_elf_entry:
     li   t4, 0
     li   t5, 0
     li   t6, 0
-    jr   a0
+    jr   t1
 
 .section .note.GNU-stack,"",%progbits

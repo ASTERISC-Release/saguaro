@@ -4,28 +4,9 @@
 /*
  * riscv64 signal-context and syscall-emulation layer (port of the aarch64 libos_context.c).
  *
- * PHASE-1 STUBS: every function below aborts at runtime. The real riscv64 implementations are
- * Phase 4 of Documentation/devel/riscv/plan.md; the aarch64 sibling
- * (libos/src/arch/aarch64/libos_context.c, findings #5, #6, #15 in
- * Documentation/devel/aarch64/direct-pal-port-log.md) is the model. riscv64-relevant points the
- * real implementation must honor:
- *
- * - prepare_sigframe(): build the riscv64 rt signal frame -- all 32 GPRs (pc/ra/sp/gp/tp/... in
- *   struct riscv_user_regs field order) into sc_regs, the F/D d-state into sc_fpregs, and set the
- *   handler's return address (`ra`) to libos_rt_sigreturn_trampoline_addr() (riscv64 has no
- *   SA_RESTORER mechanism at all, same requirement as aarch64 finding #5; the kernel's own
- *   delivery pointing `ra` at the vDSO __kernel_rt_sigreturn is *not* available to us because we
- *   synthesize the frame ourselves).
- * - The frame is always exactly sizeof(struct riscv_d_ext_state) of scalar FP; the V record (if
- *   a vector-capable kernel ever adds one) must be preserved untouched -- see the V-transparency
- *   comment in pal/include/arch/riscv64/linux/ucontext.h.
- * - maybe_emulate_syscall(): seccomp-trap path; ucontext_revert_syscall() already rewinds pc by
- *   4 (riscv64 `ecall` is fixed-width).
- * - restart_syscall(): restore a0 from context->orig_a0 (a0 == arg0 == return value, the riscv64
- *   instance of aarch64's orig_x0 / x86_64's orig_rax).
- *
- * These stubs are never reached in a Phase-1 build (nothing runs the LibOS yet); the exit
- * criterion for Phase 1 is that the whole tree *compiles and links*, which these satisfy.
+ * The aarch64 sibling (libos/src/arch/aarch64/libos_context.c) is the model. Two riscv64
+ * differences drive most of what follows: `tp` is a general-purpose register (so it is part of
+ * the saved context), and a syscall must give back every register except a0 (see syscallas.S).
  */
 
 #include <stdalign.h>
@@ -40,10 +21,9 @@
 #include "pal.h"
 #include "ucontext.h"
 
-/* The tag _return_from_syscall() tests in assembly (syscallas.S spells the same constant); if
- * this ever changes, the `li` there must change with it. */
-static_assert(PAL_PSTATE_EXACT_CONTEXT == (1ULL << 62),
-              "syscallas.S hard-codes the exact-context tag bit");
+static_assert(offsetof(PAL_TCB, libos_tcb) + offsetof(libos_tcb_t, syscall_scratch_pc)
+                  == GRAMINE_SYSCALL_RESUME_OFFSET,
+              "GRAMINE_SYSCALL_RESUME_OFFSET must match");
 
 /* `struct libos_xstate` and `PAL_XREGS_STATE` are the same structure under two names (one for
  * LibOS, one for PAL), as on x86_64/aarch64 -- and on riscv64 both are exactly the kernel's
@@ -273,13 +253,13 @@ void restart_syscall(PAL_CONTEXT* context, uint64_t syscall_nr) {
      * reproduces it with orig_a0 -- aarch64 finding #6 verbatim). Without this, a restarted
      * `read(fd, ...)` would see fd = -ERESTARTSYS. */
     context->regs[10] = context->orig_a0;
-    /* Re-enter libos_syscall_entry with the resume address in `t0` (the entry contract). No write
-     * is needed here: libos_syscall_entry() itself wrote the resume address into regs[5], and
-     * nothing in the syscall-emulation path touches regs[5] -- so _return_from_syscall()
-     * restoring `t0` from regs[5] re-establishes the contract for the re-entry. context->pc is
-     * overwritten below, which is exactly what the entry expects (pc = entry point, t0 = where
-     * the restarted ecall returns to). */
-    context->pc = (uint64_t)&libos_syscall_entry;
+    /* Restart the way the kernel does: step back onto the application's own `ecall`, which
+     * traps again and comes back through maybe_emulate_syscall(). Jumping to
+     * libos_syscall_entry() directly is not possible: its resume address lives in the TCB, and
+     * this context may first be parked in a signal frame while a handler runs and issues
+     * syscalls of its own. Every emulated syscall on riscv64 comes from a 4-byte `ecall` (no
+     * syscall site is patched), so pc - 4 is exact. */
+    context->pc -= 4;
 }
 
 void restore_sigreturn_context(PAL_CONTEXT* context, __sigset_t* new_mask) {
@@ -313,27 +293,16 @@ bool maybe_emulate_syscall(PAL_CONTEXT* context) {
      * instruction, by 4 before the context ever reaches us). */
     bool is_ecall = pc[0] == 0x73 && pc[1] == 0x00 && pc[2] == 0x00 && pc[3] == 0x00;
     if (is_ecall || libos_syscall_site_was_patched((uintptr_t)pc)) {
-        /* Put the resume address ("the instruction after the trapped ecall") in `t0` -- the entry
-         * contract's designated carrier, matching gramine_entry_api.h's riscv64 macro (`auipc +
-         * addi t0, 24`) and regs[5]'s role as the restart mirror (see syscallas.S).
-         *
-         * This must NOT be regs[1]: riscv64's `ecall` destroys no registers (measured in the
-         * guest, Phase 3: the kernel doesn't even touch `ra`), so regs[1] at this point is the
-         * application's *live* link register -- leaf libc syscall wrappers `ret` through it
-         * immediately, and overwriting it corrupts the caller's return path into an infinite
-         * self-loop. That exact clobber was the root cause of the aarch64 helloworld hang
-         * (Documentation/devel/aarch64/direct-pal-port-log.md finding #1, riscv64 counterpart).
-         * regs[1] is instead saved and restored untouched as ordinary application state.
-         *
-         * No register shuffling for the syscall number: riscv64 keeps it in a7, separate from
-         * a0, and the kernel never overwrites it -- regs[17] already holds it. (x86_64 has to
-         * reconstruct it from rax; that conflation is why riscv64 also needed orig_a0 for
-         * restarts, not an orig_a7.)
+        /* Leave the resume address ("the instruction after the trapped ecall") in the TCB for
+         * libos_syscall_entry() and touch no register: the kernel's `ecall` preserves everything
+         * but a0, glibc's inline syscalls rely on that (even for t0-t6), and `ra` in particular
+         * is the application's live link register here. The syscall number is already where it
+         * belongs (a7 = regs[17]).
          *
          * `libos_syscall_site_was_patched()` is the aarch64 hook, permanently false here: the
-         * riscv64 port does no syscall-site rewriting (plan.md decisions), so a trapped ecall is
-         * always the application's original one. Kept so the shared code path stays arch-neutral. */
-        context->regs[5] = (uint64_t)pc + 4;
+         * riscv64 port does no syscall-site rewriting, so a trapped ecall is always the
+         * application's original one. Kept so the shared code path stays arch-neutral. */
+        LIBOS_TCB_SET(syscall_scratch_pc, (void*)(pc + 4));
         context->pc = (uint64_t)&libos_syscall_entry;
         return true;
     }

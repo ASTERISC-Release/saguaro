@@ -58,3 +58,4 @@ g_pal_tcb_registry
 libos_tcb_registry_add
 libos_tcb_registry_del
 libos_tcb_registry_scan
+pal_arch_restore_context

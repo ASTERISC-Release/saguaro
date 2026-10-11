@@ -65,10 +65,14 @@ mounts:
   - [ repo, $REPO, 9p, "trans=virtio,version=9p2000.L,msize=1048576,nofail,cache=none", "0", "0" ]
 package_update: true
 packages: [ python3-click, python3-jinja2, python3-pyelftools, python3-tomli, python3-tomli-w,
-            python3-voluptuous, python3-pytest, python3-cryptography, python3-toml, file, strace, gdb ]
+            python3-voluptuous, python3-pytest, python3-cryptography, python3-toml, file, strace, gdb,
+            binutils, libgomp1 ]
 runcmd:
   - mkdir -p $REPO
   - mount $REPO || true
+  # large_mmap maps more than the guest's RAM; the default heuristic overcommit refuses that.
+  - echo 'vm.overcommit_memory = 1' > /etc/sysctl.d/90-gramine-tests.conf
+  - sysctl -w vm.overcommit_memory=1
   - touch /var/lib/gramine-guest-ready
 USERDATA
         printf 'instance-id: gramine-riscv64-%s\nlocal-hostname: riscv64-guest\n' "$(date +%s)" \

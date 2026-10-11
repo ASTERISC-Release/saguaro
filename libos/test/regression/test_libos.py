@@ -665,10 +665,10 @@ class TC_30_Syscall(RegressionTestCase):
         stdout, _ = self.run_binary(['getdents'])
         self.assertIn('getdents: setup ok', stdout)
 
-        # Directory listing (32-bit). aarch64 has no legacy getdents syscall number at all
-        # (glibc's readdir() always uses getdents64 there), so the test binary has nothing to
-        # exercise for this sub-case and prints no lines; see the SYS_getdents guard there.
-        if platform.machine() != 'aarch64':
+        # Directory listing (32-bit). aarch64 and riscv64 have no legacy getdents syscall number
+        # at all (glibc's readdir() always uses getdents64 there), so the test binary has nothing
+        # to exercise for this sub-case and prints no lines; see the SYS_getdents guard there.
+        if platform.machine() not in ('aarch64', 'riscv64'):
             self.assertIn('getdents32: . [0x4]', stdout)
             self.assertIn('getdents32: .. [0x4]', stdout)
             self.assertIn('getdents32: file1 [0x8]', stdout)
@@ -1256,6 +1256,10 @@ class TC_40_FileSystem(RegressionTestCase):
 
     def get_cache_levels_cnt(self):
         cpu0 = '/sys/devices/system/cpu/cpu0/'
+        if platform.machine() == 'riscv64' and not os.path.exists(f'{cpu0}/cache/'):
+            # A RISC-V host may expose no cache information at all (QEMU's `virt` machine has
+            # none in its device tree); there is then nothing to compare against.
+            return 0
         self.assertTrue(os.path.exists(f'{cpu0}/cache/'))
 
         n = 0

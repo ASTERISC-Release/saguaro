@@ -134,6 +134,18 @@ syscall_rt_sigreturn:
     ecall
     .cfi_endproc
 
+.global pal_arch_sigreturn_frame
+.type pal_arch_sigreturn_frame, %function
+.align 4
+pal_arch_sigreturn_frame:
+    .cfi_startproc
+    /* noreturn void pal_arch_sigreturn_frame(void* rt_sigframe): rt_sigreturn() from a frame the
+     * caller built (see pal_arch_restore_context()); the kernel looks for the frame at `sp`. */
+    mv   sp, a0
+    li   a7, __NR_rt_sigreturn
+    ecall
+    .cfi_endproc
+
 .global _PalThreadExit_asm_stub
 .type _PalThreadExit_asm_stub, %function
 _PalThreadExit_asm_stub:
