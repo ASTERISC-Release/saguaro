@@ -462,9 +462,37 @@ static int perform_relocations(struct link_map* map) {
      * ABS64 -- see the RELOC_TYPE_* comment above) relas */
     elf_rela_t* relas_addr_end = (elf_rela_t*)((uintptr_t)relas_addr + relas_size);
     for (elf_rela_t* rela = relas_addr; rela < relas_addr_end; rela++) {
+#ifdef __riscv
+        /* riscv64 BFD ld lays `.rela.plt` *contiguously after* `.rela.dyn` and reports a
+         * DT_RELASZ that spans both (measured on our own libsysdb.so: 44064 = 42792 + 1272
+         * bytes = 1783 + 53 entries; RELACOUNT separately says 1779, the .rela.dyn-relative
+         * subset). A JUMP_SLOT entry in the DT_RELA walk is therefore normal on this
+         * architecture, not corruption: glibc's rtld likewise skips it here and lets the
+         * DT_JMPREL loop below apply it (which it does, exactly once per PLT slot). */
+        if (ELF_R_TYPE(rela->r_info) == R_RISCV_JUMP_SLOT) {
+            continue;
+        }
+#endif
         if (ELF_R_TYPE(rela->r_info) == RELOC_TYPE_RELATIVE) {
             elf_addr_t* addr_to_relocate = (elf_addr_t*)(rela->r_offset + base_diff);
+#ifdef __riscv
+            /* riscv64 uses the *pure RELA* convention: the addend lives in `r_addend` and the
+             * linker zeroes the relocation's memory target, so the value must be computed as
+             * load-base + r_addend. Measured against the same artifacts this file relocates:
+             * x86_64's (and, as its passing suite shows, aarch64's) ld leaves the link-time
+             * target in the slot's file content -- for riscv64's ld 2.42 the content at a
+             * RELATIVE target is 0. Reusing the additive formula there stored `0 + base` in every
+             * GOT slot, which is how a `vdso_clock_gettime` slot holding the load base came to
+             * be called and branched into the ELF header's e_entry (the read of the *wrong*
+             * field -- content instead of addend -- is invisible whenever a linker happens to
+             * leave the content; it is not a choice we get to make for riscv64).
+             * base_diff == the load base for every flavor this file handles: ET_DYN images here
+             * always have first p_vaddr == 0 (see the file comment), and ET_EXEC has base_diff 0
+             * with pre-relocated contents, which is why relocation is skipped for those anyway. */
+            *addr_to_relocate = base_diff + rela->r_addend;
+#else
             *addr_to_relocate = *addr_to_relocate + base_diff;
+#endif
             relas_count++;
         } else if (ELF_R_TYPE(rela->r_info) == RELOC_TYPE_GLOB_DAT
 #ifdef __aarch64__
@@ -479,8 +507,9 @@ static int perform_relocations(struct link_map* map) {
             elf_addr_t* addr_to_relocate = (elf_addr_t*)(rela->r_offset + base_diff);
             *addr_to_relocate = symbol_addr + rela->r_addend;
         } else {
-            log_error("Unrecognized relocation type; PAL loader currently supports only "
-                      "RELATIVE and GLOB_DAT relocations");
+            log_error("Unrecognized relocation type 0x%lx (at offset 0x%lx); PAL loader "
+                      "currently supports only RELATIVE and GLOB_DAT relocations",
+                      (unsigned long)ELF_R_TYPE(rela->r_info), (unsigned long)rela->r_offset);
             return -PAL_ERROR_DENIED;
         }
     }

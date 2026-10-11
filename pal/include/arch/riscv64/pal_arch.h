@@ -206,7 +206,8 @@ static inline PAL_TCB* pal_get_tcb(void) {
      * populated by the PAL's own ELF loader (pal_rtld) when libsysdb.so is mapped. Lazily
      * self-register the main thread here (finding #9's scheme on aarch64: the scan miss *is*
      * the main thread, idempotently), so later scans hit the registry. */
-    __asm__("la %0, g_pal_tcb_singleton\n"
+    __asm__("la   %0, g_pal_tcb_singleton\n"
+            "ld   %0, 0(%0)\n"
             : "=&r"(tcb)
             :
             : "memory");
@@ -262,12 +263,20 @@ static inline unsigned long count_ulong_bits_set(unsigned long x) {
 }
 
 /* holds /proc/cpuinfo data; on riscv64 these are filled from the host's per-hart /proc/cpuinfo
- * `uarch`/`isa` fields (see pal_cpuid.c) -- riscv64 has no CPUID-leaf vendor/family/model/
- * stepping scheme, but the field names/types are kept identical to x86_64's so generic code
- * (pal_main.c, libos/src/fs/proc/info.c) doesn't need to care. */
+ * `uarch`/`isa`/`mmu`/identity-CSR fields (see pal_cpuid.c) -- riscv64 has no CPUID-leaf
+ * vendor/family/model/stepping scheme, and the identity CSRs (mvendorid/marchid/mimpid) are
+ * supervisor-only, so the first three x86-shaped fields carry that triplet instead (0 on CPUs
+ * whose Device Tree carries no vendor info, e.g. QEMU `virt`), `cpu_brand` carries the `isa`
+ * string, and `cpu_vendor` the Device Tree `uarch` name when the host kernel prints one. The
+ * field names/types of the x86_64 record are kept as-is so generic code (pal_main.c, the LibOS
+ * proc_fs code) doesn't need to care; `cpu_mmu` is the one *addition*, because the
+ * riscv64 /proc/cpuinfo the LibOS renders must show the page-table mode (`sv39`/`sv48`/...),
+ * which has no x86_64 analog to hide behind -- the struct is architecture-private by
+ * construction (only the arch's own cpuid/cpuinfo code reads it), so this is free. */
 struct pal_cpu_info {
     const char* cpu_vendor;
     const char* cpu_brand;
+    const char* cpu_mmu;
     uint64_t cpu_family;
     uint64_t cpu_model;
     uint64_t cpu_stepping;

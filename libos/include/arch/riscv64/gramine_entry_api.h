@@ -44,8 +44,13 @@
  * hand-spelled distant label pairs ("dangerous relocation") -- so the resume address is computed
  * as `auipc t0, 0` (pc, no relocation at all) plus a constant `addi` over the macro's own fixed
  * length. `.option norelax` pins that length: under it the assembler expands
- * `la t1, <dynamic symbol>` to exactly two instructions (GOT-slot load), making the whole macro
- * exactly six 4-byte instructions with the resume site at +24 from the `auipc`. The label below
+ * `la t1, <dynamic symbol>` to exactly two instructions (GOT-slot load of the symbol's *address*),
+ * making the whole macro exactly seven 4-byte instructions with the resume site at +28 from the
+ * `auipc`: auipc, addi, la's auipc, la's ld, the variable-content load, the
+ * libos_syscall_entry load, jr. (The variable-content load is load-bearing: `la` yields the
+ * symbol's address -- riscv64 has no RIP/PC-relative direct data access for preemptible symbols
+ * -- so dereferencing +GRAMINE_SYSCALL_OFFSET from that address reads unrelated libpal .bss,
+ * which is exactly how every gcall originally branched to a null-ish junk target.) The label below
  * marks that site; an assembler that ever breaks the norelax size guarantee would break this
  * macro too -- the static test for that is the `sigreturn_regs`-style harness, not a
  * compile-time check (patched-libc fast path is deferred anyway, see the file comment).
@@ -54,8 +59,11 @@
     .option push
     .option norelax
     auipc t0, 0            /* t0 = pc of this auipc */
-    addi  t0, t0, 24       /* t0 = address of the `1:` resume site (see the size comment above) */
-    la    t1, g_pal_tcb_singleton  /* t1 = this thread's PAL_TCB (GOT load at link time) */
+    addi  t0, t0, 28       /* t0 = address of the `1:` resume site (see the size comment above) */
+    la    t1, g_pal_tcb_singleton  /* t1 = &g_pal_tcb_singleton (the GOT slot's symbol value) */
+    ld    t1, 0(t1)        /* t1 = the thread's PAL_TCB (the *variable's* value -- a GOT load
+                              alone yields the symbol's address, not its contents: `la` is
+                              `auipc + ld`, not `lla + ld` as in the IN_PAL pal_get_tcb()) */
     ld    t1, GRAMINE_SYSCALL_OFFSET(t1)  /* t1 = the libos_syscall_entry pointer */
     jr    t1
 1:
@@ -75,8 +83,9 @@ __asm__(
     ".option push\n"
     ".option norelax\n"
     "auipc t0, 0\n"
-    "addi t0, t0, 24\n"
+    "addi t0, t0, 28\n"
     "la t1, g_pal_tcb_singleton\n"
+    "ld t1, 0(t1)\n"
     "ld t1, " GRAMINE_XSTR(GRAMINE_SYSCALL_OFFSET) "(t1)\n"
     "jr t1\n"
     "1:\n"

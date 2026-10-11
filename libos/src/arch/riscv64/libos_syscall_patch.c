@@ -34,16 +34,19 @@ bool libos_syscall_site_was_patched(uintptr_t pc) {
 }
 
 /*
- * SIGILL classification for Gramine-internal addresses (illegal_upcall()). The real riscv64
- * implementation (Phase 4) whitelists exactly the `ecall` inside the LibOS's own
- * rt_sigreturn trampoline (see libos_internal_arch.h's prototype comment) -- the same scheme as
- * aarch64 finding #5, since riscv64 (like arm64) also never uses an application-visible
- * SA_RESTORER. Until the trampoline exists, nothing internal can legitimately take a SIGILL, so
- * report "not intentional" (illegal_upcall() then logs a Gramine-internal bug).
+ * SIGILL classification for Gramine-internal addresses (illegal_upcall()). Whitelists exactly
+ * the `ecall` inside the LibOS's own rt_sigreturn trampoline that prepare_sigframe() installs as
+ * every guest handler's return address -- the same scheme as aarch64 finding #5, since riscv64
+ * (like arm64) has no application-visible SA_RESTORER at all. The trap's PC is already reverted
+ * to the trapping instruction (ucontext_revert_syscall() in the shared SIGSYS handler), so
+ * whitelist precisely: anywhere in the trampoline's few words whose content is literally `ecall`
+ * (0x00000073), discovered by inspecting the instruction rather than hardcoding an offset.
+ * Anything else in Gramine-internal memory taking an illegal instruction remains a Gramine bug.
  */
 bool libos_arch_is_intentional_internal_insn(uintptr_t addr) {
-    __UNUSED(addr);
-    return false;
+    void* tramp = libos_rt_sigreturn_trampoline_addr();
+    return addr >= (uintptr_t)tramp && addr < (uintptr_t)tramp + 16
+           && *(const uint32_t*)addr == 0x00000073 /* ecall */;
 }
 
 /* riscv64 has no analog of aarch64's stale pointer-authentication signatures (no PAC in the
