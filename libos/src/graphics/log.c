@@ -1,3 +1,6 @@
+/* SPDX-License-Identifier: LGPL-3.0-or-later */
+/* Copyright (C) 2026 The ASTERISC Research Lab */
+
 #define _GNU_SOURCE
 #include <GL/gl.h>
 #include <GL/glx.h>

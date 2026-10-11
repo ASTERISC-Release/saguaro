@@ -81,6 +81,8 @@ def add_globals_from_gramine(env):
     env.globals['gramine'] = {
         'libos': pathlib.Path(_CONFIG_PKGLIBDIR) / 'libsysdb.so',
         'pkglibdir': pathlib.Path(_CONFIG_PKGLIBDIR),
+        # the graphics preload library; installed only with -Dgraphics=enabled and a VM-type PAL
+        'libgraphics': pathlib.Path(_CONFIG_PKGLIBDIR) / 'libgraphics.so',
         'runtimedir': Runtimedir(),
     }
 

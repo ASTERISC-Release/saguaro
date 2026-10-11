@@ -1,9 +1,12 @@
 # SPDX-License-Identifier: BSD-3-Clause
+# Copyright (C) 2026 The ASTERISC Research Lab
 
 # glxgears under gramine-vm with the Tirith graphics redirection (x86_64). See
 # Documentation/devel/graphics/ for the host setup (QEMU fork, X proxy).
 
-EGL_BACKEND_DIR = $(abspath ../egl-backend)
+# The graphics preload library is built and installed with Gramine (-Dgraphics=enabled and a
+# VM-type PAL); the manifest refers to it as gramine.libgraphics.
+GRAPHICS_LIB = $(shell python3 -c "import graminelibos; print(graminelibos._CONFIG_PKGLIBDIR)")/libgraphics.so
 
 CFLAGS = -Wall -Wextra
 LDLIBS = -lGL -lX11 -lm
@@ -20,11 +23,7 @@ CFLAGS += -O3
 endif
 
 .PHONY: all
-all: egl_backend glxgears glxgears.manifest
-
-.PHONY: egl_backend
-egl_backend:
-	$(MAKE) -C $(EGL_BACKEND_DIR)
+all: glxgears glxgears.manifest
 
 glxgears: glxgears.o
 	$(CC) $^ -o $@ $(LDLIBS)
@@ -36,7 +35,6 @@ glxgears.o: main.c
 glxgears.manifest: glxgears.manifest.template FORCE
 	gramine-manifest \
 		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
-		-Degl_backend=$(EGL_BACKEND_DIR)/egl_backend.so \
 		-Dshared_input=$(SHARED_INPUT) \
 		$< $@
 	gramine-manifest-check $@
@@ -44,7 +42,7 @@ glxgears.manifest: glxgears.manifest.template FORCE
 # Without Gramine: the preload library presents through its own X connection.
 .PHONY: run-native
 run-native: all
-	LD_PRELOAD=$(EGL_BACKEND_DIR)/egl_backend.so EGL_DISCRETE=$${EGL_DISCRETE:-0} ./glxgears
+	LD_PRELOAD=$(GRAPHICS_LIB) EGL_DISCRETE=$${EGL_DISCRETE:-0} ./glxgears
 
 .PHONY: run
 run: all

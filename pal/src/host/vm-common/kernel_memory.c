@@ -39,7 +39,7 @@ static void* HUGEPAGE_DATA_REGION           = (void*)0x200000000ULL;
 static inline bool is_egl_redirect_data_region_base(void* addr, size_t size) {
     if (addr == DATA_REGION || addr == HUGEPAGE_DATA_REGION) {
         size_t expected_size = addr == DATA_REGION ? DATA_REGION_SIZE : HUGEPAGE_REGION_SIZE;
-        /* In our setup, these bases are reserved exclusively for egl-backend regions and must be
+        /* In our setup, these bases are reserved exclusively for libgraphics regions and must be
          * mapped as a single fixed-size chunk. Fail loudly if assumptions are violated. */
         if (size != expected_size) {
             log_error("Unexpected mapping size at special base %p: got %lu, expected %lu",
@@ -614,7 +614,7 @@ int memory_preload_ranges(e820_table_entry* e820_entries, size_t e820_entries_si
             return -PAL_ERROR_DENIED;
     }
 
-    /* egl-backend maps these buffers at fixed addresses after program startup. Keep PAL and
+    /* libgraphics maps these buffers at fixed addresses after program startup. Keep PAL and
      * LibOS ASLR allocations out of the ranges, but allow those deliberate user mappings to
      * replace the reservations. */
     ret = callback((uintptr_t)DATA_REGION, DATA_REGION_SIZE, /*is_user_reserved=*/true,
@@ -815,7 +815,7 @@ int memory_alloc(void* addr, size_t size, bool read, bool write, bool execute) {
 #ifdef ASAN
     asan_unpoison_region((uintptr_t)addr, size);
 #endif
-    /* Keep the whole egl-backend reservation write-back cacheable. GEM mmap
+    /* Keep the whole libgraphics reservation write-back cacheable. GEM mmap
      * requests change only the ranges they actually consume to write-combining
      * through memory_protect() below. Marking all 4 GiB write-combining here
      * needlessly splits and invalidates page mappings that may never be used. */

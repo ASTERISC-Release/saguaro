@@ -1,9 +1,12 @@
 # SPDX-License-Identifier: BSD-3-Clause
+# Copyright (C) 2026 The ASTERISC Research Lab
 
 # SuperTuxKart under gramine-vm with the Tirith graphics redirection (x86_64). Build the game first
 # with ./install-stk.sh; see Documentation/devel/graphics/ for the host setup.
 
-EGL_BACKEND_DIR = $(abspath ../egl-backend)
+# The graphics preload library is built and installed with Gramine (-Dgraphics=enabled and a
+# VM-type PAL); the manifest refers to it as gramine.libgraphics.
+GRAPHICS_LIB = $(shell python3 -c "import graminelibos; print(graminelibos._CONFIG_PKGLIBDIR)")/libgraphics.so
 STK_DIR = $(abspath .)
 STK_BIN = stk-build/stk-code/cmake_build/bin/supertuxkart
 STK_ARGS ?= --race-now --screensize=1920x1080 --seed=11 --track=abyss --kart=konqi
@@ -22,18 +25,13 @@ endif
 
 MANIFEST_ARGS = \
 	-Dlog_level=$(GRAMINE_LOG_LEVEL) \
-	-Degl_backend=$(EGL_BACKEND_DIR)/egl_backend.so \
 	-Dstk_dir=$(STK_DIR) \
 	-Dhome=$(HOME) \
 	-Dprofile_time=$(PROFILE_TIME) \
 	-Dshared_input=$(SHARED_INPUT)
 
 .PHONY: all
-all: egl_backend supertuxkart.manifest supertuxkart-startup.manifest
-
-.PHONY: egl_backend
-egl_backend:
-	$(MAKE) -C $(EGL_BACKEND_DIR)
+all: supertuxkart.manifest supertuxkart-startup.manifest
 
 $(STK_BIN):
 	@echo "SuperTuxKart is not built: run ./install-stk.sh first" >&2; exit 1
@@ -55,8 +53,8 @@ dirs:
 # Without Gramine: the preload library presents through its own X connection. Run this once before
 # the first VM run; it creates the game's configuration under ~/.config/supertuxkart.
 .PHONY: run-native
-run-native: egl_backend $(STK_BIN) dirs
-	cd $(dir $(STK_BIN)) && LD_PRELOAD=$(EGL_BACKEND_DIR)/egl_backend.so \
+run-native: $(STK_BIN) dirs
+	cd $(dir $(STK_BIN)) && LD_PRELOAD=$(GRAPHICS_LIB) \
 		EGL_DISCRETE=$${EGL_DISCRETE:-0} SDL_AUDIODRIVER=dummy ./supertuxkart $(STK_ARGS)
 
 .PHONY: run-native-startup

@@ -40,9 +40,9 @@ RUN apt-get update && \
 # The rust example's dependencies need a cargo newer than noble's default 1.75 (edition2024).
 ENV PATH="/usr/lib/rust-1.85/bin:${PATH}"
 
-# Graphics layer (see Documentation/devel/graphics/): stock Mesa and the X/GL headers for
-# CI-Examples/graphics (the egl-backend preload library and the examples), socat for the vsock-to-X
-# proxy, and the packages needed to build the QEMU fork (qemu-tirith, kept outside this repository)
+# Graphics layer (see Documentation/devel/graphics/): stock Mesa and the X/GL/SDL2 headers for the
+# graphics preload library (libos/src/graphics) and CI-Examples/graphics, socat for the
+# vsock-to-X proxy, and the packages needed to build the QEMU fork (qemu-tirith, kept outside this repository)
 # with its graphics listener.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \

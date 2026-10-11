@@ -118,7 +118,7 @@ static bool shared_input_ring_enabled(void) {
     if (__atomic_load_n(&g_vsock_shared_input_ready, __ATOMIC_ACQUIRE))
         return true;
 
-    /* This opt-in is used only by graphics manifests. egl-backend maps and initializes the
+    /* This opt-in is used only by graphics manifests. libgraphics maps and initializes the
      * communication page before opening its X11 VSOCK connection; once the host enables the ring,
      * input delivery no longer depends on opportunistic VSOCK polling from the render loop. */
     uint64_t* pte;

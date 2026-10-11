@@ -76,7 +76,9 @@ x86_64::
 The x86_64 vm PAL is inherited from upstream gramine-tdx. ``gramine-vm`` runs the QEMU named by
 ``QEMU_PATH`` and otherwise a stock ``qemu-system-x86_64`` from ``PATH``. TDX and the graphics
 redirection need a QEMU fork that is kept outside this repository; for graphics see
-``Documentation/devel/graphics/running.md``.
+``Documentation/devel/graphics/running.md``. With graphics enabled (the default), ``--vm`` also builds
+the ``libgraphics.so`` preload library and therefore needs the Mesa, X and SDL2 development packages;
+pass ``--graphics disabled``, as above, to build without them.
 
 Running an application under the VM PAL is described in ``Documentation/devel/vm.md``: the manifest's
 loader entrypoint must point at the VM ``libsysdb.so`` (``make`` against the VM install does this) and

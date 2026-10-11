@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: BSD-3-Clause
+# Copyright (C) 2026 The ASTERISC Research Lab
 #
 # Fetch and build SuperTuxKart from source into ./stk-build (no root needed; the build dependencies
 # are in the x86_64 container image, see container/Containerfile.vm-x86_64).

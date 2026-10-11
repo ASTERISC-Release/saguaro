@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (C) 2026 The ASTERISC Research Lab
+
 # SuperTuxKart under gramine-vm with the Tirith graphics redirection (x86_64).
 
 libos.entrypoint = "/supertuxkart/stk-build/stk-code/cmake_build/bin/supertuxkart"
@@ -20,7 +23,7 @@ loader.argv = ["supertuxkart", "--race-now", "--screensize=1920x1080", "--seed=1
 {% endif %}
 
 loader.env.LD_LIBRARY_PATH = "/lib:/usr/lib:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu"
-loader.env.LD_PRELOAD = "./egl_backend.so"
+loader.env.LD_PRELOAD = "./libgraphics.so"
 loader.env.HOME = "/root"
 loader.env.XDG_CONFIG_HOME = "/root/.config"
 loader.env.XDG_DATA_HOME = "/root/.local/share"
@@ -45,7 +48,7 @@ loader.env.EGL_SHARED_INPUT = "{{ '0' if shared_input|string == '0' else '1' }}"
 
 fs.mounts = [
   { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
-  { path = "/egl_backend.so", uri = "file:{{ egl_backend }}" },
+  { path = "/libgraphics.so", uri = "file:{{ gramine.libgraphics }}" },
 
   # Stock Mesa, SDL and X libraries from the host root
   { path = "/usr", type = "chroot", uri = "file:/usr" },

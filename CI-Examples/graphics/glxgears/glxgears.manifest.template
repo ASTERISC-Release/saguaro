@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (C) 2026 The ASTERISC Research Lab
+
 ##############################################
 # LibOS Settings
 ##############################################
@@ -25,7 +28,7 @@ loader.insecure__use_cmdline_argv = true
 loader.log_level = "{{ log_level }}"
 # Loader environment overrides
 loader.env.LD_LIBRARY_PATH = "/lib:/usr/lib:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu"
-loader.env.LD_PRELOAD = "./egl_backend.so"
+loader.env.LD_PRELOAD = "./libgraphics.so"
 loader.env.DISPLAY = "2:0"
 loader.env.IVSHMEM_GRAMINE_VM = "1"
 loader.env.HOST_SDL_WINDOW = "1"
@@ -55,7 +58,7 @@ fs.mounts = [
   { path = "/glxgears", uri = "file:glxgears" },
 
   # Core system dirs
-  { path = "/egl_backend.so", uri = "file:{{ egl_backend }}" },
+  { path = "/libgraphics.so", uri = "file:{{ gramine.libgraphics }}" },
 
   # Stock Mesa, glibc and X libraries from the host root
   { path = "/usr", type = "chroot", uri = "file:/usr"},

@@ -238,3 +238,9 @@ if debug
         install_dir: pkglibdir,
     )
 endif
+
+# The graphics preload library is only usable under a VM-type PAL, and its sources are x86_64-only
+# for now (rdtscp timing code).
+if get_option('graphics') == 'enabled' and (vm or tdx) and host_machine.cpu_family() == 'x86_64'
+    subdir('graphics')
+endif
