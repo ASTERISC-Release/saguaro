@@ -18,10 +18,17 @@ researchers and engineers from universities and industry. Please see acknowledge
 Status
 ======
 
-This project is a Gramine fork adapted for development, research, and teaching purposes.
+This project is a Gramine fork adapted for development, research, and teaching purposes. It is
+**experimental and unadvisable to be used for production**; it comes with no warranty.
 
-It is **experimental** and **must not be used in production environments**; it comes with no
-warranty. What it is ultimately intended to do:
+The current work is focused on implementing the following (high-level) features:
+
+- Multi-architectural support, including AMD64, AArch64, and RISC-V
+- Graphics support with a proposed redirected-graphics approach (see
+  `Tirith <https://arxiv.org/abs/2609.17525>`__)
+- Enhanced system call support (e.g., `uFork <https://arxiv.org/pdf/2509.09439>`__)
+
+What it is ultimately intended to do:
 
 - **Sandbox applications** on a personal or cloud machine: an unmodified Linux application runs on
   Gramine's own implementation of the Linux system call interface, either as an ordinary process
