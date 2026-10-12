@@ -16,6 +16,11 @@
 name: VM PAL (x86_64)
 
 on:
+  # TEMPORARY: lets the first runs start from this branch (GitHub only dispatches workflows that
+  # exist on the default branch). Remove once the file is on main.
+  push:
+    branches: [dev-riscv]
+    paths: ['.github/workflows/vm-x86_64.yml']
   workflow_dispatch:
     inputs:
       run_suite:
@@ -45,8 +50,8 @@ jobs:
     timeout-minutes: 120
     env:
       GRAMINE_PREFIX: ${{ github.workspace }}/.install-vm
-      GRAMINE_RAM_SIZE: ${{ inputs.ram }}
-      GRAMINE_CPU_NUM: ${{ inputs.cpus }}
+      GRAMINE_RAM_SIZE: ${{ inputs.ram || '8G' }}
+      GRAMINE_CPU_NUM: ${{ inputs.cpus || '2' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -115,7 +120,7 @@ jobs:
           grep -q "(again)" ../../../vm-threads.log   # printed by every thread at the end of its TLS check
 
       - name: LibOS regression suite under gramine-vm (informational)
-        if: ${{ inputs.run_suite }}
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_suite }}
         continue-on-error: true
         run: |
           . "$GRAMINE_PREFIX/env.sh"

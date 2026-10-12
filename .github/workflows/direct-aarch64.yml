@@ -8,6 +8,11 @@
 name: Direct PAL (aarch64)
 
 on:
+  # TEMPORARY: lets the first runs start from this branch (GitHub only dispatches workflows that
+  # exist on the default branch). Remove once the file is on main.
+  push:
+    branches: [dev-riscv]
+    paths: ['.github/workflows/direct-aarch64.yml']
   workflow_dispatch:
     inputs:
       suites:
@@ -41,7 +46,7 @@ jobs:
         run: scripts/dependencies.sh --build-only
 
       - name: Install application prerequisites
-        if: ${{ inputs.suites != 'pal libos' }}
+        if: ${{ inputs.suites != '' && inputs.suites != 'pal libos' }}
         run: INSTALL_RUSTUP=1 scripts/dependencies.sh
 
       - name: Build and install Gramine (direct PAL)
@@ -54,7 +59,7 @@ jobs:
 
       - name: Run the direct-PAL regression tests
         env:
-          SUITES: ${{ inputs.suites }}   # via env, never interpolated into the script text
+          SUITES: ${{ inputs.suites || 'pal libos' }}   # via env, never interpolated into the script text
         run: |
           export PATH="$HOME/.cargo/bin:$PATH"
           test/test-direct.sh $SUITES
