@@ -5,8 +5,8 @@ inherited from upstream Gramine. The upstream Sphinx site is no longer built her
 pages remain as plain reStructuredText, and a few Sphinx-only directives in them do not render.
 Upstream's own documentation is at <https://gramine.readthedocs.io>.
 
-Start with `../README.rst` (what this tree is, platform matrix) and `../INSTALL.rst` (build,
-install, containers, the RISC-V cross-build).
+Start with `../README.rst` (what this tree is, platform matrix), `FEATURES.md` (what it adds) and
+`../INSTALL.rst` (build, install, containers, the RISC-V cross-build).
 
 ## Written for this tree
 
@@ -18,7 +18,7 @@ install, containers, the RISC-V cross-build).
 | `devel/graphics/tirith-delta.md` | changes against upstream gramine-tdx |
 | `devel/summary.md` | outcome of each port in one page, with pointers into the logs |
 | `devel/README.md` | the layout of the development documents: `PLAN.md`, `FINDINGS.md`, `TODO.md`, `TESTING.md` per topic |
-| `devel/aarch64/direct/`, `devel/aarch64/vm/`, `devel/riscv/`, `devel/graphics/` | plan, findings, open items and test results of each port |
+| `devel/<topic>/` (`aarch64/direct`, `aarch64/vm`, `riscv`, `graphics`, `syscall-interception`, `runtime-libc`, `vm-network`, `docs-refactor`) | plan, findings, open items and test results of each topic |
 | `TODO.md` | index of the per-topic open items |
 
 ## Inherited from upstream
