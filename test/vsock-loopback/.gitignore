@@ -3,6 +3,8 @@
 /vsock_echo_server.manifest
 /vsock_outbound_client
 /vsock_outbound_client.manifest
+/vsock_udp_client
+/vsock_udp_client.manifest
 /build.ninja
 /.ninja_deps
 /.ninja_log

@@ -76,6 +76,7 @@ CONNECT_MAGIC = b'GNR1'
 CONNECT_VERSION = 1
 CONNECT_OP = 1
 CONNECT_TCP = 6
+CONNECT_UDP = 17
 CONNECT_REQUEST_HEADER_SIZE = 12
 CONNECT_RESPONSE_SIZE = 8
 CONNECT_STATUS_OK = 0
@@ -169,25 +170,26 @@ class NetworkPolicy:
             raise ValueError(f'vm.net.outbound must be "allow" or "deny", got {outbound!r}')
         self.outbound = outbound
         self.networks = []
-        self.tcp_ports = set()
+        self.ports = {'tcp': set(), 'udp': set()}
         for rule in deny:
             rule = str(rule)
-            if rule.startswith('tcp:'):
+            if rule.startswith(('tcp:', 'udp:')):
+                protocol = rule.split(':', 1)[0]
                 try:
-                    port = int(rule[4:])
+                    port = int(rule[len(protocol) + 1:])
                 except ValueError as e:
-                    raise ValueError(f'invalid TCP deny rule {rule!r}') from e
+                    raise ValueError(f'invalid {protocol.upper()} deny rule {rule!r}') from e
                 if not 1 <= port <= 65535:
-                    raise ValueError(f'invalid TCP deny port {port}')
-                self.tcp_ports.add(port)
+                    raise ValueError(f'invalid {protocol.upper()} deny port {port}')
+                self.ports[protocol].add(port)
             else:
                 try:
                     self.networks.append(ipaddress.ip_network(rule, strict=False))
                 except ValueError as e:
                     raise ValueError(f'invalid outbound deny rule {rule!r}') from e
 
-    def denied(self, address, port):
-        if self.outbound == 'deny' or port in self.tcp_ports:
+    def denied(self, address, port, protocol='tcp'):
+        if self.outbound == 'deny' or port in self.ports[protocol]:
             return True
         ip = ipaddress.ip_address(address)
         return any(ip.version == network.version and ip in network for network in self.networks)
@@ -345,6 +347,66 @@ async def send_connect_response(writer, status, error=0):
     await writer.drain()
 
 
+async def udp_error_response(writer, error):
+    # family 0 marks a status frame: second byte is 1 and port carries the errno.
+    writer.write(bytes((0, 1)) + int(error).to_bytes(2, 'big') + b'\0\0')
+    await writer.drain()
+
+
+async def serve_udp_datagram(reader, writer, address, port, payload, policy):
+    if policy.denied(address, port, 'udp'):
+        log_debug(f'outbound denied udp {address}:{port} by vm.net policy')
+        await udp_error_response(writer, errno.EACCES)
+        return
+
+    family = socket.AF_INET6 if ':' in address else socket.AF_INET
+    sock = socket.socket(family, socket.SOCK_DGRAM)
+    sock.setblocking(False)
+    loop = asyncio.get_running_loop()
+    try:
+        await loop.sock_sendto(sock, payload, (address, port))
+        reply, source = await asyncio.wait_for(loop.sock_recvfrom(sock, 65535), timeout=5)
+        source_ip = ipaddress.ip_address(source[0].split('%', 1)[0])
+        log_debug(f'udp {address}:{port} -> {source_ip}:{source[1]} ({len(reply)} bytes)')
+        source_family = 6 if source_ip.version == 6 else 4
+        header = bytes((source_family, len(source_ip.packed)))
+        header += int(source[1]).to_bytes(2, 'big') + len(reply).to_bytes(2, 'big')
+        writer.write(header + source_ip.packed + reply)
+        await writer.drain()
+    except asyncio.TimeoutError:
+        log_debug(f'udp {address}:{port} timed out waiting for a response')
+        await udp_error_response(writer, errno.ETIMEDOUT)
+    except OSError as e:
+        log_debug(f'udp {address}:{port} failed: {e}')
+        await udp_error_response(writer, e.errno or errno.EIO)
+    finally:
+        sock.close()
+
+
+async def serve_udp_connection(reader, writer, policy):
+    """Read framed guest datagrams and return the first UDP response for each one."""
+    while True:
+        try:
+            header = await reader.readexactly(6)
+        except asyncio.IncompleteReadError:
+            return
+        family, address_size, port, payload_size = (
+            header[0], header[1], int.from_bytes(header[2:4], 'big'),
+            int.from_bytes(header[4:6], 'big'))
+        expected_size = {4: 4, 6: 16}.get(family)
+        if not expected_size or expected_size != address_size or not port:
+            await udp_error_response(writer, errno.EINVAL)
+            return
+        try:
+            raw_address = await reader.readexactly(address_size)
+            payload = await reader.readexactly(payload_size)
+        except asyncio.IncompleteReadError:
+            return
+        address = str(ipaddress.ip_address(raw_address))
+        log_debug(f'outbound udp {address}:{port} ({payload_size} bytes)')
+        await serve_udp_datagram(reader, writer, address, port, payload, policy)
+
+
 async def serve_guest_connection(reader, writer, cid, stats, policy=None):
     """
     A guest request to connect to a numeric IP address, followed by an unmodified TCP byte stream.
@@ -365,6 +427,12 @@ async def serve_guest_connection(reader, writer, cid, stats, policy=None):
         magic, version, op, protocol, family, port, address_size = (
             header[:4], header[4], header[5], header[6], header[7],
             int.from_bytes(header[8:10], 'big'), int.from_bytes(header[10:12], 'big'))
+        if (magic == CONNECT_MAGIC and version == CONNECT_VERSION and op == CONNECT_OP and
+                protocol == CONNECT_UDP and family == 0 and port == 0 and address_size == 0):
+            log_debug('outbound udp session started')
+            await send_connect_response(writer, CONNECT_STATUS_OK)
+            await serve_udp_connection(reader, writer, policy)
+            return
         expected_size = {4: 4, 6: 16}.get(family)
         if (magic != CONNECT_MAGIC or version != CONNECT_VERSION or op != CONNECT_OP or
                 protocol != CONNECT_TCP or expected_size is None or
@@ -374,6 +442,7 @@ async def serve_guest_connection(reader, writer, cid, stats, policy=None):
 
         raw_address = await asyncio.wait_for(reader.readexactly(address_size), timeout=10)
         address = str(ipaddress.ip_address(raw_address))
+        log_debug(f'outbound tcp request {address}:{port}')
         if policy.denied(address, port):
             await send_connect_response(writer, CONNECT_STATUS_ERROR, errno.EACCES)
             log_debug(f'outbound denied tcp {address}:{port} by vm.net policy')
