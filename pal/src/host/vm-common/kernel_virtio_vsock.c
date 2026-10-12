@@ -831,6 +831,8 @@ static void admit_deferred_request(uint64_t host_port, uint64_t guest_port,
     uint32_t idx = listener->pending_conn_fds_idx + listener->pending_conn_fds_cnt;
     listener->pending_conn_fds[idx % VSOCK_MAX_PENDING_CONNS] = new_conn->fd;
     listener->pending_conn_fds_cnt++;
+    log_debug("vsock admitted the deferred connection request from host port %lu: fd %u queued"
+              " in the listener backlog", (unsigned long)host_port, new_conn->fd);
     /* this admit can run from an application thread (a close whose timeout released the slot)
      * rather than the receive path, which wakes accepters itself */
     thread_wakeup_vsock(/*is_read=*/true);
@@ -838,6 +840,10 @@ static void admit_deferred_request(uint64_t host_port, uint64_t guest_port,
 
 static void cleanup_connection(struct virtio_vsock_connection* conn) {
     assert(spinlock_is_locked(&g_vsock_connections_lock));
+
+    log_debug("vsock cleanup connection (host port %lu, guest port %lu, state %d, deferred %d)",
+              (unsigned long)conn->host_port, (unsigned long)conn->guest_port, (int)conn->state,
+              conn->has_deferred_request);
 
     while (conn->consumed_by_user != conn->prepared_for_user) {
         free(conn->packets_for_user[conn->consumed_by_user % VSOCK_MAX_PACKETS]);
@@ -990,6 +996,8 @@ static int send_reset_packet(struct virtio_vsock_connection* conn) {
     assert(spinlock_is_locked(&g_vsock_receive_lock));
     assert(spinlock_is_locked(&g_vsock_connections_lock));
 
+    log_debug("vsock conn (host port %lu): sending RST", (unsigned long)conn->host_port);
+
     struct virtio_vsock_packet* packet;
 
     packet = generate_packet(conn, VIRTIO_VSOCK_OP_RST,
@@ -1048,6 +1056,9 @@ static int send_credit_update_packet(struct virtio_vsock_connection* conn) {
 static int send_shutdown_packet(struct virtio_vsock_connection* conn,
                                 enum virtio_vsock_shutdown flags) {
     assert(spinlock_is_locked(&g_vsock_connections_lock));
+
+    log_debug("vsock conn (host port %lu): sending shutdown flags %u",
+              (unsigned long)conn->host_port, (unsigned)flags);
 
     struct virtio_vsock_packet* packet;
 
@@ -1308,6 +1319,11 @@ static int process_packet(struct virtio_vsock_packet* packet) {
                     ret = 0;
                     goto out;
                 case VIRTIO_VSOCK_OP_SHUTDOWN:
+                    log_debug("vsock conn (host port %lu): peer shutdown flags %u (state %d),"
+                              " queued %u, send_disallowed %d, recv_disallowed %d",
+                              (unsigned long)conn->host_port, packet->header.flags,
+                              (int)conn->state, conn->prepared_for_user - conn->consumed_by_user,
+                              conn->send_disallowed, conn->recv_disallowed);
                     if (packet->header.flags == VIRTIO_VSOCK_SHUTDOWN_RCV
                             || packet->header.flags == VIRTIO_VSOCK_SHUTDOWN_COMPLETE) {
                         conn->send_disallowed = true;
@@ -1328,6 +1344,13 @@ static int process_packet(struct virtio_vsock_packet* packet) {
                         ret = 0;
                         goto out;
                     }
+                    /* an RST that kills a not-fully-shutdown established connection is abnormal and
+                     * has killed the connection under the application: log it always */
+                    log_warning("vsock conn (host port %lu): peer RST kills the connection (state"
+                                " %d), queued %u, send_disallowed %d, recv_disallowed %d",
+                                (unsigned long)conn->host_port, (int)conn->state,
+                                conn->prepared_for_user - conn->consumed_by_user,
+                                conn->send_disallowed, conn->recv_disallowed);
                     cleanup_connection(conn);
                     /* fallthrough */
                 default:
@@ -2110,12 +2133,17 @@ long virtio_vsock_write(int sockfd, const void* buf, size_t count) {
     }
 
     if (conn->state != VIRTIO_VSOCK_ESTABLISHED) {
+        log_debug("vsock write on host port %lu rejected: connection state %d",
+                  (unsigned long)conn->host_port, (int)conn->state);
         ret = -PAL_ERROR_NOTCONNECTION;
         goto out;
     }
 
     if (conn->send_disallowed) {
-        /* we were instructed to not send more packets, return -EPIPE type of error */
+        /* we were instructed to not send more packets, return -EPIPE type of error; normal for a
+         * peer that hung up while we were writing, so this is only a debug line */
+        log_debug("vsock write on host port %lu rejected: peer does not receive anymore",
+                  (unsigned long)conn->host_port);
         ret = -PAL_ERROR_CONNFAILED_PIPE;
         goto out;
     }
