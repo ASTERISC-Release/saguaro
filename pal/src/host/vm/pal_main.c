@@ -220,8 +220,11 @@ noreturn void pal_start_c(void) {
     uint64_t graphics_data_size = 0;
     uint64_t graphics_huge_addr = 0;
     if (graphics_data_size_init(&graphics_data_size) == 0 && graphics_data_size) {
+        uint64_t graphics_data_addr = 0;
+        graphics_data_addr_init(&graphics_data_addr);  /* optional; 0 = the compiled 4G anchor */
         graphics_huge_addr_init(&graphics_huge_addr); /* optional; 0 = follow the data arena */
-        graphics_arenas_set_data_size((size_t)graphics_data_size, (uintptr_t)graphics_huge_addr);
+        graphics_arenas_set_geometry((uintptr_t)graphics_data_addr, (size_t)graphics_data_size,
+                                     (uintptr_t)graphics_huge_addr);
         boot_stamp("graphics arenas reserved");
     }
 

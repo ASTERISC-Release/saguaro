@@ -43,8 +43,10 @@ static size_t DATA_REGION_SIZE            = 1ULL * 1024 * 1024 * 1024;
 static void* HUGEPAGE_DATA_REGION         = (void*)0x140000000ULL;
 static size_t HUGEPAGE_REGION_SIZE        = 1ULL * 1024 * 1024 * 1024;
 
-void graphics_arenas_set_data_size(size_t data_size, uintptr_t huge_addr) {
+void graphics_arenas_set_geometry(uintptr_t data_addr, size_t data_size, uintptr_t huge_addr) {
     assert(data_size);
+    /* A zero data address means the VMM supplied no layout: keep the compiled anchor (4G). */
+    DATA_REGION          = (void*)(data_addr ? data_addr : 0x100000000ULL);
     DATA_REGION_SIZE     = data_size;
     if (huge_addr) {
         if (huge_addr < (uintptr_t)DATA_REGION + data_size) {

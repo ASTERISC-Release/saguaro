@@ -92,6 +92,10 @@ int graphics_data_size_init(uint64_t* out_graphics_data_size);
  * at the dedicated hugetlb bucket backend). Fails when absent. */
 int graphics_huge_addr_init(uint64_t* out_graphics_huge_addr);
 
+/* Guest physical address of the graphics data arena, from the VMM's
+ * opt/gramine/graphics_data_addr fw_cfg file. Fails when absent. */
+int graphics_data_addr_init(uint64_t* out_graphics_data_addr);
+
 int unixtime_init(char* unixtime_s, size_t unixtime_size);
 
 int e820_table_init(char* e820_table, size_t* e820_size, size_t max_e820_size);

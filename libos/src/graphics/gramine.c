@@ -96,11 +96,14 @@ void setup_syscall_comms(void) {
 
     /* Geometry, from the launcher environment: GRAMINE_DATA_SIZE sizes the data
      * arena (the launcher also passes it to the PAL over fw_cfg, so the PAL's
-     * reservation matches), and GRAMINE_HUGEPAGE_ADDR gives the hugepage
+     * reservation matches), GRAMINE_DATA_ADDR is where it starts (default: the
+     * compiled 4G anchor), and GRAMINE_HUGEPAGE_ADDR gives the hugepage
      * arena's guest physical address directly -- a hugepages deployment points
      * it at the dedicated hugetlb bucket backend; when unset the hugepage
      * arena follows the data arena. */
     size_t data_size = parse_graphics_size(getenv("GRAMINE_DATA_SIZE"), DATA_SIZE);
+    uint64_t data_addr = parse_graphics_u64(getenv("GRAMINE_DATA_ADDR"), (uint64_t)(uintptr_t)DATA_REGION);
+    DATA_REGION = (void *)data_addr;
     uint64_t huge_addr = parse_graphics_u64(getenv("GRAMINE_HUGEPAGE_ADDR"), 0);
     if (huge_addr && huge_addr >= (uint64_t)(uintptr_t)DATA_REGION + data_size) {
         HUGEPAGE_DATA_REGION = (void *)huge_addr;
