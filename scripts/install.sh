@@ -29,7 +29,7 @@
 #                          (default: enabled)
 #   --libc glibc|none|musl which libc is built into the runtime directory that manifests mount
 #                          at /lib. `none` builds no libc (much shorter build): applications run
-#                          on the host's glibc. Default: none for an x86_64 --vm build without
+#                          on the host's glibc. Default: none for an x86_64 or aarch64 --vm build without
 #                          --sgx or --tdx, glibc otherwise. SGX needs the bundled glibc.
 #   -j N                   ninja parallelism (default: nproc)
 #   --run-tests [suite...] run test/test-direct.sh afterwards, building the test manifests first
@@ -51,7 +51,7 @@
 #
 # Defaults match this repo's tested configuration:
 #   -Ddirect=enabled -Dsgx=disabled -Dvm=disabled -Dtdx=disabled -Dgraphics=enabled
-#   -Dtests=enabled -Dlibc=glibc -Dbuildtype=release   (libc=none for an x86_64 --vm build, see --libc)
+#   -Dtests=enabled -Dlibc=glibc -Dbuildtype=release   (libc=none for an x86_64 or aarch64 --vm build, see --libc)
 #
 # Re-running is cheap and safe: meson reuses a configured build dir with matching options and
 # ninja rebuilds only what changed.
@@ -167,10 +167,10 @@ if [ "$VM" = enabled ]; then
     fi
 fi
 
-# --libc: an x86_64 --vm build defaults to no bundled libc (the guest runs on the host's glibc; the
-# build skips building glibc). Everything else keeps the bundled glibc, and SGX needs it.
+# --libc: an x86_64 or aarch64 --vm build defaults to no bundled libc (the guest runs on the host's
+# glibc; the build skips building glibc). Everything else keeps the bundled glibc, and SGX needs it.
 if [ -z "$LIBC" ]; then
-    if [ "$VM" = enabled ] && [ "$ARCH" = x86_64 ] && [ "$SGX" != enabled ] && [ "$TDX" != enabled ]; then
+    if [ "$VM" = enabled ] && { [ "$ARCH" = x86_64 ] || [ "$ARCH" = aarch64 ]; } && [ "$SGX" != enabled ] && [ "$TDX" != enabled ]; then
         LIBC=none
     else
         LIBC=glibc
