@@ -99,11 +99,14 @@ def main():
     small = b'x' * 20
     t0 = time.monotonic()
     for i in range(small_ops):
-        s.sendall(f'set k{i} 0 0 20\r\n'.encode() + small + b'\r\n')
-        if r.readline() != b'STORED':
-            sys.exit(f'set k{i} failed')
-        if get_value(f'k{i}'.encode()) != small:
-            sys.exit(f'get k{i} mismatch')
+        try:
+            s.sendall(f'set k{i} 0 0 20\r\n'.encode() + small + b'\r\n')
+            if r.readline() != b'STORED':
+                sys.exit(f'set k{i} failed')
+            if get_value(f'k{i}'.encode()) != small:
+                sys.exit(f'get k{i} mismatch')
+        except TimeoutError:
+            sys.exit(f'small request/reply timed out at pair {i}')
     dt = time.monotonic() - t0
     print(f'{small_ops} set+get pairs in {dt:.2f} s, '
           f'{2 * small_ops / dt:.0f} requests/s')
