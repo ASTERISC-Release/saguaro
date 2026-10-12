@@ -25,6 +25,7 @@
 #include "kernel_apic.h"
 #include "kernel_files.h"
 #include "kernel_interrupts.h"
+#include "kernel_debug.h"
 #include "kernel_memory.h"
 #include "kernel_multicore.h"
 #include "kernel_pci.h"
@@ -161,14 +162,27 @@ noreturn static void print_usage_and_exit(void) {
 noreturn int pal_start_continue(void* cmdline_);
 
 /* Boot-time instrumentation: relative stamps against the first instruction of the
- * kernel, in TSC ticks and (once the TSC frequency is known) milliseconds. */
+ * kernel, in TSC ticks and (once the TSC frequency is known) milliseconds. Also routed
+ * through the debug serial port: the console (virtio) only carries output written after
+ * its driver is up, so everything before that is invisible there (see plan.md). */
 static uint64_t boot_tsc0;
 static void boot_stamp(const char* what) {
     uint64_t t = get_tsc() - boot_tsc0;
     if (g_tsc_mhz) {
-        log_always("[boot] +%lu ms: %s", (unsigned long)(t / (g_tsc_mhz * 1000)), what);
+        unsigned long ms_val = (unsigned long)(t / (g_tsc_mhz * 1000));
+        log_always("[boot] +%lu ms: %s", ms_val, what);
+        debug_serial_io_write("[boot] +");
+        debug_serial_io_write_int("", ms_val);
+        debug_serial_io_write(" ms: ");
+        debug_serial_io_write(what);
+        debug_serial_io_write("\n");
     } else {
         log_always("[boot] +%llu ticks: %s", (unsigned long long)t, what);
+        debug_serial_io_write("[boot] ");
+        debug_serial_io_write_int("", t);
+        debug_serial_io_write(" ticks: ");
+        debug_serial_io_write(what);
+        debug_serial_io_write("\n");
     }
 }
 

@@ -224,7 +224,6 @@ else
     GRAPHICS_BACKEND_ARGS+="-numa node,memdev=huge0,nodeid=0 \
     -numa node,memdev=ram1,nodeid=1 "
     [ "$HAVE_APP_BACKEND" = 1 ] && GRAPHICS_BACKEND_ARGS+="-numa node,memdev=huge2,nodeid=2 "
-    [ "$REM_MEM_SIZE" -gt 0 ] && GRAPHICS_BACKEND_ARGS+="-numa node,memdev=huge2,nodeid=2 "
 fi
 QEMU_OPTS+="$GRAPHICS_BACKEND_ARGS"
 # The bases go to the QEMU fork's placement logic (per-backend identity mapping) as env -- the
