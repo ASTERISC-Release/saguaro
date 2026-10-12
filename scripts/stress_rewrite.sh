@@ -14,9 +14,14 @@
 #   TMO=<s> kills a hung run (default 30).
 # Failing runs' output is kept in $FAILDIR (default /tmp/rewrite-stress-fail).
 # Needs the install from scripts/install.sh and `gramine-test build` prerequisites (python deps).
+#
+# Cross-testing (a test guest that cannot run `gramine-test build`, e.g. the riscv64 QEMU guest
+# driven by scripts/riscv64/render-test-manifests.sh): set DIR to the rendered run directory and
+# SKIP_BUILD=1 to use the manifests as rendered. Then --rewrite must match how the manifests were
+# rendered (REWRITE=<true|false> at render time); the option is not applied by this script.
 set -uo pipefail
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
-DIR=$HERE/../libos/test/regression
+DIR=${DIR:-$HERE/../libos/test/regression}
 . "$HERE/gramine-env.sh"   # GRAMINE_PREFIX, PATH, PYTHONPATH
 FAILDIR=${FAILDIR:-/tmp/rewrite-stress-fail}
 N=40; MODE=""; SCEN=(); TMO=${TMO:-30}
@@ -37,8 +42,12 @@ case "$MODE" in
     "")  unset REWRITE ;;
     *)   echo "--rewrite must be on|off"; exit 2 ;;
 esac
-rm -f rewrite_stress.manifest
-gramine-test build >/dev/null 2>&1 || { echo "gramine-test build failed"; exit 1; }
+if [ "${SKIP_BUILD:-0}" = 1 ]; then
+    [ -f rewrite_stress.manifest ] || { echo "SKIP_BUILD=1 but rewrite_stress.manifest is missing in $DIR"; exit 1; }
+else
+    rm -f rewrite_stress.manifest
+    gramine-test build >/dev/null 2>&1 || { echo "gramine-test build failed"; exit 1; }
+fi
 
 mkdir -p "$FAILDIR"; rm -f "$FAILDIR"/*
 total_bad=0

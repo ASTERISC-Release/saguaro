@@ -11,20 +11,20 @@ on:
   workflow_dispatch:
     inputs:
       suites:
-        description: "test/test-direct.sh suites (default: PAL and LibOS regression only; see test/test-direct.sh --list for the application suites)"
+        description: "test/test-direct.sh suites (default: PAL and LibOS regression and the python example; see test/test-direct.sh --list for the other application suites)"
         required: false
-        default: "pal libos"
+        default: "pal libos python"
       stress:
         description: "also run scripts/stress_rewrite.sh (~10 min)"
         type: boolean
         default: false
       libc:
-        description: "libc built into the runtime directory: glibc (bundled, the default) or none (no libc is built; applications run on the runner's glibc)"
+        description: "libc built into the runtime directory: none (the default: no libc is built, applications run on the runner's glibc) or glibc (bundled)"
         type: choice
         options:
-          - glibc
           - none
-        default: glibc
+          - glibc
+        default: none
 
 permissions:
   contents: read
@@ -53,7 +53,7 @@ jobs:
 
       - name: Build and install Gramine (direct PAL)
         env:
-          LIBC: ${{ inputs.libc || 'glibc' }}   # via env, never interpolated into the script text
+          LIBC: ${{ inputs.libc || 'none' }}   # via env, never interpolated into the script text
         run: scripts/install.sh --prefix "$GRAMINE_PREFIX" --libc "$LIBC"
 
       - name: Check built binaries for writable+executable segments
@@ -63,7 +63,7 @@ jobs:
 
       - name: Run the direct-PAL regression tests
         env:
-          SUITES: ${{ inputs.suites || 'pal libos' }}   # via env, never interpolated into the script text
+          SUITES: ${{ inputs.suites || 'pal libos python' }}   # via env, never interpolated into the script text
         run: |
           export PATH="$HOME/.cargo/bin:$PATH"
           test/test-direct.sh $SUITES
