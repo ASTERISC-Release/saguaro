@@ -15,6 +15,18 @@ import pytest
 import tomli
 
 
+# Lines that tests want shown at the end of the run (their own output is captured, and with
+# --tb=line not printed for passing tests); filled by report_duration() in test_libos.py.
+REPORTED_DURATIONS = []
+
+
+def pytest_terminal_summary(terminalreporter):
+    if REPORTED_DURATIONS:
+        terminalreporter.section('reported durations')
+        for line in REPORTED_DURATIONS:
+            terminalreporter.write_line(line)
+
+
 def _load_vm_entries():
     path = pathlib.Path(__file__).with_name('vm_skip.toml')
     with open(path, 'rb') as f:

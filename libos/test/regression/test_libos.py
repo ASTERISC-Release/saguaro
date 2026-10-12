@@ -5,6 +5,7 @@ import shutil
 import signal
 import socket
 import subprocess
+import time
 import unittest
 
 import json
@@ -18,6 +19,16 @@ from graminelibos.regression import (
     USES_MUSL,
     RegressionTestCase,
 )
+
+
+def report_duration(text):
+    """Add a line to the "reported durations" section of pytest's terminal summary (conftest.py)."""
+    try:
+        import conftest # pylint: disable=import-outside-toplevel
+        conftest.REPORTED_DURATIONS.append(text)
+    except (ImportError, AttributeError):
+        pass
+
 
 CPUINFO_TEST_FLAGS = [
     'fpu', 'msr', 'apic', 'xsave', 'xsaveopt', 'avx', 'sse', 'sse2',
@@ -447,16 +458,22 @@ class TC_01_Bootstrap(RegressionTestCase):
         # Lazy rewriting of trapped syscall sites (sys.rewrite_syscalls): each scenario starts
         # from a cold process. See rewrite_stress.c and scripts/stress_rewrite.sh (which repeats
         # these many times, since the interesting races are cold-start races).
-        for scenario in ['threads', 'fork', 'exec', 'signals', 'restart', 'blob', 'jit', 'mprotect',
-                         'threadstorm']:
-            with self.subTest(scenario=scenario):
-                stdout, _ = self.run_binary(['rewrite_stress', scenario], timeout=180)
-                self.assertIn('OK ' + scenario, stdout)
+        scenarios = ['threads', 'fork', 'exec', 'signals', 'restart', 'blob', 'jit', 'mprotect',
+                     'threadstorm']
         if platform.machine() == 'riscv64':
-            for scenario in ['unaligned', 'entry']:
-                with self.subTest(scenario=scenario):
+            scenarios += ['unaligned', 'entry']
+        for scenario in scenarios:
+            with self.subTest(scenario=scenario):
+                # The duration of every scenario is shown in pytest's terminal summary (see
+                # conftest.py), also when the scenario fails or is killed by the application's own
+                # alarm: on emulated machines the time itself is the interesting part.
+                start = time.monotonic()
+                try:
                     stdout, _ = self.run_binary(['rewrite_stress', scenario], timeout=180)
-                    self.assertIn('OK ' + scenario, stdout)
+                finally:
+                    report_duration('rewrite_stress %s: %.1f s' % (scenario,
+                                                                    time.monotonic() - start))
+                self.assertIn('OK ' + scenario, stdout)
 
     def test_602_fp_multithread(self):
         stdout, _ = self.run_binary(['fp_multithread'])
