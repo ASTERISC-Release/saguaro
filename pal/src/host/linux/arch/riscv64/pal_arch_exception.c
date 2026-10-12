@@ -40,6 +40,17 @@
  * flag in libpal.so's dynamic symbol table. */
 __attribute__((visibility("protected"))) PAL_TCB* g_pal_tcb_singleton = NULL;
 
+/* Linux assigns this RISC-V-specific syscall immediately after riscv_hwprobe. Older build
+ * headers may omit it; an older running kernel simply returns -ENOSYS. */
+#ifndef __NR_riscv_flush_icache
+#define __NR_riscv_flush_icache 259
+#endif
+
+int pal_arch_flush_icache(void* begin, size_t size) {
+    long ret = DO_SYSCALL(riscv_flush_icache, begin, (char*)begin + size, 0);
+    return ret < 0 ? unix_to_pal_error(ret) : 0;
+}
+
 int arch_do_rt_sigprocmask(int sig, int how) {
     __sigset_t mask;
     __sigemptyset(&mask);

@@ -299,11 +299,12 @@ bool maybe_emulate_syscall(PAL_CONTEXT* context) {
          * is the application's live link register here. The syscall number is already where it
          * belongs (a7 = regs[17]).
          *
-         * `libos_syscall_site_was_patched()` is the aarch64 hook, permanently false here: the
-         * riscv64 port does no syscall-site rewriting, so a trapped ecall is always the
-         * application's original one. Kept so the shared code path stays arch-neutral. */
+         * A racing handler can instead see the site's published `jal`; the architecture hook
+         * recognizes that case and follows the same emulation path. */
         LIBOS_TCB_SET(syscall_scratch_pc, (void*)(pc + 4));
         context->pc = (uint64_t)&libos_syscall_entry;
+        if (is_ecall)
+            libos_try_patch_syscall_site((uintptr_t)pc);
         return true;
     }
     return false;

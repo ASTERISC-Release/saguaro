@@ -441,9 +441,10 @@ class TC_01_Bootstrap(RegressionTestCase):
         stdout, _ = self.run_binary(['sigreturn_regs'], timeout=120)
         self.assertIn('TEST OK', stdout)
 
-    @unittest.skipUnless(platform.machine() == 'aarch64', 'aarch64-specific (svc site rewriting)')
+    @unittest.skipUnless(platform.machine() in ('aarch64', 'riscv64'),
+                         'direct-PAL syscall-site rewriting is aarch64/riscv64-specific')
     def test_603_rewrite_stress(self):
-        # Lazy rewriting of trapped `svc #0` sites (sys.rewrite_syscalls): each scenario starts
+        # Lazy rewriting of trapped syscall sites (sys.rewrite_syscalls): each scenario starts
         # from a cold process. See rewrite_stress.c and scripts/stress_rewrite.sh (which repeats
         # these many times, since the interesting races are cold-start races).
         for scenario in ['threads', 'fork', 'exec', 'signals', 'restart', 'blob', 'jit', 'mprotect',

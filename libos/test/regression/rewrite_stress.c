@@ -2,7 +2,8 @@
 /* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /*
- * Stress test for lazy `svc` site rewriting (sys.rewrite_syscalls, aarch64). Every scenario starts
+ * Stress test for lazy direct-PAL syscall-site rewriting (`sys.rewrite_syscalls`, aarch64/riscv64).
+ * Every scenario starts
  * from a cold process (no sites patched yet) and checks results, not performance. Run one scenario
  * per process: `rewrite_stress <scenario>`; prints "OK <scenario>" on success.
  *
@@ -28,6 +29,21 @@
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
+
+#if defined(__aarch64__)
+#define SYSCALL_NR_GETPID 172
+#define SC_INSN_NR        0xd2801588u /* mov x8, #172 */
+#define SC_INSN_CALL      0xd4000001u /* svc #0 */
+#define SC_INSN_ADD_A0(i) (0x91000000u | ((i & 0xfff) << 10))
+#define SC_INSN_RET       0xd65f03c0u
+#elif defined(__riscv)
+#define SC_INSN_NR        0x0ac00893u /* addi a7, zero, 172 */
+#define SC_INSN_CALL      0x00000073u /* ecall */
+#define SC_INSN_ADD_A0(i) (0x00050513u | ((i & 0xfff) << 20))
+#define SC_INSN_RET       0x00008067u /* jalr zero, ra, 0 */
+#else
+#error "rewrite_stress needs a direct-PAL syscall ISA"
+#endif
 
 #define CHK(cond)                                                                           \
     do {                                                                                    \
@@ -229,10 +245,10 @@ static void sc_blob(void) {
     void* prev = NULL;
     for (int i = 0; i < 300; i++) {
         uint32_t code[5];
-        code[0] = 0xd2801588;                      /* mov x8, #172 (getpid) */
-        code[1] = 0xd4000001;                      /* svc #0 */
-        code[2] = 0x91000000 | ((i & 0xfff) << 10); /* add x0, x0, #i */
-        code[3] = 0xd65f03c0;                      /* ret */
+        code[0] = SC_INSN_NR;
+        code[1] = SC_INSN_CALL;
+        code[2] = SC_INSN_ADD_A0(i);
+        code[3] = SC_INSN_RET;
         code[4] = 0;
         int fd = open(path, O_RDWR | O_CREAT | O_TRUNC, 0700);
         CHK(fd >= 0);
@@ -276,9 +292,9 @@ static void sc_jit(void) {
     uint32_t* m = mmap(NULL, 4096, PROT_READ | PROT_WRITE | PROT_EXEC,
                        MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     CHK(m != MAP_FAILED);
-    m[0] = 0xd2801588; /* mov x8, #172 */
-    m[1] = 0xd4000001; /* svc #0 */
-    m[2] = 0xd65f03c0; /* ret */
+    m[0] = SC_INSN_NR;
+    m[1] = SC_INSN_CALL;
+    m[2] = SC_INSN_RET;
     __builtin___clear_cache((char*)m, (char*)(m + 4));
     pthread_t t[4];
     for (int i = 0; i < 4; i++)

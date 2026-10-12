@@ -384,6 +384,10 @@ typedef struct PAL_CONTEXT PAL_CONTEXT;
  * Defined in pal/src/host/linux/arch/riscv64/pal_arch_exception.c and exported from libpal.so. */
 __attribute__((__noreturn__)) void pal_arch_restore_context(struct PAL_CONTEXT* context);
 
+/* `fence.i` updates only the executing hart; this asks the Linux PAL to flush a written range
+ * on every hart before the LibOS publishes it as executable code. */
+int pal_arch_flush_icache(void* begin, size_t size);
+
 typedef int64_t arch_syscall_arg_t;
 
 #define ALL_SYSCALL_ARGS(context) \
