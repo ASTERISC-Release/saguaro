@@ -41,6 +41,19 @@
 #define SC_INSN_CALL      0x00000073u /* ecall */
 #define SC_INSN_ADD_A0(i) (0x00050513u | ((i & 0xfff) << 20))
 #define SC_INSN_RET       0x00008067u /* jalr zero, ra, 0 */
+#elif defined(__x86_64__)
+/* No syscall-site rewriting on x86_64 (the bundled glibc is patched instead; see
+ * Documentation/devel/syscall-interception/PLAN.md), and test_603 is skipped on this
+ * architecture. These encodings exist to keep the binary building on x86_64, as before:
+ * x86's 2-byte `syscall` does not fit the one-instruction-per-word layout. `mov al, 39;
+ * syscall` is exactly 4 bytes, so the NR word performs the whole call, the CALL word is a
+ * nop pad, and the `jit` scenario is correct here. The `blob` scenario's add cannot be
+ * encoded in 4 words (add eax, imm32 is 5 bytes), so it stays a nop pad: its result check
+ * fails for i > 0 on a manual run -- visibly, where main failed with SIGILL on foreign code. */
+#define SC_INSN_NR        0x050F27B0u /* mov al, 39 (getpid); syscall */
+#define SC_INSN_CALL      0x90909090u /* nop; nop; nop; nop (pad) */
+#define SC_INSN_ADD_A0(i) 0x90909090u /* pad: add eax, imm32 is 5 bytes */
+#define SC_INSN_RET       0x000000C3u /* ret */
 #else
 #error "rewrite_stress needs a direct-PAL syscall ISA"
 #endif
