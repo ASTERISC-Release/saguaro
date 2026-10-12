@@ -49,3 +49,12 @@ runtime/glibc$
 ^(common|libos|vm|vm-common|linux-common)/arch/
 ^(vm-common|linux-common)/$
 ^libos/arch/
+
+# LTP's own paths (the LTP sources are not in this repository)
+^runtest/syscalls$
+^src/$
+
+# files planned by Documentation/devel/syscall-compat/PLAN.md: remove these lines when the files exist
+(^|/)MATRIX\.md$
+^mapping\.toml$
+^scripts/syscall-matrix\.py$
