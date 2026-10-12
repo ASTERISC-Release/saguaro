@@ -20,6 +20,7 @@
 #include "toml.h"
 
 #include "kernel_sched.h"
+#include "kernel_time.h"
 #include "kernel_virtio.h"
 #include "kernel_virtio_vsock.h"
 #include <stdatomic.h>
@@ -917,6 +918,10 @@ static int pal_common_socket_attrsetbyhdl(struct pal_handle* handle, PAL_STREAM_
     handle->sock.is_nonblocking = attr->nonblocking;
     handle->sock.ipv6_v6only    = attr->socket.ipv6_v6only;
     handle->sock.reuseport      = attr->socket.reuseport;
+    /* SO_RCVTIMEO / SO_SNDTIMEO: the LibOS sets them here; recv uses the receive timeout (see
+     * vm_sock_recv_wait()), the send timeout is only stored and reported back */
+    handle->sock.recvtimeout_us = attr->socket.receivetimeout_us;
+    handle->sock.sendtimeout_us = attr->socket.sendtimeout_us;
 
     int ret = virtio_vsock_set_socket_options(handle->sock.fd, handle->sock.ipv6_v6only,
                                               handle->sock.reuseport);
@@ -1132,6 +1137,37 @@ static int pal_common_udp_send(struct pal_handle *handle,
 }
 
 
+/* Sleep on `futex` of a blocking receive (the caller holds handle->sock.lock) until it is woken or
+ * the socket's SO_RCVTIMEO has run out. `*deadline_us` is the absolute deadline, 0 before the first
+ * wait; it is set here and must be kept across the caller's wait loop. Returns 0 after a wakeup (the
+ * caller re-checks its condition) and -PAL_ERROR_TRYAGAIN once the timeout is over. Without a timeout
+ * this is plain sched_thread_wait(); before this, a receive timeout was ignored and a blocking
+ * recv() on an idle socket never returned. */
+static int vm_sock_recv_wait(struct pal_handle* handle, int* futex, uint64_t* deadline_us) {
+    uint64_t timeout_us = handle->sock.recvtimeout_us;
+    if (!timeout_us) {
+        sched_thread_wait(futex, &handle->sock.lock);
+        return 0;
+    }
+
+    uint64_t now_us;
+    int ret = get_time_in_us(&now_us);
+    if (ret < 0)
+        return ret;
+    if (!*deadline_us)
+        *deadline_us = now_us + timeout_us;
+    if (now_us >= *deadline_us)
+        return -PAL_ERROR_TRYAGAIN;
+
+    void* timeout = NULL;
+    ret = register_timeout(*deadline_us, futex, &timeout);
+    if (ret < 0)
+        return ret;
+    sched_thread_wait(futex, &handle->sock.lock);
+    deregister_timeout(timeout);
+    return 0;
+}
+
 static int pal_common_tcp_recv(struct pal_handle* handle, struct iovec* iov, size_t iov_len,
                                size_t* out_total_size, struct pal_socket_addr* addr,
                                bool force_nonblocking) {
@@ -1146,7 +1182,7 @@ static int pal_common_tcp_recv(struct pal_handle* handle, struct iovec* iov, siz
 
     size_t total_bytes = 0;
     size_t iov_idx = 0;
-    // uint64_t start_ns = get_time_ns();
+    uint64_t deadline_us = 0;
     while (iov_idx < iov_len) {
         if (!iov[iov_idx].iov_base || !iov[iov_idx].iov_len) {
             iov_idx++;
@@ -1178,14 +1214,13 @@ static int pal_common_tcp_recv(struct pal_handle* handle, struct iovec* iov, siz
                     spinlock_lock(&handle->sock.lock);
                     continue;
                 }
-                sched_thread_wait(&g_sockets_reader_futex, &handle->sock.lock);
+                int wait_ret = vm_sock_recv_wait(handle, &g_sockets_reader_futex, &deadline_us);
+                if (wait_ret < 0) {
+                    spinlock_unlock(&handle->sock.lock);
+                    return wait_ret;
+                }
                 continue;
             }
-            // if (handle->sock.recvtimeout_us) {
-            //     uint64_t now = get_time_ns();
-            //     if (now - start_ns >= handle->sock.recvtimeout_us)
-            //         return -PAL_ERROR_TRYAGAIN;
-            // }
 
             /* non-blocking socket that didn't receive anything must error out with TRYAGAIN */
             spinlock_unlock(&handle->sock.lock);
@@ -1246,6 +1281,7 @@ static int pal_common_udp_recv(struct pal_handle *handle,
     if (r->relay_connected)
         (void)virtio_vsock_poll();
 
+    uint64_t deadline_us = 0;
     spinlock_lock(&handle->sock.lock);
     for (;;) {
         uint32_t head = __atomic_load_n(&r->head, __ATOMIC_RELAXED);
@@ -1313,9 +1349,13 @@ static int pal_common_udp_recv(struct pal_handle *handle,
             }
 
             if (!handle->sock.is_nonblocking && !force_nonblocking) {
-                sched_thread_wait(r->relay_connected ? &g_sockets_reader_futex
-                                                     : &r->udp_rx_futex,
-                                  &handle->sock.lock);
+                int wait_ret = vm_sock_recv_wait(handle, r->relay_connected ? &g_sockets_reader_futex
+                                                                            : &r->udp_rx_futex,
+                                                 &deadline_us);
+                if (wait_ret < 0) {
+                    spinlock_unlock(&handle->sock.lock);
+                    return wait_ret;
+                }
                 continue;
             }
             spinlock_unlock(&handle->sock.lock);

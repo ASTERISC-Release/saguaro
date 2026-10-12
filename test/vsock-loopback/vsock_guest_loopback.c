@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <time.h>
 #include <unistd.h>
 
 #define REQUEST_COUNT 1000
@@ -286,15 +287,86 @@ static int test_udp_loopback(int family, uint16_t port) {
     return 0;
 }
 
+/* SO_RCVTIMEO: a blocking recv on a socket with nothing to read has to fail with EAGAIN once the
+ * timeout is over (before, the VM PAL dropped the timeout and the call never returned). The wait
+ * must be neither skipped nor much longer than asked. */
+static int expect_recv_timeout(int fd, const char* what) {
+    struct timeval timeout = {.tv_sec = 0, .tv_usec = 300000};
+    if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
+        perror("SO_RCVTIMEO");
+        return -1;
+    }
+    struct timespec start, end;
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    char buf[16];
+    ssize_t count = recv(fd, buf, sizeof(buf), 0);
+    int error = errno;
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    long elapsed_ms = (end.tv_sec - start.tv_sec) * 1000 + (end.tv_nsec - start.tv_nsec) / 1000000;
+    if (count != -1 || (error != EAGAIN && error != EWOULDBLOCK)) {
+        fprintf(stderr, "%s recv with SO_RCVTIMEO returned %zd (errno %d), expected EAGAIN\n", what,
+                count, error);
+        return -1;
+    }
+    if (elapsed_ms < 250 || elapsed_ms > 3000) {
+        fprintf(stderr, "%s recv timeout took %ld ms, expected about 300\n", what, elapsed_ms);
+        return -1;
+    }
+    return 0;
+}
+
+static int test_recv_timeout(uint16_t udp_port, uint16_t tcp_port) {
+    struct sockaddr_in address = {
+        .sin_family = AF_INET,
+        .sin_addr.s_addr = htonl(INADDR_LOOPBACK),
+    };
+
+    int udp = socket(AF_INET, SOCK_DGRAM, 0);
+    if (udp < 0) {
+        perror("UDP socket");
+        return -1;
+    }
+    address.sin_port = htons(udp_port);
+    if (bind(udp, (struct sockaddr*)&address, sizeof(address)) < 0) {
+        perror("UDP timeout bind");
+        close(udp);
+        return -1;
+    }
+    int ret = expect_recv_timeout(udp, "UDP");
+    close(udp);
+    if (ret < 0)
+        return -1;
+
+    int listener = socket(AF_INET, SOCK_STREAM, 0);
+    int client = socket(AF_INET, SOCK_STREAM, 0);
+    if (listener < 0 || client < 0) {
+        perror("TCP socket");
+        return -1;
+    }
+    address.sin_port = htons(tcp_port);
+    if (bind(listener, (struct sockaddr*)&address, sizeof(address)) < 0 || listen(listener, 1) < 0 ||
+            connect(client, (struct sockaddr*)&address, sizeof(address)) < 0) {
+        perror("TCP timeout setup");
+        close(client);
+        close(listener);
+        return -1;
+    }
+    ret = expect_recv_timeout(client, "TCP");
+    close(client);
+    close(listener);
+    return ret;
+}
+
 int main(void) {
     if (test_tcp_loopback(AF_INET, 28091, false) < 0 ||
             test_tcp_loopback(AF_INET6, 28092, false) < 0 ||
             test_tcp_loopback(AF_INET, 28095, true) < 0 ||
             test_tcp_loopback(AF_INET6, 28096, true) < 0 ||
             test_udp_loopback(AF_INET, 28093) < 0 ||
-            test_udp_loopback(AF_INET6, 28094) < 0)
+            test_udp_loopback(AF_INET6, 28094) < 0 ||
+            test_recv_timeout(28097, 28098) < 0)
         return 1;
 
-    puts("GUEST_LOOPBACK_OK tcp4=1000 tcp6=1000 nonblock4=1 nonblock6=1 udp4=1 udp6=1");
+    puts("GUEST_LOOPBACK_OK tcp4=1000 tcp6=1000 nonblock4=1 nonblock6=1 udp4=1 udp6=1 rcvtimeo=2");
     return 0;
 }
