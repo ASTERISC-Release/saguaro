@@ -1,6 +1,12 @@
 Set up the host environment
 ===========================
 
+.. note::
+
+   This page is inherited from upstream Gramine and describes the Intel SGX backend. This tree
+   still builds that backend but does not test it; see ``README.rst`` and
+   ``Documentation/devel/multiarch.md`` for what is validated here.
+
 .. note ::
    Currently, Gramine has two backends: Linux (execution on the host Linux OS)
    and Linux-SGX (execution inside an SGX enclave). The Linux backend doesn't
@@ -16,7 +22,7 @@ Gramine with SGX support requires several features from your system:
 - The Intel DCAP must be installed if DCAP-based attestation will be used.
 
 If your system doesn't meet these requirements, please refer to more detailed
-descriptions in :doc:`devel/building`.
+descriptions in ``INSTALL.rst`` at the top of this repository.
 
 Check for SGX compatibility
 ---------------------------

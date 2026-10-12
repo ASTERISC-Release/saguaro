@@ -1,6 +1,12 @@
 Performance tuning and analysis
 ===============================
 
+.. note::
+
+   This page is inherited from upstream Gramine and describes the Intel SGX backend. This tree
+   still builds that backend but does not test it; see ``README.rst`` and
+   ``Documentation/devel/multiarch.md`` for what is validated here.
+
 .. highlight:: sh
 
 This is the "best performance practices" document for Gramine performance
@@ -418,7 +424,7 @@ Gramine optionally provides a patched libgomp library that runs faster
 inside SGX enclaves. This patched libgomp library is **not** included in the
 default distribution of Gramine, so you need to build Gramine from sources and
 add ``-Dlibgomp=enabled`` when configuring the build (for details see
-:doc:`devel/building`). Successful build places the patched libgomp library
+``INSTALL.rst`` at the top of this repository). Successful build places the patched libgomp library
 together with other Gramine libraries. Please note that the build can take a
 long time: unfortunately, the only supported way of building libgomp is as part
 of a complete GCC build.

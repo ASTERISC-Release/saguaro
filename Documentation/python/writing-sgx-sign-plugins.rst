@@ -4,6 +4,12 @@
 Writing plugins for signing SGX enclaves
 ========================================
 
+.. note::
+
+   This page is inherited from upstream Gramine and describes the Intel SGX backend. This tree
+   still builds that backend but does not test it; see ``README.rst`` and
+   ``Documentation/devel/multiarch.md`` for what is validated here.
+
 SGX cryptosystem uses RSA-3072 with modulus 3 for signing a SIGSTRUCT. However,
 there are different arrangements where suitable keys are kept and used for
 operations. A |~| keyfile is not always available (e.g., HSMs explicitly prevent

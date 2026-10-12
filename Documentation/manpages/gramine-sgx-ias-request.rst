@@ -4,6 +4,12 @@
 :program:`gramine-sgx-ias-request` -- Submit Intel Attestation Service request
 ==============================================================================
 
+.. note::
+
+   This page is inherited from upstream Gramine and describes the Intel SGX backend. This tree
+   still builds that backend but does not test it; see ``README.rst`` and
+   ``Documentation/devel/multiarch.md`` for what is validated here.
+
 Synopsis
 ========
 

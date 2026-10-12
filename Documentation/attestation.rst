@@ -1,6 +1,12 @@
 Attestation and Secret Provisioning
 ===================================
 
+.. note::
+
+   This page is inherited from upstream Gramine and describes the Intel SGX backend. This tree
+   still builds that backend but does not test it; see ``README.rst`` and
+   ``Documentation/devel/multiarch.md`` for what is validated here.
+
 Gramine is typically used to create and run Trusted Execution Environments
 (:term:`TEE`). A very important aspect of a TEE is :term:`Attestation`. Broadly
 speaking, attestation is a mechanism for a remote user to verify that the

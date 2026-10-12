@@ -1,6 +1,12 @@
 PAL host ABI
 ============
 
+.. note::
+
+   This page is inherited from upstream Gramine, where it is built with Sphinx and Doxygen. This
+   tree no longer builds that site, so the ``doxygen...`` and ``auto...`` directives below are
+   only a list of names: the declarations and their documentation comments are in ``pal/include/pal/pal.h`` and the headers it includes.
+
 TODO: This document is outdated and needs a proper review.
 
 PAL Host ABI is the interface used by Gramine to interact with its host. It is

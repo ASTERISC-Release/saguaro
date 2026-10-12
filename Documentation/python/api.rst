@@ -4,6 +4,12 @@
 Python API
 ==========
 
+.. note::
+
+   This page is inherited from upstream Gramine, where it is built with Sphinx and Doxygen. This
+   tree no longer builds that site, so the ``doxygen...`` and ``auto...`` directives below are
+   only a list of names: the declarations and their documentation comments are in ``python/graminelibos/``.
+
 Introduction
 ------------
 

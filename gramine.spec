@@ -1,8 +1,5 @@
 # Copyright (c) 2021-2022 Wojtek Porczyk <woju@invisiblethingslab.com>
 
-# .el8 has sphinx 1.8 which is too old
-%global has_supported_sphinx 0%{?rhel} >= 9
-
 Name: gramine
 Version: 1.7post~UNRELEASED
 Release: 1%{?dist}
@@ -27,11 +24,6 @@ BuildRequires: perl
 BuildRequires: protobuf-c-compiler
 BuildRequires: protobuf-c-devel
 BuildRequires: python3-devel
-%if %{has_supported_sphinx}
-BuildRequires: python3-sphinx >= 3.4
-BuildRequires: python3-sphinx_rtd_theme
-%endif
-
 Requires: python3-click >= 6.7
 Requires: python3-cryptography
 Requires: python3-jinja2
@@ -74,17 +66,8 @@ fi
 
 %meson_build
 
-%if %{has_supported_sphinx}
-%__make -C Documentation SPHINXOPTS=-tpkg_only man
-%endif
-
 %install
 %meson_install
-
-%if %{has_supported_sphinx}
-install -d %{buildroot}/%{_mandir}/man1
-install -t %{buildroot}/%{_mandir}/man1 Documentation/_build/man/*.1
-%endif
 
 install -d %{buildroot}/%{_licensedir}/%{name}
 install -t %{buildroot}/%{_licensedir}/%{name} LICENSE*.txt
@@ -130,10 +113,5 @@ install -t %{buildroot}/%{_licensedir}/%{name} LICENSE*.txt
 %{_includedir}/gramine/*.h
 %{_includedir}/gramine/mbedtls/*.h
 %{_includedir}/gramine/psa/*.h
-
-%if %{has_supported_sphinx}
-%{_mandir}/man1/%{name}-*.1*
-%{_mandir}/man1/is-sgx-available.1*
-%endif
 
 %doc %{_licensedir}/%{name}/LICENSE*.txt
