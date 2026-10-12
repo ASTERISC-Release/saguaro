@@ -1,0 +1,113 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
+# Cross-builds the DIRECT PAL for riscv64 on a hosted x86_64 runner and tests it in a RISC-V Linux
+# guest under qemu-system-riscv64 (full-system emulation, no KVM). User-mode emulation cannot be
+# used: it has no seccomp, which the direct PAL depends on. Everything runs in the cross container
+# (container/run.sh --target riscv64), exactly as on a development machine; see
+# Documentation/devel/riscv/plan.md.
+#
+# The guest is emulated, so this is slow (the first boot installs packages) and timing-sensitive
+# tests have less headroom than on real hardware.
+#
+# Manual trigger only (Actions tab -> "Direct PAL (riscv64, emulated)" -> Run workflow).
+name: Direct PAL (riscv64, emulated)
+
+on:
+  workflow_dispatch:
+    inputs:
+      suites:
+        description: "regression suites to run in the guest: pal, libos (empty: cross-build only)"
+        required: false
+        default: "pal libos"
+      examples:
+        description: "example suites for scripts/riscv64/run-examples.sh, built in the guest (slow; empty: none)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: direct-riscv64-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  direct-pal:
+    name: direct PAL tests (riscv64, emulated)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      SUITES: ${{ inputs.suites }}       # via env, never interpolated into the script text
+      EXAMPLES: ${{ inputs.examples }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the cross container
+        run: |
+          podman --version
+          container/run.sh --target riscv64 'riscv64-linux-gnu-gcc --version | head -1; qemu-system-riscv64 --version | head -1'
+
+      - name: Cross-build and install Gramine (direct PAL, riscv64)
+        run: |
+          container/run.sh --target riscv64 \
+            'scripts/install.sh --target riscv64 --prefix "$PWD/build-riscv64/prefix" -j "$(nproc)"'
+
+      - name: Check that the installed binaries are riscv64
+        run: |
+          libdir=$(dirname "$(find build-riscv64/prefix -name libsysdb.so | head -n 1)")
+          for f in "$libdir/libsysdb.so" "$libdir"/direct/loader "$libdir"/direct/libpal.so; do
+            file -bL "$f" | tee /dev/stderr | grep -q "UCB RISC-V"
+          done
+
+      - name: Boot the RISC-V guest
+        if: ${{ inputs.suites != '' || inputs.examples != '' }}
+        run: |
+          container/run.sh --target riscv64 'RISCV_GUEST_BOOT_TIMEOUT=3600 scripts/riscv64/guest.sh start && scripts/riscv64/guest.sh ssh "uname -a; nproc; free -m"'
+
+      - name: Run the regression suites in the guest
+        if: ${{ inputs.suites != '' }}
+        run: |
+          mkdir -p test-logs
+          rc=0
+          for suite in $SUITES; do
+            case $suite in pal|libos) ;; *) echo "unknown suite: $suite" >&2; exit 2 ;; esac
+            container/run.sh --target riscv64 \
+              "scripts/riscv64/render-test-manifests.sh $suite >/dev/null && scripts/riscv64/run-suite.sh $suite -rfs" \
+              2>&1 | tee "test-logs/$suite.log" || rc=1
+            [ "${PIPESTATUS[0]}" -eq 0 ] || rc=1
+          done
+          exit $rc
+
+      - name: Run the example suites in the guest
+        if: ${{ inputs.examples != '' }}
+        run: |
+          mkdir -p test-logs
+          container/run.sh --target riscv64 \
+            'scripts/riscv64/guest.sh ssh "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq build-essential cmake pkg-config curl wget sqlite3 libevent-dev libssl-dev libpcre2-dev python3-numpy python3-scipy autoconf automake libtool >/dev/null"'
+          set -o pipefail
+          container/run.sh --target riscv64 "scripts/riscv64/run-examples.sh $(printf '%q ' $EXAMPLES)" \
+            2>&1 | tee test-logs/examples.log
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Direct PAL, riscv64 (emulated guest)"
+            echo '```'
+            for f in test-logs/pal.log test-logs/libos.log; do
+              [ -f "$f" ] && { echo "$(basename "$f" .log): $(grep -aE "passed|failed" "$f" | tail -n 1)"; }
+            done
+            [ -f test-logs/examples.log ] && sed -n '/= SUMMARY =/,$p' test-logs/examples.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-direct-riscv64
+          if-no-files-found: ignore
+          include-hidden-files: true
+          path: |
+            test-logs
+            .riscv64-guest/console.log

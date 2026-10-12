@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
-# Build + test matrix for the DIRECT PAL only (x86_64 and aarch64). The vm PAL (gramine-vm) is not
-# covered here: it needs KVM (see vm.yml for the x86_64 vm job and test/test-vm.sh for aarch64).
+# Builds the DIRECT PAL natively on a hosted x86_64 runner and runs test/test-direct.sh. The other
+# platforms have workflows of their own: direct-aarch64.yml, direct-riscv64-emulated.yml (cross-built,
+# tested in an emulated guest) and vm-x86_64.yml (the vm PAL).
 #
-# Manual trigger only for now (Actions tab -> "Direct PAL CI (x86_64 + aarch64)" -> Run workflow). Enable automatic
-# runs by adding `pull_request:` / `push:` below once the matrix has proven stable on both runners.
-name: Direct PAL CI (x86_64 + aarch64)
+# Manual trigger only (Actions tab -> "Direct PAL (x86_64)" -> Run workflow).
+name: Direct PAL (x86_64)
 
 on:
   workflow_dispatch:
@@ -14,31 +14,19 @@ on:
         description: "test/test-direct.sh suites (default: PAL and LibOS regression only; see test/test-direct.sh --list for the application suites)"
         required: false
         default: "pal libos"
-      stress:
-        description: "also run scripts/stress_rewrite.sh (aarch64 only; ~10 min)"
-        type: boolean
-        default: false
 
 permissions:
   contents: read
 
 concurrency:
-  group: direct-${{ github.ref }}
+  group: direct-x86_64-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   direct-pal:
-    name: direct PAL tests (${{ matrix.arch }})
-    runs-on: ${{ matrix.runner }}
+    name: direct PAL tests (x86_64)
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: x86_64
-            runner: ubuntu-24.04
-          - arch: aarch64
-            runner: ubuntu-24.04-arm
     env:
       GRAMINE_PREFIX: ${{ github.workspace }}/.install
       LOGDIR: ${{ github.workspace }}/test-logs
@@ -67,15 +55,11 @@ jobs:
           export PATH="$HOME/.cargo/bin:$PATH"
           test/test-direct.sh $SUITES
 
-      - name: Rewrite stress (aarch64)
-        if: ${{ inputs.stress && matrix.arch == 'aarch64' }}
-        run: scripts/stress_rewrite.sh -n 20
-
       - name: Upload logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: logs-${{ matrix.arch }}
+          name: logs-direct-x86_64
           path: |
             test-logs
             /tmp/rewrite-stress-fail

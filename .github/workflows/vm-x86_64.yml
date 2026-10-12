@@ -12,8 +12,8 @@
 #               under the VM harness (informational at first: the skip list was measured on aarch64 and
 #               x86_64 results may differ; see the job summary).
 #
-# Manual trigger only (Actions tab -> "VM PAL CI" -> Run workflow).
-name: VM PAL CI
+# Manual trigger only (Actions tab -> "VM PAL (x86_64)" -> Run workflow).
+name: VM PAL (x86_64)
 
 on:
   workflow_dispatch:
@@ -35,7 +35,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: vm-${{ github.ref }}
+  group: vm-x86_64-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
