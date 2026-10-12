@@ -301,8 +301,12 @@ static void copy_into_tq_internal(struct virtio_vsock_packet* packet, uint64_t p
     vm_shared_writew(&g_vsock->tq->avail->idx, g_vsock->tq->cached_avail_idx);
 
     uint16_t host_device_used_flags = vm_shared_readw(&g_vsock->tq->used->flags);
-    if (!(host_device_used_flags & VIRTQ_USED_F_NO_NOTIFY))
+    /* A failed small-reply run showed an RW packet left outstanding while NO_NOTIFY was set.
+     * Always kick for data packets; keep suppression for control packets. */
+    if (!(host_device_used_flags & VIRTQ_USED_F_NO_NOTIFY) ||
+            packet->header.op == VIRTIO_VSOCK_OP_RW) {
         vm_mmio_writew(g_vsock->tq_notify_addr, /*queue_sel=*/1);
+    }
 }
 
 /* used only for data-flow packets (RW) */

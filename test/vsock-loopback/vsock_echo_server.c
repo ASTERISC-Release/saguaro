@@ -21,6 +21,7 @@
 
 #include <arpa/inet.h>
 #include <errno.h>
+#include <sys/epoll.h>
 #include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -62,8 +63,175 @@ static int write_all(int fd, const unsigned char* buf, size_t len) {
     return 0;
 }
 
+/* Persistent-connection regression for readiness wakeups: one EPOLLET event and one small echo
+ * per synchronous request, so the client cannot hide a missed edge by pipelining more data. */
+static int serve_epoll(const char* port, unsigned long requests) {
+    int srv = socket(AF_INET, SOCK_STREAM, 0);
+    if (srv < 0) {
+        perror("socket");
+        return 1;
+    }
+    int one = 1;
+    setsockopt(srv, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
+
+    struct sockaddr_in addr = {0};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    addr.sin_port = htons((uint16_t)atoi(port));
+    if (bind(srv, (struct sockaddr*)&addr, sizeof(addr)) < 0 || listen(srv, 32) < 0) {
+        perror("bind/listen");
+        close(srv);
+        return 1;
+    }
+
+    int epfd = epoll_create1(0);
+    if (epfd < 0) {
+        perror("epoll_create1");
+        close(srv);
+        return 1;
+    }
+    struct epoll_event ev = {
+        .events = EPOLLIN | EPOLLET | EPOLLONESHOT,
+        .data.fd = srv,
+    };
+    if (epoll_ctl(epfd, EPOLL_CTL_ADD, srv, &ev) < 0) {
+        perror("epoll_ctl listener");
+        close(epfd);
+        close(srv);
+        return 1;
+    }
+    printf("LISTENING %s (epoll, %lu requests)\n", port, requests);
+    fflush(stdout);
+
+    int cli = -1;
+    unsigned long handled = 0;
+    for (;;) {
+        struct epoll_event events[4];
+        int n = epoll_wait(epfd, events, 4, -1);
+        if (n < 0) {
+            if (errno == EINTR)
+                continue;
+            perror("epoll_wait");
+            return 1;
+        }
+        for (int i = 0; i < n; i++) {
+            if (events[i].data.fd == srv) {
+                cli = accept(srv, NULL, NULL);
+                if (cli < 0) {
+                    perror("accept");
+                    return 1;
+                }
+                ev.data.fd = cli;
+                if (epoll_ctl(epfd, EPOLL_CTL_ADD, cli, &ev) < 0) {
+                    perror("epoll_ctl client");
+                    return 1;
+                }
+                continue;
+            }
+
+            unsigned char buf[4096];
+            size_t got = 0;
+            while (got < 64) {
+                ssize_t part = read(events[i].data.fd, buf + got, sizeof(buf) - got);
+                if (part < 0 && errno == EINTR)
+                    continue;
+                if (part <= 0) {
+                    fprintf(stderr, "epoll echo: client closed after %lu requests\n", handled);
+                    return 1;
+                }
+                got += (size_t)part;
+            }
+            if (write_all(events[i].data.fd, buf, got) < 0)
+                return 1;
+            handled++;
+            if (handled % 100 == 0) {
+                printf("EPOLL_HANDLED %lu\n", handled);
+                fflush(stdout);
+            }
+            if (handled == requests) {
+                printf("DONE %lu\n", handled);
+                fflush(stdout);
+                close(cli);
+                close(epfd);
+                close(srv);
+                return 0;
+            }
+            /* libevent-style one-shot rearming after each callback. */
+            ev.data.fd = events[i].data.fd;
+            if (epoll_ctl(epfd, EPOLL_CTL_MOD, events[i].data.fd, &ev) < 0) {
+                perror("epoll_ctl rearm");
+                return 1;
+            }
+        }
+    }
+}
+
+static int serve_blocking(const char* port, unsigned long requests) {
+    int srv = socket(AF_INET, SOCK_STREAM, 0);
+    if (srv < 0) {
+        perror("socket");
+        return 1;
+    }
+    int one = 1;
+    setsockopt(srv, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
+
+    struct sockaddr_in addr = {0};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    addr.sin_port = htons((uint16_t)atoi(port));
+    if (bind(srv, (struct sockaddr*)&addr, sizeof(addr)) < 0 || listen(srv, 32) < 0) {
+        perror("bind/listen");
+        close(srv);
+        return 1;
+    }
+    printf("LISTENING %s (blocking, %lu requests)\n", port, requests);
+    fflush(stdout);
+
+    int cli = accept(srv, NULL, NULL);
+    if (cli < 0) {
+        perror("accept");
+        return 1;
+    }
+    unsigned long handled = 0;
+    while (handled < requests) {
+        unsigned char buf[64];
+        size_t got = 0;
+        while (got < sizeof(buf)) {
+            ssize_t part = read(cli, buf + got, sizeof(buf) - got);
+            if (part < 0 && errno == EINTR)
+                continue;
+            if (part <= 0) {
+                fprintf(stderr, "blocking echo: client closed after %lu requests\n", handled);
+                return 1;
+            }
+            got += (size_t)part;
+        }
+        if (write_all(cli, buf, sizeof(buf)) < 0)
+            return 1;
+        handled++;
+        if (handled % 100 == 0) {
+            printf("BLOCKING_HANDLED %lu\n", handled);
+            fflush(stdout);
+        }
+    }
+    printf("DONE %lu\n", handled);
+    fflush(stdout);
+    close(cli);
+    close(srv);
+    return 0;
+}
+
 int main(int argc, char** argv) {
     const char* port = argc > 1 ? argv[1] : "7000";
+
+    if (argc > 2 && !strcmp(argv[2], "blocking")) {
+        unsigned long requests = argc > 3 ? strtoul(argv[3], NULL, 10) : 5000;
+        return serve_blocking(port, requests);
+    }
+    if (argc > 2 && !strcmp(argv[2], "epoll")) {
+        unsigned long requests = argc > 3 ? strtoul(argv[3], NULL, 10) : 5000;
+        return serve_epoll(port, requests);
+    }
 
     /* a real server (redis, nginx) survives a peer that disappears mid-write */
     signal(SIGPIPE, SIG_IGN);
