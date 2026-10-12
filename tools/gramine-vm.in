@@ -100,36 +100,135 @@ QEMU_OPTS="-enable-kvm -vga none -display none -no-reboot -monitor none "
 
 RAW_MEM_SIZE=$(echo $QEMU_MEM_SIZE | tr -d 'G')
 REM_MEM_SIZE=$((RAW_MEM_SIZE - 4))
+
+# Graphics applications (see Documentation/devel/graphics/): a manifest with loader.env.DISPLAY
+# set to the host ("2:N") marks one. The GEM arenas -- the data arena (size from
+# GRAMINE_DATA_SIZE, default 1G) plus the fixed 1G hugepage arena -- start at guest physical 4G
+# and must fit inside guest RAM: data + 1G <= 2G (ram1) + REM, i.e. RAM >= 3G + data, and at
+# least 5G so that a non-empty huge2 backs the application itself. (The rendered manifest lists
+# the environment keys inside the [loader.env] table, hence the bare DISPLAY match.)
+if grep -Eq '^DISPLAY[^=]*=[[:space:]]*"2:' "$GRAMINE_MANIFEST" 2>/dev/null; then
+    GRAPHICS_DATA_SIZE=${GRAMINE_DATA_SIZE:-1G}
+    # Where the data arena starts. 4G is the anchor today; an explicit override relocates it
+    # (the arena and the hugepage arena after it must still be backed by guest RAM, which lives
+    # at [0-2G) and [4G; ...) -- below-4G placements are rejected here, and C2 makes the whole
+    # backend map (and this constraint) dynamic.
+    GRAPHICS_DATA_ADDR=${GRAMINE_DATA_ADDR:-4294967296}
+    case "$GRAPHICS_DATA_ADDR" in
+        *[!0-9]*)   echo "Error: GRAMINE_DATA_ADDR must be a byte address in decimal (got '$GRAPHICS_DATA_ADDR')."; exit 2 ;;
+    esac
+    if [ "$GRAPHICS_DATA_ADDR" -lt 4294967296 ]; then
+        echo "Error: GRAMINE_DATA_ADDR must be at least guest physical 4G (got $GRAPHICS_DATA_ADDR); guest RAM between 2G and 4G is the PCI hole."
+        exit 2
+    fi
+    case "$GRAPHICS_DATA_SIZE" in
+        *G) GRAPHICS_DATA_BYTES=$(( ${GRAPHICS_DATA_SIZE%G} * 1073741824 )) ;;
+        *M) GRAPHICS_DATA_BYTES=$(( ${GRAPHICS_DATA_SIZE%M} * 1048576 )) ;;
+        *)  GRAPHICS_DATA_BYTES=$(( ${GRAPHICS_DATA_SIZE:-0} + 0 )) ;;
+    esac
+    # The RAM floor: the arena window [GRAPHICS_DATA_ADDR, + data + hugepage-arena) must end
+    # inside guest RAM, which reaches RAM+2G; the fixed 3G of backends make that 4G at the
+    # default anchor (hugepages deployments need 5G: the bucket is the third fixed backend).
+    NEED_RAM=$(( (GRAPHICS_DATA_ADDR + GRAPHICS_DATA_BYTES + 1073741824 - 2147483648 + 1073741823) / 1073741824 ))
+    MIN_FLOOR=4
+    [ "${GRAMINE_HUGEPAGES:-0}" = "1" ] && MIN_FLOOR=5
+    if [ "$NEED_RAM" -lt "$MIN_FLOOR" ]; then NEED_RAM=$MIN_FLOOR; fi
+    if [ "$RAW_MEM_SIZE" -lt "$NEED_RAM" ]; then
+        echo "Error: this graphics application needs at least ${NEED_RAM}G of guest RAM for data" \
+             "arena $GRAPHICS_DATA_SIZE at address $GRAPHICS_DATA_ADDR (got ${QEMU_MEM_SIZE})."
+        exit 2
+    fi
+    # Where the hugepage GEM arena lives: in a hugepages deployment, at the dedicated 1G hugetlb
+    # bucket backend at guest 6G (data arenas elsewhere are not supported yet -- C2 makes the
+    # backend map dynamic); in a normal deployment it follows the data arena. The PAL gets all
+    # three numbers over fw_cfg and the guest library over its environment, so they are exported
+    # for exactly one knob in.
+    if [ "${GRAMINE_HUGEPAGES:-0}" = "1" ]; then
+        if [ "$GRAPHICS_DATA_ADDR" != 4294967296 ]; then
+            echo "Error: hugepages deployments keep the data arena at guest physical 4G" \
+                 "(the dedicated 1G hugetlb bucket sits at 6G); GRAMINE_DATA_ADDR=$GRAPHICS_DATA_ADDR is not supported. Unset GRAMINE_HUGEPAGES to relocate, or wait for C2."
+            exit 2
+        fi
+        if [ "$GRAPHICS_DATA_BYTES" -gt 2147483648 ]; then
+            echo "Error: GRAMINE_HUGEPAGES=1 serves the hugepage GEM bucket from a dedicated 1G" \
+                 "hugetlb backend at guest 6G, so GRAMINE_DATA_SIZE must be at most 2G (got" \
+                 "$GRAPHICS_DATA_SIZE). Reduce it or unset GRAMINE_HUGEPAGES."
+            exit 2
+        fi
+        GRAPHICS_HUGE_ADDR=6442450944          # guest physical 6G
+    else
+        GRAPHICS_HUGE_ADDR=$((GRAPHICS_DATA_ADDR + GRAPHICS_DATA_BYTES))   # follows the data arena
+    fi
+    echo "Graphics data arena: $GRAPHICS_DATA_SIZE at 0x$(printf %x $GRAPHICS_DATA_ADDR) ($GRAPHICS_DATA_BYTES bytes; guest RAM floor ${NEED_RAM}G; hugepage arena at 0x$(printf %x $GRAPHICS_HUGE_ADDR))"
+    GRAMINE_HUGEPAGE_ADDR=$GRAPHICS_HUGE_ADDR
+    GRAMINE_DATA_SIZE=$GRAPHICS_DATA_SIZE
+fi
+[ -n "${GRAPHICS_HUGE_ADDR:-}" ] && export GRAMINE_HUGEPAGE_ADDR
+[ -n "${GRAPHICS_DATA_SIZE:-}" ] && export GRAMINE_DATA_SIZE
+[ -n "${GRAPHICS_DATA_ADDR:-}" ] && export GRAMINE_DATA_ADDR
+GRAPHICS_BACKEND_ARGS=""
+
 if [ "$GRAMINE_HUGEPAGES" == "1" ]; then
     echo "Configuring Gramine VM with hugepages support."
-    if [ "$(echo $QEMU_MEM_SIZE | tr -d 'G')" -lt 8 ]; then
-        echo "Error: Gramine hugepages mode requires at least 8GB of VM memory."
+    if [ "$RAW_MEM_SIZE" -lt 5 ]; then
+        echo "Error: hugepages deployments need at least 5G of guest RAM (2G hugetlb below" \
+             "4G for kernel+app, 2G normal pages at 4-6G for the data arena, and the 1G" \
+             "hugetlb GEM bucket at 6-7G)."
         exit 2
     fi
 
-    REM_MEM_SIZE="$((REM_MEM_SIZE))G"
-    echo "REM_MEM_SIZE = $REM_MEM_SIZE"
-
-    # 3 separate DIMMs (0 - 4GB hugepages, 4GB - 5GB normal, 5GB - rest hugepages)
-    QEMU_OPTS+="-object memory-backend-memfd,id=huge0,size=2G,hugetlb=on,hugetlbsize=2M \
+    # Backends in QEMU's -numa placement rule: node 0 at guest physical 0, every later node
+    # sequentially from 4G. 2G hugetlb below 4G (kernel+app), 2G normal at 4-6G (the data
+    # arena), the dedicated 1G hugetlb bucket at 6-7G (the hugepage GEM arena -- the only
+    # hugetlb memory), and normal pages for the rest: only the 3G of fixed backends is
+    # committed up front. GRAMINE_RAM_BASES carries the guest base of each memfd backend,
+    # in -object order, to the QEMU fork's identity-mapped placement.
+    RAM_BASES=0,4294967296,6442450944
+    GRAPHICS_BACKEND_ARGS+="-object memory-backend-memfd,id=huge0,size=2G,hugetlb=on,hugetlbsize=2M \
     -object memory-backend-memfd,id=ram1,size=2G \
-    -object memory-backend-memfd,id=huge2,size=$REM_MEM_SIZE,hugetlb=on,hugetlbsize=2M \
-    -numa node,memdev=huge0,nodeid=0 \
+    -object memory-backend-memfd,id=huge_bucket,size=1G,hugetlb=on,hugetlbsize=2M "
+    REM_MEM_SIZE=$((RAW_MEM_SIZE - 5))
+    HAVE_APP_BACKEND=0
+    [ "$REM_MEM_SIZE" -gt 0 ] && HAVE_APP_BACKEND=1
+    if [ "$HAVE_APP_BACKEND" = 1 ]; then
+        REM_MEM_SIZE="${REM_MEM_SIZE}G"
+        echo "REM_MEM_SIZE = $REM_MEM_SIZE (only touched when used)"
+        GRAPHICS_BACKEND_ARGS+="-object memory-backend-memfd,id=ram2,size=$REM_MEM_SIZE "
+        RAM_BASES+=",$((7 * 1073741824))"
+    else
+        echo "no fourth backend (RAM=5G)"
+    fi
+    GRAPHICS_BACKEND_ARGS+="-numa node,memdev=huge0,nodeid=0 \
     -numa node,memdev=ram1,nodeid=1 \
-    -numa node,memdev=huge2,nodeid=2 "
+    -numa node,memdev=huge_bucket,nodeid=2 "
+    [ "$HAVE_APP_BACKEND" = 1 ] && GRAPHICS_BACKEND_ARGS+="-numa node,memdev=ram2,nodeid=3 "
 else
     echo "Configuring Gramine VM without hugepages."
 
-    # 3 separate DIMMs (0 - 4GB hugepages, 4GB - 5GB normal, 5GB - rest hugepages)
-    REM_MEM_SIZE="$((REM_MEM_SIZE))G"
-    echo "REM_MEM_SIZE = $REM_MEM_SIZE"
-    QEMU_OPTS+="-object memory-backend-memfd,id=huge0,size=2G \
-    -object memory-backend-memfd,id=ram1,size=2G \
-    -object memory-backend-memfd,id=huge2,size=$REM_MEM_SIZE \
-    -numa node,memdev=huge0,nodeid=0 \
-    -numa node,memdev=ram1,nodeid=1 \
-    -numa node,memdev=huge2,nodeid=2 "
+    # 2G below 4G for kernel+app, 2G normal at 4-6G (the GEM arenas; at RAM=4G they fill it
+    # entirely), and normal pages for the rest. 4 guests get no third backend.
+    RAM_BASES=0,4294967296
+    GRAPHICS_BACKEND_ARGS="-object memory-backend-memfd,id=huge0,size=2G \
+    -object memory-backend-memfd,id=ram1,size=2G "
+    REM_MEM_SIZE=$((RAW_MEM_SIZE - 4))
+    HAVE_APP_BACKEND=0
+    [ "$REM_MEM_SIZE" -gt 0 ] && HAVE_APP_BACKEND=1
+    if [ "$HAVE_APP_BACKEND" = 1 ]; then
+        REM_MEM_SIZE="${REM_MEM_SIZE}G"
+        echo "REM_MEM_SIZE = $REM_MEM_SIZE (only touched when used)"
+        GRAPHICS_BACKEND_ARGS+="-object memory-backend-memfd,id=huge2,size=$REM_MEM_SIZE "
+        RAM_BASES+=",$((6 * 1073741824))"
+    else
+        echo "no third backend (RAM=4G; the GEM arenas live entirely in ram1)"
+    fi
+    GRAPHICS_BACKEND_ARGS+="-numa node,memdev=huge0,nodeid=0 \
+    -numa node,memdev=ram1,nodeid=1 "
+    [ "$HAVE_APP_BACKEND" = 1 ] && GRAPHICS_BACKEND_ARGS+="-numa node,memdev=huge2,nodeid=2 "
 fi
+QEMU_OPTS+="$GRAPHICS_BACKEND_ARGS"
+# The bases go to the QEMU fork's placement logic (per-backend identity mapping) as env -- the
+# guest never sees this one.
+export GRAMINE_RAM_BASES=$RAM_BASES
 
 if [ "$TDSHIM_PAL_PATH" == "" ]; then
     QEMU_MACHINE="-M q35,kernel_irqchip=on"
@@ -218,6 +317,10 @@ GRAMINE_ARGS+=" -gramine-args-end"
 # Due to QEMU syntax, commas in the QEMU cmdline need to be escaped using an additional comma.
 GRAMINE_ARGS=${GRAMINE_ARGS//","/",,"}
 
+# Size (in bytes) of the graphics GEM data arena; set and validated in the graphics block above,
+# empty for non-graphics applications.
+GRAPHICS_DATA_BYTES=${GRAPHICS_DATA_BYTES:-""}
+
 GRAMINE_ENVS=$(python3 -c "
 import os
 env_str = ''
@@ -235,6 +338,14 @@ CMD+=($QEMU_PATH $QEMU_GDB $QEMU_VM $QEMU_OPTS $QEMU_MACHINE
     -fw_cfg name=opt/gramine/args,string="$GRAMINE_ARGS"
     -fw_cfg name=opt/gramine/envs,string="$GRAMINE_ENVS"
 -fw_cfg name=opt/gramine/unixtime_s,string="$EPOCHSECONDS")
+
+# The graphics data-arena size, passed to the PAL over fw_cfg so that the arenas are reserved
+# before the guest's boot-time allocator runs (the manifest is not readable that early).
+if [ -n "$GRAPHICS_DATA_BYTES" ]; then
+    CMD+=("-fw_cfg" "name=opt/gramine/graphics_data_size,string=$GRAPHICS_DATA_BYTES")
+    CMD+=("-fw_cfg" "name=opt/gramine/graphics_data_addr,string=$GRAPHICS_DATA_ADDR")
+    CMD+=("-fw_cfg" "name=opt/gramine/graphics_huge_addr,string=$GRAPHICS_HUGE_ADDR")
+fi
 
 # X proxy for graphics applications. A manifest that sets `loader.env.DISPLAY = "2:N"` points the
 # application at the X server of the host (vsock CID 2), which the guest reaches on vsock port

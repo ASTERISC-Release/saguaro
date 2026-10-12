@@ -79,7 +79,7 @@ for ex in $SEL; do
         run_example bash-ls bash bash.manifest bash "Makefile" - bash -c "ls" ;;
     busybox)
         run_example busybox-echo busybox busybox.manifest busybox "Hello" - busybox echo Hello
-        run_example busybox-uname busybox busybox.manifest busybox "aarch64" - busybox uname -m ;;
+        run_example busybox-uname busybox busybox.manifest busybox "$(uname -m)" - busybox uname -m ;;
     python)
         # Ubuntu's python3 is a non-PIE ET_EXEC (linked at 0x400000): skipped unless a PIE one is used
         run_example python python python.manifest "$(readlink -f "$(command -v python3)")" "42" - python -c "print(6*7)" ;;

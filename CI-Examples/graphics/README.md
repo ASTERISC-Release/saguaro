@@ -52,6 +52,12 @@ Environment: `EGL_DISCRETE=1` selects `/dev/dri/renderD129` instead of `renderD1
 `run-native`; for the VM it is set in the example's manifest template. `GRAMINE_CPU_NUM` and
 `GRAMINE_RAM_SIZE` set the guest's vCPUs and memory (defaults: 1 and 8G).
 
+RAM floor and arena sizing: a graphics guest needs `3G + data-arena size`, and at least 5G
+(the launcher enforces this for graphics manifests). The GEM data arena defaults to 1G; export
+`GRAMINE_DATA_SIZE=3G` (any G/M value or byte count) before `make run` to enlarge it -- the
+launcher relays the value to the guest, which relocates the hugepage arena accordingly. Larger
+arenas raise the floor accordingly (e.g. 3G wants 6G of guest RAM).
+
 ## Measuring
 
 Run the same workload natively and under the VM, at the same window size and settings, and compare

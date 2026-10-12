@@ -31,10 +31,68 @@
 
 static_assert(PAGE_SIZE == 4096, "unexpected PAGE_SIZE (expected 4K)");
 
-static const size_t DATA_REGION_SIZE        = 3ULL * 1024 * 1024 * 1024;
-static const size_t HUGEPAGE_REGION_SIZE    = 1ULL * 1024 * 1024 * 1024;
-static void* DATA_REGION                    = (void*)0x100000000ULL;
-static void* HUGEPAGE_DATA_REGION           = (void*)0x200000000ULL;
+/* Graphics GEM arenas (libgraphics maps its buffers here at fixed guest
+ * addresses). The data-arena size comes from the manifest key
+ * sys.experimental__graphics_data_size, parsed in pal_main and applied by
+ * graphics_arenas_set_data_size(); the hugepage arena follows the data arena
+ * directly. See also memory_reserve_graphics_arenas(); both must stay in sync
+ * with the LibOS (libos_mmap.c) and QEMU (sg-listener.c). The compiled values
+ * below are the defaults. */
+static void* DATA_REGION                  = (void*)0x100000000ULL;
+static size_t DATA_REGION_SIZE            = 1ULL * 1024 * 1024 * 1024;
+static void* HUGEPAGE_DATA_REGION         = (void*)0x140000000ULL;
+static size_t HUGEPAGE_REGION_SIZE        = 1ULL * 1024 * 1024 * 1024;
+
+void graphics_arenas_set_geometry(uintptr_t data_addr, size_t data_size, uintptr_t huge_addr) {
+    assert(data_size);
+    /* A zero data address means the VMM supplied no layout: keep the compiled anchor (4G). */
+    DATA_REGION          = (void*)(data_addr ? data_addr : 0x100000000ULL);
+    DATA_REGION_SIZE     = data_size;
+    if (huge_addr) {
+        if (huge_addr < (uintptr_t)DATA_REGION + data_size) {
+            log_error("Hugepage graphics arena 0x%lx does not follow the data arena "
+                      "(end 0x%lx); falling back to computing it",
+                      (unsigned long long)huge_addr,
+                      (unsigned long long)((uintptr_t)DATA_REGION + data_size));
+        } else {
+            HUGEPAGE_DATA_REGION = (void*)huge_addr;
+        }
+    } else {
+        /* Layout not supplied by the VMM (older launcher): follow the data arena. */
+        HUGEPAGE_DATA_REGION = (void*)((uintptr_t)DATA_REGION + data_size);
+    }
+    log_always("Graphics arenas: data at %p (%lu MiB), hugepage at %p (%lu MiB)",
+               DATA_REGION, (unsigned long)(DATA_REGION_SIZE / 1024 / 1024),
+               HUGEPAGE_DATA_REGION, (unsigned long)(HUGEPAGE_REGION_SIZE / 1024 / 1024));
+}
+
+int memory_reserve_graphics_arenas(
+        int (*callback)(uintptr_t addr, size_t size, bool is_user_reserved,
+                        const char* comment)) {
+    /* Graphics is a VM feature; a guest whose RAM does not reach the arena
+     * window (possible for a non-graphics guest started at a small memory size)
+     * simply gets no reservation -- its allocator could not use that physical
+     * range anyway. Graphics guests that configure an arena past the end of RAM
+     * are stopped here too, and the launcher enforces the RAM floor up front. */
+    if ((uintptr_t)HUGEPAGE_DATA_REGION + HUGEPAGE_REGION_SIZE >
+            (uintptr_t)g_pal_public_state.memory_address_end) {
+        log_always("Graphics arenas at %p (%lu B + hugepage) fall outside guest RAM "
+                   "(end %p); not reserved",
+                   DATA_REGION, (unsigned long)DATA_REGION_SIZE,
+                   g_pal_public_state.memory_address_end);
+        return 0;
+    }
+
+    int ret = callback((uintptr_t)DATA_REGION, DATA_REGION_SIZE,
+                       /*is_user_reserved=*/true, "egl_redirect_data");
+    if (ret < 0)
+        return -PAL_ERROR_NOMEM;
+    ret = callback((uintptr_t)HUGEPAGE_DATA_REGION, HUGEPAGE_REGION_SIZE,
+                   /*is_user_reserved=*/true, "egl_redirect_huge");
+    if (ret < 0)
+        return -PAL_ERROR_NOMEM;
+    return 0;
+}
 
 static inline bool is_egl_redirect_data_region_base(void* addr, size_t size) {
     if (addr == DATA_REGION || addr == HUGEPAGE_DATA_REGION) {
@@ -614,18 +672,10 @@ int memory_preload_ranges(e820_table_entry* e820_entries, size_t e820_entries_si
             return -PAL_ERROR_DENIED;
     }
 
-    /* libgraphics maps these buffers at fixed addresses after program startup. Keep PAL and
-     * LibOS ASLR allocations out of the ranges, but allow those deliberate user mappings to
-     * replace the reservations. */
-    ret = callback((uintptr_t)DATA_REGION, DATA_REGION_SIZE, /*is_user_reserved=*/true,
-                   "egl_redirect_data");
-    if (ret < 0)
-        return -PAL_ERROR_NOMEM;
-    ret = callback((uintptr_t)HUGEPAGE_DATA_REGION, HUGEPAGE_REGION_SIZE,
-                   /*is_user_reserved=*/true,
-                   "egl_redirect_huge");
-    if (ret < 0)
-        return -PAL_ERROR_NOMEM;
+    /* The libgraphics GEM arenas are reserved separately in
+     * memory_reserve_graphics_arenas(), after the manifest has been parsed in
+     * pal_main (their geometry depends on the manifest) -- not here, where the
+     * manifest is not yet available. */
 
     return 0;
 }
@@ -817,13 +867,19 @@ int memory_alloc(void* addr, size_t size, bool read, bool write, bool execute) {
 #endif
     /* Keep the whole libgraphics reservation write-back cacheable. GEM mmap
      * requests change only the ranges they actually consume to write-combining
-     * through memory_protect() below. Marking all 4 GiB write-combining here
-     * needlessly splits and invalidates page mappings that may never be used. */
+     * through memory_protect() below.
+     *
+     * The arenas deliberately skip the zero-fill: they are fresh memfd pages,
+     * which are zero on first touch anyway, and writing the whole arena zero
+     * would pin arena_size bytes of physical RAM (and cost a multi-GiB memset
+     * at boot) for nothing. GEM buffer mappings replace arena slices outright. */
     bool is_egl_redirect_region = is_egl_redirect_data_region_base(addr, size);
-    memset(addr, 0, size);
-    if (is_egl_redirect_region)
-        log_always("Reserved GEM arena %p (size %lu); marking allocations WC on demand",
+    if (is_egl_redirect_region) {
+        log_always("Reserved GEM arena %p (size %lu); fresh memfd pages, allocations marked WC on demand",
                    addr, (unsigned long)size);
+    } else {
+        memset(addr, 0, size);
+    }
     return 0;
 }
 

@@ -25,6 +25,7 @@
 #include "kernel_apic.h"
 #include "kernel_files.h"
 #include "kernel_interrupts.h"
+#include "kernel_debug.h"
 #include "kernel_memory.h"
 #include "kernel_multicore.h"
 #include "kernel_pci.h"
@@ -108,9 +109,16 @@ static int add_preloaded_range(uintptr_t addr, size_t size, bool is_user_reserve
     return pal_add_initial_range(addr, size, /*pal_prot=*/0, is_user_reserved, comment);
 }
 
-static void zero_out_memory_and_prot_none(void) {
+static void prot_none_free_memory(void) {
     extern struct pal_initial_mem_range g_initial_mem_ranges[];
 
+    /* Free guest RAM is inaccessible (PROT_NONE in the guest page tables) until
+     * the allocator hands pages out. The pages are deliberately NOT written
+     * zero here: the memfd (and hugetlbfs) backends are zero by construction,
+     * anything the boot wrote lives in the reserved ranges skipped below, and
+     * later allocations re-zero through memory_alloc(). Writing zero into every
+     * free page used to cost a whole-guest-RAM memset and committed all of it
+     * physically, defeating lazy allocation of the "rest" backends. */
     uint64_t cur_mem_range_idx = 0;
     uintptr_t addr = (uintptr_t)g_pal_public_state.memory_address_end;
     while (true) {
@@ -138,7 +146,6 @@ static void zero_out_memory_and_prot_none(void) {
         if (addr < (uintptr_t)g_pal_public_state.memory_address_start)
             return;
 
-        memset((void*)addr, 0, PAGE_SIZE);
         int ret = memory_protect((void*)addr, PAGE_SIZE, /*read=*/false, /*write=*/false,
                                  /*execute=*/false);
         if (ret < 0)
@@ -154,11 +161,37 @@ noreturn static void print_usage_and_exit(void) {
 
 noreturn int pal_start_continue(void* cmdline_);
 
+/* Boot-time instrumentation: relative stamps against the first instruction of the
+ * kernel, in TSC ticks and (once the TSC frequency is known) milliseconds. Also routed
+ * through the debug serial port: the console (virtio) only carries output written after
+ * its driver is up, so everything before that is invisible there (see plan.md). */
+static uint64_t boot_tsc0;
+static void boot_stamp(const char* what) {
+    uint64_t t = get_tsc() - boot_tsc0;
+    if (g_tsc_mhz) {
+        unsigned long ms_val = (unsigned long)(t / (g_tsc_mhz * 1000));
+        log_always("[boot] +%lu ms: %s", ms_val, what);
+        debug_serial_io_write("[boot] +");
+        debug_serial_io_write_int("", ms_val);
+        debug_serial_io_write(" ms: ");
+        debug_serial_io_write(what);
+        debug_serial_io_write("\n");
+    } else {
+        log_always("[boot] +%llu ticks: %s", (unsigned long long)t, what);
+        debug_serial_io_write("[boot] ");
+        debug_serial_io_write_int("", t);
+        debug_serial_io_write(" ticks: ");
+        debug_serial_io_write(what);
+        debug_serial_io_write("\n");
+    }
+}
+
 /* called by `vm_bootloader.S` on kernel startup */
 __attribute_no_stack_protector  /* starts with zero GS base register */
 __attribute_no_sanitize_address /* starts with dummy page tables w/o ASan shared memory */
 noreturn void pal_start_c(void) {
     int ret;
+    boot_tsc0 = get_tsc();
 
     set_dummy_gs_base();
 
@@ -193,9 +226,31 @@ noreturn void pal_start_c(void) {
     if (ret < 0)
         INIT_FAIL("Failed to initialize preloaded ranges");
 
+    /* Graphics GEM arenas: geometry from the VMM (opt/gramine/graphics_data_size and
+     * opt/gramine/graphics_huge_addr, absent without graphics). Reserved NOW -- before zero_out
+     * and all kernel init -- so that no boot-time allocation can ever claim pages inside the
+     * arenas. The manifest itself is only readable once virtio-fs is up, so the geometry travels
+     * through fw_cfg instead. */
+    uint64_t graphics_data_size = 0;
+    uint64_t graphics_huge_addr = 0;
+    if (graphics_data_size_init(&graphics_data_size) == 0 && graphics_data_size) {
+        uint64_t graphics_data_addr = 0;
+        graphics_data_addr_init(&graphics_data_addr);  /* optional; 0 = the compiled 4G anchor */
+        graphics_huge_addr_init(&graphics_huge_addr); /* optional; 0 = follow the data arena */
+        graphics_arenas_set_geometry((uintptr_t)graphics_data_addr, (size_t)graphics_data_size,
+                                     (uintptr_t)graphics_huge_addr);
+        boot_stamp("graphics arenas reserved");
+    }
+
+    ret = memory_reserve_graphics_arenas(&add_preloaded_range);
+    if (ret < 0)
+        INIT_FAIL("Failed to reserve the graphics arenas (arena size or VM memory size)");
+
+    boot_stamp("initial ranges set");
+
     /* PAL binary is located at 1MB and may occupy until 4MB, see pal.lds */
     /* FIXME: whole PAL binary is RWX because memory_pagetables_init() marked everything as RWX and
-     *        zero_out_memory_and_prot_none() did *not* modify perms for PAL binary memory pages */
+     *        prot_none_free_memory() did *not* modify perms for PAL binary memory pages */
     ret = add_preloaded_range(0x100000UL, 0x300000UL, /*is_user_reserved=*/false, "pal_binary");
     if (ret < 0)
         INIT_FAIL("Failed to preload PAL-binary memory range");
@@ -203,7 +258,10 @@ noreturn void pal_start_c(void) {
     /* Common memory-allocation logic relies on all memory pages to be zeroed out after boot.
      * This is not true for common hypervisors like QEMU/KVM, so must do it ourselves. Also,
      * memory_pagetables_init() marked all pages as RWX, now is good time to revert to NONE. */
-    zero_out_memory_and_prot_none();
+    /* Free guest RAM is inaccessible until the allocator hands pages out. See
+     * prot_none_free_memory() for why the old whole-RAM zero-fill is gone. */
+    prot_none_free_memory();
+    boot_stamp("free memory PROT_NONE");
 
     /* Configure PAT so that index 1 is Write-Combining (WC). Must be after multicore init because
      * PAT is per-CPU state and AP CPUs will also need it set. */
@@ -257,6 +315,7 @@ noreturn void pal_start_c(void) {
     ret = init_multicore(num_cpus, /*hob_list_addr=*/NULL);
     if (ret < 0)
         INIT_FAIL("Failed to initialize multicore (BSP CPU couldn't init AP CPUs)");
+    boot_stamp("multicore up");
 
     if (!g_console)
         INIT_FAIL("Failed to initialize virtio-console driver");

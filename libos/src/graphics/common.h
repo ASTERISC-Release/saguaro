@@ -4,7 +4,14 @@
 #ifndef __COMMON_H__
 #define __COMMON_H__
 
-#define NUM_COMM_PAGES 1
+/*
+ * The shared Tirith graphics ABI (the comm page, the request ids, the fallback
+ * arena constants) comes from graphics_comm_abi.h, defined once for all three
+ * consumers. This header adds the preload library's own externs and helpers;
+ * the per-buffer state below mirrors the QEMU listener's `check` struct
+ * (include/qemu/sg.h) by hand.
+ */
+#include "graphics_comm_abi.h"
 
 /* Enable only when both the guest redirector and host listener should wait for
  * X11 Present idle fences before reusing redirected buffers. */
@@ -90,42 +97,20 @@ void use_native_presentation_window(GLXDrawable drawable);
 /* =============== gramine defs/structs ===================== */
 extern bool in_gramine_vm;
 
-#define COMM_ADDR 0xf00000ULL
-#define COMM_MAGIC 0x1234567812345678ULL
-
+/* The library-side comm region: one page at the guest address of the comm window. */
 #define SYS_COMMS_ADDR 0xf00000ULL
-#define SYS_COMMS_SIZE 4096 // One page width.
+#define SYS_COMMS_SIZE 4096
 
-static const size_t THREE_GIGABYTES = 3ULL * 1024 * 1024 * 1024;
-static const size_t ONE_GIGABYTE = 1ULL * 1024 * 1024 * 1024;
-static const size_t DATA_SIZE = THREE_GIGABYTES;
-static const size_t HUGE_DATA_SIZE = ONE_GIGABYTE;
-static void *DATA_REGION = (void *)0x100000000ULL;
-static void *HUGEPAGE_DATA_REGION = (void *)0x200000000ULL;
+/* Fallback arena geometry (the runtime values are computed in gramine.c from
+ * the launcher's env); the hugepage arena follows the data arena unless
+ * GRAMINE_HUGEPAGE_ADDR relocates it. */
+static const size_t DATA_SIZE = GRAPHICS_GEM_DATA_SIZE;
+static const size_t HUGE_DATA_SIZE = GRAPHICS_GEM_HUGEPAGE_SIZE;
+static void *DATA_REGION = (void *)GRAPHICS_GEM_DATA_START;
+static void *HUGEPAGE_DATA_REGION =
+    (void *)(GRAPHICS_GEM_DATA_START + GRAPHICS_GEM_DATA_SIZE);
 
-static const uint64_t X11_SETUP = 12;
-static const uint64_t X11_PRESENT = 13;
-static const uint64_t X11_IDLE_FENCE_BUFFER = 33;
-static const uint64_t UPDATE_WINDOW_SIZE = 23;
-static const uint64_t UPDATE_INPUT_MASK = 39;
 
-static const uint64_t SYSCALL_LOGGING_ENABLE = 15;
-static const uint64_t SYSCALL_LOGGING_DISABLE = 16;
-
-typedef struct {
-  volatile uint64_t magic;
-  volatile uint64_t req_bit;
-  volatile uint64_t ret;
-  volatile uint64_t p1;
-  volatile uint64_t p2;
-  volatile uint64_t p3;
-  volatile uint64_t p4;
-  volatile uint64_t p5;
-} comm_page_t;
-
-_Static_assert(offsetof(comm_page_t, ret) == 16, "SG response must stay in the hot cache line");
-_Static_assert(offsetof(comm_page_t, p5) == 56, "common SG payload must fit one cache line");
-_Static_assert(sizeof(comm_page_t) == 64, "SG communication ABI must fit one cache line");
 
 static inline comm_page_t *comm_page(long offset) {
   return (comm_page_t *)(uintptr_t)(COMM_ADDR + offset);

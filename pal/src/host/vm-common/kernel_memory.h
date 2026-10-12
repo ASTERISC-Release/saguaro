@@ -50,6 +50,15 @@ void memory_pat_init_for_wc(void);
 int memory_preload_ranges(e820_table_entry* e820_entries, size_t e820_entries_size,
                           int (*callback)(uintptr_t addr, size_t size, bool is_user_reserved,
                                           const char* comment));
+
+/* Graphics GEM arenas: applies the geometry (data-arena address *and* size -- a zero address
+ * means the compiled 4G anchor; hugepage arena address, computed when not supplied) and
+ * reserves both ranges through `callback`. Call before any boot-time allocator activity
+ * (vm/pal_main.c does this right after the e820 pass, from fw_cfg input). */
+void graphics_arenas_set_geometry(uintptr_t data_addr, size_t data_size, uintptr_t huge_addr);
+int memory_reserve_graphics_arenas(int (*callback)(uintptr_t addr, size_t size,
+                                                   bool is_user_reserved,
+                                                   const char* comment));
 int memory_tighten_permissions(void);
 
 int memory_alloc(void* addr, size_t size, bool read, bool write, bool execute);

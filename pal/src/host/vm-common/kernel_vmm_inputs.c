@@ -221,6 +221,104 @@ int cmdline_init_envs(char* cmdline_envs, size_t cmdline_envs_size) {
     return 0;
 }
 
+int graphics_data_size_init(uint64_t* out_graphics_data_size) {
+    uint16_t fw_cfg_selector;
+    uint32_t fw_cfg_size;
+    int ret = find_fw_cfg_selector("opt/gramine/graphics_data_size", &fw_cfg_selector,
+                                   &fw_cfg_size);
+    if (ret < 0)
+        return ret;
+
+    char buf[32] = { 0 };
+    if (fw_cfg_size >= sizeof(buf))
+        return -PAL_ERROR_INVAL;
+
+    vm_portio_writew(FW_CFG_PORT_SEL, fw_cfg_selector);
+    for (size_t i = 0; i < fw_cfg_size; i++)
+        buf[i] = vm_portio_readb(FW_CFG_PORT_SEL + 1);
+
+    /* decimal byte size, guaranteed NULL-terminated and non-empty */
+    if (!buf[0])
+        return -PAL_ERROR_INVAL;
+
+    uint64_t value = 0;
+    for (size_t i = 0; buf[i]; i++) {
+        if (buf[i] < '0' || buf[i] > '9')
+            return -PAL_ERROR_INVAL;
+        if (value > (UINT64_MAX - 9) / 10)
+            return -PAL_ERROR_INVAL;
+        value = value * 10 + (uint64_t)(buf[i] - '0');
+    }
+    if (!value)
+        return -PAL_ERROR_INVAL;
+    *out_graphics_data_size = value;
+    return 0;
+}
+
+int graphics_huge_addr_init(uint64_t* out_graphics_huge_addr) {
+    uint16_t fw_cfg_selector;
+    uint32_t fw_cfg_size;
+    int ret = find_fw_cfg_selector("opt/gramine/graphics_huge_addr", &fw_cfg_selector,
+                                   &fw_cfg_size);
+    if (ret < 0)
+        return ret;
+
+    char buf[32] = { 0 };
+    if (fw_cfg_size >= sizeof(buf))
+        return -PAL_ERROR_INVAL;
+
+    vm_portio_writew(FW_CFG_PORT_SEL, fw_cfg_selector);
+    for (size_t i = 0; i < fw_cfg_size; i++)
+        buf[i] = vm_portio_readb(FW_CFG_PORT_SEL + 1);
+
+    /* decimal guest physical address, NULL-terminated and non-empty */
+    if (!buf[0])
+        return -PAL_ERROR_INVAL;
+
+    uint64_t value = 0;
+    for (size_t i = 0; buf[i]; i++) {
+        if (buf[i] < '0' || buf[i] > '9')
+            return -PAL_ERROR_INVAL;
+        if (value > (UINT64_MAX - 9) / 10)
+            return -PAL_ERROR_INVAL;
+        value = value * 10 + (uint64_t)(buf[i] - '0');
+    }
+    *out_graphics_huge_addr = value;
+    return 0;
+}
+
+int graphics_data_addr_init(uint64_t* out_graphics_data_addr) {
+    uint16_t fw_cfg_selector;
+    uint32_t fw_cfg_size;
+    int ret = find_fw_cfg_selector("opt/gramine/graphics_data_addr", &fw_cfg_selector,
+                                   &fw_cfg_size);
+    if (ret < 0)
+        return ret;
+
+    char buf[32] = { 0 };
+    if (fw_cfg_size >= sizeof(buf))
+        return -PAL_ERROR_INVAL;
+
+    vm_portio_writew(FW_CFG_PORT_SEL, fw_cfg_selector);
+    for (size_t i = 0; i < fw_cfg_size; i++)
+        buf[i] = vm_portio_readb(FW_CFG_PORT_SEL + 1);
+
+    /* decimal guest physical address, NULL-terminated and non-empty */
+    if (!buf[0])
+        return -PAL_ERROR_INVAL;
+
+    uint64_t value = 0;
+    for (size_t i = 0; buf[i]; i++) {
+        if (buf[i] < '0' || buf[i] > '9')
+            return -PAL_ERROR_INVAL;
+        if (value > (UINT64_MAX - 9) / 10)
+            return -PAL_ERROR_INVAL;
+        value = value * 10 + (uint64_t)(buf[i] - '0');
+    }
+    *out_graphics_data_addr = value;
+    return 0;
+}
+
 int host_pwd_init(void) {
     uint16_t fw_cfg_selector;
     uint32_t fw_cfg_size;

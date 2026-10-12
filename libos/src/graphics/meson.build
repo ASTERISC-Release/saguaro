@@ -33,6 +33,10 @@ libgraphics = shared_library('graphics',
     'main.c',
     'xcb.c',
 
+    # libos/include for the shared graphics ABI header (graphics_comm_abi.h; also used by the
+    # QEMU listener's build).
+    include_directories: ['../../include'],
+
     # The sources predate this tree's warning set and use GNU C; cleaning them up is a separate
     # task.
     override_options: ['c_std=gnu11', 'werror=false'],

@@ -428,13 +428,41 @@ long libos_syscall_munmap(void* _addr, size_t length) {
      * intact. Releasing a subrange here would make it available to the guest allocator while
      * QEMU and the GPU still use the same identity-mapped addresses, allowing GPU writes to
      * corrupt an unrelated heap allocation. The host allocator is monotonic for the VM lifetime,
-     * so preserve these reservations until process teardown. */
+     * so preserve these reservations until process teardown.
+     *
+     * The data-arena size is runtime-configurable (manifest key
+     * sys.experimental__graphics_data_size) and the hugepage arena follows the data arena; the
+     * PAL reserves exactly these ranges (kernel_memory.c). Read the bounds once; a concurrent
+     * second initialisation computes identical values. */
+    static bool gem_bounds_ready;
+    static uint64_t gem_data_start, gem_data_end, gem_huge_start, gem_huge_end;
+    if (!__atomic_load_n(&gem_bounds_ready, __ATOMIC_ACQUIRE)) {
+        /* The arena bounds are exactly the ranges the PAL reserved for them
+         * (comments "egl_redirect_data" and "egl_redirect_huge", see
+         * kernel_memory.c); a guest without a graphics deployment has none, and
+         * the guards below become no-ops. A concurrent second initialisation
+         * computes identical values. */
+        for (size_t i = 0; i < g_pal_public_state->initial_mem_ranges_len; i++) {
+            struct pal_initial_mem_range* r = &g_pal_public_state->initial_mem_ranges[i];
+            if (r->is_free) {
+                continue;
+            }
+            if (!strcmp(r->comment, "egl_redirect_data")) {
+                gem_data_start = r->start;
+                gem_data_end   = r->end;
+            } else if (!strcmp(r->comment, "egl_redirect_huge")) {
+                gem_huge_start = r->start;
+                gem_huge_end   = r->end;
+            }
+        }
+        __atomic_store_n(&gem_bounds_ready, true, __ATOMIC_RELEASE);
+    }
     bool in_regular_gem_arena =
-        addr >= GRAPHICS_GEM_DATA_START && length <= GRAPHICS_GEM_DATA_SIZE &&
-        addr - GRAPHICS_GEM_DATA_START <= GRAPHICS_GEM_DATA_SIZE - length;
+        addr >= gem_data_start && length <= gem_data_end - gem_data_start &&
+        addr - gem_data_start <= (gem_data_end - gem_data_start) - length;
     bool in_hugepage_gem_arena =
-        addr >= GRAPHICS_GEM_HUGEPAGE_START && length <= GRAPHICS_GEM_HUGEPAGE_SIZE &&
-        addr - GRAPHICS_GEM_HUGEPAGE_START <= GRAPHICS_GEM_HUGEPAGE_SIZE - length;
+        addr >= gem_huge_start && length <= gem_huge_end - gem_huge_start &&
+        addr - gem_huge_start <= (gem_huge_end - gem_huge_start) - length;
     if (in_regular_gem_arena || in_hugepage_gem_arena)
         return 0;
 #endif

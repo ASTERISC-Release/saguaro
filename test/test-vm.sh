@@ -42,6 +42,12 @@ for s in "${SUITES[@]}"; do
     examples)
         "$REPO/tools/run-vm-aarch64-examples.sh" || rc=1 ;;
     hello)
+        # The bring-up soak test targets KVM on a native aarch64 host; on anything else
+        # it cannot boot (run-vm-aarch64-dev.sh does not emulate) and would count as failures.
+        if [ "$(uname -m)" != "aarch64" ]; then
+            echo "hello: skipped (aarch64-only bring-up test; this host is $(uname -m))"
+            continue
+        fi
         for n in 2 4; do
             ok=0
             for i in $(seq 10); do
