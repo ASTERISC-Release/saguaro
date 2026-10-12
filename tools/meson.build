@@ -84,6 +84,9 @@ if tdx
     conf_gramine_tdx.merge_from(conf)
     conf_gramine_tdx.set_quoted('TDSHIM_PAL_PATH', join_paths(hostpalpath_tdx, 'tdshim-pal'))
 
+    # gramine-tdx is gramine-vm.in with the TDX paths: it sources the same relay library
+    install_data('gramine-vm-relay.sh', install_dir: hostpalpath_tdx, rename: 'vm-relay.sh')
+
     configure_file(
         input: 'gramine-vm.in',
         output: 'gramine-tdx',

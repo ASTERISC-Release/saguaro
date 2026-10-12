@@ -198,7 +198,7 @@ the ones added via this option.
 VM networking (``gramine-vm``)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The x86_64 ``gramine-vm`` launcher starts a per-VM VSOCK relay. The guest has no TCP/IP stack; the
+The ``gramine-vm`` launcher (x86_64 and AArch64) starts a per-VM VSOCK relay. The guest has no TCP/IP stack; the
 relay opens TCP and UDP sockets in the launcher's network namespace. These settings are read by the
 VM launcher and relay and do not configure the Linux PAL.
 
@@ -227,8 +227,9 @@ manifests use this for the X proxy. Guest loopback addresses ``127.0.0.0/8`` and
 the guest itself. UDP and DNS traffic use the relay; the VM PAL does not provide
 ``/etc/resolv.conf``, so mount a resolver file when needed.
 
-The relay networking feature is currently integrated and tested on x86_64. The AArch64 VM launcher
-does not yet start the relay; AArch64 runtime validation also requires a host with KVM.
+The relay networking feature is integrated and tested on x86_64 and on AArch64. The AArch64 launcher
+also needs ``/dev/vhost-vsock`` (kernel module ``vhost_vsock``) to be readable and writable by the user;
+without it the VM still boots, but guest sockets fail, and a manifest with ``vm.net`` keys is refused.
 
 Environment variables
 ^^^^^^^^^^^^^^^^^^^^^
