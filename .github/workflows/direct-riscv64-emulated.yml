@@ -20,9 +20,9 @@ on:
         required: false
         default: "pal libos"
       examples:
-        description: "example suites for scripts/riscv64/run-examples.sh, built in the guest (slow; empty: none)"
+        description: "example suites for scripts/riscv64/run-examples.sh, built in the guest (slow; default: python; empty: none)"
         required: false
-        default: ""
+        default: "python"
 
 permissions:
   contents: read

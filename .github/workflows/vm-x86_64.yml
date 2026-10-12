@@ -64,7 +64,7 @@ jobs:
       - name: Install build dependencies, QEMU and virtiofsd
         run: |
           scripts/dependencies.sh --build-only
-          sudo apt-get install -y -qq qemu-system-x86 virtiofsd lsof python3-psutil
+          sudo apt-get install -y -qq qemu-system-x86 virtiofsd lsof python3-psutil python3-numpy python3-scipy
           # gramine-vm starts `virtiofsd` by name; Ubuntu installs it off PATH. Symlink it instead of
           # putting /usr/libexec on PATH: that directory contains a `gcc` *directory*, which GNU make
           # picks over /usr/bin/gcc and then fails with "gcc: Permission denied" (glibc build).
@@ -116,6 +116,21 @@ jobs:
             2>&1 | tee ../../../vm-threads.log
           grep -q "(again)" ../../../vm-threads.log   # printed by every thread at the end of its TLS check
 
+      - name: Smoke test - python example (hello, numpy, scipy) under gramine-vm
+        run: |
+          # The HTTP server/client check of the example needs TCP/IP, which the VM PAL does not have
+          # yet, so only the three scripts that need no network run.
+          . "$GRAMINE_PREFIX/env.sh"
+          cd CI-Examples/python
+          make python.manifest
+          for s in helloworld test-numpy test-scipy; do
+            sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" timeout 600 gramine-vm python scripts/$s.py \
+              2>&1 | tee ../../vm-python-$s.log
+          done
+          grep -q "Hello World" ../../vm-python-helloworld.log
+          grep -q "numpy.dot: " ../../vm-python-test-numpy.log
+          grep -q "linalg.cholesky: " ../../vm-python-test-scipy.log
+
       - name: LibOS regression suite under gramine-vm (informational)
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_suite }}
         continue-on-error: true
@@ -133,6 +148,8 @@ jobs:
             echo "### x86_64 vm PAL"
             echo '```'
             tail -n 3 vm-hello.log 2>/dev/null || echo "(no helloworld log)"
+            echo '--- python example'
+            tail -n 1 vm-python-test-scipy.log 2>/dev/null || echo "(python example not run)"
             echo '--- libos suite'
             tail -n 1 vm-libos.log 2>/dev/null || echo "(suite not run)"
             echo '```'
