@@ -2,7 +2,8 @@ Installing
 ==========
 
 This tree builds and runs on Debian/Ubuntu (24.04 is the tested baseline) for two
-architectures, **x86_64** and **aarch64**, and has two ways to run an application:
+architectures, **x86_64** and **aarch64**, and has two ways to run an application (the experimental
+**riscv64** port of the direct PAL is cross-built instead; see `RISC-V (cross-build and test guest)`_):
 
 - ``gramine-direct`` -- the *direct* PAL: the library OS runs as an ordinary Linux process.
   Needs only the build tools; works anywhere, including inside a container.

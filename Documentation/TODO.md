@@ -1,4 +1,4 @@
-# TODO — aarch64 VM PAL (`gramine-vm`)
+# TODO — aarch64 VM PAL (`gramine-vm`) and RISC-V direct PAL
 
 Open items as of 2026-10-10 (HEAD `fc009987`). Context: `Documentation/devel/aarch64/vm-pal-plan.md` (history),
 `x86-parity-vm.md` (results), `Documentation/devel/vm.md` (how to run). Test ids refer to
@@ -128,3 +128,16 @@ When one is fixed, delete its `vm_skip.toml` entry (an xfail that starts passing
 - The x86_64 builds were not run from this branch (no x86 host); the shared sources were type-checked
   against the x86_64 headers on aarch64 and the aarch64 direct PAL suites were re-run (145/36, 28/8).
   A real x86_64 `vm`/`tdx` build and test run is still to be done.
+
+## RISC-V (RV64) direct PAL
+
+The port is experimental; its plan, log and open items are in `Documentation/devel/riscv/plan.md`
+(the lists "Open after Phase 5" and "Still open"). In short:
+
+- not run on RISC-V hardware, only in an emulated guest;
+- every syscall takes the seccomp trap and returns through `rt_sigreturn` (no syscall-site
+  rewriting, no patched libc), which leaves the `gettimeofday` test little headroom;
+- the PAL does not fill in CPU identification (`test_102_cpuinfo` is skipped);
+- `statx` has no regression test of its own and is enabled for riscv64 only;
+- the `rust` example was not run;
+- no `vm` PAL.
