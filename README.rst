@@ -121,6 +121,10 @@ Once installed, run an application::
 Documentation
 =============
 
+- `Documentation index <Documentation/README.md>`__: what each document is, and which ones are
+  inherited from upstream.
+- `Summary of the development logs <Documentation/devel/summary.md>`__: the outcome of each port
+  on one page.
 - `Multi-architecture notes
   <Documentation/devel/multiarch.md>`__: supported configurations, build options,
   test and benchmark tooling, CI workflows.
