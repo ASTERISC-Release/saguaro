@@ -555,16 +555,41 @@ async def run_relay(cid, rules, stats=None, policy=None):
         await vsock_server.serve_forever()
 
 
+def die_with_parent():
+    """Make the kernel send SIGTERM to this process when its parent dies (Linux PR_SET_PDEATHSIG).
+
+    The launcher normally stops the relay in its EXIT trap; when the launcher itself is killed with
+    SIGKILL no trap runs and the relay would stay behind, listening on its vsock port, forever.
+    Returns False when it cannot be set up or the parent is already gone.
+    """
+    import ctypes  # pylint: disable=import-outside-toplevel
+    import signal  # pylint: disable=import-outside-toplevel
+    parent = os.getppid()
+    try:
+        libc = ctypes.CDLL(None, use_errno=True)
+        if libc.prctl(1, int(signal.SIGTERM), 0, 0, 0) != 0:  # 1 = PR_SET_PDEATHSIG
+            return False
+    except (OSError, AttributeError):
+        return False
+    return os.getppid() == parent and parent != 1
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog='gramine-vm-relay')
     ap.add_argument('--cid', type=int, required=True, help='the VM\'s guest CID')
     ap.add_argument('--inbound', action='append', default=[],
                     help='inbound rule, e.g. guest=8080:host=18080:bind=127.0.0.1 or 8080:18080')
     ap.add_argument('--config', help='VM manifest or relay TOML config')
+    ap.add_argument('--die-with-parent', action='store_true',
+                    help='exit (SIGTERM) when the process that started the relay dies; used by the '
+                         'launchers, which may be killed with SIGKILL')
     args = ap.parse_args(argv)
 
     if args.cid <= 2 or args.cid >= 0xffffffff:
         ap.error(f'invalid cid {args.cid}: must be > 2 and < 0xffffffff')
+    if args.die_with_parent and not die_with_parent():
+        print('vm-relay: warning: cannot follow the launcher\'s death (no PR_SET_PDEATHSIG, or the '
+              'launcher is already gone)', file=sys.stderr)
     try:
         rules, policy = load_config(args)
     except (ValueError, KeyError, FileNotFoundError) as e:

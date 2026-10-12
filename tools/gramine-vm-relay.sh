@@ -82,7 +82,8 @@ vm_relay_start() {
     # PYTHONASYNCIODEBUG makes the relay log event-loop stalls ("Executing ... took 0.sss seconds"),
     # which is how a blocking vsock dial that freezes the other forwards shows up.
     env PYTHONASYNCIODEBUG=${GRAMINE_VM_RELAY_DEBUG:+1} \
-        python3 -m graminelibos.vsock_relay --cid "$cid" --config "$manifest" "${args[@]}" \
+        python3 -m graminelibos.vsock_relay --cid "$cid" --config "$manifest" --die-with-parent \
+        "${args[@]}" \
         >"$RELAY_LOG" 2>&1 &
     RELAY_PID=$!
     # wait until the relay prints that it listens (or dies: a host port that is taken fails here,
