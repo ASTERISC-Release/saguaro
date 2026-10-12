@@ -130,17 +130,26 @@ case "$HOST_ARCH" in
 esac
 
 # drop_stale_manifest <manifest>
-# A manifest records the LibOS it was rendered for. After the install prefix changed or went away
-# (another prefix, a recreated container, a VM install used for the same example) it has to be
-# rendered again: the PAL otherwise fails with "Unable to load loader.entrypoint", or loads another
-# build's LibOS and crashes. If the manifest names a libsysdb.so outside $GRAMINE_PREFIX (or one
-# that no longer exists), print that path, delete the manifest and succeed; otherwise fail quietly.
+# A manifest records the install it was rendered for. After the install prefix changed or went away
+# (another prefix, a recreated container, a VM install used for the same example), or after the libc
+# mode changed (a manifest rendered for a bundled glibc names runtime/glibc, which a libc=none install
+# does not have), it has to be rendered again: the PAL otherwise fails with "Unable to load
+# loader.entrypoint", cannot open the runtime directory, or loads another build's LibOS and crashes.
+# If the manifest is stale in one of those ways, print why, delete the manifest and succeed;
+# otherwise fail quietly.
 drop_stale_manifest() {
-    local libos
+    local libos rt
     libos=$(sed -n 's/^entrypoint = "file:\(.*libsysdb\.so\)"$/\1/p' "$1" 2>/dev/null | head -1)
     if [ -n "$libos" ] && { [ ! -f "$libos" ] || [ "${libos#"$GRAMINE_PREFIX"/}" = "$libos" ]; }; then
         rm -f "$1"
         echo "$libos"
+        return 0
+    fi
+    # `file:<prefix>/lib/<multiarch>/gramine/runtime/glibc` in the manifest, but no such directory
+    rt=$(grep -o 'file:[^" ]*/gramine/runtime/glibc' "$1" 2>/dev/null | head -1)
+    if [ -n "$rt" ] && [ ! -d "${rt#file:}" ]; then
+        rm -f "$1"
+        echo "${rt#file:} (missing: this install has no bundled libc)"
         return 0
     fi
     return 1
@@ -163,7 +172,7 @@ ensure_example() {
     else
         local libos
         if libos=$(drop_stale_manifest "$dir/$man"); then
-            need="manifest $1/$man was rendered for another Gramine install ($libos)"
+            need="manifest $1/$man was rendered for another Gramine install or libc mode ($libos)"
         fi
     fi
     if [ -n "$need" ]; then
@@ -436,7 +445,7 @@ python)
     # `make` does not render an existing manifest again, so one left by a run against another
     # install (for example the VM examples script) would make gramine-direct load that LibOS.
     if stale=$(drop_stale_manifest "$REPO/CI-Examples/python/python.manifest"); then
-        echo "  python.manifest was rendered for another Gramine install ($stale); rendering it again"
+        echo "  python.manifest was rendered for another Gramine install or libc mode ($stale); rendering it again"
     fi
     ( cd "$REPO/CI-Examples/python" && make >/dev/null 2>&1
       timeout -s KILL 900 make check >"$LOGDIR/python.log" 2>&1 )
