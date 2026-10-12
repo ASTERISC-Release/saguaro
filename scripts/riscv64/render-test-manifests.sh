@@ -30,6 +30,13 @@ PREFIX="${PREFIX:-$BUILD/prefix}"
 # default template mounts (and lists libgcc_s/libstdc++ from in trusted_files).
 ARCH_LIBDIR=/lib/riscv64-linux-gnu
 
+# With libc=none, gramine.runtimedir() uses GRAMINE_HOST_LIBC_DIR. This renderer runs in the
+# x86_64 cross container, but the manifests are executed in the RISC-V guest; do not let the
+# renderer's MULTIARCH (or any cross sysroot) select the runtime directory. An alternate guest
+# sysroot can override this value explicitly.
+GRAMINE_HOST_LIBC_DIR=${GRAMINE_HOST_LIBC_DIR:-/lib/riscv64-linux-gnu}
+export GRAMINE_HOST_LIBC_DIR
+
 case "$SUITE" in
     pal)
         SRC="$REPO/pal/regression"
