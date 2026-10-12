@@ -51,6 +51,56 @@ int pal_arch_flush_icache(void* begin, size_t size) {
     return ret < 0 ? unix_to_pal_error(ret) : 0;
 }
 
+#define SYSCALL_PATCH_REGISTRY_MAX 512
+
+struct syscall_patch_entry {
+    _Atomic uintptr_t site;
+    _Atomic bool complete;
+};
+
+/* Entries are never reused: a delayed SIGTRAP must still recognize a marker that it executed
+ * before the publisher installed the final jal. The LibOS has the same 512-site limit. */
+static struct syscall_patch_entry g_syscall_patch_registry[SYSCALL_PATCH_REGISTRY_MAX];
+
+int pal_arch_publish_unaligned_insn(uint32_t* site, uint32_t insn) {
+    assert(((uintptr_t)site & 3) == 2);
+
+    struct syscall_patch_entry* entry = NULL;
+    for (size_t i = 0; i < ARRAY_SIZE(g_syscall_patch_registry); i++) {
+        uintptr_t expected = 0;
+        if (atomic_compare_exchange_strong_explicit(&g_syscall_patch_registry[i].site, &expected,
+                                                    (uintptr_t)site, memory_order_release,
+                                                    memory_order_relaxed)) {
+            entry = &g_syscall_patch_registry[i];
+            break;
+        }
+    }
+    if (!entry)
+        return -PAL_ERROR_NOMEM;
+
+    volatile uint16_t* halves = (volatile uint16_t*)site;
+    halves[0] = 0x9002; /* c.ebreak: an atomic 16-bit publication barrier */
+    int ret = pal_arch_flush_icache(site, sizeof(*site));
+    if (ret < 0)
+        goto restore_ecall;
+
+    halves[1] = insn >> 16;
+    halves[0] = insn;
+    ret = pal_arch_flush_icache(site, sizeof(*site));
+    if (ret < 0)
+        goto restore_ecall;
+
+    atomic_store_explicit(&entry->complete, true, memory_order_release);
+    return 0;
+
+restore_ecall:
+    halves[1] = 0;
+    halves[0] = 0x0073; /* ecall */
+    (void)pal_arch_flush_icache(site, sizeof(*site));
+    atomic_store_explicit(&entry->complete, true, memory_order_release);
+    return ret;
+}
+
 int arch_do_rt_sigprocmask(int sig, int how) {
     __sigset_t mask;
     __sigemptyset(&mask);
@@ -247,6 +297,18 @@ __attribute__((visibility("protected"))) bool libos_tcb_registry_scan(PAL_TCB** 
  * it did before this handler existed (core dump, like a plain ebreak without Gramine).
  */
 void pal_arch_handle_trap(ucontext_t* uc) {
+    uintptr_t pc = ucontext_get_ip(uc);
+    for (size_t i = 0; i < ARRAY_SIZE(g_syscall_patch_registry); i++) {
+        if (atomic_load_explicit(&g_syscall_patch_registry[i].site, memory_order_acquire) == pc) {
+            while (!atomic_load_explicit(&g_syscall_patch_registry[i].complete,
+                                         memory_order_acquire))
+                __asm__ volatile("nop" ::: "memory");
+            /* Return to the same PC. It now contains either the final jal or the restored ecall. */
+            __asm__ volatile("fence.i" ::: "memory");
+            return;
+        }
+    }
+
     /* Both widths of `ebreak` must be recognized. RISC-V's `ebreak` is `0x00100073` (`0x00000073` is `ecall`), but under
      * the toolchain's default `-march` (rv64imafdc, i.e. with the C extension) both gas and the
      * linker RELAX a plain `ebreak` mnemonic to the 2-byte compressed encoding `c.ebreak`
@@ -255,9 +317,9 @@ void pal_arch_handle_trap(ucontext_t* uc) {
      * fetch at a compressed site would therefore read `{next insn's low half}<<16 | 0x9002` and
      * miss the protocol. Reading 16 bits first is always in-bounds: pc is 2-byte aligned (all
      * RISC-V instructions are), so a 2-byte load never straddles a page edge. */
-    uint16_t insn16 = *(const uint16_t*)ucontext_get_ip(uc);
+    uint16_t insn16 = *(const uint16_t*)pc;
     bool is_ebreak = insn16 == 0x9002 /* c.ebreak */
-                     || (insn16 == 0x0073 && *(const uint32_t*)ucontext_get_ip(uc) == 0x00100073);
+                     || (insn16 == 0x0073 && *(const uint32_t*)pc == 0x00100073);
     if (is_ebreak && uc->uc_mcontext.sc_regs.a7 == PAL_BRK_RESTORE_CONTEXT) {
         PAL_CONTEXT* ctx = (PAL_CONTEXT*)uc->uc_mcontext.sc_regs.a0;
         ctx->pstate &= ~PAL_PSTATE_EXACT_CONTEXT;

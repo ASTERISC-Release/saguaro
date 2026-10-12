@@ -64,6 +64,11 @@ static uint32_t enc_jal(int64_t delta) {
            ((d >> 11) & 1) << 20 | ((d >> 12) & 0xff) << 12;
 }
 
+static uint32_t load_insn(uintptr_t pc) {
+    const volatile uint16_t* halves = (const volatile uint16_t*)pc;
+    return halves[0] | (uint32_t)halves[1] << 16;
+}
+
 static uint32_t* alloc_stub(uintptr_t site) {
     /* A published page must remain executable: changing a shared page back to RW while adding a
      * later stub lets another hart fault while executing an older stub. Anonymous PAL mappings
@@ -100,10 +105,7 @@ static uint32_t* alloc_stub(uintptr_t site) {
 }
 
 bool libos_try_patch_syscall_site(uintptr_t pc) {
-    /* Compressed code can place an ecall at pc % 4 == 2. RISC-V only guarantees atomic
-     * replacement at a naturally aligned address, so those sites remain on the trap path until
-     * the SIGTRAP breakpoint protocol is implemented. */
-    if (!patching_enabled() || (pc & 3))
+    if (!patching_enabled() || (pc & 1))
         return false;
     struct libos_vma_info vma;
     if (lookup_vma((void*)pc, &vma) < 0)
@@ -116,8 +118,8 @@ bool libos_try_patch_syscall_site(uintptr_t pc) {
     if (!eligible)
         return false;
     spinlock_lock(&g_patch_lock);
-    volatile uint32_t* site = (volatile uint32_t*)pc;
-    if (*site != ECALL_INSN) {
+    uint32_t* site = (uint32_t*)pc;
+    if (load_insn(pc) != ECALL_INSN) {
         spinlock_unlock(&g_patch_lock);
         return false;
     }
@@ -154,9 +156,19 @@ bool libos_try_patch_syscall_site(uintptr_t pc) {
         spinlock_unlock(&g_patch_lock);
         return false;
     }
-    __atomic_store_n(site, enc_jal(delta), __ATOMIC_RELEASE);
-    if (!flush_icache((void*)page, sizeof(*site)))
-        BUG();
+    uint32_t branch = enc_jal(delta);
+    if (pc & 3) {
+        if (pal_arch_publish_unaligned_insn(site, branch) < 0) {
+            if (PalVirtualMemoryProtect((void*)page, STUB_PAGE_SIZE, orig) < 0)
+                BUG();
+            spinlock_unlock(&g_patch_lock);
+            return false;
+        }
+    } else {
+        __atomic_store_n(site, branch, __ATOMIC_RELEASE);
+        if (!flush_icache(site, sizeof(*site)))
+            BUG();
+    }
     if (PalVirtualMemoryProtect((void*)page, STUB_PAGE_SIZE, orig) < 0)
         BUG();
     g_patched_sites++;
@@ -167,7 +179,7 @@ bool libos_try_patch_syscall_site(uintptr_t pc) {
 }
 
 bool libos_syscall_site_was_patched(uintptr_t pc) {
-    uint32_t insn = *(volatile uint32_t*)pc;
+    uint32_t insn = load_insn(pc);
     if ((insn & 0x7f) != 0x6f || ((insn >> 7) & 0x1f) != 0) /* jal x0, offset */
         return false;
     int64_t delta = ((int64_t)(insn >> 31) << 20) |

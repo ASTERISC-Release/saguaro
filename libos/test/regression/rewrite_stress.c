@@ -278,6 +278,52 @@ static void sc_blob(void) {
     unlink(path);
 }
 
+#if defined(__riscv)
+/* ---- unaligned: compressed code places the ecall at 2 mod 4. Threads race both the
+ * c.ebreak publication protocol and repeated execution of the resulting unaligned jal. ---- */
+static long (*g_unaligned_fn)(void);
+static void* unaligned_user(void* arg) {
+    (void)arg;
+    pid_t pid = getpid();
+    pthread_barrier_wait(&g_bar);
+    for (int i = 0; i < 5000; i++)
+        CHK(g_unaligned_fn() == pid);
+    return NULL;
+}
+
+static void sc_unaligned(void) {
+    const char* path = "/mnt/tmpfs/rewrite_stress_unaligned";
+    unsigned char code[16] = {0};
+    uint32_t nr = SC_INSN_NR;
+    uint16_t c_nop = 0x0001;
+    uint32_t call = SC_INSN_CALL;
+    uint32_t ret = SC_INSN_RET;
+    memcpy(code + 0, &nr, sizeof(nr));
+    memcpy(code + 4, &c_nop, sizeof(c_nop));
+    memcpy(code + 6, &call, sizeof(call));
+    memcpy(code + 10, &ret, sizeof(ret));
+
+    int fd = open(path, O_RDWR | O_CREAT | O_TRUNC, 0700);
+    CHK(fd >= 0);
+    CHK(write(fd, code, sizeof(code)) == (ssize_t)sizeof(code));
+    CHK(ftruncate(fd, 4096) == 0);
+    void* mapping = mmap(NULL, 4096, PROT_READ | PROT_EXEC, MAP_PRIVATE, fd, 0);
+    CHK(mapping != MAP_FAILED);
+    close(fd);
+    g_unaligned_fn = mapping;
+
+    enum { N = 16 };
+    pthread_t threads[N];
+    CHK(pthread_barrier_init(&g_bar, NULL, N) == 0);
+    for (int i = 0; i < N; i++)
+        CHK(pthread_create(&threads[i], NULL, unaligned_user, NULL) == 0);
+    for (int i = 0; i < N; i++)
+        CHK(pthread_join(threads[i], NULL) == 0);
+    CHK(munmap(mapping, 4096) == 0);
+    unlink(path);
+}
+#endif
+
 /* ---- jit: anonymous executable memory must keep working (never patched) ---- */
 static atomic_long g_jit_err;
 static void* jit_user(void* arg) {
@@ -384,6 +430,9 @@ int main(int argc, char** argv) {
     if (!strcmp(sc, "signals_kill")) { signals_impl(false, true); printf("OK signals_kill\n"); ran++; }
     RUN("restart", sc_restart());
     RUN("blob", sc_blob());
+#if defined(__riscv)
+    RUN("unaligned", sc_unaligned());
+#endif
     RUN("jit", sc_jit());
     RUN("mprotect", sc_mprotect());
     RUN("threadstorm", sc_threadstorm());

@@ -60,3 +60,4 @@ libos_tcb_registry_del
 libos_tcb_registry_scan
 pal_arch_restore_context
 pal_arch_flush_icache
+pal_arch_publish_unaligned_insn
