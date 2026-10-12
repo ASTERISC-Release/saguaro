@@ -17,6 +17,13 @@
 #
 # Environment: CONTAINER_NAME / IMAGE_NAME override the default gramine-vm-<arch> names.
 #
+# Workspaces (see AGENTS.md): when the checkout sits in a folder named gramine-* (for example
+# ~/Projects/gramine/gramine-main/gramine-multiarch), the container is named after that folder
+# (gramine-main-vm-x86_64, gramine-main-riscv64-cross), and gets its own base for the guest CIDs
+# (GRAMINE_VM_ID_BASE), so several checkouts can run side by side. GRAMINE_WORKSPACE sets the
+# name by hand. The image is shared by all workspaces. A container whose mount of /root/gramine-multiarch
+# is a different checkout than this one is refused instead of being silently reused.
+#
 # Needs a native host of the same architecture (no emulation) with /dev/kvm for gramine-vm. The
 # container runs with --cap-add ALL (virtiofsd serves its / as the guest's /) and
 # seccomp=unconfined (the direct PAL calls personality(), which the default profile blocks).
@@ -46,8 +53,22 @@ case $TARGET in
         NAME=gramine-riscv64-cross ;;
     *) echo "unknown --target '$TARGET' (known: riscv64)" >&2; exit 1 ;;
 esac
+WORKSPACE=${GRAMINE_WORKSPACE:-}
+if [ -z "$WORKSPACE" ]; then
+    case $(basename "$(dirname "$REPO_ROOT")") in
+        gramine-*) WORKSPACE=$(basename "$(dirname "$REPO_ROOT")") ;;
+    esac
+fi
+DEFAULT_CONTAINER=$NAME
+VM_ID_BASE=
+if [ -n "$WORKSPACE" ]; then
+    DEFAULT_CONTAINER=$WORKSPACE-${NAME#gramine-}
+    # 10, 110, ..., 3910: a base per workspace (the launcher only sees the QEMU processes of its
+    # own container when it looks for a free guest CID, and CIDs are global on the host)
+    VM_ID_BASE=$((10 + 100 * ($(printf %s "$WORKSPACE" | cksum | cut -d' ' -f1) % 40)))
+fi
 IMAGE=${IMAGE_NAME:-$NAME}
-CONTAINER=${CONTAINER_NAME:-$NAME}
+CONTAINER=${CONTAINER_NAME:-$DEFAULT_CONTAINER}
 command -v podman >/dev/null || { echo "podman is required" >&2; exit 1; }
 [ -f "$CONTAINERFILE" ] || { echo "missing $CONTAINERFILE" >&2; exit 1; }
 
@@ -74,6 +95,15 @@ IMAGE_ID=$(podman image inspect "$IMAGE" --format '{{.Id}}')
 
 # --- container: recreate when missing or created from an older image ------------------------------
 if podman container exists "$CONTAINER"; then
+    MOUNT_SRC=$(podman container inspect "$CONTAINER" \
+                --format '{{range .Mounts}}{{if eq .Destination "/root/gramine-multiarch"}}{{.Source}}{{end}}{{end}}')
+    if [ -n "$MOUNT_SRC" ] && [ "$(readlink -f "$MOUNT_SRC")" != "$(readlink -f "$REPO_ROOT")" ]; then
+        echo "error: container $CONTAINER mounts $MOUNT_SRC, not this checkout ($REPO_ROOT)." >&2
+        echo "       Use a container of its own (CONTAINER_NAME=..., or put the checkout in a gramine-* folder)," >&2
+        echo "       or run '$0 down' first. Removing a container discards files kept in it outside the repository" >&2
+        echo "       (for example an install prefix under ~/.local)." >&2
+        exit 1
+    fi
     CUR_ID=$(podman container inspect "$CONTAINER" --format '{{.Image}}')
     if [ "$CUR_ID" != "$IMAGE_ID" ]; then
         echo ">>> container $CONTAINER is from an older image; recreating it"
@@ -101,6 +131,7 @@ if ! podman container exists "$CONTAINER"; then
     command -v catatonit >/dev/null 2>&1 && INIT=(--init)
     podman run -d --name "$CONTAINER" ${INIT[@]+"${INIT[@]}"} --cap-add ALL --security-opt seccomp=unconfined \
         ${DEVICES[@]+"${DEVICES[@]}"} ${GRAPHICS[@]+"${GRAPHICS[@]}"} \
+        ${VM_ID_BASE:+-e "GRAMINE_VM_ID_BASE=$VM_ID_BASE"} \
         -v "$REPO_ROOT:/root/gramine-multiarch:rw" \
         "$IMAGE" sleep infinity >/dev/null
 elif [ "$(podman container inspect "$CONTAINER" --format '{{.State.Running}}')" != true ]; then

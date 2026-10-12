@@ -241,7 +241,9 @@ fi
 
 # We need to specify a Gramine VM ID to be able to run two independent Gramine instances at the
 # same time on the same machine. They are used as IDs for the virtiofs and the vsock guest-cid.
-DEFAULT_GRAMINE_VM_ID=10
+# GRAMINE_VM_ID_BASE: set per workspace by container/run.sh, so that containers of different
+# checkouts do not pick the same (host-global) guest CID.
+DEFAULT_GRAMINE_VM_ID=${GRAMINE_VM_ID_BASE:-10}
 GRAMINE_VM_ID=$(python3 -c "
 import psutil
 import re

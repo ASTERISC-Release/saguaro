@@ -83,6 +83,11 @@ USERDATA
 
 start() {
     if running; then echo "guest already running (pid $(cat "$PIDFILE"))"; return 0; fi
+    # Another checkout's guest (or any service) on the same port would receive our ssh commands.
+    if (exec 3<>"/dev/tcp/127.0.0.1/$PORT") 2>/dev/null; then
+        echo "port $PORT is already in use (a guest of another checkout?); set RISCV_GUEST_PORT" >&2
+        return 1
+    fi
     prepare
     : > "$CONSOLE"
     qemu-system-riscv64 -machine virt -cpu rv64 -smp "$CPUS" -m "$MEM" \
