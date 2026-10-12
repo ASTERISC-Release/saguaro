@@ -31,6 +31,8 @@ Several people or agents can work at once, each on their own branch. What makes 
   (test results, with dates and conditions). More files are fine for how-tos. Keep
   `Documentation/devel/README.md` and `summary.md` current. Details in
   `Documentation/devel/README.md`.
+- **Keep documents true.** After editing documents, run `scripts/check-docs.py`: it reports paths and links
+  that name no file of the repository (names that are legitimately external go in `scripts/check-docs.allow`).
 - **Commit small, verified steps** on your own branch, with a message that says what changed and
   why.
 - **Ask first** before destructive git actions (`reset --hard`, deleting branches, anything on a

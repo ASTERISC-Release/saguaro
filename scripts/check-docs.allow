@@ -1,0 +1,51 @@
+# Names that documents mention and that are legitimately not files of this repository.
+# One regular expression per line; a document token that matches any of them is not reported.
+
+# the external QEMU fork (qemu-tirith) and the graphics workspace layout
+^qemu-tirith/
+^qemu/
+^gramine-graphics/
+^tirith-build\.sh$
+(^|/)util/(sg-listener\.c|sg-xcb\.c|input_ring\.h|meson\.build|mmap-alloc\.c)$
+^include/qemu/sg\.h$
+
+# names from before the graphics code moved into libos/src/graphics (history in the graphics plan)
+egl-(redirect|backend)
+
+# a plan that exists only on the branch dev-vm-memory
+vm-memory/
+
+# installed or generated names, untracked artifacts, build output
+^vm-relay\.sh$
+^test/benchmarks/results/$
+^libos/test/regression/root/$
+^build-
+^\./quake2_bin$
+^patches/$
+runtime/glibc$
+
+# kernel, sysfs, device-tree and guest paths; addresses and registers written like paths
+^/
+^cpuN/
+^cache/indexN/
+^arch/
+^asm-generic/
+^0x
+^x\d/
+^127\.0\.0\.0/8$
+^sgx/tdx\.enclave_size$
+^_?Pal\w+/
+
+# upstream repository names and files that were removed or never ported (named as history)
+^startup-stress\.sh$
+^gramine-tdx/$
+^gramine-install\.sh$
+^libos/test/ltp/src$
+^fs/(shm|socket)$
+^deps/local$
+^\.\./\.\./\.\./sharedgl/build$
+
+# short directory names used in running text for a longer path
+^(common|libos|vm|vm-common|linux-common)/arch/
+^(vm-common|linux-common)/$
+^libos/arch/
