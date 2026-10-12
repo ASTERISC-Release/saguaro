@@ -17,9 +17,9 @@
 #
 # Environment: CONTAINER_NAME / IMAGE_NAME override the default gramine-vm-<arch> names.
 #
-# Workspaces (see AGENTS.md): when the checkout sits in a folder named gramine-* (for example
-# ~/Projects/gramine/gramine-main/gramine-multiarch), the container is named after that folder
-# (gramine-main-vm-x86_64, gramine-main-riscv64-cross), and gets its own base for the guest CIDs
+# Workspaces (see AGENTS.md): when the checkout sits in a folder named gramine-<name> (for example
+# .../gramine-<name>/gramine-multiarch), the container is named after that folder
+# (gramine-<name>-vm-x86_64, gramine-<name>-riscv64-cross), and gets its own base for the guest CIDs
 # (GRAMINE_VM_ID_BASE), so several checkouts can run side by side. GRAMINE_WORKSPACE sets the
 # name by hand. The image is shared by all workspaces. A container whose mount of /root/gramine-multiarch
 # is a different checkout than this one is refused instead of being silently reused.
