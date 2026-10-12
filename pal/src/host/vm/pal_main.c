@@ -164,7 +164,7 @@ noreturn int pal_start_continue(void* cmdline_);
 /* Boot-time instrumentation: relative stamps against the first instruction of the
  * kernel, in TSC ticks and (once the TSC frequency is known) milliseconds. Also routed
  * through the debug serial port: the console (virtio) only carries output written after
- * its driver is up, so everything before that is invisible there (see plan.md). */
+ * its driver is up, so everything before that is invisible there (see Documentation/devel/graphics/FINDINGS.md). */
 static uint64_t boot_tsc0;
 static void boot_stamp(const char* what) {
     uint64_t t = get_tsc() - boot_tsc0;

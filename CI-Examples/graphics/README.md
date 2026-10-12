@@ -2,7 +2,7 @@
 
 Games and benchmarks that run under `gramine-vm` with the graphics host redirection (x86_64 only).
 This page gives the general procedure; details, caveats and results are in
-`Documentation/devel/graphics/` (`running.md`, `plan.md`, `TODO.md`).
+`Documentation/devel/graphics/` (`running.md`, `PLAN.md`, `FINDINGS.md`, `TODO.md`, `TESTING.md`).
 
 ## Once per machine
 
