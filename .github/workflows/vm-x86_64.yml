@@ -112,6 +112,8 @@ jobs:
 
       - name: Smoke test - multi-threaded example under gramine-vm
         run: |
+          # The example's manifests name no display; one that does (loader.env.DISPLAY = "2:N") makes
+          # gramine-vm require a local X display, which a runner does not have.
           . "$GRAMINE_PREFIX/env.sh"
           cd CI-Examples/unit_tests/multi-thread
           make thread-tls thread-tls.manifest

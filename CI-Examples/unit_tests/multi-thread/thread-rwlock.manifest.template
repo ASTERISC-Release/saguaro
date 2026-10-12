@@ -2,21 +2,15 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (C) 2026 The ASTERISC Research Lab
 
-# Hello World manifest file example
+# Manifest of a multi-threading unit test
 
 libos.entrypoint = "/thread-rwlock"
 loader.log_level = "{{ log_level }}"
 # loader.log_level = "trace"
 
 loader.env.LD_LIBRARY_PATH = "/lib:/usr/lib:/usr/lib/{{ multiarch }}:/lib/{{ multiarch }}"
-# loader.env.LD_PRELOAD = "./egl_hook.so"
 loader.env.HOME = "/root"
 loader.env.USER = "root"
-loader.env.DISPLAY="2:0"
-loader.env.IVSHMEM_GRAMINE_VM="1"
-# loader.env.LIBGL_ALWAYS_SOFTWARE="1"
-#loader.env.SGL_NETWORK_ENDPOINT="<host-ip>:6000"
-# loader.env.Xauthority = "/home/gramine/.Xauthority"
 
 loader.insecure__use_cmdline_argv = true
 loader.insecure__use_host_env = true
