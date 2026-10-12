@@ -25,6 +25,11 @@ export PATH=$PREFIX/bin:$PATH
 export PYTHONPATH=$(ls -d "$PREFIX"/lib/python3*/site-packages 2>/dev/null | head -1)
 command -v gramine-vm >/dev/null || { echo "gramine-vm not on PATH (prefix $PREFIX?)" >&2; exit 1; }
 [ -e /dev/vhost-vsock ] || { echo "no /dev/vhost-vsock; this test needs it" >&2; exit 1; }
+test_host_ip() {
+    python3 -c 'import socket; s=socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.connect(("1.1.1.1", 53)); print(s.getsockname()[0]); s.close()'
+}
+HOST_IP=${GRAMINE_VM_TEST_HOST_IP:-$(test_host_ip)}
+case $HOST_IP in 127.*|0.0.0.0) echo "not a routable container address: $HOST_IP" >&2; exit 1 ;; esac
 
 DIR=$HERE/vsock-loopback
 mkdir -p "$OUT"
@@ -57,18 +62,19 @@ run_guest() {
         >"$logfile" 2>&1
 }
 
-echo "== outbound allow: $REQUESTS synchronous small request/reply pairs, ${CPU_NUM} vCPUs"
+echo "== outbound allow: $REQUESTS synchronous pairs to $HOST_IP, ${CPU_NUM} vCPUs"
 READY=$OUT/server.port
 SERVER_LOG=$OUT/server.log
 rm -f "$READY" "$SERVER_LOG"
 python3 "$DIR/vsock_outbound_server.py" --ready-file "$READY" --requests "$REQUESTS" \
+    --bind-address "$HOST_IP" \
     >"$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 for _ in $(seq 100); do [ -s "$READY" ] && break; sleep 0.05; done
 if [ ! -s "$READY" ]; then cat "$SERVER_LOG" >&2; exit 1; fi
 PORT=$(cat "$READY")
 render_manifest allow || exit 1
-run_guest "$OUT/allow.log" 127.0.0.1 "$PORT" "$REQUESTS" || {
+run_guest "$OUT/allow.log" "$HOST_IP" "$PORT" "$REQUESTS" || {
     cat "$OUT/allow.log" "$SERVER_LOG" >&2; exit 1;
 }
 wait "$SERVER_PID" || { cat "$SERVER_LOG" >&2; exit 1; }
@@ -80,14 +86,14 @@ grep -q "ECHOED $REQUESTS" "$SERVER_LOG" || { cat "$SERVER_LOG" >&2; exit 1; }
 
 echo "== outbound deny: vm.net.outbound=deny"
 render_manifest deny || exit 1
-run_guest "$OUT/deny-all.log" 127.0.0.1 "$PORT" deny || {
+run_guest "$OUT/deny-all.log" "$HOST_IP" "$PORT" deny || {
     cat "$OUT/deny-all.log" >&2; exit 1;
 }
 grep -q 'DENIED EACCES' "$OUT/deny-all.log" || { cat "$OUT/deny-all.log" >&2; exit 1; }
 
 echo "== outbound deny rule: vm.net.deny=[tcp:$PORT]"
 render_manifest allow "tcp:$PORT" || exit 1
-run_guest "$OUT/deny-rule.log" 127.0.0.1 "$PORT" deny || {
+run_guest "$OUT/deny-rule.log" "$HOST_IP" "$PORT" deny || {
     cat "$OUT/deny-rule.log" >&2; exit 1;
 }
 grep -q 'DENIED EACCES' "$OUT/deny-rule.log" || { cat "$OUT/deny-rule.log" >&2; exit 1; }
@@ -103,7 +109,7 @@ for _ in $(seq 100); do [ -s "$DIRECT_READY" ] && break; sleep 0.05; done
 if [ ! -s "$DIRECT_READY" ]; then cat "$DIRECT_LOG" >&2; exit 1; fi
 # Direct graphics ports remain available even when relayed outbound is denied.
 render_manifest deny || exit 1
-run_guest "$OUT/direct.log.guest" 127.0.0.1 6000 1000 || {
+run_guest "$OUT/direct.log.guest" "$HOST_IP" 6000 1000 || {
     cat "$OUT/direct.log.guest" "$DIRECT_LOG" >&2; exit 1;
 }
 wait "$SERVER_PID" || { cat "$DIRECT_LOG" >&2; exit 1; }

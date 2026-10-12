@@ -21,10 +21,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--ready-file', required=True)
     parser.add_argument('--requests', type=int, required=True)
+    parser.add_argument('--bind-address', default='127.0.0.1')
     args = parser.parse_args()
     with socket.socket() as server:
         server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        server.bind(('127.0.0.1', 0))
+        server.bind((args.bind_address, 0))
         server.listen(1)
         port = server.getsockname()[1]
         with open(args.ready_file, 'w') as ready:

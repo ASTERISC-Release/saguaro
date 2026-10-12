@@ -23,6 +23,11 @@ export PATH=$PREFIX/bin:$PATH
 export PYTHONPATH=$(ls -d "$PREFIX"/lib/python3*/site-packages 2>/dev/null | head -1)
 command -v gramine-vm >/dev/null || { echo "gramine-vm not on PATH (prefix $PREFIX?)" >&2; exit 1; }
 [ -e /dev/vhost-vsock ] || { echo "no /dev/vhost-vsock; this test needs it" >&2; exit 1; }
+test_host_ip() {
+    python3 -c 'import socket; s=socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.connect(("1.1.1.1", 53)); print(s.getsockname()[0]); s.close()'
+}
+HOST_IP=${GRAMINE_VM_TEST_HOST_IP:-$(test_host_ip)}
+case $HOST_IP in 127.*|0.0.0.0) echo "not a routable container address: $HOST_IP" >&2; exit 1 ;; esac
 
 DIR=$HERE/vsock-loopback
 mkdir -p "$OUT"
@@ -39,17 +44,18 @@ trap clean EXIT INT TERM
 READY=$OUT/server.port
 SERVER_LOG=$OUT/server.log
 rm -f "$READY" "$SERVER_LOG"
-python3 "$DIR/vsock_udp_server.py" --ready-file "$READY" >"$SERVER_LOG" 2>&1 &
+python3 "$DIR/vsock_udp_server.py" --ready-file "$READY" --bind-address "$HOST_IP" \
+    >"$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 for _ in $(seq 100); do [ -s "$READY" ] && break; sleep 0.05; done
 if [ ! -s "$READY" ]; then cat "$SERVER_LOG" >&2; exit 1; fi
 PORT=$(cat "$READY")
 
-echo "== UDP and DNS: $DNS_NAME, 1 datagram, ${CPU_NUM} vCPUs"
+echo "== UDP echo to $HOST_IP and DNS $DNS_NAME, ${CPU_NUM} vCPUs"
 cd "$DIR"
 GRAMINE_CPU_NUM=$CPU_NUM GRAMINE_VM_CONSOLE_LOG="$OUT/guest.console" \
     timeout --signal=TERM --kill-after=5s 120s gramine-vm vsock_udp_client \
-    "$DNS_NAME" 127.0.0.1 "$PORT" >"$OUT/guest.log" 2>&1 || {
+    "$DNS_NAME" "$HOST_IP" "$PORT" >"$OUT/guest.log" 2>&1 || {
         cat "$OUT/guest.log" "$SERVER_LOG" >&2; exit 1;
     }
 wait "$SERVER_PID" || { cat "$SERVER_LOG" >&2; exit 1; }
