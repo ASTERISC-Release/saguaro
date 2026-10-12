@@ -103,6 +103,10 @@ def find_child_guest_cid(app, ancestor_pid, timeout=120):
             while chain and chain != 1:
                 if chain == ancestor:
                     cmdline = b' '.join(parts).decode('utf-8', 'replace')
+                    if '-gramine-args' not in cmdline:
+                        # not the guest yet: the AArch64 launcher first runs a short QEMU that only
+                        # dumps the machine's device tree; keep scanning for the real one
+                        break
                     if f'-gramine-args init "{app}"' not in cmdline:
                         sys.exit(f'QEMU under pid {ancestor} runs a different application')
                     m = re.search(r'guest-cid=(\d+)', cmdline)
