@@ -19,12 +19,12 @@ on:
         type: boolean
         default: false
       libc:
-        description: "libc built into the runtime directory: glibc (bundled, the default) or none (no libc is built; applications run on the runner's glibc)"
+        description: "libc built into the runtime directory: none (the default: no libc is built, applications run on the runner's glibc) or glibc (bundled)"
         type: choice
         options:
-          - glibc
           - none
-        default: glibc
+          - glibc
+        default: none
 
 permissions:
   contents: read
@@ -53,7 +53,7 @@ jobs:
 
       - name: Build and install Gramine (direct PAL)
         env:
-          LIBC: ${{ inputs.libc || 'glibc' }}   # via env, never interpolated into the script text
+          LIBC: ${{ inputs.libc || 'none' }}   # via env, never interpolated into the script text
         run: scripts/install.sh --prefix "$GRAMINE_PREFIX" --libc "$LIBC"
 
       - name: Check built binaries for writable+executable segments
