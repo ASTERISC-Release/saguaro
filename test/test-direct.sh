@@ -16,6 +16,12 @@
 # Environment overrides:
 #   GRAMINE_PREFIX   install prefix (default: ~/.local/gramine)
 #   LOGDIR           per-test log directory (default: ${TMPDIR:-/tmp}/gramine-multiarch-tests)
+#   GRAMINE_RUNNER   gramine-direct (default) or gramine-vm: run the server examples (redis, memcached,
+#                    lighttpd, nginx, rust) and `networks` under the VM PAL instead. The install must be
+#                    a --vm build; each server's guest port is forwarded to the same port on 127.0.0.1
+#                    by the VM's relay (GRAMINE_VM_INBOUND), so the clients are the ones of the direct run.
+#                    nginx gets `master_process off;` (the VM PAL cannot create worker processes).
+#                    Under the VM PAL the suites pal, libos and the exec/fork based ones do not apply.
 #
 # The script is architecture-neutral and also runs on x86_64 for parity
 # testing, given a Gramine install built for that host (set GRAMINE_PREFIX to
@@ -115,7 +121,9 @@ else
     RUN=("${ALL_SUITES[@]}")
 fi
 
-for bin in gramine-direct gramine-test gramine-manifest; do
+RUNNER=${GRAMINE_RUNNER:-gramine-direct}
+case "$RUNNER" in gramine-direct|gramine-vm) ;; *) echo "ERROR: GRAMINE_RUNNER must be gramine-direct or gramine-vm"; exit 1 ;; esac
+for bin in "$RUNNER" gramine-test gramine-manifest; do
     command -v "$bin" >/dev/null || { echo "ERROR: $bin not on PATH (set GRAMINE_PREFIX?)"; exit 1; }
 done
 python3 -c 'import graminelibos' 2>/dev/null || { echo "ERROR: graminelibos not on PYTHONPATH"; exit 1; }
@@ -207,6 +215,9 @@ kill_strays() {
     pkill -9 -x loader 2>/dev/null
     pkill -9 -f "/gramine/direct/[l]oader " 2>/dev/null
     pkill -9 -f "/gramine/direct/[l]ibpal[.]so " 2>/dev/null
+    # gramine-vm: SIGKILL of the launcher leaves its QEMU running until the guest ends, and a server
+    # guest never ends
+    [ "$RUNNER" = gramine-vm ] && pkill -9 -f "[q]emu-system-.* -gramine-args init" 2>/dev/null
     sleep 0.3
 }
 trap kill_strays EXIT INT TERM
@@ -219,9 +230,16 @@ summary() {
 }
 
 # start_server <logname> <timeout-sec> <dir> <cmd...> — new session, PGID-killable
+# guest ports of the server examples; under gramine-vm the relay forwards each one to the same port
+# on 127.0.0.1 (the container), where the suites' clients connect
+declare -A VM_INBOUND=([redis]="6379:6379" [memcached]="11211:11211" [lighttpd]="8003:8003"
+                       [nginx]="8002:8002,8444:8444" [rust]="3000:3000")
 start_server() {
     local name=$1 tmo=$2 dir=$3; shift 3
-    ( cd "$dir" && setsid timeout -s KILL "$tmo" "$@" >"$LOGDIR/$name.log" 2>&1 &
+    local inbound=
+    [ "$RUNNER" = gramine-vm ] && inbound=${VM_INBOUND[$name]:-}
+    ( cd "$dir" && GRAMINE_VM_INBOUND="$inbound" setsid timeout -s KILL "$tmo" "$@" \
+          >"$LOGDIR/$name.log" 2>&1 &
       echo $! >"$LOGDIR/$name.pid" )
 }
 
@@ -326,7 +344,7 @@ bash)
 redis)
     if ! ensure_example redis redis-server redis-server.manifest; then summary redis 1 "build"; continue; fi
     wait_port_free 6379 || echo "  warning: port 6379 still busy"
-    start_server redis 90 "$REPO/CI-Examples/redis" gramine-direct redis-server
+    start_server redis 90 "$REPO/CI-Examples/redis" "$RUNNER" redis-server
     python3 - >"$LOGDIR/redis-client.log" 2>&1 <<'PYEOF'
 import socket, time, sys
 # Readiness = a full PING round-trip (not just connect(): both servers
@@ -372,7 +390,7 @@ PYEOF
 memcached)
     if ! ensure_example memcached memcached memcached.manifest; then summary memcached 1 "build"; continue; fi
     wait_port_free 11211 || echo "  warning: port 11211 still busy"
-    start_server memcached 120 "$REPO/CI-Examples/memcached" gramine-direct memcached
+    start_server memcached 120 "$REPO/CI-Examples/memcached" "$RUNNER" memcached
     python3 - >"$LOGDIR/memcached-client.log" 2>&1 <<'PYEOF'
 import socket, time, sys
 # Readiness = full "version" round-trip; see the redis comment above.
@@ -463,7 +481,7 @@ lighttpd)
         summary lighttpd 1 "build (downloads lighttpd-1.4.59 via its Makefile)"; continue
     fi
     wait_port_free 8003 || echo "  warning: port 8003 still busy"
-    start_server lighttpd 120 "$REPO/CI-Examples/lighttpd" gramine-direct lighttpd
+    start_server lighttpd 120 "$REPO/CI-Examples/lighttpd" "$RUNNER" lighttpd
     rc=1
     for i in $(seq 1 40); do
         if curl -sf --max-time 5 http://127.0.0.1:8003/random/10K.1.html \
@@ -494,7 +512,12 @@ nginx)
         summary nginx 1 "build"; continue
     fi
     wait_port_free 8002 || echo "  warning: port 8002 still busy"
-    start_server nginx 120 "$REPO/CI-Examples/nginx" gramine-direct nginx
+    if [ "$RUNNER" = gramine-vm ]; then
+        # the VM PAL cannot create worker processes: run nginx as a single process
+        grep -q '^master_process' "$REPO/CI-Examples/nginx/install/conf/nginx-gramine.conf" \
+            || sed -i '1i master_process off;' "$REPO/CI-Examples/nginx/install/conf/nginx-gramine.conf"
+    fi
+    start_server nginx 120 "$REPO/CI-Examples/nginx" "$RUNNER" nginx
     rc=1
     for i in $(seq 1 40); do
         if curl -sf --max-time 5 http://127.0.0.1:8002/random/10K.1.html \
@@ -518,7 +541,7 @@ rust)
         summary rust 1 "build (needs cargo/rustc)"; continue
     fi
     wait_port_free 3000 || echo "  warning: port 3000 still busy"
-    start_server rust 90 "$REPO/CI-Examples/rust" gramine-direct rust-hyper-http-server
+    start_server rust 90 "$REPO/CI-Examples/rust" "$RUNNER" rust-hyper-http-server
     rc=1
     for i in $(seq 1 40); do
         if curl -sf --max-time 5 http://127.0.0.1:3000/ -o "$LOGDIR/rust-fetch.html" 2>/dev/null; then
@@ -537,7 +560,7 @@ networks)
     # medium/large datagrams, ordering, burst. The Makefile drops the graphics link
     # flags automatically when ../../../sharedgl/build is absent (see its comment).
     if ! ensure_example unit_tests/networks udp nw.manifest; then summary networks 1 "build"; continue; fi
-    if timeout -s KILL 120 sh -c "cd '$REPO/CI-Examples/unit_tests/networks' && gramine-direct nw" \
+    if timeout -s KILL 120 sh -c "cd '$REPO/CI-Examples/unit_tests/networks' && $RUNNER nw" \
             >"$LOGDIR/networks.log" 2>&1 \
        && grep -q "UDP SOCKET TEST PASSED" "$LOGDIR/networks.log"; then
         rc=0; detail=$(grep -ao "\[server\] OK .*" "$LOGDIR/networks.log" | head -1)
