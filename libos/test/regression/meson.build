@@ -216,7 +216,9 @@ endif
 install_dir = pkglibdir / 'tests' / 'libos' / 'regression'
 
 configurations = []
-if get_option('libc') == 'glibc'
+# Without a bundled libc (`libc=none`) the tests are built against the host's glibc, as with `glibc`
+# (the manifests then run them on the host's libc, see Runtimedir in gen_jinja_env.py).
+if get_option('libc') in ['glibc', 'none']
     common_lib = static_library('test_libos',
         'dump.c',
         'rw_file.c',

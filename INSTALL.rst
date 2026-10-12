@@ -81,6 +81,15 @@ redirection need a QEMU fork that is kept outside this repository; for graphics 
 the ``libgraphics.so`` preload library and therefore needs the Mesa, X and SDL2 development packages;
 pass ``--graphics disabled``, as above, to build without them.
 
+On x86_64 a ``--vm`` build without ``--sgx`` or ``--tdx`` builds **no libc** (``-Dlibc=none``; the build
+is much shorter): applications run in the guest on the host's glibc, which the VM serves from the host's
+``/``. ``gramine.runtimedir()`` in the manifests then names the directory with the host's ``libc.so.6`` and
+dynamic loader, found when the manifest is rendered; ``GRAMINE_HOST_LIBC_DIR`` overrides the search.
+``--libc glibc`` builds and uses the bundled glibc instead (SGX needs it, and so do builds for other
+architectures by default). One consequence: the direct PAL of a ``--vm`` build runs on an unpatched libc, so
+each syscall takes the seccomp trap (about 0.85 us on x86_64); build without ``--vm``, in a build directory
+of its own, for a direct PAL with the patched glibc.
+
 Running an application under the VM PAL is described in ``Documentation/devel/vm.md``: the manifest's
 loader entrypoint must point at the VM ``libsysdb.so`` (``make`` against the VM install does this) and
 the binary must be a PIE on aarch64, then ``gramine-vm <application>``. A kernel panic or guest exit is
@@ -156,7 +165,8 @@ and for the aarch64 vm PAL::
         --prefix="$HOME/.local/gramine-vm"
     ninja -C build-vm-aarch64 install
 
-The available options are in ``meson_options.txt``.
+The available options are in ``meson_options.txt``; ``-Dlibc=none`` skips building glibc (see the x86_64 VM
+PAL above).
 
 Troubleshooting
 ---------------
