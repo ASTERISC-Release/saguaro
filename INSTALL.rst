@@ -81,15 +81,18 @@ redirection need a QEMU fork that is kept outside this repository; for graphics 
 the ``libgraphics.so`` preload library and therefore needs the Mesa, X and SDL2 development packages;
 pass ``--graphics disabled``, as above, to build without them.
 
-A ``--vm`` build, and any aarch64 build, without ``--sgx`` or ``--tdx`` builds **no libc** (``-Dlibc=none``; the build
-is much shorter): applications run in the guest on the host's glibc, which the VM serves from the host's
-``/``. ``gramine.runtimedir()`` in the manifests then names the directory with the host's ``libc.so.6`` and
-dynamic loader, found when the manifest is rendered; ``GRAMINE_HOST_LIBC_DIR`` overrides the search.
-``--libc glibc`` builds and uses the bundled glibc instead (SGX needs it, and so do builds for other
-architectures by default). One consequence on x86_64: the direct PAL of a ``--vm`` build runs on an unpatched libc, so
+A ``--vm`` build, and direct aarch64 and riscv64 builds, without ``--sgx`` or ``--tdx`` build
+**no libc** (``-Dlibc=none``; the build is shorter): applications run against the host's glibc.
+``gramine.runtimedir()`` names the directory with the host's ``libc.so.6`` and dynamic loader,
+found when the manifest is rendered; ``GRAMINE_HOST_LIBC_DIR`` overrides the search. For RISC-V
+cross-rendered test manifests, the helper defaults this override to the guest's
+``/lib/riscv64-linux-gnu``; native rendering in the guest uses its normal multiarch lookup.
+``--libc glibc`` remains available to build and use the bundled glibc (SGX needs it, and it can be
+selected explicitly on any architecture). One consequence on x86_64: the direct PAL of a ``--vm``
+build runs on an unpatched libc, so
 each syscall takes the seccomp trap (about 0.85 us); on aarch64 the direct PAL does not use the libc patch.
 For a direct PAL with the patched glibc on x86_64, build without ``--vm``, in a build directory of its own.
-An x86_64 direct build without ``--vm`` and a riscv64 build keep the bundled glibc by default.
+An x86_64 direct build without ``--vm`` keeps the bundled glibc by default.
 
 Running an application under the VM PAL is described in ``Documentation/devel/vm.md``: the manifest's
 loader entrypoint must point at the VM ``libsysdb.so`` (``make`` against the VM install does this) and

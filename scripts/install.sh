@@ -29,9 +29,9 @@
 #                          (default: enabled)
 #   --libc glibc|none|musl which libc is built into the runtime directory that manifests mount
 #                          at /lib. `none` builds no libc (much shorter build): applications run
-#                          on the host's glibc. Default: none for a --vm build and for any aarch64 build, without
-#                          --sgx or --tdx; glibc otherwise (x86_64 direct keeps the patched glibc,
-#                          riscv64 is still glibc). SGX needs the bundled glibc.
+#                          on the host's glibc. Default: none for a --vm build and for direct
+#                          aarch64/riscv64 builds, without --sgx or --tdx; glibc otherwise
+#                          (x86_64 direct keeps the patched glibc). SGX needs the bundled glibc.
 #   -j N                   ninja parallelism (default: nproc)
 #   --run-tests [suite...] run test/test-direct.sh afterwards, building the test manifests first
 #                          (with --vm on aarch64: test/test-vm.sh, suites libos|examples|hello)
@@ -52,7 +52,7 @@
 #
 # Defaults match this repo's tested configuration:
 #   -Ddirect=enabled -Dsgx=disabled -Dvm=disabled -Dtdx=disabled -Dgraphics=enabled
-#   -Dtests=enabled -Dlibc=glibc -Dbuildtype=release   (libc=none for a --vm or aarch64 build, see --libc)
+#   -Dtests=enabled -Dlibc=glibc -Dbuildtype=release   (libc=none for --vm, aarch64 and riscv64, see --libc)
 #
 # Re-running is cheap and safe: meson reuses a configured build dir with matching options and
 # ninja rebuilds only what changed.
@@ -168,12 +168,13 @@ if [ "$VM" = enabled ]; then
     fi
 fi
 
-# --libc: a --vm build and any aarch64 build default to no bundled libc (applications run on the
-# host's glibc; the build skips building glibc, which the aarch64 direct PAL does not need patched).
+# --libc: a --vm build and direct aarch64/riscv64 builds default to no bundled libc (applications
+# run on the host's glibc; these direct PALs do not need a patched glibc).
 # x86_64 direct builds keep the bundled, patched glibc (it avoids the seccomp trap per syscall), and
 # SGX needs it.
 if [ -z "$LIBC" ]; then
-    if { [ "$VM" = enabled ] || [ "$ARCH" = aarch64 ]; } && [ "$SGX" != enabled ] && [ "$TDX" != enabled ]; then
+    if { [ "$VM" = enabled ] || [ "$ARCH" = aarch64 ] || [ "$ARCH" = riscv64 ]; } \
+        && [ "$SGX" != enabled ] && [ "$TDX" != enabled ]; then
         LIBC=none
     else
         LIBC=glibc
