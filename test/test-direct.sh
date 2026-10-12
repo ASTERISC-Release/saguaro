@@ -129,6 +129,23 @@ case "$HOST_ARCH" in
     *)       ELF_PAT="";          FOREIGN_ARCH="" ;;
 esac
 
+# drop_stale_manifest <manifest>
+# A manifest records the LibOS it was rendered for. After the install prefix changed or went away
+# (another prefix, a recreated container, a VM install used for the same example) it has to be
+# rendered again: the PAL otherwise fails with "Unable to load loader.entrypoint", or loads another
+# build's LibOS and crashes. If the manifest names a libsysdb.so outside $GRAMINE_PREFIX (or one
+# that no longer exists), print that path, delete the manifest and succeed; otherwise fail quietly.
+drop_stale_manifest() {
+    local libos
+    libos=$(sed -n 's/^entrypoint = "file:\(.*libsysdb\.so\)"$/\1/p' "$1" 2>/dev/null | head -1)
+    if [ -n "$libos" ] && { [ ! -f "$libos" ] || [ "${libos#"$GRAMINE_PREFIX"/}" = "$libos" ]; }; then
+        rm -f "$1"
+        echo "$libos"
+        return 0
+    fi
+    return 1
+}
+
 # ensure_example <example-dir> <binary> <manifest>
 # Build the example through its own Makefile if the binary is missing or was
 # produced for another architecture, or if the manifest embeds the foreign
@@ -144,14 +161,9 @@ ensure_example() {
     elif [ ! -s "$dir/$man" ]; then
         need="manifest $1/$man missing or empty"
     else
-        # A manifest records the LibOS it was rendered for. After the install prefix changed or
-        # went away (another prefix, a recreated container) it has to be rendered again, or the
-        # PAL fails with "Unable to load loader.entrypoint".
         local libos
-        libos=$(sed -n 's/^entrypoint = "file:\(.*libsysdb\.so\)"$/\1/p' "$dir/$man" | head -1)
-        if [ -n "$libos" ] && { [ ! -f "$libos" ] || [ "${libos#"$GRAMINE_PREFIX"/}" = "$libos" ]; }; then
+        if libos=$(drop_stale_manifest "$dir/$man"); then
             need="manifest $1/$man was rendered for another Gramine install ($libos)"
-            rm -f "$dir/$man"
         fi
     fi
     if [ -n "$need" ]; then
@@ -421,6 +433,11 @@ python)
         continue
     fi
     wait_port_free 8005 || echo "  warning: port 8005 still busy"
+    # `make` does not render an existing manifest again, so one left by a run against another
+    # install (for example the VM examples script) would make gramine-direct load that LibOS.
+    if stale=$(drop_stale_manifest "$REPO/CI-Examples/python/python.manifest"); then
+        echo "  python.manifest was rendered for another Gramine install ($stale); rendering it again"
+    fi
     ( cd "$REPO/CI-Examples/python" && make >/dev/null 2>&1
       timeout -s KILL 900 make check >"$LOGDIR/python.log" 2>&1 )
     rc=$?
