@@ -6,7 +6,7 @@ import sysconfig
 
 import jinja2
 
-from . import _CONFIG_PKGLIBDIR
+from . import _CONFIG_LIBC, _CONFIG_PKGLIBDIR
 
 def parse_ldd(output):
     # Be careful: We have to skip vdso, which doesn't have a corresponding file on the disk (we
@@ -68,9 +68,37 @@ def add_globals_from_python(env):
         'get_sys_path': python_get_sys_path,
     }
 
+def host_libc_dir():
+    """Directory of the host's glibc and its dynamic loader.
+
+    Used when Gramine was built without a bundled libc (meson option `libc=none`): applications then
+    run on the libc of the machine the manifest is rendered on. `GRAMINE_HOST_LIBC_DIR` overrides
+    the search, for example when manifests for another machine are rendered.
+    """
+    override = os.environ.get('GRAMINE_HOST_LIBC_DIR')
+    if override:
+        return pathlib.Path(override).resolve()
+
+    candidates = []
+    multiarch = sysconfig.get_config_var('MULTIARCH')
+    if multiarch:
+        candidates += [f'/lib/{multiarch}', f'/usr/lib/{multiarch}']
+    candidates += ['/lib64', '/usr/lib64', '/lib', '/usr/lib']
+
+    for candidate in candidates:
+        path = pathlib.Path(candidate)
+        if (path / 'libc.so.6').exists() and any(path.glob('ld-linux*.so*')):
+            return path.resolve()
+
+    raise RuntimeError('This Gramine was built without a bundled libc (libc=none), but no glibc '
+                       'was found in ' + ', '.join(candidates) + '. Set GRAMINE_HOST_LIBC_DIR to '
+                       'the directory that holds libc.so.6 and the dynamic loader.')
+
 class Runtimedir:
     @staticmethod
     def __call__(libc='glibc'):
+        if _CONFIG_LIBC == 'none' and libc == 'glibc':
+            return host_libc_dir()
         return (pathlib.Path(_CONFIG_PKGLIBDIR) / 'runtime' / libc).resolve()
     def __str__(self):
         return str(self())

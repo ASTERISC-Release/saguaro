@@ -63,9 +63,11 @@ DEFAULT_CONTAINER=$NAME
 VM_ID_BASE=
 if [ -n "$WORKSPACE" ]; then
     DEFAULT_CONTAINER=$WORKSPACE-${NAME#gramine-}
-    # 10, 110, ..., 3910: a base per workspace (the launcher only sees the QEMU processes of its
+    # 110, 210, ..., 4010: a base per workspace (the launcher only sees the QEMU processes of its
     # own container when it looks for a free guest CID, and CIDs are global on the host)
-    VM_ID_BASE=$((10 + 100 * ($(printf %s "$WORKSPACE" | cksum | cut -d' ' -f1) % 40)))
+    VM_ID_BASE_STEP=$(( $(printf %s "$WORKSPACE" | cksum | cut -d' ' -f1) % 40 ))
+    [ "$VM_ID_BASE_STEP" -ne 0 ] || VM_ID_BASE_STEP=40   # base 10 is the default outside workspaces
+    VM_ID_BASE=$((10 + 100 * VM_ID_BASE_STEP))
 fi
 IMAGE=${IMAGE_NAME:-$NAME}
 CONTAINER=${CONTAINER_NAME:-$DEFAULT_CONTAINER}

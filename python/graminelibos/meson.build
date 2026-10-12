@@ -3,6 +3,7 @@ conf.set('VERSION', meson.project_version())
 conf.set('PKGLIBDIR', get_option('prefix') / pkglibdir)
 conf.set('LIBDIR', get_option('prefix') / get_option('libdir'))
 conf.set('SYSLIBDIR', syslibdir)
+conf.set('LIBC', get_option('libc'))
 conf.set('SGX_ENABLED', sgx ? '1' : '0')
 
 init_py = configure_file(
