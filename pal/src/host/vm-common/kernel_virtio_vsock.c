@@ -696,6 +696,10 @@ static struct virtio_vsock_connection* get_connection(uint32_t fd) {
 static int attach_connection(struct virtio_vsock_connection* conn) {
     assert(spinlock_is_locked(&g_vsock_connections_lock));
 
+    /* no vsock device (g_vsock is only set by virtio_vsock_init()): there is no connection table */
+    if (!g_vsock)
+        return -PAL_ERROR_AFNOSUPPORT;
+
     uint32_t idx = 0;
     while (idx < g_vsock->conns_size) {
         if (!g_vsock->conns[idx]) {
@@ -1628,6 +1632,10 @@ int virtio_vsock_socket(int domain, int type, int protocol) {
     int ret;
 
     if (domain != AF_VSOCK)
+        return -PAL_ERROR_AFNOSUPPORT;
+
+    /* no vsock device: every socket of the PAL sits on a vsock connection, so none can be created */
+    if (!g_vsock)
         return -PAL_ERROR_AFNOSUPPORT;
 
     if (type != VIRTIO_VSOCK_TYPE_STREAM)

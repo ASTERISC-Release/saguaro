@@ -363,6 +363,8 @@ static int vm_udp_read_frame_bytes(struct pal_handle* handle, void* buf, size_t 
 }
 
 static int vm_udp_ensure_relay(struct pal_handle* handle) {
+    if (!g_vsock)
+        return -PAL_ERROR_AFNOSUPPORT;
     struct udp_rx_ring* ring = handle->region;
     if (ring->relay_connected)
         return 0;
@@ -580,6 +582,10 @@ int pal_common_socket_create(enum pal_socket_domain domain, enum pal_socket_type
                              pal_stream_options_t options, struct pal_handle** out_handle) {
     assert(domain == PAL_IPV4 || domain == PAL_IPV6);
 
+    /* no vsock device: TCP/UDP sockets are emulated over vsock, so fail instead of crashing */
+    if (!g_vsock)
+        return -PAL_ERROR_AFNOSUPPORT;
+
     /* Testing for VSOCK */
     log_debug("socket: domain=%d, type=%d, options=0x%x", domain, type, options);
 
@@ -652,6 +658,8 @@ static int pal_common_socket_bind(struct pal_handle* handle, struct pal_socket_a
     log_debug("[graphics] Bind request arrived.\n");
     
     assert(handle->hdr.type == PAL_TYPE_SOCKET);
+    if (!g_vsock)
+        return -PAL_ERROR_AFNOSUPPORT;
     if (addr->domain != handle->sock.domain) {
         return -PAL_ERROR_INVAL;
     }
@@ -765,6 +773,8 @@ static int pal_common_socket_connect(struct pal_handle* handle, struct pal_socke
                                      struct pal_socket_addr* out_local_addr,
                                      bool* out_inprogress) {
     assert(handle->hdr.type == PAL_TYPE_SOCKET);
+    if (!g_vsock)
+        return -PAL_ERROR_AFNOSUPPORT;
     if (addr->domain != PAL_DISCONNECT && addr->domain != handle->sock.domain) {
         return -PAL_ERROR_INVAL;
     }
@@ -978,6 +988,8 @@ static int pal_common_udp_send(struct pal_handle *handle,
                                bool force_nonblocking)
 {
     __UNUSED(force_nonblocking);
+    if (!g_vsock)
+        return -PAL_ERROR_AFNOSUPPORT;
     // if(iov[0].iov_len > 100)
     //     log_always("[pal_common_udp_send] handle=%p; iov=%p, iov_len=%d, force_nonblocking=%d\n", handle, iov, iov_len, force_nonblocking);
     assert(handle->hdr.type == PAL_TYPE_SOCKET);
