@@ -94,6 +94,9 @@ static void handle_sync_signal(int signum, siginfo_t* info, struct ucontext* uc)
     bool is_seccomp_trap = false;
     if (info->si_signo == SIGSYS && info->si_code == SYS_SECCOMP) {
         ucontext_revert_syscall(uc, info->si_arch, info->si_syscall, info->si_call_addr);
+#ifdef PAL_HAS_SYSCALL_TRAP_HOOK
+        pal_arch_note_syscall_trap(uc);
+#endif
         is_seccomp_trap = true;
         if (FIRST_TIME()) {
             log_always("Emulating a raw system/supervisor call. This degrades performance, consider"

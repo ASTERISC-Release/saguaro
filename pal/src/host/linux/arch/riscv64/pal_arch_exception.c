@@ -45,7 +45,23 @@ int arch_do_rt_sigprocmask(int sig, int how) {
     __sigemptyset(&mask);
     __sigaddset(&mask, sig);
 
+    /* The mask changes: what pal_arch_note_syscall_trap() recorded is no longer the mask to
+     * return to the application with. (No TCB yet during early initialization.) */
+    PAL_LINUX_TCB* tcb = pal_get_linux_tcb();
+    if (tcb)
+        tcb->trap_sigmask_valid = false;
+
     return DO_SYSCALL(rt_sigprocmask, how, &mask, NULL, sizeof(__sigset_t));
+}
+
+/* Called for every seccomp trap. The mask in the trap's frame is the thread's mask outside the
+ * handler, which is what the application must get back when the emulated syscall returns;
+ * recording it here saves pal_arch_restore_context() a rt_sigprocmask() call per syscall. */
+void pal_arch_note_syscall_trap(ucontext_t* uc) {
+    static_assert(sizeof(uc->uc_sigmask) >= sizeof(uint64_t), "kernel sigset_t is 64 bits");
+    PAL_LINUX_TCB* tcb = pal_get_linux_tcb();
+    memcpy(&tcb->trap_sigmask, &uc->uc_sigmask, sizeof(tcb->trap_sigmask));
+    tcb->trap_sigmask_valid = true;
 }
 
 int arch_do_rt_sigaction(int sig, void* handler,
@@ -311,7 +327,15 @@ __attribute__((visibility("protected"))) noreturn void pal_arch_restore_context(
         frame.uc.uc_stack.ss_size  = 0;
     }
 
-    DO_SYSCALL(rt_sigprocmask, SIG_SETMASK, NULL, &frame.uc.uc_sigmask, sizeof(__sigset_t));
+    /* The frame needs the mask to resume with. Normally that is the one recorded at this
+     * syscall's trap; a thread that has not trapped yet, or whose mask the PAL changed since,
+     * asks the kernel. */
+    memset(&frame.uc.uc_sigmask, 0, sizeof(frame.uc.uc_sigmask));
+    if (tcb->trap_sigmask_valid) {
+        memcpy(&frame.uc.uc_sigmask, &tcb->trap_sigmask, sizeof(tcb->trap_sigmask));
+    } else {
+        DO_SYSCALL(rt_sigprocmask, SIG_SETMASK, NULL, &frame.uc.uc_sigmask, sizeof(__sigset_t));
+    }
 
     ctx->pstate &= ~PAL_PSTATE_EXACT_CONTEXT;
     if (has_fpregs) {

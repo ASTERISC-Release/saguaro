@@ -80,6 +80,11 @@ typedef struct pal_linux_tcb {
         void*      alt_stack;
         int        (*callback)(void*);
         void*      param;
+#ifdef __riscv
+        /* The thread's signal mask as of its last syscall trap; see pal_arch_restore_context(). */
+        uint64_t   trap_sigmask;
+        bool       trap_sigmask_valid;
+#endif
     };
 } PAL_LINUX_TCB;
 
@@ -92,6 +97,9 @@ static inline void pal_linux_tcb_init(PAL_LINUX_TCB* tcb, PAL_HANDLE handle, voi
     tcb->alt_stack   = alt_stack; // Stack bottom
     tcb->callback    = callback;
     tcb->param       = param;
+#ifdef __riscv
+    tcb->trap_sigmask_valid = false;
+#endif
 }
 
 static inline PAL_LINUX_TCB* pal_get_linux_tcb(void) {

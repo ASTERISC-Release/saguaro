@@ -247,6 +247,8 @@ static inline void pal_context_to_ucontext(ucontext_t* uc, PAL_CONTEXT* context)
 /* Handles SIGTRAP for the exact-context-restore protocol (PAL_BRK_RESTORE_CONTEXT, pal_arch.h);
  * defined in pal/src/host/linux/arch/riscv64/pal_arch_exception.c. */
 void pal_arch_handle_trap(ucontext_t* uc);
+/* Called by the Linux PAL's SIGSYS handler for every seccomp trap (PAL_HAS_SYSCALL_TRAP_HOOK). */
+void pal_arch_note_syscall_trap(ucontext_t* uc);
 
 static inline uint64_t ucontext_get_ip(ucontext_t* uc) {
     return uc->uc_mcontext.sc_regs.pc;

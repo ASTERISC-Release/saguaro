@@ -378,6 +378,7 @@ typedef struct PAL_CONTEXT PAL_CONTEXT;
                                                           () and the ebreak immediate-less
                                                           note in syscallas.S */
 #define PAL_HAS_CONTEXT_RESTORE_TRAP 1
+#define PAL_HAS_SYSCALL_TRAP_HOOK 1
 
 /* Resumes `context` exactly through rt_sigreturn(); the LibOS's only way back to the application.
  * Defined in pal/src/host/linux/arch/riscv64/pal_arch_exception.c and exported from libpal.so. */
