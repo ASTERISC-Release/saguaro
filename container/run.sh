@@ -33,7 +33,7 @@ case $(uname -m) in
 esac
 # `--target riscv64` (first argument) selects the cross-development container of the RISC-V port
 # instead of the native one: an x86_64 image with the riscv64 cross toolchain and
-# qemu-system-riscv64 (Documentation/devel/riscv/plan.md).
+# qemu-system-riscv64 (Documentation/devel/riscv/PLAN.md).
 TARGET=
 if [ "${1:-}" = "--target" ]; then TARGET=${2:-}; shift 2; fi
 case $TARGET in

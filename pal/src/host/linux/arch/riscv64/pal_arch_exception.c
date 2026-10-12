@@ -82,7 +82,7 @@ int arch_do_rt_sigaction(int sig, void* handler,
 
 /*
  * Per-thread PAL_TCB registry (riscv64 multi-threading; reused design from the aarch64 port, see
- * findings #9, #12 and #13 in Documentation/devel/aarch64/direct-pal-port-log.md).
+ * findings #9, #12 and #13 in Documentation/devel/aarch64/direct/FINDINGS.md).
  *
  * riscv64 has exactly one user-writable TLS register (`tp`) and the application's libc needs it,
  * so a thread's PAL_TCB cannot live in a register the way x86_64 keeps it in %gs. What every

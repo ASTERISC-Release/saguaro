@@ -95,7 +95,7 @@ static bool cpuinfo_copy_entry(char* buf, const char* word, char* out, size_t ou
 }
 
 /*
- * Hide the vector extension from the ISA string an application sees (plan.md's "handle F/D only
+ * Hide the vector extension from the ISA string an application sees (PLAN.md's "handle F/D only
  * and hide V from applications" decision, the /proc/cpuinfo half of it -- the AT_HWCAP half is
  * libos_get_cpu_flags()). Dropping only the *letter* would leave the zvl/zve-prefixed tokens asserting
  * vector support, so the filter removes every vector-implying token: the compact-form `v` letter,

@@ -14,10 +14,11 @@ install, containers, the RISC-V cross-build).
 |---|---|
 | `devel/multiarch.md` | platform matrix in detail, build options, how to test, CI workflows |
 | `devel/vm.md` | building and running the vm PAL (`gramine-vm`) |
-| `devel/tirith-delta.md` | changes against upstream gramine-tdx |
+| `devel/graphics/tirith-delta.md` | changes against upstream gramine-tdx |
 | `devel/summary.md` | outcome of each port in one page, with pointers into the logs |
-| `devel/aarch64/`, `devel/riscv/`, `devel/graphics/` | plans, development logs and test-parity tables |
-| `TODO.md` | open items |
+| `devel/README.md` | the layout of the development documents: `PLAN.md`, `FINDINGS.md`, `TODO.md`, `TESTING.md` per topic |
+| `devel/aarch64/direct/`, `devel/aarch64/vm/`, `devel/riscv/`, `devel/graphics/` | plan, findings, open items and test results of each port |
+| `TODO.md` | index of the per-topic open items |
 
 ## Inherited from upstream
 

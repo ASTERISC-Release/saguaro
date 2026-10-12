@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
-# guest.sh — the RISC-V Linux test guest of the riscv64 port (Documentation/devel/riscv/plan.md).
+# guest.sh — the RISC-V Linux test guest of the riscv64 port (Documentation/devel/riscv/PLAN.md).
 #
 # Runs an Ubuntu 24.04 riscv64 cloud image under qemu-system-riscv64 (full-system emulation, no
 # KVM), with this repository shared into the guest at the same path it has here, so that paths

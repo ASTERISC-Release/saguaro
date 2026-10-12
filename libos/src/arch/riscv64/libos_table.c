@@ -320,7 +320,7 @@ libos_syscall_t libos_syscall_table[LIBOS_SYSCALL_BOUND] = {
      * RENAME_EXCHANGE are *not* honored -- Gramine never supported renameat2 flags on
      * any arch (x86_64/aarch64 leave the number unimplemented entirely), and refusing
      * every riscv rename with ENOSYS would be worse than this faithful-but-coarse
-     * mapping. Recorded in Documentation/devel/riscv/plan.md. */
+     * mapping. Recorded in Documentation/devel/riscv/PLAN.md. */
     [__NR_renameat2]                = (libos_syscall_t)libos_syscall_renameat,
     [__NR_seccomp]                    = (libos_syscall_t)0, // libos_syscall_seccomp
     [__NR_getrandom]                  = (libos_syscall_t)libos_syscall_getrandom,

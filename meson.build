@@ -63,7 +63,7 @@ cc = meson.get_compiler('c')
 host_has_glibc = cc.get_define('__GLIBC__', prefix: '#include <features.h>') != ''
 objcopy = find_program('objcopy')
 
-# Cross builds (riscv64 port, Documentation/devel/riscv/plan.md Phase 1): some build steps
+# Cross builds (riscv64 port, Documentation/devel/riscv/PLAN.md Phase 1): some build steps
 # *execute* binaries compiled for the target machine -- notably the generated-offsets
 # printers, whose stdout is captured into `asm_offsets.h`. Meson's `custom_target()` runs
 # its command on the build machine *without* applying the cross file's `exe_wrapper`

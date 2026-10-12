@@ -9,7 +9,7 @@
  *
  * The riscv64 direct-PAL port does not patch any libc -- all syscall interception goes through
  * the generic seccomp-trap path (maybe_emulate_syscall() in libos_context.c), not through this
- * macro (Documentation/devel/riscv/plan.md decisions). This header still has to exist and
+ * macro (Documentation/devel/riscv/PLAN.md decisions). This header still has to exist and
  * assemble/compile correctly, though: GRAMINE_SYSCALL_OFFSET is checked by a static_assert in
  * libos_tcb.h regardless of architecture, and gramine_call() below is still compiled (even
  * though unused) wherever this header is included, so an x86-only inline-asm body here would

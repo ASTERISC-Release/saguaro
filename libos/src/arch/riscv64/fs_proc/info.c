@@ -14,7 +14,7 @@
  * implementer/part lines, and no BogoMIPS (the riscv64 kernel computes none; see
  * pal/src/arch/riscv64/pal_cpuid.c). The `isa`/`mmu` strings come verbatim from
  * `struct pal_cpu_info` (`cpu_brand`/`cpu_mmu`), which the linux-PAL side filled from the
- * host's own cpuinfo with all vector tokens stripped (plan.md decision: F/D only, V hidden).
+ * host's own cpuinfo with all vector tokens stripped (PLAN.md decision: F/D only, V hidden).
  *
  * The one thing deliberately *not* reproduced: newer riscv64 kernels append a summary section
  * headed by a `hart isa` line (and per-hart `<id> rv64imafdc...` lines) after the per-block

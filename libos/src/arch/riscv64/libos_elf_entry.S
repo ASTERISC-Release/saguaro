@@ -20,7 +20,7 @@
  *   itself as its very first act (`REGISTER_GP`), and PIE/ET_DYN images never use gp-relative
  *   addressing at all. If a future guest libc turned out to rely on the kernel planting `gp`
  *   before entry (the psABI allows either), this is the one place to grow that -- see the
- *   "still to verify" note in Documentation/devel/riscv/plan.md.
+ *   "still to verify" note in Documentation/devel/riscv/PLAN.md.
  * - There is no PSTATE.NZCV to clear (riscv64 has no condition flags), and no FPCR vs FPSR
  *   split -- a single fcsr, whose reset value 0 (like aarch64's FPCR) already means "FP
  *   exceptions set flags but never trap", so no magic untrap constant like x86's 0x1F80 is

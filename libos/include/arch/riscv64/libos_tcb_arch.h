@@ -80,7 +80,7 @@ static inline uintptr_t get_tls(void) {
  *
  * On riscv64 the guest owns `tp`, so a thread's PAL_TCB is reached through a TLS-keyed registry
  * plus a one-shot snapshot (see pal_arch.h and findings #9, #12 and #13 in
- * Documentation/devel/aarch64/direct-pal-port-log.md -- the design is reused unchanged).
+ * Documentation/devel/aarch64/direct/FINDINGS.md -- the design is reused unchanged).
  */
 
 /*

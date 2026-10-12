@@ -8,7 +8,7 @@
 # Usage: run-vm-aarch64-dev.sh [extra qemu args]
 #
 # Target is **KVM on a native aarch64 host** (QEMU virt + in-kernel vGIC/VHE); TCG is
-# out of scope (see Documentation/devel/aarch64/vm-pal-plan.md): -cpu host is required (max is TCG-only) and
+# out of scope (see Documentation/devel/aarch64/vm/PLAN.md): -cpu host is required (max is TCG-only) and
 # the container must expose --device /dev/kvm. Override with ACCEL=tcg/CPU=max only as
 # a debugging fallback, not a supported configuration.
 set -e

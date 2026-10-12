@@ -12,7 +12,7 @@
  * convention is built on). So the resume address travels in an explicitly-passed register, and
  * the application's own live link register travels untouched: at a riscv64 `ecall` site `ra`
  * (x1) is the application's live return address -- the aarch64 port's finding #1
- * (Documentation/devel/aarch64/direct-pal-port-log.md) applies verbatim, including its symptom:
+ * (Documentation/devel/aarch64/direct/FINDINGS.md) applies verbatim, including its symptom:
  * clobbering it turns the syscall wrapper's `ret` into an infinite self-loop.
  *
  * Entry contract:
@@ -36,7 +36,7 @@
  */
 
 #ifdef PAL_HOST_VM
-#error "the riscv64 LibOS supports the Linux PAL only (Documentation/devel/riscv/plan.md scope)"
+#error "the riscv64 LibOS supports the Linux PAL only (Documentation/devel/riscv/PLAN.md scope)"
 #endif
 
 #include "asm_offsets.h"

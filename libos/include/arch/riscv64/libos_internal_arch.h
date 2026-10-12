@@ -17,7 +17,7 @@
  * LibOS must supply its own return trampoline (see rt_sigreturn_trampoline()'s comment in
  * arch/riscv64/libos_context.c). Note the riscv64 kernel is itself expected to point `ra` at the
  * vDSO's __kernel_rt_sigreturn when delivering signals natively (the arm64-kernel behavior this
- * mirrors) -- to be verified against the running guest (plan.md "still to verify"). */
+ * mirrors) -- to be verified against the running guest (PLAN.md "still to verify"). */
 void* libos_rt_sigreturn_trampoline_addr(void);
 
 /* SIGILL handling hooks used by illegal_upcall() (see bookkeep/libos_signal.c). */
@@ -38,7 +38,7 @@ bool libos_arch_repair_illegal_insn(PAL_CONTEXT* context);
 /* Lazy rewriting of trapped `ecall` sites (sys.rewrite_syscalls); see
  * arch/riscv64/libos_syscall_patch.c. The first tries to rewrite the site at \p pc; the second
  * recognizes a site that another thread rewrote between this thread's trap and its handler.
- * Deliberately never enabled on riscv64 for now (Documentation/devel/riscv/plan.md decisions:
+ * Deliberately never enabled on riscv64 for now (Documentation/devel/riscv/PLAN.md decisions:
  * seccomp-trap only, no syscall-site rewriting -- a far jump needs 8 bytes over an `ecall`'s 4). */
 bool libos_try_patch_syscall_site(uintptr_t pc);
 bool libos_syscall_site_was_patched(uintptr_t pc);

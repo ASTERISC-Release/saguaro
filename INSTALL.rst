@@ -138,7 +138,7 @@ cannot run it, because it has no seccomp. Everything runs unprivileged, in a con
 
 The guest sees the repository at the same path as the container does, so it runs the cross-built
 binaries directly; this is why the install prefix above lies inside the repository. The suites are run from the guest's own disk, not from that shared directory.
-Design, status and known limits are in ``Documentation/devel/riscv/plan.md``.
+Design, status and known limits are in ``Documentation/devel/riscv/PLAN.md``.
 
 Building by hand
 ----------------

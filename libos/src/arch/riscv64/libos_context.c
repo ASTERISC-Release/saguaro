@@ -41,7 +41,7 @@ uint64_t libos_xstate_size(void) {
 void libos_xstate_init(void) {
     /* Nothing to detect: the lp64d ABI implies F/D always (a hard requirement, not a runtime
      * feature), and the state is always the same fixed size. The vector record is out of scope
-     * (plan.md decisions), so there is nothing to probe for. */
+     * (PLAN.md decisions), so there is nothing to probe for. */
     log_debug("LibOS xstate_size 0x%lx(%lu)", sizeof(struct libos_xstate),
               sizeof(struct libos_xstate));
 }

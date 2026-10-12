@@ -13,7 +13,7 @@ endif
 # app state (the seccomp-trap path saves/restores all registers via the LibOS context), so FP
 # codegen in clock_gettime's helper paths is harmless. (A vector-using compile would *not* be
 # -- but riscv64 gcc's default -march (rv64imafdc_zicsr_zifencei) cannot emit V instructions at
-# all, see Documentation/devel/riscv/plan.md decisions on hiding V.)
+# all, see Documentation/devel/riscv/PLAN.md decisions on hiding V.)
 vdso_so_dbg = shared_library('vdso',
     'vdso.c',
     'vdso_note.S',

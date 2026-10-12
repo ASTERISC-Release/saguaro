@@ -129,7 +129,7 @@ Documentation
   <Documentation/devel/multiarch.md>`__: supported configurations, build options,
   test and benchmark tooling, CI workflows.
 - `Differences from upstream gramine-tdx
-  <Documentation/devel/tirith-delta.md>`__.
+  <Documentation/devel/graphics/tirith-delta.md>`__.
 - `Graphics host redirection <Documentation/devel/graphics/>`__ (x86_64): how to run the graphics
   examples under ``gramine-vm``, the port's log and its open items. The examples are in
   `CI-Examples/graphics <CI-Examples/graphics/>`__.

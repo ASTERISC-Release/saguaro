@@ -11,7 +11,7 @@
 # Options:
 #   --prefix DIR           install prefix (default: $HOME/.local/gramine; no root needed)
 #   --target ARCH          cross-build for ARCH instead of the build machine's own
-#                          architecture (riscv64; see Documentation/devel/riscv/plan.md).
+#                          architecture (riscv64; see Documentation/devel/riscv/PLAN.md).
 #                          Requires the matching cross toolchain to be installed -- for
 #                          riscv64 that is the `container/run.sh --target riscv64` container
 #                          (or the same packages on a native-capable distro). The default
@@ -108,7 +108,7 @@ while [ $# -gt 0 ]; do
 done
 
 # --target: cross-build. Only riscv64 (the direct PAL port,
-# Documentation/devel/riscv/plan.md) is supported here.
+# Documentation/devel/riscv/PLAN.md) is supported here.
 CROSS_ARGS=()
 if [ -n "$TARGET_ARCH" ]; then
     if [ "$TARGET_ARCH" != riscv64 ]; then
@@ -245,7 +245,7 @@ fi
 if [ "$RUN_TESTS" = 1 ] && [ -n "$TARGET_ARCH" ]; then
     echo "note: skipping --run-tests: $TARGET_ARCH binaries cannot run on this build machine;"
     echo "      run the battery inside the RISC-V guest instead (scripts/riscv64/guest.sh,"
-    echo "      then test/test-direct.sh there -- see Documentation/devel/riscv/plan.md Phase 0)"
+    echo "      then test/test-direct.sh there -- see Documentation/devel/riscv/PLAN.md Phase 0)"
     RUN_TESTS=0
 fi
 

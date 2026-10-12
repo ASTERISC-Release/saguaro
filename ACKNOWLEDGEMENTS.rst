@@ -17,7 +17,7 @@ Projects this tree builds on
 - `gramine-tdx <https://github.com/gramineproject/gramine-tdx>`__: the Intel TDX backend and the
   virtual-machine (``vm``) PAL, whose full history this repository keeps.
 - Tirith: the virtual-machine and graphics host-redirection work developed at the ASTERISC Research
-  Lab (see ``Documentation/devel/tirith-delta.md``).
+  Lab (see ``Documentation/devel/graphics/tirith-delta.md``).
 
 Organizations
 -------------

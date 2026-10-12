@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
 /* Copyright (C) 2026 The ASTERISC Research Lab */
 
-/* Phase 0 check of the riscv64 port (Documentation/devel/riscv/plan.md): the mechanism the direct
+/* Phase 0 check of the riscv64 port (Documentation/devel/riscv/PLAN.md): the mechanism the direct
  * PAL uses to intercept system calls. A seccomp filter traps one system call (getppid); the SIGSYS
  * handler inspects what the kernel reports, emulates the call by writing a result into the saved
  * register state, and returns. Builds for x86_64, aarch64 and riscv64 so the three can be compared.

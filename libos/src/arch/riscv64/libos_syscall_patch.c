@@ -6,7 +6,7 @@
  * libos_syscall_patch.c).
  *
  * On riscv64 this file deliberately contains *no* rewriting machinery: the port's design
- * decision (Documentation/devel/riscv/plan.md, "Interception mechanism") is seccomp-trap only,
+ * decision (Documentation/devel/riscv/PLAN.md, "Interception mechanism") is seccomp-trap only,
  * with no syscall-site rewriting. Beyond policy there is a hard technical asymmetry vs the
  * aarch64 prototype: aarch64 replaces a 4-byte `svc` with a 4-byte `b` to a stub *only because
  * the branch displacement fits*; a riscv64 `jal` reaches +-1MiB and a full 64-bit absolute jump

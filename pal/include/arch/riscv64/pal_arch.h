@@ -54,7 +54,7 @@ static_assert(offsetof(PAL_TCB, stack_protector_canary) == 0x8,
 
 /*
  * Same design as the aarch64 port (see findings #9, #12 and #13 in
- * Documentation/devel/aarch64/direct-pal-port-log.md): the thread pointer belongs to the
+ * Documentation/devel/aarch64/direct/FINDINGS.md): the thread pointer belongs to the
  * application's libc, so PAL_TCB is reached through (in order) a tagged-`tp` fast path for
  * Gramine's own internal threads, the per-thread PAL_TCB registry keyed by the application TLS
  * pointer, and finally this process-wide global `g_pal_tcb_singleton` -- the correct fallback for
@@ -148,7 +148,7 @@ static inline bool pal_tcb_from_tagged_tp(PAL_TCB** out_tcb) {
 static inline PAL_TCB* pal_get_tcb(void) {
 #ifdef PAL_HOST_VM
     /* Unikernel PAL (PAL_HOST_VM builds): a riscv64 vm PAL does not exist yet (out of scope, see
-     * Documentation/devel/riscv/plan.md); this branch exists only for structural parity with the
+     * Documentation/devel/riscv/PLAN.md); this branch exists only for structural parity with the
      * aarch64 header and is dead code in every riscv64 build we produce. */
     return pal_get_tcb_vm();
 #else
@@ -296,7 +296,7 @@ struct pal_cpu_info {
  * the *optional* vector state uses the extensible `__riscv_ctx_hdr` {magic, size} scheme
  * (RISCV_V_MAGIC record appended after it). So PAL_FPSTATE here is a plain mirror of the d-state
  * -- dictated by the kernel ABI, not a Gramine design choice -- and there is no record header to
- * carry. Vector state is out of scope for now (see Documentation/devel/riscv/plan.md decisions);
+ * carry. Vector state is out of scope for now (see Documentation/devel/riscv/PLAN.md decisions);
  * when it is added, `context->fpregs` keeps aliasing the d-state and the V record rides along
  * untouched inside the frame.
  */

@@ -11,7 +11,7 @@
 /* riscv64 uses the same generic syscall ABI (asm-generic/unistd.h) as aarch64: the numbers come
  * straight from the toolchain's own <asm/unistd.h> (verified up through __NR_riscv_hwprobe == 258
  * and the rest of the table on this box's headers). Per the port plan (decisions table in
- * Documentation/devel/riscv/plan.md) the dispatch table is *shared* with aarch64 rather than
+ * Documentation/devel/riscv/PLAN.md) the dispatch table is *shared* with aarch64 rather than
  * copied: riscv64 adds only two calls of its own (below), has the same omissions as aarch64 (no
  * vfork/open/pipe/getdents/... legacy calls -- see libos_table.c for how each maps onto the
  * *at()/generic replacement Gramine already implements), and where the two architectures' headers

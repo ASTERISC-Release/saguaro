@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
 /* Copyright (C) 2026 The ASTERISC Research Lab */
 
-/* Phase 3 verification for the riscv64 port (Documentation/devel/riscv/plan.md): what the
+/* Phase 3 verification for the riscv64 port (Documentation/devel/riscv/PLAN.md): what the
  * kernel reports on a SIGTRAP from `ebreak`, which pal_arch_handle_trap() (the exact-context-
  * restore protocol, aarch64 finding #15's counterpart) builds its discrimination on:
  *
