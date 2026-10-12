@@ -184,6 +184,120 @@ static int vm_relay_connect(struct pal_handle* handle, const struct pal_socket_a
     return -unix_to_pal_error(host_errno);
 }
 
+static int vm_prepare_relay_connect(struct pal_handle* handle,
+                                    const struct pal_socket_addr* addr) {
+    uint8_t* request = handle->sock.connect_request;
+    const uint8_t* address;
+    size_t address_size;
+    uint16_t port;
+
+    memset(request, 0, sizeof(handle->sock.connect_request));
+    memcpy(request, "GNR1", 4);
+    request[4] = 1;
+    request[5] = 1;
+    request[6] = 6;
+    if (addr->domain == PAL_IPV4) {
+        request[7] = 4;
+        address = (const uint8_t*)&addr->ipv4.addr;
+        address_size = 4;
+        port = ntohs(addr->ipv4.port);
+    } else if (addr->domain == PAL_IPV6) {
+        request[7] = 6;
+        address = addr->ipv6.addr;
+        address_size = 16;
+        port = ntohs(addr->ipv6.port);
+    } else {
+        return -PAL_ERROR_AFNOSUPPORT;
+    }
+    if (!port)
+        return -PAL_ERROR_INVAL;
+
+    request[8] = port >> 8;
+    request[9] = port & 0xff;
+    request[10] = address_size >> 8;
+    request[11] = address_size & 0xff;
+    memcpy(request + 12, address, address_size);
+    handle->sock.connect_request_size = 12 + address_size;
+    handle->sock.connect_request_offset = 0;
+    handle->sock.connect_response_offset = 0;
+    return 0;
+}
+
+/* Advance a nonblocking connect without sleeping. The stream response is the relay's TCP
+ * connect result; once received, normal socket polling reports completion to LibOS. */
+static void vm_tcp_connect_progress(struct pal_handle* handle) {
+    spinlock_lock(&handle->sock.lock);
+    if (!handle->sock.connect_pending) {
+        spinlock_unlock(&handle->sock.lock);
+        return;
+    }
+
+    int ret = virtio_vsock_connect_status(handle->sock.fd);
+    if (ret == -PAL_ERROR_TRYAGAIN) {
+        spinlock_unlock(&handle->sock.lock);
+        return;
+    }
+    if (ret < 0) {
+        handle->sock.connect_result = ret;
+        goto complete;
+    }
+
+    if (!handle->sock.connect_direct_vsock) {
+        while (handle->sock.connect_request_offset < handle->sock.connect_request_size) {
+            size_t offset = handle->sock.connect_request_offset;
+            size_t remaining = handle->sock.connect_request_size - offset;
+            long written = virtio_vsock_write(handle->sock.fd,
+                                               handle->sock.connect_request + offset, remaining);
+            if (written == -PAL_ERROR_TRYAGAIN) {
+                spinlock_unlock(&handle->sock.lock);
+                return;
+            }
+            if (written <= 0 || (size_t)written > remaining) {
+                handle->sock.connect_result = written < 0 ? (int)written : -PAL_ERROR_CONNFAILED;
+                goto complete;
+            }
+            handle->sock.connect_request_offset += written;
+        }
+
+        while (handle->sock.connect_response_offset < sizeof(handle->sock.connect_response)) {
+            size_t offset = handle->sock.connect_response_offset;
+            size_t remaining = sizeof(handle->sock.connect_response) - offset;
+            long received = virtio_vsock_read(handle->sock.fd,
+                                               handle->sock.connect_response + offset, remaining);
+            if (received == -PAL_ERROR_TRYAGAIN) {
+                spinlock_unlock(&handle->sock.lock);
+                return;
+            }
+            if (received <= 0 || (size_t)received > remaining) {
+                handle->sock.connect_result = received < 0 ? (int)received : -PAL_ERROR_CONNFAILED;
+                goto complete;
+            }
+            handle->sock.connect_response_offset += received;
+        }
+
+        const uint8_t* response = handle->sock.connect_response;
+        if (memcmp(response, "GNR1", 4) || response[4] != 1) {
+            handle->sock.connect_result = -PAL_ERROR_CONNFAILED;
+        } else {
+            uint16_t host_errno = ((uint16_t)response[6] << 8) | response[7];
+            if (response[5] == 0 && host_errno == 0) {
+                handle->sock.connect_result = 0;
+            } else if (response[5] == 1 && host_errno) {
+                handle->sock.connect_result = -unix_to_pal_error(host_errno);
+            } else {
+                handle->sock.connect_result = -PAL_ERROR_CONNFAILED;
+            }
+        }
+    } else {
+        handle->sock.connect_result = 0;
+    }
+
+complete:
+    handle->sock.connect_pending = false;
+    handle->sock.connect_finished = true;
+    spinlock_unlock(&handle->sock.lock);
+}
+
 /* UDP shares one VSOCK stream with the relay; these helpers preserve datagram framing above it. */
 static int vm_vsock_write_exact(struct pal_handle* handle, const void* buf, size_t size,
                                 bool force_nonblocking) {
@@ -336,6 +450,8 @@ int pal_common_socket_wait_events(struct pal_handle* handle, pal_wait_flags_t ev
     /* The relay returns UDP responses through the VSOCK stream; poll it before checking readiness. */
     if (handle->sock.type == PAL_SOCKET_UDP && handle->region->relay_connected)
         (void)virtio_vsock_poll();
+    if (handle->sock.type == PAL_SOCKET_TCP)
+        vm_tcp_connect_progress(handle);
 
     spinlock_lock(&handle->sock.lock);
 
@@ -347,6 +463,13 @@ int pal_common_socket_wait_events(struct pal_handle* handle, pal_wait_flags_t ev
                 (!handle->region->relay_connected || virtio_vsock_can_write(handle->sock.fd)))
             revents |= PAL_WAIT_WRITE;
     } else {
+        if (handle->sock.connect_pending)
+            goto out;
+        if (handle->sock.connect_finished && handle->sock.connect_result < 0) {
+            revents = (events & (PAL_WAIT_READ | PAL_WAIT_WRITE)) | PAL_WAIT_ERROR;
+            goto out;
+        }
+
         long peeked = virtio_vsock_peek(handle->sock.fd);
         if (peeked < 0) {
             /* socket is invalid or was shutdown or in the process of closing */
@@ -676,8 +799,45 @@ static int pal_common_socket_connect(struct pal_handle* handle, struct pal_socke
         addr_vm.svm_port = 65536 + g_vsock->guest_cid;
     }
 
-    int ret = virtio_vsock_connect(handle->sock.fd, &addr_vm, sizeof(addr_vm),
-                                   VSOCK_CONNECT_TIMEOUT_US);
+    int ret;
+    if (handle->sock.is_nonblocking) {
+        spinlock_lock(&handle->sock.lock);
+        if (!direct_vsock_port) {
+            ret = vm_prepare_relay_connect(handle, addr);
+            if (ret < 0) {
+                spinlock_unlock(&handle->sock.lock);
+                return ret;
+            }
+        }
+
+        handle->sock.connect_pending = true;
+        handle->sock.connect_finished = false;
+        handle->sock.connect_direct_vsock = direct_vsock_port;
+        handle->sock.connect_result = 0;
+        ret = virtio_vsock_connect_start(handle->sock.fd, &addr_vm, sizeof(addr_vm));
+        if (ret < 0) {
+            handle->sock.connect_pending = false;
+            spinlock_unlock(&handle->sock.lock);
+            return ret;
+        }
+
+        struct sockaddr_vm local_addr_vm = {0};
+        size_t local_addr_vm_size = sizeof(local_addr_vm);
+        ret = virtio_vsock_getsockname(handle->sock.fd, &local_addr_vm, &local_addr_vm_size);
+        if (ret < 0) {
+            handle->sock.connect_pending = false;
+            spinlock_unlock(&handle->sock.lock);
+            return ret;
+        }
+        if (out_local_addr)
+            vm_to_pal_sockaddr(handle->sock.domain, &local_addr_vm, out_local_addr);
+        *out_inprogress = true;
+        spinlock_unlock(&handle->sock.lock);
+        return 0;
+    }
+
+    ret = virtio_vsock_connect(handle->sock.fd, &addr_vm, sizeof(addr_vm),
+                               VSOCK_CONNECT_TIMEOUT_US);
     if (ret < 0)
         return ret;
 

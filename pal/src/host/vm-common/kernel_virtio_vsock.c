@@ -1943,6 +1943,67 @@ out:
     return ret;
 }
 
+int virtio_vsock_connect_start(int sockfd, const void* addr, size_t addrlen) {
+    int ret;
+    struct sockaddr_vm* addr_vm = (struct sockaddr_vm*)addr;
+
+    if (!addr || addrlen < sizeof(struct sockaddr_vm))
+        return -PAL_ERROR_INVAL;
+    if (sockfd < 0)
+        return -PAL_ERROR_BADHANDLE;
+
+    spinlock_lock(&g_vsock_connections_lock);
+    struct virtio_vsock_connection* conn = get_connection(sockfd);
+    if (!conn) {
+        ret = -PAL_ERROR_BADHANDLE;
+        goto out;
+    }
+    if (conn->state != VIRTIO_VSOCK_CLOSE) {
+        ret = -PAL_ERROR_STREAMEXIST;
+        goto out;
+    }
+
+    assert(conn->host_port == 0 && conn->guest_port == 0);
+    conn->host_port = addr_vm->svm_port;
+    conn->guest_port = pick_new_port();
+#if (VIRTIO_VSOCK_ALLOW_MULTIPLE_CONNECTIONS == 0)
+    host_port_add(conn);
+#else
+    host_port_add_robust(conn);
+#endif
+
+    ret = send_request_packet(conn);
+    if (ret < 0) {
+        cleanup_connection(conn);
+        goto out;
+    }
+    conn->state = VIRTIO_VSOCK_CONNECT;
+    ret = 0;
+out:
+    spinlock_unlock(&g_vsock_connections_lock);
+    return ret;
+}
+
+int virtio_vsock_connect_status(int sockfd) {
+    int ret;
+    if (sockfd < 0)
+        return -PAL_ERROR_BADHANDLE;
+
+    spinlock_lock(&g_vsock_connections_lock);
+    struct virtio_vsock_connection* conn = get_connection(sockfd);
+    if (!conn) {
+        ret = -PAL_ERROR_BADHANDLE;
+    } else if (conn->state == VIRTIO_VSOCK_CONNECT) {
+        ret = -PAL_ERROR_TRYAGAIN;
+    } else if (conn->state == VIRTIO_VSOCK_ESTABLISHED) {
+        ret = 0;
+    } else {
+        ret = -PAL_ERROR_CONNFAILED;
+    }
+    spinlock_unlock(&g_vsock_connections_lock);
+    return ret;
+}
+
 int virtio_vsock_getsockname(int sockfd, const void* addr, size_t* addrlen) {
     int ret;
 

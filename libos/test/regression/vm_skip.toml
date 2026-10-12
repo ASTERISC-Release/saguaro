@@ -54,17 +54,6 @@ tests = [
 
 [[group]]
 kind = "skip"
-category = "vm-socket-semantics"
-reason = "The VM PAL performs TCP connect synchronously, so it does not expose EINPROGRESS or asynchronous connection completion yet."
-tests = [
-  "TC_80_Socket::test_305_socket_tcp_einprogress_responsive_poll",
-  "TC_80_Socket::test_306_socket_tcp_einprogress_responsive_epoll",
-  "TC_80_Socket::test_307_socket_tcp_einprogress_unresponsive_poll",
-  "TC_80_Socket::test_308_socket_tcp_einprogress_unresponsive_epoll",
-]
-
-[[group]]
-kind = "skip"
 category = "vm-socket-ioctl"
 reason = "The VM PAL has no guest network interface enumeration; SIOCGIFCONF and SIOCGIFHWADDR are not available."
 tests = [

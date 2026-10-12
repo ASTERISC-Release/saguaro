@@ -30,11 +30,11 @@ make -C "$DIR" -s || exit 1
     >"$OUT/manifest.log" 2>&1 || { cat "$OUT/manifest.log"; exit 1; }
 
 cd "$DIR"
-echo "== guest loopback: 1,000 TCP echoes plus IPv4/IPv6 UDP self-echo, ${CPU_NUM} vCPUs"
+echo "== guest loopback: TCP echo, async connect and socket names, UDP self-echo, ${CPU_NUM} vCPUs"
 GRAMINE_CPU_NUM=$CPU_NUM GRAMINE_VM_CONSOLE_LOG="$OUT/guest.console" \
     timeout --signal=TERM --kill-after=5s 120s gramine-vm vsock_guest_loopback \
     >"$OUT/guest.log" 2>&1 || { cat "$OUT/guest.log" >&2; exit 1; }
-grep -q 'GUEST_LOOPBACK_OK tcp4=1000 tcp6=1000 udp4=1 udp6=1' "$OUT/guest.log" || {
+grep -q 'GUEST_LOOPBACK_OK tcp4=1000 tcp6=1000 nonblock4=1 nonblock6=1 udp4=1 udp6=1' "$OUT/guest.log" || {
     cat "$OUT/guest.log" >&2; exit 1;
 }
 echo "== guest loopback passed; logs in $OUT"
