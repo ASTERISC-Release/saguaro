@@ -60,10 +60,8 @@ static long host_sem_request(uint64_t request, uint64_t p1, uint64_t p2, uint64_
     return ret;
 }
 #else
-/* Request ids normally come from libos_graphics.h; placeholders keep the (unreachable) call sites below
- * compiling when graphics is not built in. */
-enum { SYSV_SEMGET, SYSV_SEMCTL, SYSV_SEMOP };
-
+/* The request ids come from graphics_comm_abi.h (through libos_graphics.h), which is included
+ * whether or not graphics is built in; the call sites below are unreachable in that case. */
 static long host_sem_request(uint64_t request, uint64_t p1, uint64_t p2, uint64_t p3,
                              uint64_t p4) {
     __UNUSED(request);
