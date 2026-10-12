@@ -9,6 +9,20 @@ LIBPAL_PATH=@LIBPAL_PATH@
 HOST_PAL_PATH=@HOST_PAL_PATH@
 TDSHIM_PAL_PATH=@TDSHIM_PAL_PATH@
 
+# The launcher runs Python snippets and the vsock relay (python3 -m graminelibos.vsock_relay) from
+# this installation. A caller that starts it with a stripped environment (the LibOS regression tests
+# pass `env=`) has no PYTHONPATH, so find the package next to the launcher: <prefix>/bin/gramine-vm
+# and <prefix>/lib/python3*/site-packages/graminelibos.
+if ! python3 -c 'import graminelibos' 2>/dev/null; then
+    _LAUNCHER_PREFIX=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)
+    for _site in "$_LAUNCHER_PREFIX"/lib/python3*/site-packages; do
+        if [ -d "$_site/graminelibos" ]; then
+            export PYTHONPATH="$_site${PYTHONPATH:+:$PYTHONPATH}"
+            break
+        fi
+    done
+fi
+
 APPLICATION=
 QEMU_GDB=
 ENVS=()
