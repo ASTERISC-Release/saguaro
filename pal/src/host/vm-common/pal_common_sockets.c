@@ -48,6 +48,15 @@ void thread_wakeup_vsock(bool is_read) {
     sched_thread_wakeup(&g_streams_waiting_events_futex);
     sched_thread_wakeup(is_read ? &g_sockets_reader_futex : &g_sockets_writer_futex);
 }
+
+void sockets_kick_waiting_threads(void) {
+    /* See the declaration in kernel_virtio_vsock.h: a cheap safety net against the wakeup race;
+     * skip entirely when there is no vsock device (nothing could be waiting on these). */
+    if (!g_vsock)
+        return;
+    sched_thread_wakeup_uninterruptable(&g_sockets_reader_futex);
+    sched_thread_wakeup_uninterruptable(&g_sockets_writer_futex);
+}
 void udp_rx_ring_init(struct pal_handle *handle, void *region)
 {
     struct udp_rx_ring* udp_region = malloc(sizeof(struct udp_rx_ring));

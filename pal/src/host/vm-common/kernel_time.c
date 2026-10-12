@@ -19,6 +19,7 @@
 
 #include "kernel_sched.h"
 #include "kernel_time.h"
+#include "kernel_virtio_vsock.h"
 #include "kernel_vmm_inputs.h"
 
 DEFINE_LIST(pending_timeout);
@@ -130,6 +131,15 @@ int notify_about_timeouts_uninterruptable(void) {
     /* to prevent lost wakeups on generic g_streams_waiting_events_futex (e.g., when a thread was
      * already running when the wakeup on this futex triggered), need to periodically kick it */
     sched_thread_wakeup_uninterruptable(&g_streams_waiting_events_futex);
+    /* the same lost-wakeup class exists for the vsock reader/writer waiters: an incoming packet
+     * is moved onto its connection's queue under the connections lock and the wakeup is issued
+     * after that lock is dropped, so a thread that rechecks its connection in between and then
+     * sleeps misses the wakeup; the queue-availability recheck before sleeping
+     * (virtio_vsock_rearm_notifications) cannot see it either, because the packet is no longer
+     * in the RX queue. Threads waiting on these futexes are plain sleepers -- no event loop
+     * polls on their behalf once their active-polling lease expired -- so they need the same
+     * periodic kick. A spurious wakeup is harmless: the waiters recheck and sleep again. */
+    sockets_kick_waiting_threads();
     spinlock_unlock(&g_pending_timeouts_list_lock);
     return 0;
 }
