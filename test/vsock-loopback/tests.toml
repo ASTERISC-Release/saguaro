@@ -1,0 +1,6 @@
+# Configuration for `gramine-test` (see python/graminelibos/util_tests.py). Only the VM PAL runs
+# this test; the host side of it is test/vsock-loopback/vsock_host_client.py.
+
+manifests = [
+  "vsock_echo_server",
+]

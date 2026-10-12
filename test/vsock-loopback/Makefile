@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
+#
+# Build of the guest-side server of the vsock-loopback test (test/test-vm-loopback.sh).
+# static-pie: the VM PAL needs PIE binaries (the same requirement the CI-Examples under
+# tools/run-vm-aarch64-examples.sh have); the manifest is rendered by `gramine-test` (tests.toml).
+
+CC ?= gcc
+CFLAGS ?= -O2 -Wall
+
+.PHONY: all clean
+all: vsock_echo_server
+
+vsock_echo_server: vsock_echo_server.c
+	$(CC) $(CFLAGS) -static-pie -o $@ $<
+
+clean:
+	$(RM) vsock_echo_server vsock_echo_server.manifest build.ninja .ninja_deps .ninja_log
