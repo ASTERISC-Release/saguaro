@@ -44,6 +44,9 @@ What it is ultimately intended to do:
   base, with design logs and test-parity notes under ``Documentation/devel/``.
 - **Use the inherited confidential-computing back ends** (Intel TDX and SGX) on x86_64.
 
+The features added so far, and the planned ones, are listed in
+`Documentation/FEATURES.md <Documentation/FEATURES.md>`__.
+
 Several features are **planned** and not available yet (see the platform matrix below and
 `Documentation/TODO.md <Documentation/TODO.md>`__): a RISC-V (RV64) port of the ``vm`` PAL, the
 graphics host redirection on AArch64, delivery of asynchronous signals to blocked threads in the

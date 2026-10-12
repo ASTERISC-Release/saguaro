@@ -12,6 +12,7 @@ install, containers, the RISC-V cross-build).
 
 | Document | Content |
 |---|---|
+| `FEATURES.md` | what this tree adds to gramine-tdx, and what is planned, in one or two lines each |
 | `devel/multiarch.md` | platform matrix in detail, build options, how to test, CI workflows |
 | `devel/vm.md` | building and running the vm PAL (`gramine-vm`) |
 | `devel/graphics/tirith-delta.md` | changes against upstream gramine-tdx |
