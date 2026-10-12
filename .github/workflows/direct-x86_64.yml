@@ -11,9 +11,9 @@ on:
   workflow_dispatch:
     inputs:
       suites:
-        description: "test/test-direct.sh suites (default: PAL and LibOS regression only; see test/test-direct.sh --list for the application suites)"
+        description: "test/test-direct.sh suites (default: PAL and LibOS regression and the python example; see test/test-direct.sh --list for the other application suites)"
         required: false
-        default: "pal libos"
+        default: "pal libos python"
 
 permissions:
   contents: read
@@ -50,7 +50,7 @@ jobs:
 
       - name: Run the direct-PAL regression tests
         env:
-          SUITES: ${{ inputs.suites || 'pal libos' }}   # via env, never interpolated into the script text
+          SUITES: ${{ inputs.suites || 'pal libos python' }}   # via env, never interpolated into the script text
         run: |
           export PATH="$HOME/.cargo/bin:$PATH"
           test/test-direct.sh $SUITES
