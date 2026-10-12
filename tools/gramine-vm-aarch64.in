@@ -19,7 +19,14 @@
 #   GRAMINE_RAM_SIZE (default 2G; a manifest's sgx/tdx.enclave_size wins, floor 1G)
 #   GRAMINE_CPU_NUM  (default 1)          GRAMINE_ACCEL (kvm)     GRAMINE_CPU (host)
 #   QEMU_PATH        (qemu-system-aarch64 from PATH)
-#   GRAMINE_VSOCK=1  add a vhost-vsock device (guest-cid = the VM id)
+#   GRAMINE_VSOCK    1 (default) adds a vhost-vsock device (guest-cid = the VM id), which the guest's
+#                    TCP/UDP sockets and the per-VM relay below need; 0 leaves it out. Needs
+#                    /dev/vhost-vsock (module vhost_vsock) readable and writable by the user; without
+#                    it the VM boots without the device, unless the manifest has vm.net.* keys (error)
+#   GRAMINE_VM_ID_BASE  first VM id (= vsock guest-cid) to try, default 10; workspaces of the repository
+#                    use different bases so their VMs and relay ports do not collide
+#   GRAMINE_VM_RELAY=0, GRAMINE_VM_INBOUND, GRAMINE_VM_RELAY_DEBUG: the vsock relay, see
+#                    tools/gramine-vm-relay.sh (the relay is started for every VM that has the device)
 #   GRAMINE_VM_CONSOLE_LOG=<file>  keep a copy of the console log
 #   GDB=1            -gdb tcp::9000 -S
 
@@ -38,6 +45,10 @@ if [ "$1" == "" ]; then
     exit 2
 fi
 APPLICATION=$1
+
+# the per-VM vsock relay (Documentation/devel/vm-network/); installed next to the VM PAL
+. "$HOST_PAL_PATH/vm-relay.sh"
+vm_relay_find_python "${BASH_SOURCE[0]}"
 shift
 
 # VM memory: the manifest's `<sgx|tdx>.enclave_size` (so existing manifests keep working), else
@@ -98,7 +109,7 @@ QEMU_SHAPE="-accel $ACCEL -cpu $CPU -m $QEMU_MEM_SIZE -smp $QEMU_CPU_NUM"
 # Gramine VM id: names the virtiofs socket (and the vsock guest-cid), so two instances can run
 # side by side. Claimed atomically with mkdir.
 # A lock whose owner is gone (killed -9, e.g. by a test harness timeout) is reclaimed.
-GRAMINE_VM_ID=10
+GRAMINE_VM_ID=${GRAMINE_VM_ID_BASE:-10}
 while true; do
     LOCK=/tmp/gramine_vm_$GRAMINE_VM_ID.lock
     if mkdir "$LOCK" 2>/dev/null; then
@@ -116,6 +127,7 @@ VHOSTFS_SOCKET=/tmp/gramine_vhostfs_$GRAMINE_VM_ID
 WORK=$(mktemp -d /tmp/gramine-vm.XXXXXX)
 VIRTIOFSD_PID=
 cleanup() {
+    vm_relay_stop
     [ -n "$VIRTIOFSD_PID" ] && kill "$VIRTIOFSD_PID" 2>/dev/null
     rm -rf "$WORK" "$VHOSTFS_SOCKET" "$VHOSTFS_SOCKET.pid" "/tmp/gramine_vm_$GRAMINE_VM_ID.lock"
 }
@@ -140,6 +152,22 @@ if [ ! -e "$VHOSTFS_SOCKET" ]; then
     echo "gramine-vm: virtiofsd failed to start:" >&2
     cat "$WORK/virtiofsd.log" >&2
     exit 2
+fi
+
+# vsock device and relay. The device carries the guest's TCP/UDP sockets; the relay (one process per VM)
+# serves them on the host side. A VM that cannot get the device still boots (as before), except when its
+# manifest asks for networking.
+GRAMINE_VSOCK=${GRAMINE_VSOCK:-1}
+if [ "$GRAMINE_VSOCK" = 1 ] && ! { [ -r /dev/vhost-vsock ] && [ -w /dev/vhost-vsock ]; }; then
+    if vm_relay_manifest_wants_network "$GRAMINE_MANIFEST"; then
+        echo "gramine-vm: $GRAMINE_MANIFEST has vm.net.* keys, but /dev/vhost-vsock is not" \
+             "readable and writable (load the vhost_vsock module and give this user access)" >&2
+        exit 2
+    fi
+    GRAMINE_VSOCK=0
+fi
+if [ "$GRAMINE_VSOCK" = 1 ]; then
+    vm_relay_start "$GRAMINE_VM_ID" "$GRAMINE_MANIFEST" || exit 2
 fi
 
 # The guest splits this string on whitespace but keeps "double-quoted" tokens whole (no escapes), so
@@ -168,7 +196,7 @@ QEMU_VIRTIO_CONSOLE="-device virtio-serial-pci,iommu_platform=off,romfile= \
 QEMU_VIRTIO_FS="-chardev socket,path=$VHOSTFS_SOCKET,id=vhostfs \
 -device vhost-user-fs-pci,iommu_platform=off,queue-size=1024,chardev=vhostfs,tag=graminefs,romfile="
 QEMU_VIRTIO_VSOCK=
-if [ "$GRAMINE_VSOCK" == "1" ]; then
+if [ "$GRAMINE_VSOCK" = 1 ]; then
     QEMU_VIRTIO_VSOCK="-device vhost-vsock-pci,iommu_platform=off,guest-cid=$GRAMINE_VM_ID,id=vsockdev"
 fi
 

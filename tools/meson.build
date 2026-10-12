@@ -66,6 +66,9 @@ if vm
 
     # The x86 launcher (q35, BIOS blob, NUMA DIMMs, vhost-vsock) cannot work on aarch64: the
     # arm one boots the kernel under QEMU `virt` with a dumped DTB. Both install as `gramine-vm`.
+    # the per-VM vsock relay of the launchers (sourced by gramine-vm-aarch64; see its header)
+    install_data('gramine-vm-relay.sh', install_dir: hostpalpath_vm, rename: 'vm-relay.sh')
+
     configure_file(
         input: host_machine.cpu_family() == 'aarch64' ? 'gramine-vm-aarch64.in' : 'gramine-vm.in',
         output: 'gramine-vm',
