@@ -8,10 +8,14 @@ CC ?= gcc
 CFLAGS ?= -O2 -Wall
 
 .PHONY: all clean
-all: vsock_echo_server
+all: vsock_echo_server vsock_outbound_client
 
 vsock_echo_server: vsock_echo_server.c
 	$(CC) $(CFLAGS) -static-pie -o $@ $<
 
+vsock_outbound_client: vsock_outbound_client.c
+	$(CC) $(CFLAGS) -static-pie -o $@ $<
+
 clean:
-	$(RM) vsock_echo_server vsock_echo_server.manifest build.ninja .ninja_deps .ninja_log
+	$(RM) vsock_echo_server vsock_outbound_client vsock_echo_server.manifest \
+		vsock_outbound_client.manifest build.ninja .ninja_deps .ninja_log

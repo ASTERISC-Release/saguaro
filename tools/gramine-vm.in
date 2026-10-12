@@ -430,48 +430,23 @@ if [ -n "$X_DISPLAY_NUM" ] && [ "${GRAMINE_VM_X_PROXY:-1}" != "0" ]; then
 fi
 
 # The vsock relay (Documentation/devel/vm-network/): one relay process per VM, listening on vsock
-# port 65536+CID, started here (after the guest CID is known) and stopped with the VM. Relay v0
-# does static inbound forwarding: every `vm.net.inbound` rule of the manifest (or every rule in
-# the colon-separated GRAMINE_VM_INBOUND="guest:host,..." convenience variable, for drivers that
-# cannot edit the manifest) gets a host (container) TCP listener bridged into the guest. With no
-# rules the relay is not started -- relay v0 has nothing else to do; the outbound phases of the
-# plan start it unconditionally. GRAMINE_VM_RELAY=0 disables it entirely. A host port that cannot
-# be bound is an error and fails the run, as agreed in the plan.
+# port 65536+CID, started here (after the guest CID is known) and stopped with the VM. It handles
+# outbound destination handshakes and static inbound forwarding. Every `vm.net.inbound` rule of the
+# manifest (or every rule in the colon-separated GRAMINE_VM_INBOUND="guest:host,..." convenience
+# variable, for drivers that cannot edit the manifest) gets a host (container) TCP listener bridged
+# into the guest. The manifest is passed to the relay for vm.net.outbound and vm.net.deny policy.
+# GRAMINE_VM_RELAY=0 disables the relay entirely. A host port that cannot be bound is an error and
+# fails the run, as agreed in the plan.
 # The relay does not touch the graphics direct port mapping (guest TCP port N == host vsock port
 # N, ports 6000+N and friends): that mapping needs no listener on the host side at all -- the host
 # connects directly to the guest's vsock port, the way the X proxy above does.
 RELAY_RULES=$(python3 -c "
-import os, sys
-try:
-    import tomli as tomllib
-except ImportError:
-    import tomllib
-rules = []
-try:
-    with open(os.environ['GRAMINE_MANIFEST'], 'rb') as f:
-        inbound = tomllib.load(f).get('vm', {}).get('net', {}).get('inbound', [])
-except Exception:
-    inbound = []
-for item in inbound:
-    if isinstance(item, dict):
-        if 'guest' not in item:
-            sys.exit(f\"vm.net.inbound rule {item!r} has no 'guest' port\")
-        spec = f\"guest={item['guest']}\"
-        if 'host' in item:
-            spec += f\":host={item['host']}\"
-        if 'bind' in item:
-            spec += f\":bind={item['bind']}\"
-        rules.append(spec)
-    else:
-        rules.append(str(item))
-env_rules = os.environ.get('GRAMINE_VM_INBOUND', '')
-if env_rules:
-    rules += [r for r in env_rules.split(',') if r]
-print('\n'.join(rules))
-" 2>&1) || { echo "Error: cannot read the vm.net.inbound rules: $RELAY_RULES" >&2; exit 2; }
+import os
+print('\\n'.join(rule for rule in os.environ.get('GRAMINE_VM_INBOUND', '').split(',') if rule))
+")
 RELAY_LOG=
 RELAY_PID=
-if [ -n "${RELAY_RULES:-}" ] && [ "${GRAMINE_VM_RELAY:-1}" != "0" ]; then
+if [ "${GRAMINE_VM_RELAY:-1}" != "0" ]; then
     RELAY_LOG=$(mktemp /tmp/gramine-vm-relay.XXXXXX)
     # one --inbound argument per rule, from the newline-separated list
     RELAY_ARGS=()
@@ -481,7 +456,8 @@ if [ -n "${RELAY_RULES:-}" ] && [ "${GRAMINE_VM_RELAY:-1}" != "0" ]; then
     # PYTHONASYNCIODEBUG makes the relay log event-loop stalls ("Executing ... took 0.sss
     # seconds"), which is how a blocking vsock dial that freezes the other forwards shows up.
     env PYTHONASYNCIODEBUG=${GRAMINE_VM_RELAY_DEBUG:+1} \
-        python3 -m graminelibos.vsock_relay --cid "$GRAMINE_VM_ID" "${RELAY_ARGS[@]}" \
+        python3 -m graminelibos.vsock_relay --cid "$GRAMINE_VM_ID" \
+        --config "$GRAMINE_MANIFEST" "${RELAY_ARGS[@]}" \
         >"$RELAY_LOG" 2>&1 &
     RELAY_PID=$!
     # wait until the relay prints that it listens (or dies: a host port that is taken fails here,

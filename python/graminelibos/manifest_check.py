@@ -160,7 +160,7 @@ GramineManifestSchema = Schema({
                 },
             )],
             # vsock ports that keep the legacy direct mapping (guest TCP port N reaches host vsock
-            # port N, the way the graphics X proxy relies on); phase 3 wires the enforcement
+            # port N, the way the graphics X proxy relies on).
             'direct_vsock_ports': [int],
         },
     },

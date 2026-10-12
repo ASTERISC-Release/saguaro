@@ -13,9 +13,11 @@
 #include "pal.h"
 #include "pal_common.h"
 #include "pal_error.h"
+#include "pal_linux_error.h"
 #include "pal_internal.h"
 #include "socket_utils.h"
 #include "spinlock.h"
+#include "toml.h"
 
 #include "kernel_sched.h"
 #include "kernel_virtio.h"
@@ -72,6 +74,115 @@ void udp_rx_ring_init(struct pal_handle *handle, void *region)
 }
 static inline uint8_t *ring_data(struct udp_rx_ring *r) {
     return r->ring;
+}
+
+static bool vm_is_direct_vsock_port(uint16_t port) {
+    toml_table_t* vm = toml_table_in(g_pal_public_state.manifest_root, "vm");
+    toml_table_t* net = vm ? toml_table_in(vm, "net") : NULL;
+    toml_array_t* ports = net ? toml_array_in(net, "direct_vsock_ports") : NULL;
+    if (!ports)
+        return false;
+
+    int count = toml_array_nelem(ports);
+    for (int i = 0; i < count; i++) {
+        toml_raw_t raw = toml_raw_at(ports, i);
+        int64_t direct_port;
+        if (raw && toml_rtoi(raw, &direct_port) == 0 && direct_port == port)
+            return true;
+    }
+    return false;
+}
+
+static int vm_relay_write_exact(struct pal_handle* handle, const void* buf, size_t size) {
+    size_t offset = 0;
+    while (offset < size) {
+        struct iovec iov = {
+            .iov_base = (char*)buf + offset,
+            .iov_len = size - offset,
+        };
+        size_t written = 0;
+        int ret = handle->sock.ops->send(handle, &iov, 1, &written, NULL,
+                                         /*force_nonblocking=*/false);
+        if (ret < 0)
+            return ret;
+        if (!written || written > size - offset)
+            return -PAL_ERROR_CONNFAILED;
+        offset += written;
+    }
+    return 0;
+}
+
+static int vm_relay_read_exact(struct pal_handle* handle, void* buf, size_t size) {
+    size_t offset = 0;
+    while (offset < size) {
+        struct iovec iov = {
+            .iov_base = (char*)buf + offset,
+            .iov_len = size - offset,
+        };
+        size_t received = 0;
+        int ret = handle->sock.ops->recv(handle, &iov, 1, &received, NULL,
+                                         /*force_nonblocking=*/false);
+        if (ret < 0)
+            return ret;
+        if (!received || received > size - offset)
+            return -PAL_ERROR_CONNFAILED;
+        offset += received;
+    }
+    return 0;
+}
+
+static int vm_relay_connect(struct pal_handle* handle, const struct pal_socket_addr* addr) {
+    uint8_t request[12 + 16] = { 'G', 'N', 'R', '1', 1, 1, 6, 0 };
+    const uint8_t* address;
+    size_t address_size;
+    uint16_t port;
+
+    if (addr->domain == PAL_IPV4) {
+        request[7] = 4;
+        address = (const uint8_t*)&addr->ipv4.addr;
+        address_size = 4;
+        port = ntohs(addr->ipv4.port);
+    } else if (addr->domain == PAL_IPV6) {
+        request[7] = 6;
+        address = addr->ipv6.addr;
+        address_size = 16;
+        port = ntohs(addr->ipv6.port);
+    } else {
+        return -PAL_ERROR_AFNOSUPPORT;
+    }
+
+    if (!port)
+        return -PAL_ERROR_INVAL;
+    request[8] = port >> 8;
+    request[9] = port & 0xff;
+    request[10] = address_size >> 8;
+    request[11] = address_size & 0xff;
+    memcpy(request + 12, address, address_size);
+
+    /* Connect() is synchronous in the VM PAL, including for non-blocking sockets. Make the short
+     * relay handshake use the same blocking send/receive path before restoring the socket flag. */
+    spinlock_lock(&handle->sock.lock);
+    bool was_nonblocking = handle->sock.is_nonblocking;
+    handle->sock.is_nonblocking = false;
+    spinlock_unlock(&handle->sock.lock);
+    int ret = vm_relay_write_exact(handle, request, 12 + address_size);
+    uint8_t response[8];
+    if (ret == 0)
+        ret = vm_relay_read_exact(handle, response, sizeof(response));
+    spinlock_lock(&handle->sock.lock);
+    handle->sock.is_nonblocking = was_nonblocking;
+    spinlock_unlock(&handle->sock.lock);
+    if (ret < 0)
+        return ret;
+
+    if (memcmp(response, "GNR1", 4) || response[4] != 1)
+        return -PAL_ERROR_CONNFAILED;
+    uint16_t host_errno = ((uint16_t)response[6] << 8) | response[7];
+    if (response[5] == 0 && host_errno == 0)
+        return 0;
+    if (response[5] != 1 || !host_errno)
+        return -PAL_ERROR_CONNFAILED;
+    return -unix_to_pal_error(host_errno);
 }
 
 static inline uint32_t ring_used(uint32_t head, uint32_t tail, uint32_t cap) {
@@ -438,15 +549,33 @@ static int pal_common_socket_connect(struct pal_handle* handle, struct pal_socke
         return 0;
     }
 
-    // log_always("Connecting to socket in pal_common_socket_connect...");
+    if (addr->domain == PAL_DISCONNECT)
+        return -PAL_ERROR_NOTSUPPORT;
 
-    struct sockaddr_vm addr_vm = { .svm_cid = g_vsock->host_cid };
+    uint16_t remote_port = addr->domain == PAL_IPV4 ? ntohs(addr->ipv4.port)
+                                                    : ntohs(addr->ipv6.port);
+    bool direct_vsock_port = vm_is_direct_vsock_port(remote_port);
+    struct sockaddr_vm addr_vm = {
+        .svm_cid = direct_vsock_port ? g_vsock->host_cid : g_vsock->guest_cid,
+        .svm_port = direct_vsock_port ? 0 : 65536 + g_vsock->guest_cid,
+    };
     pal_to_vm_sockaddr(addr, &addr_vm);
+    if (!direct_vsock_port) {
+        /* pal_to_vm_sockaddr() copies only the app's port; outbound TCP uses the reserved
+         * per-guest relay port and carries its numeric destination in a handshake below. */
+        addr_vm.svm_port = 65536 + g_vsock->guest_cid;
+    }
 
     int ret = virtio_vsock_connect(handle->sock.fd, &addr_vm, sizeof(addr_vm),
                                    VSOCK_CONNECT_TIMEOUT_US);
     if (ret < 0)
         return ret;
+
+    if (!direct_vsock_port) {
+        ret = vm_relay_connect(handle, addr);
+        if (ret < 0)
+            return ret;
+    }
 
     struct sockaddr_vm local_addr_vm = {0};
     size_t local_addr_vm_size = sizeof(local_addr_vm);

@@ -3,4 +3,5 @@
 
 manifests = [
   "vsock_echo_server",
+  "vsock_outbound_client",
 ]

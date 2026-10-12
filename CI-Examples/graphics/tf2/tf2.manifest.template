@@ -44,6 +44,7 @@ loader.env.XDG_CACHE_HOME = "/tf2-home/.cache"
 loader.env.FONTCONFIG_FILE = "/etc/fonts/fonts.conf"
 loader.env.FONTCONFIG_PATH = "/etc/fonts"
 loader.env.DISPLAY = "{{ display }}"
+vm.net.direct_vsock_ports = [{{ 6000 + (display.split(':')[1].split('.')[0] | int) }}]
 loader.env.SteamAppId = "440"
 loader.env.SteamGameId = "440"
 loader.env.SteamNoOverlayUIDrawing = "1"

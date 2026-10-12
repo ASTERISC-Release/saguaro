@@ -6,8 +6,9 @@ vsock_relay -- the per-VM network relay of the VM PAL (Documentation/devel/vm-ne
 
 One relay process per VM, started by `gramine-vm` in the container and stopped with the VM. It
 listens on AF_VSOCK port 65536 + <CID> (RELAY_PORT_BASE + CID; the guest knows its own CID, so the
-relay address needs no configuration) and, per the plan's `vm.net.inbound`, forwards TCP
-connections:
+relay address needs no configuration). Guest TCP connects send the versioned numeric-destination
+handshake below and are dialed under the manifest's `vm.net.outbound` / `vm.net.deny` policy.
+Per the plan's `vm.net.inbound`, the relay also forwards host TCP connections:
 
     host (container) TCP  bind:host   ->   guest CID:guest
 
@@ -18,19 +19,18 @@ only the port of a bound AF_INET address). Bytes are pumped both ways until eith
 This is exactly the connection the phase-1 regression client opens (test/vsock-loopback/), so a VM
 application that binds a TCP port needs no changes to be reachable through the relay.
 
-Relay v0 does static inbound forwarding only. The vsock listener on the relay port is opened from
-v0 (it reserves 65536+CID and lets `gramine-vm` check that the relay came up before booting the
-guest), but v0 has no guest-initiated protocol: a connection opened from the VM to the relay is
-closed with a short goodbye. The destination handshake that will carry outbound traffic is phase 3
-of the plan; UDP/DNS and loopback are later phases.
+Outbound request framing is `GNR1 | version:u8 | op:u8 | protocol:u8 | family:u8 | port:u16 |`
+`address_length:u16 | address`, followed by a fixed `GNR1 | version:u8 | status:u8 | errno:u16`
+reply. The stream carries application bytes after a successful reply. Numeric addresses only are
+accepted here; name resolution and UDP are phase 4, and guest loopback is phase 5.
 
 AF_VSOCK sockets are created explicitly and handed to asyncio via create_server(sock=...) /
 create_connection(sock=...): the `family=`/`host=` fast paths of start_server/open_connection go
 through getaddrinfo, whose AF_VSOCK handling varies between Python versions.
 
-Usage: python3 -m graminelibos.vsock_relay --cid CID [--inbound RULE]... [--config FILE]
+Usage: python3 -m graminelibos.vsock_relay --cid CID [--inbound RULE]... [--config MANIFEST]
   --inbound  "guest=G[:host=H[:bind=B]]" or the short forms "G" / "G:H"
-  --config   a TOML file whose `inbound` key holds the rule list (the shape `vm.net.inbound` has)
+  --config   VM manifest or relay TOML config containing inbound rules and outbound policy
 
 A host port that cannot be bound is a fatal error (an explicit choice in the plan: no silent
 clash). One "vm-relay: ..." line is printed per forward and one when the vsock listener is up; a
@@ -39,6 +39,8 @@ configuration error exits 2, a bind error exits 3.
 
 import argparse
 import asyncio
+import errno
+import ipaddress
 import os
 import socket
 import sys
@@ -63,6 +65,21 @@ LISTEN_BACKLOG = 128
 # stopped reading); beyond it the faster direction is paused, which is the flow control asyncio's
 # write buffer gives us. Not a security limit -- relay v0 is loopback-bound by default.
 READ_CHUNK = 64 * 1024
+
+# Guest-initiated TCP request/reply framing (all multi-byte integers are network byte order):
+#   request  = b'GNR1' | version:u8 | op:u8 | protocol:u8 | family:u8 | port:u16 |
+#              address_length:u16 | address[4 or 16]
+#   response = b'GNR1' | version:u8 | status:u8 | errno:u16
+# The data stream starts immediately after the fixed-size response. Names are not carried here;
+# the guest supplies a numeric IPv4/IPv6 address (DNS is phase 4).
+CONNECT_MAGIC = b'GNR1'
+CONNECT_VERSION = 1
+CONNECT_OP = 1
+CONNECT_TCP = 6
+CONNECT_REQUEST_HEADER_SIZE = 12
+CONNECT_RESPONSE_SIZE = 8
+CONNECT_STATUS_OK = 0
+CONNECT_STATUS_ERROR = 1
 
 
 def relay_port(cid):
@@ -142,6 +159,62 @@ class Stats:
         self.accepted = 0          # host connections accepted for a forward
         self.guest_connections = 0 # vsock connections opened by the VM (v0: refused)
         self.forward_error = 0     # forwards that could not reach the guest or died
+
+
+class NetworkPolicy:
+    """Outbound policy from vm.net: default allow, with optional CIDR/port deny rules."""
+
+    def __init__(self, outbound='allow', deny=()):
+        if outbound not in ('allow', 'deny'):
+            raise ValueError(f'vm.net.outbound must be "allow" or "deny", got {outbound!r}')
+        self.outbound = outbound
+        self.networks = []
+        self.tcp_ports = set()
+        for rule in deny:
+            rule = str(rule)
+            if rule.startswith('tcp:'):
+                try:
+                    port = int(rule[4:])
+                except ValueError as e:
+                    raise ValueError(f'invalid TCP deny rule {rule!r}') from e
+                if not 1 <= port <= 65535:
+                    raise ValueError(f'invalid TCP deny port {port}')
+                self.tcp_ports.add(port)
+            else:
+                try:
+                    self.networks.append(ipaddress.ip_network(rule, strict=False))
+                except ValueError as e:
+                    raise ValueError(f'invalid outbound deny rule {rule!r}') from e
+
+    def denied(self, address, port):
+        if self.outbound == 'deny' or port in self.tcp_ports:
+            return True
+        ip = ipaddress.ip_address(address)
+        return any(ip.version == network.version and ip in network for network in self.networks)
+
+
+def load_config(args):
+    """Read inbound rules and outbound policy from a VM manifest or relay config TOML."""
+    data = {}
+    if args.config:
+        with open(args.config, 'rb') as f:
+            data = tomllib.load(f)
+    # The legacy --config form has a top-level inbound array. VM manifests use vm.net.
+    network = data.get('vm', {}).get('net', data)
+    inbound = network.get('inbound') or []
+    rules = [parse_rule(spec) if not isinstance(spec, dict) else
+             Rule(spec['guest'], spec.get('host'), spec.get('bind', '127.0.0.1'))
+             for spec in inbound]
+    rules += [parse_rule(spec) for spec in args.inbound]
+    seen = {}
+    for rule in rules:
+        key = (rule.bind, rule.host)
+        if key in seen:
+            raise ValueError(f'two inbound rules map to the same host address'
+                             f' {rule.bind}:{rule.host}')
+        seen[key] = rule
+    policy = NetworkPolicy(network.get('outbound', 'allow'), network.get('deny', []))
+    return rules, policy
 
 
 def new_vsock_listener(cid, port):
@@ -267,11 +340,14 @@ async def forward_incoming(host_reader, host_writer, cid, rule, stats):
         log_debug(f'fwd{conn_id}: closed')
 
 
-async def serve_guest_connection(reader, writer, cid, stats):
+async def send_connect_response(writer, status, error=0):
+    writer.write(CONNECT_MAGIC + bytes((CONNECT_VERSION, status)) + int(error).to_bytes(2, 'big'))
+    await writer.drain()
+
+
+async def serve_guest_connection(reader, writer, cid, stats, policy=None):
     """
-    A vsock connection from the VM to the relay's port. Relay v0 has no protocol for
-    guest-initiated traffic (the outbound destination handshake is phase 3); accept only our own
-    VM's CID and hang up. The plan's loopback/handshake phases replace this body.
+    A guest request to connect to a numeric IP address, followed by an unmodified TCP byte stream.
     """
     stats.guest_connections += 1
     address = writer.get_extra_info('peername')
@@ -279,7 +355,56 @@ async def serve_guest_connection(reader, writer, cid, stats):
     if peer_cid is not None and peer_cid != cid:
         print(f'vm-relay: rejecting vsock connection from cid {peer_cid} (expected {cid})',
               file=sys.stderr)
-    close_writer_now(writer, 'guest conn')
+        close_writer_now(writer, 'foreign guest conn')
+        return
+
+    policy = policy if policy is not None else NetworkPolicy()
+    guest_writer = None
+    try:
+        header = await asyncio.wait_for(reader.readexactly(CONNECT_REQUEST_HEADER_SIZE), timeout=10)
+        magic, version, op, protocol, family, port, address_size = (
+            header[:4], header[4], header[5], header[6], header[7],
+            int.from_bytes(header[8:10], 'big'), int.from_bytes(header[10:12], 'big'))
+        expected_size = {4: 4, 6: 16}.get(family)
+        if (magic != CONNECT_MAGIC or version != CONNECT_VERSION or op != CONNECT_OP or
+                protocol != CONNECT_TCP or expected_size is None or
+                address_size != expected_size or not 0 < port < 65536):
+            await send_connect_response(writer, CONNECT_STATUS_ERROR, errno.EINVAL)
+            return
+
+        raw_address = await asyncio.wait_for(reader.readexactly(address_size), timeout=10)
+        address = str(ipaddress.ip_address(raw_address))
+        if policy.denied(address, port):
+            await send_connect_response(writer, CONNECT_STATUS_ERROR, errno.EACCES)
+            log_debug(f'outbound denied tcp {address}:{port} by vm.net policy')
+            return
+
+        try:
+            guest_reader, guest_writer = await asyncio.wait_for(
+                asyncio.open_connection(address, port, family=(socket.AF_INET if family == 4
+                                                               else socket.AF_INET6)),
+                timeout=10)
+        except asyncio.TimeoutError:
+            await send_connect_response(writer, CONNECT_STATUS_ERROR, errno.ETIMEDOUT)
+            return
+        except OSError as e:
+            await send_connect_response(writer, CONNECT_STATUS_ERROR, e.errno or errno.EIO)
+            return
+
+        await send_connect_response(writer, CONNECT_STATUS_OK)
+        try:
+            await asyncio.gather(
+                pump(f'outbound {address}:{port} guest->host', reader, guest_writer),
+                pump(f'outbound {address}:{port} host->guest', guest_reader, writer))
+        finally:
+            close_writer_now(guest_writer, 'outbound destination')
+            guest_writer = None
+    except (asyncio.IncompleteReadError, asyncio.TimeoutError, OSError, ValueError) as e:
+        log_debug(f'guest outbound handshake failed: {type(e).__name__}: {e}')
+    finally:
+        if guest_writer is not None:
+            close_writer_now(guest_writer, 'outbound destination')
+        close_writer_now(writer, 'guest conn')
 
 
 def spawn(background, coro):
@@ -300,7 +425,7 @@ def spawn(background, coro):
     return task
 
 
-async def run_relay(cid, rules, stats=None):
+async def run_relay(cid, rules, stats=None, policy=None):
     """
     The relay's main loop: the vsock listener on 65536+CID plus one TCP listener per inbound rule.
     The host (TCP) listeners are opened first so a taken port fails the launcher immediately, then
@@ -330,7 +455,7 @@ async def run_relay(cid, rules, stats=None):
 
     vsock_sock = new_vsock_listener(cid, relay_port(cid))
     vsock_server = await asyncio.start_server(
-        lambda r, w: spawn(background, serve_guest_connection(r, w, cid, stats)),
+        lambda r, w: spawn(background, serve_guest_connection(r, w, cid, stats, policy)),
         sock=vsock_sock)
     print(f'vm-relay: cid={cid} listening on vsock port {relay_port(cid)}', flush=True)
 
@@ -343,19 +468,19 @@ def main(argv=None):
     ap.add_argument('--cid', type=int, required=True, help='the VM\'s guest CID')
     ap.add_argument('--inbound', action='append', default=[],
                     help='inbound rule, e.g. guest=8080:host=18080:bind=127.0.0.1 or 8080:18080')
-    ap.add_argument('--config', help='TOML file with an `inbound` list')
+    ap.add_argument('--config', help='VM manifest or relay TOML config')
     args = ap.parse_args(argv)
 
     if args.cid <= 2 or args.cid >= 0xffffffff:
         ap.error(f'invalid cid {args.cid}: must be > 2 and < 0xffffffff')
     try:
-        rules = load_rules(args)
+        rules, policy = load_config(args)
     except (ValueError, KeyError, FileNotFoundError) as e:
         print(f'vm-relay: {e}', file=sys.stderr)
         return 2
 
     try:
-        asyncio.run(run_relay(args.cid, rules))
+        asyncio.run(run_relay(args.cid, rules, policy=policy))
     except KeyboardInterrupt:
         pass
     return 0

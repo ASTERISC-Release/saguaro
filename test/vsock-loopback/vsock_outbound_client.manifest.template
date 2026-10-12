@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
+
+loader.entrypoint = "file:{{ gramine.libos }}"
+libos.entrypoint = "/vsock_outbound_client"
+loader.log_level = "{{ env.get('GRAMINE_LOG_LEVEL', 'error') }}"
+loader.env.LD_LIBRARY_PATH = "/lib:{{ arch_libdir }}:/usr/{{ arch_libdir }}"
+loader.insecure__use_cmdline_argv = true
+
+fs.mounts = [
+  { path = "/lib", uri = "file:{{ gramine.runtimedir(libc) }}" },
+  { path = "/vsock_outbound_client", uri = "file:{{ binary_dir }}/vsock_outbound_client" },
+  { path = "{{ arch_libdir }}", uri = "file:{{ arch_libdir }}" },
+  { path = "/usr/{{ arch_libdir }}", uri = "file:/usr/{{ arch_libdir }}" },
+]
+
+vm.net.outbound = "{{ env.get('GRAMINE_VM_OUTBOUND', 'allow') }}"
+vm.net.deny = [{% if env.get('GRAMINE_VM_DENY') %}"{{ env['GRAMINE_VM_DENY'] }}"{% endif %}]
+vm.net.direct_vsock_ports = [6000]

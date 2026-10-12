@@ -11,6 +11,7 @@
 #   loopback  host-initiated connections into a guest AF_INET TCP server (test/test-vm-loopback.sh,
 #             Documentation/devel/vm-network/ phase 1)
 #   epoll     many small synchronous requests through an epoll-driven guest TCP server
+#   outbound  guest-initiated TCP through the relay, policy denial, and direct graphics ports
 #
 # Usage: test/test-vm.sh [--prefix DIR] [--build-dir DIR] [suite...]   (default: all)
 # Prerequisite: a vm build installed with `scripts/install.sh --vm` (default prefix ~/.local/gramine-vm,
@@ -25,7 +26,7 @@ while [ $# -gt 0 ]; do
     case $1 in
         --prefix) PREFIX=$2; shift 2 ;;
         --build-dir) BUILD=$2; shift 2 ;;
-        libos|examples|hello|loopback|epoll) SUITES+=("$1"); shift ;;
+        libos|examples|hello|loopback|epoll|outbound) SUITES+=("$1"); shift ;;
         -h|--help) sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
@@ -67,6 +68,8 @@ for s in "${SUITES[@]}"; do
         "$REPO/test/test-vm-loopback.sh" --prefix "$PREFIX" || rc=1 ;;
     epoll)
         "$REPO/test/test-vm-epoll.sh" --prefix "$PREFIX" || rc=1 ;;
+    outbound)
+        "$REPO/test/test-vm-outbound.sh" --prefix "$PREFIX" || rc=1 ;;
     esac
 done
 [ $rc = 0 ] && echo "ALL VM SUITES PASSED" || echo "SOME VM SUITES FAILED"
