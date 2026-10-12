@@ -44,8 +44,8 @@ What it is ultimately intended to do:
 - **Use the inherited confidential-computing back ends** (Intel TDX and SGX) on x86_64.
 
 Several features are **planned** and not available yet (see the platform matrix below and
-`Documentation/TODO.md <Documentation/TODO.md>`__): a RISC-V (RV64) port of the ``direct`` and ``vm``
-PALs, the graphics host redirection on AArch64, delivery of asynchronous signals to blocked threads in
+`Documentation/TODO.md <Documentation/TODO.md>`__): a RISC-V (RV64) port of the ``vm`` PAL (the ``direct`` PAL runs
+experimentally, tested in an emulated guest only), the graphics host redirection on AArch64, delivery of asynchronous signals to blocked threads in
 the ``vm`` PAL, a finer-grained timer, and closing the known gaps of the AArch64 ``vm`` PAL (it currently
 runs single-process applications without TCP/IP).
 
@@ -76,7 +76,7 @@ Symbol      Meaning
      - ✅
      - ✅
      - ✅
-     - 🛫
+     - ⚠️
    * - ``vm`` (``gramine-vm``): a unikernel in a QEMU guest
      - ✅
      - ⚠️
@@ -100,7 +100,8 @@ Installation
 ============
 
 See `INSTALL.rst <INSTALL.rst>`__ for how to build and install Gramine on a host or in
-the supplied containers, for the direct and the ``vm`` PAL, on x86_64 and AArch64.
+the supplied containers, for the direct and the ``vm`` PAL, on x86_64 and AArch64. It also describes the cross-build and
+the test guest for the experimental RISC-V port of the direct PAL.
 
 Once installed, run an application::
 
@@ -125,6 +126,8 @@ Documentation
   `CI-Examples/graphics <CI-Examples/graphics/>`__.
 - `AArch64 port notes <Documentation/devel/aarch64/>`__: design, findings, test
   parity with x86_64.
+- `RISC-V port notes <Documentation/devel/riscv/>`__: plan, log and test parity
+  of the experimental direct-PAL port.
 - For features shared with Gramine in general (manifest syntax, ...), the
   `upstream documentation <https://gramine.readthedocs.io>`__ is a useful
   reference; details may differ in this tree.

@@ -120,6 +120,25 @@ Notes:
 - A changed Containerfile triggers a rebuild, and a container created from an older image is recreated;
   that discards the container's ``/tmp`` (files in the repository survive).
 
+RISC-V (cross-build and test guest)
+-----------------------------------
+
+The RISC-V (RV64) port covers the direct PAL and is experimental. It is cross-built on an x86_64 or
+AArch64 machine and tested in a RISC-V Linux guest under ``qemu-system-riscv64``; user-mode emulation
+cannot run it, because it has no seccomp. Everything runs unprivileged, in a container of its own::
+
+    container/run.sh --target riscv64                       # shell in the cross container
+    scripts/install.sh --target riscv64 --prefix "$PWD/build-riscv64/prefix"   # build and install
+    scripts/riscv64/guest.sh start                          # boot the guest (first boot installs packages)
+    scripts/riscv64/run-suite.sh pal                        # PAL regression suite in the guest
+    scripts/riscv64/run-suite.sh libos                      # LibOS regression suite in the guest
+    scripts/riscv64/run-examples.sh helloworld bash redis   # example suites, built in the guest
+    scripts/riscv64/guest.sh stop
+
+The guest sees the repository at the same path as the container does, so it runs the cross-built
+binaries directly; this is why the install prefix above lies inside the repository. The suites are run from the guest's own disk, not from that shared directory.
+Design, status and known limits are in ``Documentation/devel/riscv/plan.md``.
+
 Building by hand
 ----------------
 
