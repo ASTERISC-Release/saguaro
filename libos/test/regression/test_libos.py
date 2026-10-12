@@ -453,8 +453,10 @@ class TC_01_Bootstrap(RegressionTestCase):
                 stdout, _ = self.run_binary(['rewrite_stress', scenario], timeout=180)
                 self.assertIn('OK ' + scenario, stdout)
         if platform.machine() == 'riscv64':
-            stdout, _ = self.run_binary(['rewrite_stress', 'unaligned'], timeout=180)
-            self.assertIn('OK unaligned', stdout)
+            for scenario in ['unaligned', 'entry']:
+                with self.subTest(scenario=scenario):
+                    stdout, _ = self.run_binary(['rewrite_stress', scenario], timeout=180)
+                    self.assertIn('OK ' + scenario, stdout)
 
     def test_602_fp_multithread(self):
         stdout, _ = self.run_binary(['fp_multithread'])

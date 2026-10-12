@@ -22,6 +22,8 @@
 #define JAL_RANGE       (1ull << 20)
 #define MAX_STUB_PAGES  512
 
+static const unsigned g_stub_saved_regs[] = {5, 6, 7, 28, 29}; /* t0, t1, t2, t3, t4 */
+
 struct stub_page { uintptr_t base; unsigned used; };
 static spinlock_t g_patch_lock = INIT_SPINLOCK_UNLOCKED;
 static struct stub_page g_stub_pages[MAX_STUB_PAGES];
@@ -135,8 +137,8 @@ bool libos_try_patch_syscall_site(uintptr_t pc) {
     }
     uintptr_t stub_page = (uintptr_t)stub & ~(uintptr_t)(STUB_PAGE_SIZE - 1);
     stub[0] = enc_i(-48, 2, 0, 2, 0x13); /* addi sp,sp,-48 */
-    for (unsigned i = 0; i < 5; i++)
-        stub[1 + i] = enc_s(i * 8, 2, 5 + i); /* sd t0..t4,offset(sp) */
+    for (size_t i = 0; i < ARRAY_SIZE(g_stub_saved_regs); i++)
+        stub[1 + i] = enc_s(i * 8, 2, g_stub_saved_regs[i]); /* sd t0..t4,offset(sp) */
     stub[6] = 0x00000297;                 /* auipc t0,0 */
     stub[7] = enc_i(16, 5, 3, 6, 0x03);   /* ld t1,16(t0): resume */
     stub[8] = enc_i(24, 5, 3, 5, 0x03);   /* ld t0,24(t0): entry */

@@ -7,7 +7,7 @@
  * from a cold process (no sites patched yet) and checks results, not performance. Run one scenario
  * per process: `rewrite_stress <scenario>`; prints "OK <scenario>" on success.
  *
- * Scenarios: threads, fork, exec, signals, restart, blob, jit, mprotect, threadstorm, all
+ * Scenarios: threads, entry, fork, exec, signals, restart, blob, jit, mprotect, threadstorm, all
  */
 
 #define _GNU_SOURCE
@@ -96,10 +96,48 @@ static void open_fds(void) {
     CHK(g_zero >= 0 && g_null >= 0);
 }
 
+#if defined(__riscv)
+/* Force a file-backed, 2-mod-4 ecall and keep t3/t4 live across it. The first call takes SIGSYS
+ * and publishes the site's stub; the second call must preserve both caller-saved registers on
+ * the patched-entry path. */
+static __attribute__((noinline)) long raw_getpid_preserving_t3_t4(void) {
+    const long expect_t3 = 0x13579bdf2468ace0;
+    const long expect_t4 = 0x02468ace13579bdf;
+    register long a0 __asm__("a0") = 0;
+    register long a7 __asm__("a7") = SYS_getpid;
+    register long t3 __asm__("t3") = expect_t3;
+    register long t4 __asm__("t4") = expect_t4;
+
+    __asm__ volatile(".balign 4\n\tc.nop\n\tecall"
+                     : "+r"(a0), "+r"(t3), "+r"(t4)
+                     : "r"(a7)
+                     : "memory");
+    if (t3 != expect_t3 || t4 != expect_t4) {
+        fprintf(stderr, "FAIL t3=%#lx (expected %#lx), t4=%#lx (expected %#lx)\n",
+                t3, expect_t3, t4, expect_t4);
+        _exit(1);
+    }
+    return a0;
+}
+
+static void sc_entry(void) {
+    long pid = getpid();
+    CHK(raw_getpid_preserving_t3_t4() == pid); /* initial SIGSYS publishes the stub */
+    CHK(raw_getpid_preserving_t3_t4() == pid); /* patched-entry path, with no other threads */
+}
+#endif
+
 /* ---- threads: many threads race to hit (and patch) the same cold sites ---- */
 static pthread_barrier_t g_bar;
 static void* thr_hammer(void* arg) {
     pid_t tid = syscall(SYS_gettid);
+#if defined(__riscv)
+    /* All workers start together below. The first call at this exact unaligned site patches it;
+     * the immediate second call exercises the patched stub with t3/t4 live. */
+    long pid = getpid();
+    CHK(raw_getpid_preserving_t3_t4() == pid);
+    CHK(raw_getpid_preserving_t3_t4() == pid);
+#endif
     pthread_barrier_wait(&g_bar);
     hammer((long)arg);
     CHK(syscall(SYS_gettid) == tid);
@@ -435,6 +473,9 @@ int main(int argc, char** argv) {
         printf("OK %s\n", name);              \
         ran++;                                \
     }
+#if defined(__riscv)
+    RUN("entry", sc_entry());
+#endif
     RUN("threads", sc_threads());
     RUN("fork", sc_fork());
     RUN("exec", sc_exec(argv));
