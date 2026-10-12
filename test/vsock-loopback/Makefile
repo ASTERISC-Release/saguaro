@@ -8,7 +8,7 @@ CC ?= gcc
 CFLAGS ?= -O2 -Wall
 
 .PHONY: all clean
-all: vsock_echo_server vsock_outbound_client vsock_udp_client
+all: vsock_echo_server vsock_outbound_client vsock_udp_client vsock_guest_loopback
 
 vsock_echo_server: vsock_echo_server.c
 	$(CC) $(CFLAGS) -static-pie -o $@ $<
@@ -19,7 +19,11 @@ vsock_outbound_client: vsock_outbound_client.c
 vsock_udp_client: vsock_udp_client.c
 	$(CC) $(CFLAGS) -static-pie -o $@ $<
 
+vsock_guest_loopback: vsock_guest_loopback.c
+	$(CC) $(CFLAGS) -static-pie -pthread -o $@ $<
+
 clean:
 	$(RM) vsock_echo_server vsock_outbound_client vsock_echo_server.manifest \
 		vsock_outbound_client.manifest vsock_udp_client vsock_udp_client.manifest \
+		vsock_guest_loopback vsock_guest_loopback.manifest \
 		build.ninja .ninja_deps .ninja_log

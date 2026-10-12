@@ -5,6 +5,8 @@
 /vsock_outbound_client.manifest
 /vsock_udp_client
 /vsock_udp_client.manifest
+/vsock_guest_loopback
+/vsock_guest_loopback.manifest
 /build.ninja
 /.ninja_deps
 /.ninja_log

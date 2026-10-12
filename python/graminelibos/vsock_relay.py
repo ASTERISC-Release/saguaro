@@ -443,6 +443,29 @@ async def serve_guest_connection(reader, writer, cid, stats, policy=None):
         raw_address = await asyncio.wait_for(reader.readexactly(address_size), timeout=10)
         address = str(ipaddress.ip_address(raw_address))
         log_debug(f'outbound tcp request {address}:{port}')
+
+        # Loopback belongs to the guest. Hairpin this connection through AF_VSOCK back to the
+        # same guest's listener, instead of opening a TCP connection to the relay host itself.
+        if ipaddress.ip_address(address).is_loopback:
+            try:
+                sock = vsock_connect(cid, port)
+                guest_reader, guest_writer = await asyncio.open_connection(sock=sock)
+            except OSError as e:
+                await send_connect_response(writer, CONNECT_STATUS_ERROR, e.errno or errno.EIO)
+                log_debug(f'guest loopback {address}:{port} failed: {e}')
+                return
+
+            await send_connect_response(writer, CONNECT_STATUS_OK)
+            log_debug(f'guest loopback {address}:{port} connected over VSOCK')
+            try:
+                await asyncio.gather(
+                    pump(f'loopback {address}:{port} guest->guest', reader, guest_writer),
+                    pump(f'loopback {address}:{port} guest->relay', guest_reader, writer))
+            finally:
+                close_writer_now(guest_writer, 'loopback destination')
+                guest_writer = None
+            return
+
         if policy.denied(address, port):
             await send_connect_response(writer, CONNECT_STATUS_ERROR, errno.EACCES)
             log_debug(f'outbound denied tcp {address}:{port} by vm.net policy')
