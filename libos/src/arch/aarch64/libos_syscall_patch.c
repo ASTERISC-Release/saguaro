@@ -2,8 +2,8 @@
 /* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /*
- * PROTOTYPE: lazy rewriting of trapped `svc #0` sites (opt-in via the manifest option
- * `sys.rewrite_syscalls = true`).
+ * Lazy rewriting of trapped `svc #0` sites (on by default; disable with the manifest option
+ * `sys.rewrite_syscalls = false`).
  *
  * Without a patched guest libc every guest syscall takes the seccomp-trap path (SIGSYS + signal
  * frame + rt_sigreturn, ~1.2 us). The first time a given `svc #0` traps, maybe_emulate_syscall()
@@ -21,7 +21,7 @@
  *     nop
  * 1:  .quad libos_syscall_entry
  *
- * Constraints / known limitations of the prototype:
+ * Constraints / known limitations:
  *  - `b` reaches +-128 MiB, so stubs live in internal VMAs allocated within +-120 MiB of the site.
  *  - Only file-backed, private, non-writable, executable, non-internal VMAs are patched. Such VMAs
  *    are re-mapped from the file (not copied) when a child process is created, so a child simply
