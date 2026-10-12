@@ -19,39 +19,34 @@ researchers and engineers from universities and industry. Please see acknowledge
 Status
 ======
 
-This project is a Gramine fork adapted for development, research, and teaching purposes. It is
-**experimental and unadvisable to be used for production**; it comes with no warranty.
+This is a Gramine fork for development, research and teaching. It is **experimental, comes with no
+warranty and should not be used in production**.
 
-The current work is focused on implementing the following (high-level) features:
+Current work:
 
-- Multi-architectural support, including AMD64, AArch64, and RISC-V
-- Graphics support with a proposed redirected-graphics approach (see
-  `Tirith <https://arxiv.org/abs/2609.17525>`__)
-- Enhanced system call support (e.g., `uFork <https://arxiv.org/pdf/2509.09439>`__)
+- multi-architecture support: AMD64, AArch64 and RISC-V
+- graphics through redirection to the host GPU (see `Tirith <https://arxiv.org/abs/2609.17525>`__)
+- richer system call support (for example `uFork <https://arxiv.org/pdf/2509.09439>`__)
 
-What it is ultimately intended to do:
+What it is for:
 
-- **Sandbox applications** on a personal or cloud machine: an unmodified Linux application runs on
-  Gramine's own implementation of the Linux system call interface, either as an ordinary process
-  (``gramine-direct``) or, with the ``vm`` PAL, inside a minimal virtual machine (a *microVM*) that
-  contains only the application, the library OS and a small kernel.
-- **Run applications in microVM environments**, such as video games with the (experimental) graphics host
-  redirection, or services that should not see the host operating system.
-- **Run the same application stack on x86_64, AArch64 and RISC-V**, for example to compare behaviour
-  and performance across architectures.
-- **Study and teach operating-system design**: a Linux-compatible library OS and a small bare-metal
-  kernel (page tables, scheduler, interrupts, virtio drivers, SMP bring-up) that fit in a readable code
-  base, with design logs and test-parity notes under ``Documentation/devel/``.
-- **Use the inherited confidential-computing back ends** (Intel TDX and SGX) on x86_64.
+- **Sandboxing applications.** An unmodified Linux application runs on Gramine's own system call
+  interface, either as an ordinary process (``gramine-direct``) or, with the ``vm`` PAL, in a minimal
+  virtual machine (a *microVM*) that holds only the application, the library OS and a small kernel.
+- **Running microVM workloads**, such as games with the (experimental) graphics redirection, or
+  services that should not see the host operating system.
+- **Running one application stack on x86_64, AArch64 and RISC-V**, to compare behaviour and
+  performance.
+- **Studying and teaching operating-system design.** The library OS and the small bare-metal kernel
+  (page tables, scheduler, interrupts, virtio drivers, SMP) are readable, with design logs under
+  ``Documentation/devel/``.
+- **Using the inherited confidential-computing back ends** (Intel TDX and SGX) on x86_64.
 
 The features added so far, and the planned ones, are listed in
-`Documentation/FEATURES.md <Documentation/FEATURES.md>`__.
-
-Several features are **planned** and not available yet (see the platform matrix below and
-`Documentation/TODO.md <Documentation/TODO.md>`__): a RISC-V (RV64) port of the ``vm`` PAL, the
-graphics host redirection on AArch64, delivery of asynchronous signals to blocked threads in the
-``vm`` PAL, a finer-grained timer, and closing the known gaps of the AArch64 ``vm`` PAL (it currently
-runs single-process applications without TCP/IP).
+`Documentation/FEATURES.md <Documentation/FEATURES.md>`__. Not available yet: a RISC-V ``vm`` PAL,
+graphics on AArch64, delivery of asynchronous signals to blocked threads in the ``vm`` PAL, and a
+finer-grained timer. The AArch64 ``vm`` PAL runs single-process applications; TCP and UDP work
+through a vsock relay. See `Documentation/TODO.md <Documentation/TODO.md>`__ for open items.
 
 The RISC-V port covers the ``direct`` PAL only and is **experimental**: it is cross-built, and its
 regression suites and example applications pass in an emulated RISC-V Linux guest
@@ -124,25 +119,20 @@ Once installed, run an application::
 Documentation
 =============
 
-- `Documentation index <Documentation/README.md>`__: what each document is, and which ones are
-  inherited from upstream.
-- `Summary of the development logs <Documentation/devel/summary.md>`__: the outcome of each port
-  on one page.
-- `Multi-architecture notes
-  <Documentation/devel/multiarch.md>`__: supported configurations, build options,
-  test and benchmark tooling, CI workflows.
-- `Differences from upstream gramine-tdx
-  <Documentation/devel/graphics/tirith-delta.md>`__.
-- `Graphics host redirection <Documentation/devel/graphics/>`__ (x86_64): how to run the graphics
-  examples under ``gramine-vm``, the port's log and its open items. The examples are in
-  `CI-Examples/graphics <CI-Examples/graphics/>`__.
-- `AArch64 port notes <Documentation/devel/aarch64/>`__: design, findings, test
-  parity with x86_64.
-- `RISC-V port notes <Documentation/devel/riscv/>`__: plan, log and test parity
-  of the experimental direct-PAL port.
-- For features shared with Gramine in general (manifest syntax, ...), the
-  `upstream documentation <https://gramine.readthedocs.io>`__ is a useful
-  reference; details may differ in this tree.
+- `Documentation index <Documentation/README.md>`__: what each document is, and which are inherited
+  from upstream.
+- `Features <Documentation/FEATURES.md>`__: what this tree adds to gramine-tdx, and what is planned.
+- `Development documents <Documentation/devel/>`__: one directory per port or feature, with its plan,
+  log, open items and test results; `summary <Documentation/devel/summary.md>`__ gives the outcome of
+  each on one page.
+- `Multi-architecture notes <Documentation/devel/multiarch.md>`__: configurations, build options,
+  tests, benchmarks and CI workflows.
+- `Differences from upstream gramine-tdx <Documentation/devel/graphics/tirith-delta.md>`__.
+- `Graphics examples <CI-Examples/graphics/>`__ (x86_64) and how to run them:
+  `Documentation/devel/graphics/ <Documentation/devel/graphics/>`__.
+- For features shared with Gramine in general (manifest syntax, ...) the
+  `upstream documentation <https://gramine.readthedocs.io>`__ is a useful reference; details may
+  differ in this tree.
 
 Contributing
 ============
