@@ -8,11 +8,6 @@
 name: Direct PAL (x86_64)
 
 on:
-  # TEMPORARY: lets the first runs start from this branch (GitHub only dispatches workflows that
-  # exist on the default branch). Remove once the file is on main.
-  push:
-    branches: [dev-riscv]
-    paths: ['.github/workflows/direct-x86_64.yml']
   workflow_dispatch:
     inputs:
       suites:
