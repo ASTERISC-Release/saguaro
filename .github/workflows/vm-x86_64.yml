@@ -131,6 +131,13 @@ jobs:
           grep -q "numpy.dot: " ../../vm-python-test-numpy.log
           grep -q "linalg.cholesky: " ../../vm-python-test-scipy.log
 
+      - name: Smoke test - Redis through the VM inbound relay
+        run: |
+          . "$GRAMINE_PREFIX/env.sh"
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "GRAMINE_PREFIX=$GRAMINE_PREFIX" \
+            timeout 600 test/test-vm-redis.sh 2>&1 | tee vm-redis.log
+          grep -q "Redis PING/SET/GET and benchmark passed" vm-redis.log
+
       - name: LibOS regression suite under gramine-vm (informational)
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_suite }}
         continue-on-error: true
@@ -150,6 +157,8 @@ jobs:
             tail -n 3 vm-hello.log 2>/dev/null || echo "(no helloworld log)"
             echo '--- python example'
             tail -n 1 vm-python-test-scipy.log 2>/dev/null || echo "(python example not run)"
+            echo '--- Redis inbound relay'
+            tail -n 1 vm-redis.log 2>/dev/null || echo "(Redis relay test not run)"
             echo '--- libos suite'
             tail -n 1 vm-libos.log 2>/dev/null || echo "(suite not run)"
             echo '```'
