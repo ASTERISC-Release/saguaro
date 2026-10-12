@@ -127,10 +127,12 @@ if grep -Eq '^DISPLAY[^=]*=[[:space:]]*"2:' "$GRAMINE_MANIFEST" 2>/dev/null; the
         *)  GRAPHICS_DATA_BYTES=$(( ${GRAPHICS_DATA_SIZE:-0} + 0 )) ;;
     esac
     # The RAM floor: the arena window [GRAPHICS_DATA_ADDR, + data + hugepage-arena) must end
-    # inside guest RAM, which reaches RAM+2G; the fixed 2G/4G backends give at least 5G when the
-    # anchor stays at 4G.
+    # inside guest RAM, which reaches RAM+2G; the fixed 3G of backends make that 4G at the
+    # default anchor (hugepages deployments need 5G: the bucket is the third fixed backend).
     NEED_RAM=$(( (GRAPHICS_DATA_ADDR + GRAPHICS_DATA_BYTES + 1073741824 - 2147483648 + 1073741823) / 1073741824 ))
-    if [ "$NEED_RAM" -lt 5 ]; then NEED_RAM=5; fi
+    MIN_FLOOR=4
+    [ "${GRAMINE_HUGEPAGES:-0}" = "1" ] && MIN_FLOOR=5
+    if [ "$NEED_RAM" -lt "$MIN_FLOOR" ]; then NEED_RAM=$MIN_FLOOR; fi
     if [ "$RAW_MEM_SIZE" -lt "$NEED_RAM" ]; then
         echo "Error: this graphics application needs at least ${NEED_RAM}G of guest RAM for data" \
              "arena $GRAPHICS_DATA_SIZE at address $GRAPHICS_DATA_ADDR (got ${QEMU_MEM_SIZE})."
@@ -164,52 +166,70 @@ fi
 [ -n "${GRAPHICS_HUGE_ADDR:-}" ] && export GRAMINE_HUGEPAGE_ADDR
 [ -n "${GRAPHICS_DATA_SIZE:-}" ] && export GRAMINE_DATA_SIZE
 [ -n "${GRAPHICS_DATA_ADDR:-}" ] && export GRAMINE_DATA_ADDR
+GRAPHICS_BACKEND_ARGS=""
+
 if [ "$GRAMINE_HUGEPAGES" == "1" ]; then
     echo "Configuring Gramine VM with hugepages support."
     if [ "$RAW_MEM_SIZE" -lt 5 ]; then
-        echo "Error: Gramine hugepages mode requires at least 5GB of VM memory" \
-             "(4G app memory below and at guest 4-6G, a 1G hugetlb bucket at 6-7G)."
+        echo "Error: hugepages deployments need at least 5G of guest RAM (2G hugetlb below" \
+             "4G for kernel+app, 2G normal pages at 4-6G for the data arena, and the 1G" \
+             "hugetlb GEM bucket at 6-7G)."
         exit 2
     fi
 
-    # 4 backends (or 3 at RAM=5G): 2G hugetlb below 4G for kernel+app, 2G normal at 4-6G
-    # (GEM data arena), a dedicated 1G hugetlb bucket at 6-7G (GEM hugepage bucket -- this is
-    # the only hugetlb memory the guest cannot live without), and normal pages for the rest.
-    # Only the 3G of fixed backends is committed up front; REM_MEM_SIZE pages are lazy.
+    # Backends in QEMU's -numa placement rule: node 0 at guest physical 0, every later node
+    # sequentially from 4G. 2G hugetlb below 4G (kernel+app), 2G normal at 4-6G (the data
+    # arena), the dedicated 1G hugetlb bucket at 6-7G (the hugepage GEM arena -- the only
+    # hugetlb memory), and normal pages for the rest: only the 3G of fixed backends is
+    # committed up front. GRAMINE_RAM_BASES carries the guest base of each memfd backend,
+    # in -object order, to the QEMU fork's identity-mapped placement.
+    RAM_BASES=0,4294967296,6442450944
+    GRAPHICS_BACKEND_ARGS+="-object memory-backend-memfd,id=huge0,size=2G,hugetlb=on,hugetlbsize=2M \
+    -object memory-backend-memfd,id=ram1,size=2G \
+    -object memory-backend-memfd,id=huge_bucket,size=1G,hugetlb=on,hugetlbsize=2M "
     REM_MEM_SIZE=$((RAW_MEM_SIZE - 5))
-    if [ "$REM_MEM_SIZE" -gt 0 ]; then
+    HAVE_APP_BACKEND=0
+    [ "$REM_MEM_SIZE" -gt 0 ] && HAVE_APP_BACKEND=1
+    if [ "$HAVE_APP_BACKEND" = 1 ]; then
         REM_MEM_SIZE="${REM_MEM_SIZE}G"
-        echo "REM_MEM_SIZE = $REM_MEM_SIZE"
-        QEMU_OPTS+="-object memory-backend-memfd,id=huge0,size=2G,hugetlb=on,hugetlbsize=2M \
-    -object memory-backend-memfd,id=ram1,size=2G \
-    -object memory-backend-memfd,id=huge_bucket,size=1G,hugetlb=on,hugetlbsize=2M \
-    -object memory-backend-memfd,id=ram2,size=$REM_MEM_SIZE \
-    -numa node,memdev=huge0,nodeid=0 \
-    -numa node,memdev=ram1,nodeid=1 \
-    -numa node,memdev=huge_bucket,nodeid=2 \
-    -numa node,memdev=ram2,nodeid=3 "
+        echo "REM_MEM_SIZE = $REM_MEM_SIZE (only touched when used)"
+        GRAPHICS_BACKEND_ARGS+="-object memory-backend-memfd,id=ram2,size=$REM_MEM_SIZE "
+        RAM_BASES+=",$((7 * 1073741824))"
     else
-        echo "REM_MEM_SIZE = 0 (RAM=5G; no fourth backend)"
-        QEMU_OPTS+="-object memory-backend-memfd,id=huge0,size=2G,hugetlb=on,hugetlbsize=2M \
-    -object memory-backend-memfd,id=ram1,size=2G \
-    -object memory-backend-memfd,id=huge_bucket,size=1G,hugetlb=on,hugetlbsize=2M \
-    -numa node,memdev=huge0,nodeid=0 \
+        echo "no fourth backend (RAM=5G)"
+    fi
+    GRAPHICS_BACKEND_ARGS+="-numa node,memdev=huge0,nodeid=0 \
     -numa node,memdev=ram1,nodeid=1 \
     -numa node,memdev=huge_bucket,nodeid=2 "
-    fi
+    [ "$HAVE_APP_BACKEND" = 1 ] && GRAPHICS_BACKEND_ARGS+="-numa node,memdev=ram2,nodeid=3 "
 else
     echo "Configuring Gramine VM without hugepages."
 
-    # 3 separate DIMMs (0 - 4GB hugepages, 4GB - 5GB normal, 5GB - rest hugepages)
-    REM_MEM_SIZE="$((REM_MEM_SIZE))G"
-    echo "REM_MEM_SIZE = $REM_MEM_SIZE"
-    QEMU_OPTS+="-object memory-backend-memfd,id=huge0,size=2G \
-    -object memory-backend-memfd,id=ram1,size=2G \
-    -object memory-backend-memfd,id=huge2,size=$REM_MEM_SIZE \
-    -numa node,memdev=huge0,nodeid=0 \
-    -numa node,memdev=ram1,nodeid=1 \
-    -numa node,memdev=huge2,nodeid=2 "
+    # 2G below 4G for kernel+app, 2G normal at 4-6G (the GEM arenas; at RAM=4G they fill it
+    # entirely), and normal pages for the rest. 4 guests get no third backend.
+    RAM_BASES=0,4294967296
+    GRAPHICS_BACKEND_ARGS="-object memory-backend-memfd,id=huge0,size=2G \
+    -object memory-backend-memfd,id=ram1,size=2G "
+    REM_MEM_SIZE=$((RAW_MEM_SIZE - 4))
+    HAVE_APP_BACKEND=0
+    [ "$REM_MEM_SIZE" -gt 0 ] && HAVE_APP_BACKEND=1
+    if [ "$HAVE_APP_BACKEND" = 1 ]; then
+        REM_MEM_SIZE="${REM_MEM_SIZE}G"
+        echo "REM_MEM_SIZE = $REM_MEM_SIZE (only touched when used)"
+        GRAPHICS_BACKEND_ARGS+="-object memory-backend-memfd,id=huge2,size=$REM_MEM_SIZE "
+        RAM_BASES+=",$((6 * 1073741824))"
+    else
+        echo "no third backend (RAM=4G; the GEM arenas live entirely in ram1)"
+    fi
+    GRAPHICS_BACKEND_ARGS+="-numa node,memdev=huge0,nodeid=0 \
+    -numa node,memdev=ram1,nodeid=1 "
+    [ "$HAVE_APP_BACKEND" = 1 ] && GRAPHICS_BACKEND_ARGS+="-numa node,memdev=huge2,nodeid=2 "
+    [ "$REM_MEM_SIZE" -gt 0 ] && GRAPHICS_BACKEND_ARGS+="-numa node,memdev=huge2,nodeid=2 "
 fi
+QEMU_OPTS+="$GRAPHICS_BACKEND_ARGS"
+# The bases go to the QEMU fork's placement logic (per-backend identity mapping) as env -- the
+# guest never sees this one.
+export GRAMINE_RAM_BASES=$RAM_BASES
 
 if [ "$TDSHIM_PAL_PATH" == "" ]; then
     QEMU_MACHINE="-M q35,kernel_irqchip=on"
