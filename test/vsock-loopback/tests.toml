@@ -1,0 +1,9 @@
+# Configuration for `gramine-test` (see python/graminelibos/util_tests.py). These integration tests
+# run under the VM PAL; client/server peers run on the host or in guest threads as appropriate.
+
+manifests = [
+  "vsock_echo_server",
+  "vsock_outbound_client",
+  "vsock_udp_client",
+  "vsock_guest_loopback",
+]

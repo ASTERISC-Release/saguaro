@@ -143,6 +143,10 @@ static spinlock_t g_vsock_connections_lock = INIT_SPINLOCK_UNLOCKED;
 static int cleanup_tq(void);
 static int process_packet(struct virtio_vsock_packet* packet);
 static void remove_connection(struct virtio_vsock_connection* conn);
+/* defined below, used by admit_deferred_request() */
+static struct virtio_vsock_connection* create_connection(uint64_t host_port, uint64_t guest_port,
+                                                         enum virtio_vsock_state state);
+static int send_response_packet(struct virtio_vsock_connection* conn);
 
 /* interrupt handler (interrupt service routine), called by generic handler `isr_c()` */
 int virtio_vsock_isr(void) {
@@ -297,8 +301,12 @@ static void copy_into_tq_internal(struct virtio_vsock_packet* packet, uint64_t p
     vm_shared_writew(&g_vsock->tq->avail->idx, g_vsock->tq->cached_avail_idx);
 
     uint16_t host_device_used_flags = vm_shared_readw(&g_vsock->tq->used->flags);
-    if (!(host_device_used_flags & VIRTQ_USED_F_NO_NOTIFY))
+    /* A failed small-reply run showed an RW packet left outstanding while NO_NOTIFY was set.
+     * Always kick for data packets; keep suppression for control packets. */
+    if (!(host_device_used_flags & VIRTQ_USED_F_NO_NOTIFY) ||
+            packet->header.op == VIRTIO_VSOCK_OP_RW) {
         vm_mmio_writew(g_vsock->tq_notify_addr, /*queue_sel=*/1);
+    }
 }
 
 /* used only for data-flow packets (RW) */
@@ -688,6 +696,10 @@ static struct virtio_vsock_connection* get_connection(uint32_t fd) {
 static int attach_connection(struct virtio_vsock_connection* conn) {
     assert(spinlock_is_locked(&g_vsock_connections_lock));
 
+    /* no vsock device (g_vsock is only set by virtio_vsock_init()): there is no connection table */
+    if (!g_vsock)
+        return -PAL_ERROR_AFNOSUPPORT;
+
     uint32_t idx = 0;
     while (idx < g_vsock->conns_size) {
         if (!g_vsock->conns[idx]) {
@@ -779,18 +791,91 @@ static uint64_t pick_new_port(void) {
     return max_port + 1;
 }
 
+/* A REQUEST deferred because it collided with a closing connection (see process_packet): the
+ * closing connection has just left the (host_port, guest_port) hash, so the slot is free and the
+ * new connection can be created as if its REQUEST arrived now. Called with
+ * g_vsock_connections_lock held, from cleanup_connection(). */
+static void admit_deferred_request(uint64_t host_port, uint64_t guest_port,
+                                   uint32_t peer_fwd_cnt, uint32_t peer_buf_alloc) {
+    assert(spinlock_is_locked(&g_vsock_connections_lock));
+
+    struct virtio_vsock_connection* listener = NULL;
+    for (uint32_t i = 0; i < g_vsock->conns_size; i++) {
+        struct virtio_vsock_connection* check_conn = g_vsock->conns[i];
+        if (check_conn && check_conn->state == VIRTIO_VSOCK_LISTEN
+                && check_conn->guest_port == guest_port) {
+            listener = check_conn;
+            break;
+        }
+    }
+    if (!listener) {
+        /* the application closed the listener while this request waited; its host side sees a
+         * connect that never completes, which is what a connect racing a listener close looks
+         * like anyway */
+        log_warning("vsock dropping the deferred connection request from host port %lu:"
+                    " no listener on port %lu anymore", (unsigned long)host_port,
+                    (unsigned long)guest_port);
+        return;
+    }
+    if (listener->pending_conn_fds_cnt == VSOCK_MAX_PENDING_CONNS) {
+        log_warning("vsock backlog full, dropping the deferred connection request from host"
+                    " port %lu", (unsigned long)host_port);
+        return;
+    }
+
+    struct virtio_vsock_connection* new_conn = create_connection(host_port, guest_port,
+                                                                 VIRTIO_VSOCK_ESTABLISHED);
+    if (!new_conn) {
+        log_error("no memory for the deferred connection");
+        return;
+    }
+    new_conn->peer_fwd_cnt   = peer_fwd_cnt;
+    new_conn->peer_buf_alloc = peer_buf_alloc;
+
+    if (send_response_packet(new_conn) < 0) {
+        remove_connection(new_conn);
+        return;
+    }
+    uint32_t idx = listener->pending_conn_fds_idx + listener->pending_conn_fds_cnt;
+    listener->pending_conn_fds[idx % VSOCK_MAX_PENDING_CONNS] = new_conn->fd;
+    listener->pending_conn_fds_cnt++;
+    log_debug("vsock admitted the deferred connection request from host port %lu: fd %u queued"
+              " in the listener backlog", (unsigned long)host_port, new_conn->fd);
+    /* this admit can run from an application thread (a close whose timeout released the slot)
+     * rather than the receive path, which wakes accepters itself */
+    thread_wakeup_vsock(/*is_read=*/true);
+}
+
 static void cleanup_connection(struct virtio_vsock_connection* conn) {
     assert(spinlock_is_locked(&g_vsock_connections_lock));
+
+    log_debug("vsock cleanup connection (host port %lu, guest port %lu, state %d, deferred %d)",
+              (unsigned long)conn->host_port, (unsigned long)conn->guest_port, (int)conn->state,
+              conn->has_deferred_request);
 
     while (conn->consumed_by_user != conn->prepared_for_user) {
         free(conn->packets_for_user[conn->consumed_by_user % VSOCK_MAX_PACKETS]);
         conn->consumed_by_user++;
     }
 
+    /* take the deferred REQUEST (if any) out before the addresses are cleared; admitting it must
+     * wait until this connection is fully closed, see below */
+    bool had_deferred = conn->has_deferred_request;
+    uint32_t deferred_fwd_cnt = conn->deferred_peer_fwd_cnt;
+    uint32_t deferred_buf_alloc = conn->deferred_peer_buf_alloc;
+    uint64_t host_port = conn->host_port;
+    uint64_t guest_port = conn->guest_port;
+    conn->has_deferred_request = false;
+
     if (conn->host_port)
         host_port_delete(conn);
     conn->host_port = 0;
     conn->guest_port = 0;
+
+    /* CLOSED before the sweep below: a pending child cleaned up here must not admit a deferred
+     * connection into a listener that is itself being closed */
+    conn->state_futex = 0; /* the value doesn't matter, set just for sanity */
+    conn->state = VIRTIO_VSOCK_CLOSE;
 
     for (uint32_t i = 0; i < conn->pending_conn_fds_cnt; i++) {
         /* there may be pending connections, and we clean up a connection that could accept them */
@@ -803,9 +888,11 @@ static void cleanup_connection(struct virtio_vsock_connection* conn) {
     conn->pending_conn_fds_cnt = 0;
     free(conn->pending_conn_fds);
 
-    conn->state_futex = 0; /* the value doesn't matter, set just for sanity */
-    conn->state = VIRTIO_VSOCK_CLOSE;
     sched_thread_wakeup(&conn->state_futex);
+
+    /* this connection's (host_port, guest_port) hash slot is free now */
+    if (had_deferred)
+        admit_deferred_request(host_port, guest_port, deferred_fwd_cnt, deferred_buf_alloc);
 }
 
 static struct virtio_vsock_connection* create_connection(uint64_t host_port, uint64_t guest_port,
@@ -917,6 +1004,8 @@ static int send_reset_packet(struct virtio_vsock_connection* conn) {
     assert(spinlock_is_locked(&g_vsock_receive_lock));
     assert(spinlock_is_locked(&g_vsock_connections_lock));
 
+    log_debug("vsock conn (host port %lu): sending RST", (unsigned long)conn->host_port);
+
     struct virtio_vsock_packet* packet;
 
     packet = generate_packet(conn, VIRTIO_VSOCK_OP_RST,
@@ -941,7 +1030,10 @@ static int send_request_packet(struct virtio_vsock_connection* conn) {
 }
 
 static int send_response_packet(struct virtio_vsock_connection* conn) {
-    assert(spinlock_is_locked(&g_vsock_receive_lock));
+    /* Note: no g_vsock_receive_lock here, unlike the other send_* helpers: a RESPONSE is also
+     * emitted when an application thread's close() admits a deferred connection request
+     * (admit_deferred_request()), outside of any receive context. TX ordering is guaranteed by
+     * the transmit lock alone. */
     assert(spinlock_is_locked(&g_vsock_connections_lock));
 
     struct virtio_vsock_packet* packet;
@@ -972,6 +1064,9 @@ static int send_credit_update_packet(struct virtio_vsock_connection* conn) {
 static int send_shutdown_packet(struct virtio_vsock_connection* conn,
                                 enum virtio_vsock_shutdown flags) {
     assert(spinlock_is_locked(&g_vsock_connections_lock));
+
+    log_debug("vsock conn (host port %lu): sending shutdown flags %u",
+              (unsigned long)conn->host_port, (unsigned)flags);
 
     struct virtio_vsock_packet* packet;
 
@@ -1073,32 +1168,72 @@ static int process_packet(struct virtio_vsock_packet* packet) {
     host_port_find_robust(host_port, packet->header.dst_port, &conn);
 #endif
 
-    /* Logging */
     // log_always("Received packet: op=%d, src_cid=%lu, src_port=%u, dst_cid=%lu, dst_port=%u, size=%u",
     //            packet->header.op, packet->header.src_cid, packet->header.src_port,
     //            packet->header.dst_cid, packet->header.dst_port, packet->header.size);
 
-    // if (!conn && packet->header.op == VIRTIO_VSOCK_OP_REQUEST) {
+    /* The robust hash is keyed by (host port, guest port). Accepted connections share the
+     * listener's guest port, so a REQUEST that hits an existing entry is a new connection attempt
+     * whose old connection from the same host port is still hashed. The host guarantees port
+     * uniqueness while its socket is alive, so it only sends a new REQUEST from a port whose old
+     * socket is already gone here: the hit connection is closing (or otherwise dead) and its
+     * teardown RST is still on its way. Handing the slot to the new connection now would deliver
+     * that late RST to the new one and kill it under the application, so a REQUEST that hits a
+     * closing connection is deferred (kept on the old connection, admitted by
+     * cleanup_connection() when the slot is released); the connect() on the host simply waits for
+     * the old connection's teardown, as it does on Linux. A hit on an ESTABLISHED connection
+     * cannot be live for the same reason and is stale: clean it out of the hash (its object stays
+     * attached until the application closes its fd -- freeing it here would race with a thread
+     * blocked in virtio_vsock_close_common()). */
+    if (conn && packet->header.op == VIRTIO_VSOCK_OP_REQUEST) {
+        if (conn->state == VIRTIO_VSOCK_CLOSING || conn->state == VIRTIO_VSOCK_CONNECT) {
+            if (conn->has_deferred_request) {
+                /* the sender of the earlier REQUEST gave up and tried again from the same port;
+                 * keep the newer attempt */
+                log_warning("vsock replacing the deferred connection request from host port %lu",
+                            (unsigned long)conn->host_port);
+            }
+            conn->has_deferred_request = true;
+            conn->deferred_peer_fwd_cnt = packet->header.fwd_cnt;
+            conn->deferred_peer_buf_alloc = packet->header.buf_alloc;
+            ret = 0;
+            goto out;
+        }
+        if (conn->state != VIRTIO_VSOCK_CLOSE) {
+            /* the deferred request (if any) is older than this live REQUEST and shares its slot;
+             * drop it rather than admit two connections on one hash key */
+            if (conn->has_deferred_request) {
+                conn->has_deferred_request = false;
+                log_warning("vsock dropping the deferred connection request from host port %lu",
+                            (unsigned long)conn->host_port);
+            }
+            cleanup_connection(conn); /* moves to CLOSE and removes it from the hash */
+        }
+        conn = NULL;
+    }
+
     if (!conn) {
         // log_always("Hash failed; Looking for listening connection on port %u", packet->header.dst_port);
         /* loop through all connections, trying to find a listening conn on this port; this is a
-         * slow O(n) implementation but such ops should be rare */
+         * slow O(n) implementation but such ops should be rare. Only listening sockets may take
+         * new connections: accepted children of a listener share the listener's guest port and are
+         * found by the hash above, so a state-blind scan could deliver a REQUEST (or a stray
+         * packet) to the wrong connection. */
         for (uint32_t i = 0; i < g_vsock->conns_size; i++) {
             struct virtio_vsock_connection* check_conn = g_vsock->conns[i];
             
             // log_always("Checking connection %u: state=%d, guest_port=%u",
             //            i, check_conn ? check_conn->state : -1,
             //            check_conn ? check_conn->guest_port : 0);
-            // if (check_conn && check_conn->state == VIRTIO_VSOCK_LISTEN
-            //        && check_conn->guest_port == packet->header.dst_port) {
-  
-            if (check_conn && check_conn->guest_port == packet->header.dst_port) {
+
+            if (check_conn && check_conn->state == VIRTIO_VSOCK_LISTEN
+                    && check_conn->guest_port == packet->header.dst_port) {
                 conn = check_conn;
                 // log_always("Found listening connection on port %u", conn->guest_port);
                 break;
             }
         }
-    } 
+    }
 
     if (!conn) {
         ret = -PAL_ERROR_INVAL;
@@ -1112,9 +1247,17 @@ static int process_packet(struct virtio_vsock_packet* packet) {
     switch (conn->state) {
         case VIRTIO_VSOCK_LISTEN:
             if (packet->header.op != VIRTIO_VSOCK_OP_REQUEST) {
+                /* A stray packet for one of this listener's connections that is already gone:
+                 * accepted children share the listener's guest port, so a lookup miss on the
+                 * host port falls back to the scan and can land here. Like Linux, only the child
+                 * connection dies of an RST; the listening socket must not tear itself down over
+                 * it -- an RST that reaches the listener is for a connection we no longer know,
+                 * so dropping it is all the listener can do (and answering an RST with an RST is
+                 * forbidden). */
                 if (packet->header.op == VIRTIO_VSOCK_OP_RST)
-                    cleanup_connection(conn);
-                ret = -PAL_ERROR_DENIED;
+                    ret = 0;
+                else
+                    ret = -PAL_ERROR_DENIED;
                 goto out;
             }
             if (conn->pending_conn_fds_cnt == VSOCK_MAX_PENDING_CONNS) {
@@ -1122,15 +1265,24 @@ static int process_packet(struct virtio_vsock_packet* packet) {
                 ret = -PAL_ERROR_OVERFLOW;
                 goto out;
             }
-            /* create new connection */
+            /* Create the new connection on the *listening* port, as the virtio-vsock spec and the
+             * Linux guest driver do: the host matches the RESPONSE (and every later packet) by the
+             * exact connection addresses, so answering a REQUEST from another port makes the host
+             * reset the connection. Connections accepted from one listener share its guest port and
+             * are told apart by the host port, which is the hash key. */
             struct virtio_vsock_connection* new_conn = create_connection(packet->header.src_port,
-                                                                         pick_new_port(),
+                                                                         conn->guest_port,
                                                                          VIRTIO_VSOCK_ESTABLISHED);
             if (!new_conn) {
                 log_error("no memory for new connection");
                 ret = -PAL_ERROR_NOMEM;
                 goto out;
             }
+            /* The REQUEST carries the peer's flow-control state; hand it to the child (Linux does
+             * the same). Without it the child would start with peer_buf_alloc == 0 and could not
+             * send until another packet of this connection happened to arrive. */
+            new_conn->peer_fwd_cnt   = packet->header.fwd_cnt;
+            new_conn->peer_buf_alloc = packet->header.buf_alloc;
             ret = send_response_packet(new_conn);
             if (ret < 0) {
                 remove_connection(new_conn);
@@ -1175,6 +1327,11 @@ static int process_packet(struct virtio_vsock_packet* packet) {
                     ret = 0;
                     goto out;
                 case VIRTIO_VSOCK_OP_SHUTDOWN:
+                    log_debug("vsock conn (host port %lu): peer shutdown flags %u (state %d),"
+                              " queued %u, send_disallowed %d, recv_disallowed %d",
+                              (unsigned long)conn->host_port, packet->header.flags,
+                              (int)conn->state, conn->prepared_for_user - conn->consumed_by_user,
+                              conn->send_disallowed, conn->recv_disallowed);
                     if (packet->header.flags == VIRTIO_VSOCK_SHUTDOWN_RCV
                             || packet->header.flags == VIRTIO_VSOCK_SHUTDOWN_COMPLETE) {
                         conn->send_disallowed = true;
@@ -1195,6 +1352,13 @@ static int process_packet(struct virtio_vsock_packet* packet) {
                         ret = 0;
                         goto out;
                     }
+                    /* an RST that kills a not-fully-shutdown established connection is abnormal and
+                     * has killed the connection under the application: log it always */
+                    log_warning("vsock conn (host port %lu): peer RST kills the connection (state"
+                                " %d), queued %u, send_disallowed %d, recv_disallowed %d",
+                                (unsigned long)conn->host_port, (int)conn->state,
+                                conn->prepared_for_user - conn->consumed_by_user,
+                                conn->send_disallowed, conn->recv_disallowed);
                     cleanup_connection(conn);
                     /* fallthrough */
                 default:
@@ -1204,7 +1368,14 @@ static int process_packet(struct virtio_vsock_packet* packet) {
 
         case VIRTIO_VSOCK_CLOSING:
             if (packet->header.op == VIRTIO_VSOCK_OP_RST) {
-                /* we initiated full shutdown, wait for RST and ignore all other packets */
+                /* we initiated full shutdown, wait for its ack */
+                cleanup_connection(conn); /* moves to CLOSE state */
+            } else if (packet->header.op == VIRTIO_VSOCK_OP_SHUTDOWN
+                       && (packet->header.flags & VIRTIO_VSOCK_SHUTDOWN_SEND)) {
+                /* The peer's shutdown of its send side is an ack too: we have already sent our
+                 * full shutdown, so both directions are done. (The host may answer our shutdown
+                 * with a shutdown instead of an RST, and swallowing it here would stall our
+                 * close() until its timeout.) */
                 cleanup_connection(conn); /* moves to CLOSE state */
             }
             ret = 0;
@@ -1463,6 +1634,10 @@ int virtio_vsock_socket(int domain, int type, int protocol) {
     if (domain != AF_VSOCK)
         return -PAL_ERROR_AFNOSUPPORT;
 
+    /* no vsock device: every socket of the PAL sits on a vsock connection, so none can be created */
+    if (!g_vsock)
+        return -PAL_ERROR_AFNOSUPPORT;
+
     if (type != VIRTIO_VSOCK_TYPE_STREAM)
         return -PAL_ERROR_INVAL;
 
@@ -1647,31 +1822,40 @@ int virtio_vsock_accept(int sockfd, void* addr, size_t* addrlen) {
         goto out;
     }
 
-    if (conn->pending_conn_fds_cnt == 0) {
-        /* non-blocking caller must return TRYAGAIN; blocking caller must sleep on this */
-        ret = -PAL_ERROR_TRYAGAIN;
+    /* Pop pending connections until a live one is found. A child that was reset after being
+     * queued (the host gave up on the connection before accept() ran) was already moved to CLOSE
+     * by the RST handler; like Linux's accept, skip such a socket and reclaim it, instead of
+     * handing the application a dead fd. */
+    while (conn->pending_conn_fds_cnt != 0) {
+        uint32_t idx = conn->pending_conn_fds_idx % VSOCK_MAX_PENDING_CONNS;
+        uint32_t accepted_conn_fd = conn->pending_conn_fds[idx];
+        conn->pending_conn_fds_idx++;
+        conn->pending_conn_fds_cnt--;
+
+        struct virtio_vsock_connection* accepted_conn = get_connection(accepted_conn_fd);
+        if (!accepted_conn)
+            continue;
+        if (accepted_conn->state == VIRTIO_VSOCK_CLOSE) {
+            /* reset before it was ever accepted: the application never learns about this fd, so
+             * free the connection object here (cleanup_connection() has already run) */
+            remove_connection(accepted_conn);
+            continue;
+        }
+
+        *addrlen = sizeof(struct sockaddr_vm);
+        struct sockaddr_vm* addr_vm = (struct sockaddr_vm*)addr;
+        addr_vm->svm_family = AF_VSOCK;
+        addr_vm->svm_reserved1 = 0;
+        addr_vm->svm_cid = g_vsock->host_cid;
+        addr_vm->svm_port = accepted_conn->host_port;
+
+        ret = accepted_conn_fd;
         goto out;
     }
 
-    uint32_t idx = conn->pending_conn_fds_idx % VSOCK_MAX_PENDING_CONNS;
-    uint32_t accepted_conn_fd = conn->pending_conn_fds[idx];
-    struct virtio_vsock_connection* accepted_conn = get_connection(accepted_conn_fd);
-    if (!accepted_conn) {
-        ret = -PAL_ERROR_DENIED;
-        goto out;
-    }
-
-    *addrlen = sizeof(struct sockaddr_vm);
-    struct sockaddr_vm* addr_vm = (struct sockaddr_vm*)addr;
-    addr_vm->svm_family = AF_VSOCK;
-    addr_vm->svm_reserved1 = 0;
-    addr_vm->svm_cid = g_vsock->host_cid;
-    addr_vm->svm_port = accepted_conn->host_port;
-
-    conn->pending_conn_fds_idx++;
-    conn->pending_conn_fds_cnt--;
-
-    ret = accepted_conn_fd;
+    /* nothing live pending: non-blocking caller must return TRYAGAIN; blocking caller must sleep
+     * on this */
+    ret = -PAL_ERROR_TRYAGAIN;
 out:
     spinlock_unlock(&g_vsock_connections_lock);
     return ret;
@@ -1764,6 +1948,67 @@ out:
     spinlock_unlock(&g_vsock_connections_lock);
     if (timeout)
         deregister_timeout(timeout);
+    return ret;
+}
+
+int virtio_vsock_connect_start(int sockfd, const void* addr, size_t addrlen) {
+    int ret;
+    struct sockaddr_vm* addr_vm = (struct sockaddr_vm*)addr;
+
+    if (!addr || addrlen < sizeof(struct sockaddr_vm))
+        return -PAL_ERROR_INVAL;
+    if (sockfd < 0)
+        return -PAL_ERROR_BADHANDLE;
+
+    spinlock_lock(&g_vsock_connections_lock);
+    struct virtio_vsock_connection* conn = get_connection(sockfd);
+    if (!conn) {
+        ret = -PAL_ERROR_BADHANDLE;
+        goto out;
+    }
+    if (conn->state != VIRTIO_VSOCK_CLOSE) {
+        ret = -PAL_ERROR_STREAMEXIST;
+        goto out;
+    }
+
+    assert(conn->host_port == 0 && conn->guest_port == 0);
+    conn->host_port = addr_vm->svm_port;
+    conn->guest_port = pick_new_port();
+#if (VIRTIO_VSOCK_ALLOW_MULTIPLE_CONNECTIONS == 0)
+    host_port_add(conn);
+#else
+    host_port_add_robust(conn);
+#endif
+
+    ret = send_request_packet(conn);
+    if (ret < 0) {
+        cleanup_connection(conn);
+        goto out;
+    }
+    conn->state = VIRTIO_VSOCK_CONNECT;
+    ret = 0;
+out:
+    spinlock_unlock(&g_vsock_connections_lock);
+    return ret;
+}
+
+int virtio_vsock_connect_status(int sockfd) {
+    int ret;
+    if (sockfd < 0)
+        return -PAL_ERROR_BADHANDLE;
+
+    spinlock_lock(&g_vsock_connections_lock);
+    struct virtio_vsock_connection* conn = get_connection(sockfd);
+    if (!conn) {
+        ret = -PAL_ERROR_BADHANDLE;
+    } else if (conn->state == VIRTIO_VSOCK_CONNECT) {
+        ret = -PAL_ERROR_TRYAGAIN;
+    } else if (conn->state == VIRTIO_VSOCK_ESTABLISHED) {
+        ret = 0;
+    } else {
+        ret = -PAL_ERROR_CONNFAILED;
+    }
+    spinlock_unlock(&g_vsock_connections_lock);
     return ret;
 }
 
@@ -1961,12 +2206,17 @@ long virtio_vsock_write(int sockfd, const void* buf, size_t count) {
     }
 
     if (conn->state != VIRTIO_VSOCK_ESTABLISHED) {
+        log_debug("vsock write on host port %lu rejected: connection state %d",
+                  (unsigned long)conn->host_port, (int)conn->state);
         ret = -PAL_ERROR_NOTCONNECTION;
         goto out;
     }
 
     if (conn->send_disallowed) {
-        /* we were instructed to not send more packets, return -EPIPE type of error */
+        /* we were instructed to not send more packets, return -EPIPE type of error; normal for a
+         * peer that hung up while we were writing, so this is only a debug line */
+        log_debug("vsock write on host port %lu rejected: peer does not receive anymore",
+                  (unsigned long)conn->host_port);
         ret = -PAL_ERROR_CONNFAILED_PIPE;
         goto out;
     }
@@ -2063,7 +2313,19 @@ static int virtio_vsock_close_common(struct virtio_vsock_connection* conn, uint6
             goto out;
 
         if (timeout_absolute_us <= curr_time_us) {
-            ret = -PAL_ERROR_DENIED;
+            /* The peer's ack of our shutdown did not arrive. Our shutdown (and all data sent
+             * before it) is already in the transmit queue, so the peer still receives everything;
+             * Linux's close() does not wait for the peer either. Succeed: the caller proceeds to
+             * free the connection (virtio_vsock_close), which releases the (host port, guest
+             * port) hash slot; a colliding connection request deferred on that slot is admitted
+             * then, and an ack arriving later finds no connection and is dropped (an ack that
+             * arrives very late could instead hit a connection that just took the slot -- the
+             * window is bounded by this timeout and needs the peer's vhost worker to stall that
+             * long; Linux has the same exposure without a TIME-WAIT). */
+            log_warning("vsock close of connection on guest port %lu did not get a shutdown ack"
+                        " from host port %lu", (unsigned long)conn->guest_port,
+                        (unsigned long)conn->host_port);
+            ret = 0;
             goto out;
         }
 

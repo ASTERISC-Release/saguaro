@@ -55,8 +55,14 @@
 
 /* IETF RFC 793 requires the `TIME-WAIT` state to last twice the time of the MSL (Maximum Segment
  * Lifetime). On Linux, this duration is set to 60s, see:
- * https://elixir.bootlin.com/linux/v6.3/source/include/net/tcp.h#L123. */
-#define VSOCK_CLOSE_TIMEOUT_US (60 * TIME_US_IN_S)
+ * https://elixir.bootlin.com/linux/v6.3/source/include/net/tcp.h#L123. We do not implement a
+ * TIME-WAIT: our close() waits (in the application thread) for the peer's ack of the shutdown --
+ * an RST or a shutdown -- and the address-reuse problem that TIME-WAIT guards against is covered
+ * by deferring colliding connection requests instead (process_packet). The wait only needs to be
+ * long enough for the peer's ack to arrive under a busy host (it is generated when the peer's
+ * vhost worker consumes our shutdown); after it expires, close() succeeds and releases the
+ * connection, and a late ack finds no connection and is dropped. */
+#define VSOCK_CLOSE_TIMEOUT_US (2 * TIME_US_IN_S)
 
 enum virtio_vsock_state {
     VIRTIO_VSOCK_CLOSE,
@@ -157,6 +163,17 @@ struct virtio_vsock_connection {
     bool ipv6_bound;
     bool ipv6_v6only;
     bool reuseport;
+
+    /* A new connection's REQUEST that collides with this still-hashed connection -- the host
+     * reused the port of a connection that is CLOSING here, waiting for its teardown RST (the host
+     * cannot have a live socket on a port it just sent a new REQUEST from, so only a closing or
+     * otherwise dead connection can be hit). Answering it now would let the late RST of the old
+     * connection kill the new one, so the REQUEST waits in these fields and is admitted when this
+     * connection releases the hash slot (see cleanup_connection()). Only one is kept: a second
+     * colliding REQUEST (its sender gave up on the first and re-used the port again) replaces it. */
+    bool has_deferred_request;
+    uint32_t deferred_peer_fwd_cnt;
+    uint32_t deferred_peer_buf_alloc;
 };
 
 struct sockaddr_vm {
@@ -167,3 +184,9 @@ struct sockaddr_vm {
 };
 
 void thread_wakeup_vsock(bool is_read);
+
+/* Periodic wake of everything blocked on the vsock reader/writer futexes, from the timer tick
+ * (kernel_time.c). Needed because those wakeups are issued outside the lock that guards the
+ * state they announce, and a thread that finished its check in between misses them; the waiters
+ * recheck their state and sleep again, so a spurious kick is harmless. */
+void sockets_kick_waiting_threads(void);

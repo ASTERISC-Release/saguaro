@@ -193,6 +193,44 @@ This option takes precedence over ``fs.mounts``.
 This means that etc files provided via ``fs.mounts`` will be overridden with
 the ones added via this option.
 
+.. _vm-networking:
+
+VM networking (``gramine-vm``)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The ``gramine-vm`` launcher (x86_64 and AArch64) starts a per-VM VSOCK relay. The guest has no TCP/IP stack; the
+relay opens TCP and UDP sockets in the launcher's network namespace. These settings are read by the
+VM launcher and relay and do not configure the Linux PAL.
+
+::
+
+   [vm.net]
+   outbound = "allow"
+   deny = ["10.0.0.0/8", "tcp:25", "udp:53"]
+   inbound = [{ guest = 8080, host = 18080, bind = "127.0.0.1" }]
+   direct_vsock_ports = [6000]
+
+``outbound`` accepts ``"allow"`` (the default) or ``"deny"``. ``"deny"`` blocks guest-initiated
+TCP and UDP connections. ``deny`` is an optional array of IP networks, ``tcp:PORT`` rules, and
+``udp:PORT`` rules; matching destinations are denied even when ``outbound = "allow"``.
+
+``inbound`` is an optional array of static TCP forwards. Each entry requires integer ``guest`` and
+may set integer ``host`` (default: the guest port) and string ``bind`` (default: ``"127.0.0.1"``).
+For example, the entry above forwards container port 18080 to guest port 8080. Duplicate host
+bind-address/port pairs and ports that cannot be bound cause VM startup to fail. The listener is in
+the container's network namespace when running rootlessly; reaching it from the real host requires
+publishing the container port.
+
+``direct_vsock_ports`` is an optional array of integer TCP ports that retain the legacy mapping:
+guest TCP port *N* connects directly to host AF_VSOCK port *N*, bypassing the relay. Graphics
+manifests use this for the X proxy. Guest loopback addresses ``127.0.0.0/8`` and ``::1`` refer to
+the guest itself. UDP and DNS traffic use the relay; the VM PAL does not provide
+``/etc/resolv.conf``, so mount a resolver file when needed.
+
+The relay networking feature is integrated and tested on x86_64 and on AArch64. The AArch64 launcher
+also needs ``/dev/vhost-vsock`` (kernel module ``vhost_vsock``) to be readable and writable by the user;
+without it the VM still boots, but guest sockets fail, and a manifest with ``vm.net`` keys is refused.
+
 Environment variables
 ^^^^^^^^^^^^^^^^^^^^^
 

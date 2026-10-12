@@ -9,6 +9,13 @@ LIBPAL_PATH=@LIBPAL_PATH@
 HOST_PAL_PATH=@HOST_PAL_PATH@
 TDSHIM_PAL_PATH=@TDSHIM_PAL_PATH@
 
+# The per-VM vsock relay (Documentation/devel/vm-network/), shared with gramine-vm-aarch64; installed
+# next to the VM PAL. The launcher runs Python snippets and the relay from this installation: a caller
+# with a stripped environment (the LibOS regression tests pass `env=`) has no PYTHONPATH, so the library
+# finds the package next to the launcher.
+. "$HOST_PAL_PATH/vm-relay.sh"
+vm_relay_find_python "${BASH_SOURCE[0]}"
+
 APPLICATION=
 QEMU_GDB=
 ENVS=()
@@ -299,6 +306,8 @@ cleanup() {
         kill "$XPROXY_PID" 2>/dev/null
         wait "$XPROXY_PID" 2>/dev/null
     fi
+    # the vsock relay (see vm-relay.sh): stop it and surface what it logged after startup
+    vm_relay_stop
 }
 trap cleanup EXIT
 trap 'exit 130' INT TERM
@@ -416,6 +425,19 @@ if [ -n "$X_DISPLAY_NUM" ] && [ "${GRAMINE_VM_X_PROXY:-1}" != "0" ]; then
         fi
     fi
 fi
+
+# The vsock relay (Documentation/devel/vm-network/): one relay process per VM, listening on vsock
+# port 65536+CID, started here (after the guest CID is known) and stopped with the VM. It handles
+# outbound destination handshakes and static inbound forwarding. Every `vm.net.inbound` rule of the
+# manifest (or every rule in the colon-separated GRAMINE_VM_INBOUND="guest:host,..." convenience
+# variable, for drivers that cannot edit the manifest) gets a host (container) TCP listener bridged
+# into the guest. The manifest is passed to the relay for vm.net.outbound and vm.net.deny policy.
+# GRAMINE_VM_RELAY=0 disables the relay entirely. A host port that cannot be bound is an error and
+# fails the run, as agreed in the plan.
+# The relay does not touch the graphics direct port mapping (guest TCP port N == host vsock port
+# N, ports 6000+N and friends): that mapping needs no listener on the host side at all -- the host
+# connects directly to the guest's vsock port, the way the X proxy above does.
+vm_relay_start "$GRAMINE_VM_ID" "$GRAMINE_MANIFEST" || exit 2
 
 # Check if the Gramine vhostfs pid file is already in use by another process
 if lsof /tmp/gramine_vhostfs_"$GRAMINE_VM_ID".pid 2>/dev/null; then

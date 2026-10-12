@@ -25,6 +25,7 @@ struct udp_rx_ring {
     uint32_t cap;
     uint32_t udp_rx_futex;
     uint32_t sender_port;
+    bool relay_connected;
     void *ring;
 };
 

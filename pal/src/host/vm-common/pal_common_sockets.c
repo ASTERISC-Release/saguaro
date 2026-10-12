@@ -13,11 +13,14 @@
 #include "pal.h"
 #include "pal_common.h"
 #include "pal_error.h"
+#include "pal_linux_error.h"
 #include "pal_internal.h"
 #include "socket_utils.h"
 #include "spinlock.h"
+#include "toml.h"
 
 #include "kernel_sched.h"
+#include "kernel_time.h"
 #include "kernel_virtio.h"
 #include "kernel_virtio_vsock.h"
 #include <stdatomic.h>
@@ -48,13 +51,21 @@ void thread_wakeup_vsock(bool is_read) {
     sched_thread_wakeup(&g_streams_waiting_events_futex);
     sched_thread_wakeup(is_read ? &g_sockets_reader_futex : &g_sockets_writer_futex);
 }
+
+void sockets_kick_waiting_threads(void) {
+    /* See the declaration in kernel_virtio_vsock.h: a cheap safety net against the wakeup race;
+     * skip entirely when there is no vsock device (nothing could be waiting on these). */
+    if (!g_vsock)
+        return;
+    sched_thread_wakeup_uninterruptable(&g_sockets_reader_futex);
+    sched_thread_wakeup_uninterruptable(&g_sockets_writer_futex);
+}
 void udp_rx_ring_init(struct pal_handle *handle, void *region)
 {
     struct udp_rx_ring* udp_region = malloc(sizeof(struct udp_rx_ring));
     assert(udp_region != NULL);
     handle->region = udp_region;
-    __atomic_store_n(&(udp_region->head), 0, __ATOMIC_RELAXED);
-    __atomic_store_n(&(udp_region->tail), 0, __ATOMIC_RELAXED);
+    memset(udp_region, 0, sizeof(*udp_region));
     // Not strictly required, but good hygiene
     udp_region->ring = region;
     memset(udp_region->ring, 0, DATA_SIZE);
@@ -63,6 +74,338 @@ void udp_rx_ring_init(struct pal_handle *handle, void *region)
 }
 static inline uint8_t *ring_data(struct udp_rx_ring *r) {
     return r->ring;
+}
+
+static bool vm_is_direct_vsock_port(uint16_t port) {
+    toml_table_t* vm = toml_table_in(g_pal_public_state.manifest_root, "vm");
+    toml_table_t* net = vm ? toml_table_in(vm, "net") : NULL;
+    toml_array_t* ports = net ? toml_array_in(net, "direct_vsock_ports") : NULL;
+    if (!ports)
+        return false;
+
+    int count = toml_array_nelem(ports);
+    for (int i = 0; i < count; i++) {
+        toml_raw_t raw = toml_raw_at(ports, i);
+        int64_t direct_port;
+        if (raw && toml_rtoi(raw, &direct_port) == 0 && direct_port == port)
+            return true;
+    }
+    return false;
+}
+
+static int vm_relay_write_exact(struct pal_handle* handle, const void* buf, size_t size) {
+    size_t offset = 0;
+    while (offset < size) {
+        struct iovec iov = {
+            .iov_base = (char*)buf + offset,
+            .iov_len = size - offset,
+        };
+        size_t written = 0;
+        int ret = handle->sock.ops->send(handle, &iov, 1, &written, NULL,
+                                         /*force_nonblocking=*/false);
+        if (ret < 0)
+            return ret;
+        if (!written || written > size - offset)
+            return -PAL_ERROR_CONNFAILED;
+        offset += written;
+    }
+    return 0;
+}
+
+static int vm_relay_read_exact(struct pal_handle* handle, void* buf, size_t size) {
+    size_t offset = 0;
+    while (offset < size) {
+        struct iovec iov = {
+            .iov_base = (char*)buf + offset,
+            .iov_len = size - offset,
+        };
+        size_t received = 0;
+        int ret = handle->sock.ops->recv(handle, &iov, 1, &received, NULL,
+                                         /*force_nonblocking=*/false);
+        if (ret < 0)
+            return ret;
+        if (!received || received > size - offset)
+            return -PAL_ERROR_CONNFAILED;
+        offset += received;
+    }
+    return 0;
+}
+
+static int vm_relay_connect(struct pal_handle* handle, const struct pal_socket_addr* addr) {
+    uint8_t request[12 + 16] = { 'G', 'N', 'R', '1', 1, 1, 6, 0 };
+    const uint8_t* address;
+    size_t address_size;
+    uint16_t port;
+
+    if (addr->domain == PAL_IPV4) {
+        request[7] = 4;
+        address = (const uint8_t*)&addr->ipv4.addr;
+        address_size = 4;
+        port = ntohs(addr->ipv4.port);
+    } else if (addr->domain == PAL_IPV6) {
+        request[7] = 6;
+        address = addr->ipv6.addr;
+        address_size = 16;
+        port = ntohs(addr->ipv6.port);
+    } else {
+        return -PAL_ERROR_AFNOSUPPORT;
+    }
+
+    if (!port)
+        return -PAL_ERROR_INVAL;
+    request[8] = port >> 8;
+    request[9] = port & 0xff;
+    request[10] = address_size >> 8;
+    request[11] = address_size & 0xff;
+    memcpy(request + 12, address, address_size);
+
+    /* Connect() is synchronous in the VM PAL, including for non-blocking sockets. Make the short
+     * relay handshake use the same blocking send/receive path before restoring the socket flag. */
+    spinlock_lock(&handle->sock.lock);
+    bool was_nonblocking = handle->sock.is_nonblocking;
+    handle->sock.is_nonblocking = false;
+    spinlock_unlock(&handle->sock.lock);
+    int ret = vm_relay_write_exact(handle, request, 12 + address_size);
+    uint8_t response[8];
+    if (ret == 0)
+        ret = vm_relay_read_exact(handle, response, sizeof(response));
+    spinlock_lock(&handle->sock.lock);
+    handle->sock.is_nonblocking = was_nonblocking;
+    spinlock_unlock(&handle->sock.lock);
+    if (ret < 0)
+        return ret;
+
+    if (memcmp(response, "GNR1", 4) || response[4] != 1)
+        return -PAL_ERROR_CONNFAILED;
+    uint16_t host_errno = ((uint16_t)response[6] << 8) | response[7];
+    if (response[5] == 0 && host_errno == 0)
+        return 0;
+    if (response[5] != 1 || !host_errno)
+        return -PAL_ERROR_CONNFAILED;
+    return -unix_to_pal_error(host_errno);
+}
+
+static int vm_prepare_relay_connect(struct pal_handle* handle,
+                                    const struct pal_socket_addr* addr) {
+    uint8_t* request = handle->sock.connect_request;
+    const uint8_t* address;
+    size_t address_size;
+    uint16_t port;
+
+    memset(request, 0, sizeof(handle->sock.connect_request));
+    memcpy(request, "GNR1", 4);
+    request[4] = 1;
+    request[5] = 1;
+    request[6] = 6;
+    if (addr->domain == PAL_IPV4) {
+        request[7] = 4;
+        address = (const uint8_t*)&addr->ipv4.addr;
+        address_size = 4;
+        port = ntohs(addr->ipv4.port);
+    } else if (addr->domain == PAL_IPV6) {
+        request[7] = 6;
+        address = addr->ipv6.addr;
+        address_size = 16;
+        port = ntohs(addr->ipv6.port);
+    } else {
+        return -PAL_ERROR_AFNOSUPPORT;
+    }
+    if (!port)
+        return -PAL_ERROR_INVAL;
+
+    request[8] = port >> 8;
+    request[9] = port & 0xff;
+    request[10] = address_size >> 8;
+    request[11] = address_size & 0xff;
+    memcpy(request + 12, address, address_size);
+    handle->sock.connect_request_size = 12 + address_size;
+    handle->sock.connect_request_offset = 0;
+    handle->sock.connect_response_offset = 0;
+    return 0;
+}
+
+/* Advance a nonblocking connect without sleeping. The stream response is the relay's TCP
+ * connect result; once received, normal socket polling reports completion to LibOS. */
+static void vm_tcp_connect_progress(struct pal_handle* handle) {
+    spinlock_lock(&handle->sock.lock);
+    if (!handle->sock.connect_pending) {
+        spinlock_unlock(&handle->sock.lock);
+        return;
+    }
+
+    int ret = virtio_vsock_connect_status(handle->sock.fd);
+    if (ret == -PAL_ERROR_TRYAGAIN) {
+        spinlock_unlock(&handle->sock.lock);
+        return;
+    }
+    if (ret < 0) {
+        handle->sock.connect_result = ret;
+        goto complete;
+    }
+
+    if (!handle->sock.connect_direct_vsock) {
+        while (handle->sock.connect_request_offset < handle->sock.connect_request_size) {
+            size_t offset = handle->sock.connect_request_offset;
+            size_t remaining = handle->sock.connect_request_size - offset;
+            long written = virtio_vsock_write(handle->sock.fd,
+                                               handle->sock.connect_request + offset, remaining);
+            if (written == -PAL_ERROR_TRYAGAIN) {
+                spinlock_unlock(&handle->sock.lock);
+                return;
+            }
+            if (written <= 0 || (size_t)written > remaining) {
+                handle->sock.connect_result = written < 0 ? (int)written : -PAL_ERROR_CONNFAILED;
+                goto complete;
+            }
+            handle->sock.connect_request_offset += written;
+        }
+
+        while (handle->sock.connect_response_offset < sizeof(handle->sock.connect_response)) {
+            size_t offset = handle->sock.connect_response_offset;
+            size_t remaining = sizeof(handle->sock.connect_response) - offset;
+            long received = virtio_vsock_read(handle->sock.fd,
+                                               handle->sock.connect_response + offset, remaining);
+            if (received == -PAL_ERROR_TRYAGAIN) {
+                spinlock_unlock(&handle->sock.lock);
+                return;
+            }
+            if (received <= 0 || (size_t)received > remaining) {
+                handle->sock.connect_result = received < 0 ? (int)received : -PAL_ERROR_CONNFAILED;
+                goto complete;
+            }
+            handle->sock.connect_response_offset += received;
+        }
+
+        const uint8_t* response = handle->sock.connect_response;
+        if (memcmp(response, "GNR1", 4) || response[4] != 1) {
+            handle->sock.connect_result = -PAL_ERROR_CONNFAILED;
+        } else {
+            uint16_t host_errno = ((uint16_t)response[6] << 8) | response[7];
+            if (response[5] == 0 && host_errno == 0) {
+                handle->sock.connect_result = 0;
+            } else if (response[5] == 1 && host_errno) {
+                handle->sock.connect_result = -unix_to_pal_error(host_errno);
+            } else {
+                handle->sock.connect_result = -PAL_ERROR_CONNFAILED;
+            }
+        }
+    } else {
+        handle->sock.connect_result = 0;
+    }
+
+complete:
+    handle->sock.connect_pending = false;
+    handle->sock.connect_finished = true;
+    spinlock_unlock(&handle->sock.lock);
+}
+
+/* UDP shares one VSOCK stream with the relay; these helpers preserve datagram framing above it. */
+static int vm_vsock_write_exact(struct pal_handle* handle, const void* buf, size_t size,
+                                bool force_nonblocking) {
+    size_t offset = 0;
+    while (offset < size) {
+        int64_t written = virtio_vsock_write(handle->sock.fd, (const char*)buf + offset,
+                                             size - offset);
+        if (written == -PAL_ERROR_TRYAGAIN) {
+            if (force_nonblocking || handle->sock.is_nonblocking)
+                return -PAL_ERROR_TRYAGAIN;
+            sched_thread_wait(&g_sockets_writer_futex, &handle->sock.lock);
+            continue;
+        }
+        if (written < 0)
+            return written;
+        if (!written || (size_t)written > size - offset)
+            return -PAL_ERROR_CONNFAILED;
+        offset += (size_t)written;
+    }
+    return 0;
+}
+
+static int vm_vsock_read_exact(struct pal_handle* handle, void* buf, size_t size,
+                               bool force_nonblocking) {
+    size_t offset = 0;
+    while (offset < size) {
+        int64_t received = virtio_vsock_read(handle->sock.fd, (char*)buf + offset,
+                                             size - offset);
+        if (received == -PAL_ERROR_TRYAGAIN) {
+            if (force_nonblocking || handle->sock.is_nonblocking)
+                return -PAL_ERROR_TRYAGAIN;
+            spinlock_unlock(&handle->sock.lock);
+            bool got_data = virtio_vsock_busy_poll(/*timeout_us=*/25);
+            spinlock_lock(&handle->sock.lock);
+            if (got_data)
+                continue;
+            if (virtio_vsock_rearm_notifications()) {
+                spinlock_unlock(&handle->sock.lock);
+                (void)virtio_vsock_poll();
+                spinlock_lock(&handle->sock.lock);
+                continue;
+            }
+            sched_thread_wait(&g_sockets_reader_futex, &handle->sock.lock);
+            continue;
+        }
+        if (received < 0)
+            return received;
+        if (!received || (size_t)received > size - offset)
+            return -PAL_ERROR_CONNFAILED;
+        offset += (size_t)received;
+    }
+    return 0;
+}
+
+/* Once a framed UDP record has started on the byte stream, finish it before restoring the
+ * socket's nonblocking mode; returning EAGAIN after a partial record would desynchronize framing. */
+static int vm_udp_read_frame_bytes(struct pal_handle* handle, void* buf, size_t size) {
+    bool was_nonblocking = handle->sock.is_nonblocking;
+    handle->sock.is_nonblocking = false;
+    int ret = vm_vsock_read_exact(handle, buf, size, /*force_nonblocking=*/false);
+    handle->sock.is_nonblocking = was_nonblocking;
+    return ret;
+}
+
+static int vm_udp_ensure_relay(struct pal_handle* handle) {
+    if (!g_vsock)
+        return -PAL_ERROR_AFNOSUPPORT;
+    struct udp_rx_ring* ring = handle->region;
+    if (ring->relay_connected)
+        return 0;
+
+    /* DNS creates non-blocking UDP sockets. Complete the control handshake synchronously before
+     * honoring non-blocking behavior for framed datagram writes. */
+    bool was_nonblocking = handle->sock.is_nonblocking;
+    handle->sock.is_nonblocking = false;
+
+    struct sockaddr_vm relay = {
+        .svm_family = AF_VSOCK,
+        .svm_cid = g_vsock->guest_cid,
+        .svm_port = 65536 + g_vsock->guest_cid,
+    };
+    int ret = virtio_vsock_connect(handle->sock.fd, &relay, sizeof(relay),
+                                   VSOCK_CONNECT_TIMEOUT_US);
+    if (ret < 0) {
+        handle->sock.is_nonblocking = was_nonblocking;
+        return ret;
+    }
+
+    /* A UDP relay stream has no default peer; destinations travel with each datagram. */
+    const uint8_t request[12] = { 'G', 'N', 'R', '1', 1, 1, 17, 0, 0, 0, 0, 0 };
+    ret = vm_vsock_write_exact(handle, request, sizeof(request), /*force_nonblocking=*/false);
+    uint8_t response[8];
+    if (ret == 0)
+        ret = vm_vsock_read_exact(handle, response, sizeof(response), /*force_nonblocking=*/false);
+    if (ret < 0) {
+        handle->sock.is_nonblocking = was_nonblocking;
+        return ret;
+    }
+    if (memcmp(response, "GNR1", 4) || response[4] != 1 || response[5] != 0 ||
+            response[6] || response[7]) {
+        handle->sock.is_nonblocking = was_nonblocking;
+        return -PAL_ERROR_CONNFAILED;
+    }
+    ring->relay_connected = true;
+    handle->sock.is_nonblocking = was_nonblocking;
+    log_debug("UDP VSOCK relay session established");
+    return 0;
 }
 
 static inline uint32_t ring_used(uint32_t head, uint32_t tail, uint32_t cap) {
@@ -107,16 +450,29 @@ int pal_common_socket_wait_events(struct pal_handle* handle, pal_wait_flags_t ev
                                   pal_wait_flags_t* out_events) {
     pal_wait_flags_t revents = 0;
 
+    /* The relay returns UDP responses through the VSOCK stream; poll it before checking readiness. */
+    if (handle->sock.type == PAL_SOCKET_UDP && handle->region->relay_connected)
+        (void)virtio_vsock_poll();
+    if (handle->sock.type == PAL_SOCKET_TCP)
+        vm_tcp_connect_progress(handle);
+
     spinlock_lock(&handle->sock.lock);
 
     if (handle->sock.type == PAL_SOCKET_UDP) {
-        if ((events & PAL_WAIT_READ) && udp_pending_size(handle->region))
+        long peeked = handle->region->relay_connected ? virtio_vsock_peek(handle->sock.fd) : 0;
+        if ((events & PAL_WAIT_READ) && (udp_pending_size(handle->region) || peeked > 0))
             revents |= PAL_WAIT_READ;
-        /* UDP sends either enqueue locally or are accepted and dropped when no VM transport
-         * exists, so they never block on the backing VSOCK stream. */
-        if (events & PAL_WAIT_WRITE)
+        if ((events & PAL_WAIT_WRITE) &&
+                (!handle->region->relay_connected || virtio_vsock_can_write(handle->sock.fd)))
             revents |= PAL_WAIT_WRITE;
     } else {
+        if (handle->sock.connect_pending)
+            goto out;
+        if (handle->sock.connect_finished && handle->sock.connect_result < 0) {
+            revents = (events & (PAL_WAIT_READ | PAL_WAIT_WRITE)) | PAL_WAIT_ERROR;
+            goto out;
+        }
+
         long peeked = virtio_vsock_peek(handle->sock.fd);
         if (peeked < 0) {
             /* socket is invalid or was shutdown or in the process of closing */
@@ -227,6 +583,10 @@ int pal_common_socket_create(enum pal_socket_domain domain, enum pal_socket_type
                              pal_stream_options_t options, struct pal_handle** out_handle) {
     assert(domain == PAL_IPV4 || domain == PAL_IPV6);
 
+    /* no vsock device: TCP/UDP sockets are emulated over vsock, so fail instead of crashing */
+    if (!g_vsock)
+        return -PAL_ERROR_AFNOSUPPORT;
+
     /* Testing for VSOCK */
     log_debug("socket: domain=%d, type=%d, options=0x%x", domain, type, options);
 
@@ -299,6 +659,8 @@ static int pal_common_socket_bind(struct pal_handle* handle, struct pal_socket_a
     log_debug("[graphics] Bind request arrived.\n");
     
     assert(handle->hdr.type == PAL_TYPE_SOCKET);
+    if (!g_vsock)
+        return -PAL_ERROR_AFNOSUPPORT;
     if (addr->domain != handle->sock.domain) {
         return -PAL_ERROR_INVAL;
     }
@@ -412,6 +774,8 @@ static int pal_common_socket_connect(struct pal_handle* handle, struct pal_socke
                                      struct pal_socket_addr* out_local_addr,
                                      bool* out_inprogress) {
     assert(handle->hdr.type == PAL_TYPE_SOCKET);
+    if (!g_vsock)
+        return -PAL_ERROR_AFNOSUPPORT;
     if (addr->domain != PAL_DISCONNECT && addr->domain != handle->sock.domain) {
         return -PAL_ERROR_INVAL;
     }
@@ -429,15 +793,70 @@ static int pal_common_socket_connect(struct pal_handle* handle, struct pal_socke
         return 0;
     }
 
-    // log_always("Connecting to socket in pal_common_socket_connect...");
+    if (addr->domain == PAL_DISCONNECT)
+        return -PAL_ERROR_NOTSUPPORT;
 
-    struct sockaddr_vm addr_vm = { .svm_cid = g_vsock->host_cid };
+    uint16_t remote_port = addr->domain == PAL_IPV4 ? ntohs(addr->ipv4.port)
+                                                    : ntohs(addr->ipv6.port);
+    bool direct_vsock_port = vm_is_direct_vsock_port(remote_port);
+    struct sockaddr_vm addr_vm = {
+        .svm_cid = direct_vsock_port ? g_vsock->host_cid : g_vsock->guest_cid,
+        .svm_port = direct_vsock_port ? 0 : 65536 + g_vsock->guest_cid,
+    };
     pal_to_vm_sockaddr(addr, &addr_vm);
+    if (!direct_vsock_port) {
+        /* pal_to_vm_sockaddr() copies only the app's port; outbound TCP uses the reserved
+         * per-guest relay port and carries its numeric destination in a handshake below. */
+        addr_vm.svm_port = 65536 + g_vsock->guest_cid;
+    }
 
-    int ret = virtio_vsock_connect(handle->sock.fd, &addr_vm, sizeof(addr_vm),
-                                   VSOCK_CONNECT_TIMEOUT_US);
+    int ret;
+    if (handle->sock.is_nonblocking) {
+        spinlock_lock(&handle->sock.lock);
+        if (!direct_vsock_port) {
+            ret = vm_prepare_relay_connect(handle, addr);
+            if (ret < 0) {
+                spinlock_unlock(&handle->sock.lock);
+                return ret;
+            }
+        }
+
+        handle->sock.connect_pending = true;
+        handle->sock.connect_finished = false;
+        handle->sock.connect_direct_vsock = direct_vsock_port;
+        handle->sock.connect_result = 0;
+        ret = virtio_vsock_connect_start(handle->sock.fd, &addr_vm, sizeof(addr_vm));
+        if (ret < 0) {
+            handle->sock.connect_pending = false;
+            spinlock_unlock(&handle->sock.lock);
+            return ret;
+        }
+
+        struct sockaddr_vm local_addr_vm = {0};
+        size_t local_addr_vm_size = sizeof(local_addr_vm);
+        ret = virtio_vsock_getsockname(handle->sock.fd, &local_addr_vm, &local_addr_vm_size);
+        if (ret < 0) {
+            handle->sock.connect_pending = false;
+            spinlock_unlock(&handle->sock.lock);
+            return ret;
+        }
+        if (out_local_addr)
+            vm_to_pal_sockaddr(handle->sock.domain, &local_addr_vm, out_local_addr);
+        *out_inprogress = true;
+        spinlock_unlock(&handle->sock.lock);
+        return 0;
+    }
+
+    ret = virtio_vsock_connect(handle->sock.fd, &addr_vm, sizeof(addr_vm),
+                               VSOCK_CONNECT_TIMEOUT_US);
     if (ret < 0)
         return ret;
+
+    if (!direct_vsock_port) {
+        ret = vm_relay_connect(handle, addr);
+        if (ret < 0)
+            return ret;
+    }
 
     struct sockaddr_vm local_addr_vm = {0};
     size_t local_addr_vm_size = sizeof(local_addr_vm);
@@ -464,7 +883,10 @@ static int pal_common_socket_attrquerybyhdl(struct pal_handle* handle, PAL_STREA
     attr->nonblocking = handle->sock.is_nonblocking;
 
     if (handle->sock.type == PAL_SOCKET_UDP) {
-        attr->pending_size = udp_pending_size(handle->region);
+        long peeked = handle->region->relay_connected ? virtio_vsock_peek(handle->sock.fd) : 0;
+        attr->pending_size = udp_pending_size(handle->region) ? udp_pending_size(handle->region)
+                                                              : peeked > 0 ? sanitize_size(peeked)
+                                                                           : 0;
     } else {
         long peeked = virtio_vsock_peek(handle->sock.fd);
         attr->pending_size = peeked >= 0 ? sanitize_size(peeked) : 0;
@@ -496,6 +918,10 @@ static int pal_common_socket_attrsetbyhdl(struct pal_handle* handle, PAL_STREAM_
     handle->sock.is_nonblocking = attr->nonblocking;
     handle->sock.ipv6_v6only    = attr->socket.ipv6_v6only;
     handle->sock.reuseport      = attr->socket.reuseport;
+    /* SO_RCVTIMEO / SO_SNDTIMEO: the LibOS sets them here; recv uses the receive timeout (see
+     * vm_sock_recv_wait()), the send timeout is only stored and reported back */
+    handle->sock.recvtimeout_us = attr->socket.receivetimeout_us;
+    handle->sock.sendtimeout_us = attr->socket.sendtimeout_us;
 
     int ret = virtio_vsock_set_socket_options(handle->sock.fd, handle->sock.ipv6_v6only,
                                               handle->sock.reuseport);
@@ -507,7 +933,6 @@ static int pal_common_socket_attrsetbyhdl(struct pal_handle* handle, PAL_STREAM_
 static int pal_common_tcp_send(struct pal_handle* handle, struct iovec* iov, size_t iov_len,
                                size_t* out_size, struct pal_socket_addr* addr,
                                bool force_nonblocking) {
-    __UNUSED(addr);
     assert(handle->hdr.type == PAL_TYPE_SOCKET);
         // log_always("[pal_common_tcp_send] handle=%p; iov=%p, iov_len=%d, force_nonblocking=%d\n", handle, iov, iov_len, force_nonblocking);
 
@@ -567,6 +992,9 @@ static int pal_common_udp_send(struct pal_handle *handle,
                                struct pal_socket_addr *addr,
                                bool force_nonblocking)
 {
+    __UNUSED(force_nonblocking);
+    if (!g_vsock)
+        return -PAL_ERROR_AFNOSUPPORT;
     // if(iov[0].iov_len > 100)
     //     log_always("[pal_common_udp_send] handle=%p; iov=%p, iov_len=%d, force_nonblocking=%d\n", handle, iov, iov_len, force_nonblocking);
     assert(handle->hdr.type == PAL_TYPE_SOCKET);
@@ -586,17 +1014,68 @@ static int pal_common_udp_send(struct pal_handle *handle,
     }
     if (!r) {
         spinlock_unlock(&g_sock_region_map_lock);
+        if (!addr || (addr->domain != PAL_IPV4 && addr->domain != PAL_IPV6))
+            return -PAL_ERROR_AFNOSUPPORT;
 
-        /* The VM has no external UDP transport yet. Preserve normal UDP send semantics for
-         * unreachable/offline peers: accept and drop the datagram instead of reporting
-         * EAGAIN, which makes SteamNetworkingSockets retry and recreate sockets forever. */
-        size_t dropped = 0;
+        size_t payload_size = 0;
         for (size_t i = 0; i < iov_len; i++) {
-            if (iov[i].iov_base) {
-                dropped += iov[i].iov_len;
-            }
+            if (iov[i].iov_len > SIZE_MAX - payload_size)
+                return -PAL_ERROR_TOOLONG;
+            payload_size += iov[i].iov_len;
         }
-        *out_size = dropped;
+        if (payload_size > 65507)
+            return -PAL_ERROR_TOOLONG;
+
+        uint8_t family;
+        const uint8_t* destination;
+        uint8_t address_size;
+        uint16_t port;
+        if (addr->domain == PAL_IPV4) {
+            family = 4;
+            destination = (const uint8_t*)&addr->ipv4.addr;
+            address_size = 4;
+            port = ntohs(addr->ipv4.port);
+        } else {
+            family = 6;
+            destination = addr->ipv6.addr;
+            address_size = 16;
+            port = ntohs(addr->ipv6.port);
+        }
+        if (!port)
+            return -PAL_ERROR_INVAL;
+
+        log_debug("UDP relay send to %u.%u.%u.%u:%u, %zu bytes", destination[0],
+                  address_size > 1 ? destination[1] : 0,
+                  address_size > 2 ? destination[2] : 0,
+                  address_size > 3 ? destination[3] : 0, port, payload_size);
+
+        spinlock_lock(&handle->sock.lock);
+        int ret = vm_udp_ensure_relay(handle);
+        if (ret < 0) {
+            spinlock_unlock(&handle->sock.lock);
+            return ret;
+        }
+        uint8_t header[6] = {
+            family, address_size, port >> 8, port & 0xff,
+            payload_size >> 8, payload_size & 0xff,
+        };
+        /* A partial frame cannot be retried safely as a new datagram on this stream. */
+        bool was_nonblocking = handle->sock.is_nonblocking;
+        handle->sock.is_nonblocking = false;
+        ret = vm_vsock_write_exact(handle, header, sizeof(header), /*force_nonblocking=*/false);
+        if (ret == 0)
+            ret = vm_vsock_write_exact(handle, destination, address_size,
+                                       /*force_nonblocking=*/false);
+        for (size_t i = 0; ret == 0 && i < iov_len; i++) {
+            if (iov[i].iov_base && iov[i].iov_len)
+                ret = vm_vsock_write_exact(handle, iov[i].iov_base, iov[i].iov_len,
+                                           /*force_nonblocking=*/false);
+        }
+        handle->sock.is_nonblocking = was_nonblocking;
+        spinlock_unlock(&handle->sock.lock);
+        if (ret < 0)
+            return ret;
+        *out_size = payload_size;
         return 0;
     }
     spinlock_unlock(&g_sock_region_map_lock);
@@ -658,6 +1137,37 @@ static int pal_common_udp_send(struct pal_handle *handle,
 }
 
 
+/* Sleep on `futex` of a blocking receive (the caller holds handle->sock.lock) until it is woken or
+ * the socket's SO_RCVTIMEO has run out. `*deadline_us` is the absolute deadline, 0 before the first
+ * wait; it is set here and must be kept across the caller's wait loop. Returns 0 after a wakeup (the
+ * caller re-checks its condition) and -PAL_ERROR_TRYAGAIN once the timeout is over. Without a timeout
+ * this is plain sched_thread_wait(); before this, a receive timeout was ignored and a blocking
+ * recv() on an idle socket never returned. */
+static int vm_sock_recv_wait(struct pal_handle* handle, int* futex, uint64_t* deadline_us) {
+    uint64_t timeout_us = handle->sock.recvtimeout_us;
+    if (!timeout_us) {
+        sched_thread_wait(futex, &handle->sock.lock);
+        return 0;
+    }
+
+    uint64_t now_us;
+    int ret = get_time_in_us(&now_us);
+    if (ret < 0)
+        return ret;
+    if (!*deadline_us)
+        *deadline_us = now_us + timeout_us;
+    if (now_us >= *deadline_us)
+        return -PAL_ERROR_TRYAGAIN;
+
+    void* timeout = NULL;
+    ret = register_timeout(*deadline_us, futex, &timeout);
+    if (ret < 0)
+        return ret;
+    sched_thread_wait(futex, &handle->sock.lock);
+    deregister_timeout(timeout);
+    return 0;
+}
+
 static int pal_common_tcp_recv(struct pal_handle* handle, struct iovec* iov, size_t iov_len,
                                size_t* out_total_size, struct pal_socket_addr* addr,
                                bool force_nonblocking) {
@@ -672,7 +1182,7 @@ static int pal_common_tcp_recv(struct pal_handle* handle, struct iovec* iov, siz
 
     size_t total_bytes = 0;
     size_t iov_idx = 0;
-    // uint64_t start_ns = get_time_ns();
+    uint64_t deadline_us = 0;
     while (iov_idx < iov_len) {
         if (!iov[iov_idx].iov_base || !iov[iov_idx].iov_len) {
             iov_idx++;
@@ -704,14 +1214,13 @@ static int pal_common_tcp_recv(struct pal_handle* handle, struct iovec* iov, siz
                     spinlock_lock(&handle->sock.lock);
                     continue;
                 }
-                sched_thread_wait(&g_sockets_reader_futex, &handle->sock.lock);
+                int wait_ret = vm_sock_recv_wait(handle, &g_sockets_reader_futex, &deadline_us);
+                if (wait_ret < 0) {
+                    spinlock_unlock(&handle->sock.lock);
+                    return wait_ret;
+                }
                 continue;
             }
-            // if (handle->sock.recvtimeout_us) {
-            //     uint64_t now = get_time_ns();
-            //     if (now - start_ns >= handle->sock.recvtimeout_us)
-            //         return -PAL_ERROR_TRYAGAIN;
-            // }
 
             /* non-blocking socket that didn't receive anything must error out with TRYAGAIN */
             spinlock_unlock(&handle->sock.lock);
@@ -768,6 +1277,11 @@ static int pal_common_udp_recv(struct pal_handle *handle,
         return 0;
     }
 
+    /* Network responses are queued in the VSOCK driver before they enter this UDP ring. */
+    if (r->relay_connected)
+        (void)virtio_vsock_poll();
+
+    uint64_t deadline_us = 0;
     spinlock_lock(&handle->sock.lock);
     for (;;) {
         uint32_t head = __atomic_load_n(&r->head, __ATOMIC_RELAXED);
@@ -775,8 +1289,73 @@ static int pal_common_udp_recv(struct pal_handle *handle,
         uint32_t sender_port = __atomic_load_n(&r->sender_port, __ATOMIC_ACQUIRE);
 
         if (head == tail) {
+            if (r->relay_connected && virtio_vsock_peek(handle->sock.fd) > 0) {
+                uint8_t header[6];
+                int ret = vm_udp_read_frame_bytes(handle, header, sizeof(header));
+                if (ret < 0) {
+                    spinlock_unlock(&handle->sock.lock);
+                    return ret;
+                }
+                uint8_t family = header[0];
+                uint8_t address_size = header[1];
+                uint16_t source_port = ((uint16_t)header[2] << 8) | header[3];
+                uint16_t payload_size = ((uint16_t)header[4] << 8) | header[5];
+                if (family == 0 && address_size == 1 && !payload_size) {
+                    spinlock_unlock(&handle->sock.lock);
+                    return -unix_to_pal_error(source_port);
+                }
+                if (!((family == 4 && address_size == 4) ||
+                      (family == 6 && address_size == 16)) || !source_port) {
+                    spinlock_unlock(&handle->sock.lock);
+                    return -PAL_ERROR_CONNFAILED;
+                }
+                uint8_t source[16];
+                ret = vm_udp_read_frame_bytes(handle, source, address_size);
+                uint8_t* payload = malloc(payload_size ? payload_size : 1);
+                if (!payload) {
+                    spinlock_unlock(&handle->sock.lock);
+                    return -PAL_ERROR_NOMEM;
+                }
+                if (ret == 0)
+                    ret = vm_udp_read_frame_bytes(handle, payload, payload_size);
+                if (ret < 0) {
+                    free(payload);
+                    spinlock_unlock(&handle->sock.lock);
+                    return ret;
+                }
+
+                size_t copied = 0;
+                for (size_t i = 0; i < iov_len && copied < payload_size; i++) {
+                    size_t chunk = MIN(payload_size - copied, iov[i].iov_len);
+                    if (iov[i].iov_base && chunk)
+                        memcpy(iov[i].iov_base, payload + copied, chunk);
+                    copied += chunk;
+                }
+                free(payload);
+                if (addr) {
+                    if (family == 4) {
+                        addr->domain = PAL_IPV4;
+                        addr->ipv4.port = htons(source_port);
+                        memcpy(&addr->ipv4.addr, source, 4);
+                    } else {
+                        addr->domain = PAL_IPV6;
+                        addr->ipv6.port = htons(source_port);
+                        memcpy(addr->ipv6.addr, source, 16);
+                    }
+                }
+                spinlock_unlock(&handle->sock.lock);
+                *out_total_size = copied;
+                return 0;
+            }
+
             if (!handle->sock.is_nonblocking && !force_nonblocking) {
-                sched_thread_wait(&r->udp_rx_futex, &handle->sock.lock);
+                int wait_ret = vm_sock_recv_wait(handle, r->relay_connected ? &g_sockets_reader_futex
+                                                                            : &r->udp_rx_futex,
+                                                 &deadline_us);
+                if (wait_ret < 0) {
+                    spinlock_unlock(&handle->sock.lock);
+                    return wait_ret;
+                }
                 continue;
             }
             spinlock_unlock(&handle->sock.lock);

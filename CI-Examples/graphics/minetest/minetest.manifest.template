@@ -28,6 +28,7 @@ loader.env.XDG_CONFIG_HOME = "/root/.config"
 loader.env.XDG_DATA_HOME = "/root/.local/share"
 loader.env.XDG_CACHE_HOME = "/root/.cache"
 loader.env.DISPLAY = "2:0"
+vm.net.direct_vsock_ports = [6000]
 loader.env.IVSHMEM_GRAMINE_VM = "1"
 loader.env.HOST_SDL_WINDOW = "1"
 loader.env.GALLIUM_THREAD = "0"

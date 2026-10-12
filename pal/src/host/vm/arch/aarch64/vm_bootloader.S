@@ -82,6 +82,12 @@ _start:
     orr     x2, x2, #1                /* M */
     orr     x2, x2, #4                /* C */
     orr     x2, x2, #0x1000           /* I */
+    /* UCT (bit 15): let EL0 read CTR_EL0 (cache line sizes; nginx and libgcc's __clear_cache do);
+     * UCI (bit 26): let EL0 do DC CVAU/CIVAC/CVAC and IC IVAU (JITs, __clear_cache). Linux sets both
+     * for user space; without them each EL0 `mrs x, ctr_el0` is an unhandled EC=0x18 exception that
+     * kills the guest. */
+    orr     x2, x2, #0x8000           /* UCT */
+    orr     x2, x2, #0x4000000        /* UCI */
 
     /* Clear PSTATE.PAN (ARMv8.1; QEMU -cpu max boots EL1 with PAN set, as the architecture
      * mandates) *before* sctlr_el1/M above: with PAN=1, QEMU's walker zeroes the EL1
@@ -203,6 +209,8 @@ pal_ap_entry:
     orr     x2, x2, #1                  /* M */
     orr     x2, x2, #4                  /* C */
     orr     x2, x2, #0x1000             /* I */
+    orr     x2, x2, #0x8000             /* UCT: EL0 may read CTR_EL0, same as _start */
+    orr     x2, x2, #0x4000000          /* UCI: EL0 may do DC/IC maintenance, same as _start */
     /* PSTATE.PAN is per-CPU and QEMU -cpu max resets it set on every CPU, not just the
      * BSP -- same clear-before-SCTLR ordering (and same reason) as _start. */
     msr     pan, #0

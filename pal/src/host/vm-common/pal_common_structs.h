@@ -104,6 +104,15 @@ struct pal_handle_inner_sock {
     uint8_t tcp_keepcnt;
     bool tcp_nodelay;
     bool ipv6_v6only;
+    bool connect_pending;
+    bool connect_finished;
+    bool connect_direct_vsock;
+    uint8_t connect_request[28];
+    size_t connect_request_size;
+    size_t connect_request_offset;
+    uint8_t connect_response[8];
+    size_t connect_response_offset;
+    int connect_result;
 };
 
 struct pal_handle_inner_thread {

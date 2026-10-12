@@ -54,16 +54,9 @@ tests = [
 
 [[group]]
 kind = "skip"
-category = "no-tcpip"
-reason = "The VM PAL has no TCP/UDP/unix-socket stack (vsock only; AF_INET sockets trip an assert in kernel_virtio_vsock.c)."
+category = "vm-socket-ioctl"
+reason = "The VM PAL has no guest network interface enumeration; SIOCGIFCONF and SIOCGIFHWADDR are not available."
 tests = [
-  "TC_80_Socket::test_000_getsockopt",
-  "TC_80_Socket::test_060_getsockname",
-  "TC_80_Socket::test_305_socket_tcp_einprogress_responsive_poll",
-  "TC_80_Socket::test_306_socket_tcp_einprogress_responsive_epoll",
-  "TC_80_Socket::test_307_socket_tcp_einprogress_unresponsive_poll",
-  "TC_80_Socket::test_308_socket_tcp_einprogress_unresponsive_epoll",
-  "TC_80_Socket::test_310_socket_tcp_ipv6_v6only",
   "TC_80_Socket::test_320_socket_ioctl",
 ]
 
