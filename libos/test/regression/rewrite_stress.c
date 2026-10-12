@@ -2,11 +2,12 @@
 /* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /*
- * Stress test for lazy `svc` site rewriting (sys.rewrite_syscalls, aarch64). Every scenario starts
+ * Stress test for lazy direct-PAL syscall-site rewriting (`sys.rewrite_syscalls`, aarch64/riscv64).
+ * Every scenario starts
  * from a cold process (no sites patched yet) and checks results, not performance. Run one scenario
  * per process: `rewrite_stress <scenario>`; prints "OK <scenario>" on success.
  *
- * Scenarios: threads, fork, exec, signals, restart, blob, jit, mprotect, threadstorm, all
+ * Scenarios: threads, entry, fork, exec, signals, restart, blob, jit, mprotect, threadstorm, all
  */
 
 #define _GNU_SOURCE
@@ -28,6 +29,34 @@
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
+
+#if defined(__aarch64__)
+#define SYSCALL_NR_GETPID 172
+#define SC_INSN_NR        0xd2801588u /* mov x8, #172 */
+#define SC_INSN_CALL      0xd4000001u /* svc #0 */
+#define SC_INSN_ADD_A0(i) (0x91000000u | ((i & 0xfff) << 10))
+#define SC_INSN_RET       0xd65f03c0u
+#elif defined(__riscv)
+#define SC_INSN_NR        0x0ac00893u /* addi a7, zero, 172 */
+#define SC_INSN_CALL      0x00000073u /* ecall */
+#define SC_INSN_ADD_A0(i) (0x00050513u | ((i & 0xfff) << 20))
+#define SC_INSN_RET       0x00008067u /* jalr zero, ra, 0 */
+#elif defined(__x86_64__)
+/* No syscall-site rewriting on x86_64 (the bundled glibc is patched instead; see
+ * Documentation/devel/syscall-interception/PLAN.md), and test_603 is skipped on this
+ * architecture. These encodings exist to keep the binary building on x86_64, as before:
+ * x86's 2-byte `syscall` does not fit the one-instruction-per-word layout. `mov al, 39;
+ * syscall` is exactly 4 bytes, so the NR word performs the whole call, the CALL word is a
+ * nop pad, and the `jit` scenario is correct here. The `blob` scenario's add cannot be
+ * encoded in 4 words (add eax, imm32 is 5 bytes), so it stays a nop pad: its result check
+ * fails for i > 0 on a manual run -- visibly, where main failed with SIGILL on foreign code. */
+#define SC_INSN_NR        0x050F27B0u /* mov al, 39 (getpid); syscall */
+#define SC_INSN_CALL      0x90909090u /* nop; nop; nop; nop (pad) */
+#define SC_INSN_ADD_A0(i) 0x90909090u /* pad: add eax, imm32 is 5 bytes */
+#define SC_INSN_RET       0x000000C3u /* ret */
+#else
+#error "rewrite_stress needs a direct-PAL syscall ISA"
+#endif
 
 #define CHK(cond)                                                                           \
     do {                                                                                    \
@@ -67,10 +96,48 @@ static void open_fds(void) {
     CHK(g_zero >= 0 && g_null >= 0);
 }
 
+#if defined(__riscv)
+/* Force a file-backed, 2-mod-4 ecall and keep t3/t4 live across it. The first call takes SIGSYS
+ * and publishes the site's stub; the second call must preserve both caller-saved registers on
+ * the patched-entry path. */
+static __attribute__((noinline)) long raw_getpid_preserving_t3_t4(void) {
+    const long expect_t3 = 0x13579bdf2468ace0;
+    const long expect_t4 = 0x02468ace13579bdf;
+    register long a0 __asm__("a0") = 0;
+    register long a7 __asm__("a7") = SYS_getpid;
+    register long t3 __asm__("t3") = expect_t3;
+    register long t4 __asm__("t4") = expect_t4;
+
+    __asm__ volatile(".balign 4\n\tc.nop\n\tecall"
+                     : "+r"(a0), "+r"(t3), "+r"(t4)
+                     : "r"(a7)
+                     : "memory");
+    if (t3 != expect_t3 || t4 != expect_t4) {
+        fprintf(stderr, "FAIL t3=%#lx (expected %#lx), t4=%#lx (expected %#lx)\n",
+                t3, expect_t3, t4, expect_t4);
+        _exit(1);
+    }
+    return a0;
+}
+
+static void sc_entry(void) {
+    long pid = getpid();
+    CHK(raw_getpid_preserving_t3_t4() == pid); /* initial SIGSYS publishes the stub */
+    CHK(raw_getpid_preserving_t3_t4() == pid); /* patched-entry path, with no other threads */
+}
+#endif
+
 /* ---- threads: many threads race to hit (and patch) the same cold sites ---- */
 static pthread_barrier_t g_bar;
 static void* thr_hammer(void* arg) {
     pid_t tid = syscall(SYS_gettid);
+#if defined(__riscv)
+    /* All workers start together below. The first call at this exact unaligned site patches it;
+     * the immediate second call exercises the patched stub with t3/t4 live. */
+    long pid = getpid();
+    CHK(raw_getpid_preserving_t3_t4() == pid);
+    CHK(raw_getpid_preserving_t3_t4() == pid);
+#endif
     pthread_barrier_wait(&g_bar);
     hammer((long)arg);
     CHK(syscall(SYS_gettid) == tid);
@@ -229,10 +296,10 @@ static void sc_blob(void) {
     void* prev = NULL;
     for (int i = 0; i < 300; i++) {
         uint32_t code[5];
-        code[0] = 0xd2801588;                      /* mov x8, #172 (getpid) */
-        code[1] = 0xd4000001;                      /* svc #0 */
-        code[2] = 0x91000000 | ((i & 0xfff) << 10); /* add x0, x0, #i */
-        code[3] = 0xd65f03c0;                      /* ret */
+        code[0] = SC_INSN_NR;
+        code[1] = SC_INSN_CALL;
+        code[2] = SC_INSN_ADD_A0(i);
+        code[3] = SC_INSN_RET;
         code[4] = 0;
         int fd = open(path, O_RDWR | O_CREAT | O_TRUNC, 0700);
         CHK(fd >= 0);
@@ -262,6 +329,52 @@ static void sc_blob(void) {
     unlink(path);
 }
 
+#if defined(__riscv)
+/* ---- unaligned: compressed code places the ecall at 2 mod 4. Threads race both the
+ * c.ebreak publication protocol and repeated execution of the resulting unaligned jal. ---- */
+static long (*g_unaligned_fn)(void);
+static void* unaligned_user(void* arg) {
+    (void)arg;
+    pid_t pid = getpid();
+    pthread_barrier_wait(&g_bar);
+    for (int i = 0; i < 5000; i++)
+        CHK(g_unaligned_fn() == pid);
+    return NULL;
+}
+
+static void sc_unaligned(void) {
+    const char* path = "/mnt/tmpfs/rewrite_stress_unaligned";
+    unsigned char code[16] = {0};
+    uint32_t nr = SC_INSN_NR;
+    uint16_t c_nop = 0x0001;
+    uint32_t call = SC_INSN_CALL;
+    uint32_t ret = SC_INSN_RET;
+    memcpy(code + 0, &nr, sizeof(nr));
+    memcpy(code + 4, &c_nop, sizeof(c_nop));
+    memcpy(code + 6, &call, sizeof(call));
+    memcpy(code + 10, &ret, sizeof(ret));
+
+    int fd = open(path, O_RDWR | O_CREAT | O_TRUNC, 0700);
+    CHK(fd >= 0);
+    CHK(write(fd, code, sizeof(code)) == (ssize_t)sizeof(code));
+    CHK(ftruncate(fd, 4096) == 0);
+    void* mapping = mmap(NULL, 4096, PROT_READ | PROT_EXEC, MAP_PRIVATE, fd, 0);
+    CHK(mapping != MAP_FAILED);
+    close(fd);
+    g_unaligned_fn = mapping;
+
+    enum { N = 16 };
+    pthread_t threads[N];
+    CHK(pthread_barrier_init(&g_bar, NULL, N) == 0);
+    for (int i = 0; i < N; i++)
+        CHK(pthread_create(&threads[i], NULL, unaligned_user, NULL) == 0);
+    for (int i = 0; i < N; i++)
+        CHK(pthread_join(threads[i], NULL) == 0);
+    CHK(munmap(mapping, 4096) == 0);
+    unlink(path);
+}
+#endif
+
 /* ---- jit: anonymous executable memory must keep working (never patched) ---- */
 static atomic_long g_jit_err;
 static void* jit_user(void* arg) {
@@ -276,9 +389,9 @@ static void sc_jit(void) {
     uint32_t* m = mmap(NULL, 4096, PROT_READ | PROT_WRITE | PROT_EXEC,
                        MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     CHK(m != MAP_FAILED);
-    m[0] = 0xd2801588; /* mov x8, #172 */
-    m[1] = 0xd4000001; /* svc #0 */
-    m[2] = 0xd65f03c0; /* ret */
+    m[0] = SC_INSN_NR;
+    m[1] = SC_INSN_CALL;
+    m[2] = SC_INSN_RET;
     __builtin___clear_cache((char*)m, (char*)(m + 4));
     pthread_t t[4];
     for (int i = 0; i < 4; i++)
@@ -360,6 +473,9 @@ int main(int argc, char** argv) {
         printf("OK %s\n", name);              \
         ran++;                                \
     }
+#if defined(__riscv)
+    RUN("entry", sc_entry());
+#endif
     RUN("threads", sc_threads());
     RUN("fork", sc_fork());
     RUN("exec", sc_exec(argv));
@@ -368,6 +484,9 @@ int main(int argc, char** argv) {
     if (!strcmp(sc, "signals_kill")) { signals_impl(false, true); printf("OK signals_kill\n"); ran++; }
     RUN("restart", sc_restart());
     RUN("blob", sc_blob());
+#if defined(__riscv)
+    RUN("unaligned", sc_unaligned());
+#endif
     RUN("jit", sc_jit());
     RUN("mprotect", sc_mprotect());
     RUN("threadstorm", sc_threadstorm());

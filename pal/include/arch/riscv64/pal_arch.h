@@ -384,6 +384,14 @@ typedef struct PAL_CONTEXT PAL_CONTEXT;
  * Defined in pal/src/host/linux/arch/riscv64/pal_arch_exception.c and exported from libpal.so. */
 __attribute__((__noreturn__)) void pal_arch_restore_context(struct PAL_CONTEXT* context);
 
+/* `fence.i` updates only the executing hart; this asks the Linux PAL to flush a written range
+ * on every hart before the LibOS publishes it as executable code. */
+int pal_arch_flush_icache(void* begin, size_t size);
+
+/* Atomically publish a 32-bit instruction at a 2-byte-aligned address. The PAL owns the
+ * temporary c.ebreak protocol because its SIGTRAP handler must recognize racing harts. */
+int pal_arch_publish_unaligned_insn(uint32_t* site, uint32_t insn);
+
 typedef int64_t arch_syscall_arg_t;
 
 #define ALL_SYSCALL_ARGS(context) \

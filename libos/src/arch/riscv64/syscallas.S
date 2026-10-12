@@ -45,6 +45,7 @@
 .extern libos_xstate_size
 .extern g_pal_tcb_singleton
 .extern g_pal_tcb_registry
+.extern libos_tcb_registry_scan
 .extern pal_arch_restore_context
 
 .global libos_syscall_entry
@@ -216,6 +217,71 @@ libos_syscall_entry:
     ebreak
     .cfi_endproc
 .size libos_syscall_entry, .-libos_syscall_entry
+
+/* Entry from a rewritten application `ecall`. The per-site stub has saved t0..t4 on the
+ * application stack and passes the resume PC in t1. Use the PAL's C registry accessor rather
+ * than duplicate its acquire-load protocol here. The call needs a normal ABI frame, so save every
+ * caller-saved application register first; the normal syscall entry saves the restored registers
+ * into the eventual PAL_CONTEXT. */
+.global libos_syscall_entry_patched
+.type libos_syscall_entry_patched, @function
+.balign 4
+libos_syscall_entry_patched:
+    addi  sp, sp, -144
+    sd    ra,  0(sp)
+    sd    t0,  8(sp)
+    sd    t1, 16(sp)                 /* resume address from the stub */
+    sd    t2, 24(sp)
+    sd    t3, 32(sp)
+    sd    t4, 40(sp)
+    sd    t5, 48(sp)
+    sd    t6, 56(sp)
+    sd    a0, 64(sp)
+    sd    a1, 72(sp)
+    sd    a2, 80(sp)
+    sd    a3, 88(sp)
+    sd    a4, 96(sp)
+    sd    a5,104(sp)
+    sd    a6,112(sp)
+    sd    a7,120(sp)
+    addi  a0, sp, 128
+    call  libos_tcb_registry_scan@plt
+    bnez  a0, .Lpatched_found
+    la    t0, g_pal_tcb_singleton
+    ld    t0, 0(t0)
+    j     .Lpatched_store
+.Lpatched_found:
+    ld    t0, 128(sp)
+.Lpatched_store:
+    li    t1, (LIBOS_TCB_OFF + LIBOS_TCB_SCRATCH_PC_OFF)
+    add   t1, t0, t1
+    ld    t0, 16(sp)
+    sd    t0, 0(t1)
+    ld    ra,  0(sp)
+    ld    t0,  8(sp)
+    ld    t1, 16(sp)
+    ld    t2, 24(sp)
+    ld    t3, 32(sp)
+    ld    t4, 40(sp)
+    ld    t5, 48(sp)
+    ld    t6, 56(sp)
+    ld    a0, 64(sp)
+    ld    a1, 72(sp)
+    ld    a2, 80(sp)
+    ld    a3, 88(sp)
+    ld    a4, 96(sp)
+    ld    a5,104(sp)
+    ld    a6,112(sp)
+    ld    a7,120(sp)
+    addi  sp, sp, 144
+    ld    t0, 0(sp)
+    ld    t1, 8(sp)
+    ld    t2,16(sp)
+    ld    t3,24(sp)
+    ld    t4,32(sp)
+    addi  sp, sp, 48
+    j     libos_syscall_entry
+.size libos_syscall_entry_patched, .-libos_syscall_entry_patched
 
 .global _return_from_syscall
 .type _return_from_syscall, @function
