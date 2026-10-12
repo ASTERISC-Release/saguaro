@@ -27,6 +27,10 @@
 #   --graphics enabled|disabled
 #                          compile the Tirith graphics host-redirection paths into the LibOS
 #                          (default: enabled)
+#   --libc glibc|none|musl which libc is built into the runtime directory that manifests mount
+#                          at /lib. `none` builds no libc (much shorter build): applications run
+#                          on the host's glibc. Default: none for an x86_64 --vm build without
+#                          --sgx or --tdx, glibc otherwise. SGX needs the bundled glibc.
 #   -j N                   ninja parallelism (default: nproc)
 #   --run-tests [suite...] run test/test-direct.sh afterwards, building the test manifests first
 #                          (with --vm on aarch64: test/test-vm.sh, suites libos|examples|hello)
@@ -47,7 +51,7 @@
 #
 # Defaults match this repo's tested configuration:
 #   -Ddirect=enabled -Dsgx=disabled -Dvm=disabled -Dtdx=disabled -Dgraphics=enabled
-#   -Dtests=enabled -Dlibc=glibc -Dbuildtype=release
+#   -Dtests=enabled -Dlibc=glibc -Dbuildtype=release   (libc=none for an x86_64 --vm build, see --libc)
 #
 # Re-running is cheap and safe: meson reuses a configured build dir with matching options and
 # ninja rebuilds only what changed.
@@ -83,6 +87,7 @@ RUN_TESTS=0
 JOBS="$(nproc)"
 SGX=disabled VM=disabled TDX=disabled
 GRAPHICS=enabled   # Tirith graphics paths in the LibOS (see meson_options.txt)
+LIBC=              # empty: chosen after the options are parsed (see --libc)
 TEST_SUITES=()
 
 usage() { sed -n '/^# install.sh/,/^# Notes:/p' "$0" | sed 's/^# \{0,1\}//'; }
@@ -100,6 +105,7 @@ while [ $# -gt 0 ]; do
         --vm)             VM=enabled; shift ;;
         --tdx)            TDX=enabled; shift ;;
         --graphics)       GRAPHICS=$2; shift 2 ;;
+        --libc)           LIBC=$2; shift 2 ;;
         -j*)              JOBS=${1#-j}; [ -n "$JOBS" ] || { JOBS=$2; shift; }; shift ;;
         pal|libos|helloworld|multithread|busybox|redis|memcached|examples|hello)
                           RUN_TESTS=1; TEST_SUITES+=("$1"); shift ;;
@@ -161,6 +167,24 @@ if [ "$VM" = enabled ]; then
     fi
 fi
 
+# --libc: an x86_64 --vm build defaults to no bundled libc (the guest runs on the host's glibc; the
+# build skips building glibc). Everything else keeps the bundled glibc, and SGX needs it.
+if [ -z "$LIBC" ]; then
+    if [ "$VM" = enabled ] && [ "$ARCH" = x86_64 ] && [ "$SGX" != enabled ] && [ "$TDX" != enabled ]; then
+        LIBC=none
+    else
+        LIBC=glibc
+    fi
+fi
+case "$LIBC" in
+    glibc|none|musl) ;;
+    *) echo "ERROR: --libc must be glibc, none or musl (got '$LIBC')"; exit 2 ;;
+esac
+if [ "$LIBC" = none ] && [ "$SGX" = enabled ]; then
+    echo "ERROR: --sgx needs the bundled glibc; use --libc glibc"
+    exit 2
+fi
+
 PREFIX=$(realpath -m "$PREFIX")
 
 missing_tools() {
@@ -187,7 +211,7 @@ for tool in meson ninja python3 cc make bison; do
     command -v "$tool" >/dev/null || { echo "ERROR: '$tool' not found after dependency install"; exit 1; }
 done
 
-echo ">>> configuring ($BUILDDIR -> $PREFIX, direct=$DIRECT sgx=$SGX vm=$VM tdx=$TDX graphics=$GRAPHICS tests=$TESTS)"
+echo ">>> configuring ($BUILDDIR -> $PREFIX, direct=$DIRECT sgx=$SGX vm=$VM tdx=$TDX graphics=$GRAPHICS libc=$LIBC tests=$TESTS)"
 # On an already-configured build dir this reconfigures in place (cheap);
 # --reconfigure covers the case where meson insists on regeneration.
 if ! meson setup "$BUILDDIR" \
@@ -196,7 +220,7 @@ if ! meson setup "$BUILDDIR" \
         -Ddirect="$DIRECT" \
         -Dsgx="$SGX" -Dvm="$VM" -Dtdx="$TDX" -Dgraphics="$GRAPHICS" \
         -Dtests="$TESTS" -Dtests_pie="$TESTS_PIE" \
-        -Dlibc=glibc ${CROSS_ARGS[@]+"${CROSS_ARGS[@]}"} \
+        -Dlibc="$LIBC" ${CROSS_ARGS[@]+"${CROSS_ARGS[@]}"} \
         2>"$BUILDDIR-setup.err"; then
     echo "    plain 'meson setup' failed; retrying with --reconfigure"
     meson setup --reconfigure "$BUILDDIR" \
@@ -205,7 +229,7 @@ if ! meson setup "$BUILDDIR" \
         -Ddirect="$DIRECT" \
         -Dsgx="$SGX" -Dvm="$VM" -Dtdx="$TDX" -Dgraphics="$GRAPHICS" \
         -Dtests="$TESTS" -Dtests_pie="$TESTS_PIE" \
-        -Dlibc=glibc ${CROSS_ARGS[@]+"${CROSS_ARGS[@]}"} \
+        -Dlibc="$LIBC" ${CROSS_ARGS[@]+"${CROSS_ARGS[@]}"} \
     || { echo "ERROR: meson setup failed:"; tail -5 "$BUILDDIR-setup.err"; exit 1; }
 fi
 rm -f "$BUILDDIR-setup.err"
