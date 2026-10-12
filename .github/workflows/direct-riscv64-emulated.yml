@@ -13,11 +13,6 @@
 name: Direct PAL (riscv64, emulated)
 
 on:
-  # TEMPORARY: lets the first runs start from this branch (GitHub only dispatches workflows that
-  # exist on the default branch). Remove once the file is on main.
-  push:
-    branches: [dev-riscv]
-    paths: ['.github/workflows/direct-riscv64-emulated.yml']
   workflow_dispatch:
     inputs:
       suites:
@@ -76,8 +71,11 @@ jobs:
           rc=0
           for suite in $SUITES; do
             case $suite in pal|libos) ;; *) echo "unknown suite: $suite" >&2; exit 2 ;; esac
+            # Emulation on a hosted runner is several times slower than on a workstation: give
+            # each test more time, and leave out gettimeofday, whose own 20 s limit for 4 million
+            # calls cannot be met here (every call is a seccomp trap; see the port's plan).
             container/run.sh --target riscv64 \
-              "scripts/riscv64/render-test-manifests.sh $suite >/dev/null && scripts/riscv64/run-suite.sh $suite -rfs" \
+              "scripts/riscv64/render-test-manifests.sh $suite >/dev/null && GRAMINE_TEST_TIMEOUT=600 scripts/riscv64/run-suite.sh $suite -rfs --durations=10 -k 'not test_103_gettimeofday'" \
               2>&1 | tee "test-logs/$suite.log" || rc=1
             [ "${PIPESTATUS[0]}" -eq 0 ] || rc=1
           done
