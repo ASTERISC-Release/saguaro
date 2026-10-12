@@ -17,6 +17,8 @@ python_src = [
     'gen_jinja_env.py',
     'manifest.py',
     'manifest_check.py',
+    # the per-VM vsock relay started by gramine-vm (Documentation/devel/vm-network/)
+    'vsock_relay.py',
 ]
 
 if enable_tests

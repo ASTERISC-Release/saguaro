@@ -54,10 +54,20 @@ make -C "$DIR" -s || exit 1
 VM_LOG=$OUT/guest.log
 rm -f "$VM_LOG"
 echo "== vsock-loopback: starting the guest (RAM ${GRAMINE_RAM_SIZE:-default}, ${GRAMINE_CPU_NUM} vCPUs)"
+# In relay mode, tell gramine-vm to run the per-VM vsock relay with one inbound forward
+# (host TCP $RELAY_HOST_PORT -> guest 7000). The launcher starts the relay and waits until it
+# listens, then boots the guest; it is stopped when the VM exits.
+RELAY_HOST_PORT=${RELAY_HOST_PORT:-17000}
+EXTRA_ENV=()
+if [ "${RELAY:-0}" = "1" ]; then
+    EXTRA_ENV=(GRAMINE_VM_INBOUND="7000:$RELAY_HOST_PORT")
+    echo "== vsock-loopback: relay mode, forwarding host 127.0.0.1:$RELAY_HOST_PORT -> guest 7000"
+fi
 # run from the test directory so the QEMU cmdline carries the bare name `vsock_echo_server`, which
 # vsock_host_client.py uses to find the guest CID of *this* VM
 cd "$DIR"
-GRAMINE_VM_CONSOLE_LOG=$VM_LOG gramine-vm vsock_echo_server >"$OUT/gramine-vm.out" 2>&1 &
+env ${EXTRA_ENV[@]+"${EXTRA_ENV[@]}"} GRAMINE_VM_CONSOLE_LOG=$VM_LOG \
+    gramine-vm vsock_echo_server >"$OUT/gramine-vm.out" 2>&1 &
 VM_PID=$!
 # cleanup note: killing `gramine-vm` does not kill its QEMU child (the launcher traps and exits),
 # so also kill the QEMU of this test by its fw_cfg args signature; do not kill the process group,
@@ -70,9 +80,28 @@ trap 'kill_guest' EXIT INT TERM
 
 echo "== vsock-loopback: $SEQUENTIAL sequential + $CONCURRENT concurrent connections, $SIZE bytes each"
 rc=0
-python3 "$DIR/vsock_host_client.py" --vm-pid "$VM_PID" \
-    --sequential "$SEQUENTIAL" --concurrent "$CONCURRENT" --size "$SIZE" \
+# Wait until the guest's server is listening (it prints "LISTENING 7000" once boot has reached the
+# application). Direct vsock tolerates the boot itself, but in relay mode the host TCP listener is
+# up before QEMU boots, so only the console line proves the guest can be reached.
+for _ in $(seq 400); do
+    grep -q "LISTENING" "$OUT/gramine-vm.out" 2>/dev/null && break
+    kill -0 "$VM_PID" 2>/dev/null || { echo "the guest exited before listening:" >&2; \
+        tail -n 20 "$OUT/gramine-vm.out" >&2; rc=1; break; }
+    sleep 0.25
+done
+if [ $rc -eq 0 ] && ! grep -q "LISTENING" "$OUT/gramine-vm.out" 2>/dev/null; then
+    echo "the guest server never reported LISTENING" >&2; rc=1
+fi
+
+CLIENT_ARGS=(--vm-pid "$VM_PID" --sequential "$SEQUENTIAL" --concurrent "$CONCURRENT"
+             --size "$SIZE")
+if [ "${RELAY:-0}" = "1" ]; then
+    CLIENT_ARGS+=(--tcp "$RELAY_HOST_PORT")
+fi
+if [ $rc -eq 0 ]; then
+python3 "$DIR/vsock_host_client.py" "${CLIENT_ARGS[@]}" \
     2>&1 | tee "$OUT/client.log" || rc=$?
+fi
 
 # wait for the guest to exit after GOODBYE (it prints "DONE n" and exits 0)
 for _ in $(seq 100); do

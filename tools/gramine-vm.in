@@ -290,6 +290,7 @@ fi
 # guest ends with a triple fault, so QEMU's own exit status says nothing about the application.
 CONSOLE_LOG=$(mktemp /tmp/gramine-vm-console.XXXXXX)
 XPROXY_LOG=
+RELAY_LOG=
 cleanup() {
     rm -f "$CONSOLE_LOG" ${XPROXY_LOG:+"$XPROXY_LOG"}
     [ -n "${VIRTIOFSD_PID:-}" ] && kill "$VIRTIOFSD_PID" 2>/dev/null
@@ -298,6 +299,17 @@ cleanup() {
         pkill -P "$XPROXY_PID" 2>/dev/null
         kill "$XPROXY_PID" 2>/dev/null
         wait "$XPROXY_PID" 2>/dev/null
+    fi
+    # the vsock relay is a single asyncio process (no children to reap); stop it and surface any
+    # line it wrote after startup (a forward that could not reach the guest, or its debug trace)
+    # before deleting the log -- startup lines were already echoed above.
+    if [ -n "${RELAY_PID:-}" ]; then
+        kill "$RELAY_PID" 2>/dev/null
+        wait "$RELAY_PID" 2>/dev/null
+    fi
+    if [ -n "${RELAY_LOG:-}" ] && [ -s "$RELAY_LOG" ]; then
+        grep -vE '^vm-relay: (cid=[0-9]+ (port=[0-9]+ ->|listening))' "$RELAY_LOG" >&2
+        rm -f "$RELAY_LOG"
     fi
 }
 trap cleanup EXIT
@@ -415,6 +427,78 @@ if [ -n "$X_DISPLAY_NUM" ] && [ "${GRAMINE_VM_X_PROXY:-1}" != "0" ]; then
             exit 2
         fi
     fi
+fi
+
+# The vsock relay (Documentation/devel/vm-network/): one relay process per VM, listening on vsock
+# port 65536+CID, started here (after the guest CID is known) and stopped with the VM. Relay v0
+# does static inbound forwarding: every `vm.net.inbound` rule of the manifest (or every rule in
+# the colon-separated GRAMINE_VM_INBOUND="guest:host,..." convenience variable, for drivers that
+# cannot edit the manifest) gets a host (container) TCP listener bridged into the guest. With no
+# rules the relay is not started -- relay v0 has nothing else to do; the outbound phases of the
+# plan start it unconditionally. GRAMINE_VM_RELAY=0 disables it entirely. A host port that cannot
+# be bound is an error and fails the run, as agreed in the plan.
+# The relay does not touch the graphics direct port mapping (guest TCP port N == host vsock port
+# N, ports 6000+N and friends): that mapping needs no listener on the host side at all -- the host
+# connects directly to the guest's vsock port, the way the X proxy above does.
+RELAY_RULES=$(python3 -c "
+import os, sys
+try:
+    import tomli as tomllib
+except ImportError:
+    import tomllib
+rules = []
+try:
+    with open(os.environ['GRAMINE_MANIFEST'], 'rb') as f:
+        inbound = tomllib.load(f).get('vm', {}).get('net', {}).get('inbound', [])
+except Exception:
+    inbound = []
+for item in inbound:
+    if isinstance(item, dict):
+        if 'guest' not in item:
+            sys.exit(f\"vm.net.inbound rule {item!r} has no 'guest' port\")
+        spec = f\"guest={item['guest']}\"
+        if 'host' in item:
+            spec += f\":host={item['host']}\"
+        if 'bind' in item:
+            spec += f\":bind={item['bind']}\"
+        rules.append(spec)
+    else:
+        rules.append(str(item))
+env_rules = os.environ.get('GRAMINE_VM_INBOUND', '')
+if env_rules:
+    rules += [r for r in env_rules.split(',') if r]
+print('\n'.join(rules))
+" 2>&1) || { echo "Error: cannot read the vm.net.inbound rules: $RELAY_RULES" >&2; exit 2; }
+RELAY_LOG=
+RELAY_PID=
+if [ -n "${RELAY_RULES:-}" ] && [ "${GRAMINE_VM_RELAY:-1}" != "0" ]; then
+    RELAY_LOG=$(mktemp /tmp/gramine-vm-relay.XXXXXX)
+    # one --inbound argument per rule, from the newline-separated list
+    RELAY_ARGS=()
+    while IFS= read -r rule; do
+        [ -n "$rule" ] && RELAY_ARGS+=(--inbound "$rule")
+    done <<< "$RELAY_RULES"
+    # PYTHONASYNCIODEBUG makes the relay log event-loop stalls ("Executing ... took 0.sss
+    # seconds"), which is how a blocking vsock dial that freezes the other forwards shows up.
+    env PYTHONASYNCIODEBUG=${GRAMINE_VM_RELAY_DEBUG:+1} \
+        python3 -m graminelibos.vsock_relay --cid "$GRAMINE_VM_ID" "${RELAY_ARGS[@]}" \
+        >"$RELAY_LOG" 2>&1 &
+    RELAY_PID=$!
+    # wait until the relay prints that it listens (or dies: a host port that is taken fails here,
+    # not silently at the first connection)
+    for _ in $(seq 100); do
+        grep -q "listening on vsock port" "$RELAY_LOG" 2>/dev/null && break
+        kill -0 "$RELAY_PID" 2>/dev/null || break
+        sleep 0.05
+    done
+    if ! kill -0 "$RELAY_PID" 2>/dev/null; then
+        echo "Error: the VM's vsock relay did not start (host ports of vm.net.inbound must be" \
+             "free):" >&2
+        cat "$RELAY_LOG" >&2
+        RELAY_PID=
+        exit 2
+    fi
+    grep "^vm-relay:" "$RELAY_LOG" >&2
 fi
 
 # Check if the Gramine vhostfs pid file is already in use by another process

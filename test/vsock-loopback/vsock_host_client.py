@@ -114,31 +114,33 @@ def find_child_guest_cid(app, ancestor_pid, timeout=120):
     sys.exit(f'no QEMU descended from pid {ancestor_pid} appeared within {timeout} s')
 
 
-def wait_for_listener(cid, port, timeout=120):
+def wait_for_listener(family, addr, timeout=120):
     """The guest boots for some seconds before the server listens; retry while it refuses.
     While the guest kernel has not brought its vsock driver up yet, the host's vsock core does
     not know this CID at all and answers ENHOSTUNREACH (No route to host); a listening socket
-    that is not established yet gives ECONNREFUSED; both are expected until the server listens."""
+    that is not established yet gives ECONNREFUSED; both are expected until the server listens.
+    `family`/`addr` are AF_VSOCK/(cid, port) for a direct connection, or AF_INET/('127.0.0.1',
+    port) to go through the VM's relay."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        s = socket.socket(socket.AF_VSOCK, socket.SOCK_STREAM)
+        s = socket.socket(family, socket.SOCK_STREAM)
         s.settimeout(10)
         try:
-            s.connect((cid, port))
+            s.connect(addr)
             return s
         except (ConnectionRefusedError, ConnectionResetError, OSError):
             # ECONNREFUSED / ENHOSTUNREACH / timeouts while the guest is booting
             s.close()
             time.sleep(0.5)
-    sys.exit(f'nothing listens on cid {cid} port {port} within {timeout} s')
+    sys.exit(f'nothing listens on {addr} within {timeout} s')
 
 
-def one_connection(cid, port, seq, payload, read_timeout=60):
+def one_connection(family, addr, seq, payload, read_timeout=60):
     """One request/response round trip: send seq+payload, half-close, read the echo, verify."""
-    s = socket.socket(socket.AF_VSOCK, socket.SOCK_STREAM)
+    s = socket.socket(family, socket.SOCK_STREAM)
     s.settimeout(read_timeout)
     try:
-        s.connect((cid, port))
+        s.connect(addr)
         s.sendall(seq.to_bytes(4, 'little') + payload)
         s.shutdown(socket.SHUT_WR)
         echo = b''
@@ -177,21 +179,30 @@ def main():
                     help='PID of the gramine-vm launcher whose QEMU child to use (unambiguous'
                          ' when several VMs run in parallel)')
     ap.add_argument('--port', type=int, default=7000)
+    ap.add_argument('--tcp', type=int,
+                    help='connect over host TCP to 127.0.0.1:PORT (through the VM\'s vsock relay)'
+                         ' instead of a direct AF_VSOCK connection to the guest')
     ap.add_argument('--sequential', type=int, default=100)
     ap.add_argument('--concurrent', type=int, default=16)
     ap.add_argument('--size', type=int, default=8192)
     args = ap.parse_args()
 
-    if args.cid is not None:
-        cid = args.cid
-    elif args.vm_pid is not None:
-        cid = find_child_guest_cid(args.app, args.vm_pid)
+    if args.tcp is not None:
+        # through the relay: a host TCP listener that the relay forwards to the guest
+        family, addr = socket.AF_INET, ('127.0.0.1', args.tcp)
+        print(f'relay tcp {addr[0]}:{addr[1]}', flush=True)
     else:
-        cid = find_guest_cid(args.app)
-    print(f'guest cid {cid}, port {args.port}', flush=True)
+        if args.cid is not None:
+            cid = args.cid
+        elif args.vm_pid is not None:
+            cid = find_child_guest_cid(args.app, args.vm_pid)
+        else:
+            cid = find_guest_cid(args.app)
+        family, addr = socket.AF_VSOCK, (cid, args.port)
+        print(f'guest cid {cid}, port {args.port}', flush=True)
 
     # the first working connection also proves the VM booted and the listener is up
-    first = wait_for_listener(cid, args.port)
+    first = wait_for_listener(family, addr)
     first.close()
 
     rng = random.Random(20261012)
@@ -200,7 +211,7 @@ def main():
         for i in range(n):
             payload = rng.randbytes(args.size)
             try:
-                one_connection(cid, args.port, i, payload)
+                one_connection(family, addr, i, payload)
             except (OSError, AssertionError) as e:
                 print(f'ERROR {what} connection #{i}: {type(e).__name__}: {e}', file=sys.stderr)
                 dump_sockets(f'{what} failure at connection {i}')
@@ -220,9 +231,9 @@ def main():
 
     def opener(i):
         try:
-            s = socket.socket(socket.AF_VSOCK, socket.SOCK_STREAM)
+            s = socket.socket(family, socket.SOCK_STREAM)
             s.settimeout(60)
-            s.connect((cid, args.port))
+            s.connect(addr)
             s.sendall(i.to_bytes(4, 'little') + payloads[i])
             s.shutdown(socket.SHUT_WR)
             with lock:  # completion order is arbitrary; keep the seq with the socket
@@ -271,14 +282,14 @@ def main():
     print(f'concurrent: {args.concurrent} connections ok', flush=True)
 
     # phase 3: the listener must still serve one more sequential connection afterwards
-    one_connection(cid, args.port, 0, rng.randbytes(args.size))
+    one_connection(family, addr, 0, rng.randbytes(args.size))
     print(f'the listener is still healthy after {args.sequential + args.concurrent + 1} '
           'connections', flush=True)
 
     # tell the server to exit
-    s = socket.socket(socket.AF_VSOCK, socket.SOCK_STREAM)
+    s = socket.socket(family, socket.SOCK_STREAM)
     s.settimeout(30)
-    s.connect((cid, args.port))
+    s.connect(addr)
     s.sendall(GOODBYE)
     s.shutdown(socket.SHUT_WR)
     s.close()

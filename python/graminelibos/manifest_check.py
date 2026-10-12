@@ -132,4 +132,36 @@ GramineManifestSchema = Schema({
 
         'stack': {'size': _size},
     },
+
+    # The VM PAL (`gramine-vm`); see Documentation/devel/vm-network/PLAN.md. Only `vm.net` is read
+    # today, by the launcher and its per-VM vsock relay. The `vm` table is shared with the VM
+    # memory plan (Documentation/devel/vm-memory/PLAN.md): whichever topic lands first adds its
+    # keys here; keep the other's keys when editing.
+    'vm': {
+        'net': {
+            # "allow" (the default) lets the guest connect out through the relay, "deny" blocks
+            # everything the rules below do not allow. Enforced from phase 3 of the plan; the key
+            # is validated from now so manifests do not grow silently-invalid ones.
+            'outbound': Any('allow', 'deny'),
+            # rules the relay refuses, e.g. "10.0.0.0/8" or "tcp:25"; phase 3
+            'deny': [str],
+            # static inbound forwards: a listener on the host (container) at `bind:host` that
+            # reaches the guest's TCP port `guest`. `host` defaults to `guest`; `bind` defaults to
+            # "127.0.0.1" (rootless hosts cannot bind low ports, and an exposed port is explicit).
+            # The shorthand forms -- a bare port (8080 or "8080") or "GUEST:HOST" -- are accepted
+            # as an integer or a string.
+            'inbound': [Any(
+                int,
+                str,
+                {
+                    Required('guest'): int,
+                    'host': int,
+                    'bind': str,
+                },
+            )],
+            # vsock ports that keep the legacy direct mapping (guest TCP port N reaches host vsock
+            # port N, the way the graphics X proxy relies on); phase 3 wires the enforcement
+            'direct_vsock_ports': [int],
+        },
+    },
 })

@@ -118,6 +118,15 @@ int main(int argc, char** argv) {
             fflush(stdout);
             return 0;
         }
+        {
+            /* what this connection carries: one request (seq, len == size+4) or several merged
+             * ones (a delivery bug); says what the client will check against */
+            uint32_t seq = len >= 4 ? (uint32_t)buf[0] | buf[1] << 8 | buf[2] << 16 |
+                                      (uint32_t)buf[3] << 24
+                                    : 0xffffffff;
+            printf("SERVE accept#%lu seq %u len %zu\n", count, seq, len);
+            fflush(stdout);
+        }
         if (write_all(cli, buf, len) < 0) {
             uint32_t seq = len >= 4 ? (uint32_t)buf[0] | buf[1] << 8 | buf[2] << 16 |
                                       (uint32_t)buf[3] << 24
