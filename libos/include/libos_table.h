@@ -291,6 +291,9 @@ long libos_syscall_setfsuid(uid_t uid);
 long libos_syscall_setfsgid(gid_t gid);
 long libos_syscall_capget(void* header, void* data);
 long libos_syscall_capset(void* header, const void* data);
+long libos_syscall_memfd_create(const char* name, unsigned int flags);
+long libos_openat_internal(int dfd, const char* filename, int flags, int mode);
+long libos_unlink_internal(const char* pathname);
 
 long libos_syscall_kcmp(pid_t pid1, pid_t pid2, int type, unsigned long idx1, unsigned long idx2);
 

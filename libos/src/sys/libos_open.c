@@ -74,6 +74,8 @@ long libos_syscall_read(int fd, void* buf, size_t count) {
 }
 
 ssize_t do_handle_write(struct libos_handle* hdl, const void* buf, size_t count) {
+    if (hdl->is_memfd && (hdl->memfd_seals & LIBOS_F_SEAL_WRITE))
+        return -EPERM;
     if (!(hdl->acc_mode & MAY_WRITE))
         return -EBADF;
 
@@ -198,11 +200,11 @@ out:
     return ret;
 }
 
-long libos_syscall_openat(int dfd, const char* filename, int flags, int mode) {
+static long do_openat(int dfd, const char* filename, int flags, int mode, bool user_pointer) {
     struct libos_handle* hdl;
     int ret = 0;
 
-    if (!is_user_string_readable(filename))
+    if (user_pointer && !is_user_string_readable(filename))
         return -EFAULT;
 
     /* Graphics handle to redirect open() system call */
@@ -308,6 +310,14 @@ out:
     if (dir)
         put_dentry(dir);
     return ret;
+}
+
+long libos_syscall_openat(int dfd, const char* filename, int flags, int mode) {
+    return do_openat(dfd, filename, flags, mode, true);
+}
+
+long libos_openat_internal(int dfd, const char* filename, int flags, int mode) {
+    return do_openat(dfd, filename, flags, mode, false);
 }
 
 long libos_syscall_close(int fd) {
@@ -837,6 +847,13 @@ long libos_syscall_ftruncate(int fd, loff_t length) {
     if (hdl->is_dir || !fs->fs_ops->truncate) {
         ret = -EINVAL;
         goto out;
+    }
+    if (hdl->is_memfd && hdl->inode) {
+        if ((length < hdl->inode->size && (hdl->memfd_seals & LIBOS_F_SEAL_SHRINK)) ||
+            (length > hdl->inode->size && (hdl->memfd_seals & LIBOS_F_SEAL_GROW))) {
+            ret = -EPERM;
+            goto out;
+        }
     }
 
     ret = fs->fs_ops->truncate(hdl, length);

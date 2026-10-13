@@ -97,6 +97,7 @@ libos_sources = files(
     'sys/libos_ioctl.c',
     'sys/libos_mlock.c',
     'sys/libos_mmap.c',
+    'sys/libos_memfd.c',
     'sys/libos_open.c',
     'sys/libos_pipe.c',
     'sys/libos_poll.c',

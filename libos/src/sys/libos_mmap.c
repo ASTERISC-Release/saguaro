@@ -144,6 +144,11 @@ void* libos_syscall_mmap(void* addr, size_t length, int prot, int flags, int fd,
                     log_always("error: mmap with invalid fd (fd: %d)", fd);
                     return (void*)-EBADF;
                 }
+                if (hdl->is_memfd && (prot & PROT_WRITE) && (flags & MAP_SHARED) &&
+                    (hdl->memfd_seals & LIBOS_F_SEAL_WRITE)) {
+                    ret = -EPERM;
+                    goto out_handle;
+                }
 
                 // log_always("mmap request (fd: %d, offset: %lu, length: %zu, prot: 0x%x, flags: 0x%x)",
                 //            fd, offset, length, prot, flags);
@@ -373,6 +378,19 @@ long libos_syscall_mprotect(void* addr, size_t length, int prot) {
 
     if (!access_ok(addr, length)) {
         return -EINVAL;
+    }
+
+    if (prot & PROT_WRITE) {
+        struct libos_vma_info vma_info = {0};
+        if (lookup_vma(addr, &vma_info) >= 0) {
+            bool sealed_shared_memfd = vma_info.file && (vma_info.flags & MAP_SHARED) &&
+                                       vma_info.file->is_memfd &&
+                                       (vma_info.file->memfd_seals & LIBOS_F_SEAL_WRITE);
+            if (vma_info.file)
+                put_handle(vma_info.file);
+            if (sealed_shared_memfd)
+                return -EPERM;
+        }
     }
 
     /* `bkeep_mprotect` and then `PalVirtualMemoryProtect` is racy, but it's hard to do it properly.

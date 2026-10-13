@@ -24,6 +24,13 @@
 #include "list.h"
 #include "pal.h"
 
+#define LIBOS_F_SEAL_SEAL         0x0001U
+#define LIBOS_F_SEAL_SHRINK       0x0002U
+#define LIBOS_F_SEAL_GROW         0x0004U
+#define LIBOS_F_SEAL_WRITE        0x0008U
+#define LIBOS_F_SEAL_FUTURE_WRITE 0x0010U
+#define LIBOS_F_SEAL_EXEC         0x0020U
+
 /* Handle types. Many of these are used by a single filesystem. */
 enum libos_handle_type {
     /* Files: */
@@ -234,6 +241,8 @@ struct libos_handle {
      * contain the open flags without access mode (i.e. set it to `flags & ~O_ACCMODE`). */
     int flags; /* Linux' O_* flags */
     int acc_mode;
+    bool is_memfd;
+    unsigned int memfd_seals;
     struct libos_lock lock;
 
     /* Lock for handle position (`pos`). Intended for operations that change the position (e.g.

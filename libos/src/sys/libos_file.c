@@ -39,8 +39,8 @@ long libos_syscall_unlink(const char* file) {
     return libos_syscall_unlinkat(AT_FDCWD, file, 0);
 }
 
-long libos_syscall_unlinkat(int dfd, const char* pathname, int flag) {
-    if (!is_user_string_readable(pathname))
+static long do_unlinkat(int dfd, const char* pathname, int flag, bool user_pointer) {
+    if (user_pointer && !is_user_string_readable(pathname))
         return -EFAULT;
 
     if (flag & ~AT_REMOVEDIR)
@@ -106,6 +106,14 @@ out:
     if (dent)
         put_dentry(dent);
     return ret;
+}
+
+long libos_syscall_unlinkat(int dfd, const char* pathname, int flag) {
+    return do_unlinkat(dfd, pathname, flag, true);
+}
+
+long libos_unlink_internal(const char* pathname) {
+    return do_unlinkat(AT_FDCWD, pathname, 0, false);
 }
 
 long libos_syscall_mkdir(const char* pathname, int mode) {

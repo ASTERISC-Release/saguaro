@@ -218,6 +218,10 @@ static long do_preadv_pwritev(unsigned long fd, struct iovec* vec, unsigned long
         ret = -EBADF;
         goto out;
     }
+    if (write && hdl->is_memfd && (hdl->memfd_seals & LIBOS_F_SEAL_WRITE)) {
+        ret = -EPERM;
+        goto out;
+    }
     if (current_offset) {
         maybe_lock_pos_handle(hdl);
         position_locked = true;
@@ -347,6 +351,10 @@ long libos_syscall_copy_file_range(int fd_in, loff_t* off_in, int fd_out, loff_t
         ret = -EBADF;
         goto out;
     }
+    if (out_hdl->is_memfd && (out_hdl->memfd_seals & LIBOS_F_SEAL_WRITE)) {
+        ret = -EPERM;
+        goto out;
+    }
     if (!in_hdl->fs || !in_hdl->fs->fs_ops || !in_hdl->fs->fs_ops->read ||
         !out_hdl->fs || !out_hdl->fs->fs_ops || !out_hdl->fs->fs_ops->write) {
         ret = -EINVAL;
@@ -467,6 +475,10 @@ long libos_syscall_splice(int fd_in, loff_t* off_in, int fd_out, loff_t* off_out
     }
     if (!(in_hdl->acc_mode & MAY_READ) || !(out_hdl->acc_mode & MAY_WRITE)) {
         ret = -EBADF;
+        goto out;
+    }
+    if (out_hdl->is_memfd && (out_hdl->memfd_seals & LIBOS_F_SEAL_WRITE)) {
+        ret = -EPERM;
         goto out;
     }
     if (!in_hdl->fs || !in_hdl->fs->fs_ops || !in_hdl->fs->fs_ops->read ||
