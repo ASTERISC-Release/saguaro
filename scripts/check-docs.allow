@@ -56,3 +56,4 @@ runtime/glibc$
 ^src/$
 ^\.ltp-results/$
 
+^gramine-libos-
