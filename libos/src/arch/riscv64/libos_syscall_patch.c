@@ -37,8 +37,8 @@ static bool patching_enabled(void) {
     int e = __atomic_load_n(&g_enabled, __ATOMIC_ACQUIRE);
     if (e >= 0)
         return e;
-    bool val = false;
-    if (toml_bool_in(g_manifest_root, "sys.rewrite_syscalls", false, &val) < 0)
+    bool val = true;
+    if (toml_bool_in(g_manifest_root, "sys.rewrite_syscalls", true, &val) < 0)
         val = false;
     __atomic_store_n(&g_enabled, val, __ATOMIC_RELEASE);
     return val;

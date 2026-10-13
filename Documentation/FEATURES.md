@@ -25,9 +25,10 @@ production use.
 
 ### System calls and libc
 
-- **Runtime syscall-site rewriting** (AArch64 done, RISC-V experimental). The first trap at an `svc` or `ecall`
-  site rewrites it into a branch to a stub (`sys.rewrite_syscalls`), so no patched libc is needed; on RISC-V it is
-  off by default and 3 to 4 times faster than trapping in emulation. `syscall-interception/`
+- **Runtime syscall-site rewriting** (done on AArch64 and RISC-V). The first trap at an `svc` or `ecall` site
+  rewrites it into a branch to a stub (`sys.rewrite_syscalls`, on by default), so no patched libc is needed; on a
+  RISC-V board (Ky X1) a syscall is 3.3 to 4.1 times cheaper than the trap. `syscall-interception/`,
+  `riscv-hardware/`
 - **Host libc instead of a built glibc** (done). With `libc=none` no glibc is built and applications run on the
   host's: the default for VM builds and for direct AArch64 and RISC-V builds; x86_64 direct keeps the patched
   glibc. The VM build in CI went from 5m45s to 1m19s. `runtime-libc/`
