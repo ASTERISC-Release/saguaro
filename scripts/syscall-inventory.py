@@ -38,7 +38,8 @@ def table_entries(path):
 
 def function_bodies():
     bodies = {}
-    declaration = re.compile(r"\blong\s+(libos_syscall_[A-Za-z0-9_]+)\s*\([^;]*?\)\s*\{", re.S)
+    declaration = re.compile(
+        r"\b(?:long|int|void\s*\*)\s+(libos_syscall_[A-Za-z0-9_]+)\s*\([^;]*?\)\s*\{", re.S)
     for path in (ROOT / "libos/src").rglob("*.c"):
         source = re.sub(r"/\*.*?\*/|//[^\n]*", "", path.read_text(), flags=re.S)
         for match in declaration.finditer(source):
@@ -55,11 +56,16 @@ def function_bodies():
 def classify(target, bodies):
     if not target or target == "0":
         return "ENOSYS"
+    # getrusage returns fabricated, monotonically increasing CPU time rather than usage.
+    if target == "libos_syscall_getrusage":
+        return "stub"
     handler = target.removeprefix("libos_syscall_")
     body = bodies.get("libos_syscall_" + handler, "")
     # The conservative stub rule: the complete handler body is one fixed-value return.
     # More involved handlers are implemented; this intentionally does not infer quality.
-    if not body or re.fullmatch(r"return\s+(?:[-+]?\d+|[-+]?ENOSYS|0)\s*;", body):
+    if not body:
+        raise ValueError(f"handler body not found: {target}")
+    if re.fullmatch(r"return\s+(?:[-+]?\d+|[-+]?ENOSYS|0)\s*;", body):
         return "stub"
     return "implemented"
 
@@ -83,7 +89,8 @@ def main():
             if name not in GROUP_BY_NAME:
                 GROUP_BY_NAME[name] = "misc"
         for name, target in entries.items():
-            syscalls[name][f"{arch}_state"] = classify(target, bodies)
+            if name in nrmap:  # exclude fork-private call numbers absent from Linux UAPI
+                syscalls[name][f"{arch}_state"] = classify(target, bodies)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("w") as out:
         out.write("syscall,x86_64_number,aarch64_number,group,x86_64_state,aarch64_state\n")

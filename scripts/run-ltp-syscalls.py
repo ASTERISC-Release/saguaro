@@ -100,10 +100,10 @@ def classify_result(loader, returncode, timed_out, counts, output):
         return "fail"
     if counts["broken"]:
         return "broken"
+    if counts["passed"] == 0 and counts["skipped"] and returncode in (0, 32):
+        return "conf"
     if returncode != 0:
         return "fail"
-    if counts["passed"] == 0 and counts["skipped"]:
-        return "conf"
     return "pass"
 
 
@@ -134,6 +134,7 @@ skipped 4""")
     assert summary_counts == {"passed": 2, "failed": 1, "broken": 3, "skipped": 4}
     assert classify_result("vm", 134, False, {"failed": 0, "broken": 0, "passed": 0, "skipped": 0}, "") == "guest_panic"
     assert classify_result("vm", -15, True, {"failed": 0, "broken": 0, "passed": 0, "skipped": 0}, "") == "timeout"
+    assert classify_result("vm", 32, False, {"failed": 0, "broken": 0, "passed": 0, "skipped": 1}, "") == "conf"
     print("parser self-test passed: real old-API getpid01/new-API creat01 and PASS/FAIL Summary fixtures")
 
 
