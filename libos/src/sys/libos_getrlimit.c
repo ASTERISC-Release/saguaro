@@ -92,38 +92,15 @@ long libos_syscall_getrlimit(int resource, struct __kernel_rlimit* rlim) {
     return 0;
 }
 
-int libos_syscall_getrusage(int who, struct rusage *usage)
-{
- static uint64_t fake_us_thread = 0;
-    static uint64_t fake_us_process = 0;
+long libos_syscall_getrusage(int who, struct __kernel_rusage* usage) {
+    if (who != RUSAGE_SELF && who != RUSAGE_CHILDREN && who != RUSAGE_THREAD)
+        return -EINVAL;
+    if (!is_user_memory_writable(usage, sizeof(*usage)))
+        return -EFAULT;
 
-    if (!usage)
-        return -1;
-
-    if (who != RUSAGE_SELF && who != RUSAGE_THREAD)
-        return -1;
-
+    /* PALs do not currently expose CPU accounting counters. Return a correctly initialized ABI
+     * structure until that interface exists; never synthesize CPU time from wall-clock time. */
     memset(usage, 0, sizeof(*usage));
-
-    uint64_t t;
-    if (who == RUSAGE_THREAD) {
-        fake_us_thread += 500;
-        t = fake_us_thread;
-    } else {
-        fake_us_process += 500;
-        t = fake_us_process;
-    }
-
-    usage->ru_utime.tv_sec  = (time_t)(t / 1000000ULL);
-    usage->ru_utime.tv_usec = (t % 1000000ULL);
-
-    uint64_t st = t / 10;
-    usage->ru_stime.tv_sec  = (time_t)(st / 1000000ULL);
-    usage->ru_stime.tv_usec = (st % 1000000ULL);
-
-    usage->ru_nvcsw  = (long)(t / 100000ULL);
-    usage->ru_nivcsw = (long)(t / 200000ULL);
-
     return 0;
 }
 long libos_syscall_setrlimit(int resource, struct __kernel_rlimit* rlim) {
