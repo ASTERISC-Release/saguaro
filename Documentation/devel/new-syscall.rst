@@ -1,6 +1,9 @@
 Implementing new system call
 ============================
 
+For this repository's workflow (measuring with the LTP tests, regression checks, keeping the
+syscall matrix true) see `syscall-workflow.md <syscall-workflow.md>`__.
+
 .. highlight:: c
 
 1. Define interface of system call and add it to system call table
