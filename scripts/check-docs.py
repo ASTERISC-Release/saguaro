@@ -33,6 +33,9 @@ DEFAULT_GLOBS = [
     'Documentation/devel/aarch64/*/PLAN.md', 'Documentation/devel/aarch64/*/TODO.md',
     'Documentation/devel/aarch64/*/TESTING.md',
     'Documentation/devel/graphics/running.md', 'Documentation/devel/graphics/tirith-delta.md',
+    'Documentation/devel/syscall-compat/MATRIX.md',
+    'Documentation/devel/syscall-compat/README.md',
+    'Documentation/devel/syscall-compat/RERUN.md',
 ]
 DOC_EXT = ('.md', '.rst', '.sh', '.py', '.toml', '.yml')
 # tokens that are not paths at all: placeholders, options, urls, absolute system paths, code

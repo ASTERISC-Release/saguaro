@@ -33,6 +33,8 @@ production use.
   glibc. The VM build in CI went from 5m45s to 1m19s. `runtime-libc/`
 - **More LibOS system calls** (done). `mremap`, SysV semaphores, `faccessat2`, `getresuid`/`getresgid`, more
   `prctl` options, and `statx` on RISC-V. `graphics/tirith-delta.md`
+- **VM syscall compatibility matrix** (measured on x86_64). LTP results for native, direct and VM loaders,
+  with per-test reasons and rerun instructions. `devel/syscall-compat/MATRIX.md`
 
 ### The VM PAL (`gramine-vm`)
 

@@ -26,6 +26,12 @@ export PYTHONPATH="$prefix/lib/python3.12/site-packages${PYTHONPATH:+:$PYTHONPAT
 cd "$test_dir"
 LTP_CONFIG=ltp_all.cfg gramine-test build
 
+# The splice02 scenario is a pipeline, so upstream's manifest builder does not discover
+# its test binary. Its sibling uses the same template and runtime files.
+if [[ -f splice01.manifest && ! -f splice02.manifest ]]; then
+    sed 's/splice01/splice02/g' splice01.manifest > splice02.manifest
+fi
+
 # The VM PAL has no dev: stream, but LibOS tmpfs can provide private /dev/shm for the
 # single-process VM test run. Keep the default manifest behavior for native/direct/SGX runs.
 if [[ ${LTP_VM_TMPFS_SHM:-0} == 1 ]]; then

@@ -365,6 +365,9 @@ def main():
     parser.add_argument("--timeout", type=float, help="override every per-test timeout")
     parser.add_argument("--timeout-factor", type=float, default=1.0)
     parser.add_argument("--jobs", type=int, default=1)
+    parser.add_argument("--skip-test", action="append", default=[], metavar="NAME",
+                        help="record NAME as TCONF without executing it")
+    parser.add_argument("--skip-reason", default="excluded by --skip-test")
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("tests", nargs="*")
     args = parser.parse_args()
@@ -386,24 +389,32 @@ def main():
     unknown = sorted(set(selected) - set(scenarios))
     if unknown:
         parser.error("tests missing from scenario: " + ", ".join(unknown))
+    unknown_skips = sorted(set(args.skip_test) - set(selected))
+    if unknown_skips:
+        parser.error("skipped tests missing from selection: " + ", ".join(unknown_skips))
+    active = [name for name in selected if name not in args.skip_test]
     if args.loader != "native":
-        missing = sorted({ltp_test_command(scenarios[name]) for name in selected
+        missing = sorted({ltp_test_command(scenarios[name]) for name in active
                           if not (args.harness_dir / f"{ltp_test_command(scenarios[name])}.manifest").exists()})
         if missing:
             parser.error("manifests missing; build them with gramine-test build first: " + ", ".join(missing[:10]))
-    guest_cids = allocate_guest_cids(1) * len(selected) if args.loader == "vm" else [None] * len(selected)
+    guest_cids = allocate_guest_cids(1) * len(active) if args.loader == "vm" else [None] * len(active)
 
-    results = []
+    results = [{"loader": args.loader, "test": name, "subtests": [],
+                "counts": {"passed": 0, "failed": 0, "skipped": 1, "broken": 0},
+                "exit_status": None, "status": "conf", "duration_seconds": 0,
+                "timeout": False, "guest_panic": False, "skip_reason": args.skip_reason}
+               for name in selected if name in args.skip_test]
     timeout_by_test = {
         name: (args.timeout if args.timeout is not None else
                config.get(name, "timeout", fallback="30", raw=True))
-        for name in selected
+        for name in active
     }
     timeout_by_test = {name: float(timeout) * args.timeout_factor
                        for name, timeout in timeout_by_test.items()}
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as pool:
         tasks = {pool.submit(run_one, name, scenarios[name], args, timeout_by_test[name], cid): name
-                 for name, cid in zip(selected, guest_cids)}
+                 for name, cid in zip(active, guest_cids)}
         for future in concurrent.futures.as_completed(tasks):
             name = tasks[future]
             try:
