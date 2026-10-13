@@ -116,6 +116,22 @@ Once installed, run an application::
 ``CI-Examples/install-all-prereqs.sh`` installs the host packages that some of them
 (curl, gcc, iperf, mongodb, nodejs, openjdk, pytorch, r) need.
 
+Will my application run?
+========================
+
+To check whether an application is likely to run under ``gramine-direct`` or ``gramine-vm``,
+trace its system calls and compare them with the syscall matrix built from the LTP tests::
+
+    scripts/syscall-profile.py run -- ./app args      # which syscalls, and a verdict per loader
+    scripts/syscall-tolerance.py -- ./app args        # does it still work without the ones
+                                                      # that are not supported?
+
+The results are heuristic and cover only the code paths of the traced run. How it works, how to
+run it and how well it did on ten applications:
+`Documentation/devel/syscall-profile/README.md <Documentation/devel/syscall-profile/README.md>`__;
+the matrix itself: `Documentation/devel/syscall-compat/MATRIX.md
+<Documentation/devel/syscall-compat/MATRIX.md>`__.
+
 Documentation
 =============
 
@@ -125,6 +141,8 @@ Documentation
 - `Development documents <Documentation/devel/>`__: one directory per port or feature, with its plan,
   log, open items and test results; `summary <Documentation/devel/summary.md>`__ gives the outcome of
   each on one page.
+- `Syscall support and application profiling <Documentation/devel/syscall-profile/README.md>`__: the
+  matrix, the profiler and the tolerance check.
 - `Multi-architecture notes <Documentation/devel/multiarch.md>`__: configurations, build options,
   tests, benchmarks and CI workflows.
 - `Differences from upstream gramine-tdx <Documentation/devel/graphics/tirith-delta.md>`__.
