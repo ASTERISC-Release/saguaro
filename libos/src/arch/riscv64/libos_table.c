@@ -315,13 +315,7 @@ libos_syscall_t libos_syscall_table[LIBOS_SYSCALL_BOUND] = {
     [__NR_finit_module]               = (libos_syscall_t)0, // libos_syscall_finit_module
     [__NR_sched_setattr]              = (libos_syscall_t)0, // libos_syscall_sched_setattr
     [__NR_sched_getattr]              = (libos_syscall_t)0, // libos_syscall_sched_getattr
-    /* riscv64's only rename: `renameat2` with flags 0 (what glibc/musl's rename() calls).
-     * libos_syscall_renameat ignores the trailing flags argument, so RENAME_NOREPLACE/
-     * RENAME_EXCHANGE are *not* honored -- Gramine never supported renameat2 flags on
-     * any arch (x86_64/aarch64 leave the number unimplemented entirely), and refusing
-     * every riscv rename with ENOSYS would be worse than this faithful-but-coarse
-     * mapping. Recorded in Documentation/devel/riscv/PLAN.md. */
-    [__NR_renameat2]                = (libos_syscall_t)libos_syscall_renameat,
+    [__NR_renameat2]                = (libos_syscall_t)libos_syscall_renameat2,
     [__NR_seccomp]                    = (libos_syscall_t)0, // libos_syscall_seccomp
     [__NR_getrandom]                  = (libos_syscall_t)libos_syscall_getrandom,
     [__NR_memfd_create]               = (libos_syscall_t)0, // libos_syscall_memfd_create

@@ -423,6 +423,17 @@ out:
     return ret;
 }
 
+long libos_syscall_renameat2(int olddirfd, const char* oldpath, int newdirfd, const char* newpath,
+                             unsigned int flags) {
+    /* The existing filesystem rename hooks implement the flags == 0 operation. The other Linux
+     * renameat2 modes require atomic no-replace or exchange support from every filesystem. */
+    if (flags & ~7U)
+        return -EINVAL;
+    if (flags)
+        return -EOPNOTSUPP;
+    return libos_syscall_renameat(olddirfd, oldpath, newdirfd, newpath);
+}
+
 long libos_syscall_sendfile(int out_fd, int in_fd, off_t* offset, size_t count) {
     long ret;
     char* buf = NULL;
