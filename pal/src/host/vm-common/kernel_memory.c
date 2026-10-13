@@ -75,7 +75,10 @@ int memory_frame_alloc(uintptr_t* out_frame) {
         g_frame_pool_bitmap[i / 8] |= mask;
         g_frame_pool_next = (i + 1) % frame_count;
         uintptr_t frame = g_frame_pool_start + i * PAGE_SIZE;
-        memset((void*)frame, 0, PAGE_SIZE);
+#ifdef ASAN
+        asan_unpoison_region(frame, PAGE_SIZE);
+#endif
+        _real_memset((void*)frame, 0, PAGE_SIZE);
         *out_frame = frame;
         spinlock_unlock_enable_irq(&g_frame_pool_lock);
         return 0;
@@ -100,6 +103,9 @@ int memory_frame_free(uintptr_t frame) {
     g_frame_pool_bitmap[i / 8] &= ~mask;
     if (i < g_frame_pool_next)
         g_frame_pool_next = i;
+#ifdef ASAN
+    asan_poison_region(frame, PAGE_SIZE, ASAN_POISON_USER);
+#endif
     spinlock_unlock_enable_irq(&g_frame_pool_lock);
     return 0;
 }
@@ -139,6 +145,65 @@ int memory_address_space_clone(uint64_t base_root, struct memory_address_space* 
     return 0;
 }
 
+static int address_space_get_leaf_entry(struct memory_address_space* space, uintptr_t addr,
+                                        bool make_private, uint64_t** out_entry) {
+    const uint64_t addr_mask = 0x00000ffffffff000UL;
+    if (!space || !space->root || !space->base_root ||
+            addr >= 512UL * 1024 * 1024 * 1024 || !IS_ALIGNED_POW2(addr, PAGE_SIZE))
+        return -PAL_ERROR_INVAL;
+
+    size_t pml4_idx = (addr >> 39) & 0x1ff;
+    size_t pdpt_idx = (addr >> 30) & 0x1ff;
+    size_t pd_idx = (addr >> 21) & 0x1ff;
+    size_t pt_idx = (addr >> 12) & 0x1ff;
+    uint64_t* pdpt;
+    int ret;
+    if (make_private) {
+        ret = address_space_get_private_child(&space->root[pml4_idx],
+                                               space->base_root[pml4_idx], &pdpt);
+    } else {
+        if (!(space->root[pml4_idx] & 1) || !(space->base_root[pml4_idx] & 1))
+            return -PAL_ERROR_INVAL;
+        pdpt = (uint64_t*)(space->root[pml4_idx] & addr_mask);
+        ret = 0;
+    }
+    if (ret < 0)
+        return ret;
+
+    uint64_t* base_pdpt = (uint64_t*)(space->base_root[pml4_idx] & addr_mask);
+    if ((pdpt[pdpt_idx] | base_pdpt[pdpt_idx]) & (1UL << 7))
+        return -PAL_ERROR_INVAL; /* splitting a 1-GiB page is not implemented */
+    uint64_t* pd;
+    if (make_private) {
+        ret = address_space_get_private_child(&pdpt[pdpt_idx], base_pdpt[pdpt_idx], &pd);
+    } else {
+        if (!(pdpt[pdpt_idx] & 1) || !(base_pdpt[pdpt_idx] & 1))
+            return -PAL_ERROR_INVAL;
+        pd = (uint64_t*)(pdpt[pdpt_idx] & addr_mask);
+        ret = 0;
+    }
+    if (ret < 0)
+        return ret;
+
+    uint64_t* base_pd = (uint64_t*)(base_pdpt[pdpt_idx] & addr_mask);
+    if ((pd[pd_idx] | base_pd[pd_idx]) & (1UL << 7))
+        return -PAL_ERROR_INVAL; /* splitting a 2-MiB page is not implemented */
+    uint64_t* pt;
+    if (make_private) {
+        ret = address_space_get_private_child(&pd[pd_idx], base_pd[pd_idx], &pt);
+    } else {
+        if (!(pd[pd_idx] & 1) || !(base_pd[pd_idx] & 1))
+            return -PAL_ERROR_INVAL;
+        pt = (uint64_t*)(pd[pd_idx] & addr_mask);
+        ret = 0;
+    }
+    if (ret < 0)
+        return ret;
+
+    *out_entry = &pt[pt_idx];
+    return 0;
+}
+
 __attribute_no_sanitize_address
 int memory_address_space_map(struct memory_address_space* space, uintptr_t addr,
                              uintptr_t frame, bool write, bool execute, bool usermode) {
@@ -148,40 +213,46 @@ int memory_address_space_map(struct memory_address_space* space, uintptr_t addr,
             !IS_ALIGNED_POW2(frame, PAGE_SIZE) || (frame & ~addr_mask))
         return -PAL_ERROR_INVAL;
 
-    size_t pml4_idx = (addr >> 39) & 0x1ff;
-    size_t pdpt_idx = (addr >> 30) & 0x1ff;
-    size_t pd_idx = (addr >> 21) & 0x1ff;
-    size_t pt_idx = (addr >> 12) & 0x1ff;
-    uint64_t* pdpt;
-    int ret = address_space_get_private_child(&space->root[pml4_idx],
-                                               space->base_root[pml4_idx], &pdpt);
-    if (ret < 0)
-        return ret;
-
-    uint64_t* base_pdpt = (uint64_t*)(space->base_root[pml4_idx] & addr_mask);
-    if ((pdpt[pdpt_idx] | base_pdpt[pdpt_idx]) & (1UL << 7))
-        return -PAL_ERROR_INVAL; /* splitting a 1-GiB page is not implemented */
-    uint64_t* pd;
-    ret = address_space_get_private_child(&pdpt[pdpt_idx], base_pdpt[pdpt_idx], &pd);
-    if (ret < 0)
-        return ret;
-
-    uint64_t* base_pd = (uint64_t*)(base_pdpt[pdpt_idx] & addr_mask);
-    if ((pd[pd_idx] | base_pd[pd_idx]) & (1UL << 7))
-        return -PAL_ERROR_INVAL; /* splitting a huge page is not implemented */
-    uint64_t* pt;
-    ret = address_space_get_private_child(&pd[pd_idx], base_pd[pd_idx], &pt);
+    uint64_t* pte;
+    int ret = address_space_get_leaf_entry(space, addr, /*make_private=*/true, &pte);
     if (ret < 0)
         return ret;
 
     uint64_t flags = 1UL | (write ? 1UL << 1 : 0) | (usermode ? 1UL << 2 : 0) |
                      (execute ? 0 : 1UL << 63);
-    pt[pt_idx] = frame | flags;
+    *pte = frame | flags;
 
     uint64_t current_root;
     __asm__ volatile("mov %%cr3, %0" : "=r"(current_root));
     if ((current_root & addr_mask) == (uintptr_t)space->root)
         __asm__ volatile("invlpg (%0)" : : "r"(addr) : "memory");
+    return 0;
+}
+
+int memory_address_space_share_range(struct memory_address_space* source,
+                                    struct memory_address_space* target, uintptr_t addr,
+                                    size_t size) {
+    if (!source || !target || !IS_ALIGNED_POW2(addr, PAGE_SIZE) || !size ||
+            !IS_ALIGNED_POW2(size, PAGE_SIZE) || addr + size < addr)
+        return -PAL_ERROR_INVAL;
+
+    const uint64_t addr_mask = 0x00000ffffffff000UL;
+    for (uintptr_t va = addr; va < addr + size; va += PAGE_SIZE) {
+        uint64_t* pte;
+        int ret = address_space_get_leaf_entry(source, va, /*make_private=*/false, &pte);
+        if (ret < 0)
+            return ret;
+        uint64_t entry = *pte;
+        uint64_t* target_pte;
+        ret = address_space_get_leaf_entry(target, va, /*make_private=*/true, &target_pte);
+        if (ret < 0)
+            return ret;
+        *target_pte = entry;
+        uint64_t current_root;
+        __asm__ volatile("mov %%cr3, %0" : "=r"(current_root));
+        if ((current_root & addr_mask) == (uintptr_t)target->root)
+            __asm__ volatile("invlpg (%0)" : : "r"(va) : "memory");
+    }
     return 0;
 }
 
@@ -312,6 +383,14 @@ static inline bool is_egl_redirect_data_region_range(void* addr, size_t size) {
 
 /* Beginning of the page table hierarchy */
 uint64_t g_pml4_table_base = 0;
+
+#ifdef __x86_64__
+static struct memory_address_space g_boot_address_space;
+
+struct memory_address_space* memory_address_space_boot(void) {
+    return &g_boot_address_space;
+}
+#endif
 
 /* Address Sanitizer shadow memory (physical memory range) */
 static uint64_t g_asan_shadow_phys_start = 0;
@@ -773,6 +852,10 @@ int memory_pagetables_init(void* memory_address_end, bool current_page_tables_co
         return ret;
 
     g_pml4_table_base = pml4_table_base;
+#ifdef __x86_64__
+    g_boot_address_space.root = (uint64_t*)pml4_table_base;
+    g_boot_address_space.base_root = (uint64_t*)pml4_table_base;
+#endif
     return 0;
 }
 
@@ -1109,3 +1192,226 @@ int memory_free(void* addr, size_t size) {
 #endif
     return memory_mark_pages_off((uint64_t)addr, size);
 }
+
+#ifdef __x86_64__
+struct frame_alloc_record {
+    uintptr_t next;
+    uint64_t old_pte;
+};
+
+static bool is_frame_pool_frame(uintptr_t frame) {
+    return g_frame_pool_bitmap && frame >= g_frame_pool_start &&
+           frame < g_frame_pool_start + g_frame_pool_size &&
+           IS_ALIGNED_POW2(frame, PAGE_SIZE);
+}
+
+static int address_space_restore_pte(struct memory_address_space* space, uintptr_t addr,
+                                     uint64_t pte) {
+    uint64_t* entry;
+    int ret = address_space_get_leaf_entry(space, addr, /*make_private=*/true, &entry);
+    if (ret < 0)
+        return ret;
+    *entry = pte;
+    uint64_t current_root;
+    __asm__ volatile("mov %%cr3, %0" : "=r"(current_root));
+    if ((current_root & 0x00000ffffffff000UL) == (uintptr_t)space->root)
+        __asm__ volatile("invlpg (%0)" : : "r"(addr) : "memory");
+    return 0;
+}
+
+__attribute_no_sanitize_address
+int memory_address_space_alloc(struct memory_address_space* space, void* addr, size_t size,
+                               bool read, bool write, bool execute) {
+    if (!g_frame_pool_bitmap)
+        return memory_alloc(addr, size, read, write, execute);
+    if (is_egl_redirect_data_region_base(addr, size)) {
+        int ret = memory_alloc(addr, size, read, write, execute);
+        if (ret < 0)
+            return ret;
+        return memory_address_space_share_range(memory_address_space_boot(), space,
+                                                (uintptr_t)addr, size);
+    }
+    if (!space || !IS_ALIGNED_POW2((uintptr_t)addr, PAGE_SIZE) || !size ||
+            !IS_ALIGNED_POW2(size, PAGE_SIZE) || (uintptr_t)addr + size < (uintptr_t)addr)
+        return -PAL_ERROR_INVAL;
+    if ((uintptr_t)addr < SHARED_MEM_ADDR + SHARED_MEM_SIZE &&
+            SHARED_MEM_ADDR < (uintptr_t)addr + size)
+        return -PAL_ERROR_DENIED;
+
+    if (!read && !write && !execute) {
+        for (uintptr_t va = (uintptr_t)addr; va < (uintptr_t)addr + size; va += PAGE_SIZE) {
+            uint64_t* entry;
+            int ret = address_space_get_leaf_entry(space, va, /*make_private=*/false, &entry);
+            if (ret < 0)
+                return ret;
+            uint64_t physical = *entry & 0x00000ffffffff000UL;
+            ret = address_space_restore_pte(space, va, physical);
+            if (ret < 0)
+                return ret;
+        }
+#ifdef ASAN
+        asan_poison_region((uintptr_t)addr, size, ASAN_POISON_USER);
+#endif
+        return 0;
+    }
+
+    /* Allocate all frames first and keep rollback data in each not-yet-mapped frame. */
+    uintptr_t frame_list = 0;
+    for (uintptr_t va = (uintptr_t)addr; va < (uintptr_t)addr + size; va += PAGE_SIZE) {
+        uintptr_t frame;
+        int ret = memory_frame_alloc(&frame);
+        if (ret < 0) {
+            while (frame_list) {
+                struct frame_alloc_record* record = (void*)frame_list;
+                uintptr_t next = record->next;
+                memory_frame_free(frame_list);
+                frame_list = next;
+            }
+            return ret;
+        }
+
+        uint64_t* old_pte;
+        ret = address_space_get_leaf_entry(space, va, /*make_private=*/false, &old_pte);
+        if (ret < 0) {
+            memory_frame_free(frame);
+            while (frame_list) {
+                struct frame_alloc_record* record = (void*)frame_list;
+                uintptr_t next = record->next;
+                memory_frame_free(frame_list);
+                frame_list = next;
+            }
+            return ret;
+        }
+        struct frame_alloc_record* record = (void*)frame;
+        record->next = frame_list;
+        record->old_pte = *old_pte;
+        frame_list = frame;
+    }
+
+    uintptr_t frame = frame_list;
+    size_t mapped_pages = 0;
+    for (uintptr_t va = (uintptr_t)addr + size - PAGE_SIZE;; va -= PAGE_SIZE) {
+        struct frame_alloc_record* record = (void*)frame;
+        uintptr_t next = record->next;
+        int ret = memory_address_space_map(space, va, frame, write, execute, /*usermode=*/true);
+        if (ret < 0) {
+            uintptr_t rollback_frame = frame_list;
+            for (size_t i = 0; i < mapped_pages; i++) {
+                struct frame_alloc_record* rollback_record = (void*)rollback_frame;
+                uintptr_t rollback_next = rollback_record->next;
+                uintptr_t rollback_va = (uintptr_t)addr + size - PAGE_SIZE - i * PAGE_SIZE;
+                address_space_restore_pte(space, rollback_va, rollback_record->old_pte);
+                memory_frame_free(rollback_frame);
+                rollback_frame = rollback_next;
+            }
+            while (rollback_frame) {
+                struct frame_alloc_record* rollback_record = (void*)rollback_frame;
+                uintptr_t rollback_next = rollback_record->next;
+                memory_frame_free(rollback_frame);
+                rollback_frame = rollback_next;
+            }
+            return ret;
+        }
+        mapped_pages++;
+        frame = next;
+        if (va == (uintptr_t)addr)
+            break;
+    }
+
+#ifdef ASAN
+    asan_unpoison_region((uintptr_t)addr, size);
+#endif
+    memset(addr, 0, size);
+    return 0;
+}
+
+__attribute_no_sanitize_address
+int memory_address_space_free(struct memory_address_space* space, void* addr, size_t size) {
+    if (!g_frame_pool_bitmap)
+        return memory_free(addr, size);
+    if (is_egl_redirect_data_region_range(addr, size)) {
+        int ret = memory_free(addr, size);
+        if (ret < 0)
+            return ret;
+        return memory_address_space_share_range(memory_address_space_boot(), space,
+                                                (uintptr_t)addr, size);
+    }
+    if (!space || !IS_ALIGNED_POW2((uintptr_t)addr, PAGE_SIZE) || !size ||
+            !IS_ALIGNED_POW2(size, PAGE_SIZE) || (uintptr_t)addr + size < (uintptr_t)addr)
+        return -PAL_ERROR_INVAL;
+    if ((uintptr_t)addr < SHARED_MEM_ADDR + SHARED_MEM_SIZE &&
+            SHARED_MEM_ADDR < (uintptr_t)addr + size)
+        return -PAL_ERROR_DENIED;
+
+    const uint64_t addr_mask = 0x00000ffffffff000UL;
+    for (uintptr_t va = (uintptr_t)addr; va < (uintptr_t)addr + size; va += PAGE_SIZE) {
+        uint64_t* entry;
+        int ret = address_space_get_leaf_entry(space, va, /*make_private=*/false, &entry);
+        if (ret < 0)
+            return ret;
+        uintptr_t frame = *entry & addr_mask;
+        ret = address_space_get_leaf_entry(space, va, /*make_private=*/true, &entry);
+        if (ret < 0)
+            return ret;
+        *entry = frame;
+
+        uint64_t current_root;
+        __asm__ volatile("mov %%cr3, %0" : "=r"(current_root));
+        if ((current_root & addr_mask) == (uintptr_t)space->root)
+            __asm__ volatile("invlpg (%0)" : : "r"(va) : "memory");
+
+        if (is_frame_pool_frame(frame)) {
+            ret = memory_frame_free(frame);
+            if (ret < 0)
+                return ret;
+        }
+    }
+#ifdef ASAN
+    asan_poison_region((uintptr_t)addr, size, ASAN_POISON_USER);
+#endif
+    return 0;
+}
+
+__attribute_no_sanitize_address
+int memory_address_space_protect(struct memory_address_space* space, void* addr, size_t size,
+                                 bool read, bool write, bool execute) {
+    if (!g_frame_pool_bitmap)
+        return memory_protect(addr, size, read, write, execute);
+    if (is_egl_redirect_data_region_range(addr, size)) {
+        int ret = memory_protect(addr, size, read, write, execute);
+        if (ret < 0)
+            return ret;
+        return memory_address_space_share_range(memory_address_space_boot(), space,
+                                                (uintptr_t)addr, size);
+    }
+    if (!space || !IS_ALIGNED_POW2((uintptr_t)addr, PAGE_SIZE) || !size ||
+            !IS_ALIGNED_POW2(size, PAGE_SIZE) || (uintptr_t)addr + size < (uintptr_t)addr)
+        return -PAL_ERROR_INVAL;
+    if ((uintptr_t)addr < SHARED_MEM_ADDR + SHARED_MEM_SIZE &&
+            SHARED_MEM_ADDR < (uintptr_t)addr + size)
+        return -PAL_ERROR_DENIED;
+
+    const uint64_t addr_mask = 0x00000ffffffff000UL;
+    for (uintptr_t va = (uintptr_t)addr; va < (uintptr_t)addr + size; va += PAGE_SIZE) {
+        uint64_t* entry;
+        int ret = address_space_get_leaf_entry(space, va, /*make_private=*/false, &entry);
+        if (ret < 0)
+            return ret;
+        uintptr_t frame = *entry & addr_mask;
+        if (!read && !write && !execute) {
+            ret = address_space_restore_pte(space, va, frame);
+        } else {
+            ret = memory_address_space_map(space, va, frame, write, execute, /*usermode=*/true);
+        }
+        if (ret < 0)
+            return ret;
+    }
+#ifdef ASAN
+    if (read || write || execute)
+        asan_unpoison_region((uintptr_t)addr, size);
+    else
+        asan_poison_region((uintptr_t)addr, size, ASAN_POISON_USER);
+#endif
+    return 0;
+}
+#endif

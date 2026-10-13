@@ -158,7 +158,7 @@ void thread_setup(struct thread* thread, void* fpregs, void* stack, int (*callba
     thread->state = THREAD_RUNNABLE;
     thread->blocked_on = NULL;
 #ifdef __x86_64__
-    thread->address_space_root = g_pml4_table_base;
+    thread->address_space = memory_address_space_boot();
 #endif
 
     memset(thread->cpu_mask, 0xFF, MAX_NUM_CPU_LONGS * 8);

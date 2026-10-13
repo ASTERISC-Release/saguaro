@@ -43,6 +43,8 @@ static e820_table_entry g_e820_entries[E820_NR_ENTRIES];
 static size_t g_e820_entries_size;
 
 #ifdef __x86_64__
+static struct memory_address_space g_initial_process_address_space;
+
 struct address_space_thread_check {
     volatile uint64_t* addr;
     uint64_t observed;
@@ -60,7 +62,7 @@ static int address_space_thread_check(void* arg) {
 static int init_multiprocess_frame_pool(void) {
     extern struct pal_initial_mem_range g_initial_mem_ranges[];
 
-    const uintptr_t pool_size = 64UL * 1024 * 1024;
+    const uintptr_t pool_size = 1UL * 1024 * 1024 * 1024;
     const uintptr_t search_start = 1UL * 1024 * 1024 * 1024;
     uintptr_t search_end = MIN((uintptr_t)g_pal_public_state.memory_address_end,
                                2UL * 1024 * 1024 * 1024);
@@ -188,7 +190,7 @@ static int init_multiprocess_frame_pool(void) {
                 PAL_HANDLE thread_handle;
                 ret = pal_common_thread_create_with_address_space(
                         &thread_handle, address_space_thread_check, &thread_check,
-                        (uint64_t)child_space.root);
+                        &child_space);
                 if (ret < 0) {
                     *parent_value = original_value;
                     memory_frame_free(frame2);
@@ -621,6 +623,21 @@ noreturn int pal_start_continue(void* cmdline_) {
     ret = pal_common_get_topo_info(&g_pal_public_state.topo_info);
     if (ret < 0)
         INIT_FAIL("Failed to get topology information: %s", pal_strerror(ret));
+
+#ifdef __x86_64__
+    if (enable_multiprocess) {
+        ret = memory_address_space_clone(g_pml4_table_base, &g_initial_process_address_space);
+        if (ret < 0)
+            INIT_FAIL("Failed to create the initial process address space: %s", pal_strerror(ret));
+        struct pal_tcb_vm* current_tcb = (struct pal_tcb_vm*)pal_get_tcb();
+        if (!current_tcb)
+            INIT_FAIL("Cannot find the initial thread control block");
+        current_tcb->kernel_thread.address_space = &g_initial_process_address_space;
+        ret = memory_address_space_switch(&g_initial_process_address_space);
+        if (ret < 0)
+            INIT_FAIL("Failed to switch to the initial process address space: %s", pal_strerror(ret));
+    }
+#endif
 
     pal_main(/*instance_id=*/0, /*parent_process=*/NULL, g_first_thread_handle, argv + 1, envp,
              /*post_callback=*/NULL);

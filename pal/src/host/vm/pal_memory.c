@@ -8,8 +8,14 @@
 #include "api.h"
 #include "kernel_memory.h"
 #include "pal.h"
+#include "pal_common.h"
 #include "pal_error.h"
 #include "pal_internal.h"
+
+static struct memory_address_space* current_address_space(void) {
+    struct pal_tcb_vm* tcb = (struct pal_tcb_vm*)pal_get_tcb();
+    return tcb ? tcb->kernel_thread.address_space : NULL;
+}
 
 int _PalVirtualMemoryAlloc(void* addr, size_t size, pal_prot_flags_t prot) {
     assert(WITHIN_MASK(prot, PAL_PROT_MASK));
@@ -18,11 +24,17 @@ int _PalVirtualMemoryAlloc(void* addr, size_t size, pal_prot_flags_t prot) {
     bool read    = !!(prot & PAL_PROT_READ);
     bool write   = !!(prot & (PAL_PROT_WRITE | PAL_PROT_WRITECOPY));
     bool execute = !!(prot & PAL_PROT_EXEC);
+    struct memory_address_space* address_space = current_address_space();
+    if (address_space)
+        return memory_address_space_alloc(address_space, addr, size, read, write, execute);
     return memory_alloc(addr, size, read, write, execute);
 }
 
 int _PalVirtualMemoryFree(void* addr, size_t size) {
     assert(addr);
+    struct memory_address_space* address_space = current_address_space();
+    if (address_space)
+        return memory_address_space_free(address_space, addr, size);
     return memory_free(addr, size);
 }
 
@@ -33,6 +45,9 @@ int _PalVirtualMemoryProtect(void* addr, size_t size, pal_prot_flags_t prot) {
     bool read    = !!(prot & PAL_PROT_READ);
     bool write   = !!(prot & (PAL_PROT_WRITE | PAL_PROT_WRITECOPY));
     bool execute = !!(prot & PAL_PROT_EXEC);
+    struct memory_address_space* address_space = current_address_space();
+    if (address_space)
+        return memory_address_space_protect(address_space, addr, size, read, write, execute);
     return memory_protect(addr, size, read, write, execute);
 }
 

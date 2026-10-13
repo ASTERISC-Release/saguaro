@@ -25,6 +25,13 @@
 #define DIRBUF_SIZE 1024
 #define DT_DIR      4
 
+#ifdef __x86_64__
+static struct memory_address_space* current_address_space(void) {
+    struct pal_tcb_vm* tcb = (struct pal_tcb_vm*)pal_get_tcb();
+    return tcb ? tcb->kernel_thread.address_space : NULL;
+}
+#endif
+
 bool g_use_trusted_files = false; /* only TDX PAL will set this */
 
 /* out_modified_path is allocated by this func; must be freed by the caller */
@@ -394,7 +401,14 @@ int pal_common_file_map(struct pal_handle* handle, void* addr, pal_prot_flags_t 
     bool read  = !!(prot & PAL_PROT_READ);
     bool write = !!(prot & (PAL_PROT_WRITE | PAL_PROT_WRITECOPY));
     bool execute = !!(prot & PAL_PROT_EXEC);
+#ifdef __x86_64__
+    struct memory_address_space* address_space = current_address_space();
+    ret = address_space
+            ? memory_address_space_alloc(address_space, addr, size, read, /*write=*/true, execute)
+            : memory_alloc(addr, size, read, /*write=*/true, execute);
+#else
     ret = memory_alloc(addr, size, read, /*write=*/true, execute);
+#endif
     if (ret < 0)
         return ret;
 
@@ -434,7 +448,14 @@ int pal_common_file_map(struct pal_handle* handle, void* addr, pal_prot_flags_t 
 
     if (!write) {
         /* restore read-only permission */
+#ifdef __x86_64__
+        ret = address_space
+                ? memory_address_space_protect(address_space, addr, size, read,
+                                               /*write=*/false, execute)
+                : memory_protect(addr, size, read, /*write=*/false, execute);
+#else
         ret = memory_protect(addr, size, read, /*write=*/false, execute);
+#endif
         if (ret < 0) {
             log_error("Cannot restore read-only permission during file mmap, fatal.");
             BUG();
@@ -444,7 +465,14 @@ int pal_common_file_map(struct pal_handle* handle, void* addr, pal_prot_flags_t 
     ret = 0;
 out:
     if (ret < 0)
+#ifdef __x86_64__
+        if (address_space)
+            (void)memory_address_space_free(address_space, addr, size);
+        else
+            (void)memory_free(addr, size);
+#else
         (void)memory_free(addr, size);
+#endif
     return ret;
 }
 

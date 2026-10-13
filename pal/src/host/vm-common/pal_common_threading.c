@@ -28,14 +28,19 @@ static int assign_new_tid(void) {
 
 int pal_common_thread_create(struct pal_handle** handle, int (*callback)(void*),
                              const void* param) {
+    struct pal_tcb_vm* curr_tcb = (struct pal_tcb_vm*)pal_get_tcb();
+    struct memory_address_space* address_space = curr_tcb
+            ? curr_tcb->kernel_thread.address_space
+            : memory_address_space_boot();
     return pal_common_thread_create_with_address_space(handle, callback, param,
-                                                       g_pml4_table_base);
+                                                       address_space);
 }
 
 int pal_common_thread_create_with_address_space(struct pal_handle** handle,
                                                int (*callback)(void*), const void* param,
-                                               uint64_t address_space_root) {
-    if (!address_space_root || !IS_ALIGNED_POW2(address_space_root, PAGE_SIZE))
+                                               struct memory_address_space* address_space) {
+    if (!address_space || !address_space->root ||
+            !IS_ALIGNED_POW2((uintptr_t)address_space->root, PAGE_SIZE))
         return -PAL_ERROR_INVAL;
 
     /*
@@ -62,10 +67,30 @@ int pal_common_thread_create_with_address_space(struct pal_handle** handle,
         return ret;
     }
 
+#ifdef __x86_64__
+    /* PAL stacks are shared kernel mappings. A child root may have been cloned before this stack
+     * was allocated, so add its existing physical pages to that root before scheduling it. */
+    struct pal_tcb_vm* curr_tcb = (struct pal_tcb_vm*)pal_get_tcb();
+    struct memory_address_space* current_space = curr_tcb
+            ? curr_tcb->kernel_thread.address_space
+            : memory_address_space_boot();
+    if (address_space != current_space) {
+        size_t stack_size = THREAD_STACK_SIZE + ALT_STACK_SIZE + g_xsave_size + VM_XSAVE_ALIGN;
+        uintptr_t stack_start = ALIGN_DOWN((uintptr_t)stack, PAGE_SIZE);
+        uintptr_t stack_end = ALIGN_UP((uintptr_t)stack + stack_size, PAGE_SIZE);
+        ret = memory_address_space_share_range(current_space, address_space, stack_start,
+                                               stack_end - stack_start);
+        if (ret < 0) {
+            free(thread_handle);
+            return ret;
+        }
+    }
+#endif
+
     /* init TCB in the highest part of the allocated stack region */
     struct pal_tcb_vm* tcb = stack + THREAD_STACK_SIZE + ALT_STACK_SIZE - sizeof(*tcb);
     thread_setup(&tcb->kernel_thread, fpregs, stack, callback, param);
-    tcb->kernel_thread.address_space_root = address_space_root;
+    tcb->kernel_thread.address_space = address_space;
 
     thread_handle->hdr.type = PAL_TYPE_THREAD;
     thread_handle->thread.tid = assign_new_tid();
@@ -78,7 +103,7 @@ int pal_common_thread_create_with_address_space(struct pal_handle** handle,
     /* thread_handle may be created via libos_syscall_clone(); in this case the newly created
      * thread_handle jumps to `sysret_asm` PAL VM trampoline, which expects user_rip to point to
      * actual ring-3 rip */
-    struct pal_tcb_vm* curr_tcb = (struct pal_tcb_vm*)pal_get_tcb();
+    curr_tcb = (struct pal_tcb_vm*)pal_get_tcb();
     if (curr_tcb)
         tcb->kernel_thread.context.user_rip = curr_tcb->kernel_thread.context.user_rip;
 

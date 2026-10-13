@@ -108,7 +108,7 @@ int pal_common_thread_create(struct pal_handle** handle, int (*callback)(void*),
 #ifdef __x86_64__
 int pal_common_thread_create_with_address_space(struct pal_handle** handle,
                                                 int (*callback)(void*), const void* param,
-                                                uint64_t address_space_root);
+                                                struct memory_address_space* address_space);
 #endif
 noreturn void pal_common_thread_exit(int* clear_child_tid);
 int pal_common_thread_set_cpu_affinity(struct pal_handle* thread, unsigned long* cpu_mask,

@@ -26,6 +26,10 @@ enum thread_state {
     THREAD_RUNNING,
 };
 
+#ifdef __x86_64__
+struct memory_address_space;
+#endif
+
 /*
  * Kernel-mode switch context. On x86_64 this is the explicit register set saved by
  * save_context_and_restore_next (kernel_events.S). On aarch64 the same struct doubles as the
@@ -148,8 +152,7 @@ struct thread {
     bool is_helper; /* is it an idle or bottomhalves thread */
 
 #ifdef __x86_64__
-    /* Physical page-table root used while this thread runs; zero means the boot address space. */
-    uint64_t address_space_root;
+    struct memory_address_space* address_space;
 #endif
 
     /* CPU affinity of a thread */
