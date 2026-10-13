@@ -103,6 +103,94 @@ int memory_frame_free(uintptr_t frame) {
     spinlock_unlock_enable_irq(&g_frame_pool_lock);
     return 0;
 }
+
+/* Clone a child table only the first time an address-space map operation reaches it. The parent
+ * and child can therefore share all untouched identity-map tables while writes to a private leaf
+ * remain local to the child root. */
+static int address_space_get_private_child(uint64_t* entry, uint64_t base_entry,
+                                           uint64_t** out_child) {
+    const uint64_t addr_mask = 0x00000ffffffff000UL;
+    if (!(*entry & 1) || !(*entry & addr_mask) || !(base_entry & 1) ||
+            !((base_entry) & addr_mask))
+        return -PAL_ERROR_INVAL;
+
+    if ((*entry & addr_mask) == (base_entry & addr_mask)) {
+        uint64_t* copy = memory_get_shared_region(PAGE_SIZE);
+        if (!copy)
+            return -PAL_ERROR_NOMEM;
+        memcpy(copy, (void*)(*entry & addr_mask), PAGE_SIZE);
+        *entry = (*entry & ~addr_mask) | ((uintptr_t)copy & addr_mask);
+    }
+
+    *out_child = (uint64_t*)(*entry & addr_mask);
+    return 0;
+}
+
+int memory_address_space_clone(uint64_t base_root, struct memory_address_space* out_space) {
+    if (!base_root || !IS_ALIGNED_POW2(base_root, PAGE_SIZE) || !out_space)
+        return -PAL_ERROR_INVAL;
+
+    uint64_t* root = memory_get_shared_region(PAGE_SIZE);
+    if (!root)
+        return -PAL_ERROR_NOMEM;
+    memcpy(root, (void*)base_root, PAGE_SIZE);
+    out_space->root = root;
+    out_space->base_root = (uint64_t*)base_root;
+    return 0;
+}
+
+__attribute_no_sanitize_address
+int memory_address_space_map(struct memory_address_space* space, uintptr_t addr,
+                             uintptr_t frame, bool write, bool execute, bool usermode) {
+    const uint64_t addr_mask = 0x00000ffffffff000UL;
+    if (!space || !space->root || !space->base_root ||
+            addr >= 512UL * 1024 * 1024 * 1024 || !IS_ALIGNED_POW2(addr, PAGE_SIZE) ||
+            !IS_ALIGNED_POW2(frame, PAGE_SIZE) || (frame & ~addr_mask))
+        return -PAL_ERROR_INVAL;
+
+    size_t pml4_idx = (addr >> 39) & 0x1ff;
+    size_t pdpt_idx = (addr >> 30) & 0x1ff;
+    size_t pd_idx = (addr >> 21) & 0x1ff;
+    size_t pt_idx = (addr >> 12) & 0x1ff;
+    uint64_t* pdpt;
+    int ret = address_space_get_private_child(&space->root[pml4_idx],
+                                               space->base_root[pml4_idx], &pdpt);
+    if (ret < 0)
+        return ret;
+
+    uint64_t* base_pdpt = (uint64_t*)(space->base_root[pml4_idx] & addr_mask);
+    if ((pdpt[pdpt_idx] | base_pdpt[pdpt_idx]) & (1UL << 7))
+        return -PAL_ERROR_INVAL; /* splitting a 1-GiB page is not implemented */
+    uint64_t* pd;
+    ret = address_space_get_private_child(&pdpt[pdpt_idx], base_pdpt[pdpt_idx], &pd);
+    if (ret < 0)
+        return ret;
+
+    uint64_t* base_pd = (uint64_t*)(base_pdpt[pdpt_idx] & addr_mask);
+    if ((pd[pd_idx] | base_pd[pd_idx]) & (1UL << 7))
+        return -PAL_ERROR_INVAL; /* splitting a huge page is not implemented */
+    uint64_t* pt;
+    ret = address_space_get_private_child(&pd[pd_idx], base_pd[pd_idx], &pt);
+    if (ret < 0)
+        return ret;
+
+    uint64_t flags = 1UL | (write ? 1UL << 1 : 0) | (usermode ? 1UL << 2 : 0) |
+                     (execute ? 0 : 1UL << 63);
+    pt[pt_idx] = frame | flags;
+
+    uint64_t current_root;
+    __asm__ volatile("mov %%cr3, %0" : "=r"(current_root));
+    if ((current_root & addr_mask) == (uintptr_t)space->root)
+        __asm__ volatile("invlpg (%0)" : : "r"(addr) : "memory");
+    return 0;
+}
+
+int memory_address_space_switch(const struct memory_address_space* space) {
+    if (!space || !space->root || !IS_ALIGNED_POW2((uintptr_t)space->root, PAGE_SIZE))
+        return -PAL_ERROR_INVAL;
+    __asm__ volatile("mov %0, %%cr3" : : "r"((uintptr_t)space->root) : "memory");
+    return 0;
+}
 #endif
 
 #define MSR_IA32_PAT 0x277

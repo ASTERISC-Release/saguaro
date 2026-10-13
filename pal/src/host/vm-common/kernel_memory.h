@@ -51,6 +51,15 @@ int memory_pagetables_init(void* memory_address_end, bool current_page_tables_co
 int memory_frame_pool_init(uintptr_t addr, size_t size);
 int memory_frame_alloc(uintptr_t* out_frame);
 int memory_frame_free(uintptr_t frame);
+
+struct memory_address_space {
+    uint64_t* root;
+    uint64_t* base_root;
+};
+int memory_address_space_clone(uint64_t base_root, struct memory_address_space* out_space);
+int memory_address_space_map(struct memory_address_space* space, uintptr_t addr,
+                             uintptr_t frame, bool write, bool execute, bool usermode);
+int memory_address_space_switch(const struct memory_address_space* space);
 #endif
 
 /* Ensures IA32_PAT has Write-Combining at index 1 (fatal on failure). */

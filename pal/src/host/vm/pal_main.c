@@ -116,8 +116,57 @@ static int init_multiprocess_frame_pool(void) {
                 memory_frame_free(reused_frame);
                 return -PAL_ERROR_DENIED;
             }
+
+            uintptr_t test_addr = candidate + 16UL * 1024 * 1024;
+            volatile uint64_t* parent_value = (volatile uint64_t*)test_addr;
+            uint64_t original_value = *parent_value;
+            const uint64_t parent_marker = 0x1122334455667788UL;
+            const uint64_t child_marker = 0x8877665544332211UL;
+            *parent_value = parent_marker;
+
+            struct memory_address_space child_space = {0};
+            ret = memory_address_space_clone(g_pml4_table_base, &child_space);
+            if (ret == 0) {
+                ret = memory_address_space_map(&child_space, test_addr, reused_frame,
+                                               /*write=*/true, /*execute=*/false,
+                                               /*usermode=*/true);
+            }
+            if (ret < 0) {
+                *parent_value = original_value;
+                memory_frame_free(frame2);
+                memory_frame_free(reused_frame);
+                return ret;
+            }
+
+            ret = memory_address_space_switch(&child_space);
+            if (ret < 0) {
+                *parent_value = original_value;
+                memory_frame_free(frame2);
+                memory_frame_free(reused_frame);
+                return ret;
+            }
+            uint64_t child_initial_value = *(volatile uint64_t*)test_addr;
+            *(volatile uint64_t*)test_addr = child_marker;
+
+            struct memory_address_space parent_space = {
+                .root = (uint64_t*)g_pml4_table_base,
+                .base_root = (uint64_t*)g_pml4_table_base,
+            };
+            ret = memory_address_space_switch(&parent_space);
+            if (ret < 0)
+                return ret;
+
+            bool isolated = child_initial_value == 0 && *parent_value == parent_marker &&
+                            *(volatile uint64_t*)reused_frame == child_marker;
+            *parent_value = original_value;
             memory_frame_free(frame2);
-            return memory_frame_free(reused_frame);
+            ret = memory_frame_free(reused_frame);
+            if (ret < 0)
+                return ret;
+            if (!isolated)
+                return -PAL_ERROR_DENIED;
+            log_always("Address-space mapping self-check passed");
+            return 0;
         }
     }
     return -PAL_ERROR_NOMEM;
