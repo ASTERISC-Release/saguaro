@@ -1422,6 +1422,14 @@ int memory_address_space_alloc(struct memory_address_space* space, void* addr, s
                 uintptr_t rollback_next = rollback_record->next;
                 uintptr_t rollback_va = (uintptr_t)addr + size - PAGE_SIZE - i * PAGE_SIZE;
                 address_space_restore_pte(space, rollback_va, rollback_record->old_pte);
+                rollback_frame = rollback_next;
+            }
+            if (mapped_pages && memory_address_space_flush_range((uintptr_t)addr, size) < 0)
+                BUG();
+            rollback_frame = frame_list;
+            for (size_t i = 0; i < mapped_pages; i++) {
+                struct frame_alloc_record* rollback_record = (void*)rollback_frame;
+                uintptr_t rollback_next = rollback_record->next;
                 memory_frame_free(rollback_frame);
                 rollback_frame = rollback_next;
             }
