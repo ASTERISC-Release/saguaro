@@ -717,6 +717,55 @@ long libos_syscall_fdatasync(int fd) {
     return libos_syscall_fsync(fd);
 }
 
+long libos_syscall_sync(void) {
+    /* Filesystem writes are issued synchronously by the PAL callbacks. */
+    return 0;
+}
+
+long libos_syscall_syncfs(int fd) {
+    struct libos_handle* hdl = get_fd_handle(fd, NULL, NULL);
+    if (!hdl)
+        return -EBADF;
+    put_handle(hdl);
+    return libos_syscall_fsync(fd);
+}
+
+long libos_syscall_sync_file_range(int fd, loff_t offset, loff_t nbytes, unsigned int flags) {
+    const unsigned int supported = 1U | 2U | 4U;
+    if (offset < 0 || nbytes < 0 || (flags & ~supported))
+        return -EINVAL;
+    struct libos_handle* hdl = get_fd_handle(fd, NULL, NULL);
+    if (!hdl)
+        return -EBADF;
+    if (hdl->inode && hdl->inode->type != S_IFREG && hdl->inode->type != S_IFDIR) {
+        put_handle(hdl);
+        return -ESPIPE;
+    }
+    bool can_flush = hdl->fs && hdl->fs->fs_ops && hdl->fs->fs_ops->flush;
+    put_handle(hdl);
+    if ((flags & 2U) && can_flush)
+        return libos_syscall_fsync(fd);
+    return 0;
+}
+
+long libos_syscall_readahead(int fd, loff_t offset, size_t count) {
+    __UNUSED(count);
+    if (offset < 0)
+        return -EINVAL;
+    struct libos_handle* hdl = get_fd_handle(fd, NULL, NULL);
+    if (!hdl)
+        return -EBADF;
+    long ret = 0;
+    if (!(hdl->acc_mode & MAY_READ))
+        ret = -EBADF;
+    else if (hdl->is_dir)
+        ret = -EISDIR;
+    else if (!hdl->fs || !hdl->fs->fs_ops || !hdl->fs->fs_ops->seek)
+        ret = -EINVAL;
+    put_handle(hdl);
+    return ret;
+}
+
 long libos_syscall_truncate(const char* path, loff_t length) {
     if (length < 0)
         return -EINVAL;
