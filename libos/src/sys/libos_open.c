@@ -207,6 +207,35 @@ static long do_openat(int dfd, const char* filename, int flags, int mode, bool u
     if (user_pointer && !is_user_string_readable(filename))
         return -EFAULT;
 
+    /* procfs normally resolves /proc/self/fd/N through the target pathname. A memfd has no
+     * pathname after creation, so reopen it by duplicating the live LibOS handle instead. */
+    static const char proc_fd_prefix[] = "/proc/self/fd/";
+    if (!strncmp(filename, proc_fd_prefix, sizeof(proc_fd_prefix) - 1) &&
+        !(flags & ~(O_CLOEXEC | O_LARGEFILE | O_ACCMODE | O_CREAT | O_TRUNC))) {
+        const char* p = filename + sizeof(proc_fd_prefix) - 1;
+        if (*p >= '0' && *p <= '9') {
+            unsigned long target_fd = 0;
+            do {
+                unsigned int digit = (unsigned int)(*p - '0');
+                if (target_fd > (UINT32_MAX - digit) / 10)
+                    return -EBADF;
+                target_fd = target_fd * 10 + digit;
+                p++;
+            } while (*p >= '0' && *p <= '9');
+            if (!*p) {
+                struct libos_handle* target = get_fd_handle((int)target_fd, NULL, NULL);
+                if (target && target->is_memfd) {
+                    int new_fd = set_new_fd_handle(target,
+                        (flags & O_CLOEXEC) ? FD_CLOEXEC : 0, NULL);
+                    put_handle(target);
+                    return new_fd;
+                }
+                if (target)
+                    put_handle(target);
+            }
+        }
+    }
+
     /* Graphics handle to redirect open() system call */
 #ifdef ENABLE_GRAPHICS
     long retval = 0;
