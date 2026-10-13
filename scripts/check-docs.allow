@@ -55,5 +55,3 @@ runtime/glibc$
 ^src/$
 ^\.ltp-results/$
 
-# Planned by syscall-profile/PLAN.md; remove each line when the file exists
-^scripts/syscall-profile\.py$
