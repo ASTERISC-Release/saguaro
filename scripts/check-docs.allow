@@ -53,3 +53,4 @@ runtime/glibc$
 # LTP's own paths (the LTP sources are not in this repository)
 ^runtest/syscalls$
 ^src/$
+^\.ltp-results/$

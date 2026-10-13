@@ -412,13 +412,11 @@ Rewriting trapped syscall sites (aarch64 and riscv64, direct PAL)
 ::
 
     sys.rewrite_syscalls = [true|false]
-    (Default: true on aarch64; false on riscv64 -- the mechanism is implemented
-    there but awaits validation on RISC-V hardware; only has an effect on the
-    direct PAL)
+    (Default: true on aarch64 and riscv64; only has an effect on the direct PAL)
 
 Without a patched libc, every guest ``svc #0`` (AArch64) or ``ecall`` (RISC-V)
 is intercepted by a seccomp trap, which costs about 1.2 us per syscall on
-AArch64 and about 12 us on emulated RISC-V. When this option is enabled, the
+AArch64 and about 8 us on RISC-V hardware (Ky X1; about 12 us on emulated RISC-V). When this option is enabled, the
 first trap at a given site rewrites that instruction into a branch to a small
 per-site stub that enters the LibOS directly, so later executions do not trap.
 Only file-backed, private, read-execute mappings are rewritten. Set to
