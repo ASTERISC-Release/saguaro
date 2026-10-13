@@ -239,7 +239,11 @@ static int file_unlink_path(const char* uri) {
 }
 
 static int file_rename_path(const char* old_uri, const char* new_uri) {
+#ifdef __NR_renameat
     int ret = DO_SYSCALL(renameat, AT_FDCWD, old_uri, AT_FDCWD, new_uri);
+#else
+    int ret = DO_SYSCALL(renameat2, AT_FDCWD, old_uri, AT_FDCWD, new_uri, 0);
+#endif
     return ret < 0 ? unix_to_pal_error(ret) : 0;
 }
 

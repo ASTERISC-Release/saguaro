@@ -47,7 +47,15 @@ static long setresid(bool group, uint32_t rid, uint32_t eid, uint32_t sid) {
         return -EPERM;
     }
     if (rid != UINT32_MAX) { if (group) t->gid = rid; else t->uid = rid; }
-    if (eid != UINT32_MAX) { if (group) t->egid = eid; else t->euid = eid; }
+    if (eid != UINT32_MAX) {
+        if (group) {
+            t->egid = eid;
+            t->fsgid = eid;
+        } else {
+            t->euid = eid;
+            t->fsuid = eid;
+        }
+    }
     if (sid != UINT32_MAX) { if (group) t->sgid = sid; else t->suid = sid; }
     unlock(&t->lock);
     return 0;
@@ -70,7 +78,7 @@ long libos_syscall_setreuid(uid_t ruid, uid_t euid) {
         return -EPERM;
     }
     if (ruid != UINT32_MAX) t->uid = ruid;
-    if (euid != UINT32_MAX) t->euid = euid;
+    if (euid != UINT32_MAX) { t->euid = euid; t->fsuid = euid; }
     if (ruid != UINT32_MAX || (euid != UINT32_MAX && euid != old_uid)) t->suid = t->euid;
     unlock(&t->lock);
     return 0;
@@ -86,8 +94,27 @@ long libos_syscall_setregid(gid_t rgid, gid_t egid) {
         return -EPERM;
     }
     if (rgid != UINT32_MAX) t->gid = rgid;
-    if (egid != UINT32_MAX) t->egid = egid;
+    if (egid != UINT32_MAX) { t->egid = egid; t->fsgid = egid; }
     if (rgid != UINT32_MAX || (egid != UINT32_MAX && egid != old_gid)) t->sgid = t->egid;
     unlock(&t->lock);
     return 0;
+}
+
+long libos_syscall_setfsuid(uid_t uid) {
+    struct libos_thread* t = get_cur_thread();
+    lock(&t->lock);
+    uid_t old = t->fsuid;
+    if (uid == (uid_t)-1 || t->euid == 0 || uid == t->uid || uid == t->euid || uid == t->suid)
+        if (uid != (uid_t)-1) t->fsuid = uid;
+    unlock(&t->lock);
+    return old;
+}
+long libos_syscall_setfsgid(gid_t gid) {
+    struct libos_thread* t = get_cur_thread();
+    lock(&t->lock);
+    gid_t old = t->fsgid;
+    if (gid == (gid_t)-1 || t->euid == 0 || gid == t->gid || gid == t->egid || gid == t->sgid)
+        if (gid != (gid_t)-1) t->fsgid = gid;
+    unlock(&t->lock);
+    return old;
 }

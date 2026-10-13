@@ -287,6 +287,10 @@ long libos_syscall_setresuid(uid_t ruid, uid_t euid, uid_t suid);
 long libos_syscall_setresgid(gid_t rgid, gid_t egid, gid_t sgid);
 long libos_syscall_setreuid(uid_t ruid, uid_t euid);
 long libos_syscall_setregid(gid_t rgid, gid_t egid);
+long libos_syscall_setfsuid(uid_t uid);
+long libos_syscall_setfsgid(gid_t gid);
+long libos_syscall_capget(void* header, void* data);
+long libos_syscall_capset(void* header, const void* data);
 
 long libos_syscall_kcmp(pid_t pid1, pid_t pid2, int type, unsigned long idx1, unsigned long idx2);
 

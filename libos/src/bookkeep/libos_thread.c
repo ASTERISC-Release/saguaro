@@ -190,6 +190,12 @@ static int init_main_thread(void) {
     cur_thread->gid = gid_int64;
     cur_thread->egid = gid_int64;
     cur_thread->sgid = gid_int64;
+    cur_thread->fsuid = uid_int64;
+    cur_thread->fsgid = gid_int64;
+    /* Keep a small software capability set for ABI compatibility. These bits do not grant PAL
+     * privileges; operations still enforce Gramine's host-backed policy. */
+    cur_thread->cap_effective = cur_thread->cap_permitted =
+        (1ULL << 0) | (1ULL << 5) | (1ULL << 8) | (1ULL << 13);
 
     cur_thread->signal_dispositions = alloc_default_signal_dispositions();
     if (!cur_thread->signal_dispositions) {
@@ -303,6 +309,11 @@ struct libos_thread* get_new_thread(void) {
     thread->egid      = cur_thread->egid;
     thread->suid      = cur_thread->suid;
     thread->sgid      = cur_thread->sgid;
+    thread->fsuid     = cur_thread->fsuid;
+    thread->fsgid     = cur_thread->fsgid;
+    thread->cap_effective = cur_thread->cap_effective;
+    thread->cap_permitted = cur_thread->cap_permitted;
+    thread->cap_inheritable = cur_thread->cap_inheritable;
 
     thread->stack     = cur_thread->stack;
     thread->stack_top = cur_thread->stack_top;

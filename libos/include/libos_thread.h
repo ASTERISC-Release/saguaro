@@ -72,7 +72,8 @@ struct libos_thread {
     IDTYPE tid;
 
     /* credentials */
-    IDTYPE uid, gid, euid, egid, suid, sgid;
+    IDTYPE uid, gid, euid, egid, suid, sgid, fsuid, fsgid;
+    uint64_t cap_effective, cap_permitted, cap_inheritable;
 
     struct {
         size_t count;

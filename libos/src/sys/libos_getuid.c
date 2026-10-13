@@ -57,6 +57,7 @@ long libos_syscall_setuid(uid_t uid) {
         goto out;
     }
     current->euid = uid;
+    current->fsuid = uid;
     ret = 0;
 out:
     unlock(&current->lock);
@@ -77,6 +78,7 @@ long libos_syscall_setgid(gid_t gid) {
         goto out;
     }
     current->egid = gid;
+    current->fsgid = gid;
     ret = 0;
 out:
     unlock(&current->lock);

@@ -11,6 +11,7 @@
 #include "libos_handle.h"
 #include "libos_lock.h"
 #include "libos_process.h"
+#include "libos_thread.h"
 #include "linux_abi/fs.h"
 #include "perm.h"
 #include "stat.h"
@@ -25,11 +26,24 @@ int check_permissions(struct libos_dentry* dent, mode_t mask) {
     if (mask == F_OK)
         return 0;
 
-    /* Check the "user" part of mode against mask */
-    if (((dent->inode->perm >> 6) & mask) == mask)
+    struct libos_thread* current = get_cur_thread();
+    mode_t granted;
+    if (current->fsuid == 0) {
+        /* Root bypasses read/write checks, but execution still needs an execute bit. */
+        if ((mask & MAY_EXEC) && !(dent->inode->perm & (S_IXUSR | S_IXGRP | S_IXOTH)))
+            return -EACCES;
         return 0;
+    }
 
-    return -EACCES;
+    if (current->fsuid == dent->inode->uid) {
+        granted = (dent->inode->perm >> 6) & 7;
+    } else {
+        bool in_group = current->fsgid == dent->inode->gid;
+        for (size_t i = 0; !in_group && i < current->groups_info.count; i++)
+            in_group = current->groups_info.groups[i] == dent->inode->gid;
+        granted = in_group ? (dent->inode->perm >> 3) & 7 : dent->inode->perm & 7;
+    }
+    return (granted & mask) == mask ? 0 : -EACCES;
 }
 
 /* This function works like `lookup_dcache`, but if the dentry is not in cache, it creates a new,
