@@ -36,6 +36,9 @@ production use.
   `prctl` options, and `statx` on RISC-V. `graphics/tirith-delta.md`
 - **VM syscall compatibility matrix** (measured on x86_64). LTP results for native, direct and VM loaders,
   with per-test reasons and rerun instructions. `devel/syscall-compat/MATRIX.md`
+- **Application syscall profile** (experimental). `scripts/syscall-profile.py` traces an application with
+  `strace` and reports which of its syscalls the direct and vm loaders support, with a likely/may run/unlikely
+  verdict; calibrated on ten applications. `devel/syscall-profile/`
 
 ### The VM PAL (`gramine-vm`)
 

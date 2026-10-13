@@ -213,6 +213,45 @@ def do_profile(command, output=None, drive=None, wait=2.0):
     return profile
 
 
+def static_profile(binary, with_libs=True):
+    """Over-approximate profile: `syscall` sites with a constant number in the binary and in the
+    shared libraries `ldd` lists (x86_64 only). A dynamic program gets all of libc's syscalls."""
+    objdump = shutil.which("objdump")
+    if not objdump:
+        sys.exit("objdump not found (binutils)")
+    with (COMPAT / "syscalls.csv").open() as f:
+        names = {int(r["x86_64_number"]): r["syscall"] for r in csv.DictReader(f) if r["x86_64_number"]}
+    files = [binary]
+    ldd = subprocess.run(["ldd", binary], capture_output=True, text=True).stdout
+    if with_libs:
+        files += re.findall(r"=>\s+(/\S+)", ldd)
+    calls = collections.Counter()
+    unknown_sites = 0
+    for path in files:
+        text = subprocess.run([objdump, "-d", "--no-show-raw-insn", path], capture_output=True,
+                              text=True).stdout
+        number = None
+        for line in text.splitlines():
+            insn = line.split("\t", 1)[-1].strip()
+            move = re.match(r"mov\s+\$0x([0-9a-f]+),%e?ax$", insn)
+            if move:
+                number = int(move[1], 16)
+            elif insn.startswith("syscall"):
+                if number in names:
+                    calls[names[number]] += 1
+                else:
+                    unknown_sites += 1
+                number = None
+            elif re.match(r"(call|jmp|ret)", insn) or ":" in line and line.rstrip().endswith(":"):
+                number = None
+    return {"calls": {n: {"count": c, "errors": {}, "args": {}} for n, c in sorted(calls.items())},
+            "paths": {}, "multiprocess": {"tasks": 0, "processes": 1, "fork_like_calls":
+                                          int("fork" in calls or "vfork" in calls),
+                                          "extra_execs": int("execve" in calls)},
+            "unparsed_lines": 0, "static": True, "static_files": files,
+            "static_sites_without_constant": unknown_sites}
+
+
 def load_matrix():
     with (COMPAT / "syscalls.csv").open() as f:
         syscalls = {row["syscall"]: row for row in csv.DictReader(f)}
@@ -344,6 +383,10 @@ def report_text(profile, results):
              f"syscalls, {multi['processes']} process(es), exit status {profile['exit_status']}, "
              f"arch {profile['arch']}",
              "Only the code paths of this run are covered; the matrix was measured on x86_64."]
+    if profile.get("static"):
+        lines.append("STATIC SCAN: an over-approximation. A dynamic program is credited with every "
+                     "syscall of its libraries; the dynamic profile is the one to trust. "
+                     f"{profile['static_sites_without_constant']} sites had no constant number.")
     if profile["arch"] not in ("x86_64", "amd64"):
         lines.append("Not x86_64: only the LibOS source state is used (no LTP evidence).")
     for res in results:
@@ -388,6 +431,10 @@ def main():
         p.add_argument("-o", "--output", help="write the JSON profile here")
         p.add_argument("--drive", help="server mode: shell command (a client) run untraced after "
                                        "--wait seconds; the traced program is stopped when it ends")
+        p.add_argument("--static", action="store_true",
+                       help="scan the binary and its libraries instead of tracing (over-approximation)")
+        p.add_argument("--no-libs", action="store_true",
+                       help="with --static: scan only the program itself, not its shared libraries")
         p.add_argument("--wait", type=float, default=2.0, help="seconds before --drive starts")
         p.add_argument("command", nargs=argparse.REMAINDER, help="-- CMD ARGS...")
     for mode in ("check", "run"):
@@ -406,7 +453,15 @@ def main():
     command = args.command[1:] if args.command[:1] == ["--"] else args.command
     if not command:
         parser.error("no command given after --")
-    profile = do_profile(command, args.output, args.drive, args.wait)
+    if args.static:
+        profile = static_profile(shutil.which(command[0]) or command[0], not args.no_libs)
+        profile.update({"version": 1, "command": command, "arch": platform.machine(),
+                        "tracer": "objdump scan", "exit_status": None, "drive": None,
+                        "drive_status": None})
+        if args.output:
+            pathlib.Path(args.output).write_text(json.dumps(profile, indent=1) + "\n")
+    else:
+        profile = do_profile(command, args.output, args.drive, args.wait)
     if args.mode == "profile":
         print(f"{len(profile['calls'])} syscalls, {profile['multiprocess']['processes']} process(es)"
               + (f"; wrote {args.output}" if args.output else ""), file=sys.stderr)
