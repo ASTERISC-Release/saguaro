@@ -309,3 +309,260 @@ long libos_syscall_pwritev2(unsigned long fd, struct iovec* vec, unsigned long v
     return do_preadv_pwritev(fd, vec, vlen, offset, true, flags, true);
 }
 #endif
+
+#define LIBOS_SPLICE_F_MOVE     1U
+#define LIBOS_SPLICE_F_NONBLOCK 2U
+#define LIBOS_SPLICE_F_MORE     4U
+#define LIBOS_SPLICE_F_GIFT     8U
+#define LIBOS_SPLICE_FLAGS \
+    (LIBOS_SPLICE_F_MOVE | LIBOS_SPLICE_F_NONBLOCK | LIBOS_SPLICE_F_MORE | LIBOS_SPLICE_F_GIFT)
+#define LIBOS_COPY_CHUNK (64 * 1024)
+
+long libos_syscall_copy_file_range(int fd_in, loff_t* off_in, int fd_out, loff_t* off_out,
+                                   size_t len, unsigned int flags) {
+    if (flags)
+        return -EINVAL;
+    if (off_in && (!is_user_memory_readable(off_in, sizeof(*off_in)) ||
+                   !is_user_memory_writable(off_in, sizeof(*off_in))))
+        return -EFAULT;
+    if (off_out && (!is_user_memory_readable(off_out, sizeof(*off_out)) ||
+                    !is_user_memory_writable(off_out, sizeof(*off_out))))
+        return -EFAULT;
+
+    struct libos_handle* in_hdl = get_fd_handle(fd_in, NULL, NULL);
+    if (!in_hdl)
+        return -EBADF;
+    struct libos_handle* out_hdl = get_fd_handle(fd_out, NULL, NULL);
+    if (!out_hdl) {
+        put_handle(in_hdl);
+        return -EBADF;
+    }
+
+    long ret = 0;
+    if (in_hdl->type == TYPE_PIPE || out_hdl->type == TYPE_PIPE) {
+        ret = -EINVAL;
+        goto out;
+    }
+    if (!(in_hdl->acc_mode & MAY_READ) || !(out_hdl->acc_mode & MAY_WRITE)) {
+        ret = -EBADF;
+        goto out;
+    }
+    if (!in_hdl->fs || !in_hdl->fs->fs_ops || !in_hdl->fs->fs_ops->read ||
+        !out_hdl->fs || !out_hdl->fs->fs_ops || !out_hdl->fs->fs_ops->write) {
+        ret = -EINVAL;
+        goto out;
+    }
+    if (!in_hdl->fs->fs_ops->seek || !out_hdl->fs->fs_ops->seek) {
+        ret = -ESPIPE;
+        goto out;
+    }
+    if (in_hdl->inode && out_hdl->inode && in_hdl->inode->mount != out_hdl->inode->mount) {
+        ret = -EXDEV;
+        goto out;
+    }
+
+    file_off_t in_pos = in_hdl->pos;
+    file_off_t out_pos = out_hdl->pos;
+    if (off_in)
+        memcpy(&in_pos, off_in, sizeof(in_pos));
+    if (off_out)
+        memcpy(&out_pos, off_out, sizeof(out_pos));
+    if (in_pos < 0 || out_pos < 0) {
+        ret = -EINVAL;
+        goto out;
+    }
+    if (len > 0x7ffff000)
+        len = 0x7ffff000;
+
+    char* buffer = malloc(MIN(len, LIBOS_COPY_CHUNK));
+    if (!buffer && len) {
+        ret = -ENOMEM;
+        goto out;
+    }
+    size_t copied = 0;
+    while (copied < len) {
+        size_t chunk = MIN(len - copied, LIBOS_COPY_CHUNK);
+        ssize_t bytes = in_hdl->fs->fs_ops->read(in_hdl, buffer, chunk, &in_pos);
+        if (bytes < 0) {
+            ret = copied ? (long)copied : bytes;
+            break;
+        }
+        if (!bytes)
+            break;
+        size_t written = 0;
+        while (written < (size_t)bytes) {
+            ssize_t out_bytes = out_hdl->fs->fs_ops->write(out_hdl, buffer + written,
+                                                           (size_t)bytes - written, &out_pos);
+            if (out_bytes < 0) {
+                ret = copied + written ? (long)(copied + written) : out_bytes;
+                goto copy_done;
+            }
+            if (!out_bytes)
+                goto copy_done;
+            written += out_bytes;
+        }
+        copied += written;
+        if ((size_t)bytes < chunk)
+            break;
+    }
+    if (ret == 0)
+        ret = copied;
+copy_done:
+    free(buffer);
+    if (off_in && copied)
+        memcpy(off_in, &in_pos, sizeof(in_pos));
+    else if (!off_in && copied)
+        in_hdl->pos = in_pos;
+    if (off_out && copied)
+        memcpy(off_out, &out_pos, sizeof(out_pos));
+    else if (!off_out && copied)
+        out_hdl->pos = out_pos;
+out:
+    put_handle(out_hdl);
+    put_handle(in_hdl);
+    return ret == -EINTR ? -ERESTARTSYS : ret;
+}
+
+long libos_syscall_splice(int fd_in, loff_t* off_in, int fd_out, loff_t* off_out, size_t len,
+                          unsigned int flags) {
+    if (flags & ~LIBOS_SPLICE_FLAGS)
+        return -EINVAL;
+    if (off_in && !is_user_memory_readable(off_in, sizeof(*off_in)))
+        return -EFAULT;
+    if (off_out && !is_user_memory_readable(off_out, sizeof(*off_out)))
+        return -EFAULT;
+    if (off_in && off_out)
+        return -EINVAL;
+    struct libos_handle* in_hdl = get_fd_handle(fd_in, NULL, NULL);
+    if (!in_hdl)
+        return -EBADF;
+    struct libos_handle* out_hdl = get_fd_handle(fd_out, NULL, NULL);
+    if (!out_hdl) {
+        put_handle(in_hdl);
+        return -EBADF;
+    }
+    bool in_pipe = in_hdl->type == TYPE_PIPE;
+    bool out_pipe = out_hdl->type == TYPE_PIPE;
+    long ret = 0;
+    if (!in_pipe && !out_pipe) {
+        ret = -EINVAL;
+        goto out;
+    }
+    if (!in_hdl->fs || !in_hdl->fs->fs_ops || !out_hdl->fs || !out_hdl->fs->fs_ops) {
+        ret = -EINVAL;
+        goto out;
+    }
+    if ((!in_pipe && off_in && !in_hdl->fs->fs_ops->seek) ||
+        (!out_pipe && off_out && !out_hdl->fs->fs_ops->seek)) {
+        ret = -ESPIPE;
+        goto out;
+    }
+    if ((in_pipe && off_in) || (out_pipe && off_out)) {
+        ret = -EINVAL;
+        goto out;
+    }
+    if (!(in_hdl->acc_mode & MAY_READ) || !(out_hdl->acc_mode & MAY_WRITE)) {
+        ret = -EBADF;
+        goto out;
+    }
+    if (!in_hdl->fs || !in_hdl->fs->fs_ops || !in_hdl->fs->fs_ops->read ||
+        !out_hdl->fs || !out_hdl->fs->fs_ops || !out_hdl->fs->fs_ops->write) {
+        ret = -EINVAL;
+        goto out;
+    }
+    file_off_t in_pos = in_pipe ? 0 : in_hdl->pos;
+    file_off_t out_pos = out_pipe ? 0 : out_hdl->pos;
+    if (off_in)
+        memcpy(&in_pos, off_in, sizeof(in_pos));
+    if (off_out)
+        memcpy(&out_pos, off_out, sizeof(out_pos));
+    if (in_pos < 0 || out_pos < 0) {
+        ret = -EINVAL;
+        goto out;
+    }
+    char* buffer = malloc(MIN(len, LIBOS_COPY_CHUNK));
+    if (!buffer && len) {
+        ret = -ENOMEM;
+        goto out;
+    }
+    size_t transferred = 0;
+    while (transferred < len) {
+        size_t chunk = MIN(len - transferred, LIBOS_COPY_CHUNK);
+        ssize_t bytes = in_hdl->fs->fs_ops->read(in_hdl, buffer, chunk, &in_pos);
+        if (bytes < 0) {
+            ret = transferred ? (long)transferred : bytes;
+            break;
+        }
+        if (!bytes)
+            break;
+        ssize_t written = out_hdl->fs->fs_ops->write(out_hdl, buffer, bytes, &out_pos);
+        if (written < 0) {
+            ret = transferred ? (long)transferred : written;
+            break;
+        }
+        transferred += written;
+        if (written < bytes || (size_t)bytes < chunk)
+            break;
+    }
+    free(buffer);
+    if (off_in && transferred)
+        memcpy(off_in, &in_pos, sizeof(in_pos));
+    else if (!in_pipe && transferred)
+        in_hdl->pos = in_pos;
+    if (off_out && transferred)
+        memcpy(off_out, &out_pos, sizeof(out_pos));
+    else if (!out_pipe && transferred)
+        out_hdl->pos = out_pos;
+    if (ret == 0)
+        ret = transferred;
+out:
+    put_handle(out_hdl);
+    put_handle(in_hdl);
+    return ret == -EINTR ? -ERESTARTSYS : ret;
+}
+
+long libos_syscall_tee(int fd_in, int fd_out, size_t len, unsigned int flags) {
+    if (flags & ~LIBOS_SPLICE_FLAGS)
+        return -EINVAL;
+    struct libos_handle* in_hdl = get_fd_handle(fd_in, NULL, NULL);
+    if (!in_hdl)
+        return -EBADF;
+    struct libos_handle* out_hdl = get_fd_handle(fd_out, NULL, NULL);
+    if (!out_hdl) {
+        put_handle(in_hdl);
+        return -EBADF;
+    }
+    long ret = -EINVAL;
+    if (in_hdl->type == TYPE_PIPE && out_hdl->type == TYPE_PIPE && in_hdl != out_hdl) {
+        /* Gramine's PAL pipes are stream sockets and do not expose pipe-buffer duplication. */
+        ret = -EOPNOTSUPP;
+    }
+    put_handle(out_hdl);
+    put_handle(in_hdl);
+    __UNUSED(len);
+    return ret;
+}
+
+long libos_syscall_vmsplice(int fd, const struct iovec* iov, unsigned long nr_segs,
+                            unsigned int flags) {
+    if (flags & ~LIBOS_SPLICE_FLAGS)
+        return -EINVAL;
+    struct libos_handle* hdl = get_fd_handle(fd, NULL, NULL);
+    if (!hdl)
+        return -EBADF;
+    bool is_pipe = hdl->type == TYPE_PIPE;
+    bool can_read = hdl->acc_mode & MAY_READ;
+    bool can_write = hdl->acc_mode & MAY_WRITE;
+    put_handle(hdl);
+    if (!is_pipe)
+        return -EINVAL;
+    if (!can_read && !can_write)
+        return -EBADF;
+    if (flags & LIBOS_SPLICE_F_GIFT)
+        flags &= ~LIBOS_SPLICE_F_GIFT; /* PAL pipe writes copy the supplied bytes. */
+    if (can_write)
+        return libos_syscall_writev(fd, (struct iovec*)iov, nr_segs);
+    if (flags & LIBOS_SPLICE_F_GIFT)
+        return -EINVAL;
+    return libos_syscall_readv(fd, (struct iovec*)iov, nr_segs);
+}

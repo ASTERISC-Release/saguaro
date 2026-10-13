@@ -132,6 +132,13 @@ long libos_syscall_sync(void);
 long libos_syscall_syncfs(int fd);
 long libos_syscall_sync_file_range(int fd, loff_t offset, loff_t nbytes, unsigned int flags);
 long libos_syscall_readahead(int fd, loff_t offset, size_t count);
+long libos_syscall_copy_file_range(int fd_in, loff_t* off_in, int fd_out, loff_t* off_out,
+                                   size_t len, unsigned int flags);
+long libos_syscall_splice(int fd_in, loff_t* off_in, int fd_out, loff_t* off_out, size_t len,
+                          unsigned int flags);
+long libos_syscall_tee(int fd_in, int fd_out, size_t len, unsigned int flags);
+long libos_syscall_vmsplice(int fd, const struct iovec* iov, unsigned long nr_segs,
+                            unsigned int flags);
 long libos_syscall_truncate(const char* path, loff_t length);
 long libos_syscall_ftruncate(int fd, loff_t length);
 long libos_syscall_fallocate(int fd, int mode, loff_t offset, loff_t len);
@@ -276,6 +283,10 @@ long libos_syscall_prctl(int option, unsigned long arg2, unsigned long arg3, uns
                          unsigned long arg5);
 long libos_syscall_getresuid(uid_t* ruid, uid_t* euid, uid_t* suid);
 long libos_syscall_getresgid(gid_t* rgid, gid_t* egid, gid_t* sgid);
+long libos_syscall_setresuid(uid_t ruid, uid_t euid, uid_t suid);
+long libos_syscall_setresgid(gid_t rgid, gid_t egid, gid_t sgid);
+long libos_syscall_setreuid(uid_t ruid, uid_t euid);
+long libos_syscall_setregid(gid_t rgid, gid_t egid);
 
 long libos_syscall_kcmp(pid_t pid1, pid_t pid2, int type, unsigned long idx1, unsigned long idx2);
 
