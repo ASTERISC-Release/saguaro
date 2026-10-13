@@ -48,3 +48,14 @@ minute, no input; `Documentation/devel/syscall-profile/TESTING.md`) shows:
 
 Not checked: that the game starts under `gramine-vm`, rendering, input, audio, saving, and the
 bundled SDL2 (`SYSTEM_SDL=0`).
+
+## Native run, 2026-10-12 (`make run-native`, Hyprland, 3840x2160 desktop)
+
+The game started with the graphics preload library, opened a window and (per the user) worked. With a
+floating 1920x1080 window rule (see `Documentation/devel/graphics/TESTING.md`, "Window size") the picture
+was **cropped to one corner**: the game asks for an 800x480 window, then sets a 3840x2160 drawable (its
+default is the desktop resolution), which the rule squeezes to 1920x1080. Quake II had the same problem;
+the fix there was the game's own windowed resolution. For Bastion that is Options, Display, Resolution
+(1920x1080, fullscreen off); the setting is saved in the game's data folder (`DATA_DIR`). That was not
+done yet: the game closed before the option was reached, so it is not known whether the setting
+removes the cropping. `EGL_SDL_LOG=1` prints the window sizes the game requests.
