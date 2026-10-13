@@ -46,6 +46,23 @@ long libos_syscall_pread64(int fd, char* buf, size_t count, loff_t pos);
 long libos_syscall_pwrite64(int fd, char* buf, size_t count, loff_t pos);
 long libos_syscall_readv(unsigned long fd, struct iovec* vec, unsigned long vlen);
 long libos_syscall_writev(unsigned long fd, struct iovec* vec, unsigned long vlen);
+#ifdef __x86_64__
+long libos_syscall_preadv(unsigned long fd, struct iovec* vec, unsigned long vlen,
+                         unsigned long pos_l, unsigned long pos_h);
+long libos_syscall_pwritev(unsigned long fd, struct iovec* vec, unsigned long vlen,
+                          unsigned long pos_l, unsigned long pos_h);
+long libos_syscall_preadv2(unsigned long fd, struct iovec* vec, unsigned long vlen,
+                           unsigned long pos_l, unsigned long pos_h, int flags);
+long libos_syscall_pwritev2(unsigned long fd, struct iovec* vec, unsigned long vlen,
+                            unsigned long pos_l, unsigned long pos_h, int flags);
+#else
+long libos_syscall_preadv(unsigned long fd, struct iovec* vec, unsigned long vlen, loff_t offset);
+long libos_syscall_pwritev(unsigned long fd, struct iovec* vec, unsigned long vlen, loff_t offset);
+long libos_syscall_preadv2(unsigned long fd, struct iovec* vec, unsigned long vlen, loff_t offset,
+                           int flags);
+long libos_syscall_pwritev2(unsigned long fd, struct iovec* vec, unsigned long vlen, loff_t offset,
+                            int flags);
+#endif
 long libos_syscall_access(const char* file, mode_t mode);
 long libos_syscall_pipe(int* fildes);
 long libos_syscall_select(int nfds, struct linux_fd_set* readfds, struct linux_fd_set* writefds,
