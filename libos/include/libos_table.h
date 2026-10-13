@@ -206,6 +206,11 @@ long libos_syscall_utime(const char* pathname, const struct utimbuf* times);
 long libos_syscall_utimes(const char* pathname, const struct __kernel_timeval times[2]);
 long libos_syscall_futimesat(int dirfd, const char* pathname,
                              const struct __kernel_timeval times[2]);
+long libos_syscall_symlink(const char* target, const char* linkpath);
+long libos_syscall_symlinkat(const char* target, int newdirfd, const char* linkpath);
+long libos_syscall_link(const char* oldpath, const char* newpath);
+long libos_syscall_linkat(int olddirfd, const char* oldpath, int newdirfd, const char* newpath,
+                          int flags);
 long libos_syscall_fchmodat(int dfd, const char* filename, mode_t mode);
 long libos_syscall_fchownat(int dfd, const char* filename, uid_t user, gid_t group, int flags);
 long libos_syscall_faccessat(int dfd, const char* filename, mode_t mode);

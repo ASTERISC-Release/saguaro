@@ -67,6 +67,10 @@ int pal_common_file_attrquerybyhdl(struct pal_handle* handle, PAL_STREAM_ATTR* p
 int pal_common_file_attrquery(const char* type, const char* uri, PAL_STREAM_ATTR* pal_attr);
 int pal_common_file_attrsetbyhdl(struct pal_handle* handle, PAL_STREAM_ATTR* attr);
 int pal_common_file_rename(struct pal_handle* handle, const char* type, const char* uri);
+int pal_common_file_symlink(const char* target, const char* uri);
+int pal_common_file_link(const char* old_uri, const char* new_uri);
+int pal_common_file_unlink_path(const char* uri);
+int pal_common_file_rename_path(const char* old_uri, const char* new_uri);
 
 int pal_common_dir_open(struct pal_handle** handle, const char* type, const char* uri,
                         enum pal_access access, pal_share_flags_t share,

@@ -268,6 +268,12 @@ struct libos_inode {
     /* File size */
     file_off_t size;
 
+    /* Number of directory entries referring to this inode. */
+    uint32_t nlink;
+
+    /* Stable inode number shared by all hard links to this inode. */
+    ino_t ino;
+
     /* credentials */
     IDTYPE uid, gid;
 
@@ -391,6 +397,12 @@ struct libos_d_ops {
      * The caller should hold `g_dcache_lock`. On success, the caller should free `*out_target`.
      */
     int (*follow_link)(struct libos_dentry* dent, char** out_target);
+
+    /* Create a symlink at a negative dentry, retaining its target in the new inode. */
+    int (*symlink)(const char* target, struct libos_dentry* dent);
+
+    /* Create a hard link from a positive dentry to a negative dentry. */
+    int (*link)(struct libos_dentry* old, struct libos_dentry* new);
 
     /* Set access and modification times. Either array element may contain UTIME_OMIT. */
     int (*set_times)(struct libos_dentry* dent, const struct __kernel_timespec times[2]);

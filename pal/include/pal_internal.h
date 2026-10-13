@@ -89,6 +89,12 @@ struct handle_ops {
 
     /* 'rename' is used to change name of a stream, or reset its share option */
     int (*rename)(PAL_HANDLE handle, const char* type, const char* uri);
+
+    /* Path-based file creation operations. These are used only by file handles. */
+    int (*symlink)(const char* target, const char* uri);
+    int (*link)(const char* old_uri, const char* new_uri);
+    int (*unlink_path)(const char* uri);
+    int (*rename_path)(const char* old_uri, const char* new_uri);
 };
 
 extern const struct handle_ops* g_pal_handle_ops[];

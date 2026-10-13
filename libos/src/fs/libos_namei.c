@@ -470,7 +470,7 @@ int open_namei(struct libos_handle* hdl, struct libos_dentry* start, const char*
          * Can happen if user specified O_NOFOLLOW, or O_TRUNC | O_EXCL. Posix requires us to fail
          * with -ELOOP when trying to open a symlink.
          */
-        ret = -ELOOP;
+        ret = (flags & O_CREAT) && (flags & O_EXCL) ? -EEXIST : -ELOOP;
         goto out;
     }
 

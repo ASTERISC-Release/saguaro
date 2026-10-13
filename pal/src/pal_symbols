@@ -43,6 +43,10 @@ PalSetExceptionHandler
 PalSegmentBaseGet
 PalSegmentBaseSet
 PalStreamChangeName
+PalFileCreateSymlink
+PalFileCreateLink
+PalFileUnlink
+PalFileRename
 PalStreamAttributesSetByHandle
 PalDeviceIoControl
 PalDebugMapAdd

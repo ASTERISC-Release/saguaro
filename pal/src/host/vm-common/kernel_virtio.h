@@ -272,6 +272,8 @@ int virtio_fs_fuse_create(uint64_t dir_nodeid, const char* filename, uint32_t fl
                           uint64_t* out_nodeid, uint64_t* out_fh);
 int virtio_fs_fuse_release(uint64_t nodeid, uint64_t fh);
 int virtio_fs_fuse_unlink(uint64_t dir_nodeid, const char* filename);
+int virtio_fs_fuse_symlink(uint64_t dir_nodeid, const char* filename, const char* target);
+int virtio_fs_fuse_link(uint64_t old_nodeid, uint64_t new_dir_nodeid, const char* new_filename);
 int virtio_fs_fuse_rename(uint64_t old_dir_nodeid, const char* old_filename,
                           uint64_t new_dir_nodeid, const char* new_filename);
 

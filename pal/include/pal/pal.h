@@ -546,6 +546,12 @@ int PalStreamAttributesSetByHandle(PAL_HANDLE handle, PAL_STREAM_ATTR* attr);
  */
 int PalStreamChangeName(PAL_HANDLE handle, const char* typed_uri);
 
+/* Create a symbolic or hard link between host-backed file URIs. */
+int PalFileCreateSymlink(const char* target, const char* typed_uri);
+int PalFileCreateLink(const char* old_typed_uri, const char* new_typed_uri);
+int PalFileUnlink(const char* typed_uri);
+int PalFileRename(const char* old_typed_uri, const char* new_typed_uri);
+
 struct pal_socket_addr {
     enum pal_socket_domain domain;
     union {

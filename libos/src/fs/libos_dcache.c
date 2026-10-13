@@ -239,8 +239,10 @@ bool dentry_is_ancestor(struct libos_dentry* anc, struct libos_dentry* dent) {
 }
 
 ino_t dentry_ino(struct libos_dentry* dent) {
-    return hash_abs_path(dent);
+    return dent->inode ? dent->inode->ino : hash_abs_path(dent);
 }
+
+static uint64_t g_next_inode_ino;
 
 static size_t dentry_path_size(struct libos_dentry* dent, bool relative) {
     /* The following code should mirror `dentry_path_into_buf`. */
@@ -427,6 +429,8 @@ struct libos_inode* get_new_inode(struct libos_mount* mount, mode_t type, mode_t
     inode->type = type;
     inode->perm = perm;
     inode->size = 0;
+    inode->nlink = 1;
+    inode->ino = __atomic_add_fetch(&g_next_inode_ino, 1, __ATOMIC_RELAXED);
     inode->ctime = 0;
     inode->mtime = 0;
     inode->atime = 0;

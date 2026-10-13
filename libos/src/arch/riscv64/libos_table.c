@@ -79,8 +79,8 @@ libos_syscall_t libos_syscall_table[LIBOS_SYSCALL_BOUND] = {
     [__NR_mknodat]                    = (libos_syscall_t)libos_syscall_mknodat,
     [__NR_mkdirat]                    = (libos_syscall_t)libos_syscall_mkdirat,
     [__NR_unlinkat]                   = (libos_syscall_t)libos_syscall_unlinkat,
-    [__NR_symlinkat]                  = (libos_syscall_t)0, // libos_syscall_symlinkat
-    [__NR_linkat]                     = (libos_syscall_t)0, // libos_syscall_linkat
+    [__NR_symlinkat]                  = (libos_syscall_t)libos_syscall_symlinkat,
+    [__NR_linkat]                     = (libos_syscall_t)libos_syscall_linkat,
     /* No renameat on riscv64: the generic riscv ABI table only ever grew renameat2 (276),
      * the by-definition-equivalent superset (flags==0 is plain renameat); see the entry
      * under [__NR_renameat2] below. */

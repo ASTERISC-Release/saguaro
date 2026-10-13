@@ -445,6 +445,43 @@ int virtio_fs_fuse_unlink(uint64_t dir_nodeid, const char* filename) {
     return 0;
 }
 
+int virtio_fs_fuse_symlink(uint64_t dir_nodeid, const char* filename, const char* target) {
+    struct fuse_in_header hdr_in = { .opcode = FUSE_SYMLINK, .nodeid = dir_nodeid };
+    struct fuse_out_header hdr_out = {0};
+    struct fuse_entry_out entry_out = {0};
+    struct virtio_fs_desc descs[] = {
+        { .addr = &hdr_in, .size = sizeof(hdr_in), .in = true },
+        { .addr = (void*)filename, .size = strlen(filename) + 1, .in = true },
+        { .addr = (void*)target, .size = strlen(target) + 1, .in = true },
+        { .addr = &hdr_out, .size = sizeof(hdr_out), .in = false },
+        { .addr = &entry_out, .size = sizeof(entry_out), .in = false },
+    };
+
+    int ret = virtio_fs_exec_request(ARRAY_SIZE(descs), descs);
+    if (ret < 0)
+        return ret;
+    return hdr_out.error < 0 ? unix_to_pal_error(hdr_out.error) : 0;
+}
+
+int virtio_fs_fuse_link(uint64_t old_nodeid, uint64_t new_dir_nodeid, const char* new_filename) {
+    struct fuse_in_header hdr_in = { .opcode = FUSE_LINK, .nodeid = new_dir_nodeid };
+    struct fuse_link_in link_in = { .oldnodeid = old_nodeid };
+    struct fuse_out_header hdr_out = {0};
+    struct fuse_entry_out entry_out = {0};
+    struct virtio_fs_desc descs[] = {
+        { .addr = &hdr_in, .size = sizeof(hdr_in), .in = true },
+        { .addr = &link_in, .size = sizeof(link_in), .in = true },
+        { .addr = (void*)new_filename, .size = strlen(new_filename) + 1, .in = true },
+        { .addr = &hdr_out, .size = sizeof(hdr_out), .in = false },
+        { .addr = &entry_out, .size = sizeof(entry_out), .in = false },
+    };
+
+    int ret = virtio_fs_exec_request(ARRAY_SIZE(descs), descs);
+    if (ret < 0)
+        return ret;
+    return hdr_out.error < 0 ? unix_to_pal_error(hdr_out.error) : 0;
+}
+
 int virtio_fs_fuse_rename(uint64_t old_dir_nodeid, const char* old_filename,
                           uint64_t new_dir_nodeid, const char* new_filename) {
     int ret;

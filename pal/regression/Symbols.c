@@ -68,6 +68,10 @@ int main(int argc, char** argv, char** envp) {
     PRINT_SYMBOL(PalStreamAttributesQueryByHandle);
     PRINT_SYMBOL(PalStreamAttributesSetByHandle);
     PRINT_SYMBOL(PalStreamChangeName);
+    PRINT_SYMBOL(PalFileCreateSymlink);
+    PRINT_SYMBOL(PalFileCreateLink);
+    PRINT_SYMBOL(PalFileUnlink);
+    PRINT_SYMBOL(PalFileRename);
     PRINT_SYMBOL(PalStreamsWaitEvents);
 
     PRINT_SYMBOL(PalThreadCreate);

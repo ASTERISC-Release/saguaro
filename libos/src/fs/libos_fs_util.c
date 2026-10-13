@@ -79,7 +79,7 @@ static int generic_istat(struct libos_inode* inode, struct stat* buf) {
      * to keep track of the exact value (we would have to list the directory, and also take into
      * account synthetic files created by Gramine, such as named pipes and sockets).
      */
-    buf->st_nlink = (inode->type == S_IFDIR ? 2 : 1);
+    buf->st_nlink = (inode->type == S_IFDIR ? 2 : inode->nlink);
 
     if (inode->mount->uri)
         buf->st_dev = hash_str(inode->mount->uri);

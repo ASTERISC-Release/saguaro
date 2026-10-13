@@ -223,6 +223,26 @@ static int file_rename(PAL_HANDLE handle, const char* type, const char* uri) {
     return 0;
 }
 
+static int file_symlink(const char* target, const char* uri) {
+    int ret = DO_SYSCALL(symlinkat, target, AT_FDCWD, uri);
+    return ret < 0 ? unix_to_pal_error(ret) : 0;
+}
+
+static int file_link(const char* old_uri, const char* new_uri) {
+    int ret = DO_SYSCALL(linkat, AT_FDCWD, old_uri, AT_FDCWD, new_uri, 0);
+    return ret < 0 ? unix_to_pal_error(ret) : 0;
+}
+
+static int file_unlink_path(const char* uri) {
+    int ret = DO_SYSCALL(unlinkat, AT_FDCWD, uri, 0);
+    return ret < 0 ? unix_to_pal_error(ret) : 0;
+}
+
+static int file_rename_path(const char* old_uri, const char* new_uri) {
+    int ret = DO_SYSCALL(renameat, AT_FDCWD, old_uri, AT_FDCWD, new_uri);
+    return ret < 0 ? unix_to_pal_error(ret) : 0;
+}
+
 static int dir_open(PAL_HANDLE* handle, const char* type, const char* uri, enum pal_access access,
                     pal_share_flags_t share, enum pal_create_mode create,
                     pal_stream_options_t options) {
@@ -416,6 +436,10 @@ struct handle_ops g_file_ops = {
     .attrquerybyhdl = &file_attrquerybyhdl,
     .attrsetbyhdl   = &file_attrsetbyhdl,
     .rename         = &file_rename,
+    .symlink        = &file_symlink,
+    .link           = &file_link,
+    .unlink_path    = &file_unlink_path,
+    .rename_path    = &file_rename_path,
 };
 
 struct handle_ops g_dir_ops = {

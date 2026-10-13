@@ -61,8 +61,12 @@ static void tmpfs_idrop(struct libos_inode* inode) {
     assert(locked(&inode->lock));
 
     if (inode->data) {
-        mem_file_destroy(inode->data);
-        free(inode->data);
+        if (inode->type == S_IFLNK) {
+            free(inode->data);
+        } else {
+            mem_file_destroy(inode->data);
+            free(inode->data);
+        }
     }
 }
 
@@ -74,16 +78,24 @@ struct tmpfs_checkpoint {
 static int tmpfs_icheckpoint(struct libos_inode* inode, void** out_data, size_t* out_size) {
     assert(locked(&inode->lock));
 
-    struct libos_mem_file* mem = inode->data;
-    assert(mem->size >= 0);
-
+    size_t data_size;
+    const void* data;
+    if (inode->type == S_IFLNK) {
+        data_size = strlen(inode->data) + 1;
+        data = inode->data;
+    } else {
+        struct libos_mem_file* mem = inode->data;
+        assert(mem->size >= 0);
+        data_size = mem->size;
+        data = mem->buf;
+    }
     struct tmpfs_checkpoint* cp;
-    size_t cp_size = sizeof(*cp) + mem->size;
+    size_t cp_size = sizeof(*cp) + data_size;
     cp = malloc(cp_size);
     if (!cp)
         return -ENOMEM;
-    cp->size = mem->size;
-    memcpy(cp->data, mem->buf, mem->size);
+    cp->size = data_size;
+    memcpy(cp->data, data, data_size);
 
     *out_data = cp;
     *out_size = cp_size;
@@ -92,6 +104,13 @@ static int tmpfs_icheckpoint(struct libos_inode* inode, void** out_data, size_t*
 
 static int tmpfs_irestore(struct libos_inode* inode, void* data) {
     struct tmpfs_checkpoint* cp = data;
+
+    if (inode->type == S_IFLNK) {
+        inode->data = malloc(cp->size);
+        if (inode->data)
+            memcpy(inode->data, cp->data, cp->size);
+        return inode->data ? 0 : -ENOMEM;
+    }
 
     struct libos_mem_file* mem = malloc(sizeof(*mem));
     if (!mem)
@@ -169,6 +188,45 @@ static int tmpfs_mkdir(struct libos_dentry* dent, mode_t perm) {
     assert(!dent->inode);
 
     return tmpfs_setup_dentry(dent, S_IFDIR, perm);
+}
+
+static int tmpfs_symlink(const char* target, struct libos_dentry* dent) {
+    assert(locked(&g_dcache_lock));
+    assert(!dent->inode);
+
+    char* target_copy = strdup(target);
+    if (!target_copy)
+        return -ENOMEM;
+    int ret = tmpfs_setup_dentry(dent, S_IFLNK, PERM_rwxrwxrwx);
+    if (ret < 0) {
+        free(target_copy);
+        return ret;
+    }
+    struct libos_mem_file* empty_data = dent->inode->data;
+    mem_file_destroy(empty_data);
+    free(empty_data);
+    dent->inode->data = target_copy;
+    dent->inode->size = strlen(target);
+    return 0;
+}
+
+static int tmpfs_link(struct libos_dentry* old, struct libos_dentry* new) {
+    assert(locked(&g_dcache_lock));
+    assert(old->inode && !new->inode);
+    get_inode(old->inode);
+    new->inode = old->inode;
+    lock(&old->inode->lock);
+    old->inode->nlink++;
+    unlock(&old->inode->lock);
+    return 0;
+}
+
+static int tmpfs_follow_link(struct libos_dentry* dent, char** out_target) {
+    assert(locked(&g_dcache_lock));
+    if (dent->inode->type != S_IFLNK)
+        return -EINVAL;
+    *out_target = strdup(dent->inode->data);
+    return *out_target ? 0 : -ENOMEM;
 }
 
 static int tmpfs_unlink(struct libos_dentry* dent) {
@@ -355,6 +413,9 @@ struct libos_d_ops tmp_d_ops = {
     .rename      = &tmpfs_rename,
     .chmod       = &tmpfs_chmod,
     .set_times   = &tmpfs_set_times,
+    .symlink     = &tmpfs_symlink,
+    .link        = &tmpfs_link,
+    .follow_link = &tmpfs_follow_link,
     .idrop       = &tmpfs_idrop,
     .icheckpoint = &tmpfs_icheckpoint,
     .irestore    = &tmpfs_irestore,

@@ -92,6 +92,10 @@ long libos_syscall_unlinkat(int dfd, const char* pathname, int flag) {
         goto out;
     }
 
+    lock(&dent->inode->lock);
+    if (dent->inode->nlink > 0)
+        dent->inode->nlink--;
+    unlock(&dent->inode->lock);
     put_inode(dent->inode);
     dent->inode = NULL;
     ret = 0;
@@ -127,8 +131,21 @@ long libos_syscall_mkdirat(int dfd, const char* pathname, int mode) {
     if (*pathname != '/' && (ret = get_dirfd_dentry(dfd, &dir)) < 0)
         return ret;
 
+    /* Linux mkdir reports EEXIST for a final symlink, even when it is dangling. */
+    struct libos_dentry* existing = NULL;
+    lock(&g_dcache_lock);
+    ret = path_lookupat(dir, pathname, LOOKUP_NO_FOLLOW | LOOKUP_CREATE, &existing);
+    if (ret == 0 && existing->inode && existing->inode->type == S_IFLNK)
+        ret = -EEXIST;
+    unlock(&g_dcache_lock);
+    if (existing)
+        put_dentry(existing);
+    if (ret < 0)
+        goto out;
+
     ret = open_namei(NULL, dir, pathname, O_CREAT | O_EXCL | O_DIRECTORY, mode, NULL);
 
+out:
     if (dir)
         put_dentry(dir);
     return ret;
@@ -319,9 +336,10 @@ static int do_rename(struct libos_dentry* old_dent, struct libos_dentry* new_den
     assert(locked(&g_dcache_lock));
     assert(old_dent->inode);
 
-    if ((old_dent->inode->type != S_IFREG) || (new_dent->inode &&
-                                               new_dent->inode->type != S_IFREG)) {
-        /* Current implementation of fs does not allow for renaming anything but regular files */
+    if ((old_dent->inode->type != S_IFREG && old_dent->inode->type != S_IFLNK) ||
+        (new_dent->inode && new_dent->inode->type != S_IFREG &&
+         new_dent->inode->type != S_IFLNK && new_dent->inode->type != S_IFDIR)) {
+        /* Current implementation allows regular files and symlinks. */
         return -ENOSYS;
     }
 
@@ -564,6 +582,139 @@ long libos_syscall_futimesat(int dirfd, const char* pathname,
         }
     }
     return libos_syscall_utimensat(dirfd, pathname, times, 0);
+}
+
+long libos_syscall_symlink(const char* target, const char* linkpath) {
+    return libos_syscall_symlinkat(target, AT_FDCWD, linkpath);
+}
+
+long libos_syscall_symlinkat(const char* target, int newdirfd, const char* linkpath) {
+    if (!is_user_string_readable(target) || !is_user_string_readable(linkpath))
+        return -EFAULT;
+
+    struct libos_dentry* dir = NULL;
+    struct libos_dentry* new = NULL;
+    int ret;
+    if (*linkpath != '/' && (ret = get_dirfd_dentry(newdirfd, &dir)) < 0)
+        return ret;
+
+    lock(&g_dcache_lock);
+    ret = path_lookupat(dir, linkpath, LOOKUP_NO_FOLLOW | LOOKUP_CREATE, &new);
+    if (ret < 0)
+        goto out;
+    if (new->inode) {
+        ret = -EEXIST;
+        goto out;
+    }
+    if (!new->parent) {
+        ret = -EEXIST;
+        goto out;
+    }
+    ret = check_permissions(new->parent, MAY_WRITE | MAY_EXEC);
+    if (ret < 0)
+        goto out;
+    struct libos_d_ops* d_ops = new->mount->fs->d_ops;
+    if (!d_ops || !d_ops->symlink) {
+        ret = -EOPNOTSUPP;
+        goto out;
+    }
+    ret = d_ops->symlink(target, new);
+out:
+    unlock(&g_dcache_lock);
+    if (dir)
+        put_dentry(dir);
+    if (new)
+        put_dentry(new);
+    return ret;
+}
+
+long libos_syscall_link(const char* oldpath, const char* newpath) {
+    return libos_syscall_linkat(AT_FDCWD, oldpath, AT_FDCWD, newpath, 0);
+}
+
+long libos_syscall_linkat(int olddirfd, const char* oldpath, int newdirfd, const char* newpath,
+                          int flags) {
+    if (!is_user_string_readable(oldpath) || !is_user_string_readable(newpath))
+        return -EFAULT;
+    if (flags & ~(AT_SYMLINK_FOLLOW | AT_EMPTY_PATH))
+        return -EINVAL;
+
+    struct libos_dentry* old_dir = NULL;
+    struct libos_dentry* old = NULL;
+    struct libos_dentry* new_dir = NULL;
+    struct libos_dentry* new = NULL;
+    struct libos_handle* old_hdl = NULL;
+    int ret;
+    if (!*oldpath && (flags & AT_EMPTY_PATH)) {
+        old_hdl = get_fd_handle(olddirfd, NULL, NULL);
+        if (!old_hdl)
+            return -EBADF;
+        old = old_hdl->dentry;
+        if (!old) {
+            put_handle(old_hdl);
+            return -EBADF;
+        }
+        get_dentry(old);
+    } else if (*oldpath != '/' && (ret = get_dirfd_dentry(olddirfd, &old_dir)) < 0) {
+        return ret;
+    }
+    if (*newpath != '/' && (ret = get_dirfd_dentry(newdirfd, &new_dir)) < 0) {
+        goto out;
+    }
+
+    lock(&g_dcache_lock);
+    if (!old) {
+        int lookup_flags = flags & AT_SYMLINK_FOLLOW ? LOOKUP_FOLLOW : LOOKUP_NO_FOLLOW;
+        ret = path_lookupat(old_dir, oldpath, lookup_flags, &old);
+        if (ret < 0)
+            goto unlock_out;
+    }
+    if (!old->inode) {
+        ret = -ENOENT;
+        goto unlock_out;
+    }
+    if (old->inode->type == S_IFDIR) {
+        ret = -EPERM;
+        goto unlock_out;
+    }
+    ret = path_lookupat(new_dir, newpath, LOOKUP_NO_FOLLOW | LOOKUP_CREATE, &new);
+    if (ret < 0)
+        goto unlock_out;
+    if (new->inode) {
+        ret = -EEXIST;
+        goto unlock_out;
+    }
+    if (!new->parent) {
+        ret = -EEXIST;
+        goto unlock_out;
+    }
+    ret = check_permissions(new->parent, MAY_WRITE | MAY_EXEC);
+    if (ret < 0)
+        goto unlock_out;
+    if (old->mount != new->mount) {
+        ret = -EXDEV;
+        goto unlock_out;
+    }
+    struct libos_d_ops* d_ops = new->mount->fs->d_ops;
+    if (!d_ops || !d_ops->link) {
+        ret = -EOPNOTSUPP;
+        goto unlock_out;
+    }
+    ret = d_ops->link(old, new);
+unlock_out:
+    unlock(&g_dcache_lock);
+out:
+    if (old_hdl)
+        put_handle(old_hdl);
+    if (old_dir)
+        put_dentry(old_dir);
+    if (old)
+        put_dentry(old);
+    if (new_dir)
+        put_dentry(new_dir);
+    if (new)
+        put_dentry(new);
+    return ret;
 }
 
 long libos_syscall_sendfile(int out_fd, int in_fd, off_t* offset, size_t count) {

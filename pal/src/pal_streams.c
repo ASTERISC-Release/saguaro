@@ -393,6 +393,67 @@ int PalStreamChangeName(PAL_HANDLE hdl, const char* typed_uri) {
     return hops->rename(hdl, type, uri);
 }
 
+int PalFileCreateSymlink(const char* target, const char* typed_uri) {
+    char type[URI_PREFIX_MAX_LEN + 1];
+    const char* uri;
+    struct handle_ops* ops;
+    int ret = split_uri_and_find_ops(typed_uri, type, &uri, &ops);
+    if (ret < 0)
+        return ret;
+    if (ops != &g_file_ops || !ops->symlink)
+        return -PAL_ERROR_NOTSUPPORT;
+    return ops->symlink(target, uri);
+}
+
+int PalFileCreateLink(const char* old_typed_uri, const char* new_typed_uri) {
+    char old_type[URI_PREFIX_MAX_LEN + 1];
+    char new_type[URI_PREFIX_MAX_LEN + 1];
+    const char* old_uri;
+    const char* new_uri;
+    struct handle_ops* old_ops;
+    struct handle_ops* new_ops;
+    int ret = split_uri_and_find_ops(old_typed_uri, old_type, &old_uri, &old_ops);
+    if (ret < 0)
+        return ret;
+    ret = split_uri_and_find_ops(new_typed_uri, new_type, &new_uri, &new_ops);
+    if (ret < 0)
+        return ret;
+    if (old_ops != &g_file_ops || new_ops != &g_file_ops || old_ops != new_ops || !new_ops->link)
+        return -PAL_ERROR_NOTSUPPORT;
+    return new_ops->link(old_uri, new_uri);
+}
+
+int PalFileUnlink(const char* typed_uri) {
+    char type[URI_PREFIX_MAX_LEN + 1];
+    const char* uri;
+    struct handle_ops* ops;
+    int ret = split_uri_and_find_ops(typed_uri, type, &uri, &ops);
+    if (ret < 0)
+        return ret;
+    if (ops != &g_file_ops || !ops->unlink_path)
+        return -PAL_ERROR_NOTSUPPORT;
+    return ops->unlink_path(uri);
+}
+
+int PalFileRename(const char* old_typed_uri, const char* new_typed_uri) {
+    char old_type[URI_PREFIX_MAX_LEN + 1];
+    char new_type[URI_PREFIX_MAX_LEN + 1];
+    const char* old_uri;
+    const char* new_uri;
+    struct handle_ops* old_ops;
+    struct handle_ops* new_ops;
+    int ret = split_uri_and_find_ops(old_typed_uri, old_type, &old_uri, &old_ops);
+    if (ret < 0)
+        return ret;
+    ret = split_uri_and_find_ops(new_typed_uri, new_type, &new_uri, &new_ops);
+    if (ret < 0)
+        return ret;
+    if (old_ops != &g_file_ops || new_ops != &g_file_ops || old_ops != new_ops ||
+        !new_ops->rename_path)
+        return -PAL_ERROR_NOTSUPPORT;
+    return new_ops->rename_path(old_uri, new_uri);
+}
+
 int PalDebugLog(const void* buffer, size_t size) {
     return _PalDebugLog(buffer, size);
 }
