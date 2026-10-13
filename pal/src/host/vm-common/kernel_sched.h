@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #include "spinlock.h"
@@ -30,6 +31,8 @@ extern bool g_kick_sched_thread;
 
 extern int g_streams_waiting_events_futex;
 
+struct thread;
+
 /* the four helper functions are implemented in pal_common_threading.c which knows about the
  * relationship between the TCB (which is pointed to by GS base reg) and the thread struct */
 struct thread* get_thread_ptr(uintptr_t curr_gs_base);
@@ -47,3 +50,6 @@ void sched_thread_add(struct thread* thread);
 void sched_thread_remove(struct thread* thread);
 void sched_thread_set_cpu_affinity(struct thread* thread, unsigned long* cpu_mask,
                                    size_t cpu_mask_len);
+#ifdef __x86_64__
+bool sched_thread_is_stopped(struct thread* thread);
+#endif

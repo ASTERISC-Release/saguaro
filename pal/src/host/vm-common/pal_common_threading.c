@@ -12,6 +12,7 @@
 #include "pal_internal.h"
 
 #include "kernel_multicore.h"
+#include "kernel_memory.h"
 #include "kernel_sched.h"
 #include "kernel_thread.h"
 #include "kernel_xsave.h"
@@ -27,6 +28,16 @@ static int assign_new_tid(void) {
 
 int pal_common_thread_create(struct pal_handle** handle, int (*callback)(void*),
                              const void* param) {
+    return pal_common_thread_create_with_address_space(handle, callback, param,
+                                                       g_pml4_table_base);
+}
+
+int pal_common_thread_create_with_address_space(struct pal_handle** handle,
+                                               int (*callback)(void*), const void* param,
+                                               uint64_t address_space_root) {
+    if (!address_space_root || !IS_ALIGNED_POW2(address_space_root, PAGE_SIZE))
+        return -PAL_ERROR_INVAL;
+
     /*
      * Stack layout for the new thread looks like this:
      *
@@ -54,6 +65,7 @@ int pal_common_thread_create(struct pal_handle** handle, int (*callback)(void*),
     /* init TCB in the highest part of the allocated stack region */
     struct pal_tcb_vm* tcb = stack + THREAD_STACK_SIZE + ALT_STACK_SIZE - sizeof(*tcb);
     thread_setup(&tcb->kernel_thread, fpregs, stack, callback, param);
+    tcb->kernel_thread.address_space_root = address_space_root;
 
     thread_handle->hdr.type = PAL_TYPE_THREAD;
     thread_handle->thread.tid = assign_new_tid();

@@ -13,6 +13,7 @@
 #include "api.h"
 #include "cpu.h"
 #include "kernel_interrupts.h"
+#include "kernel_memory.h"
 #include "kernel_multicore.h"
 #include "kernel_thread.h"
 #include "kernel_virtio.h"
@@ -38,6 +39,16 @@ static spinlock_t g_thread_list_lock = INIT_SPINLOCK_UNLOCKED;
 
 /* Atomic variable used to kick sched_thread() into action (instead of waiting for some time) */
 bool g_kick_sched_thread = false;
+
+static void switch_to_thread_address_space(struct thread* thread) {
+    uint64_t root = thread->address_space_root ?: g_pml4_table_base;
+    int ret = memory_address_space_switch_root(root);
+    if (ret < 0) {
+        log_error("Failed to switch to thread address-space root %p: %s", (void*)root,
+                  pal_strerror(ret));
+        BUG();
+    }
+}
 
 static uint64_t get_rflags(void) {
     uint64_t result;
@@ -165,6 +176,8 @@ void sched_thread_uninterruptable(struct isr_regs* userland_regs) {
      * userland context and rewire RIP to point to a special "return via iret" assembly. */
     save_userland_context(curr_thread, userland_regs);
 
+    switch_to_thread_address_space(next_thread);
+
     /* it is cumbersome to restore FSBASE in asm, so restore explicitly here */
     /* Diagnostic logging: print FS base values we are about to install and the thread identities.
      * This helps verify whether per-thread user_fsbase differs between threads or gets clobbered.
@@ -207,6 +220,8 @@ void sched_thread(uint32_t* lock_to_unlock, int* clear_child_tid) {
 
     // log_always("Scheduling out thread %p, scheduling in thread %p\n", curr_thread, next_thread);
 
+    switch_to_thread_address_space(next_thread);
+
     /* it is cumbersome to restore FSBASE in asm, so restore explicitly here */
     wrmsr(MSR_IA32_FS_BASE, next_thread->context.user_fsbase);
 
@@ -238,6 +253,7 @@ void sched_thread_wait(int* futex_word, spinlock_t* lock) {
 
     assert(next_thread != curr_thread);
 
+    switch_to_thread_address_space(next_thread);
     wrmsr(MSR_IA32_FS_BASE, next_thread->context.user_fsbase);
 
     uint64_t next_gs_base = (uint64_t)get_gs_base(next_thread);
@@ -293,6 +309,13 @@ void sched_thread_remove(struct thread* thread) {
     thread->state      = THREAD_STOPPED;
     thread->blocked_on = NULL;
     spinlock_unlock_enable_irq(&g_thread_list_lock);
+}
+
+bool sched_thread_is_stopped(struct thread* thread) {
+    spinlock_lock_disable_irq(&g_thread_list_lock);
+    bool stopped = thread->state == THREAD_STOPPED;
+    spinlock_unlock_enable_irq(&g_thread_list_lock);
+    return stopped;
 }
 
 void sched_thread_set_cpu_affinity(struct thread* thread, unsigned long* cpu_mask,

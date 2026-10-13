@@ -147,6 +147,11 @@ struct thread {
     int* blocked_on;
     bool is_helper; /* is it an idle or bottomhalves thread */
 
+#ifdef __x86_64__
+    /* Physical page-table root used while this thread runs; zero means the boot address space. */
+    uint64_t address_space_root;
+#endif
+
     /* CPU affinity of a thread */
     unsigned long cpu_mask[MAX_NUM_CPU_LONGS];
 

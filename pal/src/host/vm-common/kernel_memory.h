@@ -60,6 +60,7 @@ int memory_address_space_clone(uint64_t base_root, struct memory_address_space* 
 int memory_address_space_map(struct memory_address_space* space, uintptr_t addr,
                              uintptr_t frame, bool write, bool execute, bool usermode);
 int memory_address_space_switch(const struct memory_address_space* space);
+int memory_address_space_switch_root(uint64_t root);
 #endif
 
 /* Ensures IA32_PAT has Write-Combining at index 1 (fatal on failure). */

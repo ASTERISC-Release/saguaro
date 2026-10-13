@@ -188,7 +188,19 @@ int memory_address_space_map(struct memory_address_space* space, uintptr_t addr,
 int memory_address_space_switch(const struct memory_address_space* space) {
     if (!space || !space->root || !IS_ALIGNED_POW2((uintptr_t)space->root, PAGE_SIZE))
         return -PAL_ERROR_INVAL;
-    __asm__ volatile("mov %0, %%cr3" : : "r"((uintptr_t)space->root) : "memory");
+    return memory_address_space_switch_root((uintptr_t)space->root);
+}
+
+int memory_address_space_switch_root(uint64_t root) {
+    const uint64_t addr_mask = 0x00000ffffffff000UL;
+    if (!root || !IS_ALIGNED_POW2(root, PAGE_SIZE) || (root & ~addr_mask))
+        return -PAL_ERROR_INVAL;
+
+    uint64_t current_root;
+    __asm__ volatile("mov %%cr3, %0" : "=r"(current_root));
+    if ((current_root & addr_mask) == root)
+        return 0;
+    __asm__ volatile("mov %0, %%cr3" : : "r"(root) : "memory");
     return 0;
 }
 #endif

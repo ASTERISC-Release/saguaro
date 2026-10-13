@@ -43,6 +43,20 @@ static e820_table_entry g_e820_entries[E820_NR_ENTRIES];
 static size_t g_e820_entries_size;
 
 #ifdef __x86_64__
+struct address_space_thread_check {
+    volatile uint64_t* addr;
+    uint64_t observed;
+    atomic_bool done;
+};
+
+static int address_space_thread_check(void* arg) {
+    struct address_space_thread_check* check = arg;
+    check->observed = *check->addr;
+    *check->addr = 0x7766554433221100UL;
+    atomic_store_explicit(&check->done, true, memory_order_release);
+    return 0;
+}
+
 static int init_multiprocess_frame_pool(void) {
     extern struct pal_initial_mem_range g_initial_mem_ranges[];
 
@@ -158,14 +172,51 @@ static int init_multiprocess_frame_pool(void) {
 
             bool isolated = child_initial_value == 0 && *parent_value == parent_marker &&
                             *(volatile uint64_t*)reused_frame == child_marker;
+            if (!isolated) {
+                *parent_value = original_value;
+                memory_frame_free(frame2);
+                memory_frame_free(reused_frame);
+                return -PAL_ERROR_DENIED;
+            }
+
+            bool scheduler_switched = true;
+            if (g_num_cpus == 1) {
+                struct address_space_thread_check thread_check = {
+                    .addr = (volatile uint64_t*)test_addr,
+                };
+                atomic_init(&thread_check.done, false);
+                PAL_HANDLE thread_handle;
+                ret = pal_common_thread_create_with_address_space(
+                        &thread_handle, address_space_thread_check, &thread_check,
+                        (uint64_t)child_space.root);
+                if (ret < 0) {
+                    *parent_value = original_value;
+                    memory_frame_free(frame2);
+                    memory_frame_free(reused_frame);
+                    return ret;
+                }
+
+                while (!atomic_load_explicit(&thread_check.done, memory_order_acquire))
+                    _PalThreadYieldExecution();
+                while (!sched_thread_is_stopped(thread_handle->thread.kernel_thread))
+                    _PalThreadYieldExecution();
+
+                scheduler_switched = thread_check.observed == child_marker &&
+                                     *parent_value == parent_marker &&
+                                     *(volatile uint64_t*)reused_frame ==
+                                             0x7766554433221100UL;
+                PalObjectDestroy(thread_handle);
+            } else {
+                log_always("Skipping scheduled address-space check with %u vCPUs", g_num_cpus);
+            }
             *parent_value = original_value;
             memory_frame_free(frame2);
             ret = memory_frame_free(reused_frame);
             if (ret < 0)
                 return ret;
-            if (!isolated)
+            if (!scheduler_switched)
                 return -PAL_ERROR_DENIED;
-            log_always("Address-space mapping self-check passed");
+            log_always("Address-space mapping and scheduler switch self-check passed");
             return 0;
         }
     }
