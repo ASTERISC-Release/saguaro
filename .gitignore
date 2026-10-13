@@ -68,3 +68,4 @@ built-debug
 .ltp-install/
 .ltp-nofork-src/
 .ltp-nofork-install/
+/libos/test/ltp/install

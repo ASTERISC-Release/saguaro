@@ -25,6 +25,7 @@ if HAS_SGX:
 LTP_SCENARIO = os.environ.get('LTP_SCENARIO', DEFAULT_LTP_SCENARIO)
 LTP_CONFIG = os.environ.get('LTP_CONFIG', DEFAULT_LTP_CONFIG).split(' ')
 LTP_TIMEOUT_FACTOR = float(os.environ.get('LTP_TIMEOUT_FACTOR', '1'))
+LTP_LOADER = os.environ.get('LTP_LOADER')
 
 
 def read_scenario(scenario):
@@ -186,9 +187,12 @@ def check_must_pass(passed, failed, must_pass):
 def test_ltp(cmd, section):
     must_pass = section.getintset('must-pass')
 
-    loader = 'gramine-sgx' if HAS_SGX else 'gramine-direct'
+    loader = LTP_LOADER or ('gramine-sgx' if HAS_SGX else 'gramine-direct')
+    loader = {'direct': 'gramine-direct', 'vm': 'gramine-vm'}.get(loader, loader)
+    if loader not in ('native', 'gramine-direct', 'gramine-vm', 'gramine-sgx'):
+        raise ValueError('LTP_LOADER must be native, gramine-direct, gramine-vm or gramine-sgx')
     timeout = int(section.getfloat('timeout') * LTP_TIMEOUT_FACTOR)
-    full_cmd = [loader, *cmd]
+    full_cmd = cmd if loader == 'native' else [loader, *cmd]
 
     logging.info('command: %s', full_cmd)
     logging.info('must_pass: %s', list(must_pass) if must_pass else 'all')
@@ -258,6 +262,7 @@ Supports the following environment variables:
     LTP_SCENARIO: LTP scenario file (default: {})
     LTP_CONFIG: space-separated list of LTP config files (default: {})
     LTP_TIMEOUT_FACTOR: multiply all timeouts by given value
+    LTP_LOADER: native, gramine-direct, gramine-vm or gramine-sgx (default preserves old behavior)
 '''.format(sys.argv[0], DEFAULT_LTP_SCENARIO, DEFAULT_LTP_CONFIG)
         print(usage, file=sys.stderr)
         sys.exit(1)
