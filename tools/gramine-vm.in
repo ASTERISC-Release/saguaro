@@ -439,12 +439,18 @@ fi
 # connects directly to the guest's vsock port, the way the X proxy above does.
 vm_relay_start "$GRAMINE_VM_ID" "$GRAMINE_MANIFEST" || exit 2
 
+VIRTIOFSD=$(command -v virtiofsd || echo /usr/lib/qemu/virtiofsd)
+if [ ! -x "$VIRTIOFSD" ]; then
+    echo "gramine-vm: virtiofsd not found" >&2
+    exit 2
+fi
+
 # Check if the Gramine vhostfs pid file is already in use by another process
 if lsof /tmp/gramine_vhostfs_"$GRAMINE_VM_ID".pid 2>/dev/null; then
     echo "Error: /tmp/gramine_vhostfs_"$GRAMINE_VM_ID".pid is already in use."
     exit 2
 fi
-virtiofsd --socket-path /tmp/gramine_vhostfs_"$GRAMINE_VM_ID" --shared-dir / --log-level error \
+"$VIRTIOFSD" --socket-path /tmp/gramine_vhostfs_"$GRAMINE_VM_ID" --shared-dir / --log-level error \
 --sandbox none --no-announce-submounts &
 VIRTIOFSD_PID=$!
 while [ ! -e /tmp/gramine_vhostfs_"$GRAMINE_VM_ID" ]; do sleep 0.1; done
