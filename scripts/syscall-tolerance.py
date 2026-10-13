@@ -96,7 +96,12 @@ def run_once(command, deny, drive, wait, timeout, capture):
             drive_status = subprocess.run(drive, shell=True, stdout=subprocess.DEVNULL,
                                           stderr=subprocess.DEVNULL,
                                           timeout=max(deadline - time.time(), 1)).returncode
+            if proc.poll() is not None:  # it ended before the client finished
+                out = proc.communicate()[0]
+                return proc.returncode, drive_status, out
             os.killpg(proc.pid, signal.SIGTERM)
+            out, _ = proc.communicate(timeout=max(deadline - time.time(), 1))
+            return "stopped", drive_status, out
         out, _ = proc.communicate(timeout=max(deadline - time.time(), 1))
         return proc.returncode, drive_status, out
     except subprocess.TimeoutExpired:
@@ -106,18 +111,15 @@ def run_once(command, deny, drive, wait, timeout, capture):
 
 
 def same(base, other, compare_output, drive):
-    """Equal outcomes: exit status (not for servers, who are stopped by us) and drive status."""
-    if base[1] != other[1]:
-        return False
-    if not drive and base[0] != other[0]:
-        return False
-    if drive and other[0] == "hang":
+    """Equal outcomes: exit status ("stopped" for a program still running when we ended it, so an
+    early exit or crash differs) and drive status."""
+    if base[1] != other[1] or base[0] != other[0]:
         return False
     return not compare_output or base[2] == other[2]
 
 
 def describe(result):
-    status = "hang" if result[0] == "hang" else f"exit {result[0]}"
+    status = result[0] if result[0] in ("hang", "stopped") else f"exit {result[0]}"
     return status + (f", client {result[1]}" if result[1] is not None else "")
 
 
@@ -166,7 +168,7 @@ def main():
     capture = args.compare_output
     base = run_once(command, [], args.drive, args.wait, args.timeout, capture)
     print(f"undisturbed:        {describe(base)}")
-    if base[0] == "hang" or (not args.drive and base[0] != 0):
+    if base[0] == "hang" or (not args.drive and base[0] != 0) or (args.drive and base[0] != "stopped"):
         print("the undisturbed run did not succeed; fix the command first")
         sys.exit(2)
     denied = run_once(command, deny, args.drive, args.wait, args.timeout, capture)

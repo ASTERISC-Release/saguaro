@@ -72,3 +72,4 @@ built-debug
 
 .ltp-results/
 /.syscall-profiles/
+/.game/
