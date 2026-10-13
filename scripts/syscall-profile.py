@@ -20,9 +20,11 @@ import pathlib
 import platform
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 import tomllib
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -150,6 +152,12 @@ def parse_trace(lines):
             if literal and literal[1].startswith(SPECIAL_PATHS) and (
                     literal[1] in paths or len(paths) < MAX_PATHS):
                 paths[literal[1]] += 1
+    # the first execve is strace starting the command, not the application
+    if "execve" in calls:
+        calls["execve"]["count"] -= 1
+        if calls["execve"]["count"] <= 0:
+            del calls["execve"]
+
     def counted(name):
         return calls[name]["count"] if name in calls else 0
 
@@ -164,22 +172,42 @@ def parse_trace(lines):
                          "args": dict(data["args"])} for name, data in sorted(calls.items())},
         "paths": dict(sorted(paths.items())),
         "multiprocess": {"tasks": process_count, "processes": 1 + fork_like, "fork_like_calls": fork_like,
-                         "extra_execs": max(execs - 1, 0)},
+                         "extra_execs": execs},
         "unparsed_lines": unparsed,
     }
 
 
-def do_profile(command, output=None):
+def traced_children(pid):
+    path = pathlib.Path(f"/proc/{pid}/task/{pid}/children")
+    return [int(x) for x in path.read_text().split()] if path.exists() else []
+
+
+def do_profile(command, output=None, drive=None, wait=2.0):
+    """Trace `command`. For a server, `drive` is a shell command run (untraced) after `wait`
+    seconds; when it ends the traced program gets SIGTERM, and then SIGKILL after 10 s."""
     strace = shutil.which("strace")
     if not strace:
         sys.exit("strace not found (in the container: apt-get install -y strace)")
     with tempfile.TemporaryDirectory() as tmp:
         trace = pathlib.Path(tmp) / "trace.txt"
-        run = subprocess.run([strace, "-f", "-s", "256", "-o", str(trace), "--", *command])
+        proc = subprocess.Popen([strace, "-f", "-s", "256", "-o", str(trace), "--", *command])
+        drive_status = None
+        if drive:
+            time.sleep(wait)
+            drive_status = subprocess.run(drive, shell=True).returncode
+            for child in traced_children(proc.pid):
+                os.kill(child, signal.SIGTERM)
+            try:
+                proc.wait(10)
+            except subprocess.TimeoutExpired:
+                for child in traced_children(proc.pid):
+                    os.kill(child, signal.SIGKILL)
+        returncode = proc.wait()
         version = subprocess.run([strace, "-V"], capture_output=True, text=True).stdout.split("\n")[0]
         profile = parse_trace(trace.read_text(errors="replace").splitlines())
     profile.update({"version": 1, "command": command, "arch": platform.machine(),
-                    "tracer": version, "exit_status": run.returncode})
+                    "tracer": version, "exit_status": returncode, "drive": drive,
+                    "drive_status": drive_status})
     if output:
         pathlib.Path(output).write_text(json.dumps(profile, indent=1) + "\n")
     return profile
@@ -270,7 +298,8 @@ def check_loader(profile, loader, matrix, evidence, rules, partial_ratio):
                  "why": f"LTP {len(usable) - len(failing)} of {len(usable)} usable tests pass",
                  "reason": reasons.most_common(1)[0][0] if reasons else "",
                  "tests": [f"{row['test']}: {row['evidence'][:110]}" for row in failing[:2]]}
-        if (len(usable) - len(failing)) / len(usable) >= partial_ratio:
+        passing_ratio = (len(usable) - len(failing)) / len(usable)
+        if passing_ratio >= partial_ratio or entry["reason"] == "behaviour difference":
             findings["minor"].append(entry)
         else:
             findings["doubtful"].append(entry)
@@ -357,6 +386,9 @@ def main():
     for mode in ("profile", "run"):
         p = sub.add_parser(mode)
         p.add_argument("-o", "--output", help="write the JSON profile here")
+        p.add_argument("--drive", help="server mode: shell command (a client) run untraced after "
+                                       "--wait seconds; the traced program is stopped when it ends")
+        p.add_argument("--wait", type=float, default=2.0, help="seconds before --drive starts")
         p.add_argument("command", nargs=argparse.REMAINDER, help="-- CMD ARGS...")
     for mode in ("check", "run"):
         p = sub.choices[mode] if mode == "run" else sub.add_parser(mode)
@@ -374,7 +406,7 @@ def main():
     command = args.command[1:] if args.command[:1] == ["--"] else args.command
     if not command:
         parser.error("no command given after --")
-    profile = do_profile(command, args.output)
+    profile = do_profile(command, args.output, args.drive, args.wait)
     if args.mode == "profile":
         print(f"{len(profile['calls'])} syscalls, {profile['multiprocess']['processes']} process(es)"
               + (f"; wrote {args.output}" if args.output else ""), file=sys.stderr)

@@ -54,6 +54,9 @@ def main():
                            stdout=subprocess.DEVNULL, check=True)
             lines = trace.read_text(errors="replace").splitlines()
         raw = raw_counts(lines)
+        raw["execve"] -= 1  # the profiler leaves out strace's own start of the command
+        if not raw["execve"]:
+            del raw["execve"]
         profile = tool.parse_trace(lines)
         mine = {name: data["count"] for name, data in profile["calls"].items()}
         diff = {name: (raw.get(name, 0), mine.get(name, 0))

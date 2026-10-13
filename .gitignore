@@ -71,3 +71,4 @@ built-debug
 /libos/test/ltp/install
 
 .ltp-results/
+/.syscall-profiles/
