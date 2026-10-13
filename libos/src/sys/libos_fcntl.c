@@ -25,6 +25,7 @@
 #include "libos_process.h"
 #include "libos_table.h"
 #include "libos_thread.h"
+#include "libos_vma.h"
 #include "linux_abi/errors.h"
 #include "linux_abi/fs.h"
 #include "toml_utils.h"
@@ -39,6 +40,25 @@
 #define F_SEAL_EXEC         LIBOS_F_SEAL_EXEC
 #define F_SEAL_MASK (F_SEAL_SEAL | F_SEAL_SHRINK | F_SEAL_GROW | F_SEAL_WRITE | \
                      F_SEAL_FUTURE_WRITE | F_SEAL_EXEC)
+
+static int memfd_has_writable_shared_mapping(struct libos_handle* handle) {
+    struct libos_vma_info* vmas = NULL;
+    size_t count = 0;
+    int ret = dump_all_vmas(/*include_unmapped=*/false, &vmas, &count);
+    if (ret < 0)
+        return ret;
+
+    bool found = false;
+    for (size_t i = 0; i < count; i++) {
+        if (vmas[i].file == handle && (vmas[i].flags & MAP_SHARED) &&
+            (vmas[i].prot & PROT_WRITE)) {
+            found = true;
+            break;
+        }
+    }
+    free_vma_info_array(vmas, count);
+    return found;
+}
 
 static int generic_set_flags(struct libos_handle* handle, unsigned int flags, unsigned int mask) {
     /* TODO: DOES THIS WORK LOL
@@ -250,9 +270,16 @@ long libos_syscall_fcntl(int fd, int cmd, unsigned long arg) {
                 ret = -EINVAL;
                 break;
             }
+            if (!(get_fd_acc_mode(fd, handle_map) & MAY_WRITE)) {
+                ret = -EPERM;
+                break;
+            }
             lock(&hdl->lock);
             if (hdl->memfd_seals & F_SEAL_SEAL)
                 ret = -EPERM;
+            else if ((arg & F_SEAL_WRITE) && !(hdl->memfd_seals & F_SEAL_WRITE) &&
+                     (ret = memfd_has_writable_shared_mapping(hdl)) != 0)
+                ret = ret < 0 ? ret : -EBUSY;
             else {
                 hdl->memfd_seals |= arg;
                 ret = 0;

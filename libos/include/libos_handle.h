@@ -265,6 +265,7 @@ int set_handle_nonblocking(struct libos_handle* hdl, bool on);
 struct libos_fd_handle {
     uint32_t vfd; /* virtual file descriptor */
     int flags;    /* file descriptor flags, only FD_CLOEXEC */
+    int acc_mode; /* per-open access mode */
 
     struct libos_handle* handle;
 };
@@ -304,6 +305,8 @@ int set_new_fd_handle_by_fd(uint32_t fd, struct libos_handle* hdl, int fd_flags,
                             struct libos_handle_map* map);
 int set_new_fd_handle_above_fd(uint32_t fd, struct libos_handle* hdl, int fd_flags,
                                struct libos_handle_map* map);
+int get_fd_acc_mode(uint32_t fd, struct libos_handle_map* map);
+int set_fd_acc_mode(uint32_t fd, int acc_mode, struct libos_handle_map* map);
 struct libos_handle* detach_fd_handle(uint32_t fd, int* flags, struct libos_handle_map* map);
 void detach_all_fds(void);
 void close_cloexec_handles(struct libos_handle_map* map);

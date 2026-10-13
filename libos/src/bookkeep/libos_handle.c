@@ -389,6 +389,7 @@ static int __init_handle(struct libos_fd_handle** fdhdl, uint32_t fd, struct lib
 
     new_handle->vfd   = fd;
     new_handle->flags = fd_flags;
+    new_handle->acc_mode = hdl->acc_mode;
     get_handle(hdl);
     new_handle->handle = hdl;
     return 0;
@@ -475,6 +476,29 @@ int set_new_fd_handle_by_fd(uint32_t fd, struct libos_handle* hdl, int fd_flags,
 int set_new_fd_handle_above_fd(uint32_t fd, struct libos_handle* hdl, int fd_flags,
                                struct libos_handle_map* handle_map) {
     return __set_new_fd_handle(fd, hdl, fd_flags, handle_map, /*find_first=*/true);
+}
+
+int get_fd_acc_mode(uint32_t fd, struct libos_handle_map* handle_map) {
+    if (!handle_map && !(handle_map = get_thread_handle_map(NULL)))
+        return -EBADF;
+    rwlock_read_lock(&handle_map->lock);
+    int ret = fd <= handle_map->fd_top && handle_map->map[fd] &&
+              handle_map->map[fd]->handle ? handle_map->map[fd]->acc_mode : -EBADF;
+    rwlock_read_unlock(&handle_map->lock);
+    return ret;
+}
+
+int set_fd_acc_mode(uint32_t fd, int acc_mode, struct libos_handle_map* handle_map) {
+    if (!handle_map && !(handle_map = get_thread_handle_map(NULL)))
+        return -EBADF;
+    rwlock_write_lock(&handle_map->lock);
+    int ret = -EBADF;
+    if (fd <= handle_map->fd_top && handle_map->map[fd] && handle_map->map[fd]->handle) {
+        handle_map->map[fd]->acc_mode = acc_mode;
+        ret = 0;
+    }
+    rwlock_write_unlock(&handle_map->lock);
+    return ret;
 }
 
 static inline __attribute__((unused)) const char* __handle_name(struct libos_handle* hdl) {

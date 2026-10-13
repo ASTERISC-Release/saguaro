@@ -13,6 +13,7 @@
 
 struct utimbuf;
 struct __kernel_timeval;
+struct libos_handle;
 
 typedef void (*libos_syscall_t)(void);
 
@@ -292,6 +293,7 @@ long libos_syscall_setfsgid(gid_t gid);
 long libos_syscall_capget(void* header, void* data);
 long libos_syscall_capset(void* header, const void* data);
 long libos_syscall_memfd_create(const char* name, unsigned int flags);
+int libos_memfd_check_write(struct libos_handle* handle, loff_t offset, size_t count);
 long libos_openat_internal(int dfd, const char* filename, int flags, int mode);
 long libos_unlink_internal(const char* pathname);
 

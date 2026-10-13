@@ -9,6 +9,7 @@
 #define _POSIX_C_SOURCE 200809L  /* for SSIZE_MAX */
 #include <limits.h>
 #include <stdalign.h>
+#include <linux/falloc.h>
 
 #include "libos_fs.h"
 #include "libos_graphics.h"
@@ -74,8 +75,9 @@ long libos_syscall_read(int fd, void* buf, size_t count) {
 }
 
 ssize_t do_handle_write(struct libos_handle* hdl, const void* buf, size_t count) {
-    if (hdl->is_memfd && (hdl->memfd_seals & LIBOS_F_SEAL_WRITE))
-        return -EPERM;
+    int seal_ret = libos_memfd_check_write(hdl, hdl->pos, count);
+    if (seal_ret < 0)
+        return seal_ret;
     if (!(hdl->acc_mode & MAY_WRITE))
         return -EBADF;
 
@@ -225,8 +227,22 @@ static long do_openat(int dfd, const char* filename, int flags, int mode, bool u
             if (!*p) {
                 struct libos_handle* target = get_fd_handle((int)target_fd, NULL, NULL);
                 if (target && target->is_memfd) {
+                    if (flags & O_TRUNC) {
+                        long trunc_ret = libos_syscall_ftruncate((int)target_fd, 0);
+                        if (trunc_ret < 0) {
+                            put_handle(target);
+                            return trunc_ret;
+                        }
+                    }
                     int new_fd = set_new_fd_handle(target,
                         (flags & O_CLOEXEC) ? FD_CLOEXEC : 0, NULL);
+                    int acc_mode = 0;
+                    if ((flags & O_ACCMODE) != O_WRONLY)
+                        acc_mode |= MAY_READ;
+                    if ((flags & O_ACCMODE) != O_RDONLY)
+                        acc_mode |= MAY_WRITE;
+                    if (new_fd >= 0)
+                        set_fd_acc_mode((uint32_t)new_fd, acc_mode, NULL);
                     put_handle(target);
                     return new_fd;
                 }
@@ -534,6 +550,10 @@ long libos_syscall_pwrite64(int fd, char* buf, size_t count, loff_t offset) {
 
     if (!(hdl->acc_mode & MAY_WRITE)) {
         ret = -EBADF;
+        goto out;
+    }
+    ret = libos_memfd_check_write(hdl, offset, count);
+    if (ret < 0) {
         goto out;
     }
 
@@ -899,8 +919,9 @@ long libos_syscall_fallocate(int fd, int mode, loff_t offset, loff_t len) {
     if (len <= 0) {
         return -EINVAL;
     }
-    if (mode) {
-        log_warning("fallocate only supported with 0 as mode");
+    const int punch_hole_mode = FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE;
+    if (mode && mode != punch_hole_mode) {
+        log_warning("fallocate mode 0x%x is not supported", mode);
         return -ENOSYS;
     }
 
@@ -935,6 +956,47 @@ long libos_syscall_fallocate(int fd, int mode, loff_t offset, loff_t len) {
     loff_t end;
     if (__builtin_add_overflow(offset, len, &end)) {
         ret = -EFBIG;
+        goto out;
+    }
+
+    file_off_t current_size;
+    lock(&handle->inode->lock);
+    current_size = handle->inode->size;
+    unlock(&handle->inode->lock);
+    if (handle->is_memfd) {
+        if ((handle->memfd_seals & LIBOS_F_SEAL_WRITE) &&
+            mode == punch_hole_mode) {
+            ret = -EPERM;
+            goto out;
+        }
+        if ((handle->memfd_seals & LIBOS_F_SEAL_GROW) && mode == 0 && end > current_size) {
+            ret = -EPERM;
+            goto out;
+        }
+    }
+
+    if (mode == punch_hole_mode) {
+        static const char zeros[4096];
+        lock(&handle->inode->lock);
+        file_off_t size = handle->inode->size;
+        unlock(&handle->inode->lock);
+        file_off_t punch_end = end < size ? end : size;
+        loff_t pos = offset;
+        while (pos < punch_end) {
+            loff_t remaining = punch_end - pos;
+            size_t count = remaining < (loff_t)sizeof(zeros) ? (size_t)remaining : sizeof(zeros);
+            ssize_t written = fs->fs_ops->write(handle, zeros, count, &pos);
+            if (written < 0) {
+                ret = (int)written;
+                break;
+            }
+            if (!written) {
+                ret = -EIO;
+                break;
+            }
+        }
+        if (pos >= punch_end)
+            ret = 0;
         goto out;
     }
 
