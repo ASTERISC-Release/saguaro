@@ -353,7 +353,7 @@ def check_loader(profile, loader, matrix, evidence, rules, partial_ratio):
             continue
         hit = rule_hit(rule, profile)
         if hit:
-            bucket = "blockers" if rule["severity"] == "blocker" else "doubtful"
+            bucket = {"blocker": "blockers", "note": "notes"}.get(rule["severity"], "doubtful")
             findings[bucket].append({"syscall": rule.get("syscall", "path"), "calls": hit,
                                      "why": rule["why"] + f" [{rule['source']}]"})
     if findings["blockers"]:
