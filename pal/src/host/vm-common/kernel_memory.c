@@ -110,10 +110,50 @@ int memory_frame_free(uintptr_t frame) {
     return 0;
 }
 
+size_t memory_frame_allocated_count(void) {
+    if (!g_frame_pool_bitmap)
+        return 0;
+    size_t count = 0;
+    size_t frame_count = g_frame_pool_size / PAGE_SIZE;
+    spinlock_lock_disable_irq(&g_frame_pool_lock);
+    for (size_t i = 0; i < frame_count; i++)
+        count += !!(g_frame_pool_bitmap[i / 8] & (1U << (i % 8)));
+    spinlock_unlock_enable_irq(&g_frame_pool_lock);
+    return count;
+}
+
+struct address_space_table_page {
+    struct address_space_table_page* next;
+    uintptr_t frame;
+};
+
+static int address_space_alloc_table_page(struct memory_address_space* space, uint64_t** out_page) {
+    if (!g_frame_pool_bitmap) {
+        *out_page = memory_get_shared_region(PAGE_SIZE);
+        return *out_page ? 0 : -PAL_ERROR_NOMEM;
+    }
+
+    uintptr_t frame;
+    int ret = memory_frame_alloc(&frame);
+    if (ret < 0)
+        return ret;
+    struct address_space_table_page* node = memory_get_shared_region(sizeof(*node));
+    if (!node) {
+        memory_frame_free(frame);
+        return -PAL_ERROR_NOMEM;
+    }
+    node->frame = frame;
+    node->next = space->owned_table_pages;
+    space->owned_table_pages = node;
+    *out_page = (uint64_t*)frame;
+    return 0;
+}
+
 /* Clone a child table only the first time an address-space map operation reaches it. The parent
  * and child can therefore share all untouched identity-map tables while writes to a private leaf
  * remain local to the child root. */
 static int address_space_get_private_child(uint64_t* entry, uint64_t base_entry,
+                                           struct memory_address_space* space,
                                            uint64_t** out_child) {
     const uint64_t addr_mask = 0x00000ffffffff000UL;
     if (!(*entry & 1) || !(*entry & addr_mask) || !(base_entry & 1) ||
@@ -121,9 +161,10 @@ static int address_space_get_private_child(uint64_t* entry, uint64_t base_entry,
         return -PAL_ERROR_INVAL;
 
     if ((*entry & addr_mask) == (base_entry & addr_mask)) {
-        uint64_t* copy = memory_get_shared_region(PAGE_SIZE);
-        if (!copy)
-            return -PAL_ERROR_NOMEM;
+        uint64_t* copy;
+        int ret = address_space_alloc_table_page(space, &copy);
+        if (ret < 0)
+            return ret;
         memcpy(copy, (void*)(*entry & addr_mask), PAGE_SIZE);
         *entry = (*entry & ~addr_mask) | ((uintptr_t)copy & addr_mask);
     }
@@ -136,13 +177,35 @@ int memory_address_space_clone(uint64_t base_root, struct memory_address_space* 
     if (!base_root || !IS_ALIGNED_POW2(base_root, PAGE_SIZE) || !out_space)
         return -PAL_ERROR_INVAL;
 
-    uint64_t* root = memory_get_shared_region(PAGE_SIZE);
-    if (!root)
-        return -PAL_ERROR_NOMEM;
+    memset(out_space, 0, sizeof(*out_space));
+    uint64_t* root;
+    int ret = address_space_alloc_table_page(out_space, &root);
+    if (ret < 0)
+        return ret;
     memcpy(root, (void*)base_root, PAGE_SIZE);
     out_space->root = root;
     out_space->base_root = (uint64_t*)base_root;
     return 0;
+}
+
+size_t memory_address_space_destroy(struct memory_address_space* space) {
+    if (!space)
+        return 0;
+    struct address_space_table_page* node = space->owned_table_pages;
+    size_t released = 0;
+    while (node) {
+        struct address_space_table_page* next = node->next;
+        int ret = memory_frame_free(node->frame);
+        if (ret < 0) {
+            log_error("Failed to release address-space page-table frame %p: %s",
+                      (void*)node->frame, pal_strerror(ret));
+            BUG();
+        }
+        released++;
+        node = next;
+    }
+    memset(space, 0, sizeof(*space));
+    return released;
 }
 
 static int address_space_get_leaf_entry(struct memory_address_space* space, uintptr_t addr,
@@ -160,7 +223,7 @@ static int address_space_get_leaf_entry(struct memory_address_space* space, uint
     int ret;
     if (make_private) {
         ret = address_space_get_private_child(&space->root[pml4_idx],
-                                               space->base_root[pml4_idx], &pdpt);
+                                               space->base_root[pml4_idx], space, &pdpt);
     } else {
         if (!(space->root[pml4_idx] & 1) || !(space->base_root[pml4_idx] & 1))
             return -PAL_ERROR_INVAL;
@@ -175,7 +238,7 @@ static int address_space_get_leaf_entry(struct memory_address_space* space, uint
         return -PAL_ERROR_INVAL; /* splitting a 1-GiB page is not implemented */
     uint64_t* pd;
     if (make_private) {
-        ret = address_space_get_private_child(&pdpt[pdpt_idx], base_pdpt[pdpt_idx], &pd);
+        ret = address_space_get_private_child(&pdpt[pdpt_idx], base_pdpt[pdpt_idx], space, &pd);
     } else {
         if (!(pdpt[pdpt_idx] & 1) || !(base_pdpt[pdpt_idx] & 1))
             return -PAL_ERROR_INVAL;
@@ -190,7 +253,7 @@ static int address_space_get_leaf_entry(struct memory_address_space* space, uint
         return -PAL_ERROR_INVAL; /* splitting a 2-MiB page is not implemented */
     uint64_t* pt;
     if (make_private) {
-        ret = address_space_get_private_child(&pd[pd_idx], base_pd[pd_idx], &pt);
+        ret = address_space_get_private_child(&pd[pd_idx], base_pd[pd_idx], space, &pt);
     } else {
         if (!(pd[pd_idx] & 1) || !(base_pd[pd_idx] & 1))
             return -PAL_ERROR_INVAL;

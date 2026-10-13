@@ -51,13 +51,16 @@ int memory_pagetables_init(void* memory_address_end, bool current_page_tables_co
 int memory_frame_pool_init(uintptr_t addr, size_t size);
 int memory_frame_alloc(uintptr_t* out_frame);
 int memory_frame_free(uintptr_t frame);
+size_t memory_frame_allocated_count(void);
 
 struct memory_address_space {
     uint64_t* root;
     uint64_t* base_root;
+    void* owned_table_pages;
 };
 struct memory_address_space* memory_address_space_boot(void);
 int memory_address_space_clone(uint64_t base_root, struct memory_address_space* out_space);
+size_t memory_address_space_destroy(struct memory_address_space* space);
 int memory_address_space_map(struct memory_address_space* space, uintptr_t addr,
                              uintptr_t frame, bool write, bool execute, bool usermode);
 int memory_address_space_share_range(struct memory_address_space* source,

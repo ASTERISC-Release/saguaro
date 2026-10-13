@@ -149,6 +149,7 @@ static int init_multiprocess_frame_pool(void) {
             }
             if (ret < 0) {
                 *parent_value = original_value;
+                memory_address_space_destroy(&child_space);
                 memory_frame_free(frame2);
                 memory_frame_free(reused_frame);
                 return ret;
@@ -157,6 +158,7 @@ static int init_multiprocess_frame_pool(void) {
             ret = memory_address_space_switch(&child_space);
             if (ret < 0) {
                 *parent_value = original_value;
+                memory_address_space_destroy(&child_space);
                 memory_frame_free(frame2);
                 memory_frame_free(reused_frame);
                 return ret;
@@ -193,6 +195,7 @@ static int init_multiprocess_frame_pool(void) {
                         &child_space);
                 if (ret < 0) {
                     *parent_value = original_value;
+                    memory_address_space_destroy(&child_space);
                     memory_frame_free(frame2);
                     memory_frame_free(reused_frame);
                     return ret;
@@ -212,10 +215,16 @@ static int init_multiprocess_frame_pool(void) {
                 log_always("Skipping scheduled address-space check with %u vCPUs", g_num_cpus);
             }
             *parent_value = original_value;
+            size_t frames_before_destroy = memory_frame_allocated_count();
+            size_t table_pages_released = memory_address_space_destroy(&child_space);
+            bool table_frames_reclaimed = memory_frame_allocated_count() + table_pages_released ==
+                                          frames_before_destroy;
             memory_frame_free(frame2);
             ret = memory_frame_free(reused_frame);
             if (ret < 0)
                 return ret;
+            if (!table_frames_reclaimed)
+                return -PAL_ERROR_DENIED;
             if (!scheduler_switched)
                 return -PAL_ERROR_DENIED;
             log_always("Address-space mapping and scheduler switch self-check passed");
