@@ -316,7 +316,7 @@ long libos_syscall_pwritev2(unsigned long fd, struct iovec* vec, unsigned long v
 #define LIBOS_SPLICE_F_GIFT     8U
 #define LIBOS_SPLICE_FLAGS \
     (LIBOS_SPLICE_F_MOVE | LIBOS_SPLICE_F_NONBLOCK | LIBOS_SPLICE_F_MORE | LIBOS_SPLICE_F_GIFT)
-#define LIBOS_COPY_CHUNK (64 * 1024)
+#define LIBOS_COPY_CHUNK (64U * 1024U)
 
 long libos_syscall_copy_file_range(int fd_in, loff_t* off_in, int fd_out, loff_t* off_out,
                                    size_t len, unsigned int flags) {
@@ -458,6 +458,10 @@ long libos_syscall_splice(int fd_in, loff_t* off_in, int fd_out, loff_t* off_out
         goto out;
     }
     if ((in_pipe && off_in) || (out_pipe && off_out)) {
+        ret = -ESPIPE;
+        goto out;
+    }
+    if (out_hdl->flags & O_APPEND) {
         ret = -EINVAL;
         goto out;
     }
@@ -533,13 +537,78 @@ long libos_syscall_tee(int fd_in, int fd_out, size_t len, unsigned int flags) {
         return -EBADF;
     }
     long ret = -EINVAL;
-    if (in_hdl->type == TYPE_PIPE && out_hdl->type == TYPE_PIPE && in_hdl != out_hdl) {
-        /* Gramine's PAL pipes are stream sockets and do not expose pipe-buffer duplication. */
-        ret = -EOPNOTSUPP;
+    if (in_hdl->type == TYPE_PIPE && out_hdl->type == TYPE_PIPE &&
+        memcmp(in_hdl->info.pipe.name, out_hdl->info.pipe.name, PIPE_URI_SIZE)) {
+        struct libos_handle* peer = get_fd_handle(in_hdl->info.pipe.peer_fd, NULL, NULL);
+        if (!peer || peer->type != TYPE_PIPE ||
+            memcmp(peer->info.pipe.name, in_hdl->info.pipe.name, PIPE_URI_SIZE)) {
+            ret = -EOPNOTSUPP;
+        } else if (!(in_hdl->acc_mode & MAY_READ) || !(out_hdl->acc_mode & MAY_WRITE) ||
+                   !(peer->acc_mode & MAY_WRITE)) {
+            ret = -EBADF;
+        } else if (len > 0) {
+            PAL_STREAM_ATTR attr;
+            int pal_ret = PalStreamAttributesQueryByHandle(in_hdl->pal_handle, &attr);
+            if (pal_ret < 0) {
+                ret = pal_to_unix_errno(pal_ret);
+            } else if (!attr.pending_size) {
+                ret = -EAGAIN;
+            } else if (attr.pending_size > 1024 * 1024) {
+                ret = -EOPNOTSUPP;
+            } else {
+                size_t pending = attr.pending_size;
+                char* buffer = malloc(pending);
+                if (!buffer) {
+                    ret = -ENOMEM;
+                } else {
+                    file_off_t pos = 0;
+                    size_t read_count = 0;
+                    while (read_count < pending) {
+                        ssize_t n = in_hdl->fs->fs_ops->read(in_hdl, buffer + read_count,
+                                                             pending - read_count, &pos);
+                        if (n <= 0) {
+                            ret = n < 0 ? n : -EIO;
+                            break;
+                        }
+                        read_count += n;
+                    }
+                    size_t duplicate = MIN(len, read_count);
+                    size_t written = 0;
+                    bool dest_ok = true;
+                    while (written < duplicate) {
+                        ssize_t n = out_hdl->fs->fs_ops->write(out_hdl, buffer + written,
+                                                               duplicate - written, &pos);
+                        if (n <= 0) {
+                            ret = n < 0 ? n : -EIO;
+                            dest_ok = false;
+                            break;
+                        }
+                        written += n;
+                    }
+                    pos = 0;
+                    written = 0;
+                    while (written < read_count) {
+                        ssize_t n = peer->fs->fs_ops->write(peer, buffer + written,
+                                                            read_count - written, &pos);
+                        if (n <= 0) {
+                            ret = n < 0 ? n : -EIO;
+                            break;
+                        }
+                        written += n;
+                    }
+                    if (written == read_count && dest_ok)
+                        ret = duplicate;
+                    free(buffer);
+                }
+            }
+        } else {
+            ret = 0;
+        }
+        if (peer)
+            put_handle(peer);
     }
     put_handle(out_hdl);
     put_handle(in_hdl);
-    __UNUSED(len);
     return ret;
 }
 
@@ -555,14 +624,15 @@ long libos_syscall_vmsplice(int fd, const struct iovec* iov, unsigned long nr_se
     bool can_write = hdl->acc_mode & MAY_WRITE;
     put_handle(hdl);
     if (!is_pipe)
+        return -EBADF;
+    if (nr_segs > 1024)
         return -EINVAL;
     if (!can_read && !can_write)
         return -EBADF;
-    if (flags & LIBOS_SPLICE_F_GIFT)
-        flags &= ~LIBOS_SPLICE_F_GIFT; /* PAL pipe writes copy the supplied bytes. */
+    if ((flags & LIBOS_SPLICE_F_GIFT) && !can_write)
+        return -EINVAL;
+    /* PAL pipe writes copy the supplied bytes, so GIFT does not transfer page ownership. */
     if (can_write)
         return libos_syscall_writev(fd, (struct iovec*)iov, nr_segs);
-    if (flags & LIBOS_SPLICE_F_GIFT)
-        return -EINVAL;
     return libos_syscall_readv(fd, (struct iovec*)iov, nr_segs);
 }

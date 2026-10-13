@@ -54,6 +54,7 @@ enum libos_handle_type {
 
 struct libos_pipe_handle {
     bool ready_for_ops; /* true for pipes, false for FIFOs that were mknod'ed but not open'ed */
+    int peer_fd; /* other end's descriptor for anonymous pipes; -1 for named FIFOs */
     char name[PIPE_URI_SIZE];
 };
 

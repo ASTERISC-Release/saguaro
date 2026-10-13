@@ -240,10 +240,14 @@ static ssize_t chroot_write(struct libos_handle* hdl, const void* buf, size_t co
     assert(actual_count <= count);
     if (hdl->inode->type == S_IFREG) {
         *pos += actual_count;
-        /* Update file size if we just wrote past the end of file */
+        uint64_t time_us;
+        bool have_time = PalSystemTimeQuery(&time_us) >= 0;
+        /* Update cached metadata after a host-backed write. */
         lock(&hdl->inode->lock);
         if (hdl->inode->size < *pos)
             hdl->inode->size = *pos;
+        if (have_time)
+            hdl->inode->mtime = time_us / 1000000;
         unlock(&hdl->inode->lock);
     }
 

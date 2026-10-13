@@ -141,6 +141,8 @@ long libos_syscall_pipe2(int* filedes, int flags) {
 
     hdl1->info.pipe.ready_for_ops = true;
     hdl2->info.pipe.ready_for_ops = true;
+    hdl1->info.pipe.peer_fd = -1;
+    hdl2->info.pipe.peer_fd = -1;
 
     ret = create_pipes(hdl1, hdl2, flags, hdl1->info.pipe.name);
     if (ret < 0)
@@ -160,6 +162,8 @@ long libos_syscall_pipe2(int* filedes, int flags) {
         goto out;
     }
 
+    hdl1->info.pipe.peer_fd = vfd2;
+    hdl2->info.pipe.peer_fd = vfd1;
     filedes[0] = vfd1;
     filedes[1] = vfd2;
 
