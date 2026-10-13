@@ -21,6 +21,7 @@ vm-memory/
 ^libos/test/regression/root/$
 ^build-
 ^\./quake2_bin$
+^\./bastion_game$
 ^patches/$
 runtime/glibc$
 
