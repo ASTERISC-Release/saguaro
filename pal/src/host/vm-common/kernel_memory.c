@@ -127,6 +127,16 @@ struct address_space_table_page {
     uintptr_t frame;
 };
 
+/* Mapping helpers invalidate the current vCPU while changing individual entries. Range operations
+ * call this once after updating all entries so other vCPUs cannot retain stale translations for
+ * threads sharing the address space. */
+static int memory_address_space_flush_range(uintptr_t addr, size_t size) {
+    if (g_num_cpus <= 1)
+        return 0;
+    return send_invalidate_tlb_ipi_and_wait((void*)addr, size,
+                                           /*invalidate_on_this_cpu=*/true);
+}
+
 static int address_space_get_leaf_entry(struct memory_address_space* space, uintptr_t addr,
                                         bool make_private, uint64_t** out_entry);
 
@@ -250,7 +260,7 @@ int memory_address_space_copy_private_range(struct memory_address_space* source,
         if (ret < 0)
             return ret;
     }
-    return 0;
+    return memory_address_space_flush_range(addr, size);
 }
 
 static int address_space_get_leaf_entry(struct memory_address_space* space, uintptr_t addr,
@@ -361,7 +371,7 @@ int memory_address_space_share_range(struct memory_address_space* source,
         if ((current_root & addr_mask) == (uintptr_t)target->root)
             __asm__ volatile("invlpg (%0)" : : "r"(va) : "memory");
     }
-    return 0;
+    return memory_address_space_flush_range(addr, size);
 }
 
 int memory_address_space_switch(const struct memory_address_space* space) {
@@ -1357,6 +1367,9 @@ int memory_address_space_alloc(struct memory_address_space* space, void* addr, s
             if (ret < 0)
                 return ret;
         }
+        int ret = memory_address_space_flush_range((uintptr_t)addr, size);
+        if (ret < 0)
+            return ret;
 #ifdef ASAN
         asan_poison_region((uintptr_t)addr, size, ASAN_POISON_USER);
 #endif
@@ -1426,6 +1439,10 @@ int memory_address_space_alloc(struct memory_address_space* space, void* addr, s
             break;
     }
 
+    int ret = memory_address_space_flush_range((uintptr_t)addr, size);
+    if (ret < 0)
+        return ret;
+
 #ifdef ASAN
     asan_unpoison_region((uintptr_t)addr, size);
 #endif
@@ -1467,7 +1484,19 @@ int memory_address_space_free(struct memory_address_space* space, void* addr, si
         __asm__ volatile("mov %%cr3, %0" : "=r"(current_root));
         if ((current_root & addr_mask) == (uintptr_t)space->root)
             __asm__ volatile("invlpg (%0)" : : "r"(va) : "memory");
+    }
+    int ret = memory_address_space_flush_range((uintptr_t)addr, size);
+    if (ret < 0)
+        return ret;
 
+    /* Do not return a physical frame to the pool until remote vCPUs have dropped cached mappings
+     * to it. The not-present PTEs keep the frame addresses available for this second pass. */
+    for (uintptr_t va = (uintptr_t)addr; va < (uintptr_t)addr + size; va += PAGE_SIZE) {
+        uint64_t* entry;
+        ret = address_space_get_leaf_entry(space, va, /*make_private=*/false, &entry);
+        if (ret < 0)
+            return ret;
+        uintptr_t frame = *entry & addr_mask;
         if (is_frame_pool_frame(frame)) {
             ret = memory_frame_free(frame);
             if (ret < 0)
@@ -1514,6 +1543,9 @@ int memory_address_space_protect(struct memory_address_space* space, void* addr,
         if (ret < 0)
             return ret;
     }
+    int ret = memory_address_space_flush_range((uintptr_t)addr, size);
+    if (ret < 0)
+        return ret;
 #ifdef ASAN
     if (read || write || execute)
         asan_unpoison_region((uintptr_t)addr, size);
