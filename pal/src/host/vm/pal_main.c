@@ -44,6 +44,9 @@ static size_t g_e820_entries_size;
 
 #ifdef __x86_64__
 static struct memory_address_space g_initial_process_address_space;
+extern char __process_data_start[];
+extern char __process_data_end[];
+static volatile uint64_t g_process_data_selfcheck __attribute__((section(".process_data")));
 
 struct address_space_thread_check {
     volatile uint64_t* addr;
@@ -139,9 +142,17 @@ static int init_multiprocess_frame_pool(void) {
             const uint64_t parent_marker = 0x1122334455667788UL;
             const uint64_t child_marker = 0x8877665544332211UL;
             *parent_value = parent_marker;
+            uint64_t original_process_data_value = g_process_data_selfcheck;
+            g_process_data_selfcheck = parent_marker;
 
             struct memory_address_space child_space = {0};
             ret = memory_address_space_clone(g_pml4_table_base, &child_space);
+            if (ret == 0) {
+                ret = memory_address_space_copy_private_range(
+                        memory_address_space_boot(), &child_space,
+                        (uintptr_t)__process_data_start,
+                        (uintptr_t)__process_data_end - (uintptr_t)__process_data_start);
+            }
             if (ret == 0) {
                 ret = memory_address_space_map(&child_space, test_addr, reused_frame,
                                                /*write=*/true, /*execute=*/false,
@@ -165,6 +176,8 @@ static int init_multiprocess_frame_pool(void) {
             }
             uint64_t child_initial_value = *(volatile uint64_t*)test_addr;
             *(volatile uint64_t*)test_addr = child_marker;
+            bool child_process_data_initial = g_process_data_selfcheck == parent_marker;
+            g_process_data_selfcheck = child_marker;
 
             struct memory_address_space parent_space = {
                 .root = (uint64_t*)g_pml4_table_base,
@@ -174,8 +187,11 @@ static int init_multiprocess_frame_pool(void) {
             if (ret < 0)
                 return ret;
 
-            bool isolated = child_initial_value == 0 && *parent_value == parent_marker &&
+            bool isolated = child_initial_value == 0 && child_process_data_initial &&
+                            g_process_data_selfcheck == parent_marker &&
+                            *parent_value == parent_marker &&
                             *(volatile uint64_t*)reused_frame == child_marker;
+            g_process_data_selfcheck = original_process_data_value;
             if (!isolated) {
                 *parent_value = original_value;
                 memory_frame_free(frame2);

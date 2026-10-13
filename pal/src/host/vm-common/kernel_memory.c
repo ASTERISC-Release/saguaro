@@ -127,6 +127,21 @@ struct address_space_table_page {
     uintptr_t frame;
 };
 
+static int address_space_get_leaf_entry(struct memory_address_space* space, uintptr_t addr,
+                                        bool make_private, uint64_t** out_entry);
+
+static int address_space_track_frame(struct memory_address_space* space, uintptr_t frame) {
+    if (!g_frame_pool_bitmap)
+        return 0;
+    struct address_space_table_page* node = memory_get_shared_region(sizeof(*node));
+    if (!node)
+        return -PAL_ERROR_NOMEM;
+    node->frame = frame;
+    node->next = space->owned_table_pages;
+    space->owned_table_pages = node;
+    return 0;
+}
+
 static int address_space_alloc_table_page(struct memory_address_space* space, uint64_t** out_page) {
     if (!g_frame_pool_bitmap) {
         *out_page = memory_get_shared_region(PAGE_SIZE);
@@ -137,14 +152,11 @@ static int address_space_alloc_table_page(struct memory_address_space* space, ui
     int ret = memory_frame_alloc(&frame);
     if (ret < 0)
         return ret;
-    struct address_space_table_page* node = memory_get_shared_region(sizeof(*node));
-    if (!node) {
+    ret = address_space_track_frame(space, frame);
+    if (ret < 0) {
         memory_frame_free(frame);
-        return -PAL_ERROR_NOMEM;
+        return ret;
     }
-    node->frame = frame;
-    node->next = space->owned_table_pages;
-    space->owned_table_pages = node;
     *out_page = (uint64_t*)frame;
     return 0;
 }
@@ -206,6 +218,39 @@ size_t memory_address_space_destroy(struct memory_address_space* space) {
     }
     memset(space, 0, sizeof(*space));
     return released;
+}
+
+int memory_address_space_copy_private_range(struct memory_address_space* source,
+                                            struct memory_address_space* target, uintptr_t addr,
+                                            size_t size) {
+    if (!source || !target || !IS_ALIGNED_POW2(addr, PAGE_SIZE) || !size ||
+            !IS_ALIGNED_POW2(size, PAGE_SIZE) || addr + size < addr)
+        return -PAL_ERROR_INVAL;
+    if (!g_frame_pool_bitmap)
+        return -PAL_ERROR_NOMEM;
+
+    for (uintptr_t va = addr; va < addr + size; va += PAGE_SIZE) {
+        uint64_t* source_entry;
+        int ret = address_space_get_leaf_entry(source, va,
+                                               /*make_private=*/false, &source_entry);
+        if (ret < 0 || !(*source_entry & 1))
+            return ret < 0 ? ret : -PAL_ERROR_INVAL;
+        uintptr_t frame;
+        ret = memory_frame_alloc(&frame);
+        if (ret < 0)
+            return ret;
+        memcpy((void*)frame, (void*)(*source_entry & 0x00000ffffffff000UL), PAGE_SIZE);
+        ret = address_space_track_frame(target, frame);
+        if (ret < 0) {
+            memory_frame_free(frame);
+            return ret;
+        }
+        ret = memory_address_space_map(target, va, frame, /*write=*/true, /*execute=*/false,
+                                       /*usermode=*/false);
+        if (ret < 0)
+            return ret;
+    }
+    return 0;
 }
 
 static int address_space_get_leaf_entry(struct memory_address_space* space, uintptr_t addr,

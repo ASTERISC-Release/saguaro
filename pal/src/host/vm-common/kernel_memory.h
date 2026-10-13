@@ -61,6 +61,9 @@ struct memory_address_space {
 struct memory_address_space* memory_address_space_boot(void);
 int memory_address_space_clone(uint64_t base_root, struct memory_address_space* out_space);
 size_t memory_address_space_destroy(struct memory_address_space* space);
+int memory_address_space_copy_private_range(struct memory_address_space* source,
+                                            struct memory_address_space* target, uintptr_t addr,
+                                            size_t size);
 int memory_address_space_map(struct memory_address_space* space, uintptr_t addr,
                              uintptr_t frame, bool write, bool execute, bool usermode);
 int memory_address_space_share_range(struct memory_address_space* source,
