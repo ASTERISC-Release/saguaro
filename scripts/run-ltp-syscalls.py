@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import sys
 import time
+import traceback
 
 try:
     import psutil
@@ -24,6 +25,38 @@ except ImportError:
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 STATUS = {"TPASS": "passed", "PASS": "passed", "TFAIL": "failed", "FAIL": "failed",
           "TCONF": "skipped", "CONF": "skipped", "TBROK": "broken", "BROK": "broken"}
+
+
+def ltp_test_command(command):
+    """Return the final test command, accounting for LTP scenario pipelines."""
+    return command[command.index("|") + 1] if "|" in command else command[0]
+
+
+def build_argv(command, loader, binary):
+    """Build an argv for a test, including the occasional LTP shell pipeline."""
+    loader_program = {"direct": "gramine-direct", "vm": "gramine-vm"}.get(loader)
+    if "|" not in command:
+        if loader == "native":
+            return [str(binary), *command[1:]]
+        return [loader_program, *command]
+
+    segments, current = [], []
+    for token in command:
+        if token == "|":
+            segments.append(current)
+            current = []
+        else:
+            current.append(token)
+    segments.append(current)
+    shell_parts = []
+    for segment in segments:
+        if segment and segment[0] == binary.name:
+            if loader == "native":
+                segment = [str(binary), *segment[1:]]
+            else:
+                segment = [loader_program, *segment]
+        shell_parts.append(shlex.join(segment))
+    return ["/bin/bash", "-c", " | ".join(shell_parts)]
 
 
 def parse_output(output):
@@ -130,6 +163,11 @@ def kill_process_group(process):
         process.wait()
 
 
+def partial_output(timeout_error):
+    output = timeout_error.output or ""
+    return output.decode(errors="replace") if isinstance(output, bytes) else output
+
+
 def find_guest(cid):
     """Find QEMU processes for the guest CID reserved by this runner."""
     if psutil is None:
@@ -225,20 +263,47 @@ def remove_guest_files(cid):
             path.unlink(missing_ok=True)
 
 
+def kill_test_orphans(binary, existing_pids):
+    """Kill exact LTP executable PIDs left behind after their parent times out."""
+    if psutil is None:
+        return
+    target = binary.resolve()
+    pids = []
+    for process in psutil.process_iter(["pid", "cmdline"]):
+        try:
+            if process.info["pid"] in existing_pids:
+                continue
+            argv = process.info["cmdline"] or []
+            if argv and pathlib.Path(argv[0]).resolve() == target:
+                pids.append(process.info["pid"])
+        except (psutil.Error, OSError):
+            continue
+    for pid in pids:
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+    if pids:
+        time.sleep(0.1)
+    for pid in pids:
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+
+
 def run_one(name, command, args, per_test_timeout, reserved_cid=None):
-    binary = pathlib.Path(args.ltp_root) / "testcases/bin" / command[0]
+    binary = pathlib.Path(args.ltp_root) / "testcases/bin" / ltp_test_command(command)
     env = os.environ.copy()
     env["PATH"] = f"{binary.parent}:{env.get('PATH', '/usr/bin:/bin')}"
     if args.loader == "vm":
         env["GRAMINE_VM_ID_BASE"] = str(reserved_cid)
-    if args.loader == "native":
-        argv = [str(binary), *command[1:]]
-    else:
-        loader = {"direct": "gramine-direct", "vm": "gramine-vm"}[args.loader]
-        argv = [loader, *command]
+    argv = build_argv(command, args.loader, binary)
+    existing_pids = set(psutil.pids()) if psutil else set()
     start = time.monotonic()
     proc = subprocess.Popen(argv, cwd=args.harness_dir, env=env, stdout=subprocess.PIPE,
-                            stderr=subprocess.STDOUT, text=True, start_new_session=True)
+                            stderr=subprocess.STDOUT, text=True, errors="replace",
+                            start_new_session=True)
     timed_out = False
     qemu_pids, cid = [], reserved_cid
     try:
@@ -249,14 +314,20 @@ def run_one(name, command, args, per_test_timeout, reserved_cid=None):
                 if found_cid is None:
                     time.sleep(0.02)
         output, _ = proc.communicate(timeout=per_test_timeout)
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as timeout_error:
         timed_out = True
         if args.loader == "vm":
             qemu_pids, _ = find_guest(reserved_cid)
             stop_guest(proc, qemu_pids)
         else:
             kill_process_group(proc)
-        output, _ = proc.communicate()
+            kill_test_orphans(binary, existing_pids)
+        output = partial_output(timeout_error)
+        # A test may leave a child in uninterruptible kernel sleep. It can retain the pipe after
+        # the process group is signalled; closing our read end prevents that child from blocking
+        # the runner forever. The timeout output remains available for the failure report.
+        if proc.stdout:
+            proc.stdout.close()
     except BaseException:
         if proc.poll() is None:
             if args.loader == "vm":
@@ -264,6 +335,7 @@ def run_one(name, command, args, per_test_timeout, reserved_cid=None):
                 stop_guest(proc, qemu_pids)
             else:
                 kill_process_group(proc)
+                kill_test_orphans(binary, existing_pids)
         raise
     if args.loader == "vm":
         remove_guest_files(cid)
@@ -314,8 +386,8 @@ def main():
     if unknown:
         parser.error("tests missing from scenario: " + ", ".join(unknown))
     if args.loader != "native":
-        missing = sorted({scenarios[name][0] for name in selected
-                          if not (args.harness_dir / f"{scenarios[name][0]}.manifest").exists()})
+        missing = sorted({ltp_test_command(scenarios[name]) for name in selected
+                          if not (args.harness_dir / f"{ltp_test_command(scenarios[name])}.manifest").exists()})
         if missing:
             parser.error("manifests missing; build them with gramine-test build first: " + ", ".join(missing[:10]))
     guest_cids = allocate_guest_cids(1) * len(selected) if args.loader == "vm" else [None] * len(selected)
@@ -329,20 +401,29 @@ def main():
     timeout_by_test = {name: float(timeout) * args.timeout_factor
                        for name, timeout in timeout_by_test.items()}
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as pool:
-        futures = [pool.submit(run_one, name, scenarios[name], args, timeout_by_test[name], cid)
-                   for name, cid in zip(selected, guest_cids)]
-        for future in concurrent.futures.as_completed(futures):
-            result = future.result()
+        tasks = {pool.submit(run_one, name, scenarios[name], args, timeout_by_test[name], cid): name
+                 for name, cid in zip(selected, guest_cids)}
+        for future in concurrent.futures.as_completed(tasks):
+            name = tasks[future]
+            try:
+                result = future.result()
+            except Exception as error:
+                result = {"loader": args.loader, "test": name, "subtests": [],
+                          "counts": {key: 0 for key in ("passed", "failed", "skipped", "broken")},
+                          "exit_status": None, "status": "runner_error", "duration_seconds": None,
+                          "timeout": False, "guest_panic": False,
+                          "runner_error": f"{error!r}\n{traceback.format_exc()}"}
             results.append(result)
-            print(f"{result['loader']} {result['test']}: {result['status']} ({result['duration_seconds']:.2f}s)",
-                  flush=True)
+            duration = result.get("duration_seconds")
+            duration_text = f"{duration:.2f}s" if duration is not None else "n/a"
+            print(f"{result['loader']} {result['test']}: {result['status']} ({duration_text})", flush=True)
     results.sort(key=lambda result: selected.index(result["test"]))
     out = {"loader": args.loader, "results": results}
     if args.results:
         args.results.parent.mkdir(parents=True, exist_ok=True)
         args.results.write_text(json.dumps(out, indent=2) + "\n")
     totals = {status: sum(result["status"] == status for result in results)
-              for status in ("pass", "fail", "conf", "broken", "timeout", "guest_panic")}
+              for status in ("pass", "fail", "conf", "broken", "timeout", "guest_panic", "runner_error")}
     print(json.dumps({"tests": len(results), "totals": totals, "results_file": str(args.results) if args.results else None}))
 
 
