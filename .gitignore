@@ -62,3 +62,9 @@ built-debug
 # RISC-V test guest state (scripts/riscv64/guest.sh): image download, disk, ssh key
 /.riscv64-guest/
 .riscv64-checks/
+
+# LTP is GPL-2.0: fetched and built locally for syscall compatibility measurements.
+.ltp-src/
+.ltp-install/
+.ltp-nofork-src/
+.ltp-nofork-install/
