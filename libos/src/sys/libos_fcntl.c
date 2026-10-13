@@ -40,6 +40,9 @@
 #define F_SEAL_EXEC         LIBOS_F_SEAL_EXEC
 #define F_SEAL_MASK (F_SEAL_SEAL | F_SEAL_SHRINK | F_SEAL_GROW | F_SEAL_WRITE | \
                      F_SEAL_FUTURE_WRITE | F_SEAL_EXEC)
+#ifndef F_GETPIPE_SZ
+#define F_GETPIPE_SZ 1032
+#endif
 
 static int memfd_has_writable_shared_mapping(struct libos_handle* handle) {
     struct libos_vma_info* vmas = NULL;
@@ -248,6 +251,12 @@ long libos_syscall_fcntl(int fd, int cmd, unsigned long arg) {
             flags = hdl->flags;
             unlock(&hdl->lock);
             ret = flags;
+            break;
+
+        case F_GETPIPE_SZ:
+            /* Report the Linux default nominal capacity. The PAL stream API does not expose or
+             * enforce a bounded FIFO ring yet; vmsplice observes that limitation. */
+            ret = hdl->type == TYPE_PIPE ? 65536 : -EINVAL;
             break;
 
         /* F_SETFL (int) */
