@@ -202,6 +202,39 @@ def markdown(inventory, by_syscall, native, direct, original_vm, vm, reasons, ma
     return "\n".join(lines)
 
 
+def direct_status(tests, direct):
+    if not tests:
+        return "untested"
+    passing = sum(direct[name]["status"] == "pass" for name in tests)
+    return "full" if passing == len(tests) else "partial" if passing else "none"
+
+
+def write_syscalls_csv(path, inventory, by_syscall, direct, vm, reasons):
+    """One row per syscall, for scripts/syscall-profile.py."""
+    fieldnames = ("syscall", "x86_64_number", "aarch64_number", "group", "x86_64_state",
+                  "aarch64_state", "ltp_tests", "direct_pass", "direct_status", "vm_pass",
+                  "vm_status", "vm_main_reason", "vm_failing_tests")
+    with path.open("w", newline="") as output:
+        writer = csv.DictWriter(output, fieldnames=fieldnames, lineterminator="\n")
+        writer.writeheader()
+        for name, item in inventory.items():
+            tests = by_syscall[name]
+            failures = [test for test in tests if reasons[test][0]]
+            counter = collections.Counter(reasons[test][0] for test in failures)
+            main = (sorted(counter, key=lambda reason: (-counter[reason], REASONS.index(reason)))[0]
+                    if failures else "")
+            writer.writerow({
+                "syscall": name, "x86_64_number": item["x86_64_number"],
+                "aarch64_number": item["aarch64_number"], "group": item["group"],
+                "x86_64_state": item["x86_64_state"], "aarch64_state": item["aarch64_state"],
+                "ltp_tests": len(tests),
+                "direct_pass": sum(direct[t]["status"] == "pass" for t in tests),
+                "direct_status": direct_status(tests, direct),
+                "vm_pass": sum(vm[t]["status"] == "pass" for t in tests),
+                "vm_status": vm_status(tests, vm, reasons), "vm_main_reason": main,
+                "vm_failing_tests": ";".join(t for t in tests if vm[t]["status"] != "pass")})
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--inventory", type=pathlib.Path, default=TOPIC / "inventory.csv")
@@ -213,6 +246,7 @@ def main():
     parser.add_argument("--vm", type=pathlib.Path, default=RESULTS / "vm-nofork-tmpfs.json")
     parser.add_argument("--output-md", type=pathlib.Path, default=TOPIC / "MATRIX.md")
     parser.add_argument("--output-csv", type=pathlib.Path, default=TOPIC / "matrix.csv")
+    parser.add_argument("--output-syscalls", type=pathlib.Path, default=TOPIC / "syscalls.csv")
     args = parser.parse_args()
     inventory = {row["syscall"]: row for row in csv.DictReader(args.inventory.open())}
     mapping_data = tomllib.loads(args.mapping.read_text())
@@ -263,6 +297,7 @@ def main():
                              "vm_nofork_passed": counts["passed"], "vm_nofork_failed": counts["failed"],
                              "vm_nofork_skipped": counts["skipped"], "vm_nofork_broken": counts["broken"],
                              "reason": reasons[name][0], "evidence": compact(reasons[name][1], 250)})
+    write_syscalls_csv(args.output_syscalls, inventory, by_syscall, direct, vm, reasons)
     args.output_md.write_text(markdown(inventory, by_syscall, native, direct, original_vm, vm,
                                        reasons, len(mapping), len(unmapped)))
     print(f"wrote {len(inventory)} syscalls and {len(tests)} tests; "
