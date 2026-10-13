@@ -494,9 +494,29 @@ int pal_common_file_attrquery(const char* type, const char* uri, PAL_STREAM_ATTR
 }
 
 int pal_common_file_attrsetbyhdl(struct pal_handle* handle, PAL_STREAM_ATTR* attr) {
-    struct fuse_setattr_in setattr = { .valid = FATTR_FH | FATTR_MODE,
-                                       .fh    = handle->file.fh,
-                                       .mode  = attr->share_flags };
+    struct fuse_setattr_in setattr = { .valid = FATTR_FH, .fh = handle->file.fh };
+    if (attr->set_atime) {
+        if (attr->atime_now) {
+            setattr.valid |= FATTR_ATIME_NOW;
+        } else {
+            setattr.valid |= FATTR_ATIME;
+            setattr.atime = attr->atime.tv_sec;
+            setattr.atimensec = attr->atime.tv_nsec;
+        }
+    }
+    if (attr->set_mtime) {
+        if (attr->mtime_now) {
+            setattr.valid |= FATTR_MTIME_NOW;
+        } else {
+            setattr.valid |= FATTR_MTIME;
+            setattr.mtime = attr->mtime.tv_sec;
+            setattr.mtimensec = attr->mtime.tv_nsec;
+        }
+    }
+    if (!attr->set_atime && !attr->set_mtime) {
+        setattr.valid |= FATTR_MODE;
+        setattr.mode = attr->share_flags;
+    }
     return virtio_fs_fuse_setattr(handle->file.nodeid, &setattr);
 }
 

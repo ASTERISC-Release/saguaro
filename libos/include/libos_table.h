@@ -11,6 +11,9 @@
 #include "linux_abi/futex.h"
 #include "linux_abi/sysinfo.h"
 
+struct utimbuf;
+struct __kernel_timeval;
+
 typedef void (*libos_syscall_t)(void);
 
 extern libos_syscall_t libos_syscall_table[];
@@ -197,6 +200,12 @@ long libos_syscall_readlinkat(int dirfd, const char* file, char* buf, int bufsiz
 long libos_syscall_renameat(int olddfd, const char* pathname, int newdfd, const char* newname);
 long libos_syscall_renameat2(int olddfd, const char* oldpath, int newdfd, const char* newpath,
                              unsigned int flags);
+long libos_syscall_utimensat(int dirfd, const char* pathname, const struct __kernel_timespec* times,
+                             int flags);
+long libos_syscall_utime(const char* pathname, const struct utimbuf* times);
+long libos_syscall_utimes(const char* pathname, const struct __kernel_timeval times[2]);
+long libos_syscall_futimesat(int dirfd, const char* pathname,
+                             const struct __kernel_timeval times[2]);
 long libos_syscall_fchmodat(int dfd, const char* filename, mode_t mode);
 long libos_syscall_fchownat(int dfd, const char* filename, uid_t user, gid_t group, int flags);
 long libos_syscall_faccessat(int dfd, const char* filename, mode_t mode);

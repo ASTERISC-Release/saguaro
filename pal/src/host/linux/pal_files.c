@@ -6,6 +6,7 @@
  */
 
 #include <linux/fcntl.h> /* AT_FDCWD, AT_REMOVEDIR */
+#include <time.h>
 
 #include "api.h"
 #include "linux_utils.h"
@@ -17,6 +18,9 @@
 #include "pal_linux_error.h"
 #include "path_utils.h"
 #include "stat.h"
+
+#define PAL_UTIME_NOW  ((1L << 30) - 1)
+#define PAL_UTIME_OMIT ((1L << 30) - 2)
 
 static int file_open(PAL_HANDLE* handle, const char* type, const char* uri, enum pal_access access,
                      pal_share_flags_t share, enum pal_create_mode create,
@@ -172,6 +176,22 @@ static int file_attrquerybyhdl(PAL_HANDLE handle, PAL_STREAM_ATTR* attr) {
 }
 
 static int file_attrsetbyhdl(PAL_HANDLE handle, PAL_STREAM_ATTR* attr) {
+    if (attr->set_atime || attr->set_mtime) {
+        struct timespec times[2] = {
+            attr->set_atime ? (struct timespec){.tv_sec = attr->atime.tv_sec,
+                                                 .tv_nsec = attr->atime.tv_nsec}
+                            : (struct timespec){.tv_nsec = PAL_UTIME_OMIT},
+            attr->set_mtime ? (struct timespec){.tv_sec = attr->mtime.tv_sec,
+                                                 .tv_nsec = attr->mtime.tv_nsec}
+                            : (struct timespec){.tv_nsec = PAL_UTIME_OMIT},
+        };
+        if (attr->atime_now)
+            times[0].tv_nsec = PAL_UTIME_NOW;
+        if (attr->mtime_now)
+            times[1].tv_nsec = PAL_UTIME_NOW;
+        int ret = DO_SYSCALL(utimensat, handle->file.fd, NULL, times, 0);
+        return ret < 0 ? unix_to_pal_error(ret) : 0;
+    }
     int ret = DO_SYSCALL(fchmod, handle->file.fd, attr->share_flags);
     return ret < 0 ? unix_to_pal_error(ret) : 0;
 }

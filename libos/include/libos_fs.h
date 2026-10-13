@@ -392,6 +392,9 @@ struct libos_d_ops {
      */
     int (*follow_link)(struct libos_dentry* dent, char** out_target);
 
+    /* Set access and modification times. Either array element may contain UTIME_OMIT. */
+    int (*set_times)(struct libos_dentry* dent, const struct __kernel_timespec times[2]);
+
     /*
      * \brief Change file permissions.
      *

@@ -25,6 +25,9 @@
 #include "perm.h"
 #include "stat.h"
 
+#define UTIME_NOW  ((1L << 30) - 1)
+#define UTIME_OMIT ((1L << 30) - 2)
+
 /*
  * Always add a read permission to files created on host, because PAL requires opening the file even
  * for operations such as `unlink` or `chmod`.
@@ -405,6 +408,51 @@ static int chroot_chmod(struct libos_dentry* dent, mode_t perm) {
     return 0;
 }
 
+static int chroot_set_times(struct libos_dentry* dent, const struct __kernel_timespec times[2]) {
+    assert(locked(&g_dcache_lock));
+    assert(dent->inode);
+
+    if (times[0].tv_nsec == UTIME_OMIT && times[1].tv_nsec == UTIME_OMIT)
+        return 0;
+
+    PAL_HANDLE palhdl;
+    int ret = chroot_temp_open(dent, &palhdl);
+    if (ret < 0)
+        return ret;
+
+    PAL_STREAM_ATTR attr = {0};
+    if (times[0].tv_nsec != UTIME_OMIT) {
+        attr.set_atime = true;
+        attr.atime_now = times[0].tv_nsec == UTIME_NOW;
+        if (!attr.atime_now)
+            attr.atime = (PAL_TIMESPEC){.tv_sec = times[0].tv_sec, .tv_nsec = times[0].tv_nsec};
+    }
+    if (times[1].tv_nsec != UTIME_OMIT) {
+        attr.set_mtime = true;
+        attr.mtime_now = times[1].tv_nsec == UTIME_NOW;
+        if (!attr.mtime_now)
+            attr.mtime = (PAL_TIMESPEC){.tv_sec = times[1].tv_sec, .tv_nsec = times[1].tv_nsec};
+    }
+    ret = PalStreamAttributesSetByHandle(palhdl, &attr);
+    PalObjectDestroy(palhdl);
+    if (ret < 0)
+        return pal_to_unix_errno(ret);
+
+    uint64_t now_us;
+    if (PalSystemTimeQuery(&now_us) < 0)
+        return -EPERM;
+    lock(&dent->inode->lock);
+    if (times[0].tv_nsec != UTIME_OMIT)
+        dent->inode->atime = times[0].tv_nsec == UTIME_NOW ? now_us / 1000000
+                                                           : times[0].tv_sec;
+    if (times[1].tv_nsec != UTIME_OMIT)
+        dent->inode->mtime = times[1].tv_nsec == UTIME_NOW ? now_us / 1000000
+                                                           : times[1].tv_sec;
+    dent->inode->ctime = now_us / 1000000;
+    unlock(&dent->inode->lock);
+    return 0;
+}
+
 static int chroot_fchmod(struct libos_handle* hdl, mode_t perm) {
     int ret;
 
@@ -443,6 +491,7 @@ struct libos_d_ops chroot_d_ops = {
     .unlink  = &chroot_unlink,
     .rename  = &chroot_rename,
     .chmod   = &chroot_chmod,
+    .set_times = &chroot_set_times,
 };
 
 struct libos_fs chroot_builtin_fs = {

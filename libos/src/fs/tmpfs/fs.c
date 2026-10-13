@@ -22,6 +22,9 @@
 #include "perm.h"
 #include "stat.h"
 
+#define UTIME_NOW  ((1L << 30) - 1)
+#define UTIME_OMIT ((1L << 30) - 2)
+
 #define USEC_IN_SEC 1000000
 
 static int tmpfs_setup_dentry(struct libos_dentry* dent, mode_t type, mode_t perm) {
@@ -211,6 +214,25 @@ static int tmpfs_chmod(struct libos_dentry* dent, mode_t perm) {
     return 0;
 }
 
+static int tmpfs_set_times(struct libos_dentry* dent, const struct __kernel_timespec times[2]) {
+    if (times[0].tv_nsec == UTIME_OMIT && times[1].tv_nsec == UTIME_OMIT)
+        return 0;
+    uint64_t now_us;
+    if (PalSystemTimeQuery(&now_us) < 0)
+        return -EPERM;
+
+    lock(&dent->inode->lock);
+    if (times[0].tv_nsec != UTIME_OMIT)
+        dent->inode->atime = times[0].tv_nsec == UTIME_NOW ? now_us / USEC_IN_SEC
+                                                           : times[0].tv_sec;
+    if (times[1].tv_nsec != UTIME_OMIT)
+        dent->inode->mtime = times[1].tv_nsec == UTIME_NOW ? now_us / USEC_IN_SEC
+                                                           : times[1].tv_sec;
+    dent->inode->ctime = now_us / USEC_IN_SEC;
+    unlock(&dent->inode->lock);
+    return 0;
+}
+
 static int tmpfs_fchmod(struct libos_handle* hdl, mode_t perm) {
     __UNUSED(hdl);
     __UNUSED(perm);
@@ -332,6 +354,7 @@ struct libos_d_ops tmp_d_ops = {
     .unlink      = &tmpfs_unlink,
     .rename      = &tmpfs_rename,
     .chmod       = &tmpfs_chmod,
+    .set_times   = &tmpfs_set_times,
     .idrop       = &tmpfs_idrop,
     .icheckpoint = &tmpfs_icheckpoint,
     .irestore    = &tmpfs_irestore,

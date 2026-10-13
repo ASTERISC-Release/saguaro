@@ -621,9 +621,12 @@ int virtio_fs_fuse_getattr(uint64_t nodeid, uint64_t fh, uint32_t flags, uint64_
 int virtio_fs_fuse_setattr(uint64_t nodeid, const struct fuse_setattr_in* setattr) {
     int ret;
 
-    /* the only currently used fields are `size` and `mode`, set on a file handle */
-    if (setattr->valid != (FATTR_FH | FATTR_SIZE)
-            && setattr->valid != (FATTR_FH | FATTR_MODE))
+    /* Restrict setattr to attributes exposed through the PAL file interface. */
+    uint32_t allowed = FATTR_FH | FATTR_SIZE | FATTR_MODE | FATTR_ATIME | FATTR_MTIME
+                       | FATTR_ATIME_NOW | FATTR_MTIME_NOW;
+    if (!(setattr->valid & FATTR_FH) || (setattr->valid & ~allowed)
+            || !(setattr->valid & (FATTR_SIZE | FATTR_MODE | FATTR_ATIME | FATTR_MTIME
+                                   | FATTR_ATIME_NOW | FATTR_MTIME_NOW)))
         return -PAL_ERROR_INVAL;
 
     struct fuse_in_header  hdr_in     = { .opcode = FUSE_SETATTR, .nodeid = nodeid };

@@ -17,6 +17,10 @@
 #include "perm.h"
 #include "stat.h"
 
+#define UTIME_NOW  ((1L << 30) - 1)
+#define UTIME_OMIT ((1L << 30) - 2)
+
+
 /*
  * Read/write in 64KB chunks in the sendfile() syscall. This syscall also has an optimization of
  * using a statically allocated buffer instead of allocating on the heap (as our internal malloc()
@@ -432,6 +436,134 @@ long libos_syscall_renameat2(int olddirfd, const char* oldpath, int newdirfd, co
     if (flags)
         return -EOPNOTSUPP;
     return libos_syscall_renameat(olddirfd, oldpath, newdirfd, newpath);
+}
+
+static int validate_times(const struct __kernel_timespec times[2]) {
+    for (size_t i = 0; i < 2; i++) {
+        if (times[i].tv_nsec != UTIME_NOW && times[i].tv_nsec != UTIME_OMIT
+                && (times[i].tv_nsec < 0 || times[i].tv_nsec >= 1000000000L))
+            return -EINVAL;
+    }
+    return 0;
+}
+
+static int set_dentry_times(struct libos_dentry* dent, const struct __kernel_timespec times[2]) {
+    if (!dent->inode)
+        return -ENOENT;
+    if (!dent->inode->fs || !dent->inode->fs->d_ops || !dent->inode->fs->d_ops->set_times)
+        return -EOPNOTSUPP;
+    return dent->inode->fs->d_ops->set_times(dent, times);
+}
+
+long libos_syscall_utimensat(int dirfd, const char* pathname,
+                             const struct __kernel_timespec* user_times,
+                             int flags) {
+    struct __kernel_timespec times[2];
+    if (!is_user_string_readable(pathname))
+        return -EFAULT;
+    if (user_times && !is_user_memory_readable(user_times, sizeof(times)))
+        return -EFAULT;
+    if (flags & ~(AT_SYMLINK_NOFOLLOW | AT_EMPTY_PATH))
+        return -EINVAL;
+
+    if (user_times) {
+        memcpy(times, user_times, sizeof(times));
+    } else {
+        times[0] = (struct __kernel_timespec){.tv_nsec = UTIME_NOW};
+        times[1] = (struct __kernel_timespec){.tv_nsec = UTIME_NOW};
+    }
+    int ret = validate_times(times);
+    if (ret < 0)
+        return ret;
+
+    if (!*pathname && (flags & AT_EMPTY_PATH)) {
+        struct libos_handle* hdl = get_fd_handle(dirfd, NULL, NULL);
+        if (!hdl)
+            return -EBADF;
+        if (!hdl->dentry) {
+            put_handle(hdl);
+            return -EOPNOTSUPP;
+        }
+        lock(&g_dcache_lock);
+        ret = set_dentry_times(hdl->dentry, times);
+        unlock(&g_dcache_lock);
+        put_handle(hdl);
+        return ret;
+    }
+
+    struct libos_dentry* dir = NULL;
+    struct libos_dentry* dent = NULL;
+    if (*pathname != '/' && (ret = get_dirfd_dentry(dirfd, &dir)) < 0)
+        return ret;
+
+    lock(&g_dcache_lock);
+    int lookup_flags = (flags & AT_SYMLINK_NOFOLLOW) ? LOOKUP_NO_FOLLOW : LOOKUP_FOLLOW;
+    ret = path_lookupat(dir, pathname, lookup_flags, &dent);
+    if (ret == 0)
+        ret = set_dentry_times(dent, times);
+    unlock(&g_dcache_lock);
+    if (dir)
+        put_dentry(dir);
+    if (dent)
+        put_dentry(dent);
+    return ret;
+}
+
+long libos_syscall_utime(const char* pathname, const struct utimbuf* user_times) {
+    if (user_times && !is_user_memory_readable(user_times, sizeof(*user_times)))
+        return -EFAULT;
+    struct __kernel_timespec times[2];
+    if (!user_times) {
+        times[0] = (struct __kernel_timespec){.tv_nsec = UTIME_NOW};
+        times[1] = (struct __kernel_timespec){.tv_nsec = UTIME_NOW};
+    } else {
+        struct utimbuf value;
+        memcpy(&value, user_times, sizeof(value));
+        times[0] = (struct __kernel_timespec){.tv_sec = value.actime, .tv_nsec = 0};
+        times[1] = (struct __kernel_timespec){.tv_sec = value.modtime, .tv_nsec = 0};
+    }
+    return libos_syscall_utimensat(AT_FDCWD, pathname, times, 0);
+}
+
+long libos_syscall_utimes(const char* pathname, const struct __kernel_timeval user_times[2]) {
+    if (user_times && !is_user_memory_readable(user_times, 2 * sizeof(*user_times)))
+        return -EFAULT;
+    struct __kernel_timeval value[2];
+    struct __kernel_timespec times[2];
+    if (!user_times) {
+        times[0] = (struct __kernel_timespec){.tv_nsec = UTIME_NOW};
+        times[1] = (struct __kernel_timespec){.tv_nsec = UTIME_NOW};
+    } else {
+        memcpy(value, user_times, sizeof(value));
+        for (size_t i = 0; i < 2; i++) {
+            if (value[i].tv_usec < 0 || value[i].tv_usec >= 1000000)
+                return -EINVAL;
+            times[i] = (struct __kernel_timespec){.tv_sec = value[i].tv_sec,
+                                                  .tv_nsec = value[i].tv_usec * 1000};
+        }
+    }
+    return libos_syscall_utimensat(AT_FDCWD, pathname, times, 0);
+}
+
+long libos_syscall_futimesat(int dirfd, const char* pathname,
+                             const struct __kernel_timeval user_times[2]) {
+    if (user_times && !is_user_memory_readable(user_times, 2 * sizeof(*user_times)))
+        return -EFAULT;
+    struct __kernel_timeval value[2];
+    struct __kernel_timespec times[2];
+    if (!user_times) {
+        times[0] = (struct __kernel_timespec){.tv_nsec = UTIME_NOW};
+        times[1] = (struct __kernel_timespec){.tv_nsec = UTIME_NOW};
+    } else {
+        memcpy(value, user_times, sizeof(value));
+        for (size_t i = 0; i < 2; i++) {
+            if (value[i].tv_usec < 0 || value[i].tv_usec >= 1000000)
+                return -EINVAL;
+            times[i] = (struct __kernel_timespec){.tv_sec = value[i].tv_sec,
+                                                  .tv_nsec = value[i].tv_usec * 1000};
+        }
+    }
+    return libos_syscall_utimensat(dirfd, pathname, times, 0);
 }
 
 long libos_syscall_sendfile(int out_fd, int in_fd, off_t* offset, size_t count) {
