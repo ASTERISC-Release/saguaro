@@ -12,5 +12,6 @@ Open items are kept per topic, in the `TODO.md` of each directory under `Documen
 | Syscall interception | `devel/syscall-interception/TODO.md` |
 | Host libc instead of a built glibc | `devel/runtime-libc/TODO.md` |
 | TCP and UDP in the VM PAL | `devel/vm-network/TODO.md` |
+| RISC-V hardware validation | `devel/riscv-hardware/TODO.md` |
 | Syscall compatibility of `gramine-vm` | `devel/syscall-compat/TODO.md` |
 | Documentation refactor | `devel/docs-refactor/TODO.md` |
