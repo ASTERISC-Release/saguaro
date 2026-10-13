@@ -17,6 +17,8 @@ DATA_DIR ?= $(HOME)/.local/share/gramine-bastion
 SHARED_INPUT ?= 1
 # 1: the host's SDL2 replaces the game's bundled one; 0: use the bundled SDL2.
 SYSTEM_SDL ?= 1
+# Game options; -windowed is also in the manifest (-noborder removes the window frame).
+BASTION_ARGS ?= -windowed
 
 ifeq ($(DEBUG),1)
 GRAMINE_LOG_LEVEL = debug
@@ -53,7 +55,7 @@ dirs:
 run-native: $(GAME_BIN) dirs
 	cd bastion_game && env LD_PRELOAD=$(GRAPHICS_LIB) EGL_DISCRETE=$${EGL_DISCRETE:-0} \
 		XDG_DATA_HOME=$(DATA_DIR)/share XDG_CONFIG_HOME=$(DATA_DIR)/config \
-		SDL_AUDIODRIVER=dummy ALSOFT_DRIVERS=null ./Bastion.bin.x86_64
+		SDL_AUDIODRIVER=dummy ALSOFT_DRIVERS=null ./Bastion.bin.x86_64 $(BASTION_ARGS)
 
 .PHONY: run
 run: all dirs

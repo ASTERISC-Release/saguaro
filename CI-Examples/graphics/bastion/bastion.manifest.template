@@ -18,7 +18,7 @@ sys.experimental__shared_input_ring = true
 
 loader.log_level = "{{ log_level }}"
 loader.insecure__use_host_env = true
-loader.argv = ["Bastion.bin.x86_64"]
+loader.argv = ["Bastion.bin.x86_64", "-windowed"]
 
 # The game's own libraries (Mono, FMOD, MojoShader) are found through /bastion/lib64.
 loader.env.LD_LIBRARY_PATH = "/bastion/lib64:/lib:/usr/lib:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu"
