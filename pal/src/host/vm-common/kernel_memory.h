@@ -45,6 +45,14 @@ int memory_mark_pages_write_combined(uint64_t addr, size_t size, bool mark);
 
 int memory_pagetables_init(void* memory_address_end, bool current_page_tables_cover_1gb);
 
+#ifdef __x86_64__
+/* Reserve a supervisor-only range for private process frames. `addr` and `size` must be page
+ * aligned and the range must not overlap memory already reserved for another PAL use. */
+int memory_frame_pool_init(uintptr_t addr, size_t size);
+int memory_frame_alloc(uintptr_t* out_frame);
+int memory_frame_free(uintptr_t frame);
+#endif
+
 /* Ensures IA32_PAT has Write-Combining at index 1 (fatal on failure). */
 void memory_pat_init_for_wc(void);
 int memory_preload_ranges(e820_table_entry* e820_entries, size_t e820_entries_size,

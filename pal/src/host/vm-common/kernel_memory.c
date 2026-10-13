@@ -24,6 +24,87 @@
 #include "kernel_multicore.h"
 #include "kernel_virtio.h"
 
+#ifdef __x86_64__
+/* Process-private backing frames come from an explicitly reserved, supervisor-only interval. The
+ * pool is opt-in until address spaces consume these frames; single-process guests keep the full
+ * existing memory quota. */
+static uintptr_t g_frame_pool_start;
+static size_t g_frame_pool_size;
+static size_t g_frame_pool_next;
+static uint8_t* g_frame_pool_bitmap;
+static spinlock_t g_frame_pool_lock = INIT_SPINLOCK_UNLOCKED;
+
+int memory_frame_pool_init(uintptr_t addr, size_t size) {
+    if (g_frame_pool_bitmap || !size || !IS_ALIGNED_POW2(addr, PAGE_SIZE) ||
+            !IS_ALIGNED_POW2(size, PAGE_SIZE) || addr < 1024UL * 1024 * 1024 ||
+            addr + size < addr || addr + size > (uintptr_t)g_pal_public_state.memory_address_end)
+        return -PAL_ERROR_INVAL;
+
+    size_t frame_count = size / PAGE_SIZE;
+    size_t bitmap_size = UDIV_ROUND_UP(frame_count, 8);
+    uint8_t* bitmap = memory_get_shared_region(bitmap_size);
+    if (!bitmap)
+        return -PAL_ERROR_NOMEM;
+
+    int ret = memory_mark_pages_on(addr, size, /*write=*/true, /*execute=*/false,
+                                   /*usermode=*/false);
+    if (ret < 0)
+        return ret;
+
+    memset(bitmap, 0, bitmap_size);
+    g_frame_pool_start = addr;
+    g_frame_pool_size = size;
+    g_frame_pool_bitmap = bitmap;
+    log_always("Private frame pool: [%p, %p), %zu frames", (void*)addr, (void*)(addr + size),
+               frame_count);
+    return 0;
+}
+
+int memory_frame_alloc(uintptr_t* out_frame) {
+    if (!out_frame || !g_frame_pool_bitmap)
+        return -PAL_ERROR_INVAL;
+
+    spinlock_lock_disable_irq(&g_frame_pool_lock);
+    size_t frame_count = g_frame_pool_size / PAGE_SIZE;
+    for (size_t scanned = 0; scanned < frame_count; scanned++) {
+        size_t i = (g_frame_pool_next + scanned) % frame_count;
+        uint8_t mask = 1U << (i % 8);
+        if (g_frame_pool_bitmap[i / 8] & mask)
+            continue;
+
+        g_frame_pool_bitmap[i / 8] |= mask;
+        g_frame_pool_next = (i + 1) % frame_count;
+        uintptr_t frame = g_frame_pool_start + i * PAGE_SIZE;
+        memset((void*)frame, 0, PAGE_SIZE);
+        *out_frame = frame;
+        spinlock_unlock_enable_irq(&g_frame_pool_lock);
+        return 0;
+    }
+    spinlock_unlock_enable_irq(&g_frame_pool_lock);
+    return -PAL_ERROR_NOMEM;
+}
+
+int memory_frame_free(uintptr_t frame) {
+    if (!g_frame_pool_bitmap || frame < g_frame_pool_start ||
+            frame >= g_frame_pool_start + g_frame_pool_size ||
+            !IS_ALIGNED_POW2(frame, PAGE_SIZE))
+        return -PAL_ERROR_INVAL;
+
+    size_t i = (frame - g_frame_pool_start) / PAGE_SIZE;
+    uint8_t mask = 1U << (i % 8);
+    spinlock_lock_disable_irq(&g_frame_pool_lock);
+    if (!(g_frame_pool_bitmap[i / 8] & mask)) {
+        spinlock_unlock_enable_irq(&g_frame_pool_lock);
+        return -PAL_ERROR_INVAL;
+    }
+    g_frame_pool_bitmap[i / 8] &= ~mask;
+    if (i < g_frame_pool_next)
+        g_frame_pool_next = i;
+    spinlock_unlock_enable_irq(&g_frame_pool_lock);
+    return 0;
+}
+#endif
+
 #define MSR_IA32_PAT 0x277
 
 /* PAT memory types, see Intel SDM, Vol. 3A, Chapter 12. */

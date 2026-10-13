@@ -39,6 +39,90 @@
 uint64_t g_tsc_mhz;
 
 static struct pal_handle* g_first_thread_handle = NULL;
+static e820_table_entry g_e820_entries[E820_NR_ENTRIES];
+static size_t g_e820_entries_size;
+
+#ifdef __x86_64__
+static int init_multiprocess_frame_pool(void) {
+    extern struct pal_initial_mem_range g_initial_mem_ranges[];
+
+    const uintptr_t pool_size = 64UL * 1024 * 1024;
+    const uintptr_t search_start = 1UL * 1024 * 1024 * 1024;
+    uintptr_t search_end = MIN((uintptr_t)g_pal_public_state.memory_address_end,
+                               2UL * 1024 * 1024 * 1024);
+
+    for (size_t e820_idx = 0; e820_idx < g_e820_entries_size / sizeof(g_e820_entries[0]);
+            e820_idx++) {
+        const e820_table_entry* entry = &g_e820_entries[e820_idx];
+        if (entry->type != E820_ADDRESS_RANGE_MEMORY || entry->address > UINTPTR_MAX - entry->size)
+            continue;
+
+        uintptr_t range_start = MAX(search_start, (uintptr_t)entry->address);
+        uintptr_t range_end = MIN(search_end, (uintptr_t)(entry->address + entry->size));
+        uintptr_t candidate = ALIGN_UP(range_start, pool_size);
+        for (; candidate <= range_end && pool_size <= range_end - candidate;
+                candidate += pool_size) {
+            bool overlaps = false;
+            for (size_t i = 0; i < g_pal_public_state.initial_mem_ranges_len; i++) {
+                if (candidate < g_initial_mem_ranges[i].end &&
+                        g_initial_mem_ranges[i].start < candidate + pool_size) {
+                    overlaps = true;
+                    break;
+                }
+            }
+            if (overlaps)
+                continue;
+
+            int ret = pal_add_initial_range(candidate, pool_size, /*prot=*/0,
+                                            /*is_user_reserved=*/false, "private_frame_pool");
+            if (ret < 0)
+                return ret;
+            ret = memory_frame_pool_init(candidate, pool_size);
+            if (ret < 0)
+                return ret;
+
+            uintptr_t frame1, frame2, reused_frame;
+            ret = memory_frame_alloc(&frame1);
+            if (ret < 0)
+                return ret;
+            ret = memory_frame_alloc(&frame2);
+            if (ret < 0) {
+                memory_frame_free(frame1);
+                return ret;
+            }
+            if (frame1 == frame2 || !IS_ALIGNED_POW2(frame1, PAGE_SIZE) ||
+                    !IS_ALIGNED_POW2(frame2, PAGE_SIZE)) {
+                memory_frame_free(frame1);
+                memory_frame_free(frame2);
+                return -PAL_ERROR_DENIED;
+            }
+            *(uint64_t*)frame1 = 0xfeedfacecafebeefUL;
+            ret = memory_frame_free(frame1);
+            if (ret < 0) {
+                memory_frame_free(frame2);
+                return ret;
+            }
+            if (memory_frame_free(frame1) != -PAL_ERROR_INVAL) {
+                memory_frame_free(frame2);
+                return -PAL_ERROR_DENIED;
+            }
+            ret = memory_frame_alloc(&reused_frame);
+            if (ret < 0) {
+                memory_frame_free(frame2);
+                return ret;
+            }
+            if (reused_frame != frame1 || *(uint64_t*)reused_frame != 0) {
+                memory_frame_free(frame2);
+                memory_frame_free(reused_frame);
+                return -PAL_ERROR_DENIED;
+            }
+            memory_frame_free(frame2);
+            return memory_frame_free(reused_frame);
+        }
+    }
+    return -PAL_ERROR_NOMEM;
+}
+#endif
 
 #define FW_CFG_RAM_SIZE 0x03 /* 64-bit RAM size in bytes */
 #define FW_CFG_NB_CPUS  0x05 /* 32-bit number of vCPUs */
@@ -204,15 +288,14 @@ noreturn void pal_start_c(void) {
         INIT_FAIL("Detected unsupported number of virtual CPUs: %u (supported: 1..%u)", num_cpus,
                   MAX_NUM_CPUS);
 
-    e820_table_entry e820[E820_NR_ENTRIES]; /* 16*20 = 320B, ok to allocate on stack */
-    size_t e820_size;
-
-    ret = e820_table_init((char*)e820, &e820_size, sizeof(e820));
+    ret = e820_table_init((char*)g_e820_entries, &g_e820_entries_size,
+                          sizeof(g_e820_entries));
     if (ret < 0)
         INIT_FAIL("Can't read E820 table from VMM");
 
-    ret = memory_init(e820, e820_size, &g_pal_public_state.memory_address_start,
-                                       &g_pal_public_state.memory_address_end);
+    ret = memory_init(g_e820_entries, g_e820_entries_size,
+                      &g_pal_public_state.memory_address_start,
+                      &g_pal_public_state.memory_address_end);
     if (ret < 0)
         INIT_FAIL("Failed to initialize physical memory");
 
@@ -222,7 +305,7 @@ noreturn void pal_start_c(void) {
     if (ret < 0)
         INIT_FAIL("Failed to initialize page tables");
 
-    ret = memory_preload_ranges(e820, e820_size, &add_preloaded_range);
+    ret = memory_preload_ranges(g_e820_entries, g_e820_entries_size, &add_preloaded_range);
     if (ret < 0)
         INIT_FAIL("Failed to initialize preloaded ranges");
 
@@ -400,6 +483,19 @@ noreturn int pal_start_continue(void* cmdline_) {
     g_pal_public_state.manifest_root = toml_parse(manifest, errbuf, sizeof(errbuf));
     if (!g_pal_public_state.manifest_root)
         INIT_FAIL_MANIFEST(errbuf);
+
+#ifdef __x86_64__
+    bool enable_multiprocess;
+    ret = toml_bool_in(g_pal_public_state.manifest_root, "sys.experimental__multiprocess",
+                       /*defaultval=*/false, &enable_multiprocess);
+    if (ret < 0)
+        INIT_FAIL("Cannot parse 'sys.experimental__multiprocess'");
+    if (enable_multiprocess) {
+        ret = init_multiprocess_frame_pool();
+        if (ret < 0)
+            INIT_FAIL("Cannot initialize the multiprocess frame pool: %s", pal_strerror(ret));
+    }
+#endif
 
     ret = toml_bool_in(g_pal_public_state.manifest_root,
                        "sys.enable_extra_runtime_domain_names_conf", /*defaultval=*/false,
