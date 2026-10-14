@@ -110,6 +110,7 @@ libos_sources = files(
     'sys/libos_poll.c',
     'sys/libos_sched.c',
     'sys/libos_sem.c',
+    'sys/libos_sysv_msg.c',
     'sys/libos_sysv_shm.c',
     'sys/libos_sigaction.c',
     'sys/libos_sleep.c',

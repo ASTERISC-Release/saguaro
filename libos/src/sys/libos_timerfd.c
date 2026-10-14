@@ -449,9 +449,8 @@ out:
 }
 
 long libos_syscall_timerfd_gettime(int fd, struct __kernel_itimerspec* curr) {
-    if (!is_user_memory_writable(curr, sizeof(*curr)))
-        return -EFAULT;
-
+    /* the kernel's order: EBADF, then EINVAL for a non-timerfd, and EFAULT only when the result
+     * is copied out (LTP timerfd_gettime01 checks the first two with a bad buffer) */
     struct libos_handle* hdl = get_fd_handle(fd, NULL, NULL);
     if (!hdl)
         return -EBADF;
@@ -474,9 +473,15 @@ long libos_syscall_timerfd_gettime(int fd, struct __kernel_itimerspec* curr) {
     if (ret < 0)
         goto out;
 
+    struct __kernel_itimerspec value;
     spinlock_lock(&t->lock);
-    timerfd_report_state(t, now_ns, /*abstime=*/false, curr);
+    timerfd_report_state(t, now_ns, /*abstime=*/false, &value);
     spinlock_unlock(&t->lock);
+    if (!is_user_memory_writable(curr, sizeof(*curr))) {
+        ret = -EFAULT;
+        goto out;
+    }
+    *curr = value;
 out:
     put_handle(hdl);
     return ret;

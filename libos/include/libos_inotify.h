@@ -80,6 +80,8 @@ void libos_inotify_child_event_raw(struct libos_dentry* dir, const char* name, u
 void libos_inotify_delete_self_locked(struct libos_dentry* dent, bool report_delete_parent);
 void libos_inotify_move_self(struct libos_dentry* dent);
 void libos_inotify_transfer_watches(struct libos_dentry* from, struct libos_dentry* to);
+/* `renameat2(RENAME_EXCHANGE)`: the watches of `a` move to `b` and those of `b` to `a` */
+void libos_inotify_swap_watches(struct libos_dentry* a, struct libos_dentry* b);
 
 /* drop all watches and queued events of a closing instance */
 void libos_inotify_destroy_watches(struct libos_handle* group);

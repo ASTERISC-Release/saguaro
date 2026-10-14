@@ -347,6 +347,26 @@ void libos_inotify_transfer_watches(struct libos_dentry* from, struct libos_dent
         put_dentry(put_after[i]);
 }
 
+void libos_inotify_swap_watches(struct libos_dentry* a, struct libos_dentry* b) {
+    assert(locked(&g_dcache_lock));
+
+    /* Each watch holds one reference on its dentry; both dentries are referenced by the caller,
+     * so the counts can be moved without a dentry being freed in between. */
+    spinlock_lock(&g_inotify_lock);
+    for (struct libos_inotify_watch* w = g_inotify_watches; w; w = w->next) {
+        if (w->dir_dentry == a) {
+            get_dentry(b);
+            put_dentry(a);
+            w->dir_dentry = b;
+        } else if (w->dir_dentry == b) {
+            get_dentry(a);
+            put_dentry(b);
+            w->dir_dentry = a;
+        }
+    }
+    spinlock_unlock(&g_inotify_lock);
+}
+
 /* drop all watches and queued events of a closing instance (kernel: `inotify_release`); the
  * kernel discards the still-queued events and emits no `IN_IGNORED` (nobody could read them) */
 void libos_inotify_destroy_watches(struct libos_handle* group) {

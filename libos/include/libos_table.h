@@ -341,6 +341,10 @@ long libos_syscall_shmget(int key, size_t size, int shmflg);
 long libos_syscall_shmat(int shmid, const void* shmaddr, int shmflg);
 long libos_syscall_shmctl(int shmid, int cmd, void* buf);
 long libos_syscall_shmdt(const void* shmaddr);
+long libos_syscall_msgget(int key, int msgflg);
+long libos_syscall_msgsnd(int msqid, const void* msgp, size_t msgsz, int msgflg);
+long libos_syscall_msgrcv(int msqid, void* msgp, size_t msgsz, long msgtyp, int msgflg);
+long libos_syscall_msgctl(int msqid, int cmd, void* buf);
 long libos_openat_internal(int dfd, const char* filename, int flags, int mode);
 long libos_unlink_internal(const char* pathname);
 

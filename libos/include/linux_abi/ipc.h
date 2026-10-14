@@ -3,10 +3,11 @@
 
 /*
  * The Linux ABI of the System V IPC primitives the LibOS implements directly
- * (shared memory today; see `libos/src/sys/libos_sysv_shm.c`). The layouts match
- * `<asm-generic/ipcbuf.h>` and `<asm-generic/shmbuf.h>` as used by all three
+ * (shared memory, `libos/src/sys/libos_sysv_shm.c`, and message queues,
+ * `libos/src/sys/libos_sysv_msg.c`). The layouts match `<asm-generic/ipcbuf.h>`,
+ * `<asm-generic/shmbuf.h>` and `<asm-generic/msgbuf.h>` as used by all three
  * architectures this LibOS builds for (x86_64, aarch64, riscv64 — all 64-bit, so
- * `shmid_ds` is `shmid64_ds` and the time fields are one `long`).
+ * `shmid_ds` is `shmid64_ds`, `msqid_ds` is `msqid64_ds` and the time fields are one `long`).
  */
 
 #ifndef _LINUX_ABI_IPC_H
@@ -100,6 +101,42 @@ struct linux_shm_info {
     unsigned long shm_swp;
     unsigned long swap_attempts;
     unsigned long swap_successes;
+};
+
+/* msgctl() extra commands and msgrcv() flags, <linux/msg.h> */
+#define LINUX_MSG_STAT      11
+#define LINUX_MSG_INFO      12
+#define LINUX_MSG_STAT_ANY  13
+#define LINUX_MSG_NOERROR   010000
+#define LINUX_MSG_EXCEPT    020000
+#define LINUX_MSG_COPY      040000
+
+/* <asm-generic/msgbuf.h> struct msqid64_ds on 64-bit architectures (x86_64's own
+ * `asm/msgbuf.h` has the same layout there). */
+struct linux_msqid_ds {
+    struct linux_ipc_perm msg_perm;
+    long msg_stime;
+    long msg_rtime;
+    long msg_ctime;
+    unsigned long msg_cbytes;
+    unsigned long msg_qnum;
+    unsigned long msg_qbytes;
+    int msg_lspid;
+    int msg_lrpid;
+    unsigned long __unused4;
+    unsigned long __unused5;
+};
+
+/* <linux/msg.h> struct msginfo (IPC_INFO and MSG_INFO) */
+struct linux_msginfo {
+    int msgpool;
+    int msgmap;
+    int msgmax;
+    int msgmnb;
+    int msgmni;
+    int msgssz;
+    int msgtql;
+    unsigned short msgseg;
 };
 
 #endif /* _LINUX_ABI_IPC_H */

@@ -698,6 +698,8 @@ int wakeup_one_thread_on_signal(struct libos_thread* thread, void* arg) {
     if (!__sigismember(&thread->signal_mask, sig)) {
         thread_wakeup(thread);
         ret = PalThreadResume(thread->pal_handle);
+        if (ret == -PAL_ERROR_NOTIMPLEMENTED)
+            ret = 0; /* no thread resume in this PAL (VM): the wakeup above is all it can do */
         ret = ret < 0 ? pal_to_unix_errno(ret) : 1; /* "1" to finish one-shot thread walk */
     }
     unlock(&thread->lock);

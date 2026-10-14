@@ -505,9 +505,11 @@ static int do_exchange(struct libos_dentry* old_dent, struct libos_dentry* new_d
     assert(locked(&g_dcache_lock));
     assert(old_dent->inode && new_dent->inode);
 
-    if ((old_dent->inode->type != S_IFREG && old_dent->inode->type != S_IFLNK) ||
-        (new_dent->inode->type != S_IFREG && new_dent->inode->type != S_IFLNK)) {
-        /* Same rule as `do_rename()`: only regular files and symlinks. */
+    mode_t old_type = old_dent->inode->type;
+    mode_t new_type = new_dent->inode->type;
+    if ((old_type != S_IFREG && old_type != S_IFLNK && old_type != S_IFDIR) ||
+        (new_type != S_IFREG && new_type != S_IFLNK && new_type != S_IFDIR)) {
+        /* Same rule as `do_rename()`: regular files, symlinks and directories. */
         return -ENOSYS;
     }
 
@@ -527,6 +529,52 @@ static int do_exchange(struct libos_dentry* old_dent, struct libos_dentry* new_d
     int ret = fs->d_ops->exchange(old_dent, new_dent);
     if (ret < 0)
         return ret;
+
+    /* The LibOS swaps the inodes of the two dentries (the kernel swaps the dentries), so what the
+     * kernel carries along with a dentry has to be swapped here: the cached children of a
+     * directory, the process cwd, and the inotify watches. */
+    if (old_type == S_IFDIR || new_type == S_IFDIR) {
+        LISTP_TYPE(libos_dentry) old_children = LISTP_INIT;
+        LISTP_TYPE(libos_dentry) new_children = LISTP_INIT;
+        LISTP_SPLICE_INIT(&old_dent->children, &old_children, siblings, libos_dentry);
+        LISTP_SPLICE_INIT(&new_dent->children, &new_children, siblings, libos_dentry);
+        struct libos_dentry* child;
+        LISTP_FOR_EACH_ENTRY(child, &old_children, siblings)
+            child->parent = new_dent;
+        LISTP_FOR_EACH_ENTRY(child, &new_children, siblings)
+            child->parent = old_dent;
+        LISTP_SPLICE_INIT(&old_children, &new_dent->children, siblings, libos_dentry);
+        LISTP_SPLICE_INIT(&new_children, &old_dent->children, siblings, libos_dentry);
+        size_t nchildren = old_dent->nchildren;
+        old_dent->nchildren = new_dent->nchildren;
+        new_dent->nchildren = nchildren;
+
+        lock(&g_process.fs_lock);
+        struct libos_dentry* cwd = g_process.cwd;
+        if (cwd == old_dent || cwd == new_dent) {
+            struct libos_dentry* moved = cwd == old_dent ? new_dent : old_dent;
+            get_dentry(moved);
+            put_dentry(cwd);
+            g_process.cwd = moved;
+        }
+        unlock(&g_process.fs_lock);
+
+        /* a directory that changes parents moves its ".." link: when a directory and a
+         * non-directory trade places across two parents, the parents' `nlink` follow */
+        if (old_type != new_type && old_dent->parent != new_dent->parent && old_dent->parent &&
+                new_dent->parent) {
+            struct libos_inode* loses = (old_type == S_IFDIR ? old_dent : new_dent)->parent->inode;
+            struct libos_inode* gains = (old_type == S_IFDIR ? new_dent : old_dent)->parent->inode;
+            lock(&loses->lock);
+            if (loses->nlink > 0)
+                loses->nlink--;
+            unlock(&loses->lock);
+            lock(&gains->lock);
+            gains->nlink++;
+            unlock(&gains->lock);
+        }
+    }
+    libos_inotify_swap_watches(old_dent, new_dent);
 
     struct libos_inode* tmp = old_dent->inode;
     old_dent->inode = new_dent->inode;

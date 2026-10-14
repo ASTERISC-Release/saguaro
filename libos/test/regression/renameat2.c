@@ -156,6 +156,102 @@ int main(int argc, const char** argv) {
         }
         unlink(l1);
         unlink(l2);
+
+        /* 5b. directories: contents travel with the directory, a directory and a file can trade
+         *     places across parents, the cwd moves with its
+         *     directory, and a directory cannot be exchanged with its own descendant */
+        char d1[600], d2[600], p[600], pf[600], tmp[700];
+        path_of(d1, sizeof(d1), "r2_d1");
+        path_of(d2, sizeof(d2), "r2_d2");
+        path_of(p, sizeof(p), "r2_p");
+        path_of(pf, sizeof(pf), "r2_p/f");
+        if (mkdir(d1, 0755) || mkdir(d2, 0755) || mkdir(p, 0755))
+            err(1, "mkdir for directory exchange");
+        snprintf(tmp, sizeof(tmp), "%s/x", d1);
+        write_file(tmp, "XXX\n");
+        snprintf(tmp, sizeof(tmp), "%s/y", d2);
+        write_file(tmp, "YYY\n");
+        write_file(pf, "FFF\n");
+        struct stat sd1, sd2;
+        if (stat(d1, &sd1) || stat(d2, &sd2))
+            err(1, "stat dirs");
+        r = do_renameat2(d1, d2, RENAME_EXCHANGE);
+        if (r)
+            err(1, "EXCHANGE directories");
+        if (stat(d1, &na) || stat(d2, &nb))
+            err(1, "stat dirs after exchange");
+        if (na.st_ino != sd2.st_ino || nb.st_ino != sd1.st_ino)
+            errx(1, "directory EXCHANGE did not swap the inodes");
+        snprintf(tmp, sizeof(tmp), "%s/y", d1);
+        read_file(tmp, buf, sizeof(buf));
+        if (strcmp(buf, "YYY\n") != 0)
+            errx(1, "directory EXCHANGE: d1/y has the wrong content");
+        snprintf(tmp, sizeof(tmp), "%s/x", d2);
+        read_file(tmp, buf, sizeof(buf));
+        if (strcmp(buf, "XXX\n") != 0)
+            errx(1, "directory EXCHANGE: d2/x has the wrong content");
+        snprintf(tmp, sizeof(tmp), "%s/x", d1);
+        if (access(tmp, F_OK) == 0)
+            errx(1, "directory EXCHANGE: d1/x still visible");
+
+        struct stat sp;
+        if (stat(p, &sp))
+            err(1, "stat p");
+        r = do_renameat2(d1, pf, RENAME_EXCHANGE); /* d1 (holds y) <-> p/f (a file) */
+        if (r)
+            err(1, "EXCHANGE directory with file");
+        struct stat np, nf;
+        if (stat(p, &np) || stat(d1, &nf))
+            err(1, "stat after dir/file exchange");
+        if (!S_ISREG(nf.st_mode))
+            errx(1, "after dir/file EXCHANGE d1 is not a file");
+        read_file(d1, buf, sizeof(buf));
+        if (strcmp(buf, "FFF\n") != 0)
+            errx(1, "after dir/file EXCHANGE d1 has the wrong content");
+        snprintf(tmp, sizeof(tmp), "%s/y", pf);
+        read_file(tmp, buf, sizeof(buf));
+        if (strcmp(buf, "YYY\n") != 0)
+            errx(1, "after dir/file EXCHANGE p/f/y has the wrong content");
+        /* Linux adds one link to `p` here; the LibOS reports a constant 2 for every directory
+         * (fs/libos_fs_util.c), so only "not fewer" can be checked portably */
+        if (np.st_nlink < sp.st_nlink)
+            errx(1, "dir/file EXCHANGE: parent nlink dropped from %lu to %lu",
+                 (unsigned long)sp.st_nlink, (unsigned long)np.st_nlink);
+
+        char saved_cwd[600];
+        if (!getcwd(saved_cwd, sizeof(saved_cwd)))
+            err(1, "getcwd");
+        if (chdir(d2))
+            err(1, "chdir d2");
+        r = do_renameat2(d2, pf, RENAME_EXCHANGE); /* cwd (holds x) moves to p/f */
+        if (r)
+            err(1, "EXCHANGE of the cwd");
+        if (access("x", F_OK))
+            errx(1, "cwd lost its contents after EXCHANGE");
+        char cwd_now[700];
+        if (!getcwd(cwd_now, sizeof(cwd_now)))
+            err(1, "getcwd after exchange");
+        if (strcmp(cwd_now, pf) != 0)
+            errx(1, "cwd after EXCHANGE is %s, want %s", cwd_now, pf);
+        if (chdir(saved_cwd))
+            err(1, "chdir back");
+
+        snprintf(tmp, sizeof(tmp), "%s/sub", d2); /* d2 now holds y */
+        if (mkdir(tmp, 0755))
+            err(1, "mkdir sub");
+        r = do_renameat2(d2, tmp, RENAME_EXCHANGE);
+        if (r == 0 || errno != EINVAL)
+            errx(1, "EXCHANGE with a descendant: want EINVAL, got r=%ld errno=%d", r, errno);
+        if (rmdir(tmp))
+            err(1, "rmdir sub");
+
+        /* clean up: d2 holds y, p/f holds x, d1 is the file */
+        snprintf(tmp, sizeof(tmp), "%s/y", d2);
+        unlink(tmp);
+        snprintf(tmp, sizeof(tmp), "%s/x", pf);
+        unlink(tmp);
+        if (rmdir(d2) || rmdir(pf) || rmdir(p) || unlink(d1))
+            err(1, "cleanup of the directory exchange");
     } else {
         /* 6. the host-backed filesystem has no exchange hook: honest EOPNOTSUPP */
         write_file(a, "AAA\n");

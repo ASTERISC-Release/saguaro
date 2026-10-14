@@ -469,7 +469,11 @@ int do_kill_thread(IDTYPE sender, IDTYPE tgid, IDTYPE tid, int sig) {
     }
     if (thread != get_cur_thread()) {
         thread_wakeup(thread);
-        ret = pal_to_unix_errno(PalThreadResume(thread->pal_handle));
+        ret = PalThreadResume(thread->pal_handle);
+        /* The signal is queued and a thread waiting in the LibOS is woken already; a PAL without
+         * thread resume (the VM PAL) only delays delivery to a thread running in user space until
+         * its next LibOS entry, which is no reason to fail `tgkill()` as before. */
+        ret = ret == -PAL_ERROR_NOTIMPLEMENTED ? 0 : pal_to_unix_errno(ret);
     }
 
     put_thread(thread);
