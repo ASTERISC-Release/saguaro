@@ -293,6 +293,25 @@ def kill_test_orphans(binary, existing_pids):
             pass
 
 
+SHM_HOST = '{ type = "untrusted_shm", path = "/dev/shm", uri = "dev:/dev/shm" },'
+SHM_TMPFS = '{ type = "tmpfs", path = "/dev/shm" },'
+
+
+def set_manifest_shm(manifests, kind):
+    """Give the manifests the /dev/shm mount `kind` needs: "tmpfs" for the VM PAL (it has no
+    dev: stream), "host" for gramine-direct (LTP's library shares its result counters with the
+    forked test process through /dev/shm; a LibOS tmpfs is private to one process, so the counts
+    of a forking test would be lost). Returns the number of manifests changed."""
+    old, new = (SHM_HOST, SHM_TMPFS) if kind == "tmpfs" else (SHM_TMPFS, SHM_HOST)
+    changed = 0
+    for manifest in manifests:
+        text = manifest.read_text()
+        if old in text:
+            manifest.write_text(text.replace(old, new))
+            changed += 1
+    return changed
+
+
 def run_one(name, command, args, per_test_timeout, reserved_cid=None):
     binary = pathlib.Path(args.ltp_root) / "testcases/bin" / ltp_test_command(command)
     env = os.environ.copy()
@@ -369,10 +388,17 @@ def main():
                         help="record NAME as TCONF without executing it")
     parser.add_argument("--skip-reason", default="excluded by --skip-test")
     parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--set-shm", choices=("host", "tmpfs"),
+                        help="only switch every manifest's /dev/shm mount (see set_manifest_shm)")
     parser.add_argument("tests", nargs="*")
     args = parser.parse_args()
     if args.self_test:
         parser_self_test()
+        return
+    if args.set_shm:
+        manifests = sorted(args.harness_dir.glob("*.manifest"))
+        changed = set_manifest_shm(manifests, args.set_shm)
+        print(f"/dev/shm is {args.set_shm} in the {len(manifests)} manifests ({changed} changed)")
         return
     if not args.loader:
         parser.error("--loader is required")
@@ -410,6 +436,12 @@ def main():
                   file=sys.stderr)
             link.unlink()
             link.symlink_to(os.path.relpath(args.ltp_root.resolve(), args.harness_dir.resolve()))
+        manifests = sorted({args.harness_dir / f"{ltp_test_command(scenarios[name])}.manifest"
+                            for name in active})
+        changed = set_manifest_shm(manifests, "tmpfs" if args.loader == "vm" else "host")
+        if changed:
+            print(f"note: switched /dev/shm in {changed} manifests for the {args.loader} loader",
+                  file=sys.stderr)
     guest_cids = allocate_guest_cids(1) * len(active) if args.loader == "vm" else [None] * len(active)
 
     results = [{"loader": args.loader, "test": name, "subtests": [],

@@ -32,26 +32,13 @@ if [[ -f splice01.manifest && ! -f splice02.manifest ]]; then
     sed 's/splice01/splice02/g' splice01.manifest > splice02.manifest
 fi
 
-# The VM PAL has no dev: stream, but LibOS tmpfs can provide private /dev/shm for the
-# single-process VM test run. Keep the default manifest behavior for native/direct/SGX runs.
+# The VM PAL has no dev: stream, but LibOS tmpfs can provide a private /dev/shm for the
+# single-process VM test run. Keep the default (host /dev/shm, shared between the processes of a
+# test) for native/direct/SGX runs: LTP's library keeps its result counters in a /dev/shm mapping
+# shared with the forked test process. scripts/run-ltp-syscalls.py switches the manifests it runs
+# to the variant its loader needs, so this setting only chooses the initial state.
 if [[ ${LTP_VM_TMPFS_SHM:-0} == 1 ]]; then
-    python3 - "$test_dir" <<'PY'
-from pathlib import Path
-import sys
-
-root = Path(sys.argv[1])
-old = '{ type = "untrusted_shm", path = "/dev/shm", uri = "dev:/dev/shm" },'
-new = '{ type = "tmpfs", path = "/dev/shm" },'
-changed = 0
-configured = 0
-for manifest in root.glob("*.manifest"):
-    text = manifest.read_text()
-    if old in text:
-        text = text.replace(old, new)
-        manifest.write_text(text)
-        changed += 1
-    if new in text:
-        configured += 1
-print(f"Configured /dev/shm as tmpfs in {configured} VM manifests ({changed} changed)")
-PY
+    python3 "$repo_root/scripts/run-ltp-syscalls.py" --set-shm tmpfs --harness-dir "$test_dir"
+else
+    python3 "$repo_root/scripts/run-ltp-syscalls.py" --set-shm host --harness-dir "$test_dir"
 fi
