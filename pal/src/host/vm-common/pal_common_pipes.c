@@ -100,10 +100,10 @@ static int pipe_connect(struct pal_handle** handle, const char* name,
         sched_thread_wakeup(&g_streams_waiting_events_futex);
     sched_thread_wakeup(&found_server_pipe->pipe.connect_futex);
 
-    /* Do not return a connected handle until the server has accepted it. Otherwise the client can
-     * close and disappear from g_connecting_pipes_list before a process in another root wakes to
-     * accept it. */
-    while (!pipe->pipe.pipe_buf)
+    /* A blocking client must stay alive until accepted, or a process in another root might miss it
+     * after the client closes. Nonblocking clients are used by the local create-and-accept
+     * sequence (e.g. pollable events), so they must return before the server calls waitforclient. */
+    while (!pipe->pipe.nonblocking && !pipe->pipe.pipe_buf)
         sched_thread_wait(&pipe->pipe.connect_futex, &g_connecting_pipes_lock);
 
     *handle = pipe;
