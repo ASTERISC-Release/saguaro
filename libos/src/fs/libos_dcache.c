@@ -432,8 +432,11 @@ struct libos_inode* get_new_inode(struct libos_mount* mount, mode_t type, mode_t
     inode->nlink = 1;
     inode->ino = __atomic_add_fetch(&g_next_inode_ino, 1, __ATOMIC_RELAXED);
     inode->ctime = 0;
+    inode->ctime_nsec = 0;
     inode->mtime = 0;
+    inode->mtime_nsec = 0;
     inode->atime = 0;
+    inode->atime_nsec = 0;
 
     struct libos_thread* current = get_cur_thread();
     lock(&current->lock);
@@ -693,8 +696,11 @@ BEGIN_CP_FUNC(inode) {
         new_inode->gid = inode->gid;
 
         new_inode->ctime = inode->ctime;
+        new_inode->ctime_nsec = inode->ctime_nsec;
         new_inode->mtime = inode->mtime;
+        new_inode->mtime_nsec = inode->mtime_nsec;
         new_inode->atime = inode->atime;
+        new_inode->atime_nsec = inode->atime_nsec;
 
         DO_CP_MEMBER(mount, inode, new_inode, mount);
         DO_CP_MEMBER(fs, inode, new_inode, fs);

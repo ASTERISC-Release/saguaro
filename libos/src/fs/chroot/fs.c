@@ -246,8 +246,10 @@ static ssize_t chroot_write(struct libos_handle* hdl, const void* buf, size_t co
         lock(&hdl->inode->lock);
         if (hdl->inode->size < *pos)
             hdl->inode->size = *pos;
-        if (have_time)
+        if (have_time) {
             hdl->inode->mtime = time_us / 1000000;
+            hdl->inode->mtime_nsec = (time_us % 1000000) * 1000;
+        }
         unlock(&hdl->inode->lock);
     }
 
@@ -544,14 +546,21 @@ static int chroot_set_times(struct libos_dentry* dent, const struct __kernel_tim
     uint64_t now_us;
     if (PalSystemTimeQuery(&now_us) < 0)
         return -EPERM;
+    time_t now = now_us / 1000000;
+    long now_nsec = (now_us % 1000000) * 1000;
     lock(&dent->inode->lock);
-    if (times[0].tv_nsec != UTIME_OMIT)
-        dent->inode->atime = times[0].tv_nsec == UTIME_NOW ? now_us / 1000000
-                                                           : times[0].tv_sec;
-    if (times[1].tv_nsec != UTIME_OMIT)
-        dent->inode->mtime = times[1].tv_nsec == UTIME_NOW ? now_us / 1000000
-                                                           : times[1].tv_sec;
-    dent->inode->ctime = now_us / 1000000;
+    if (times[0].tv_nsec != UTIME_OMIT) {
+        dent->inode->atime = times[0].tv_nsec == UTIME_NOW ? now : times[0].tv_sec;
+        /* The host file stores nanosecond precision; the PAL time query is microsecond based, so
+         * `UTIME_NOW` here is accurate to the microsecond. */
+        dent->inode->atime_nsec = times[0].tv_nsec == UTIME_NOW ? now_nsec : times[0].tv_nsec;
+    }
+    if (times[1].tv_nsec != UTIME_OMIT) {
+        dent->inode->mtime = times[1].tv_nsec == UTIME_NOW ? now : times[1].tv_sec;
+        dent->inode->mtime_nsec = times[1].tv_nsec == UTIME_NOW ? now_nsec : times[1].tv_nsec;
+    }
+    dent->inode->ctime = now;
+    dent->inode->ctime_nsec = now_nsec;
     unlock(&dent->inode->lock);
     return 0;
 }

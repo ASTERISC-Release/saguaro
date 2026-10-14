@@ -159,6 +159,14 @@ out:
     return ret;
 }
 
+static int rmdir_check_empty_callback(const char* name, void* arg) {
+    bool* found = arg;
+    if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0)
+        return 0;
+    *found = true;
+    return 0;
+}
+
 long libos_syscall_rmdir(const char* pathname) {
     int ret = 0;
     struct libos_dentry* dent = NULL;
@@ -186,6 +194,22 @@ long libos_syscall_rmdir(const char* pathname) {
     if (!fs || !fs->d_ops || !fs->d_ops->unlink) {
         ret = -EACCES;
         goto out;
+    }
+
+    /* Check emptiness here: the PAL delete reports "directory not empty" only as a generic
+     * error, and `ENOTEMPTY` is the answer Linux gives. Filesystems without a readdir hook are
+     * left to their own unlink implementation. */
+    if (fs->d_ops->readdir) {
+        bool not_empty = false;
+        int rd = fs->d_ops->readdir(dent, &rmdir_check_empty_callback, &not_empty);
+        if (rd < 0) {
+            ret = rd;
+            goto out;
+        }
+        if (not_empty) {
+            ret = -ENOTEMPTY;
+            goto out;
+        }
     }
 
     ret = fs->d_ops->unlink(dent);
@@ -391,11 +415,41 @@ static int do_rename(struct libos_dentry* old_dent, struct libos_dentry* new_den
     return 0;
 }
 
-long libos_syscall_rename(const char* oldpath, const char* newpath) {
-    return libos_syscall_renameat(AT_FDCWD, oldpath, AT_FDCWD, newpath);
+static int do_exchange(struct libos_dentry* old_dent, struct libos_dentry* new_dent) {
+    assert(locked(&g_dcache_lock));
+    assert(old_dent->inode && new_dent->inode);
+
+    if ((old_dent->inode->type != S_IFREG && old_dent->inode->type != S_IFLNK) ||
+        (new_dent->inode->type != S_IFREG && new_dent->inode->type != S_IFLNK)) {
+        /* Same rule as `do_rename()`: only regular files and symlinks. */
+        return -ENOSYS;
+    }
+
+    if (old_dent->mount != new_dent->mount || old_dent->inode->fs != new_dent->inode->fs) {
+        return -EXDEV;
+    }
+
+    if (dentry_is_ancestor(old_dent, new_dent) || dentry_is_ancestor(new_dent, old_dent)) {
+        return -EINVAL;
+    }
+
+    struct libos_fs* fs = old_dent->inode->fs;
+    if (!fs || !fs->d_ops || !fs->d_ops->exchange) {
+        return -EOPNOTSUPP;
+    }
+
+    int ret = fs->d_ops->exchange(old_dent, new_dent);
+    if (ret < 0)
+        return ret;
+
+    struct libos_inode* tmp = old_dent->inode;
+    old_dent->inode = new_dent->inode;
+    new_dent->inode = tmp;
+    return 0;
 }
 
-long libos_syscall_renameat(int olddirfd, const char* oldpath, int newdirfd, const char* newpath) {
+static int do_renameat(int olddirfd, const char* oldpath, int newdirfd, const char* newpath,
+                       unsigned int flags) {
     struct libos_dentry* old_dir_dent = NULL;
     struct libos_dentry* old_dent     = NULL;
     struct libos_dentry* new_dir_dent = NULL;
@@ -438,6 +492,20 @@ long libos_syscall_renameat(int olddirfd, const char* oldpath, int newdirfd, con
     assert(refcount_get(&old_dent->ref_count) >= 2);
     assert(refcount_get(&new_dent->ref_count) >= 2);
 
+    if (flags & RENAME_EXCHANGE) {
+        if (!new_dent->inode) {
+            ret = -ENOENT;
+            goto out;
+        }
+        ret = do_exchange(old_dent, new_dent);
+        goto out;
+    }
+
+    if ((flags & RENAME_NOREPLACE) && new_dent->inode) {
+        ret = -EEXIST;
+        goto out;
+    }
+
     ret = do_rename(old_dent, new_dent);
 
 out:
@@ -453,15 +521,24 @@ out:
     return ret;
 }
 
+long libos_syscall_rename(const char* oldpath, const char* newpath) {
+    return do_renameat(AT_FDCWD, oldpath, AT_FDCWD, newpath, /*flags=*/0);
+}
+
+long libos_syscall_renameat(int olddirfd, const char* oldpath, int newdirfd, const char* newpath) {
+    return do_renameat(olddirfd, oldpath, newdirfd, newpath, /*flags=*/0);
+}
+
 long libos_syscall_renameat2(int olddirfd, const char* oldpath, int newdirfd, const char* newpath,
                              unsigned int flags) {
-    /* The existing filesystem rename hooks implement the flags == 0 operation. The other Linux
-     * renameat2 modes require atomic no-replace or exchange support from every filesystem. */
-    if (flags & ~7U)
+    if (flags & ~(RENAME_NOREPLACE | RENAME_EXCHANGE | RENAME_WHITEOUT))
         return -EINVAL;
-    if (flags)
-        return -EOPNOTSUPP;
-    return libos_syscall_renameat(olddirfd, oldpath, newdirfd, newpath);
+    /* Linux rejects these combinations too (see tmpfs_rename_prepare()). */
+    if ((flags & RENAME_EXCHANGE) && (flags & (RENAME_NOREPLACE | RENAME_WHITEOUT)))
+        return -EINVAL;
+    if (flags & RENAME_WHITEOUT)
+        return -EOPNOTSUPP; /* no overlayfs whiteout support in the LibOS filesystems */
+    return do_renameat(olddirfd, oldpath, newdirfd, newpath, flags);
 }
 
 static int validate_times(const struct __kernel_timespec times[2]) {
@@ -479,6 +556,49 @@ static int set_dentry_times(struct libos_dentry* dent, const struct __kernel_tim
     if (!dent->inode->fs || !dent->inode->fs->d_ops || !dent->inode->fs->d_ops->set_times)
         return -EOPNOTSUPP;
     return dent->inode->fs->d_ops->set_times(dent, times);
+}
+
+/* Set the times of the file referenced by `fd` through its dentry. Shared by the
+ * `AT_EMPTY_PATH` / `futimesat(dirfd, NULL, ...)` paths. */
+static int set_fd_times(int fd, const struct __kernel_timespec times[2]) {
+    struct libos_handle* hdl = get_fd_handle(fd, NULL, NULL);
+    if (!hdl)
+        return -EBADF;
+    if (!hdl->dentry) {
+        put_handle(hdl);
+        return -EOPNOTSUPP; /* no path to set times on (e.g. pipes and sockets) */
+    }
+    lock(&g_dcache_lock);
+    int ret = set_dentry_times(hdl->dentry, times);
+    unlock(&g_dcache_lock);
+    put_handle(hdl);
+    return ret;
+}
+
+/*
+ * The shared core of the timestamp syscalls. `times` is a LibOS-internal (already copied and
+ * validated) array; `pathname` is a LibOS-internal string and must be non-NULL.
+ */
+static int do_utimensat(int dirfd, const char* pathname,
+                        const struct __kernel_timespec times[2], int flags) {
+    struct libos_dentry* dir = NULL;
+    struct libos_dentry* dent = NULL;
+    int ret;
+
+    if (*pathname != '/' && (ret = get_dirfd_dentry(dirfd, &dir)) < 0)
+        return ret;
+
+    lock(&g_dcache_lock);
+    int lookup_flags = (flags & AT_SYMLINK_NOFOLLOW) ? LOOKUP_NO_FOLLOW : LOOKUP_FOLLOW;
+    ret = path_lookupat(dir, pathname, lookup_flags, &dent);
+    if (ret == 0)
+        ret = set_dentry_times(dent, times);
+    unlock(&g_dcache_lock);
+    if (dir)
+        put_dentry(dir);
+    if (dent)
+        put_dentry(dent);
+    return ret;
 }
 
 long libos_syscall_utimensat(int dirfd, const char* pathname,
@@ -502,40 +622,15 @@ long libos_syscall_utimensat(int dirfd, const char* pathname,
     if (ret < 0)
         return ret;
 
-    if (!*pathname && (flags & AT_EMPTY_PATH)) {
-        struct libos_handle* hdl = get_fd_handle(dirfd, NULL, NULL);
-        if (!hdl)
-            return -EBADF;
-        if (!hdl->dentry) {
-            put_handle(hdl);
-            return -EOPNOTSUPP;
-        }
-        lock(&g_dcache_lock);
-        ret = set_dentry_times(hdl->dentry, times);
-        unlock(&g_dcache_lock);
-        put_handle(hdl);
-        return ret;
-    }
+    if (!*pathname && (flags & AT_EMPTY_PATH))
+        return set_fd_times(dirfd, times);
 
-    struct libos_dentry* dir = NULL;
-    struct libos_dentry* dent = NULL;
-    if (*pathname != '/' && (ret = get_dirfd_dentry(dirfd, &dir)) < 0)
-        return ret;
-
-    lock(&g_dcache_lock);
-    int lookup_flags = (flags & AT_SYMLINK_NOFOLLOW) ? LOOKUP_NO_FOLLOW : LOOKUP_FOLLOW;
-    ret = path_lookupat(dir, pathname, lookup_flags, &dent);
-    if (ret == 0)
-        ret = set_dentry_times(dent, times);
-    unlock(&g_dcache_lock);
-    if (dir)
-        put_dentry(dir);
-    if (dent)
-        put_dentry(dent);
-    return ret;
+    return do_utimensat(dirfd, pathname, times, flags);
 }
 
 long libos_syscall_utime(const char* pathname, const struct utimbuf* user_times) {
+    if (!is_user_string_readable(pathname))
+        return -EFAULT;
     if (user_times && !is_user_memory_readable(user_times, sizeof(*user_times)))
         return -EFAULT;
     struct __kernel_timespec times[2];
@@ -548,10 +643,12 @@ long libos_syscall_utime(const char* pathname, const struct utimbuf* user_times)
         times[0] = (struct __kernel_timespec){.tv_sec = value.actime, .tv_nsec = 0};
         times[1] = (struct __kernel_timespec){.tv_sec = value.modtime, .tv_nsec = 0};
     }
-    return libos_syscall_utimensat(AT_FDCWD, pathname, times, 0);
+    return do_utimensat(AT_FDCWD, pathname, times, /*flags=*/0);
 }
 
 long libos_syscall_utimes(const char* pathname, const struct __kernel_timeval user_times[2]) {
+    if (!is_user_string_readable(pathname))
+        return -EFAULT;
     if (user_times && !is_user_memory_readable(user_times, 2 * sizeof(*user_times)))
         return -EFAULT;
     struct __kernel_timeval value[2];
@@ -568,11 +665,15 @@ long libos_syscall_utimes(const char* pathname, const struct __kernel_timeval us
                                                   .tv_nsec = value[i].tv_usec * 1000};
         }
     }
-    return libos_syscall_utimensat(AT_FDCWD, pathname, times, 0);
+    return do_utimensat(AT_FDCWD, pathname, times, /*flags=*/0);
 }
 
+/* futimesat(dirfd, NULL, times) is the old futimes(): the times of the file `dirfd` refers to. A
+ * non-NULL pathname follows the utimensat rules (relative to `dirfd`, absolute paths ignore it). */
 long libos_syscall_futimesat(int dirfd, const char* pathname,
                              const struct __kernel_timeval user_times[2]) {
+    if (pathname && !is_user_string_readable(pathname))
+        return -EFAULT;
     if (user_times && !is_user_memory_readable(user_times, 2 * sizeof(*user_times)))
         return -EFAULT;
     struct __kernel_timeval value[2];
@@ -589,7 +690,9 @@ long libos_syscall_futimesat(int dirfd, const char* pathname,
                                                   .tv_nsec = value[i].tv_usec * 1000};
         }
     }
-    return libos_syscall_utimensat(dirfd, pathname, times, 0);
+    if (!pathname)
+        return set_fd_times(dirfd, times);
+    return do_utimensat(dirfd, pathname, times, /*flags=*/0);
 }
 
 long libos_syscall_symlink(const char* target, const char* linkpath) {

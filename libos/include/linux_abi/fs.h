@@ -15,6 +15,11 @@
 #include <linux/fcntl.h>
 #include <stdint.h>
 
+/* renameat2 flags (linux/rename.h; defined here because not every toolchain ships that header) */
+#define RENAME_NOREPLACE (1U << 0) /* Don't overwrite the target of the rename */
+#define RENAME_EXCHANGE  (1U << 1) /* Exchange source and destination */
+#define RENAME_WHITEOUT  (1U << 2) /* Whiteout source (overlayfs only) */
+
 struct linux_dirent64 {
     uint64_t d_ino;              /* Inode number */
     uint64_t d_off;              /* Offset to next linux_dirent */

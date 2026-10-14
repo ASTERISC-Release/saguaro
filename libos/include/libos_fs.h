@@ -277,10 +277,13 @@ struct libos_inode {
     /* credentials */
     IDTYPE uid, gid;
 
-    /* Create/modify/access time */
+    /* Create/modify/access time. The `_nsec` companions hold the nanosecond part (0..999999999). */
     time_t ctime;
+    long ctime_nsec;
     time_t mtime;
+    long mtime_nsec;
     time_t atime;
+    long atime_nsec;
 
     /* Mounted filesystem this inode belongs to. Does not change. */
     struct libos_mount* mount;
@@ -436,6 +439,20 @@ struct libos_d_ops {
      * negative, and the new dentry as non-negative.
      */
     int (*rename)(struct libos_dentry* old, struct libos_dentry* new);
+
+    /*!
+     * \brief Atomically exchange two dentries (renameat2 with RENAME_EXCHANGE).
+     *
+     * \param old  First dentry, positive.
+     * \param new  Second dentry, positive.
+     *
+     * Both dentries exist, are on the same mount and are not directories. Filesystems without
+     * exchange support leave this NULL; the LibOS then answers `EOPNOTSUPP`.
+     *
+     * The caller should hold `g_dcache_lock`. On success, the caller swaps the inodes of the two
+     * dentries (this hook only updates the filesystem's own state, e.g. timestamps).
+     */
+    int (*exchange)(struct libos_dentry* old, struct libos_dentry* new);
 
     /*!
      * \brief List all files in the directory.
