@@ -10,7 +10,7 @@
 #include "kernel_sched.h"
 #include "kernel_thread.h"
 
-#define SCHEDULING_STACK_SIZE    128     /* temp stack used by save_context_and_restore_next() */
+#define SCHEDULING_STACK_SIZE    (PAGE_SIZE * 4) /* context switch and deferred cleanup stack */
 
 #define AP_STARTUP_PAGE_ADDRESS 0x8000UL /* copy AP asm startup code to 32K address */
 #define AP_STARTUP_PAGE_SIZE    0x1000UL /* asm startup code must fit into 4K */

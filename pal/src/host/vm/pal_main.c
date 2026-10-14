@@ -41,6 +41,7 @@ uint64_t g_tsc_mhz;
 static struct pal_handle* g_first_thread_handle = NULL;
 static e820_table_entry g_e820_entries[E820_NR_ENTRIES];
 static size_t g_e820_entries_size;
+static const char* g_vm_envp[MAX_ENVS_CNT];
 
 #ifdef __x86_64__
 static struct memory_address_space g_initial_process_address_space;
@@ -696,9 +697,7 @@ noreturn int pal_start_continue(void* cmdline_) {
         INIT_FAIL("Failed to read Gramine arguments");
 
     static int envp_cnt = 0;
-    static const char* envp[MAX_ENVS_CNT] = { NULL };
-
-    ret = cmdline_read_gramine_envs(g_envs, &envp_cnt, &envp[0]);
+    ret = cmdline_read_gramine_envs(g_envs, &envp_cnt, &g_vm_envp[0]);
     if (ret < 0)
         INIT_FAIL("Failed to read host environment variables");
 
@@ -778,7 +777,23 @@ noreturn int pal_start_continue(void* cmdline_) {
     }
 #endif
 
-    pal_main(/*instance_id=*/0, /*parent_process=*/NULL, g_first_thread_handle, argv + 1, envp,
+    pal_main(/*instance_id=*/0, /*parent_process=*/NULL, g_first_thread_handle, argv + 1, g_vm_envp,
              /*post_callback=*/NULL);
     __builtin_unreachable();
+}
+
+noreturn void vm_pal_process_start(PAL_HANDLE parent_process, const char** arguments) {
+    struct pal_tcb_vm* tcb = (struct pal_tcb_vm*)pal_get_tcb();
+    if (!tcb || !tcb->thread_handle)
+        INIT_FAIL("Child process has no PAL thread handle");
+
+    /* The copied process-data segment inherited the parent's LibOS memory callbacks. The child
+     * must install its own callbacks during LibOS initialization. */
+    PalResetMemoryBookkeepingUpcallsForChild();
+
+    uint64_t instance_id = 0;
+    if (_PalRandomBitsRead(&instance_id, sizeof(instance_id)) < 0 || !instance_id)
+        instance_id = 1;
+    pal_main(instance_id, parent_process, tcb->thread_handle, arguments, g_vm_envp,
+             /*post_callback=*/NULL);
 }

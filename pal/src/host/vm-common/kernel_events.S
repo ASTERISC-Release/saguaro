@@ -186,7 +186,8 @@ sigreturn_asm:
     // void save_context_and_restore_next(uint64_t curr_gs_base, uint64_t next_gs_base,
     //                                    uint32_t* lock_to_unlock, int* clear_child_tid,
     //                                    uint32_t* critical_section_lock_to_unlock,
-    //                                    void* scheduling_stack)
+    //                                    void* scheduling_stack,
+    //                                    void (*post_switch)(void*), void* post_switch_arg)
     //
     //   RDI (1st arg):  current context (= GS register base), may be 0x0
     //   RSI (2nd arg):  next context (= next GS register base), always exists
@@ -253,8 +254,11 @@ save_context_and_restore_next:
 
     cmp     $0, %rdx                // check if lock_to_unlock != NULL
     je      .Lskip_spinlock_unlock
-    movl    $0, (%rdx)              // spinlock_unlock(lock_to_unlock)
+    mov     %rdx, %r12              // keep lock until on the scheduling stack
 .Lskip_spinlock_unlock:
+
+    mov     8(%rsp), %r10           // optional post-switch cleanup function
+    mov     16(%rsp), %r11          // optional post-switch cleanup argument
 
     cmp     $0, %rcx                // check if clear_child_tid != NULL
     je      .Lskip_clear_child_tid
@@ -276,6 +280,18 @@ save_context_and_restore_next:
     // the critical section (typically `g_thread_list_lock`). Note that interrupts are re-enabled
     // (if that was the state of the restoring thread) during popfq below.
     movl    $0, (%r8)              // spinlock_unlock(critical_section_lock_to_unlock)
+
+    // Cleanup may destroy the old root and its stacks; run only after switching roots and stacks
+    // and after releasing scheduler/stack locks.
+    test    %r12, %r12
+    jz      .Lskip_deferred_unlock
+    movl    $0, (%r12)
+.Lskip_deferred_unlock:
+    test    %r10, %r10
+    jz      .Lskip_post_switch
+    mov     %r11, %rdi
+    call    *%r10
+.Lskip_post_switch:
 
     mov     %gs:PAL_TCB_VM_CONTEXT_FPREGS, %rdi
     callq   do_xrstor

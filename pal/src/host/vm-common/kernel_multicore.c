@@ -71,7 +71,10 @@ int init_multicore_prepare(uint32_t num_cpus) {
         g_per_cpu_data[i].interrupt_stack = per_cpu_interrupt_stack + i * INTERRUPT_STACK_SIZE;
         g_per_cpu_data[i].interrupt_xsave_area = per_cpu_interrupt_xsave_area
                                                      + i * INTERRUPT_XSAVE_AREA_SIZE;
-        g_per_cpu_data[i].scheduling_stack = per_cpu_scheduling_stack + i * SCHEDULING_STACK_SIZE;
+        /* save_context_and_restore_next() installs RSP directly from this value; provide the
+         * stack top because x86 stacks grow down. */
+        g_per_cpu_data[i].scheduling_stack = per_cpu_scheduling_stack +
+                                             (i + 1) * SCHEDULING_STACK_SIZE;
     }
 
     /* only CPU0 has a bottomhalves thread currently (i.e. CPU0 handles all incoming events) */

@@ -6,11 +6,16 @@
 
 #include "api.h"
 #include "pal.h"
+#include "pal_common.h"
 #include "pal_error.h"
 #include "pal_internal.h"
+#include "toml_utils.h"
 
 #include "kernel_interrupts.h"
 #include "kernel_memory.h"
+#include "kernel_sched.h"
+
+extern noreturn void vm_pal_process_start(PAL_HANDLE process, const char** args);
 
 extern char __process_data_start[];
 extern char __process_data_end[];
@@ -44,6 +49,7 @@ struct proc_shared_stream {
     atomic_uint refs;
     atomic_uint side_refs[2];
     uintptr_t handles_frame;
+    uintptr_t startup_frame;
     struct proc_ring directions[2];
 };
 static_assert(sizeof(struct proc_shared_stream) <= PAGE_SIZE, "process stream must fit one frame");
@@ -52,6 +58,50 @@ static_assert(ALIGN_UP(2 * sizeof(struct pal_handle), _Alignof(struct proc_handl
               "process handle queues must fit the endpoint frame");
 static_assert(2 * sizeof(struct pal_handle) <= PAGE_SIZE,
               "process endpoints must fit one handle frame");
+static_assert(ALIGN_UP(2 * sizeof(struct pal_handle), _Alignof(struct proc_handle_queue)) +
+                      2 * sizeof(struct proc_handle_queue) +
+                      ALIGN_UP(sizeof(struct memory_address_space),
+                               _Alignof(struct memory_address_space)) <= PAGE_SIZE,
+              "process roots must fit the endpoint handle frame");
+
+struct vm_process_startup {
+    PAL_HANDLE child_process;
+    const char** arguments;
+};
+
+static atomic_bool g_process_manager_initialized;
+static atomic_uint g_active_processes;
+static atomic_int g_root_exit_code;
+
+static int vm_process_child_start(void* arg);
+static void vm_process_exit_cleanup(void* arg);
+static void vm_root_process_exit_cleanup(void* arg);
+
+static void vm_process_manager_init(void) {
+    bool expected = false;
+    if (atomic_compare_exchange_strong_explicit(&g_process_manager_initialized, &expected, true,
+                                                memory_order_acq_rel, memory_order_acquire))
+        atomic_store_explicit(&g_active_processes, 1, memory_order_release);
+}
+
+static void vm_process_manager_exit(void) {
+    unsigned int previous = atomic_fetch_sub_explicit(&g_active_processes, 1,
+                                                       memory_order_acq_rel);
+    assert(previous > 0);
+    if (previous == 1) {
+        int exit_code = atomic_load_explicit(&g_root_exit_code, memory_order_acquire);
+        log_always("[ VM exited with code %d ]", exit_code);
+        triple_fault();
+    }
+}
+
+static struct memory_address_space* proc_child_space(struct proc_shared_stream* shared) {
+    uintptr_t offset = ALIGN_UP(2 * sizeof(struct pal_handle), _Alignof(struct proc_handle_queue)) +
+                       2 * sizeof(struct proc_handle_queue);
+    offset = ALIGN_UP(offset, _Alignof(struct memory_address_space));
+    return (struct memory_address_space*)((char*)memory_frame_pointer(shared->handles_frame) +
+                                          offset);
+}
 
 static struct proc_shared_stream* proc_stream(PAL_HANDLE handle) {
     return memory_frame_pointer(handle->process.shared_stream_frame);
@@ -213,6 +263,31 @@ static void proc_destroy(PAL_HANDLE handle) {
         (void)memory_frame_free(private_frame);
 }
 
+static void vm_process_exit_cleanup(void* arg) {
+    uintptr_t stream_frame = (uintptr_t)arg;
+    struct proc_shared_stream* shared = memory_frame_pointer(stream_frame);
+    struct memory_address_space* child_space = proc_child_space(shared);
+    uintptr_t startup_frame = shared->startup_frame;
+    PAL_HANDLE child_process = (PAL_HANDLE)memory_frame_pointer(shared->handles_frame) + 1;
+
+    (void)memory_address_space_destroy(child_space);
+    if (startup_frame)
+        (void)memory_frame_free(startup_frame);
+    shared->startup_frame = 0;
+    proc_destroy(child_process);
+    vm_process_manager_exit();
+}
+
+static void vm_root_process_exit_cleanup(void* arg) {
+    __UNUSED(arg);
+    vm_process_manager_exit();
+}
+
+static int vm_process_child_start(void* arg) {
+    struct vm_process_startup* startup = arg;
+    vm_pal_process_start(startup->child_process, startup->arguments);
+}
+
 int vm_process_send_handle(PAL_HANDLE target_process, PAL_HANDLE cargo) {
     if (!target_process || target_process->hdr.type != PAL_TYPE_PROCESS)
         return -PAL_ERROR_BADHANDLE;
@@ -338,17 +413,118 @@ static int proc_create_pair(PAL_HANDLE* parent, PAL_HANDLE* child) {
 }
 
 noreturn void _PalProcessExit(int exitcode) {
+    struct pal_tcb_vm* tcb = (struct pal_tcb_vm*)pal_get_tcb();
+    if (tcb && tcb->kernel_thread.address_space &&
+            tcb->kernel_thread.address_space->owner_frame) {
+        uintptr_t owner_frame = tcb->kernel_thread.address_space->owner_frame;
+        log_always("[ VM child exited with code %d ]", exitcode);
+        sched_thread_set_exit_cleanup(vm_process_exit_cleanup, (void*)owner_frame);
+        pal_common_thread_exit(NULL);
+    }
+    if (atomic_load_explicit(&g_process_manager_initialized, memory_order_acquire)) {
+        atomic_store_explicit(&g_root_exit_code, exitcode, memory_order_release);
+        sched_thread_set_exit_cleanup(vm_root_process_exit_cleanup, NULL);
+        pal_common_thread_exit(NULL);
+    }
     log_always("[ VM exited with code %d ]", exitcode);
     triple_fault();
 }
 
 int _PalProcessCreate(const char** args, uintptr_t (*reserved_mem_ranges)[2],
                       size_t reserved_mem_ranges_len, PAL_HANDLE* out_handle) {
-    __UNUSED(args);
     __UNUSED(reserved_mem_ranges);
     __UNUSED(reserved_mem_ranges_len);
-    __UNUSED(out_handle);
-    return -PAL_ERROR_NOTIMPLEMENTED;
+    bool enabled = false;
+    int ret = toml_bool_in(g_pal_public_state.manifest_root,
+                           "sys.experimental__multiprocess", false, &enabled);
+    if (ret < 0)
+        return ret;
+    if (!enabled)
+        return -PAL_ERROR_NOTIMPLEMENTED;
+    if (!out_handle)
+        return -PAL_ERROR_INVAL;
+
+    size_t arg_count = 0;
+    size_t arg_bytes = 0;
+    if (args) {
+        while (args[arg_count]) {
+            if (++arg_count > 128)
+                return -PAL_ERROR_INVAL;
+            size_t len = strlen(args[arg_count - 1]) + 1;
+            size_t base = sizeof(struct vm_process_startup) + 129 * sizeof(char*);
+            if (len > PAGE_SIZE - base || arg_bytes > PAGE_SIZE - base - len)
+                return -PAL_ERROR_INVAL;
+            arg_bytes += len;
+        }
+    }
+
+    struct pal_tcb_vm* tcb = (struct pal_tcb_vm*)pal_get_tcb();
+    if (!tcb || !tcb->kernel_thread.address_space)
+        return -PAL_ERROR_DENIED;
+
+    vm_process_manager_init();
+
+    PAL_HANDLE parent_process = NULL;
+    PAL_HANDLE child_process = NULL;
+    ret = proc_create_pair(&parent_process, &child_process);
+    if (ret < 0)
+        return ret;
+
+    struct proc_shared_stream* shared = proc_stream(parent_process);
+    struct memory_address_space* child_space = proc_child_space(shared);
+    ret = vm_process_copy_runtime(tcb->kernel_thread.address_space, child_space, NULL);
+    if (ret < 0) {
+        log_error("process address-space clone failed: %d", ret);
+        goto fail;
+    }
+    ret = sched_thread_share_runtime_stacks(child_space);
+    if (ret < 0) {
+        log_error("process runtime-stack sharing failed: %d", ret);
+        memory_address_space_destroy(child_space);
+        goto fail;
+    }
+    child_space->owner_frame = parent_process->process.shared_stream_frame;
+
+    uintptr_t startup_frame;
+    ret = memory_frame_alloc(&startup_frame);
+    if (ret < 0) {
+        memory_address_space_destroy(child_space);
+        goto fail;
+    }
+    shared->startup_frame = startup_frame;
+    struct vm_process_startup* startup = memory_frame_pointer(startup_frame);
+    memset(startup, 0, PAGE_SIZE);
+    startup->child_process = child_process;
+    char** copied_argv = (char**)((char*)startup + sizeof(*startup));
+    char* strings = (char*)(copied_argv + arg_count + 1);
+    startup->arguments = (const char**)copied_argv;
+    for (size_t i = 0; i < arg_count; i++) {
+        size_t len = strlen(args[i]) + 1;
+        copied_argv[i] = strings;
+        memcpy(strings, args[i], len);
+        strings += len;
+    }
+
+    struct pal_handle* child_thread = NULL;
+    atomic_fetch_add_explicit(&g_active_processes, 1, memory_order_acq_rel);
+    ret = pal_common_thread_create_with_address_space(&child_thread, vm_process_child_start,
+                                                       startup, child_space);
+    if (ret < 0) {
+        log_error("process child-thread creation failed: %d", ret);
+        vm_process_manager_exit();
+        memory_frame_free(startup_frame);
+        shared->startup_frame = 0;
+        memory_address_space_destroy(child_space);
+        goto fail;
+    }
+
+    *out_handle = parent_process;
+    return 0;
+
+fail:
+    proc_destroy(parent_process);
+    proc_destroy(child_process);
+    return ret;
 }
 
 int vm_process_stream_selfcheck(void) {

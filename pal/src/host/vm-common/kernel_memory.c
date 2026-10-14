@@ -208,7 +208,7 @@ size_t memory_frame_allocated_count(void) {
 /* Mapping helpers invalidate the current vCPU while changing individual entries. Range operations
  * call this once after updating all entries so other vCPUs cannot retain stale translations for
  * threads sharing the address space. */
-static int memory_address_space_flush_range(uintptr_t addr, size_t size) {
+int memory_address_space_flush_range(uintptr_t addr, size_t size) {
     if (g_num_cpus <= 1)
         return 0;
     return send_invalidate_tlb_ipi_and_wait((void*)addr, size,
@@ -486,11 +486,23 @@ int memory_address_space_map(struct memory_address_space* space, uintptr_t addr,
 int memory_address_space_share_range(struct memory_address_space* source,
                                     struct memory_address_space* target, uintptr_t addr,
                                     size_t size) {
+    bool changed;
+    int ret = memory_address_space_share_range_noflush(source, target, addr, size, &changed);
+    if (ret < 0 || !changed)
+        return ret;
+    return memory_address_space_flush_range(addr, size);
+}
+
+int memory_address_space_share_range_noflush(struct memory_address_space* source,
+                                            struct memory_address_space* target,
+                                            uintptr_t addr, size_t size, bool* out_changed) {
     if (!source || !target || !IS_ALIGNED_POW2(addr, PAGE_SIZE) || !size ||
-            !IS_ALIGNED_POW2(size, PAGE_SIZE) || addr + size < addr)
+            !IS_ALIGNED_POW2(size, PAGE_SIZE) || addr + size < addr || !out_changed)
         return -PAL_ERROR_INVAL;
 
     const uint64_t addr_mask = 0x00000ffffffff000UL;
+    bool changed = false;
+    *out_changed = false;
     for (uintptr_t va = addr; va < addr + size; va += PAGE_SIZE) {
         uint64_t* pte;
         int ret = address_space_get_leaf_entry(source, va, /*make_private=*/false, &pte);
@@ -501,13 +513,17 @@ int memory_address_space_share_range(struct memory_address_space* source,
         ret = address_space_get_leaf_entry(target, va, /*make_private=*/true, &target_pte);
         if (ret < 0)
             return ret;
+        if (*target_pte == entry)
+            continue;
         *target_pte = entry;
+        changed = true;
         uint64_t current_root;
         __asm__ volatile("mov %%cr3, %0" : "=r"(current_root));
         if ((current_root & addr_mask) == target->root_phys)
             __asm__ volatile("invlpg (%0)" : : "r"(va) : "memory");
     }
-    return memory_address_space_flush_range(addr, size);
+    *out_changed = changed;
+    return 0;
 }
 
 int memory_address_space_switch(const struct memory_address_space* space) {
