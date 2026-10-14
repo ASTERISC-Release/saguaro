@@ -53,3 +53,4 @@ not check. If a test fails, give the output. When something is done and verified
 - Building, containers and the RISC-V test guest: `INSTALL.rst`.
 - Platform matrix, build options, how to test: `Documentation/devel/multiarch.md`.
 - Development documents of every topic: `Documentation/devel/`.
+- Implementing or fixing a system call, and measuring it: `Documentation/devel/syscall-workflow.md`.
