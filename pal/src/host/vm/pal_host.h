@@ -32,6 +32,7 @@ struct udp_rx_ring {
 typedef struct pal_handle {
     PAL_HDR hdr;
     struct udp_rx_ring *region;
+    uintptr_t private_frame;
     /* Bitmask of `PAL_HANDLE_FD_*` flags. */
     uint32_t flags;
     LIST_TYPE(pal_handle) list;

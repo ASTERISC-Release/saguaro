@@ -55,25 +55,39 @@ int pal_common_thread_create_with_address_space(struct pal_handle** handle,
      *       stack  +--> +-------------------+
      */
 
-    struct pal_handle* thread_handle = calloc(1, sizeof(*thread_handle));
-    if (!thread_handle)
-        return -PAL_ERROR_NOMEM;
+    struct pal_tcb_vm* curr_tcb = (struct pal_tcb_vm*)pal_get_tcb();
+    struct memory_address_space* current_space = curr_tcb
+            ? curr_tcb->kernel_thread.address_space
+            : memory_address_space_boot();
+    struct pal_handle* thread_handle = NULL;
+    uintptr_t handle_frame = 0;
+    if (address_space != current_space) {
+        int ret = memory_frame_alloc(&handle_frame);
+        if (ret < 0)
+            return ret;
+        thread_handle = memory_frame_pointer(handle_frame);
+        memset(thread_handle, 0, PAGE_SIZE);
+        thread_handle->private_frame = handle_frame;
+    } else {
+        thread_handle = calloc(1, sizeof(*thread_handle));
+        if (!thread_handle)
+            return -PAL_ERROR_NOMEM;
+    }
 
     void* stack;
     void* fpregs;
     int ret = thread_get_stack_and_fpregs(&stack, &fpregs);
     if (ret < 0) {
-        free(thread_handle);
+        if (handle_frame)
+            memory_frame_free(handle_frame);
+        else
+            free(thread_handle);
         return ret;
     }
 
 #ifdef __x86_64__
     /* PAL stacks are shared kernel mappings. A child root may have been cloned before this stack
      * was allocated, so add its existing physical pages to that root before scheduling it. */
-    struct pal_tcb_vm* curr_tcb = (struct pal_tcb_vm*)pal_get_tcb();
-    struct memory_address_space* current_space = curr_tcb
-            ? curr_tcb->kernel_thread.address_space
-            : memory_address_space_boot();
     if (address_space != current_space) {
         size_t stack_size = THREAD_STACK_SIZE + ALT_STACK_SIZE + g_xsave_size + VM_XSAVE_ALIGN;
         uintptr_t stack_start = ALIGN_DOWN((uintptr_t)stack, PAGE_SIZE);
@@ -81,7 +95,10 @@ int pal_common_thread_create_with_address_space(struct pal_handle** handle,
         ret = memory_address_space_share_range(current_space, address_space, stack_start,
                                                stack_end - stack_start);
         if (ret < 0) {
-            free(thread_handle);
+            if (handle_frame)
+                memory_frame_free(handle_frame);
+            else
+                free(thread_handle);
             return ret;
         }
     }

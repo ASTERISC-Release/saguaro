@@ -62,18 +62,22 @@ static int (*g_mem_bkeep_alloc_upcall)(size_t size, uintptr_t* out_addr)
         __attribute__((section(".process_data")));
 static int (*g_mem_bkeep_free_upcall)(uintptr_t addr, size_t size)
         __attribute__((section(".process_data")));
+static bool g_bookkeeping_initialized __attribute__((section(".process_data")));
 
 static bool g_initial_mem_disabled __attribute__((section(".process_data")));
 static uintptr_t g_last_alloc_addr __attribute__((section(".process_data"))) = UINTPTR_MAX;
+static uintptr_t g_last_reserved_range_start __attribute__((section(".process_data"))) = UINTPTR_MAX;
+static uintptr_t g_last_reserved_range_end __attribute__((section(".process_data"))) = UINTPTR_MAX;
 /* Array of initial (PAL) memory ranges. Must be kept sorted in descending order. */
 struct pal_initial_mem_range g_initial_mem_ranges[0x100]
         __attribute__((section(".process_data"))) = { 0 };
 
 void PalSetMemoryBookkeepingUpcalls(int (*alloc)(size_t size, uintptr_t* out_addr),
                                     int (*free)(uintptr_t addr, size_t size)) {
-    if (!FIRST_TIME()) {
+    if (g_bookkeeping_initialized) {
         BUG();
     }
+    g_bookkeeping_initialized = true;
     g_mem_bkeep_alloc_upcall = alloc;
     g_mem_bkeep_free_upcall = free;
 }
@@ -228,9 +232,6 @@ static bool find_free_range(size_t size, uintptr_t* out_addr) {
 }
 
 static int find_non_reserved_range_below(uintptr_t addr, size_t size, uintptr_t* out_addr) {
-    static uintptr_t g_last_reserved_range_start = UINTPTR_MAX;
-    static uintptr_t g_last_reserved_range_end = UINTPTR_MAX;
-
     if (addr < size) {
         return -PAL_ERROR_NOMEM;
     }
@@ -248,6 +249,16 @@ static int find_non_reserved_range_below(uintptr_t addr, size_t size, uintptr_t*
 
     *out_addr = candidate;
     return 0;
+}
+
+void PalResetMemoryBookkeepingUpcallsForChild(void) {
+    g_mem_bkeep_alloc_upcall = NULL;
+    g_mem_bkeep_free_upcall = NULL;
+    g_bookkeeping_initialized = false;
+    g_initial_mem_disabled = false;
+    g_last_alloc_addr = UINTPTR_MAX;
+    g_last_reserved_range_start = UINTPTR_MAX;
+    g_last_reserved_range_end = UINTPTR_MAX;
 }
 
 static bool overlaps_existing_range(uintptr_t addr, size_t size, uintptr_t* out_addr) {

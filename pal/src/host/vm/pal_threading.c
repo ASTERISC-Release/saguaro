@@ -12,7 +12,15 @@
 #include "pal_internal.h"
 
 #include "kernel_sched.h"
+#include "kernel_memory.h"
 #include "kernel_thread.h"
+
+static void thread_destroy(PAL_HANDLE handle) {
+    if (handle->private_frame)
+        (void)memory_frame_free(handle->private_frame);
+    else
+        free(handle);
+}
 
 int _PalThreadCreate(struct pal_handle** handle, int (*callback)(void*), void* param) {
     return pal_common_thread_create(handle, callback, param);
@@ -42,5 +50,5 @@ int _PalThreadGetCpuAffinity(struct pal_handle* thread, unsigned long* cpu_mask,
 }
 
 struct handle_ops g_thread_ops = {
-    /* nothing */
+    .destroy = &thread_destroy,
 };
