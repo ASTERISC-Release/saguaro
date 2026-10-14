@@ -156,6 +156,7 @@ extern bool g_eventfd_passthrough_mode;
 int init_eventfd_mode(void);
 int init_external_process_liveness_mode(void);
 int init_sysv_semaphores(void);
+int init_sysv_shm(void);
 
 void warn_unsupported_syscall(unsigned long sysno);
 void debug_print_syscall_before(unsigned long sysno, ...);

@@ -206,6 +206,7 @@ extern struct libos_fs pseudo_builtin_fs;
 
 int init_procfs(void);
 int proc_meminfo_load(struct libos_dentry* dent, char** out_data, size_t* out_size);
+int proc_sysvipc_shm_load(struct libos_dentry* dent, char** out_data, size_t* out_size);
 int proc_cpuinfo_load(struct libos_dentry* dent, char** out_data, size_t* out_size);
 int proc_stat_load(struct libos_dentry* dent, char** out_data, size_t* out_size);
 int proc_self_follow_link(struct libos_dentry* dent, char** out_target);

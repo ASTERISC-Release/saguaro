@@ -296,6 +296,10 @@ long libos_syscall_capget(void* header, void* data);
 long libos_syscall_capset(void* header, const void* data);
 long libos_syscall_memfd_create(const char* name, unsigned int flags);
 int libos_memfd_check_write(struct libos_handle* handle, loff_t offset, size_t count);
+long libos_syscall_shmget(int key, size_t size, int shmflg);
+long libos_syscall_shmat(int shmid, const void* shmaddr, int shmflg);
+long libos_syscall_shmctl(int shmid, int cmd, void* buf);
+long libos_syscall_shmdt(const void* shmaddr);
 long libos_openat_internal(int dfd, const char* filename, int flags, int mode);
 long libos_unlink_internal(const char* pathname);
 

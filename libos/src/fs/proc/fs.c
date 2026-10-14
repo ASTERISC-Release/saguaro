@@ -77,6 +77,10 @@ int init_procfs(void) {
     pseudo_add_str(root, "cpuinfo", &proc_cpuinfo_load);
     pseudo_add_str(root, "stat", &proc_stat_load);
 
+    /* `/proc/sysvipc/shm`: the System V shared memory segment table (see libos_sysv_shm.c) */
+    struct pseudo_node* sysvipc = pseudo_add_dir(root, "sysvipc");
+    pseudo_add_str(sysvipc, "shm", &proc_sysvipc_shm_load);
+
     pseudo_add_link(root, "self", &proc_self_follow_link);
 
     struct pseudo_node* thread_pid = pseudo_add_dir(root, /*name=*/NULL);

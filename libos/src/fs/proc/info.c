@@ -224,3 +224,11 @@ int proc_stat_load(struct libos_dentry* dent, char** out_data, size_t* out_size)
 }
 
 #undef ADD_INFO
+
+/* `/proc/sysvipc/shm` (the segment table lives in libos_sysv_shm.c) */
+extern int sysv_shm_proc_load(char** out_data, size_t* out_size);
+
+int proc_sysvipc_shm_load(struct libos_dentry* dent, char** out_data, size_t* out_size) {
+    __UNUSED(dent);
+    return sysv_shm_proc_load(out_data, out_size);
+}
