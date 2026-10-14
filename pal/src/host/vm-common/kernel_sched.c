@@ -55,6 +55,14 @@ static void switch_to_thread_address_space(struct thread* thread) {
     }
 }
 
+/* Called by save_context_and_restore_next() on the scheduling (or interrupt) stack, after the
+ * previous context is saved and GS holds the next thread's TCB. The root must not change while
+ * still running on the previous thread's stack, which may be private to its process. */
+void sched_switch_to_current_thread_root(void);
+void sched_switch_to_current_thread_root(void) {
+    switch_to_thread_address_space(get_thread_ptr(rdmsr(MSR_IA32_GS_BASE)));
+}
+
 static uint64_t get_rflags(void) {
     uint64_t result;
     __asm__ volatile("pushfq; pop %0" : "=r"(result) : : "cc");
@@ -98,6 +106,11 @@ static void save_userland_context(struct thread* curr_thread, struct isr_regs* u
     curr_thread->context.rflags = get_rflags();
 }
 
+static bool thread_is_exiting(struct thread* thread) {
+    return thread->address_space && __atomic_load_n(&thread->address_space->exiting,
+                                                    __ATOMIC_ACQUIRE);
+}
+
 static struct thread* find_next_thread(struct thread* curr_thread) {
     assert(spinlock_is_locked(&g_thread_list_lock));
 
@@ -116,7 +129,8 @@ static struct thread* find_next_thread(struct thread* curr_thread) {
     struct thread* thread;
     LISTP_FOR_EACH_ENTRY(thread, &g_thread_list, list) {
         if (thread->state != THREAD_RUNNABLE || thread->is_helper || !thread->address_space ||
-                thread->address_space->root_phys == g_pml4_table_base)
+                thread->address_space->root_phys == g_pml4_table_base ||
+                thread_is_exiting(thread))
             continue;
 
         size_t cpu_mask_idx = cpu_id / BITS_IN_TYPE(unsigned long);
@@ -136,7 +150,8 @@ static struct thread* find_next_thread(struct thread* curr_thread) {
     /* Do not switch a lone process thread to an always-runnable PAL helper on yield. */
     if (curr_thread && curr_thread->state != THREAD_BLOCKED && !curr_thread->is_helper &&
             curr_thread->address_space &&
-            curr_thread->address_space->root_phys != g_pml4_table_base)
+            curr_thread->address_space->root_phys != g_pml4_table_base &&
+            !thread_is_exiting(curr_thread))
         return curr_thread;
 
     /* Console input has no application event-loop path in which to process its receive queue.
@@ -151,7 +166,7 @@ static struct thread* find_next_thread(struct thread* curr_thread) {
     struct thread* next_thread = NULL;
 
     LISTP_FOR_EACH_ENTRY(thread, &g_thread_list, list) {
-        if (thread->state != THREAD_RUNNABLE)
+        if (thread->state != THREAD_RUNNABLE || thread_is_exiting(thread))
             continue;
 
         size_t cpu_mask_idx        = cpu_id / BITS_IN_TYPE(unsigned long);
@@ -208,7 +223,6 @@ void sched_thread_uninterruptable(struct isr_regs* userland_regs) {
      * userland context and rewire RIP to point to a special "return via iret" assembly. */
     save_userland_context(curr_thread, userland_regs);
 
-    switch_to_thread_address_space(next_thread);
 
     /* it is cumbersome to restore FSBASE in asm, so restore explicitly here */
     /* Diagnostic logging: print FS base values we are about to install and the thread identities.
@@ -253,13 +267,12 @@ void sched_thread(uint32_t* lock_to_unlock, int* clear_child_tid) {
 
     // log_always("Scheduling out thread %p, scheduling in thread %p\n", curr_thread, next_thread);
 
-    /* clear_child_tid belongs to the exiting thread's address space. Clear it before switching
-     * roots; the assembly context switch runs after the next root is active. */
+    /* clear_child_tid belongs to the exiting thread's address space. Clear it here, in that
+     * address space; the assembly switches to the next thread's root later. */
     if (clear_child_tid) {
         __atomic_store_n(clear_child_tid, 0, __ATOMIC_RELEASE);
         clear_child_tid = NULL;
     }
-    switch_to_thread_address_space(next_thread);
 
     /* it is cumbersome to restore FSBASE in asm, so restore explicitly here */
     wrmsr(MSR_IA32_FS_BASE, next_thread->context.user_fsbase);
@@ -298,7 +311,6 @@ void sched_thread_wait(int* futex_word, spinlock_t* lock) {
 
     assert(next_thread != curr_thread);
 
-    switch_to_thread_address_space(next_thread);
     wrmsr(MSR_IA32_FS_BASE, next_thread->context.user_fsbase);
 
     uint64_t next_gs_base = (uint64_t)get_gs_base(next_thread);
@@ -366,6 +378,33 @@ void sched_thread_set_exit_cleanup(void (*cleanup)(void*), void* arg) {
 }
 
 #ifdef __x86_64__
+size_t sched_thread_remove_exiting(struct memory_address_space* space, struct thread** out_threads,
+                                   size_t max, bool* out_running) {
+    size_t count = 0;
+    bool running = false;
+    spinlock_lock_disable_irq(&g_thread_list_lock);
+    struct thread* thread;
+    struct thread* tmp;
+    LISTP_FOR_EACH_ENTRY_SAFE(thread, tmp, &g_thread_list, list) {
+        if (thread->address_space != space)
+            continue;
+        if (thread->state == THREAD_RUNNING) {
+            /* still on another CPU; find_next_thread() will not pick it again */
+            running = true;
+            continue;
+        }
+        if (count == max)
+            break;
+        LISTP_DEL(thread, &g_thread_list, list);
+        thread->state      = THREAD_STOPPED;
+        thread->blocked_on = NULL;
+        out_threads[count++] = thread;
+    }
+    spinlock_unlock_enable_irq(&g_thread_list_lock);
+    *out_running = running;
+    return count;
+}
+
 int sched_thread_share_stack(struct memory_address_space* source,
                              struct memory_address_space* new_thread_space,
                              uintptr_t addr, size_t size) {

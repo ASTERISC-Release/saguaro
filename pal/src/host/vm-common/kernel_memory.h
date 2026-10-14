@@ -64,6 +64,9 @@ struct memory_address_space {
     uint64_t* base_root;
     uintptr_t owned_frame_head;
     uintptr_t owner_frame;
+    /* set when the process exits: its remaining threads are never scheduled again and are
+     * removed before the address space is destroyed */
+    uint32_t exiting;
 };
 struct memory_address_space* memory_address_space_boot(void);
 int memory_address_space_clone(uint64_t base_root, struct memory_address_space* out_space);

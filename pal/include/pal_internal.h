@@ -313,6 +313,8 @@ void pal_disable_early_memory_bookkeeping(void);
 void init_slab_mgr(void);
 #if defined(PAL_HOST_VM) && defined(__x86_64__)
 int pal_enable_shared_frame_slab_allocator(void);
+/* Drops one reference of a handle shared with another process; true if others still hold it. */
+bool vm_handle_release_share(PAL_HANDLE handle);
 #endif
 void* malloc(size_t size);
 void* calloc(size_t num, size_t size);

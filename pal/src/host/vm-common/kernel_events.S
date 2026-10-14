@@ -275,6 +275,20 @@ save_context_and_restore_next:
     mov     %r9, %rsp             // set this temporary scheduling stack
 .Lskip_setting_scheduling_stack:
 
+    // Install the next thread's page-table root only now: the previous thread's stack (for
+    // example a LibOS syscall stack in process-private memory) may be mapped differently, or not
+    // at all, in the next root, while the scheduling stack and the interrupt stack are PAL memory
+    // mapped identically in every root. GS already holds the next thread's TCB.
+    push    %r8
+    push    %r10
+    push    %r11
+    push    %r12
+    callq   sched_switch_to_current_thread_root
+    pop     %r12
+    pop     %r11
+    pop     %r10
+    pop     %r8
+
     // Now we are completely done with both previously running thread and next thread, can unlock
     // the critical section (typically `g_thread_list_lock`). Note that interrupts are re-enabled
     // (if that was the state of the restoring thread) during popfq below.

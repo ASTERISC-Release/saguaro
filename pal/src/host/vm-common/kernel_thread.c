@@ -106,6 +106,17 @@ out:
     return ret;
 }
 
+void thread_release_stack(void* thread_stack) {
+    spinlock_lock(&g_thread_stack_lock);
+    for (size_t i = 0; i < g_thread_stack_num; i++) {
+        if (g_thread_stack_map[i].stack == thread_stack) {
+            g_thread_stack_map[i].used = false;
+            break;
+        }
+    }
+    spinlock_unlock(&g_thread_stack_lock);
+}
+
 noreturn void thread_free_stack_and_die(void* thread_stack, int* clear_child_tid) {
     /* we do not free thread stack (and fpregs memory region allocated with it) but instead mark it
      * as recycled, see thread_get_stack_and_fpregs() */

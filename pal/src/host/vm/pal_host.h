@@ -33,6 +33,10 @@ typedef struct pal_handle {
     PAL_HDR hdr;
     struct udp_rx_ring *region;
     uintptr_t private_frame;
+    /* Number of other processes that hold this same handle object (sent with PalSendHandle). The
+     * object lives in PAL memory shared by all process roots; the last holder destroys it, like
+     * an open file description shared after fork. */
+    uint32_t share_refs;
     /* Bitmask of `PAL_HANDLE_FD_*` flags. */
     uint32_t flags;
     LIST_TYPE(pal_handle) list;

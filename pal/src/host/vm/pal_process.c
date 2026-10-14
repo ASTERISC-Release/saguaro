@@ -14,6 +14,7 @@
 #include "kernel_interrupts.h"
 #include "kernel_memory.h"
 #include "kernel_sched.h"
+#include "kernel_thread.h"
 
 extern noreturn void vm_pal_process_start(PAL_HANDLE process, const char** args);
 
@@ -27,8 +28,14 @@ static int vm_process_copy_runtime(const struct memory_address_space* source,
 #define PROC_STREAM_CAPACITY 1984
 #define PROC_HANDLE_CAPACITY 8
 
+/* The stream state lives in a frame-pool page that every root maps at the same supervisor address,
+ * so its lock and futex words are the same objects for both processes. A reader waits on
+ * `reader_futex` while the ring is empty, a writer on `writer_futex` while it is full; each side
+ * wakes the other after moving data and on shutdown. */
 struct proc_ring {
-    atomic_flag lock;
+    spinlock_t lock;
+    int reader_futex;
+    int writer_futex;
     uint64_t head;
     uint64_t tail;
     bool reader_closed;
@@ -37,7 +44,9 @@ struct proc_ring {
 };
 
 struct proc_handle_queue {
-    atomic_flag lock;
+    spinlock_t lock;
+    int reader_futex;
+    int writer_futex;
     PAL_HANDLE handles[PROC_HANDLE_CAPACITY];
     uint64_t head;
     uint64_t tail;
@@ -118,21 +127,37 @@ static struct proc_handle_queue* proc_handle_queue(struct proc_shared_stream* sh
 static void proc_destroy(PAL_HANDLE handle);
 
 static void proc_ring_lock(struct proc_ring* ring) {
-    while (atomic_flag_test_and_set_explicit(&ring->lock, memory_order_acquire))
-        __asm__ volatile("pause" ::: "memory");
+    spinlock_lock(&ring->lock);
 }
 
 static void proc_ring_unlock(struct proc_ring* ring) {
-    atomic_flag_clear_explicit(&ring->lock, memory_order_release);
+    spinlock_unlock(&ring->lock);
 }
 
 static void proc_handle_queue_lock(struct proc_handle_queue* queue) {
-    while (atomic_flag_test_and_set_explicit(&queue->lock, memory_order_acquire))
-        __asm__ volatile("pause" ::: "memory");
+    spinlock_lock(&queue->lock);
 }
 
 static void proc_handle_queue_unlock(struct proc_handle_queue* queue) {
-    atomic_flag_clear_explicit(&queue->lock, memory_order_release);
+    spinlock_unlock(&queue->lock);
+}
+
+bool vm_handle_release_share(PAL_HANDLE handle) {
+    uint32_t refs = __atomic_load_n(&handle->share_refs, __ATOMIC_ACQUIRE);
+    while (refs) {
+        if (__atomic_compare_exchange_n(&handle->share_refs, &refs, refs - 1, /*weak=*/false,
+                                        __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
+            return true;
+    }
+    return false;
+}
+
+/* Drops a handle that was queued for another process but not received. */
+static void proc_drop_cargo(PAL_HANDLE cargo) {
+    if (cargo->hdr.type == PAL_TYPE_PROCESS)
+        proc_destroy(cargo);
+    else
+        _PalObjectDestroy(cargo);
 }
 
 static void proc_handle_queue_close(struct proc_handle_queue* queue, bool reader, bool writer) {
@@ -147,10 +172,12 @@ static void proc_handle_queue_close(struct proc_handle_queue* queue, bool reader
     }
     if (writer)
         queue->writer_closed = true;
+    sched_thread_wakeup(&queue->reader_futex);
+    sched_thread_wakeup(&queue->writer_futex);
     proc_handle_queue_unlock(queue);
 
     for (size_t i = 0; i < pending_count; i++)
-        proc_destroy(pending[i]);
+        proc_drop_cargo(pending[i]);
 }
 
 static size_t proc_ring_copy_out(struct proc_ring* ring, void* buffer, size_t count) {
@@ -184,17 +211,27 @@ static int64_t proc_read(PAL_HANDLE handle, uint64_t offset, uint64_t count, voi
 
     struct proc_shared_stream* shared = proc_stream(handle);
     struct proc_ring* ring = &shared->directions[1 - handle->process.side];
+    int64_t ret;
+    proc_ring_lock(ring);
     while (true) {
-        proc_ring_lock(ring);
         size_t bytes = proc_ring_copy_out(ring, buffer, count);
-        bool eof = ring->writer_closed && ring->head == ring->tail;
-        proc_ring_unlock(ring);
-        if (bytes || eof)
-            return bytes;
-        if (handle->process.nonblocking)
-            return -PAL_ERROR_TRYAGAIN;
-        _PalThreadYieldExecution();
+        if (bytes) {
+            sched_thread_wakeup(&ring->writer_futex);
+            ret = bytes;
+            break;
+        }
+        if (ring->writer_closed) {
+            ret = 0;
+            break;
+        }
+        if (handle->process.nonblocking) {
+            ret = -PAL_ERROR_TRYAGAIN;
+            break;
+        }
+        sched_thread_wait(&ring->reader_futex, &ring->lock);
     }
+    proc_ring_unlock(ring);
+    return ret;
 }
 
 static int64_t proc_write(PAL_HANDLE handle, uint64_t offset, uint64_t count,
@@ -208,19 +245,27 @@ static int64_t proc_write(PAL_HANDLE handle, uint64_t offset, uint64_t count,
 
     struct proc_shared_stream* shared = proc_stream(handle);
     struct proc_ring* ring = &shared->directions[handle->process.side];
+    int64_t ret;
+    proc_ring_lock(ring);
     while (true) {
-        proc_ring_lock(ring);
-        bool broken = ring->reader_closed;
-        size_t bytes = broken ? 0 : proc_ring_copy_in(ring, buffer, count);
-        proc_ring_unlock(ring);
-        if (broken)
-            return -PAL_ERROR_DENIED;
-        if (bytes)
-            return bytes;
-        if (handle->process.nonblocking)
-            return -PAL_ERROR_TRYAGAIN;
-        _PalThreadYieldExecution();
+        if (ring->reader_closed) {
+            ret = -PAL_ERROR_DENIED;
+            break;
+        }
+        size_t bytes = proc_ring_copy_in(ring, buffer, count);
+        if (bytes) {
+            sched_thread_wakeup(&ring->reader_futex);
+            ret = bytes;
+            break;
+        }
+        if (handle->process.nonblocking) {
+            ret = -PAL_ERROR_TRYAGAIN;
+            break;
+        }
+        sched_thread_wait(&ring->writer_futex, &ring->lock);
     }
+    proc_ring_unlock(ring);
+    return ret;
 }
 
 static int proc_delete(PAL_HANDLE handle, enum pal_delete_mode mode) {
@@ -233,6 +278,7 @@ static int proc_delete(PAL_HANDLE handle, enum pal_delete_mode mode) {
     if (mode == PAL_DELETE_READ || mode == PAL_DELETE_ALL) {
         proc_ring_lock(incoming);
         incoming->reader_closed = true;
+        sched_thread_wakeup(&incoming->writer_futex);
         proc_ring_unlock(incoming);
         proc_handle_queue_close(proc_handle_queue(shared, 1 - handle->process.side), true, false);
         handle->flags &= ~PAL_HANDLE_FD_READABLE;
@@ -240,6 +286,7 @@ static int proc_delete(PAL_HANDLE handle, enum pal_delete_mode mode) {
     if (mode == PAL_DELETE_WRITE || mode == PAL_DELETE_ALL) {
         proc_ring_lock(outgoing);
         outgoing->writer_closed = true;
+        sched_thread_wakeup(&outgoing->reader_futex);
         proc_ring_unlock(outgoing);
         proc_handle_queue_close(proc_handle_queue(shared, handle->process.side), false, true);
         handle->flags &= ~PAL_HANDLE_FD_WRITABLE;
@@ -263,6 +310,26 @@ static void proc_destroy(PAL_HANDLE handle) {
         (void)memory_frame_free(private_frame);
 }
 
+/* The other threads of an exiting process (LibOS IPC and async workers, application threads) die
+ * with it. They are stopped only at points where they hold no PAL lock: blocked, yielded or
+ * preempted in user mode; one that still runs on another CPU is waited for. */
+static void vm_process_reap_threads(struct memory_address_space* space) {
+    while (true) {
+        struct thread* removed[16];
+        bool running = false;
+        size_t count = sched_thread_remove_exiting(space, removed, ARRAY_SIZE(removed), &running);
+        for (size_t i = 0; i < count; i++) {
+            struct pal_tcb_vm* tcb = (struct pal_tcb_vm*)get_gs_base(removed[i]);
+            if (tcb->thread_handle)
+                thread_release_stack(tcb->thread_handle->thread.stack);
+        }
+        if (!count && !running)
+            break;
+        if (!count)
+            CPU_RELAX();
+    }
+}
+
 static void vm_process_exit_cleanup(void* arg) {
     uintptr_t stream_frame = (uintptr_t)arg;
     struct proc_shared_stream* shared = memory_frame_pointer(stream_frame);
@@ -270,6 +337,7 @@ static void vm_process_exit_cleanup(void* arg) {
     uintptr_t startup_frame = shared->startup_frame;
     PAL_HANDLE child_process = (PAL_HANDLE)memory_frame_pointer(shared->handles_frame) + 1;
 
+    vm_process_reap_threads(child_space);
     (void)memory_address_space_destroy(child_space);
     if (startup_frame)
         (void)memory_frame_free(startup_frame);
@@ -291,42 +359,55 @@ static int vm_process_child_start(void* arg) {
 int vm_process_send_handle(PAL_HANDLE target_process, PAL_HANDLE cargo) {
     if (!target_process || target_process->hdr.type != PAL_TYPE_PROCESS)
         return -PAL_ERROR_BADHANDLE;
-    if (!cargo || cargo->hdr.type != PAL_TYPE_PROCESS)
+    if (!cargo)
+        return -PAL_ERROR_BADHANDLE;
+    /* Threads and PAL events belong to one process's scheduler use and are never inherited. */
+    if (cargo->hdr.type == PAL_TYPE_THREAD || cargo->hdr.type == PAL_TYPE_EVENT)
         return -PAL_ERROR_NOTIMPLEMENTED;
 
     struct proc_shared_stream* shared = proc_stream(target_process);
     struct proc_handle_queue* queue = proc_handle_queue(shared, target_process->process.side);
     PAL_HANDLE copy = NULL;
-    uintptr_t copy_frame = 0;
-    int ret = memory_frame_alloc(&copy_frame);
-    if (ret < 0)
-        return ret;
-    copy = memory_frame_pointer(copy_frame);
-    memcpy(copy, cargo, sizeof(*copy));
-    copy->private_frame = copy_frame;
+    if (cargo->hdr.type == PAL_TYPE_PROCESS) {
+        /* process endpoints keep per-holder state (side, private frame), so they are copied */
+        uintptr_t copy_frame = 0;
+        int ret = memory_frame_alloc(&copy_frame);
+        if (ret < 0)
+            return ret;
+        copy = memory_frame_pointer(copy_frame);
+        memcpy(copy, cargo, sizeof(*copy));
+        copy->private_frame = copy_frame;
 
-    struct proc_shared_stream* cargo_shared = proc_stream(copy);
-    atomic_fetch_add_explicit(&cargo_shared->refs, 1, memory_order_relaxed);
-    atomic_fetch_add_explicit(&cargo_shared->side_refs[copy->process.side], 1,
-                              memory_order_relaxed);
+        struct proc_shared_stream* cargo_shared = proc_stream(copy);
+        atomic_fetch_add_explicit(&cargo_shared->refs, 1, memory_order_relaxed);
+        atomic_fetch_add_explicit(&cargo_shared->side_refs[copy->process.side], 1,
+                                  memory_order_relaxed);
+    } else {
+        /* Every other handle object and its state are allocated from PAL memory that all roots
+         * map identically, so the receiver shares the object itself. */
+        __atomic_add_fetch(&cargo->share_refs, 1, __ATOMIC_ACQ_REL);
+        copy = cargo;
+    }
     while (true) {
         proc_handle_queue_lock(queue);
         if (queue->reader_closed || queue->writer_closed) {
             proc_handle_queue_unlock(queue);
-            proc_destroy(copy);
+            proc_drop_cargo(copy);
             return -PAL_ERROR_DENIED;
         }
         if (queue->tail - queue->head < PROC_HANDLE_CAPACITY) {
             queue->handles[queue->tail++ % PROC_HANDLE_CAPACITY] = copy;
+            sched_thread_wakeup(&queue->reader_futex);
             proc_handle_queue_unlock(queue);
             return 0;
         }
-        proc_handle_queue_unlock(queue);
         if (target_process->process.nonblocking) {
-            proc_destroy(copy);
+            proc_handle_queue_unlock(queue);
+            proc_drop_cargo(copy);
             return -PAL_ERROR_TRYAGAIN;
         }
-        _PalThreadYieldExecution();
+        sched_thread_wait(&queue->writer_futex, &queue->lock);
+        proc_handle_queue_unlock(queue);
     }
 }
 
@@ -337,21 +418,27 @@ int vm_process_receive_handle(PAL_HANDLE source_process, PAL_HANDLE* out_cargo) 
     struct proc_shared_stream* shared = proc_stream(source_process);
     struct proc_handle_queue* queue = proc_handle_queue(shared,
                                                         1 - source_process->process.side);
+    int ret;
+    proc_handle_queue_lock(queue);
     while (true) {
-        proc_handle_queue_lock(queue);
         if (queue->head != queue->tail) {
             *out_cargo = queue->handles[queue->head++ % PROC_HANDLE_CAPACITY];
-            proc_handle_queue_unlock(queue);
-            return 0;
+            sched_thread_wakeup(&queue->writer_futex);
+            ret = 0;
+            break;
         }
-        bool eof = queue->writer_closed || queue->reader_closed;
-        proc_handle_queue_unlock(queue);
-        if (eof)
-            return -PAL_ERROR_DENIED;
-        if (source_process->process.nonblocking)
-            return -PAL_ERROR_TRYAGAIN;
-        _PalThreadYieldExecution();
+        if (queue->writer_closed || queue->reader_closed) {
+            ret = -PAL_ERROR_DENIED;
+            break;
+        }
+        if (source_process->process.nonblocking) {
+            ret = -PAL_ERROR_TRYAGAIN;
+            break;
+        }
+        sched_thread_wait(&queue->reader_futex, &queue->lock);
     }
+    proc_handle_queue_unlock(queue);
+    return ret;
 }
 
 static int proc_attrquerybyhdl(PAL_HANDLE handle, PAL_STREAM_ATTR* attr) {
@@ -395,12 +482,12 @@ static int proc_create_pair(PAL_HANDLE* parent, PAL_HANDLE* child) {
     atomic_init(&shared->side_refs[0], 1);
     atomic_init(&shared->side_refs[1], 1);
     shared->handles_frame = handles_frame;
-    atomic_flag_clear(&shared->directions[0].lock);
-    atomic_flag_clear(&shared->directions[1].lock);
+    spinlock_init(&shared->directions[0].lock);
+    spinlock_init(&shared->directions[1].lock);
     PAL_HANDLE handles = memory_frame_pointer(handles_frame);
     memset(handles, 0, PAGE_SIZE);
-    atomic_flag_clear(&proc_handle_queue(shared, 0)->lock);
-    atomic_flag_clear(&proc_handle_queue(shared, 1)->lock);
+    spinlock_init(&proc_handle_queue(shared, 0)->lock);
+    spinlock_init(&proc_handle_queue(shared, 1)->lock);
     for (size_t i = 0; i < 2; i++) {
         init_handle_hdr(&handles[i], PAL_TYPE_PROCESS);
         handles[i].flags = PAL_HANDLE_FD_READABLE | PAL_HANDLE_FD_WRITABLE;
@@ -417,6 +504,7 @@ noreturn void _PalProcessExit(int exitcode) {
     if (tcb && tcb->kernel_thread.address_space &&
             tcb->kernel_thread.address_space->owner_frame) {
         uintptr_t owner_frame = tcb->kernel_thread.address_space->owner_frame;
+        __atomic_store_n(&tcb->kernel_thread.address_space->exiting, 1, __ATOMIC_RELEASE);
         log_always("[ VM child exited with code %d ]", exitcode);
         sched_thread_set_exit_cleanup(vm_process_exit_cleanup, (void*)owner_frame);
         pal_common_thread_exit(NULL);

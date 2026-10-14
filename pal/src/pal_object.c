@@ -10,6 +10,10 @@
 #include "pal_internal.h"
 
 void _PalObjectDestroy(PAL_HANDLE handle) {
+#if defined(PAL_HOST_VM) && defined(__x86_64__)
+    if (vm_handle_release_share(handle))
+        return;
+#endif
     const struct handle_ops* ops = HANDLE_OPS(handle);
 
     if (ops && ops->destroy) {

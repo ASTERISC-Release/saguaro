@@ -187,6 +187,8 @@ DEFINE_LISTP(thread);
 
 int thread_get_stack_and_fpregs(void** out_stack, void** out_fpregs);
 noreturn void thread_free_stack_and_die(void* thread_stack, int* clear_child_tid);
+/* Returns the stack of a thread that will never run again (killed with its process) for reuse. */
+void thread_release_stack(void* thread_stack);
 
 void thread_setup(struct thread* thread, void* fpregs, void* stack, int (*callback)(void*),
                   const void* param);

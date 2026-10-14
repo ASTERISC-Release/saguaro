@@ -1700,6 +1700,22 @@ BEGIN_RS_FUNC(vma) {
 }
 END_RS_FUNC(vma)
 
+/* A PAL may reserve address ranges for later MAP_FIXED users (the VM PAL's graphics arenas). Every
+ * process gets the same reservation from its own PAL at startup, so a reservation the application
+ * has not touched is not sent to a child: it would copy the whole arena and then collide with the
+ * child's own reservation. */
+static bool is_untouched_user_reserved_range(const struct libos_vma_info* vma) {
+    if (vma->file)
+        return false;
+    for (size_t i = 0; i < g_pal_public_state->initial_mem_ranges_len; i++) {
+        const struct pal_initial_mem_range* range = &g_pal_public_state->initial_mem_ranges[i];
+        if (range->is_user_reserved && !range->is_free && (uintptr_t)vma->addr == range->start
+                && (uintptr_t)vma->addr + vma->length == range->end)
+            return true;
+    }
+    return false;
+}
+
 BEGIN_CP_FUNC(all_vmas) {
     __UNUSED(obj);
     __UNUSED(size);
@@ -1718,7 +1734,8 @@ BEGIN_CP_FUNC(all_vmas) {
     /* Checkpoint VMAs in descending order - checkpointing code requires it. See
      * `create_mem_ranges_array` for details. */
     for (struct libos_vma_info* vma = &vmas[count - 1]; true; vma--) {
-        DO_CP(vma, vma, NULL);
+        if (!is_untouched_user_reserved_range(vma))
+            DO_CP(vma, vma, NULL);
         if (vma == vmas)
             break;
     }

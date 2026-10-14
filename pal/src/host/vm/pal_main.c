@@ -817,9 +817,9 @@ noreturn void vm_pal_process_start(PAL_HANDLE parent_process, const char** argum
      * must install its own callbacks during LibOS initialization. */
     PalResetMemoryBookkeepingUpcallsForChild();
 
-    uint64_t instance_id = 0;
-    if (_PalRandomBitsRead(&instance_id, sizeof(instance_id)) < 0 || !instance_id)
-        instance_id = 1;
+    /* All processes of one Gramine instance share its instance id (it names the IPC pipes). The
+     * copied process-data segment still holds the parent's public state at this point. */
+    uint64_t instance_id = g_pal_public_state.instance_id;
     pal_main(instance_id, parent_process, tcb->thread_handle, arguments, g_vm_envp,
              /*post_callback=*/NULL);
 }

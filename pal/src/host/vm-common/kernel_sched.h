@@ -58,6 +58,10 @@ int sched_thread_share_stack(struct memory_address_space* source,
                              struct memory_address_space* new_thread_space,
                              uintptr_t addr, size_t size);
 int sched_thread_share_runtime_stacks(struct memory_address_space* target);
+/* Removes up to `max` threads of an exiting address space that are not running on any CPU and
+ * stores them in `out_threads`; `*out_running` tells whether one of its threads still runs. */
+size_t sched_thread_remove_exiting(struct memory_address_space* space, struct thread** out_threads,
+                                   size_t max, bool* out_running);
 #endif
 void sched_thread_set_cpu_affinity(struct thread* thread, unsigned long* cpu_mask,
                                    size_t cpu_mask_len);
