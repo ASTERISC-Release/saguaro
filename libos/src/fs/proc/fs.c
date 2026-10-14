@@ -11,6 +11,20 @@
 #include "libos_fs_pseudo.h"
 #include "libos_process.h"
 
+static int proc_tainted_load(struct libos_dentry* dent, char** out_data, size_t* out_size) {
+    __UNUSED(dent);
+
+    /* the kernel's taint flags: nothing can taint this LibOS, so the mask is always empty (the
+     * LTP timerfd clock-stealing test reads it and requires it to exist) */
+    char* buffer = strdup("0\n");
+    if (!buffer)
+        return -ENOMEM;
+
+    *out_data = buffer;
+    *out_size = strlen(buffer);
+    return 0;
+}
+
 static int proc_pid_max_load(struct libos_dentry* dent, char** out_data, size_t* out_size) {
     __UNUSED(dent);
 
@@ -72,6 +86,7 @@ int init_procfs(void) {
     struct pseudo_node* sys = pseudo_add_dir(root, "sys");
     struct pseudo_node* kernel = pseudo_add_dir(sys, "kernel");
     pseudo_add_str(kernel, "pid_max", &proc_pid_max_load);
+    pseudo_add_str(kernel, "tainted", &proc_tainted_load);
 
     pseudo_add_str(root, "meminfo", &proc_meminfo_load);
     pseudo_add_str(root, "cpuinfo", &proc_cpuinfo_load);

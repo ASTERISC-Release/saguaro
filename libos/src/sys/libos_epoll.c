@@ -189,6 +189,13 @@ void maybe_epoll_et_trigger(struct libos_handle* handle, int ret, bool in, bool 
                 needs_et = true;
             }
             break;
+        case TYPE_TIMERFD:
+            /* reads are discrete (one per expiration burst), like eventfd's */
+            needs_et = true;
+            break;
+        case TYPE_SIGNALFD:
+            needs_et = true;
+            break;
         default:
             /* Type unsupported with EPOLLET. */
             break;
@@ -461,6 +468,8 @@ long libos_syscall_epoll_ctl(int epfd, int op, int fd, struct epoll_event* event
         case TYPE_PIPE:
         case TYPE_SOCK:
         case TYPE_EVENTFD:
+        case TYPE_TIMERFD:
+        case TYPE_SIGNALFD:
             break;
         default:
             /* epoll not supported by this type of handle */

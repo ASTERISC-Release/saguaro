@@ -139,6 +139,10 @@ int append_signal(struct libos_thread* thread, siginfo_t* info);
 /* callback for walk_thread_list() */
 int wakeup_one_thread_on_signal(struct libos_thread* thread, void* arg);
 
+/* wake all threads that do not block `sig` (for signals queued on the process queue by something
+ * other than `kill()`, so that sleepers in `sigwaitinfo()` see them) */
+void libos_signal_wake_waiters(int sig);
+
 /*!
  * \brief Pop any of the pending signals allowed in \p mask.
  *

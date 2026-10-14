@@ -228,22 +228,32 @@ static bool queue_append_signal(struct libos_signal_queue* queue, struct libos_s
 }
 
 static bool append_thread_signal(struct libos_thread* thread, struct libos_signal** signal) {
+    int sig = (*signal)->siginfo.si_signo;
     lock(&thread->lock);
     bool ret = queue_append_signal(&thread->signal_queue, signal);
     if (ret) {
         (void)__atomic_add_fetch(&thread->pending_signals, 1, __ATOMIC_RELEASE);
     }
     unlock(&thread->lock);
+    if (ret) {
+        /* wake any signalfd that watches this signal (arrival hint only, the siginfo stays in
+         * these queues and is taken by `signalfd_read()`) */
+        libos_signalfd_notify(sig);
+    }
     return ret;
 }
 
 static bool append_process_signal(struct libos_signal** signal) {
+    int sig = (*signal)->siginfo.si_signo;
     lock(&g_process_signal_queue_lock);
     bool ret = queue_append_signal(&g_process_signal_queue, signal);
     if (ret) {
         (void)__atomic_add_fetch(&g_process_pending_signals_cnt, 1, __ATOMIC_RELEASE);
     }
     unlock(&g_process_signal_queue_lock);
+    if (ret) {
+        libos_signalfd_notify(sig);
+    }
     return ret;
 }
 
@@ -648,6 +658,35 @@ uintptr_t get_stack_for_sighandler(uintptr_t sp, bool use_altstack) {
     return (uintptr_t)alt_stack->ss_sp + alt_stack->ss_size;
 }
 
+static int wakeup_thread_on_signal(struct libos_thread* thread, void* arg) {
+    int sig = (int)(long)arg;
+
+    if (thread == get_cur_thread())
+        return 0;
+
+    lock(&thread->lock);
+    if (!__sigismember(&thread->signal_mask, sig)) {
+        thread_wakeup(thread);
+        /* a no-op on a thread that is running; resumes one that sleeps in a syscall */
+        int ret = PalThreadResume(thread->pal_handle);
+        if (ret < 0) {
+            log_debug("waking up thread %u for signal %d failed: %s", thread->tid, sig,
+                      pal_strerror(ret));
+        }
+    }
+    unlock(&thread->lock);
+    return 0;
+}
+
+/* Wake up all threads that do not block `sig`, so that a signal queued on the process queue (by
+ * something that is not `kill()`, e.g. a POSIX timer expiration) reaches a thread sleeping in
+ * `sigwaitinfo()`/`rt_sigtimedwait()` (see also `wakeup_one_thread_on_signal`). */
+void libos_signal_wake_waiters(int sig) {
+    if (sig < 1 || sig > SIGS_CNT)
+        return;
+    (void)walk_thread_list(wakeup_thread_on_signal, (void*)(long)sig, /*one_shot=*/false);
+}
+
 int wakeup_one_thread_on_signal(struct libos_thread* thread, void* arg) {
     int sig = (int)(long)arg;
 
@@ -663,6 +702,30 @@ int wakeup_one_thread_on_signal(struct libos_thread* thread, void* arg) {
     }
     unlock(&thread->lock);
     return ret;
+}
+
+/*
+ * Take one pending signal that is a member of `match` (a signalfd's mask, already intersected
+ * with the reading thread's block mask by the caller) out of the thread/process queues, like the
+ * kernel's signalfd read. Returns true and fills `out` if one was taken.
+ */
+bool signalfd_take_signal(const __sigset_t* match, siginfo_t* out) {
+    /* `pop_unblocked_signal()` takes signals *absent* from its mask: build the complement of
+     * `match` over the signal range */
+    __sigset_t deny;
+    __sigemptyset(&deny);
+    for (int sig = 1; sig <= SIGS_CNT; sig++) {
+        if (!__sigismember(match, sig))
+            __sigaddset(&deny, sig);
+    }
+
+    struct libos_signal signal = {0};
+    pop_unblocked_signal(&deny, &signal);
+    if (signal.siginfo.si_signo == 0)
+        return false;
+
+    *out = signal.siginfo;
+    return true;
 }
 
 void pop_unblocked_signal(__sigset_t* mask, struct libos_signal* signal) {

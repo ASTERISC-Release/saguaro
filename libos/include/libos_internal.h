@@ -256,6 +256,17 @@ void delete_epoll_items_for_fd(int fd, struct libos_handle* handle);
  */
 void maybe_epoll_et_trigger(struct libos_handle* handle, int ret, bool in, bool was_partial);
 
+/* drop the timerfd worker's registry reference, if any (`fs/timerfd/fs.c` on close) */
+int libos_timerfd_untrack(struct libos_handle* hdl);
+
+/* signalfd: arrival hint after a signal became pending (`bookkeep/libos_signal.c`), and taking
+ * one pending signal matching a signalfd mask out of the pending queues */
+void libos_signalfd_notify(int sig);
+bool signalfd_take_signal(const __sigset_t* match, siginfo_t* out);
+
+/* drop the signalfd wake registry entry (`fs/signalfd/fs.c` on close) */
+void libos_signalfd_untrack(struct libos_handle* hdl);
+
 int init_stack(const char* const* argv, const char* const* envp, char*** out_argp,
                elf_auxv_t** out_auxv);
 

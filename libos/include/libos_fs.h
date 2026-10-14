@@ -971,6 +971,8 @@ extern struct libos_fs fifo_builtin_fs;
 extern struct libos_fs socket_builtin_fs;
 extern struct libos_fs epoll_builtin_fs;
 extern struct libos_fs eventfd_builtin_fs;
+extern struct libos_fs timerfd_builtin_fs;
+extern struct libos_fs signalfd_builtin_fs;
 extern struct libos_fs synthetic_builtin_fs;
 extern struct libos_fs path_builtin_fs;
 extern struct libos_fs shm_builtin_fs;

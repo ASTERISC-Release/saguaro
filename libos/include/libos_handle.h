@@ -53,6 +53,8 @@ enum libos_handle_type {
     /* Special handles: */
     TYPE_EPOLL,      /* epoll handles, see `libos_epoll.c` */
     TYPE_EVENTFD,    /* eventfd handles, used by `eventfd` filesystem */
+    TYPE_TIMERFD,    /* timerfd handles, used by `timerfd` filesystem */
+    TYPE_SIGNALFD,   /* signalfd handles, used by `signalfd` filesystem */
 
     /* Host redirection handle */
     TYPE_HOST,              /* handle redirected to host OS, used by `host` filesystem */
@@ -157,6 +159,24 @@ struct libos_eventfd_handle {
     uint64_t dummy_host_val;
 };
 
+struct libos_timerfd_handle {
+    bool broken_in_child; /* like eventfd, timerfds do not work across processes */
+    bool armed;
+    int clock_id;
+    spinlock_t lock;      /* protects the fields below */
+    uint64_t expiry_ns;   /* next expiration, in the clock's nanoseconds */
+    uint64_t interval_ns; /* 0 for a one-shot timer */
+    uint64_t expirations; /* expirations not yet read */
+    uint64_t dummy_host_val; /* notifications written to the dummy host eventfd */
+};
+
+struct libos_signalfd_handle {
+    bool broken_in_child; /* as for eventfd/timerfd: not shared with children */
+    __sigset_t mask;      /* the signals this descriptor watches (constant after creation) */
+    spinlock_t lock;      /* protects the field below */
+    uint64_t dummy_host_val; /* arrival notifications written to the dummy host eventfd */
+};
+
 struct libos_handle {
     enum libos_handle_type type;
     bool is_dir;
@@ -232,6 +252,8 @@ struct libos_handle {
 
         struct libos_epoll_handle epoll;         /* TYPE_EPOLL */
         struct libos_eventfd_handle eventfd;     /* TYPE_EVENTFD */
+        struct libos_timerfd_handle timerfd;     /* TYPE_TIMERFD */
+        struct libos_signalfd_handle signalfd;   /* TYPE_SIGNALFD */
     } info;
 
     struct libos_dir_handle dir_info;

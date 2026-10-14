@@ -1030,6 +1030,14 @@ class TC_30_Syscall(RegressionTestCase):
         stdout, _ = self.run_binary(['memfd_seals'])
         self.assertIn('TEST OK', stdout)
 
+    def test_076_timerfd(self):
+        stdout, _ = self.run_binary(['timerfd'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_077_ptimers(self):
+        stdout, _ = self.run_binary(['ptimer'])
+        self.assertIn('TEST OK', stdout)
+
     @unittest.skipIf(USES_MUSL, 'sched_setscheduler is not supported in musl')
     def test_080_sched(self):
         stdout, _ = self.run_binary(['sched'])

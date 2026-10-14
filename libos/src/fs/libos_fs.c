@@ -29,6 +29,8 @@ static struct libos_fs* g_builtin_fs[] = {
     &socket_builtin_fs,
     &epoll_builtin_fs,
     &eventfd_builtin_fs,
+    &timerfd_builtin_fs,
+    &signalfd_builtin_fs,
     &pseudo_builtin_fs,
     &synthetic_builtin_fs,
     &path_builtin_fs,

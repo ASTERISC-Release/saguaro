@@ -10,6 +10,10 @@
 #include "libos_types.h"
 #include "linux_abi/futex.h"
 #include "linux_abi/sysinfo.h"
+#include <linux/signal.h> /* `struct sigevent`, for the POSIX timer prototypes */
+#include <linux/time.h>   /* `struct __kernel_itimerspec`, for the POSIX timers */
+
+struct __kernel_itimerspec; /* <linux/time.h> */
 
 struct utimbuf;
 struct __kernel_timeval;
@@ -266,6 +270,20 @@ long libos_syscall_prlimit64(pid_t pid, int resource, const struct __kernel_rlim
 long libos_syscall_sendmmsg(int fd, struct mmsghdr* msg, unsigned int vlen, unsigned int flags);
 long libos_syscall_eventfd2(unsigned int count, int flags);
 long libos_syscall_eventfd(unsigned int count);
+long libos_syscall_timerfd_create(int clockid, int flags);
+long libos_syscall_timerfd_settime(int fd, int flags,
+                                   const struct __kernel_itimerspec* new_val,
+                                   struct __kernel_itimerspec* old_val);
+long libos_syscall_timerfd_gettime(int fd, struct __kernel_itimerspec* curr);
+long libos_syscall_signalfd(int fd, const __sigset_t* mask, size_t sizemask);
+long libos_syscall_signalfd4(int fd, const __sigset_t* mask, size_t sizemask, int flags);
+long libos_syscall_timer_create(int clockid, struct sigevent* evp, void** out_timerid);
+long libos_syscall_timer_settime(void* timerid, int flags,
+                                 const struct __kernel_itimerspec* new_val,
+                                 struct __kernel_itimerspec* old_val);
+long libos_syscall_timer_gettime(void* timerid, struct __kernel_itimerspec* curr);
+long libos_syscall_timer_getoverrun(void* timerid);
+long libos_syscall_timer_delete(void* timerid);
 long libos_syscall_getcpu(unsigned* cpu, unsigned* node, void* unused_cache);
 long libos_syscall_personality(unsigned long persona);
 bool libos_personality_sticky_timeouts(void);
