@@ -41,6 +41,19 @@ ssize_t do_handle_read(struct libos_handle* hdl, void* buf, size_t count) {
     return ret;
 }
 
+/*
+ * A memfd reopened through /proc/self/fd/N shares one handle with the original descriptor but may
+ * have a different access mode (the kernel keeps the mode per open file description); the mode is
+ * recorded on the fd table entry, so enforce it there for memfd descriptors. Other file
+ * descriptions of the same handle are unaffected (their entry carries the handle's own mode).
+ */
+static bool fd_memfd_access_denied(int fd, struct libos_handle* hdl, int mask) {
+    if (!hdl->is_memfd)
+        return false;
+    int mode = get_fd_acc_mode((uint32_t)fd, /*handle_map=*/NULL);
+    return mode >= 0 && !(mode & mask);
+}
+
 long libos_syscall_read(int fd, void* buf, size_t count) {
     long retval;
     if (!is_user_memory_writable(buf, count))
@@ -49,6 +62,11 @@ long libos_syscall_read(int fd, void* buf, size_t count) {
     struct libos_handle* hdl = get_fd_handle(fd, NULL, NULL);
     if (!hdl)
         return -EBADF;
+
+    if (fd_memfd_access_denied(fd, hdl, MAY_READ)) {
+        put_handle(hdl);
+        return -EBADF;
+    }
 
     #ifdef ENABLE_GRAPHICS
         if(hdl->type == TYPE_HOST){
@@ -104,6 +122,11 @@ long libos_syscall_write(int fd, const void* buf, size_t count) {
     struct libos_handle* hdl = get_fd_handle(fd, NULL, NULL);
     if (!hdl)
         return -EBADF;
+
+    if (fd_memfd_access_denied(fd, hdl, MAY_WRITE)) {
+        put_handle(hdl);
+        return -EBADF;
+    }
 
     #ifdef ENABLE_GRAPHICS
         if(hdl->type == TYPE_HOST){
@@ -227,6 +250,17 @@ static long do_openat(int dfd, const char* filename, int flags, int mode, bool u
             if (!*p) {
                 struct libos_handle* target = get_fd_handle((int)target_fd, NULL, NULL);
                 if (target && target->is_memfd) {
+                    /* A memfd reopened through /proc/self/fd/N gets full read-write access (the
+                     * documented memfd behavior — this is why the seals exist); after
+                     * F_SEAL_FUTURE_WRITE a new writable descriptor is refused with EPERM. */
+                    lock(&target->lock);
+                    bool refuse_write = (target->memfd_seals & LIBOS_F_SEAL_FUTURE_WRITE)
+                                        && (flags & O_ACCMODE) != O_RDONLY;
+                    unlock(&target->lock);
+                    if (refuse_write) {
+                        put_handle(target);
+                        return -EPERM;
+                    }
                     if (flags & O_TRUNC) {
                         long trunc_ret = libos_syscall_ftruncate((int)target_fd, 0);
                         if (trunc_ret < 0) {
@@ -510,6 +544,10 @@ long libos_syscall_pread64(int fd, char* buf, size_t count, loff_t offset) {
         ret = -EBADF;
         goto out;
     }
+    if (fd_memfd_access_denied(fd, hdl, MAY_READ)) {
+        ret = -EBADF;
+        goto out;
+    }
 
     if (!fs || !fs->fs_ops)
         goto out;
@@ -549,6 +587,10 @@ long libos_syscall_pwrite64(int fd, char* buf, size_t count, loff_t offset) {
     ssize_t ret = -EACCES;
 
     if (!(hdl->acc_mode & MAY_WRITE)) {
+        ret = -EBADF;
+        goto out;
+    }
+    if (fd_memfd_access_denied(fd, hdl, MAY_WRITE)) {
         ret = -EBADF;
         goto out;
     }

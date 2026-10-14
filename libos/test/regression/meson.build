@@ -77,6 +77,7 @@ tests = {
     'madvise': {},
     'mkfifo': {},
     'mmap_file': {},
+    'memfd_seals': {},
     'mmap_file_backed': {},
     'mmap_file_emulated': {},
     'mprotect_file_fork': {},

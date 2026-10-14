@@ -78,6 +78,9 @@ int libos_memfd_check_write(struct libos_handle* handle, loff_t offset, size_t c
         return 0;
     if (handle->memfd_seals & LIBOS_F_SEAL_WRITE)
         return -EPERM;
+    /* F_SEAL_FUTURE_WRITE needs no check here: the only way to get a *new* descriptor for a
+     * memfd is the /proc/self/fd/N reopen, which refuses write access once the seal is in place
+     * (see `libos_open.c`); descriptors that predate the seal keep working. */
 
     loff_t end;
     if (__builtin_add_overflow(offset, (loff_t)count, &end))

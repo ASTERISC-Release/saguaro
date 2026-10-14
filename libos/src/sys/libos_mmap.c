@@ -144,10 +144,22 @@ void* libos_syscall_mmap(void* addr, size_t length, int prot, int flags, int fd,
                     log_always("error: mmap with invalid fd (fd: %d)", fd);
                     return (void*)-EBADF;
                 }
-                if (hdl->is_memfd && (prot & PROT_WRITE) && (flags & MAP_SHARED) &&
-                    (hdl->memfd_seals & LIBOS_F_SEAL_WRITE)) {
-                    ret = -EPERM;
-                    goto out_handle;
+                if (hdl->is_memfd) {
+                    /* F_SEAL_EXEC refuses executable mappings, shared or private. */
+                    if ((prot & PROT_EXEC) && (hdl->memfd_seals & LIBOS_F_SEAL_EXEC)) {
+                        ret = -EPERM;
+                        goto out_handle;
+                    }
+                    if (flags & MAP_SHARED) {
+                        /* F_SEAL_WRITE refuses new writable shared mappings;
+                         * F_SEAL_FUTURE_WRITE refuses them from the moment the seal is added (the
+                         * mappings that predate the seal stay usable, checked in mprotect). */
+                        if ((prot & PROT_WRITE) && (hdl->memfd_seals & (LIBOS_F_SEAL_WRITE
+                                                                        | LIBOS_F_SEAL_FUTURE_WRITE))) {
+                            ret = -EPERM;
+                            goto out_handle;
+                        }
+                    }
                 }
 
                 // log_always("mmap request (fd: %d, offset: %lu, length: %zu, prot: 0x%x, flags: 0x%x)",
@@ -380,15 +392,22 @@ long libos_syscall_mprotect(void* addr, size_t length, int prot) {
         return -EINVAL;
     }
 
-    if (prot & PROT_WRITE) {
+    if (prot & (PROT_WRITE | PROT_EXEC)) {
         struct libos_vma_info vma_info = {0};
         if (lookup_vma(addr, &vma_info) >= 0) {
-            bool sealed_shared_memfd = vma_info.file && (vma_info.flags & MAP_SHARED) &&
-                                       vma_info.file->is_memfd &&
-                                       (vma_info.file->memfd_seals & LIBOS_F_SEAL_WRITE);
+            bool memfd_vma = vma_info.file && vma_info.file->is_memfd;
+            unsigned int seals = memfd_vma ? vma_info.file->memfd_seals : 0;
             if (vma_info.file)
                 put_handle(vma_info.file);
-            if (sealed_shared_memfd)
+            if (memfd_vma && (prot & PROT_EXEC) && (seals & LIBOS_F_SEAL_EXEC))
+                return -EPERM;
+            /* making a shared mapping writable counts as new writable access unless it was
+             * already writable; `F_SEAL_WRITE` refuses that always, `F_SEAL_FUTURE_WRITE` only
+             * once the seal is in place (mappings already writable when the seal was added keep
+             * working). Private mappings never write through to the file. */
+            if (memfd_vma && (vma_info.flags & MAP_SHARED) && (prot & PROT_WRITE)
+                    && !(vma_info.prot & PROT_WRITE)
+                    && (seals & (LIBOS_F_SEAL_WRITE | LIBOS_F_SEAL_FUTURE_WRITE)))
                 return -EPERM;
         }
     }
