@@ -398,6 +398,18 @@ def main():
                           if not (args.harness_dir / f"{ltp_test_command(scenarios[name])}.manifest").exists()})
         if missing:
             parser.error("manifests missing; build them with gramine-test build first: " + ", ".join(missing[:10]))
+        # Under a Gramine loader the binary comes from the manifests' `install` symlink, not from
+        # --ltp-root: point the symlink at --ltp-root so the two cannot disagree (they once did, and
+        # an "unmodified" run measured the no-fork build). The manifests do not depend on which
+        # install the symlink names; one run at a time per checkout.
+        link = args.harness_dir / "install"
+        if not link.is_symlink():
+            parser.error(f"{link} is not a symlink; build the manifests with scripts/build-ltp-manifests.sh")
+        if link.resolve() != args.ltp_root.resolve():
+            print(f"note: {link} pointed to {link.resolve()}; repointing it to {args.ltp_root.resolve()}",
+                  file=sys.stderr)
+            link.unlink()
+            link.symlink_to(os.path.relpath(args.ltp_root.resolve(), args.harness_dir.resolve()))
     guest_cids = allocate_guest_cids(1) * len(active) if args.loader == "vm" else [None] * len(active)
 
     results = [{"loader": args.loader, "test": name, "subtests": [],
@@ -430,7 +442,7 @@ def main():
             duration_text = f"{duration:.2f}s" if duration is not None else "n/a"
             print(f"{result['loader']} {result['test']}: {result['status']} ({duration_text})", flush=True)
     results.sort(key=lambda result: selected.index(result["test"]))
-    out = {"loader": args.loader, "results": results}
+    out = {"loader": args.loader, "ltp_root": str(args.ltp_root.resolve()), "results": results}
     if args.results:
         args.results.parent.mkdir(parents=True, exist_ok=True)
         args.results.write_text(json.dumps(out, indent=2) + "\n")
