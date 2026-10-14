@@ -139,7 +139,7 @@ def markdown(inventory, by_syscall, native, direct, original_vm, vm, reasons, ma
         f"Scope: {len(all_tests)} scenario entries, {mapped_count} mapped and {unmapped_count} "
         "unmapped. `signal06` is an explicit TCONF because it could signal container PID 1. "
         "All four loaders used one worker; VM runs used one guest and one vCPU. The corrected "
-        "unmodified VM run took 1,082 seconds; the no-fork VM run took 1,922 seconds.", "",
+        "unmodified VM run took 2,402 seconds; the no-fork VM run took 2,395 seconds.", "",
         "## Loader totals", "", "| Loader | P | F | C | B | T | X | E |", "|---|---:|---:|---:|---:|---:|---:|---:|"
     ]
     for label, result in (("native", native), ("direct", direct), ("VM unmodified", original_vm),
