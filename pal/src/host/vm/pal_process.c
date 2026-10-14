@@ -25,9 +25,12 @@ struct proc_ring {
 
 struct proc_shared_stream {
     atomic_uint refs;
+    uintptr_t handles_frame;
     struct proc_ring directions[2];
 };
 static_assert(sizeof(struct proc_shared_stream) <= PAGE_SIZE, "process stream must fit one frame");
+static_assert(2 * sizeof(struct pal_handle) <= PAGE_SIZE,
+              "process endpoints must fit one handle frame");
 
 static struct proc_shared_stream* proc_stream(PAL_HANDLE handle) {
     return memory_frame_pointer(handle->process.shared_stream_frame);
@@ -137,10 +140,12 @@ static int proc_delete(PAL_HANDLE handle, enum pal_delete_mode mode) {
 static void proc_destroy(PAL_HANDLE handle) {
     (void)proc_delete(handle, PAL_DELETE_ALL);
     uintptr_t frame = handle->process.shared_stream_frame;
-    free(handle);
     struct proc_shared_stream* shared = memory_frame_pointer(frame);
-    if (atomic_fetch_sub_explicit(&shared->refs, 1, memory_order_acq_rel) == 1)
+    if (atomic_fetch_sub_explicit(&shared->refs, 1, memory_order_acq_rel) == 1) {
+        uintptr_t handles_frame = shared->handles_frame;
         (void)memory_frame_free(frame);
+        (void)memory_frame_free(handles_frame);
+    }
 }
 
 static int proc_attrquerybyhdl(PAL_HANDLE handle, PAL_STREAM_ATTR* attr) {
@@ -168,33 +173,32 @@ struct handle_ops g_proc_ops = {
 };
 
 static int proc_create_pair(PAL_HANDLE* parent, PAL_HANDLE* child) {
-    uintptr_t frame;
+    uintptr_t frame, handles_frame;
     int ret = memory_frame_alloc(&frame);
     if (ret < 0)
         return ret;
-
-    PAL_HANDLE handles[2] = { calloc(1, sizeof(*handles[0])),
-                              calloc(1, sizeof(*handles[1])) };
-    if (!handles[0] || !handles[1]) {
-        free(handles[0]);
-        free(handles[1]);
+    ret = memory_frame_alloc(&handles_frame);
+    if (ret < 0) {
         memory_frame_free(frame);
-        return -PAL_ERROR_NOMEM;
+        return ret;
     }
 
     struct proc_shared_stream* shared = memory_frame_pointer(frame);
     memset(shared, 0, PAGE_SIZE);
     atomic_init(&shared->refs, 2);
+    shared->handles_frame = handles_frame;
     atomic_flag_clear(&shared->directions[0].lock);
     atomic_flag_clear(&shared->directions[1].lock);
-    for (size_t i = 0; i < ARRAY_SIZE(handles); i++) {
-        init_handle_hdr(handles[i], PAL_TYPE_PROCESS);
-        handles[i]->flags = PAL_HANDLE_FD_READABLE | PAL_HANDLE_FD_WRITABLE;
-        handles[i]->process.shared_stream_frame = frame;
-        handles[i]->process.side = i;
+    PAL_HANDLE handles = memory_frame_pointer(handles_frame);
+    memset(handles, 0, PAGE_SIZE);
+    for (size_t i = 0; i < 2; i++) {
+        init_handle_hdr(&handles[i], PAL_TYPE_PROCESS);
+        handles[i].flags = PAL_HANDLE_FD_READABLE | PAL_HANDLE_FD_WRITABLE;
+        handles[i].process.shared_stream_frame = frame;
+        handles[i].process.side = i;
     }
-    *parent = handles[0];
-    *child = handles[1];
+    *parent = &handles[0];
+    *child = &handles[1];
     return 0;
 }
 
