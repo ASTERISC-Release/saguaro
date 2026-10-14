@@ -27,6 +27,7 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/sysmacros.h>
+#include <time.h>
 #include <unistd.h>
 
 /* from the kernel's include/uapi/drm/drm.h, to not depend on its installation */
@@ -109,6 +110,17 @@ struct drm_syncobj_handle {
     uint64_t point;
 };
 
+struct drm_syncobj_wait {
+    uint64_t handles;
+    int64_t timeout_nsec;
+    uint32_t count_handles;
+    uint32_t flags;
+    uint32_t first_signaled;
+    uint32_t pad;
+    uint64_t deadline_nsec;
+};
+#define DRM_SYNCOBJ_WAIT_FLAGS_WAIT_FOR_SUBMIT (1 << 1)
+
 #define DRM_IOCTL_BASE        'd'
 #define DRM_IOCTL_VERSION     _IOWR(DRM_IOCTL_BASE, 0x00, struct drm_version)
 #define DRM_IOCTL_GET_CAP     _IOWR(DRM_IOCTL_BASE, 0x0c, struct drm_get_cap)
@@ -119,6 +131,7 @@ struct drm_syncobj_handle {
 #define DRM_IOCTL_SYNCOBJ_DESTROY      _IOWR(DRM_IOCTL_BASE, 0xc0, struct drm_syncobj_destroy)
 #define DRM_IOCTL_SYNCOBJ_HANDLE_TO_FD _IOWR(DRM_IOCTL_BASE, 0xc1, struct drm_syncobj_handle)
 #define DRM_IOCTL_SYNCOBJ_FD_TO_HANDLE _IOWR(DRM_IOCTL_BASE, 0xc2, struct drm_syncobj_handle)
+#define DRM_IOCTL_SYNCOBJ_WAIT         _IOWR(DRM_IOCTL_BASE, 0xc3, struct drm_syncobj_wait)
 #define DRM_CLOEXEC 02000000
 #define DRM_RDWR    02
 #define DRM_COMMAND_BASE      0x40
@@ -230,6 +243,23 @@ static void check_prime(int fd, uint32_t handle) {
     if (si.handle == 0 || si.fd != sh.fd)
         errx(1, "syncobj import: handle %u, fd %d (expected %d)", si.handle, si.fd, sh.fd);
     close(sh.fd);
+    /* an absolute CLOCK_MONOTONIC deadline 20 ms ahead (the kernel's clock is not Gramine's) */
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    int64_t start = (int64_t)ts.tv_sec * 1000000000 + ts.tv_nsec;
+    struct drm_syncobj_wait wait = {.handles = (uintptr_t)&sc.handle, .count_handles = 1,
+                                    .timeout_nsec = start + 20000000,
+                                    .flags = DRM_SYNCOBJ_WAIT_FLAGS_WAIT_FOR_SUBMIT};
+    if (ioctl(fd, DRM_IOCTL_SYNCOBJ_WAIT, &wait) != -1 || errno != ETIME)
+        errx(1, "SYNCOBJ_WAIT on an empty syncobj: expected ETIME, got %s", strerror(errno));
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    int64_t waited_ms = ((int64_t)ts.tv_sec * 1000000000 + ts.tv_nsec - start) / 1000000;
+    if (waited_ms < 10 || waited_ms > 2000)
+        errx(1, "SYNCOBJ_WAIT with a deadline 20 ms ahead returned after %lld ms",
+             (long long)waited_ms);
+    if (wait.timeout_nsec != start + 20000000)
+        errx(1, "SYNCOBJ_WAIT: the deadline in the argument was not restored");
+
     struct drm_syncobj_destroy sd = {.handle = si.handle};
     if (ioctl(fd, DRM_IOCTL_SYNCOBJ_DESTROY, &sd) < 0)
         err(1, "DRM_IOCTL_SYNCOBJ_DESTROY");

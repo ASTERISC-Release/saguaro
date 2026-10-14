@@ -10,6 +10,9 @@
  * fds on the host side and LibOS fds on the application side, so this file translates them:
  * an input LibOS fd is replaced by the host fd of its handle for the duration of the call, and an
  * output host fd is wrapped into a new `TYPE_HOSTFD` handle whose LibOS fd is written back.
+ * Absolute `CLOCK_MONOTONIC` deadlines (syncobj and amdgpu waits) are moved from Gramine's clock,
+ * which is real time, to the host's monotonic clock: otherwise a "has it signaled?" query with a
+ * deadline of "now" turns into a wait until the GPU is done.
  *
  * A `TYPE_HOSTFD` handle owns a PAL device handle of the host fd (`PalHostFdWrap()`). It supports
  * read, write, mmap, fstat, lseek (for the size of a dma-buf), poll (generic, through the PAL
@@ -28,12 +31,16 @@
 #include "stat.h"
 #include "toml_utils.h"
 
-/* The ioctls below, from the kernel's uapi headers (drm/drm.h, linux/dma-buf.h, linux/sync_file.h);
- * the sizes are those of the argument structures. */
+/* The ioctls below, from the kernel's uapi headers (drm/drm.h, drm/amdgpu_drm.h, linux/dma-buf.h,
+ * linux/sync_file.h); the sizes are those of the argument structures. */
 #define DRM_IOCTL_PRIME_HANDLE_TO_FD    _IOC(_IOC_READ | _IOC_WRITE, 'd', 0x2d, 12)
 #define DRM_IOCTL_PRIME_FD_TO_HANDLE    _IOC(_IOC_READ | _IOC_WRITE, 'd', 0x2e, 12)
 #define DRM_IOCTL_SYNCOBJ_HANDLE_TO_FD  _IOC(_IOC_READ | _IOC_WRITE, 'd', 0xc1, 24)
 #define DRM_IOCTL_SYNCOBJ_FD_TO_HANDLE  _IOC(_IOC_READ | _IOC_WRITE, 'd', 0xc2, 24)
+#define DRM_IOCTL_SYNCOBJ_WAIT          _IOC(_IOC_READ | _IOC_WRITE, 'd', 0xc3, 40)
+#define DRM_IOCTL_SYNCOBJ_TIMELINE_WAIT _IOC(_IOC_READ | _IOC_WRITE, 'd', 0xca, 48)
+#define DRM_IOCTL_AMDGPU_WAIT_CS        _IOC(_IOC_READ | _IOC_WRITE, 'd', 0x49, 32)
+#define DRM_IOCTL_AMDGPU_WAIT_FENCES    _IOC(_IOC_READ | _IOC_WRITE, 'd', 0x52, 24)
 #define DMA_BUF_IOCTL_EXPORT_SYNC_FILE  _IOC(_IOC_READ | _IOC_WRITE, 'b', 2, 8)
 #define DMA_BUF_IOCTL_IMPORT_SYNC_FILE  _IOC(_IOC_WRITE, 'b', 3, 8)
 #define SYNC_IOC_MERGE                  _IOC(_IOC_READ | _IOC_WRITE, '>', 3, 48)
@@ -41,30 +48,48 @@
 /* The O_CLOEXEC flag of struct drm_prime_handle (DRM_CLOEXEC) */
 #define DRM_CLOEXEC 02000000
 
-struct fd_field {
-    uint16_t offset;  /* of the `int32_t` fd in the argument */
-    bool out;         /* written by the kernel (else read by it) */
+enum field_kind {
+    FD_IN,     /* int32_t LibOS fd, read by the kernel */
+    FD_OUT,    /* int32_t host fd, written by the kernel */
+    /* int64_t absolute CLOCK_MONOTONIC deadline in ns, read by the kernel. The application computed
+     * it from Gramine's clock (real time), so it is moved to the host's clock for the call. */
+    TIME_ABS,
 };
 
-struct fd_ioctl {
+struct ioctl_field {
+    uint16_t offset;
+    enum field_kind kind;
+};
+
+struct translated_ioctl {
     unsigned int cmd;
-    struct fd_field fields[2];
+    struct ioctl_field fields[2];
     size_t fields_cnt;
     int16_t cloexec_flags_offset; /* offset of a flags word with DRM_CLOEXEC, or -1: always cloexec */
 };
 
-static const struct fd_ioctl g_fd_ioctls[] = {
+static const struct translated_ioctl g_translated_ioctls[] = {
     /* struct drm_prime_handle { u32 handle; u32 flags; s32 fd; } */
-    { DRM_IOCTL_PRIME_HANDLE_TO_FD,   {{8, true}},  1, 4 },
-    { DRM_IOCTL_PRIME_FD_TO_HANDLE,   {{8, false}}, 1, -1 },
+    { DRM_IOCTL_PRIME_HANDLE_TO_FD,    {{8, FD_OUT}}, 1, 4 },
+    { DRM_IOCTL_PRIME_FD_TO_HANDLE,    {{8, FD_IN}},  1, -1 },
     /* struct drm_syncobj_handle { u32 handle; u32 flags; s32 fd; u32 pad; u64 point; } */
-    { DRM_IOCTL_SYNCOBJ_HANDLE_TO_FD, {{8, true}},  1, -1 },
-    { DRM_IOCTL_SYNCOBJ_FD_TO_HANDLE, {{8, false}}, 1, -1 },
+    { DRM_IOCTL_SYNCOBJ_HANDLE_TO_FD,  {{8, FD_OUT}}, 1, -1 },
+    { DRM_IOCTL_SYNCOBJ_FD_TO_HANDLE,  {{8, FD_IN}},  1, -1 },
+    /* struct drm_syncobj_wait { u64 handles; s64 timeout_nsec; u32 count_handles; u32 flags;
+     *                           u32 first_signaled; u32 pad; u64 deadline_nsec; } */
+    { DRM_IOCTL_SYNCOBJ_WAIT,          {{8, TIME_ABS}}, 1, -1 },
+    /* struct drm_syncobj_timeline_wait { u64 handles; u64 points; s64 timeout_nsec; ... } */
+    { DRM_IOCTL_SYNCOBJ_TIMELINE_WAIT, {{16, TIME_ABS}}, 1, -1 },
+    /* union drm_amdgpu_wait_cs { struct { u64 handle; u64 timeout; ... } in; ... } */
+    { DRM_IOCTL_AMDGPU_WAIT_CS,        {{8, TIME_ABS}}, 1, -1 },
+    /* union drm_amdgpu_wait_fences { struct { u64 fences; u32 count; u32 wait_all; u64 timeout_ns; }
+     *                                in; ... } */
+    { DRM_IOCTL_AMDGPU_WAIT_FENCES,    {{16, TIME_ABS}}, 1, -1 },
     /* struct dma_buf_export_sync_file { u32 flags; s32 fd; } (and the import one) */
-    { DMA_BUF_IOCTL_EXPORT_SYNC_FILE, {{4, true}},  1, -1 },
-    { DMA_BUF_IOCTL_IMPORT_SYNC_FILE, {{4, false}}, 1, -1 },
+    { DMA_BUF_IOCTL_EXPORT_SYNC_FILE,  {{4, FD_OUT}}, 1, -1 },
+    { DMA_BUF_IOCTL_IMPORT_SYNC_FILE,  {{4, FD_IN}},  1, -1 },
     /* struct sync_merge_data { char name[32]; s32 fd2; s32 fence; u32 flags; u32 pad; } */
-    { SYNC_IOC_MERGE,                 {{32, false}, {36, true}}, 2, -1 },
+    { SYNC_IOC_MERGE,                  {{32, FD_IN}, {36, FD_OUT}}, 2, -1 },
 };
 
 static bool raw_device_ioctl_enabled(void) {
@@ -118,26 +143,50 @@ static int host_fd_of(int fd) {
     return host_fd;
 }
 
+/* An absolute deadline on Gramine's clock, moved to the host's CLOCK_MONOTONIC. 0 (no wait) and
+ * INT64_MAX (no deadline) keep their meaning. */
+static int64_t host_deadline(int64_t deadline) {
+    if (deadline <= 0 || deadline == INT64_MAX)
+        return deadline;
+    uint64_t gramine_us = 0, host_ns = 0;
+    if (PalSystemTimeQuery(&gramine_us) < 0 || PalHostClockMonotonic(&host_ns) < 0)
+        return deadline;
+    int64_t remaining = deadline - (int64_t)(gramine_us * 1000);
+    int64_t moved;
+    if (__builtin_add_overflow((int64_t)host_ns, remaining, &moved))
+        return remaining > 0 ? INT64_MAX : 0;
+    return moved > 0 ? moved : 0;
+}
+
 int raw_device_ioctl(struct libos_handle* hdl, unsigned int cmd, unsigned long arg) {
-    const struct fd_ioctl* fdi = NULL;
+    const struct translated_ioctl* ti = NULL;
     if (raw_device_ioctl_enabled()) {
-        for (size_t i = 0; i < ARRAY_SIZE(g_fd_ioctls); i++) {
-            if (g_fd_ioctls[i].cmd == cmd) {
-                fdi = &g_fd_ioctls[i];
+        for (size_t i = 0; i < ARRAY_SIZE(g_translated_ioctls); i++) {
+            if (g_translated_ioctls[i].cmd == cmd) {
+                ti = &g_translated_ioctls[i];
                 break;
             }
         }
     }
 
-    int32_t saved[2] = {0};
-    if (fdi) {
+    int64_t saved[2] = {0};
+    if (ti) {
         if (!is_user_memory_writable((void*)arg, _IOC_SIZE(cmd)))
             return -EFAULT;
-        for (size_t i = 0; i < fdi->fields_cnt; i++) {
-            int32_t* field = (int32_t*)(arg + fdi->fields[i].offset);
-            saved[i] = *field;
-            if (!fdi->fields[i].out)
-                *field = host_fd_of(saved[i]);
+        for (size_t i = 0; i < ti->fields_cnt; i++) {
+            void* field = (void*)(arg + ti->fields[i].offset);
+            switch (ti->fields[i].kind) {
+                case FD_IN:
+                    saved[i] = *(int32_t*)field;
+                    *(int32_t*)field = host_fd_of((int32_t)saved[i]);
+                    break;
+                case TIME_ABS:
+                    saved[i] = *(int64_t*)field;
+                    *(int64_t*)field = host_deadline(saved[i]);
+                    break;
+                case FD_OUT:
+                    break;
+            }
         }
     }
 
@@ -148,35 +197,39 @@ int raw_device_ioctl(struct libos_handle* hdl, unsigned int cmd, unsigned long a
     else
         ret = cmd_ret;
 
-    if (fdi) {
-        for (size_t i = 0; i < fdi->fields_cnt; i++) {
-            int32_t* field = (int32_t*)(arg + fdi->fields[i].offset);
-            if (!fdi->fields[i].out) {
-                *field = saved[i];
+    if (ti) {
+        for (size_t i = 0; i < ti->fields_cnt; i++) {
+            void* field = (void*)(arg + ti->fields[i].offset);
+            if (ti->fields[i].kind == FD_IN) {
+                *(int32_t*)field = (int32_t)saved[i];
+                continue;
+            }
+            if (ti->fields[i].kind == TIME_ABS) {
+                *(int64_t*)field = saved[i];
                 continue;
             }
             if (ret < 0)
                 continue;
-            int host_fd = *field;
+            int host_fd = *(int32_t*)field;
             PAL_HANDLE pal_handle = NULL;
             int wrap_ret = PalHostFdWrap(host_fd, &pal_handle);
             if (wrap_ret < 0) {
                 log_warning("raw ioctl 0x%x: cannot wrap host fd %d: %s", cmd, host_fd,
                             pal_strerror(wrap_ret));
-                *field = -1;
+                *(int32_t*)field = -1;
                 ret = pal_to_unix_errno(wrap_ret);
                 continue;
             }
             bool cloexec = true;
-            if (fdi->cloexec_flags_offset >= 0)
-                cloexec = *(uint32_t*)(arg + fdi->cloexec_flags_offset) & DRM_CLOEXEC;
+            if (ti->cloexec_flags_offset >= 0)
+                cloexec = *(uint32_t*)(arg + ti->cloexec_flags_offset) & DRM_CLOEXEC;
             int fd = hostfd_install(pal_handle, cloexec);
             if (fd < 0) {
-                *field = -1;
+                *(int32_t*)field = -1;
                 ret = fd;
                 continue;
             }
-            *field = fd;
+            *(int32_t*)field = fd;
         }
     }
     return ret;

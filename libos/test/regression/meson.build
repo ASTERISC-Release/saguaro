@@ -19,6 +19,7 @@ tests = {
     'devfs': {},
     'device_drm': {},
     'device_passthrough': {},
+    'host_unix_socket': {},
     'double_fork': {},
     'epoll_epollet': {},
     'epoll_test': {},

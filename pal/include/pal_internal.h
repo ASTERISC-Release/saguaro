@@ -169,6 +169,12 @@ int _PalDeviceIoControl(PAL_HANDLE handle, uint32_t cmd, unsigned long arg, int*
 int _PalHostReadlink(const char* uri, char* buf, size_t* size);
 int _PalHostFdWrap(int host_fd, PAL_HANDLE* out_handle);
 int _PalHostFdGet(PAL_HANDLE handle, int* out_host_fd);
+int _PalHostClockMonotonic(uint64_t* out_nsec);
+int _PalHostUnixConnect(const char* path, pal_stream_options_t options, PAL_HANDLE* out_handle);
+int _PalHostSendmsg(PAL_HANDLE handle, struct iovec* iov, size_t iov_len, const int* host_fds,
+                    size_t host_fds_cnt, bool nonblocking, size_t* out_size);
+int _PalHostRecvmsg(PAL_HANDLE handle, struct iovec* iov, size_t iov_len, int* host_fds,
+                    size_t* host_fds_cnt, bool nonblocking, size_t* out_size);
 // Returns 0 on success, negative PAL code on failure
 int _PalGetCPUInfo(struct pal_cpu_info* info);
 

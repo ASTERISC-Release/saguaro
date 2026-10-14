@@ -1,4 +1,7 @@
 /drm_info
 /gbm_map
 /egl_readback
+/ioctl_bench
+/x_roundtrip
+/gl_bench
 /*.manifest

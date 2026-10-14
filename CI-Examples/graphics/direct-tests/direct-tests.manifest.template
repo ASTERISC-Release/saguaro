@@ -12,8 +12,11 @@ loader.log_level = "{{ log_level }}"
 loader.insecure__use_cmdline_argv = true
 loader.env.LD_LIBRARY_PATH = "/lib:/usr/lib/x86_64-linux-gnu"
 
-# The application may submit any ioctl to the GPU (see Documentation/manifest-syntax.rst).
+# The application may submit any ioctl to the GPU and talk to the X server (see
+# Documentation/manifest-syntax.rst).
 sys.insecure__allow_raw_device_ioctl = true
+sys.insecure__host_unix_sockets = ["/tmp/.X11-unix/X0"]
+loader.env.DISPLAY = ":0"
 
 fs.mounts = [
 {% if not host_binary %}

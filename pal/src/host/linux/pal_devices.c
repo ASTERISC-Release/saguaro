@@ -10,10 +10,14 @@
  *       implemented (without device-specific changes to LibOS layer).
  */
 
+#include <asm/socket.h>
 #include <linux/fcntl.h> /* AT_FDCWD */
+#include <linux/un.h>
+#include <stdalign.h>
 
 #include "api.h"
 #include "ioctls.h"
+#include "linux_socket.h"
 #include "pal.h"
 #include "pal_error.h"
 #include "pal_flags_conv.h"
@@ -219,6 +223,22 @@ static int dev_attrquerybyhdl(PAL_HANDLE handle, PAL_STREAM_ATTR* attr) {
     return 0;
 }
 
+static int dev_attrsetbyhdl(PAL_HANDLE handle, PAL_STREAM_ATTR* attr) {
+    assert(handle->hdr.type == PAL_TYPE_DEV);
+
+    if (attr->nonblocking == handle->dev.nonblocking)
+        return 0;
+    int flags = DO_SYSCALL(fcntl, handle->dev.fd, F_GETFL);
+    if (flags < 0)
+        return unix_to_pal_error(flags);
+    flags = attr->nonblocking ? (flags | O_NONBLOCK) : (flags & ~O_NONBLOCK);
+    int ret = DO_SYSCALL(fcntl, handle->dev.fd, F_SETFL, flags);
+    if (ret < 0)
+        return unix_to_pal_error(ret);
+    handle->dev.nonblocking = attr->nonblocking;
+    return 0;
+}
+
 struct handle_ops g_dev_ops = {
     .open           = &dev_open,
     .read           = &dev_read,
@@ -230,6 +250,7 @@ struct handle_ops g_dev_ops = {
     .flush          = &dev_flush,
     .attrquery      = &dev_attrquery,
     .attrquerybyhdl = &dev_attrquerybyhdl,
+    .attrsetbyhdl   = &dev_attrsetbyhdl,
 };
 
 int _PalHostFdWrap(int host_fd, PAL_HANDLE* out_handle) {
@@ -272,6 +293,101 @@ int _PalHostFdGet(PAL_HANDLE handle, int* out_host_fd) {
         default:
             return -PAL_ERROR_BADHANDLE;
     }
+}
+
+int _PalHostUnixConnect(const char* path, pal_stream_options_t options, PAL_HANDLE* out_handle) {
+    struct sockaddr_un addr = {.sun_family = AF_UNIX};
+    size_t len = strlen(path);
+    if (len == 0 || len >= sizeof(addr.sun_path))
+        return -PAL_ERROR_INVAL;
+    memcpy(addr.sun_path, path, len + 1);
+
+    int fd = DO_SYSCALL(socket, AF_UNIX,
+                        SOCK_STREAM | SOCK_CLOEXEC |
+                            ((options & PAL_OPTION_NONBLOCK) ? SOCK_NONBLOCK : 0),
+                        0);
+    if (fd < 0)
+        return unix_to_pal_error(fd);
+
+    int ret = DO_SYSCALL(connect, fd, &addr, sizeof(addr));
+    if (ret < 0 && ret != -EINPROGRESS) {
+        DO_SYSCALL(close, fd);
+        return unix_to_pal_error(ret);
+    }
+
+    ret = _PalHostFdWrap(fd, out_handle);
+    if (ret < 0)
+        DO_SYSCALL(close, fd);
+    return ret;
+}
+
+/* At most this many fds go with one message; X clients pass a handful (dma-bufs, fences). */
+#define HOST_MSG_MAX_FDS 64
+
+int _PalHostSendmsg(PAL_HANDLE handle, struct iovec* iov, size_t iov_len, const int* host_fds,
+                    size_t host_fds_cnt, bool nonblocking, size_t* out_size) {
+    if (handle->hdr.type != PAL_TYPE_DEV)
+        return -PAL_ERROR_BADHANDLE;
+    if (host_fds_cnt > HOST_MSG_MAX_FDS)
+        return -PAL_ERROR_INVAL;
+
+    struct msghdr msg = {.msg_iov = iov, .msg_iovlen = iov_len};
+    alignas(struct cmsghdr) char control[CMSG_SPACE(HOST_MSG_MAX_FDS * sizeof(int))];
+    if (host_fds_cnt) {
+        msg.msg_control = control;
+        msg.msg_controllen = CMSG_SPACE(host_fds_cnt * sizeof(int));
+        struct cmsghdr* cmsg = CMSG_FIRSTHDR(&msg);
+        cmsg->cmsg_level = SOL_SOCKET;
+        cmsg->cmsg_type = SCM_RIGHTS;
+        cmsg->cmsg_len = CMSG_LEN(host_fds_cnt * sizeof(int));
+        memcpy(CMSG_DATA(cmsg), host_fds, host_fds_cnt * sizeof(int));
+    }
+
+    long ret = DO_SYSCALL(sendmsg, handle->dev.fd, &msg,
+                          MSG_NOSIGNAL | (nonblocking ? MSG_DONTWAIT : 0));
+    if (ret < 0)
+        return unix_to_pal_error(ret);
+    *out_size = (size_t)ret;
+    return 0;
+}
+
+int _PalHostRecvmsg(PAL_HANDLE handle, struct iovec* iov, size_t iov_len, int* host_fds,
+                    size_t* host_fds_cnt, bool nonblocking, size_t* out_size) {
+    if (handle->hdr.type != PAL_TYPE_DEV)
+        return -PAL_ERROR_BADHANDLE;
+
+    size_t cap = MIN(*host_fds_cnt, (size_t)HOST_MSG_MAX_FDS);
+    alignas(struct cmsghdr) char control[CMSG_SPACE(HOST_MSG_MAX_FDS * sizeof(int))];
+    struct msghdr msg = {
+        .msg_iov = iov,
+        .msg_iovlen = iov_len,
+        .msg_control = cap ? control : NULL,
+        .msg_controllen = cap ? CMSG_SPACE(cap * sizeof(int)) : 0,
+    };
+
+    long ret = DO_SYSCALL(recvmsg, handle->dev.fd, &msg,
+                          MSG_CMSG_CLOEXEC | (nonblocking ? MSG_DONTWAIT : 0));
+    if (ret < 0)
+        return unix_to_pal_error(ret);
+
+    /* one SCM_RIGHTS message at most: that is all a receiver gets from one recvmsg of a stream */
+    size_t cnt = 0;
+    struct cmsghdr* cmsg = cap ? CMSG_FIRSTHDR(&msg) : NULL;
+    if (cmsg && cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_RIGHTS &&
+            cmsg->cmsg_len >= CMSG_LEN(0)) {
+        size_t n = (cmsg->cmsg_len - CMSG_LEN(0)) / sizeof(int);
+        for (size_t i = 0; i < n; i++) {
+            int fd;
+            memcpy(&fd, (char*)CMSG_DATA(cmsg) + i * sizeof(int), sizeof(int));
+            if (cnt < cap)
+                host_fds[cnt++] = fd;
+            else
+                DO_SYSCALL(close, fd);
+        }
+    }
+    *host_fds_cnt = cnt;
+    *out_size = (size_t)ret;
+    return 0;
 }
 
 static bool memcpy_to_host(void* host_ptr, const void* ptr, size_t size) {

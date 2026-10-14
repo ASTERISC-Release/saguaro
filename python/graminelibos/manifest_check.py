@@ -126,6 +126,7 @@ GramineManifestSchema = Schema({
         'experimental__shared_input_ring': bool,
         'insecure__allow_eventfd': bool,
         'insecure__allow_raw_device_ioctl': bool,
+        'insecure__host_unix_sockets': [str],
         'rewrite_syscalls': bool,
 
         # Description of this thing will be both very hard to write, and mostly useless, since

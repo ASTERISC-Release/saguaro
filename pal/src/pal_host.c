@@ -40,3 +40,60 @@ __attribute__((weak)) int _PalHostFdGet(PAL_HANDLE handle, int* out_host_fd) {
 int PalHostFdGet(PAL_HANDLE handle, int* out_host_fd) {
     return _PalHostFdGet(handle, out_host_fd);
 }
+
+__attribute__((weak)) int _PalHostClockMonotonic(uint64_t* out_nsec) {
+    __UNUSED(out_nsec);
+    return -PAL_ERROR_NOTIMPLEMENTED;
+}
+
+int PalHostClockMonotonic(uint64_t* out_nsec) {
+    return _PalHostClockMonotonic(out_nsec);
+}
+
+__attribute__((weak)) int _PalHostUnixConnect(const char* path, pal_stream_options_t options,
+                                              PAL_HANDLE* out_handle) {
+    __UNUSED(path);
+    __UNUSED(options);
+    __UNUSED(out_handle);
+    return -PAL_ERROR_NOTIMPLEMENTED;
+}
+
+int PalHostUnixConnect(const char* path, pal_stream_options_t options, PAL_HANDLE* out_handle) {
+    return _PalHostUnixConnect(path, options, out_handle);
+}
+
+__attribute__((weak)) int _PalHostSendmsg(PAL_HANDLE handle, struct iovec* iov, size_t iov_len,
+                                          const int* host_fds, size_t host_fds_cnt,
+                                          bool nonblocking, size_t* out_size) {
+    __UNUSED(handle);
+    __UNUSED(iov);
+    __UNUSED(iov_len);
+    __UNUSED(host_fds);
+    __UNUSED(host_fds_cnt);
+    __UNUSED(nonblocking);
+    __UNUSED(out_size);
+    return -PAL_ERROR_NOTIMPLEMENTED;
+}
+
+int PalHostSendmsg(PAL_HANDLE handle, struct iovec* iov, size_t iov_len, const int* host_fds,
+                   size_t host_fds_cnt, bool nonblocking, size_t* out_size) {
+    return _PalHostSendmsg(handle, iov, iov_len, host_fds, host_fds_cnt, nonblocking, out_size);
+}
+
+__attribute__((weak)) int _PalHostRecvmsg(PAL_HANDLE handle, struct iovec* iov, size_t iov_len,
+                                          int* host_fds, size_t* host_fds_cnt, bool nonblocking,
+                                          size_t* out_size) {
+    __UNUSED(handle);
+    __UNUSED(iov);
+    __UNUSED(iov_len);
+    __UNUSED(host_fds);
+    __UNUSED(host_fds_cnt);
+    __UNUSED(nonblocking);
+    __UNUSED(out_size);
+    return -PAL_ERROR_NOTIMPLEMENTED;
+}
+
+int PalHostRecvmsg(PAL_HANDLE handle, struct iovec* iov, size_t iov_len, int* host_fds,
+                   size_t* host_fds_cnt, bool nonblocking, size_t* out_size) {
+    return _PalHostRecvmsg(handle, iov, iov_len, host_fds, host_fds_cnt, nonblocking, out_size);
+}

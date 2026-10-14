@@ -982,6 +982,63 @@ int PalHostFdWrap(int host_fd, PAL_HANDLE* out_handle);
 int PalHostFdGet(PAL_HANDLE handle, int* out_host_fd);
 
 /*!
+ * \brief Connect to a host Unix stream socket by path.
+ *
+ * \param      path        Host path of the socket (for example `/tmp/.X11-unix/X0`).
+ * \param      options     `PAL_OPTION_NONBLOCK` or 0.
+ * \param[out] out_handle  On success contains a device handle (`PAL_TYPE_DEV`) of the connected
+ *                         socket; it supports read, write, wait and #PalHostSendmsg/#PalHostRecvmsg.
+ *
+ * \returns 0 on success, negative error code on failure.
+ */
+int PalHostUnixConnect(const char* path, pal_stream_options_t options, PAL_HANDLE* out_handle);
+
+/*!
+ * \brief Read the host's `CLOCK_MONOTONIC`.
+ *
+ * Gramine's own clocks (#PalSystemTimeQuery) are all real time; device interfaces that take
+ * absolute `CLOCK_MONOTONIC` deadlines (DRM syncobj waits) need the host's clock instead.
+ *
+ * \param[out] out_nsec  Nanoseconds.
+ *
+ * \returns 0 on success, negative error code on failure.
+ */
+int PalHostClockMonotonic(uint64_t* out_nsec);
+
+/*!
+ * \brief Send data with host fds (`SCM_RIGHTS`) on a host socket.
+ *
+ * \param      handle         Handle from #PalHostUnixConnect.
+ * \param      iov            Buffers to send.
+ * \param      iov_len        Length of \p iov.
+ * \param      host_fds       Host fds to pass with the data (see #PalHostFdGet); may be NULL.
+ * \param      host_fds_cnt   Number of \p host_fds.
+ * \param      nonblocking    Do not block, whatever the mode of the handle.
+ * \param[out] out_size       On success the number of bytes sent.
+ *
+ * \returns 0 on success, negative error code on failure.
+ */
+int PalHostSendmsg(PAL_HANDLE handle, struct iovec* iov, size_t iov_len, const int* host_fds,
+                   size_t host_fds_cnt, bool nonblocking, size_t* out_size);
+
+/*!
+ * \brief Receive data and host fds (`SCM_RIGHTS`) on a host socket.
+ *
+ * \param         handle        Handle from #PalHostUnixConnect.
+ * \param         iov           Buffers to receive into.
+ * \param         iov_len       Length of \p iov.
+ * \param[out]    host_fds      Received host fds (close-on-exec; the caller owns them).
+ * \param[in,out] host_fds_cnt  Capacity of \p host_fds; on success the number received (fds
+ *                              beyond the capacity are closed by the host).
+ * \param         nonblocking   Do not block, whatever the mode of the handle.
+ * \param[out]    out_size      On success the number of bytes received (0: end of stream).
+ *
+ * \returns 0 on success, negative error code on failure.
+ */
+int PalHostRecvmsg(PAL_HANDLE handle, struct iovec* iov, size_t iov_len, int* host_fds,
+                   size_t* host_fds_cnt, bool nonblocking, size_t* out_size);
+
+/*!
  * \brief Obtain the attestation report (local) with `user_report_data` embedded into it.
  *
  * \param         user_report_data       Report data with arbitrary contents (typically uniquely

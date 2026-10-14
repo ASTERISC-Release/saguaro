@@ -4,7 +4,7 @@
 # Test programs for graphics under gramine-direct (x86_64), see
 # Documentation/devel/graphics-direct/. `make check` runs each natively and under gramine-direct.
 
-PROGRAMS = drm_info gbm_map egl_readback
+PROGRAMS = drm_info gbm_map egl_readback ioctl_bench x_roundtrip gl_bench
 NODE ?= /dev/dri/renderD128
 
 CFLAGS = -Wall -Wextra -O2 $(shell pkg-config --cflags libdrm)
@@ -27,6 +27,15 @@ drm_info: drm_info.c
 gbm_map: gbm_map.c
 	$(CC) $(CFLAGS) $< -o $@ $(LDLIBS_gbm_map)
 
+ioctl_bench: ioctl_bench.c
+	$(CC) $(CFLAGS) $< -o $@ $(LDLIBS_drm_info)
+
+gl_bench: gl_bench.c
+	$(CC) $(CFLAGS) $(shell pkg-config --cflags gbm egl glesv2) $< -o $@ $(LDLIBS_egl_readback)
+
+x_roundtrip: x_roundtrip.c
+	$(CC) $(CFLAGS) $< -o $@ $(shell pkg-config --libs xcb)
+
 egl_readback: egl_readback.c
 	$(CC) $(CFLAGS) $(shell pkg-config --cflags gbm egl glesv2) $< -o $@ $(LDLIBS_egl_readback)
 
@@ -38,7 +47,7 @@ egl_readback: egl_readback.c
 
 .PHONY: check
 check: all
-	@for p in $(PROGRAMS); do \
+	@for p in $(filter-out ioctl_bench x_roundtrip gl_bench,$(PROGRAMS)); do \
 		echo "== $$p native"; ./$$p $(NODE) || exit 1; \
 		echo "== $$p gramine-direct"; gramine-direct $$p $(NODE) || exit 1; \
 	done

@@ -736,6 +736,34 @@ warning on the first such IOCTL. Other PALs ignore the key.
    this means submitting commands to it. File descriptors inside IOCTL arguments
    are host file descriptors unless Gramine knows the IOCTL and translates them.
 
+.. _host-unix-sockets:
+
+Host UNIX sockets (``gramine-direct``)
+""
+
+::
+
+    sys.insecure__host_unix_sockets = ["[HOST PATH]", ...]
+    (Default: [])
+
+Gramine's UNIX sockets connect Gramine processes to each other; they cannot
+reach a socket of the host. With this list, a ``connect()`` of a UNIX stream
+socket to one of these paths (exactly as written, for example the X server's
+``"/tmp/.X11-unix/X0"``) connects to the host socket itself, through the Linux
+PAL. File descriptors passed with ``SCM_RIGHTS`` on such a socket are
+translated: an fd the application sends becomes the host fd behind it (files,
+devices, sockets, and fds returned by device IOCTLs), and an fd received from
+the host becomes a new Gramine fd. ``SCM_CREDENTIALS`` is not supported. With
+other PALs the paths are ignored (the connection fails).
+
+This is what an X11 client with GPU rendering needs: Mesa's DRI3 and the
+``Present`` extension send buffer and fence fds to the X server.
+
+.. warning::
+   This option is insecure and must not be used in production. The application
+   talks to the host service directly; in the case of the X server it can see
+   and control other clients' windows and read the keyboard.
+
 .. _experimental-flock-bsd-style-locks-support:
 
 Experimental flock (BSD-style locks) support

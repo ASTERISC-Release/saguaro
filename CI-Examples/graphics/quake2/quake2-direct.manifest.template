@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (C) 2026 The ASTERISC Research Lab
 
-# Yamagi Quake II under gramine-direct on the host GPU (Documentation/devel/graphics-direct/). The
-# preload library runs in its native mode; X is reached over TCP, relayed to the host X socket.
+# Yamagi Quake II under gramine-direct on the host GPU (Documentation/devel/graphics-direct/).
+# Insecure by design: the application can submit work to the GPU and talk to the X server directly
+# (see the insecure__ keys below and Documentation/manifest-syntax.rst).
 
 libos.entrypoint = "/quake2_bin/release/quake2"
 
@@ -15,29 +16,42 @@ loader.uid = 1000
 loader.gid = 1000
 
 loader.env.LD_LIBRARY_PATH = "/lib:/usr/lib:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu"
+{% if preload|string != "0" %}
+# The preload library in its native ("process") mode: EGL on GBM, presentation with DRI3.
 loader.env.LD_PRELOAD = "/libgraphics.so"
+loader.env.EGL_GRAMINE = "0"
+loader.env.EGL_DISCRETE = "{{ egl_discrete }}"
+loader.env.GBM_BACKEND = "dri"
+{% endif %}
 loader.env.HOME = "/root"
 loader.env.USER = "root_user"
-loader.env.DISPLAY = "{{ display }}"
-loader.env.GALLIUM_THREAD = "0"
+loader.env.DISPLAY = ":{{ display }}"
 loader.env.vblank_mode = "0"
 loader.env.ALSOFT_DRIVERS = "null"
 loader.env.SDL_AUDIODRIVER = "dummy"
 loader.env.PULSE_SERVER = "none"
 loader.env.PIPEWIRE_REMOTE = "none"
-loader.env.GBM_BACKEND = "dri"
-loader.env.EGL_GRAMINE = "0"
-loader.env.EGL_DISCRETE = "{{ egl_discrete }}"
 
 sys.stack.size = "32M"
+# `timeout` and Ctrl-C-less stops: let SIGTERM through once so the program can exit cleanly
+sys.enable_sigterm_injection = true
+
+# GPU ioctls go to the host unchanged (Linux PAL only)
+sys.insecure__allow_raw_device_ioctl = true
+# the X server's socket, with fd passing (dma-bufs and fences for DRI3)
+sys.insecure__host_unix_sockets = ["/tmp/.X11-unix/X{{ display }}"]
 
 fs.mounts = [
+{% if preload|string != "0" %}
   { path = "/libgraphics.so", uri = "file:{{ gramine.libgraphics }}" },
+{% endif %}
   { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
   { path = "/usr", type = "chroot", uri = "file:/usr" },
   { path = "/etc/ld.so.cache", uri = "file:/etc/ld.so.cache" },
   { path = "/dev/dri", type = "chroot", uri = "file:/dev/dri" },
-  { path = "/sys", type = "chroot", uri = "file:/sys" },
+  # libxshmfence's fences when there is no memfd_create
+  { path = "/dev/shm", type = "chroot", uri = "file:/dev/shm" },
+  { path = "/sys", type = "chroot", uri = "file:/sys", host_symlinks = true },
   { path = "/quake2_bin", type = "chroot", uri = "file:quake2_bin" },
   { path = "/root/.yq2", type = "chroot", uri = "file:{{ env.HOME }}/.yq2" },
   { path = "/root/.cache", type = "chroot", uri = "file:{{ env.HOME }}/.cache" },

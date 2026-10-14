@@ -21,6 +21,169 @@
 #include "libos_socket.h"
 #include "linux_socket.h"
 #include "pal.h"
+#include "toml_utils.h"
+
+/*
+ * Host UNIX sockets (gramine-direct). Gramine's UNIX sockets connect Gramine processes only. The
+ * manifest can list host socket paths (`sys.insecure__host_unix_sockets`, for example the X
+ * server's `/tmp/.X11-unix/X0`); a `connect()` to such a path connects to the host socket itself,
+ * through the Linux PAL, and file descriptors passed with `SCM_RIGHTS` are translated between
+ * LibOS fds and host fds in both directions.
+ */
+
+/* fds per message, as in the PAL (HOST_MSG_MAX_FDS) */
+#define HOST_UNIX_MAX_FDS 64
+
+static bool is_host_unix_socket(const char* path, size_t pathlen) {
+    toml_array_t* paths = toml_array_in(toml_table_in(g_manifest_root, "sys"),
+                                        "insecure__host_unix_sockets");
+    if (!paths)
+        return false;
+    for (int i = 0; i < toml_array_nelem(paths); i++) {
+        toml_datum_t entry = toml_string_at(paths, i);
+        if (!entry.ok)
+            continue;
+        bool match = strlen(entry.u.s) == pathlen && !memcmp(entry.u.s, path, pathlen);
+        free(entry.u.s);
+        if (match)
+            return true;
+    }
+    return false;
+}
+
+static int host_unix_send(struct libos_handle* handle, PAL_HANDLE pal_handle, struct iovec* iov,
+                          size_t iov_len, void* msg_control, size_t msg_controllen,
+                          size_t* out_size, bool force_nonblocking) {
+    int host_fds[HOST_UNIX_MAX_FDS];
+    struct libos_handle* hdls[HOST_UNIX_MAX_FDS];
+    size_t fds_cnt = 0;
+    int ret = 0;
+
+    struct cmsghdr* cmsg = (struct cmsghdr*)msg_control;
+    size_t rest = msg_controllen;
+    while (cmsg && rest >= sizeof(struct cmsghdr)) {
+        /* the last header may end without padding (libxcb sets `msg_controllen` to CMSG_LEN()),
+         * which Linux accepts */
+        if (cmsg->cmsg_len < sizeof(struct cmsghdr) || cmsg->cmsg_len > rest) {
+            ret = -EINVAL;
+            goto out;
+        }
+        if (cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_RIGHTS) {
+            size_t n = (cmsg->cmsg_len - CMSG_LEN(0)) / sizeof(int);
+            for (size_t i = 0; i < n; i++) {
+                if (fds_cnt == HOST_UNIX_MAX_FDS) {
+                    ret = -ETOOMANYREFS;
+                    goto out;
+                }
+                int fd;
+                memcpy(&fd, CMSG_DATA(cmsg) + i * sizeof(int), sizeof(int));
+                struct libos_handle* hdl = get_fd_handle(fd, NULL, NULL);
+                if (!hdl) {
+                    ret = -EBADF;
+                    goto out;
+                }
+                hdls[fds_cnt] = hdl;
+                PAL_HANDLE ph = hdl->type == TYPE_SOCK ? hdl->info.sock.pal_handle
+                                                       : hdl->pal_handle;
+                if (!ph || PalHostFdGet(ph, &host_fds[fds_cnt]) < 0) {
+                    log_warning("sendmsg to a host socket: fd %d has no host fd", fd);
+                    fds_cnt++;
+                    ret = -EBADF;
+                    goto out;
+                }
+                fds_cnt++;
+            }
+        } else if (cmsg->cmsg_level == SOL_SOCKET) {
+            ret = -EINVAL; /* SCM_CREDENTIALS: not supported */
+            goto out;
+        }
+        if (CMSG_ALIGN(cmsg->cmsg_len) >= rest)
+            break;
+        rest -= CMSG_ALIGN(cmsg->cmsg_len);
+        cmsg = (struct cmsghdr*)((char*)cmsg + CMSG_ALIGN(cmsg->cmsg_len));
+    }
+
+    lock(&handle->lock);
+    bool nonblocking = force_nonblocking || (handle->flags & O_NONBLOCK);
+    unlock(&handle->lock);
+
+    ret = PalHostSendmsg(pal_handle, iov, iov_len, host_fds, fds_cnt, nonblocking, out_size);
+    ret = pal_to_unix_errno(ret);
+out:
+    for (size_t i = 0; i < fds_cnt; i++)
+        put_handle(hdls[i]);
+    return ret;
+}
+
+static int host_unix_recv(struct libos_handle* handle, PAL_HANDLE pal_handle, struct iovec* iov,
+                          size_t iov_len, void* msg_control, size_t* msg_controllen_ptr,
+                          size_t* out_size, bool force_nonblocking) {
+    size_t space = (msg_control && msg_controllen_ptr) ? *msg_controllen_ptr : 0;
+    size_t max_fds = space >= CMSG_SPACE(sizeof(int))
+                         ? MIN((space - CMSG_LEN(0)) / sizeof(int), (size_t)HOST_UNIX_MAX_FDS)
+                         : 0;
+    int host_fds[HOST_UNIX_MAX_FDS];
+    size_t fds_cnt = max_fds;
+
+    lock(&handle->lock);
+    bool nonblocking = force_nonblocking || (handle->flags & O_NONBLOCK);
+    unlock(&handle->lock);
+
+    int ret = PalHostRecvmsg(pal_handle, iov, iov_len, host_fds, &fds_cnt, nonblocking, out_size);
+    if (ret < 0)
+        return pal_to_unix_errno(ret);
+
+    size_t installed = 0;
+    int fds[HOST_UNIX_MAX_FDS];
+    for (size_t i = 0; i < fds_cnt; i++) {
+        PAL_HANDLE ph = NULL;
+        ret = PalHostFdWrap(host_fds[i], &ph);
+        if (ret < 0) {
+            log_warning("recvmsg from a host socket: cannot wrap host fd %d: %s", host_fds[i],
+                        pal_strerror(ret));
+            continue; /* the host fd is leaked open; nothing better to do */
+        }
+        int fd = hostfd_install(ph, /*cloexec=*/false);
+        if (fd < 0)
+            continue;
+        fds[installed++] = fd;
+    }
+
+    if (msg_control && msg_controllen_ptr) {
+        if (installed) {
+            struct cmsghdr* cmsg = (struct cmsghdr*)msg_control;
+            cmsg->cmsg_len = CMSG_LEN(installed * sizeof(int));
+            cmsg->cmsg_level = SOL_SOCKET;
+            cmsg->cmsg_type = SCM_RIGHTS;
+            memcpy(CMSG_DATA(cmsg), fds, installed * sizeof(int));
+            *msg_controllen_ptr = CMSG_SPACE(installed * sizeof(int));
+        } else {
+            *msg_controllen_ptr = 0;
+        }
+    }
+    return 0;
+}
+
+static int host_unix_connect(struct libos_handle* handle, const char* path, size_t pathlen,
+                             pal_stream_options_t options, PAL_HANDLE* out_pal_handle) {
+    char host_path[sizeof(((struct sockaddr_un*)0)->sun_path) + 1];
+    if (pathlen >= sizeof(host_path))
+        return -EINVAL;
+    memcpy(host_path, path, pathlen);
+    host_path[pathlen] = '\0';
+
+    static bool warned = false;
+    if (!__atomic_exchange_n(&warned, true, __ATOMIC_RELAXED)) {
+        log_warning("Connecting to host UNIX sockets (sys.insecure__host_unix_sockets), first: %s; "
+                    "this is insecure and must not be used in production.", host_path);
+    }
+
+    int ret = PalHostUnixConnect(host_path, options, out_pal_handle);
+    if (ret < 0)
+        return ret == -PAL_ERROR_NOTIMPLEMENTED ? -ENOENT : pal_to_unix_errno(ret);
+    handle->info.sock.host_unix = true;
+    return 0;
+}
 
 /*!
  * \brief Verify UNIX socket address and convert it to a unique socket name.
@@ -243,10 +406,18 @@ static int connect(struct libos_handle* handle, void* addr, size_t addrlen, bool
     unlock(&handle->lock);
 
     PAL_HANDLE pal_handle = NULL;
-    ret = PalStreamOpen(pipe_name, PAL_ACCESS_RDWR, /*share_flags=*/0, PAL_CREATE_IGNORED, options,
-                        &pal_handle);
-    if (ret < 0) {
-        return (ret == -PAL_ERROR_CONNFAILED) ? -ENOENT : pal_to_unix_errno(ret);
+    const char* path = (char*)addr + offsetof(struct sockaddr_un, sun_path);
+    size_t pathlen = addrlen - offsetof(struct sockaddr_un, sun_path);
+    if (path[0] && is_host_unix_socket(path, strnlen(path, pathlen))) {
+        ret = host_unix_connect(handle, path, strnlen(path, pathlen), options, &pal_handle);
+        if (ret < 0)
+            return ret;
+    } else {
+        ret = PalStreamOpen(pipe_name, PAL_ACCESS_RDWR, /*share_flags=*/0, PAL_CREATE_IGNORED,
+                            options, &pal_handle);
+        if (ret < 0) {
+            return (ret == -PAL_ERROR_CONNFAILED) ? -ENOENT : pal_to_unix_errno(ret);
+        }
     }
 
     assert(sock->pal_handle == NULL);
@@ -417,6 +588,13 @@ static int send(struct libos_handle* handle, struct iovec* iov, size_t iov_len, 
     /* Connected SOCK_DGRAM pairs use this stream-oriented PAL pipe path. General UNIX datagram
      * sockets are still rejected by create(). */
 
+    if (handle->info.sock.host_unix) {
+        PAL_HANDLE host_pal_handle = __atomic_load_n(&handle->info.sock.pal_handle,
+                                                     __ATOMIC_ACQUIRE);
+        return host_unix_send(handle, host_pal_handle, iov, iov_len, msg_control, msg_controllen,
+                              out_size, force_nonblocking);
+    }
+
     struct cmsghdr* cmsg = (struct cmsghdr*)msg_control;
     size_t rest_msg_controllen = msg_controllen;
     while (cmsg && rest_msg_controllen >= sizeof(struct cmsghdr)) {
@@ -495,6 +673,11 @@ static int recv(struct libos_handle* handle, struct iovec* iov, size_t iov_len, 
     PAL_HANDLE pal_handle = __atomic_load_n(&handle->info.sock.pal_handle, __ATOMIC_ACQUIRE);
     if (!pal_handle) {
         return -ENOTCONN;
+    }
+
+    if (handle->info.sock.host_unix) {
+        return host_unix_recv(handle, pal_handle, iov, iov_len, msg_control, msg_controllen_ptr,
+                              out_size, force_nonblocking);
     }
 
     void* buf;

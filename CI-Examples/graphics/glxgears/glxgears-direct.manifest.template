@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (C) 2026 The ASTERISC Research Lab
 
-# glxgears under gramine-direct on the host GPU (Documentation/devel/graphics-direct/). The preload
-# library runs in its native mode (EGL on GBM on the render node, presentation through its own X
-# connection); X is reached over TCP (`DISPLAY = "127.0.0.1:N"`), relayed to the host X socket.
+# glxgears under gramine-direct on the host GPU (Documentation/devel/graphics-direct/). Insecure by
+# design: the application can submit work to the GPU and talk to the X server directly (see the
+# three insecure__ keys below and Documentation/manifest-syntax.rst).
 
 libos.entrypoint = "/glxgears"
 
@@ -12,23 +12,36 @@ loader.insecure__use_host_env = true
 loader.insecure__use_cmdline_argv = true
 
 loader.env.LD_LIBRARY_PATH = "/lib:/usr/lib:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu"
+{% if preload|string != "0" %}
+# The preload library in its native ("process") mode: EGL on GBM, presentation with DRI3.
 loader.env.LD_PRELOAD = "/libgraphics.so"
-loader.env.DISPLAY = "{{ display }}"
-loader.env.GALLIUM_THREAD = "0"
-loader.env.vblank_mode = "0"
-loader.env.GBM_BACKEND = "dri"
 loader.env.EGL_GRAMINE = "0"
 loader.env.EGL_DISCRETE = "{{ egl_discrete }}"
+loader.env.GBM_BACKEND = "dri"
+{% endif %}
+loader.env.DISPLAY = ":{{ display }}"
+loader.env.vblank_mode = "0"
 
 sys.stack.size = "32M"
+# `timeout` and Ctrl-C-less stops: let SIGTERM through once so the program can exit cleanly
+sys.enable_sigterm_injection = true
+
+# GPU ioctls go to the host unchanged (Linux PAL only)
+sys.insecure__allow_raw_device_ioctl = true
+# the X server's socket, with fd passing (dma-bufs and fences for DRI3)
+sys.insecure__host_unix_sockets = ["/tmp/.X11-unix/X{{ display }}"]
 
 fs.mounts = [
   { path = "/glxgears", uri = "file:glxgears" },
+{% if preload|string != "0" %}
   { path = "/libgraphics.so", uri = "file:{{ gramine.libgraphics }}" },
+{% endif %}
   { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
   { path = "/usr", type = "chroot", uri = "file:/usr" },
   { path = "/etc/ld.so.cache", uri = "file:/etc/ld.so.cache" },
   { path = "/dev/dri", type = "chroot", uri = "file:/dev/dri" },
-  { path = "/sys", type = "chroot", uri = "file:/sys" },
+  # libxshmfence's fences when there is no memfd_create
+  { path = "/dev/shm", type = "chroot", uri = "file:/dev/shm" },
+  { path = "/sys", type = "chroot", uri = "file:/sys", host_symlinks = true },
   { path = "/root/.cache", type = "chroot", uri = "file:{{ env.HOME }}/.cache" },
 ]
