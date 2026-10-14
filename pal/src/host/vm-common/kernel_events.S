@@ -252,10 +252,9 @@ save_context_and_restore_next:
     pop     %rcx
     pop     %rdx
 
-    cmp     $0, %rdx                // check if lock_to_unlock != NULL
-    je      .Lskip_spinlock_unlock
+    // R12 was saved in the old context above. Always replace it: when lock_to_unlock is NULL,
+    // retaining the old R12 would make the deferred unlock write through an arbitrary pointer.
     mov     %rdx, %r12              // keep lock until on the scheduling stack
-.Lskip_spinlock_unlock:
 
     mov     8(%rsp), %r10           // optional post-switch cleanup function
     mov     16(%rsp), %r11          // optional post-switch cleanup argument
