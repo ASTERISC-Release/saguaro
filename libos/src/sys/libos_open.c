@@ -14,6 +14,7 @@
 #include "libos_fs.h"
 #include "libos_graphics.h"
 #include "libos_handle.h"
+#include "libos_inotify.h"
 #include "libos_internal.h"
 #include "libos_lock.h"
 #include "libos_process.h"
@@ -85,6 +86,8 @@ long libos_syscall_read(int fd, void* buf, size_t count) {
     #endif
 
     ssize_t ret = do_handle_read(hdl, buf, count);
+    if (ret > 0 && hdl->dentry && hdl->dentry->inode && S_ISREG(hdl->dentry->inode->type))
+        libos_inotify_file_event(hdl->dentry, IN_ACCESS);
     put_handle(hdl);
     if (ret == -EINTR) {
         ret = -ERESTARTSYS;
@@ -146,6 +149,8 @@ long libos_syscall_write(int fd, const void* buf, size_t count) {
     #endif
 
     ssize_t ret = do_handle_write(hdl, buf, count);
+    if (ret > 0 && hdl->dentry && hdl->dentry->inode && S_ISREG(hdl->dentry->inode->type))
+        libos_inotify_file_event(hdl->dentry, IN_MODIFY);
     put_handle(hdl);
     if (ret == -EINTR) {
         ret = -ERESTARTSYS;
@@ -365,6 +370,10 @@ static long do_openat(int dfd, const char* filename, int flags, int mode, bool u
         }
         goto out_hdl;
     }
+
+    /* inotify: `IN_OPEN` on the opened object (regular files; the kernel's own event) */
+    if (!hdl->is_dir && hdl->dentry && hdl->dentry->inode && S_ISREG(hdl->dentry->inode->type))
+        libos_inotify_file_event(hdl->dentry, IN_OPEN);
 #ifdef ENABLE_GRAPHICS
 graphics_cont:
     if (use_graphics_host) {

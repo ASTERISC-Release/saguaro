@@ -9,6 +9,7 @@
 
 #include "libos_fs.h"
 #include "libos_handle.h"
+#include "libos_inotify.h"
 #include "libos_lock.h"
 #include "libos_process.h"
 #include "libos_thread.h"
@@ -489,7 +490,9 @@ int open_namei(struct libos_handle* hdl, struct libos_dentry* start, const char*
     }
 
     bool need_open = true;
+    bool existed = true;
     if (!dent->inode) {
+        existed = false;
         if (!(flags & O_CREAT)) {
             ret = -ENOENT;
             goto out;
@@ -538,6 +541,11 @@ int open_namei(struct libos_handle* hdl, struct libos_dentry* start, const char*
         if (ret < 0)
             goto out;
     }
+
+    /* inotify: `IN_CREATE` on the parent directory's watches, only when the object was really
+     * created just now (`IN_ISDIR` for `mkdir`), before any `IN_OPEN` of the new file */
+    if (!existed && dent->inode && dent->parent)
+        libos_inotify_child_event(dent->parent, dent, IN_CREATE, /*cookie=*/0);
 
     if (hdl && need_open) {
         ret = dentry_open(hdl, dent, flags);

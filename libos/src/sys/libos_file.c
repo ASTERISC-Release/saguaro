@@ -8,6 +8,7 @@
 
 #include "libos_fs.h"
 #include "libos_handle.h"
+#include "libos_inotify.h"
 #include "libos_internal.h"
 #include "libos_lock.h"
 #include "libos_process.h"
@@ -96,6 +97,11 @@ static long do_unlinkat(int dfd, const char* pathname, int flag, bool user_point
     if (dent->inode->nlink > 0)
         dent->inode->nlink--;
     unlock(&dent->inode->lock);
+
+    /* inotify: the full removal sequence (attrib/delete-self/ignored on the victim's watches,
+     * then `IN_DELETE` on the parent's watches); the victim's inode is still attached */
+    libos_inotify_delete_self_locked(dent, /*report_delete_parent=*/true);
+
     put_inode(dent->inode);
     dent->inode = NULL;
     ret = 0;
@@ -216,6 +222,10 @@ long libos_syscall_rmdir(const char* pathname) {
     if (ret < 0)
         goto out;
 
+    /* inotify: the removal sequence, as in `do_unlinkat` (no link-count `IN_ATTRIB` for
+     * directories — the kernel does not report one for `rmdir`) */
+    libos_inotify_delete_self_locked(dent, /*report_delete_parent=*/true);
+
     put_inode(dent->inode);
     dent->inode = NULL;
     ret = 0;
@@ -267,6 +277,10 @@ long libos_syscall_fchmodat(int dfd, const char* filename, mode_t mode) {
     dent->inode->perm = perm;
     unlock(&dent->inode->lock);
 
+    /* inotify: the kernel reports a permission change on any watched type (a directory gets
+     * `IN_ATTRIB | IN_ISDIR` on both the parent's and its own watch) */
+    libos_inotify_file_event(dent, IN_ATTRIB);
+
 out_dent:
     put_dentry(dent);
 out:
@@ -300,6 +314,9 @@ long libos_syscall_fchmod(int fd, mode_t mode) {
     lock(&hdl->inode->lock);
     hdl->inode->perm = perm;
     unlock(&hdl->inode->lock);
+
+    if (hdl->dentry && hdl->dentry->inode)
+        libos_inotify_file_event(hdl->dentry, IN_ATTRIB); /* as for `chmod` */
 
     ret = 0;
 out:
@@ -368,10 +385,11 @@ static int do_rename(struct libos_dentry* old_dent, struct libos_dentry* new_den
     assert(locked(&g_dcache_lock));
     assert(old_dent->inode);
 
-    if ((old_dent->inode->type != S_IFREG && old_dent->inode->type != S_IFLNK) ||
+    if ((old_dent->inode->type != S_IFREG && old_dent->inode->type != S_IFLNK &&
+         old_dent->inode->type != S_IFDIR) ||
         (new_dent->inode && new_dent->inode->type != S_IFREG &&
          new_dent->inode->type != S_IFLNK && new_dent->inode->type != S_IFDIR)) {
-        /* Current implementation allows regular files and symlinks. */
+        /* Current implementation allows regular files, symlinks and directories. */
         return -ENOSYS;
     }
 
@@ -404,9 +422,77 @@ static int do_rename(struct libos_dentry* old_dent, struct libos_dentry* new_den
 
     /* TODO: Add appropriate checks for hardlinks once they get implemented. */
 
+    /* inotify: capture the move's identity before the rename reshapes the dentries */
+    struct libos_dentry* old_parent = old_dent->parent;
+    bool moved_is_dir = old_dent->inode->type == S_IFDIR;
+    static unsigned int rename_cookie = 0;
+    unsigned int cookie = ++rename_cookie;
+
     int ret = fs->d_ops->rename(old_dent, new_dent);
     if (ret < 0)
         return ret;
+
+    if (moved_is_dir) {
+        /* directory `nlink` bookkeeping as in the kernel: the old parent loses one child, a
+         * different new parent gains one, and an overwritten empty directory loses one */
+        struct libos_inode* old_dir = new_dent->inode ? new_dent->inode : NULL; /* replaced dir */
+        if (old_dent->parent) {
+            lock(&old_dent->parent->inode->lock);
+            if (old_dent->parent->inode->nlink > 0)
+                old_dent->parent->inode->nlink--;
+            unlock(&old_dent->parent->inode->lock);
+        }
+        if (new_dent->parent && new_dent->parent != old_dent->parent && new_dent->parent->inode) {
+            lock(&new_dent->parent->inode->lock);
+            new_dent->parent->inode->nlink++;
+            unlock(&new_dent->parent->inode->lock);
+        }
+        if (old_dir && new_dent->parent && new_dent->parent->inode) {
+            /* the replaced empty directory leaves the (same or other) new parent */
+            lock(&new_dent->parent->inode->lock);
+            if (new_dent->parent->inode->nlink > 0)
+                new_dent->parent->inode->nlink--;
+            unlock(&new_dent->parent->inode->lock);
+        }
+    }
+
+    if (moved_is_dir) {
+        /* The LibOS moves the inode (the kernel moves the dentry), so cached children of the old
+         * dentry must follow it to the new one, and the process cwd (which the kernel keeps with
+         * the moved directory) has to be rebound. */
+        while (!LISTP_EMPTY(&old_dent->children)) {
+            struct libos_dentry* child =
+                LISTP_FIRST_ENTRY(&old_dent->children, struct libos_dentry, siblings);
+            LISTP_DEL_INIT(child, &old_dent->children, siblings);
+            child->parent = new_dent;
+            LISTP_ADD_TAIL(child, &new_dent->children, siblings);
+        }
+        new_dent->nchildren = old_dent->nchildren;
+        old_dent->nchildren = 0;
+
+        lock(&g_process.fs_lock);
+        if (g_process.cwd == old_dent) {
+            get_dentry(new_dent);
+            put_dentry(g_process.cwd);
+            g_process.cwd = new_dent;
+        }
+        unlock(&g_process.fs_lock);
+    }
+
+    /* inotify: `IN_MOVED_FROM` (old parent, old name), `IN_MOVED_TO` (new parent, new name) with
+     * a shared cookie, then `IN_MOVE_SELF` on the moved object; then the watches follow the
+     * inode to the new dentry (the LibOS moves inodes, the kernel moves dentries) */
+    if (old_parent)
+        libos_inotify_child_event_raw(old_parent, old_dent->name, IN_MOVED_FROM, moved_is_dir,
+                                      cookie);
+    if (new_dent->parent && new_dent->parent != old_parent)
+        libos_inotify_child_event_raw(new_dent->parent, new_dent->name, IN_MOVED_TO, moved_is_dir,
+                                      cookie);
+    else if (old_parent)
+        libos_inotify_child_event_raw(old_parent, new_dent->name, IN_MOVED_TO, moved_is_dir,
+                                      cookie);
+    libos_inotify_move_self(old_dent);
+    libos_inotify_transfer_watches(old_dent, new_dent);
 
     if (new_dent->inode)
         put_inode(new_dent->inode);

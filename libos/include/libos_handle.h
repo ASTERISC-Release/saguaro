@@ -55,6 +55,7 @@ enum libos_handle_type {
     TYPE_EVENTFD,    /* eventfd handles, used by `eventfd` filesystem */
     TYPE_TIMERFD,    /* timerfd handles, used by `timerfd` filesystem */
     TYPE_SIGNALFD,   /* signalfd handles, used by `signalfd` filesystem */
+    TYPE_INOTIFY,    /* inotify instances, used by `inotify` filesystem */
 
     /* Host redirection handle */
     TYPE_HOST,              /* handle redirected to host OS, used by `host` filesystem */
@@ -177,6 +178,27 @@ struct libos_signalfd_handle {
     uint64_t dummy_host_val; /* arrival notifications written to the dummy host eventfd */
 };
 
+/* An event in one inotify instance's queue; the name (with its padded length `len`) trails. */
+struct libos_inotify_event {
+    struct libos_inotify_event* next;
+    int wd;             /* watch descriptor, or -1 for the overflow event */
+    unsigned int mask;
+    unsigned int cookie;/* shared by the MOVED_FROM/MOVED_TO pair, else 0 */
+    unsigned int len;   /* bytes at `name` (padded to a multiple of 4, NUL included) */
+    char name[];
+};
+
+struct libos_inotify_handle {
+    bool broken_in_child; /* as for eventfd/timerfd: not shared with children */
+    spinlock_t lock;      /* protects the fields below */
+    struct libos_inotify_event* ev_head;
+    struct libos_inotify_event* ev_tail;
+    unsigned int queued;      /* events in the queue, capped at `queue_limit` */
+    unsigned int queue_limit; /* the emulated /proc/sys/fs/inotify/max_queued_events at creation */
+    unsigned int watch_count; /* watches in the global watch list referencing this instance */
+    uint64_t dummy_host_val;  /* arrival notifications written to the dummy host eventfd */
+};
+
 struct libos_handle {
     enum libos_handle_type type;
     bool is_dir;
@@ -254,6 +276,7 @@ struct libos_handle {
         struct libos_eventfd_handle eventfd;     /* TYPE_EVENTFD */
         struct libos_timerfd_handle timerfd;     /* TYPE_TIMERFD */
         struct libos_signalfd_handle signalfd;   /* TYPE_SIGNALFD */
+        struct libos_inotify_handle inotify;     /* TYPE_INOTIFY */
     } info;
 
     struct libos_dir_handle dir_info;

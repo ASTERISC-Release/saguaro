@@ -9,6 +9,7 @@
 
 #include "api.h"
 #include "libos_fs_pseudo.h"
+#include "libos_inotify.h"
 #include "libos_process.h"
 
 static int proc_tainted_load(struct libos_dentry* dent, char** out_data, size_t* out_size) {
@@ -23,6 +24,39 @@ static int proc_tainted_load(struct libos_dentry* dent, char** out_data, size_t*
     *out_data = buffer;
     *out_size = strlen(buffer);
     return 0;
+}
+
+/* `/proc/sys/fs/inotify/{max_queued_events,max_user_instances,max_user_watches}`: the limits the
+ * inotify implementation applies (see `sys/libos_inotify.c`); LTP `inotify05` reads
+ * `max_queued_events` to size its overflow test */
+static int proc_inotify_number_load(unsigned int value, char** out_data, size_t* out_size) {
+    char* buffer = malloc(16);
+    if (!buffer)
+        return -ENOMEM;
+
+    int ret = snprintf(buffer, 16, "%u\n", value);
+    assert(ret > 0 && (size_t)ret < 16);
+    *out_data = buffer;
+    *out_size = strlen(buffer);
+    return 0;
+}
+
+static int proc_inotify_max_queued_events_load(struct libos_dentry* dent, char** out_data,
+                                               size_t* out_size) {
+    __UNUSED(dent);
+    return proc_inotify_number_load(libos_inotify_max_queued_events(), out_data, out_size);
+}
+
+static int proc_inotify_max_user_instances_load(struct libos_dentry* dent, char** out_data,
+                                                size_t* out_size) {
+    __UNUSED(dent);
+    return proc_inotify_number_load(INOTIFY_MAX_INSTANCES, out_data, out_size);
+}
+
+static int proc_inotify_max_user_watches_load(struct libos_dentry* dent, char** out_data,
+                                              size_t* out_size) {
+    __UNUSED(dent);
+    return proc_inotify_number_load(libos_inotify_max_user_watches(), out_data, out_size);
 }
 
 static int proc_pid_max_load(struct libos_dentry* dent, char** out_data, size_t* out_size) {
@@ -87,6 +121,12 @@ int init_procfs(void) {
     struct pseudo_node* kernel = pseudo_add_dir(sys, "kernel");
     pseudo_add_str(kernel, "pid_max", &proc_pid_max_load);
     pseudo_add_str(kernel, "tainted", &proc_tainted_load);
+
+    struct pseudo_node* fs_node = pseudo_add_dir(sys, "fs");
+    struct pseudo_node* inotify_node = pseudo_add_dir(fs_node, "inotify");
+    pseudo_add_str(inotify_node, "max_queued_events", &proc_inotify_max_queued_events_load);
+    pseudo_add_str(inotify_node, "max_user_instances", &proc_inotify_max_user_instances_load);
+    pseudo_add_str(inotify_node, "max_user_watches", &proc_inotify_max_user_watches_load);
 
     pseudo_add_str(root, "meminfo", &proc_meminfo_load);
     pseudo_add_str(root, "cpuinfo", &proc_cpuinfo_load);

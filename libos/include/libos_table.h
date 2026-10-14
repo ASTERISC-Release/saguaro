@@ -285,6 +285,12 @@ long libos_syscall_timer_gettime(void* timerid, struct __kernel_itimerspec* curr
 long libos_syscall_timer_getoverrun(void* timerid);
 long libos_syscall_timer_delete(void* timerid);
 
+/* inotify (see libos_inotify.h for the event API used by the filesystem paths) */
+long libos_syscall_inotify_init(void);
+long libos_syscall_inotify_init1(int flags);
+long libos_syscall_inotify_add_watch(int fd, char* pathname, unsigned int mask);
+long libos_syscall_inotify_rm_watch(int fd, int wd);
+
 /* Extended attributes: validated here, answered "not supported" (see libos_xattr.c) */
 long libos_syscall_setxattr(const char* path, const char* name, const void* value, size_t size,
                             int flags);

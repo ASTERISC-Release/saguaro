@@ -9,6 +9,7 @@
 #include "libos_fs.h"
 #include "libos_fs_lock.h"
 #include "libos_handle.h"
+#include "libos_inotify.h"
 #include "libos_internal.h"
 #include "libos_lock.h"
 #include "libos_thread.h"
@@ -550,6 +551,12 @@ void put_handle(struct libos_handle* hdl) {
     if (!ref_count) {
         assert(hdl->epoll_items_count == 0);
         assert(LISTP_EMPTY(&hdl->epoll_items));
+
+        /* inotify: the kernel closes the file description with an event when the last reference
+         * to it goes away; only regular files with a dentry are watched objects */
+        if (hdl->dentry && hdl->dentry->inode && S_ISREG(hdl->dentry->inode->type))
+            libos_inotify_file_event(hdl->dentry, hdl->acc_mode & MAY_WRITE ? IN_CLOSE_WRITE
+                                                                            : IN_CLOSE_NOWRITE);
 
         if (hdl->is_dir) {
             clear_directory_handle(hdl);
