@@ -955,6 +955,14 @@ extern struct libos_fs fifo_builtin_fs;
 extern struct libos_fs socket_builtin_fs;
 extern struct libos_fs epoll_builtin_fs;
 extern struct libos_fs eventfd_builtin_fs;
+extern struct libos_fs hostfd_builtin_fs;
+
+/* `hostfd` filesystem (libos/src/fs/hostfd/fs.c): install a PAL handle of a host fd as a new LibOS
+ * fd (the handle is owned by the LibOS afterwards, also on failure); returns the fd or -errno */
+int hostfd_install(PAL_HANDLE pal_handle, bool cloexec);
+/* ioctl on a host device or host-fd handle, with the fd translation of known DRM/dma-buf ioctls
+ * when `sys.insecure__allow_raw_device_ioctl` is set */
+int raw_device_ioctl(struct libos_handle* hdl, unsigned int cmd, unsigned long arg);
 extern struct libos_fs synthetic_builtin_fs;
 extern struct libos_fs path_builtin_fs;
 extern struct libos_fs shm_builtin_fs;

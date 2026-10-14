@@ -167,6 +167,8 @@ unsigned long _PalMemoryQuota(void);
 int _PalDeviceIoControl(PAL_HANDLE handle, uint32_t cmd, unsigned long arg, int* out_ret);
 /* Host passthrough (pal_host.c has weak defaults; the Linux PAL implements them) */
 int _PalHostReadlink(const char* uri, char* buf, size_t* size);
+int _PalHostFdWrap(int host_fd, PAL_HANDLE* out_handle);
+int _PalHostFdGet(PAL_HANDLE handle, int* out_host_fd);
 // Returns 0 on success, negative PAL code on failure
 int _PalGetCPUInfo(struct pal_cpu_info* info);
 

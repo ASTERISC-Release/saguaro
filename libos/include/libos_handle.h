@@ -46,6 +46,7 @@ enum libos_handle_type {
     /* Special handles: */
     TYPE_EPOLL,      /* epoll handles, see `libos_epoll.c` */
     TYPE_EVENTFD,    /* eventfd handles, used by `eventfd` filesystem */
+    TYPE_HOSTFD,     /* host fds without a path (gramine-direct), used by `hostfd` filesystem */
 
     /* Host redirection handle */
     TYPE_HOST,              /* handle redirected to host OS, used by `host` filesystem */

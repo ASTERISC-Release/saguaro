@@ -2,9 +2,11 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 
 # Test programs for graphics under gramine-direct (Documentation/devel/graphics-direct/): the
-# render node, sysfs and the raw ioctl passthrough. One manifest per program (-Dentrypoint=...).
+# render node, sysfs and the raw ioctl passthrough. One manifest per program (-Dentrypoint=...);
+# an entrypoint with an absolute path (e.g. /usr/bin/eglinfo) is taken from the host's /usr.
 
-libos.entrypoint = "/{{ entrypoint }}"
+{% set host_binary = entrypoint.startswith('/') %}
+libos.entrypoint = "{{ entrypoint if host_binary else '/' + entrypoint }}"
 
 loader.log_level = "{{ log_level }}"
 loader.insecure__use_cmdline_argv = true
@@ -14,7 +16,9 @@ loader.env.LD_LIBRARY_PATH = "/lib:/usr/lib/x86_64-linux-gnu"
 sys.insecure__allow_raw_device_ioctl = true
 
 fs.mounts = [
+{% if not host_binary %}
   { path = "/{{ entrypoint }}", uri = "file:{{ entrypoint }}" },
+{% endif %}
   { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
   { path = "/usr", type = "chroot", uri = "file:/usr" },
   { path = "/etc/ld.so.cache", uri = "file:/etc/ld.so.cache" },

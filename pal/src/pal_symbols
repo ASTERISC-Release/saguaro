@@ -46,6 +46,8 @@ PalStreamChangeName
 PalStreamAttributesSetByHandle
 PalDeviceIoControl
 PalHostReadlink
+PalHostFdWrap
+PalHostFdGet
 PalDebugMapAdd
 PalDebugMapRemove
 PalDebugDescribeLocation

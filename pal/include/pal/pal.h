@@ -509,6 +509,8 @@ typedef struct _PAL_STREAM_ATTR {
             /* device number of a character device (`st_rdev`); 0:0 if the PAL does not know it */
             uint32_t rdev_major;
             uint32_t rdev_minor;
+            /* the host's `st_mode` (file type and permissions); 0 if the PAL does not know it */
+            uint32_t host_mode;
         } dev;
     };
 } PAL_STREAM_ATTR;
@@ -957,6 +959,27 @@ int PalDeviceIoControl(PAL_HANDLE handle, uint32_t cmd, unsigned long arg, int* 
  *          negative error code on failure.
  */
 int PalHostReadlink(const char* typed_uri, char* buf, size_t* size);
+
+/*!
+ * \brief Wrap a host file descriptor into a PAL handle.
+ *
+ * \param      host_fd     A host fd of this process, for example one that a device ioctl returned
+ *                         (dma-buf, sync file). The handle takes ownership of it.
+ * \param[out] out_handle  On success contains a device handle (`PAL_TYPE_DEV`) for the fd.
+ *
+ * \returns 0 on success, negative error code on failure (\p host_fd is then left open).
+ */
+int PalHostFdWrap(int host_fd, PAL_HANDLE* out_handle);
+
+/*!
+ * \brief Get the host file descriptor of a PAL handle.
+ *
+ * \param      handle       A file, device or socket handle.
+ * \param[out] out_host_fd  On success contains the host fd (still owned by \p handle).
+ *
+ * \returns 0 on success, -PAL_ERROR_BADHANDLE if the handle has no host fd.
+ */
+int PalHostFdGet(PAL_HANDLE handle, int* out_host_fd);
 
 /*!
  * \brief Obtain the attestation report (local) with `user_report_data` embedded into it.

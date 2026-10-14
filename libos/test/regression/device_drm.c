@@ -15,12 +15,14 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <poll.h>
 #include <stdbool.h>
 #include <linux/ioctl.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/epoll.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -86,10 +88,39 @@ union drm_amdgpu_gem_mmap {
 #define AMDGPU_GEM_DOMAIN_GTT 0x2
 #define AMDGPU_GEM_CREATE_CPU_ACCESS_REQUIRED (1 << 0)
 
+struct drm_prime_handle {
+    uint32_t handle;
+    uint32_t flags;
+    int32_t fd;
+};
+struct drm_syncobj_create {
+    uint32_t handle;
+    uint32_t flags;
+};
+struct drm_syncobj_destroy {
+    uint32_t handle;
+    uint32_t pad;
+};
+struct drm_syncobj_handle {
+    uint32_t handle;
+    uint32_t flags;
+    int32_t fd;
+    uint32_t pad;
+    uint64_t point;
+};
+
 #define DRM_IOCTL_BASE        'd'
 #define DRM_IOCTL_VERSION     _IOWR(DRM_IOCTL_BASE, 0x00, struct drm_version)
 #define DRM_IOCTL_GET_CAP     _IOWR(DRM_IOCTL_BASE, 0x0c, struct drm_get_cap)
 #define DRM_IOCTL_GEM_CLOSE   _IOW(DRM_IOCTL_BASE, 0x09, struct drm_gem_close)
+#define DRM_IOCTL_PRIME_HANDLE_TO_FD   _IOWR(DRM_IOCTL_BASE, 0x2d, struct drm_prime_handle)
+#define DRM_IOCTL_PRIME_FD_TO_HANDLE   _IOWR(DRM_IOCTL_BASE, 0x2e, struct drm_prime_handle)
+#define DRM_IOCTL_SYNCOBJ_CREATE       _IOWR(DRM_IOCTL_BASE, 0xbf, struct drm_syncobj_create)
+#define DRM_IOCTL_SYNCOBJ_DESTROY      _IOWR(DRM_IOCTL_BASE, 0xc0, struct drm_syncobj_destroy)
+#define DRM_IOCTL_SYNCOBJ_HANDLE_TO_FD _IOWR(DRM_IOCTL_BASE, 0xc1, struct drm_syncobj_handle)
+#define DRM_IOCTL_SYNCOBJ_FD_TO_HANDLE _IOWR(DRM_IOCTL_BASE, 0xc2, struct drm_syncobj_handle)
+#define DRM_CLOEXEC 02000000
+#define DRM_RDWR    02
 #define DRM_COMMAND_BASE      0x40
 #define DRM_IOCTL_I915_GEM_CREATE \
     _IOWR(DRM_IOCTL_BASE, DRM_COMMAND_BASE + 0x1b, struct drm_i915_gem_create)
@@ -136,6 +167,79 @@ static bool create_bo(int fd, const char* driver, uint32_t* out_handle, uint64_t
     return false;
 }
 
+/* fds that ioctls return and take: the LibOS must hand out its own fds for them */
+static void check_prime(int fd, uint32_t handle) {
+    struct drm_prime_handle ph = {.handle = handle, .flags = DRM_CLOEXEC | DRM_RDWR, .fd = -1};
+    if (ioctl(fd, DRM_IOCTL_PRIME_HANDLE_TO_FD, &ph) < 0)
+        err(1, "DRM_IOCTL_PRIME_HANDLE_TO_FD");
+    int dmabuf = ph.fd;
+    if (fcntl(dmabuf, F_GETFD) != FD_CLOEXEC)
+        errx(1, "dma-buf fd %d: not a valid fd with FD_CLOEXEC", dmabuf);
+    off_t size = lseek(dmabuf, 0, SEEK_END);
+    if (size != BO_SIZE)
+        errx(1, "dma-buf: lseek(SEEK_END) returned %lld, expected %d", (long long)size, BO_SIZE);
+    if (lseek(dmabuf, 0, SEEK_SET) != 0)
+        err(1, "dma-buf: lseek(SEEK_SET)");
+
+    /* the dma-buf maps the same memory as the GEM object (word 18 was written above) */
+    uint32_t* m = mmap(NULL, BO_SIZE, PROT_READ, MAP_SHARED, dmabuf, 0);
+    if (m == MAP_FAILED)
+        err(1, "mmap of the dma-buf");
+    if (m[18] != 18u * 2654435761u)
+        errx(1, "dma-buf mapping: wrong data");
+    if (munmap(m, BO_SIZE) < 0)
+        err(1, "munmap of the dma-buf");
+
+    struct pollfd pfd = {.fd = dmabuf, .events = POLLIN};
+    if (poll(&pfd, 1, 1000) != 1 || !(pfd.revents & POLLIN))
+        errx(1, "poll on the idle dma-buf did not report POLLIN");
+    int epfd = epoll_create1(EPOLL_CLOEXEC);
+    struct epoll_event ev = {.events = EPOLLIN, .data.fd = dmabuf};
+    if (epfd < 0 || epoll_ctl(epfd, EPOLL_CTL_ADD, dmabuf, &ev) < 0)
+        err(1, "epoll on the dma-buf");
+    if (epoll_wait(epfd, &ev, 1, 1000) != 1 || !(ev.events & EPOLLIN) || ev.data.fd != dmabuf)
+        errx(1, "epoll_wait on the idle dma-buf did not report EPOLLIN");
+    close(epfd);
+
+    /* importing a duplicate fd gives the same GEM handle back */
+    int dup_fd = dup(dmabuf);
+    if (dup_fd < 0)
+        err(1, "dup of the dma-buf");
+    struct drm_prime_handle imp = {.fd = dup_fd};
+    if (ioctl(fd, DRM_IOCTL_PRIME_FD_TO_HANDLE, &imp) < 0)
+        err(1, "DRM_IOCTL_PRIME_FD_TO_HANDLE");
+    if (imp.handle != handle || imp.fd != dup_fd)
+        errx(1, "PRIME import: handle %u (expected %u), fd %d (expected %d)", imp.handle, handle,
+             imp.fd, dup_fd);
+    close(dup_fd);
+    close(dmabuf);
+
+    /* a syncobj exported as an fd and imported again */
+    struct drm_syncobj_create sc = {0};
+    if (ioctl(fd, DRM_IOCTL_SYNCOBJ_CREATE, &sc) < 0)
+        err(1, "DRM_IOCTL_SYNCOBJ_CREATE");
+    struct drm_syncobj_handle sh = {.handle = sc.handle, .fd = -1};
+    if (ioctl(fd, DRM_IOCTL_SYNCOBJ_HANDLE_TO_FD, &sh) < 0)
+        err(1, "DRM_IOCTL_SYNCOBJ_HANDLE_TO_FD");
+    struct stat st;
+    if (fstat(sh.fd, &st) < 0)
+        err(1, "fstat of the syncobj fd");
+    struct drm_syncobj_handle si = {.fd = sh.fd};
+    if (ioctl(fd, DRM_IOCTL_SYNCOBJ_FD_TO_HANDLE, &si) < 0)
+        err(1, "DRM_IOCTL_SYNCOBJ_FD_TO_HANDLE");
+    if (si.handle == 0 || si.fd != sh.fd)
+        errx(1, "syncobj import: handle %u, fd %d (expected %d)", si.handle, si.fd, sh.fd);
+    close(sh.fd);
+    struct drm_syncobj_destroy sd = {.handle = si.handle};
+    if (ioctl(fd, DRM_IOCTL_SYNCOBJ_DESTROY, &sd) < 0)
+        err(1, "DRM_IOCTL_SYNCOBJ_DESTROY");
+    sd.handle = sc.handle;
+    if (ioctl(fd, DRM_IOCTL_SYNCOBJ_DESTROY, &sd) < 0)
+        err(1, "DRM_IOCTL_SYNCOBJ_DESTROY");
+
+    printf("PRIME and syncobj fds: OK\n");
+}
+
 /* mmap of a GEM object through the render node: write, read back, mprotect, mremap, munmap */
 static void check_gem_mapping(int fd, const char* driver) {
     uint32_t handle;
@@ -178,10 +282,13 @@ static void check_gem_mapping(int fd, const char* driver) {
     if (munmap(p, BO_SIZE / 2) < 0)
         err(1, "munmap");
 
+    printf("GEM mapping: %s OK\n", driver);
+
+    check_prime(fd, handle);
+
     struct drm_gem_close gc = {.handle = handle};
     if (ioctl(fd, DRM_IOCTL_GEM_CLOSE, &gc) < 0)
         err(1, "DRM_IOCTL_GEM_CLOSE");
-    printf("GEM mapping: %s OK\n", driver);
 }
 
 static void check_node(const char* node, bool denied) {

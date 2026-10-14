@@ -22,6 +22,10 @@
 #include "path_utils.h"
 #include "perm.h"
 
+/* The realpath of a device handle that wraps a host fd without a path (see _PalHostFdWrap()); such
+ * a handle must not be deleted by name. */
+#define HOST_FD_REALPATH "(host fd)"
+
 static int dev_open(PAL_HANDLE* handle, const char* type, const char* uri, enum pal_access access,
                     pal_share_flags_t share, enum pal_create_mode create,
                     pal_stream_options_t options) {
@@ -131,6 +135,9 @@ static int dev_delete(PAL_HANDLE handle, enum pal_delete_mode delete_mode) {
     if (delete_mode != PAL_DELETE_ALL)
         return -PAL_ERROR_INVAL;
 
+    if (!strcmp(handle->dev.realpath, HOST_FD_REALPATH))
+        return -PAL_ERROR_INVAL;
+
     int ret = DO_SYSCALL(unlinkat, AT_FDCWD, handle->dev.realpath, 0);
     return ret < 0 ? unix_to_pal_error(ret) : ret;
 }
@@ -190,6 +197,7 @@ static int dev_attrquery(const char* type, const char* uri, PAL_STREAM_ATTR* att
     attr->nonblocking = false;
     attr->dev.rdev_major = host_dev_major(stat_buf.st_rdev);
     attr->dev.rdev_minor = host_dev_minor(stat_buf.st_rdev);
+    attr->dev.host_mode = stat_buf.st_mode;
     return 0;
 }
 
@@ -207,6 +215,7 @@ static int dev_attrquerybyhdl(PAL_HANDLE handle, PAL_STREAM_ATTR* attr) {
     attr->nonblocking  = handle->dev.nonblocking;
     attr->dev.rdev_major = host_dev_major(stat_buf.st_rdev);
     attr->dev.rdev_minor = host_dev_minor(stat_buf.st_rdev);
+    attr->dev.host_mode = stat_buf.st_mode;
     return 0;
 }
 
@@ -222,6 +231,48 @@ struct handle_ops g_dev_ops = {
     .attrquery      = &dev_attrquery,
     .attrquerybyhdl = &dev_attrquerybyhdl,
 };
+
+int _PalHostFdWrap(int host_fd, PAL_HANDLE* out_handle) {
+    int flags = DO_SYSCALL(fcntl, host_fd, F_GETFL);
+    if (flags < 0)
+        return unix_to_pal_error(flags);
+
+    int ret = DO_SYSCALL(fcntl, host_fd, F_SETFD, FD_CLOEXEC);
+    if (ret < 0)
+        return unix_to_pal_error(ret);
+
+    PAL_HANDLE hdl = calloc(1, HANDLE_SIZE(dev));
+    if (!hdl)
+        return -PAL_ERROR_NOMEM;
+    init_handle_hdr(hdl, PAL_TYPE_DEV);
+    hdl->dev.realpath = strdup(HOST_FD_REALPATH);
+    if (!hdl->dev.realpath) {
+        free(hdl);
+        return -PAL_ERROR_NOMEM;
+    }
+    hdl->dev.fd = host_fd;
+    hdl->dev.nonblocking = !!(flags & O_NONBLOCK);
+    switch (flags & O_ACCMODE) {
+        case O_RDONLY: hdl->flags |= PAL_HANDLE_FD_READABLE; break;
+        case O_WRONLY: hdl->flags |= PAL_HANDLE_FD_WRITABLE; break;
+        default:       hdl->flags |= PAL_HANDLE_FD_READABLE | PAL_HANDLE_FD_WRITABLE; break;
+    }
+    *out_handle = hdl;
+    return 0;
+}
+
+int _PalHostFdGet(PAL_HANDLE handle, int* out_host_fd) {
+    switch (handle->hdr.type) {
+        case PAL_TYPE_DEV:
+        case PAL_TYPE_FILE:
+        case PAL_TYPE_SOCKET:
+        case PAL_TYPE_EVENTFD:
+            *out_host_fd = handle->generic.fd;
+            return 0;
+        default:
+            return -PAL_ERROR_BADHANDLE;
+    }
+}
 
 static bool memcpy_to_host(void* host_ptr, const void* ptr, size_t size) {
     memcpy(host_ptr, ptr, size);

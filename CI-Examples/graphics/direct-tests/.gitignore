@@ -1,3 +1,4 @@
 /drm_info
 /gbm_map
+/egl_readback
 /*.manifest

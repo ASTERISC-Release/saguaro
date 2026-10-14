@@ -358,8 +358,8 @@ long libos_syscall_mremap(void* old_address, size_t old_size, size_t new_size, i
     /* A device mapping (for example a GPU buffer mapped through a render node): the emulation
      * below copies the data into anonymous memory, which would detach the mapping from the
      * device. Shrinking only drops the tail; growing or moving is not supported. */
-    if (vma.file && vma.file->type == TYPE_CHROOT && vma.file->inode &&
-            vma.file->inode->type == S_IFCHR) {
+    if (vma.file && ((vma.file->type == TYPE_CHROOT && vma.file->inode &&
+                      vma.file->inode->type == S_IFCHR) || vma.file->type == TYPE_HOSTFD)) {
         long ret;
         if (new_size < old_size) {
             ret = my_munmap((char*)old_address + new_size, old_size - new_size);
