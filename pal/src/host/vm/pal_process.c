@@ -14,6 +14,8 @@
 
 extern char __process_data_start[];
 extern char __process_data_end[];
+static volatile uint64_t g_process_copy_private_check __attribute__((section(".process_data")));
+static volatile uint64_t g_process_copy_shared_check;
 static int vm_process_copy_runtime(const struct memory_address_space* source,
                                    struct memory_address_space* target, size_t* out_pages);
 
@@ -457,18 +459,9 @@ static int vm_process_copy_runtime(const struct memory_address_space* source,
     if (ret < 0)
         goto fail;
 
-    for (size_t i = 0; i < g_pal_public_state.initial_mem_ranges_len; i++) {
-        const struct pal_initial_mem_range* range = &g_pal_public_state.initial_mem_ranges[i];
-        if (range->is_free || range->is_user_reserved ||
-                strcmp(range->comment, "PAL internal memory"))
-            continue;
-        size_t size = range->end - range->start;
-        ret = memory_address_space_copy_private_range(
-                (struct memory_address_space*)source, target, range->start, size);
-        if (ret < 0)
-            goto fail;
-        copied_pages += size / PAGE_SIZE;
-    }
+    /* PAL/kernel memory stays shared across roots. In particular, the scheduler list and lock,
+     * stack registry, and allocator state must have one owner while the scheduler switches among
+     * threads from different roots. Only process-specific PAL state belongs in .process_data. */
 
     if (out_pages)
         *out_pages = copied_pages;
@@ -484,6 +477,12 @@ int vm_process_runtime_copy_selfcheck(void) {
     struct memory_address_space copy = {0};
     size_t initial_frames = memory_frame_allocated_count();
     size_t copied_pages = 0;
+    const uint64_t private_before = g_process_copy_private_check;
+    const uint64_t shared_before = g_process_copy_shared_check;
+    const uint64_t private_marker = 0x13579bdf2468ace0UL;
+    const uint64_t shared_marker = 0xfedcba9876543210UL;
+    bool private_isolated = false;
+    bool shared_visible = false;
     size_t manifest_size = g_pal_common_state.raw_manifest_data
             ? strlen(g_pal_common_state.raw_manifest_data) : 0;
     char manifest_prefix[32] = {0};
@@ -492,14 +491,20 @@ int vm_process_runtime_copy_selfcheck(void) {
         memcpy(manifest_prefix, g_pal_common_state.raw_manifest_data,
                MIN(manifest_size, sizeof(manifest_prefix) - 1));
 
+    g_process_copy_private_check = private_marker;
+    g_process_copy_shared_check = shared_before;
     int ret = vm_process_copy_runtime(boot, &copy, &copied_pages);
     if (ret < 0)
-        return ret;
+        goto restore_state;
 
     ret = memory_address_space_switch(&copy);
     if (ret < 0)
         goto out;
     address_space_active = true;
+
+    private_isolated = g_process_copy_private_check == private_marker;
+    g_process_copy_private_check = 0x0badc0de0ddba11UL;
+    g_process_copy_shared_check = shared_marker;
 
     bool isolated_state = g_pal_public_state.manifest_root &&
                           g_pal_common_state.raw_manifest_data &&
@@ -516,12 +521,21 @@ int vm_process_runtime_copy_selfcheck(void) {
     if (ret < 0)
         goto out;
     address_space_active = false;
+    private_isolated &= g_process_copy_private_check == private_marker;
+    shared_visible = g_process_copy_shared_check == shared_marker;
+    g_process_copy_private_check = private_before;
+    g_process_copy_shared_check = shared_before;
     if (!isolated_state) {
         ret = -PAL_ERROR_DENIED;
         goto out;
     }
+    if (!private_isolated || !shared_visible) {
+        ret = -PAL_ERROR_DENIED;
+        goto out;
+    }
 
-    log_always("Child PAL runtime copy check passed (%zu pages)", copied_pages);
+    log_always("PAL root state self-check passed (private process state copied, shared PAL state "
+               "visible, %zu process-data pages)", copied_pages);
 
 out:
     if (address_space_active) {
@@ -530,6 +544,9 @@ out:
             return restore_ret;
     }
     memory_address_space_destroy(&copy);
+restore_state:
+    g_process_copy_private_check = private_before;
+    g_process_copy_shared_check = shared_before;
     if (memory_frame_allocated_count() != initial_frames)
         return -PAL_ERROR_DENIED;
     return ret;
