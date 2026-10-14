@@ -298,7 +298,7 @@ static int init_multiprocess_frame_pool(void) {
             }
 
             bool scheduler_switched = true;
-            if (g_num_cpus == 1) {
+            {
                 struct address_space_thread_check thread_check = {
                     .addr = (volatile uint64_t*)test_addr,
                 };
@@ -330,8 +330,6 @@ static int init_multiprocess_frame_pool(void) {
                               *(volatile uint64_t*)memory_frame_pointer(reused_frame),
                               *(volatile uint64_t*)memory_frame_pointer(frame2));
                 PalObjectDestroy(thread_handle);
-            } else {
-                log_always("Skipping scheduled address-space check with %u vCPUs", g_num_cpus);
             }
             *parent_value = original_value;
             memory_address_space_destroy(&grandchild_space);

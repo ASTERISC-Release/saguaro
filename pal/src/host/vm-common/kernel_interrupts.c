@@ -165,10 +165,15 @@ void isr_c(struct isr_regs* regs) {
 
             void* addr  = __atomic_load_n(&g_invalidate_tlb_request.addr, __ATOMIC_ACQUIRE);
             size_t size = __atomic_load_n(&g_invalidate_tlb_request.size, __ATOMIC_ACQUIRE);
-            uint64_t mark_addr = (uint64_t)addr;
-            while (mark_addr < (uint64_t)addr + size) {
-                invlpg(mark_addr);
-                mark_addr += PAGE_SIZE;
+            if (size) {
+                uint64_t mark_addr = (uint64_t)addr;
+                while (mark_addr < (uint64_t)addr + size) {
+                    invlpg(mark_addr);
+                    mark_addr += PAGE_SIZE;
+                }
+            } else {
+                /* A zero-size request invalidates a paging-structure change (e.g. a PML4 slot). */
+                __asm__ volatile("mov %%cr3, %%rax; mov %%rax, %%cr3" : : : "rax", "memory");
             }
 
             get_per_cpu_data()->invalidate_tlb_ipi_received = 1;
@@ -200,12 +205,14 @@ int send_invalidate_tlb_ipi_and_wait(void* addr, size_t size, bool invalidate_on
 
     int ret;
 
-    if (invalidate_on_this_cpu) {
+    if (invalidate_on_this_cpu && size) {
         uint64_t mark_addr = (uint64_t)addr;
         while (mark_addr < (uint64_t)addr + size) {
             invlpg(mark_addr);
             mark_addr += PAGE_SIZE;
         }
+    } else if (invalidate_on_this_cpu) {
+        __asm__ volatile("mov %%cr3, %%rax; mov %%rax, %%cr3" : : : "rax", "memory");
     }
 
     if (!g_interrupts_enabled) {

@@ -83,6 +83,15 @@ int init_multicore_prepare(uint32_t num_cpus) {
     wrmsr(MSR_IA32_GS_KERNEL_BASE, (uint64_t)&g_per_cpu_data[0]);
 
     g_num_cpus = num_cpus;
+    for (uint32_t i = 0; i < num_cpus; i++) {
+        unsigned long cpu_mask[MAX_NUM_CPU_LONGS] = {0};
+        cpu_mask[i / BITS_IN_TYPE(unsigned long)] = 1UL << (i % BITS_IN_TYPE(unsigned long));
+        sched_thread_set_cpu_affinity(g_per_cpu_data[i].idle_thread, cpu_mask,
+                                      MAX_NUM_CPU_LONGS);
+    }
+    unsigned long bottomhalves_cpu_mask[MAX_NUM_CPU_LONGS] = {1};
+    sched_thread_set_cpu_affinity(g_per_cpu_data[0].bottomhalves_thread,
+                                  bottomhalves_cpu_mask, MAX_NUM_CPU_LONGS);
     ret = 0;
 out:
     if (ret < 0) {

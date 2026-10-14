@@ -105,10 +105,38 @@ static struct thread* find_next_thread(struct thread* curr_thread) {
 
     uint32_t cpu_id            = get_per_cpu_data()->cpu_id;
 
-    /* Console input has no application event-loop path in which to process its
-     * receive queue, so ensure CPU0's helper cannot be starved by a continuously
-     * runnable user thread. VSOCK queues are normally serviced inline from the
-     * socket/event path and fall back to this helper when user threads block. */
+    /* Once a process has its own root, prefer its runnable threads to boot-root helper threads.
+     * Helpers stay runnable while idle, so scanning them first can starve a process thread after
+     * it yields on an SMP guest. The feature-disabled single-root path keeps the original order. */
+    struct thread* process_thread = NULL;
+    struct thread* thread;
+    LISTP_FOR_EACH_ENTRY(thread, &g_thread_list, list) {
+        if (thread->state != THREAD_RUNNABLE || thread->is_helper || !thread->address_space ||
+                thread->address_space->root_phys == g_pml4_table_base)
+            continue;
+
+        size_t cpu_mask_idx = cpu_id / BITS_IN_TYPE(unsigned long);
+        unsigned long cpu_mask_bit = 1UL << (cpu_id % BITS_IN_TYPE(unsigned long));
+        if (!(thread->cpu_mask[cpu_mask_idx] & cpu_mask_bit))
+            continue;
+
+        if (!process_thread)
+            process_thread = thread;
+        else
+            __atomic_store_n(&g_kick_sched_thread, true, __ATOMIC_RELEASE);
+    }
+    if (process_thread) {
+        return process_thread;
+    }
+
+    /* Do not switch a lone process thread to an always-runnable PAL helper on yield. */
+    if (curr_thread && curr_thread->state != THREAD_BLOCKED && !curr_thread->is_helper &&
+            curr_thread->address_space &&
+            curr_thread->address_space->root_phys != g_pml4_table_base)
+        return curr_thread;
+
+    /* Console input has no application event-loop path in which to process its receive queue.
+     * When no process-root thread is runnable, let the CPU0 helper drain pending console events. */
     if (cpu_id == 0 &&
             __atomic_load_n(&g_console_trigger_bottomhalf, __ATOMIC_ACQUIRE)) {
         assert(get_per_cpu_data()->bottomhalves_thread);
@@ -118,7 +146,6 @@ static struct thread* find_next_thread(struct thread* curr_thread) {
 
     struct thread* next_thread = NULL;
 
-    struct thread* thread;
     LISTP_FOR_EACH_ENTRY(thread, &g_thread_list, list) {
         if (thread->state != THREAD_RUNNABLE)
             continue;
@@ -221,6 +248,12 @@ void sched_thread(uint32_t* lock_to_unlock, int* clear_child_tid) {
 
     // log_always("Scheduling out thread %p, scheduling in thread %p\n", curr_thread, next_thread);
 
+    /* clear_child_tid belongs to the exiting thread's address space. Clear it before switching
+     * roots; the assembly context switch runs after the next root is active. */
+    if (clear_child_tid) {
+        __atomic_store_n(clear_child_tid, 0, __ATOMIC_RELEASE);
+        clear_child_tid = NULL;
+    }
     switch_to_thread_address_space(next_thread);
 
     /* it is cumbersome to restore FSBASE in asm, so restore explicitly here */

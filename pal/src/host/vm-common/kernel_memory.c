@@ -99,8 +99,7 @@ static int memory_frame_pool_map_alias(size_t memory_size) {
     g_boot_address_space.root = memory_frame_pointer(g_pml4_table_base);
     g_boot_address_space.root_phys = g_pml4_table_base;
     g_boot_address_space.base_root = g_boot_address_space.root;
-    __asm__ volatile("mov %%cr3, %%rax; mov %%rax, %%cr3" : : : "rax", "memory");
-    return 0;
+    return send_invalidate_tlb_ipi_and_wait(NULL, 0, /*invalidate_on_this_cpu=*/true);
 }
 
 int memory_frame_pool_init(uintptr_t addr, size_t size) {
