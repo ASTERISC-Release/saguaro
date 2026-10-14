@@ -445,12 +445,13 @@ if lsof /tmp/gramine_vhostfs_"$GRAMINE_VM_ID".pid 2>/dev/null; then
     exit 2
 fi
 # A stripped environment (the LibOS regression tests pass `env=`, which wipes PATH) leaves bash's
-# built-in default PATH, which lacks the distro's virtiofsd directories. Find it explicitly, the
-# same way QEMU_PATH allows overriding the QEMU binary.
+# built-in default PATH, which lacks the distro's virtiofsd directories (Debian/Ubuntu install it
+# as QEMU's helper /usr/lib/qemu/virtiofsd, Fedora under /usr/libexec). Find it explicitly; the
+# VIRTIOFSD variable overrides the lookup, the same way QEMU_PATH overrides the QEMU binary.
 VIRTIOFSD=${VIRTIOFSD:-$(command -v virtiofsd || true)}
 [ -n "$VIRTIOFSD" ] || VIRTIOFSD=$(ls /usr/lib/qemu/virtiofsd /usr/libexec/virtiofsd 2>/dev/null | head -n 1)
-if [ -z "$VIRTIOFSD" ]; then
-    echo "Error: virtiofsd not found in PATH (set VIRTIOFSD to its path)." >&2
+if [ -z "$VIRTIOFSD" ] || [ ! -x "$VIRTIOFSD" ]; then
+    echo "Error: virtiofsd not found in PATH, /usr/lib/qemu or /usr/libexec (set VIRTIOFSD to its path)." >&2
     exit 2
 fi
 "$VIRTIOFSD" --socket-path /tmp/gramine_vhostfs_"$GRAMINE_VM_ID" --shared-dir / --log-level error \

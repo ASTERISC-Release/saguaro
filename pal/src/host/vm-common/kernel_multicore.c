@@ -71,7 +71,10 @@ int init_multicore_prepare(uint32_t num_cpus) {
         g_per_cpu_data[i].interrupt_stack = per_cpu_interrupt_stack + i * INTERRUPT_STACK_SIZE;
         g_per_cpu_data[i].interrupt_xsave_area = per_cpu_interrupt_xsave_area
                                                      + i * INTERRUPT_XSAVE_AREA_SIZE;
-        g_per_cpu_data[i].scheduling_stack = per_cpu_scheduling_stack + i * SCHEDULING_STACK_SIZE;
+        /* save_context_and_restore_next() installs RSP directly from this value; provide the
+         * stack top because x86 stacks grow down. */
+        g_per_cpu_data[i].scheduling_stack = per_cpu_scheduling_stack +
+                                             (i + 1) * SCHEDULING_STACK_SIZE;
     }
 
     /* only CPU0 has a bottomhalves thread currently (i.e. CPU0 handles all incoming events) */
@@ -83,6 +86,15 @@ int init_multicore_prepare(uint32_t num_cpus) {
     wrmsr(MSR_IA32_GS_KERNEL_BASE, (uint64_t)&g_per_cpu_data[0]);
 
     g_num_cpus = num_cpus;
+    for (uint32_t i = 0; i < num_cpus; i++) {
+        unsigned long cpu_mask[MAX_NUM_CPU_LONGS] = {0};
+        cpu_mask[i / BITS_IN_TYPE(unsigned long)] = 1UL << (i % BITS_IN_TYPE(unsigned long));
+        sched_thread_set_cpu_affinity(g_per_cpu_data[i].idle_thread, cpu_mask,
+                                      MAX_NUM_CPU_LONGS);
+    }
+    unsigned long bottomhalves_cpu_mask[MAX_NUM_CPU_LONGS] = {1};
+    sched_thread_set_cpu_affinity(g_per_cpu_data[0].bottomhalves_thread,
+                                  bottomhalves_cpu_mask, MAX_NUM_CPU_LONGS);
     ret = 0;
 out:
     if (ret < 0) {

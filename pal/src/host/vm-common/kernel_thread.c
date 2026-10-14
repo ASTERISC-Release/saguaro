@@ -21,6 +21,7 @@
 #include "spinlock.h"
 
 #include "kernel_sched.h"
+#include "kernel_memory.h"
 #include "kernel_thread.h"
 #include "kernel_time.h"
 #include "kernel_virtio.h"
@@ -105,6 +106,17 @@ out:
     return ret;
 }
 
+void thread_release_stack(void* thread_stack) {
+    spinlock_lock(&g_thread_stack_lock);
+    for (size_t i = 0; i < g_thread_stack_num; i++) {
+        if (g_thread_stack_map[i].stack == thread_stack) {
+            g_thread_stack_map[i].used = false;
+            break;
+        }
+    }
+    spinlock_unlock(&g_thread_stack_lock);
+}
+
 noreturn void thread_free_stack_and_die(void* thread_stack, int* clear_child_tid) {
     /* we do not free thread stack (and fpregs memory region allocated with it) but instead mark it
      * as recycled, see thread_get_stack_and_fpregs() */
@@ -156,6 +168,9 @@ void thread_setup(struct thread* thread, void* fpregs, void* stack, int (*callba
 
     thread->state = THREAD_RUNNABLE;
     thread->blocked_on = NULL;
+#ifdef __x86_64__
+    thread->address_space = memory_address_space_boot();
+#endif
 
     memset(thread->cpu_mask, 0xFF, MAX_NUM_CPU_LONGS * 8);
 

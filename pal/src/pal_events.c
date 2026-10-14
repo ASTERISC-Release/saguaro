@@ -9,7 +9,9 @@
 
 int PalEventCreate(PAL_HANDLE* handle, bool init_signaled, bool auto_clear) {
     *handle = NULL;
-    return _PalEventCreate(handle, init_signaled, auto_clear);
+    int ret = _PalEventCreate(handle, init_signaled, auto_clear);
+    PAL_TRACK_HANDLE(ret, *handle);
+    return ret;
 }
 
 void PalEventSet(PAL_HANDLE handle) {

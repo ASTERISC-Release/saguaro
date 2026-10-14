@@ -25,6 +25,13 @@
 #define DIRBUF_SIZE 1024
 #define DT_DIR      4
 
+#ifdef __x86_64__
+static struct memory_address_space* current_address_space(void) {
+    struct pal_tcb_vm* tcb = (struct pal_tcb_vm*)pal_get_tcb();
+    return tcb ? tcb->kernel_thread.address_space : NULL;
+}
+#endif
+
 bool g_use_trusted_files = false; /* only TDX PAL will set this */
 
 /* out_modified_path is allocated by this func; must be freed by the caller */
@@ -476,11 +483,113 @@ void pal_common_file_destroy(struct pal_handle* handle) {
     free(handle);
 }
 
+#ifdef __x86_64__
+/*
+ * Writable MAP_SHARED file mappings of processes with their own address spaces (experimental
+ * multiprocess support). Every process mapping the same host file (same FUSE node) maps the same
+ * frames, so stores are visible to all of them, as with Linux's page cache. The cache keeps its
+ * frames until the VM exits, and the frames are not written back to the host file: the data is
+ * shared between guest processes only. This is what POSIX shared memory (`/dev/shm`) needs.
+ */
+struct shared_file_cache {
+    struct shared_file_cache* next;
+    uint64_t nodeid;
+    size_t frames_count;
+    uintptr_t* frames; /* 0 = page not loaded yet */
+};
+
+static struct shared_file_cache* g_shared_file_caches;
+static spinlock_t g_shared_file_caches_lock = INIT_SPINLOCK_UNLOCKED;
+
+/* Returns the frame of page `page` of the file, loading it on first use. */
+static int shared_file_page(struct pal_handle* handle, uint64_t page, uintptr_t* out_frame) {
+    uintptr_t frame = 0;
+    spinlock_lock(&g_shared_file_caches_lock);
+    struct shared_file_cache* cache = g_shared_file_caches;
+    while (cache && cache->nodeid != handle->file.nodeid)
+        cache = cache->next;
+    if (!cache) {
+        cache = calloc(1, sizeof(*cache));
+        if (!cache) {
+            spinlock_unlock(&g_shared_file_caches_lock);
+            return -PAL_ERROR_NOMEM;
+        }
+        cache->nodeid = handle->file.nodeid;
+        cache->next = g_shared_file_caches;
+        g_shared_file_caches = cache;
+    }
+    if (page >= cache->frames_count) {
+        size_t new_count = MAX(page + 1, cache->frames_count * 2);
+        uintptr_t* frames = calloc(new_count, sizeof(*frames));
+        if (!frames) {
+            spinlock_unlock(&g_shared_file_caches_lock);
+            return -PAL_ERROR_NOMEM;
+        }
+        if (cache->frames_count)
+            memcpy(frames, cache->frames, cache->frames_count * sizeof(*frames));
+        free(cache->frames);
+        cache->frames = frames;
+        cache->frames_count = new_count;
+    }
+    frame = cache->frames[page];
+    spinlock_unlock(&g_shared_file_caches_lock);
+    if (frame) {
+        *out_frame = frame;
+        return 0;
+    }
+
+    /* load outside the lock (the FUSE request may sleep); another process may win the race */
+    int ret = memory_frame_alloc(&frame);
+    if (ret < 0)
+        return ret;
+    ret = emulate_file_map_via_read(handle->file.nodeid, handle->file.fh,
+                                    memory_frame_pointer(frame), page * PAGE_SIZE, PAGE_SIZE);
+    if (ret < 0) {
+        memory_frame_free(frame);
+        return ret;
+    }
+    spinlock_lock(&g_shared_file_caches_lock);
+    if (cache->frames[page]) {
+        memory_frame_free(frame);
+        frame = cache->frames[page];
+    } else {
+        cache->frames[page] = frame;
+    }
+    spinlock_unlock(&g_shared_file_caches_lock);
+    *out_frame = frame;
+    return 0;
+}
+
+static int shared_file_map(struct pal_handle* handle, struct memory_address_space* space,
+                           void* addr, pal_prot_flags_t prot, uint64_t offset, uint64_t size) {
+    bool execute = !!(prot & PAL_PROT_EXEC);
+    for (uint64_t done = 0; done < size; done += PAGE_SIZE) {
+        uintptr_t frame;
+        int ret = shared_file_page(handle, (offset + done) / PAGE_SIZE, &frame);
+        if (ret == 0)
+            ret = memory_address_space_map_shared_frame(space, (uintptr_t)addr + done, frame,
+                                                        /*write=*/true, execute);
+        if (ret < 0) {
+            if (done)
+                (void)memory_address_space_free(space, addr, done);
+            return ret;
+        }
+    }
+    return memory_address_space_flush_range((uintptr_t)addr, size);
+}
+#endif
+
 int pal_common_file_map(struct pal_handle* handle, void* addr, pal_prot_flags_t prot,
                         uint64_t offset, uint64_t size) {
     int ret;
 
     assert(IS_ALLOC_ALIGNED(offset) && IS_ALLOC_ALIGNED(size));
+
+#ifdef __x86_64__
+    if (!(prot & PAL_PROT_WRITECOPY) && (prot & PAL_PROT_WRITE) && memory_frame_pool_active()
+            && current_address_space() && !handle->file.chunk_hashes)
+        return shared_file_map(handle, current_address_space(), addr, prot, offset, size);
+#endif
 
     if (!(prot & PAL_PROT_WRITECOPY) && (prot & PAL_PROT_WRITE)) {
         log_warning("App tries to create a writable shared file mapping. This is impossible.");
@@ -492,7 +601,14 @@ int pal_common_file_map(struct pal_handle* handle, void* addr, pal_prot_flags_t 
     bool read  = !!(prot & PAL_PROT_READ);
     bool write = !!(prot & (PAL_PROT_WRITE | PAL_PROT_WRITECOPY));
     bool execute = !!(prot & PAL_PROT_EXEC);
+#ifdef __x86_64__
+    struct memory_address_space* address_space = current_address_space();
+    ret = address_space
+            ? memory_address_space_alloc(address_space, addr, size, read, /*write=*/true, execute)
+            : memory_alloc(addr, size, read, /*write=*/true, execute);
+#else
     ret = memory_alloc(addr, size, read, /*write=*/true, execute);
+#endif
     if (ret < 0)
         return ret;
 
@@ -532,7 +648,14 @@ int pal_common_file_map(struct pal_handle* handle, void* addr, pal_prot_flags_t 
 
     if (!write) {
         /* restore read-only permission */
+#ifdef __x86_64__
+        ret = address_space
+                ? memory_address_space_protect(address_space, addr, size, read,
+                                               /*write=*/false, execute)
+                : memory_protect(addr, size, read, /*write=*/false, execute);
+#else
         ret = memory_protect(addr, size, read, /*write=*/false, execute);
+#endif
         if (ret < 0) {
             log_error("Cannot restore read-only permission during file mmap, fatal.");
             BUG();
@@ -542,7 +665,14 @@ int pal_common_file_map(struct pal_handle* handle, void* addr, pal_prot_flags_t 
     ret = 0;
 out:
     if (ret < 0)
+#ifdef __x86_64__
+        if (address_space)
+            (void)memory_address_space_free(address_space, addr, size);
+        else
+            (void)memory_free(addr, size);
+#else
         (void)memory_free(addr, size);
+#endif
     return ret;
 }
 

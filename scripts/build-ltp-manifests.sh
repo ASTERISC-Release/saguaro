@@ -42,3 +42,28 @@ if [[ ${LTP_VM_TMPFS_SHM:-0} == 1 ]]; then
 else
     python3 "$repo_root/scripts/run-ltp-syscalls.py" --set-shm host --harness-dir "$test_dir"
 fi
+
+# Process-syscall measurements must opt in explicitly while the VM PAL implementation is
+# experimental. Set or clear this option even in unchanged generated manifests, because
+# gramine-test build leaves up-to-date manifest files alone.
+python3 - "$test_dir" "${LTP_VM_MULTIPROCESS:-0}" <<'PY'
+from pathlib import Path
+import sys
+
+root = Path(sys.argv[1])
+enabled = sys.argv[2] == "1"
+changed = 0
+for manifest in root.glob("*.manifest"):
+    original = manifest.read_text()
+    lines = [line for line in original.splitlines(keepends=True)
+             if not line.startswith("experimental__multiprocess =")]
+    text = "".join(lines)
+    if enabled:
+        marker = "[sys]\n"
+        if marker in text:
+            text = text.replace(marker, marker + "experimental__multiprocess = true\n", 1)
+    if text != original:
+        manifest.write_text(text)
+        changed += 1
+print(f"Set experimental VM multiprocess support to {enabled} in {changed} LTP manifests")
+PY

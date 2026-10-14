@@ -15,7 +15,9 @@
 int PalProcessCreate(const char** args, uintptr_t (*reserved_mem_ranges)[2],
                      size_t reserved_mem_ranges_len, PAL_HANDLE* out_handle) {
     *out_handle = NULL;
-    return _PalProcessCreate(args, reserved_mem_ranges, reserved_mem_ranges_len, out_handle);
+    int ret = _PalProcessCreate(args, reserved_mem_ranges, reserved_mem_ranges_len, out_handle);
+    PAL_TRACK_HANDLE(ret, *out_handle);
+    return ret;
 }
 
 noreturn void PalProcessExit(int exitcode) {

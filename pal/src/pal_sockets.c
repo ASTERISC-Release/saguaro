@@ -8,7 +8,9 @@
 
 int PalSocketCreate(enum pal_socket_domain domain, enum pal_socket_type type,
                     pal_stream_options_t options, PAL_HANDLE* out_handle) {
-    return _PalSocketCreate(domain, type, options, out_handle);
+    int ret = _PalSocketCreate(domain, type, options, out_handle);
+    PAL_TRACK_HANDLE(ret, *out_handle);
+    return ret;
 }
 
 int PalSocketBind(PAL_HANDLE handle, struct pal_socket_addr* addr) {
@@ -25,7 +27,9 @@ int PalSocketAccept(PAL_HANDLE handle, pal_stream_options_t options, PAL_HANDLE*
                     struct pal_socket_addr* out_client_addr,
                     struct pal_socket_addr* out_local_addr) {
     assert(handle->hdr.type == PAL_TYPE_SOCKET);
-    return _PalSocketAccept(handle, options, out_client, out_client_addr, out_local_addr);
+    int ret = _PalSocketAccept(handle, options, out_client, out_client_addr, out_local_addr);
+    PAL_TRACK_HANDLE(ret, *out_client);
+    return ret;
 }
 
 int PalSocketConnect(PAL_HANDLE handle, struct pal_socket_addr* addr,

@@ -14,15 +14,11 @@
 #include "kernel_virtio.h"
 
 int _PalSendHandle(struct pal_handle* target_process, struct pal_handle* cargo) {
-    __UNUSED(target_process);
-    __UNUSED(cargo);
-    return -PAL_ERROR_NOTIMPLEMENTED;
+    return vm_process_send_handle(target_process, cargo);
 }
 
 int _PalReceiveHandle(struct pal_handle* source_process, struct pal_handle** out_cargo) {
-    __UNUSED(source_process);
-    __UNUSED(out_cargo);
-    return -PAL_ERROR_NOTIMPLEMENTED;
+    return vm_process_receive_handle(source_process, out_cargo);
 }
 
 int _PalInitDebugStream(const char* path) {
