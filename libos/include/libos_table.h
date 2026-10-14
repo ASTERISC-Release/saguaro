@@ -284,6 +284,23 @@ long libos_syscall_timer_settime(void* timerid, int flags,
 long libos_syscall_timer_gettime(void* timerid, struct __kernel_itimerspec* curr);
 long libos_syscall_timer_getoverrun(void* timerid);
 long libos_syscall_timer_delete(void* timerid);
+
+/* Extended attributes: validated here, answered "not supported" (see libos_xattr.c) */
+long libos_syscall_setxattr(const char* path, const char* name, const void* value, size_t size,
+                            int flags);
+long libos_syscall_lsetxattr(const char* path, const char* name, const void* value, size_t size,
+                             int flags);
+long libos_syscall_fsetxattr(int fd, const char* name, const void* value, size_t size, int flags);
+long libos_syscall_getxattr(const char* path, const char* name, void* value, size_t size);
+long libos_syscall_lgetxattr(const char* path, const char* name, void* value, size_t size);
+long libos_syscall_fgetxattr(int fd, const char* name, void* value, size_t size);
+long libos_syscall_listxattr(const char* path, char* list, size_t size);
+long libos_syscall_llistxattr(const char* path, char* list, size_t size);
+long libos_syscall_flistxattr(int fd, char* list, size_t size);
+long libos_syscall_removexattr(const char* path, const char* name);
+long libos_syscall_lremovexattr(const char* path, const char* name);
+long libos_syscall_fremovexattr(int fd, const char* name);
+
 long libos_syscall_getcpu(unsigned* cpu, unsigned* node, void* unused_cache);
 long libos_syscall_personality(unsigned long persona);
 bool libos_personality_sticky_timeouts(void);

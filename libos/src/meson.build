@@ -115,6 +115,7 @@ libos_sources = files(
     'sys/libos_stat.c',
     'sys/libos_time.c',
     'sys/libos_uname.c',
+  'sys/libos_xattr.c',
     'sys/libos_wait.c',
     'sys/libos_wrappers.c',
     'utils/log.c',
