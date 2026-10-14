@@ -53,7 +53,9 @@ typedef struct pal_handle {
         struct pal_handle_inner_eventfd eventfd;
 
         struct {
-            PAL_IDX unused;
+            uintptr_t shared_stream_frame;
+            uint32_t side;
+            bool nonblocking;
         } process;
     };
 }* PAL_HANDLE;
@@ -65,6 +67,8 @@ DEFINE_LISTP(pal_handle);
 #define PAL_HANDLE_FD_WRITABLE  2
 /* Set if an error was seen on this handle. Currently only set by `_PalStreamsWaitEvents`. */
 #define PAL_HANDLE_FD_ERROR     4
+
+int vm_process_stream_selfcheck(void);
 
 #ifdef __x86_64__
 noreturn void pal_start_c(void);

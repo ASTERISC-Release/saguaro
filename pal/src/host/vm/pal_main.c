@@ -102,6 +102,12 @@ static int init_multiprocess_frame_pool(void) {
             if (ret < 0)
                 return ret;
 
+            ret = vm_process_stream_selfcheck();
+            if (ret < 0)
+                return ret;
+            log_always("Process stream read/write, attributes, shutdown, and frame-reclaim "
+                       "self-check passed");
+
             /* PAL thread stacks are intentionally recycled instead of freed from their own
              * stacks. Warm one stack before the frame-reclamation baseline is measured. */
             struct address_space_thread_check warmup_check = {
