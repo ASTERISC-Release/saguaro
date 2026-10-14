@@ -4,11 +4,12 @@
 # Test programs for graphics under gramine-direct (x86_64), see
 # Documentation/devel/graphics-direct/. `make check` runs each natively and under gramine-direct.
 
-PROGRAMS = drm_info
+PROGRAMS = drm_info gbm_map
 NODE ?= /dev/dri/renderD128
 
 CFLAGS = -Wall -Wextra -O2 $(shell pkg-config --cflags libdrm)
 LDLIBS_drm_info = $(shell pkg-config --libs libdrm)
+LDLIBS_gbm_map = $(shell pkg-config --libs gbm)
 
 ifeq ($(DEBUG),1)
 GRAMINE_LOG_LEVEL = debug
@@ -21,6 +22,9 @@ all: $(PROGRAMS) $(addsuffix .manifest,$(PROGRAMS))
 
 drm_info: drm_info.c
 	$(CC) $(CFLAGS) $< -o $@ $(LDLIBS_drm_info)
+
+gbm_map: gbm_map.c
+	$(CC) $(CFLAGS) $< -o $@ $(LDLIBS_gbm_map)
 
 %.manifest: direct-tests.manifest.template FORCE
 	gramine-manifest -Dlog_level=$(GRAMINE_LOG_LEVEL) -Dentrypoint=$* $< $@
