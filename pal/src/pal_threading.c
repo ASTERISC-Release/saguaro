@@ -12,7 +12,9 @@
 /* PAL call PalThreadCreate: create a thread inside the current process */
 int PalThreadCreate(int (*callback)(void*), void* param, PAL_HANDLE* handle) {
     *handle = NULL;
-    return _PalThreadCreate(handle, callback, param);
+    int ret = _PalThreadCreate(handle, callback, param);
+    PAL_TRACK_HANDLE(ret, *handle);
+    return ret;
 }
 
 /* PAL call PalThreadYieldExecution. Yield the execution of the current thread. */

@@ -7,10 +7,24 @@
 
 #include "pal.h"
 #include "pal_internal.h"
+#include "pal_common.h"
+
+#ifdef __x86_64__
+/* `dev:/dev/shm/...` (Gramine's untrusted_shm mount): host files reached through virtio-fs. With
+ * the experimental multiprocess support their writable MAP_SHARED mappings share frames between
+ * guest processes (see pal_common_file_map()); the opened handle is an ordinary file handle. */
+static bool is_dev_shm(const char* uri) {
+    return !strcmp(uri, "/dev/shm") || strstartswith(uri, "/dev/shm/");
+}
+#endif
 
 static int dev_open(PAL_HANDLE* handle, const char* type, const char* uri, enum pal_access access,
                     pal_share_flags_t share, enum pal_create_mode create,
                     pal_stream_options_t options) {
+#ifdef __x86_64__
+    if (is_dev_shm(uri))
+        return pal_common_file_open(handle, URI_TYPE_FILE, uri, access, share, create, options);
+#endif
     __UNUSED(handle);
     __UNUSED(type);
     __UNUSED(uri);
@@ -62,6 +76,10 @@ static int dev_flush(PAL_HANDLE handle) {
 }
 
 static int dev_attrquery(const char* type, const char* uri, PAL_STREAM_ATTR* attr) {
+#ifdef __x86_64__
+    if (is_dev_shm(uri))
+        return pal_common_file_attrquery(URI_TYPE_FILE, uri, attr);
+#endif
     __UNUSED(type);
     __UNUSED(uri);
     __UNUSED(attr);

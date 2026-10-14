@@ -59,6 +59,7 @@ struct proc_shared_stream {
     atomic_uint side_refs[2];
     uintptr_t handles_frame;
     uintptr_t startup_frame;
+    PAL_HANDLE child_thread; /* the child's first PAL thread, freed after the child exits */
     struct proc_ring directions[2];
 };
 static_assert(sizeof(struct proc_shared_stream) <= PAGE_SIZE, "process stream must fit one frame");
@@ -76,6 +77,9 @@ static_assert(ALIGN_UP(2 * sizeof(struct pal_handle), _Alignof(struct proc_handl
 struct vm_process_startup {
     PAL_HANDLE child_process;
     const char** arguments;
+    /* the parent's reserved ranges, in frame-pool memory reachable from every root */
+    uintptr_t (*reserved_ranges)[2];
+    size_t reserved_ranges_count;
 };
 
 static atomic_bool g_process_manager_initialized;
@@ -83,6 +87,8 @@ static atomic_uint g_active_processes;
 static atomic_int g_root_exit_code;
 
 static int vm_process_child_start(void* arg);
+struct proc_shared_stream;
+static void vm_process_free_startup(struct proc_shared_stream* shared);
 static void vm_process_exit_cleanup(void* arg);
 static void vm_root_process_exit_cleanup(void* arg);
 
@@ -330,18 +336,93 @@ static void vm_process_reap_threads(struct memory_address_space* space) {
     }
 }
 
+static struct memory_address_space* current_space_for_tracking(void) {
+    if (!memory_frame_pool_active())
+        return NULL;
+    struct pal_tcb_vm* tcb = (struct pal_tcb_vm*)pal_get_tcb();
+    struct memory_address_space* space = tcb ? tcb->kernel_thread.address_space : NULL;
+    return space == memory_address_space_boot() ? NULL : space;
+}
+
+void vm_track_handle(PAL_HANDLE handle) {
+    struct memory_address_space* space = current_space_for_tracking();
+    if (!space)
+        return;
+    spinlock_lock(&space->handles_lock);
+    if (space->handles_count == space->handles_cap) {
+        size_t cap = space->handles_cap ? space->handles_cap * 2 : 32;
+        void** handles = malloc(cap * sizeof(*handles));
+        if (!handles) {
+            /* not fatal: the handle is then only not destroyed at process exit */
+            spinlock_unlock(&space->handles_lock);
+            return;
+        }
+        if (space->handles_count)
+            memcpy(handles, space->handles, space->handles_count * sizeof(*handles));
+        free(space->handles);
+        space->handles = handles;
+        space->handles_cap = cap;
+    }
+    space->handles[space->handles_count++] = handle;
+    spinlock_unlock(&space->handles_lock);
+}
+
+void vm_untrack_handle(PAL_HANDLE handle) {
+    struct memory_address_space* space = current_space_for_tracking();
+    if (!space)
+        return;
+    spinlock_lock(&space->handles_lock);
+    for (size_t i = space->handles_count; i > 0; i--) {
+        if (space->handles[i - 1] == handle) {
+            space->handles[i - 1] = space->handles[--space->handles_count];
+            break;
+        }
+    }
+    spinlock_unlock(&space->handles_lock);
+}
+
+/* Destroys the handles the exiting process still holds (dropping its share of shared ones), as
+ * Linux closes a process's descriptors at exit. With `keep_threads`, thread handles stay: their
+ * threads may still be scheduled; the exit cleanup destroys them after removing those threads. */
+static void vm_destroy_tracked_handles(struct memory_address_space* space, bool keep_threads) {
+    while (true) {
+        PAL_HANDLE handle = NULL;
+        spinlock_lock(&space->handles_lock);
+        for (size_t i = space->handles_count; i > 0; i--) {
+            PAL_HANDLE candidate = space->handles[i - 1];
+            if (keep_threads && candidate->hdr.type == PAL_TYPE_THREAD)
+                continue;
+            handle = candidate;
+            space->handles[i - 1] = space->handles[--space->handles_count];
+            break;
+        }
+        spinlock_unlock(&space->handles_lock);
+        if (!handle)
+            break;
+        _PalObjectDestroy(handle);
+    }
+    if (!keep_threads) {
+        free(space->handles);
+        space->handles = NULL;
+        space->handles_count = space->handles_cap = 0;
+    }
+}
+
 static void vm_process_exit_cleanup(void* arg) {
     uintptr_t stream_frame = (uintptr_t)arg;
     struct proc_shared_stream* shared = memory_frame_pointer(stream_frame);
     struct memory_address_space* child_space = proc_child_space(shared);
-    uintptr_t startup_frame = shared->startup_frame;
     PAL_HANDLE child_process = (PAL_HANDLE)memory_frame_pointer(shared->handles_frame) + 1;
 
     vm_process_reap_threads(child_space);
+    vm_destroy_tracked_handles(child_space, /*keep_threads=*/false);
+    if (shared->child_thread) {
+        _PalObjectDestroy(shared->child_thread);
+        shared->child_thread = NULL;
+    }
     (void)memory_address_space_destroy(child_space);
-    if (startup_frame)
-        (void)memory_frame_free(startup_frame);
-    shared->startup_frame = 0;
+    vm_process_free_startup(shared);
+    log_debug("process exit: %zu frame-pool frames in use", memory_frame_allocated_count());
     proc_destroy(child_process);
     vm_process_manager_exit();
 }
@@ -353,7 +434,22 @@ static void vm_root_process_exit_cleanup(void* arg) {
 
 static int vm_process_child_start(void* arg) {
     struct vm_process_startup* startup = arg;
+    vm_set_reserved_ranges((const uintptr_t (*)[2])startup->reserved_ranges,
+                           startup->reserved_ranges_count);
     vm_pal_process_start(startup->child_process, startup->arguments);
+}
+
+static void vm_process_free_startup(struct proc_shared_stream* shared) {
+    if (!shared->startup_frame)
+        return;
+    struct vm_process_startup* startup = memory_frame_pointer(shared->startup_frame);
+    if (startup->reserved_ranges) {
+        (void)memory_frame_free_contiguous(startup->reserved_ranges,
+                                           startup->reserved_ranges_count
+                                               * sizeof(*startup->reserved_ranges));
+    }
+    (void)memory_frame_free(shared->startup_frame);
+    shared->startup_frame = 0;
 }
 
 int vm_process_send_handle(PAL_HANDLE target_process, PAL_HANDLE cargo) {
@@ -503,8 +599,15 @@ noreturn void _PalProcessExit(int exitcode) {
     struct pal_tcb_vm* tcb = (struct pal_tcb_vm*)pal_get_tcb();
     if (tcb && tcb->kernel_thread.address_space &&
             tcb->kernel_thread.address_space->owner_frame) {
-        uintptr_t owner_frame = tcb->kernel_thread.address_space->owner_frame;
-        __atomic_store_n(&tcb->kernel_thread.address_space->exiting, 1, __ATOMIC_RELEASE);
+        struct memory_address_space* space = tcb->kernel_thread.address_space;
+        uintptr_t owner_frame = space->owner_frame;
+        /* stop the process's other threads, wait until none runs on another vCPU, then close
+         * what the process still holds while this thread can still block */
+        space->exit_thread = &tcb->kernel_thread;
+        __atomic_store_n(&space->exiting, 1, __ATOMIC_RELEASE);
+        while (sched_thread_space_has_other_running(space, &tcb->kernel_thread))
+            _PalThreadYieldExecution();
+        vm_destroy_tracked_handles(space, /*keep_threads=*/true);
         log_always("[ VM child exited with code %d ]", exitcode);
         sched_thread_set_exit_cleanup(vm_process_exit_cleanup, (void*)owner_frame);
         pal_common_thread_exit(NULL);
@@ -520,8 +623,6 @@ noreturn void _PalProcessExit(int exitcode) {
 
 int _PalProcessCreate(const char** args, uintptr_t (*reserved_mem_ranges)[2],
                       size_t reserved_mem_ranges_len, PAL_HANDLE* out_handle) {
-    __UNUSED(reserved_mem_ranges);
-    __UNUSED(reserved_mem_ranges_len);
     bool enabled = false;
     int ret = toml_bool_in(g_pal_public_state.manifest_root,
                            "sys.experimental__multiprocess", false, &enabled);
@@ -592,6 +693,19 @@ int _PalProcessCreate(const char** args, uintptr_t (*reserved_mem_ranges)[2],
         memcpy(strings, args[i], len);
         strings += len;
     }
+    if (reserved_mem_ranges_len) {
+        void* ranges;
+        ret = memory_frame_alloc_contiguous(reserved_mem_ranges_len * sizeof(*reserved_mem_ranges),
+                                            &ranges);
+        if (ret < 0) {
+            vm_process_free_startup(shared);
+            memory_address_space_destroy(child_space);
+            goto fail;
+        }
+        memcpy(ranges, reserved_mem_ranges, reserved_mem_ranges_len * sizeof(*reserved_mem_ranges));
+        startup->reserved_ranges = ranges;
+        startup->reserved_ranges_count = reserved_mem_ranges_len;
+    }
 
     struct pal_handle* child_thread = NULL;
     atomic_fetch_add_explicit(&g_active_processes, 1, memory_order_acq_rel);
@@ -600,11 +714,11 @@ int _PalProcessCreate(const char** args, uintptr_t (*reserved_mem_ranges)[2],
     if (ret < 0) {
         log_error("process child-thread creation failed: %d", ret);
         vm_process_manager_exit();
-        memory_frame_free(startup_frame);
-        shared->startup_frame = 0;
+        vm_process_free_startup(shared);
         memory_address_space_destroy(child_space);
         goto fail;
     }
+    shared->child_thread = child_thread;
 
     *out_handle = parent_process;
     return 0;

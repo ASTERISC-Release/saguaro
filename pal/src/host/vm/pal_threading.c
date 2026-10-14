@@ -35,6 +35,15 @@ void _PalThreadYieldExecution(void) {
 }
 
 int _PalThreadResume(struct pal_handle* thread) {
+#ifdef __x86_64__
+    /* Experimental multiprocess support only, for now: the default VM keeps its earlier behavior.
+     * A thread blocked in the LibOS is woken by the LibOS itself; one running or preempted in user
+     * mode handles its signals at its next timer tick in user mode. */
+    if (memory_frame_pool_active()) {
+        __atomic_store_n(&thread->thread.kernel_thread->resume_pending, true, __ATOMIC_RELEASE);
+        return 0;
+    }
+#endif
     __UNUSED(thread);
     return -PAL_ERROR_NOTIMPLEMENTED;
 }

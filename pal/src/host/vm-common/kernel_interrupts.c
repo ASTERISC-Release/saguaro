@@ -100,6 +100,11 @@ void isr_c(struct isr_regs* regs) {
             /* below code is currently only for diagnostics; we always panic on PFs */
             uint64_t faulted_addr;
             __asm__ volatile("mov %%cr2, %%rax" : "=a"(faulted_addr));
+#ifdef __x86_64__
+            /* first touch of a demand-zero page of a process address space */
+            if (memory_address_space_handle_fault(faulted_addr, regs->error_code))
+                break;
+#endif
 
             ret = pal_common_perform_memfault_handling(faulted_addr, regs);
             if (ret == 0) {
@@ -140,6 +145,9 @@ void isr_c(struct isr_regs* regs) {
                  * preemptive userland scheduling but cooperative kernel scheduling); note that we
                  * don't enable/disable interrupts via RFLAGS' IF because it will happen
                  * automatically during save_context / restore_context */
+#ifdef __x86_64__
+                pal_common_deliver_pending_interrupt(regs);
+#endif
                 sched_thread_uninterruptable(regs);
             }
             break;

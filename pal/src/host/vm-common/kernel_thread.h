@@ -153,6 +153,9 @@ struct thread {
 
 #ifdef __x86_64__
     struct memory_address_space* address_space;
+    /* set by _PalThreadResume(): deliver PAL_EVENT_INTERRUPTED when the thread next runs in user
+     * mode (see pal_common_deliver_pending_interrupt()) */
+    bool resume_pending;
 #endif
 
     /* CPU affinity of a thread */
@@ -182,6 +185,15 @@ struct thread {
     uint64_t sigreturn_user_rax;
     uint64_t sigreturn_pseudo_rsp; /* &sigreturn_pseudo_stack + sizeof(thread_irq_pseudo_stack) */
     struct thread_irq_pseudo_stack sigreturn_pseudo_stack;
+
+#ifdef __x86_64__
+    /* a LibOS upcall for an event of this thread in user mode, run outside the interrupt
+     * handler (see pal_common_exception.c) */
+    struct isr_regs upcall_regs;
+    void* upcall_fpregs;
+    uint64_t upcall_addr;
+    int upcall_event;
+#endif
 };
 DEFINE_LISTP(thread);
 

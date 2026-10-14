@@ -35,7 +35,27 @@ static size_t g_frame_alias_mapped_size;
 static uint8_t* g_frame_pool_bitmap;
 static uintptr_t* g_frame_owner_next;
 static uint8_t* g_frame_owner_kind;
+/* References held on a frame by page-table leaves of process roots (a forked child shares its
+ * parent's frames until it replaces them; MAP_SHARED memory stays shared). Other frame users
+ * (page tables, alias-only objects) hold the single reference set by memory_frame_alloc(). */
+static uint16_t* g_frame_refcount;
 static spinlock_t g_frame_pool_lock = INIT_SPINLOCK_UNLOCKED;
+
+/* The pool is also used by the page-fault handler (demand-zero pages), which runs with interrupts
+ * disabled: restore the caller's interrupt state instead of enabling interrupts on unlock (an
+ * interrupt nested on the shared IST stack would overwrite the handler's frame). */
+static inline uint64_t frame_pool_lock(void) {
+    uint64_t flags;
+    __asm__ volatile("pushfq; pop %0; cli" : "=r"(flags) : : "memory");
+    spinlock_lock(&g_frame_pool_lock);
+    return flags;
+}
+
+static inline void frame_pool_unlock(uint64_t flags) {
+    spinlock_unlock(&g_frame_pool_lock);
+    if (flags & 0x200)
+        __asm__ volatile("sti" : : : "memory");
+}
 
 /* A supervisor-only direct-map window gives every root stable access to physical frames and
  * page tables, even when a process remaps their identity addresses. */
@@ -45,7 +65,11 @@ static spinlock_t g_frame_pool_lock = INIT_SPINLOCK_UNLOCKED;
 #define PTE_PRESENT 0x001UL
 #define PTE_WRITE   0x002UL
 #define PTE_HUGE    0x080UL
+#define PTE_USER    0x004UL
 #define PTE_NX      (1UL << 63)
+/* Software bit of a non-present leaf (ignored by the hardware): a demand-zero page whose access
+ * rights are the entry's W and NX bits; see memory_address_space_handle_fault(). */
+#define PTE_LAZY    (1UL << 9)
 
 static struct memory_address_space g_boot_address_space;
 
@@ -102,6 +126,7 @@ static int memory_frame_pool_map_alias(size_t memory_size) {
     g_frame_pool_bitmap = memory_frame_pointer((uintptr_t)g_frame_pool_bitmap);
     g_frame_owner_next = memory_frame_pointer((uintptr_t)g_frame_owner_next);
     g_frame_owner_kind = memory_frame_pointer((uintptr_t)g_frame_owner_kind);
+    g_frame_refcount = memory_frame_pointer((uintptr_t)g_frame_refcount);
     g_boot_address_space.root = memory_frame_pointer(g_pml4_table_base);
     g_boot_address_space.root_phys = g_pml4_table_base;
     g_boot_address_space.base_root = g_boot_address_space.root;
@@ -133,10 +158,13 @@ int memory_frame_pool_init(uintptr_t addr, size_t size) {
     size_t owner_kind_size = frame_count * sizeof(*g_frame_owner_kind);
     g_frame_owner_next = memory_get_shared_region(owner_next_size);
     g_frame_owner_kind = memory_get_shared_region(owner_kind_size);
-    if (!g_frame_owner_next || !g_frame_owner_kind)
+    size_t refcount_size = frame_count * sizeof(*g_frame_refcount);
+    g_frame_refcount = memory_get_shared_region(refcount_size);
+    if (!g_frame_owner_next || !g_frame_owner_kind || !g_frame_refcount)
         return -PAL_ERROR_NOMEM;
     memset(g_frame_owner_next, 0, owner_next_size);
     memset(g_frame_owner_kind, 0, owner_kind_size);
+    memset(g_frame_refcount, 0, refcount_size);
     ret = memory_frame_pool_map_alias((uintptr_t)g_pal_public_state.memory_address_end);
     if (ret < 0)
         return ret;
@@ -149,7 +177,7 @@ int memory_frame_alloc(uintptr_t* out_frame) {
     if (!out_frame || !g_frame_pool_bitmap)
         return -PAL_ERROR_INVAL;
 
-    spinlock_lock_disable_irq(&g_frame_pool_lock);
+    uint64_t pool_irq_flags = frame_pool_lock();
     size_t frame_count = g_frame_pool_size / PAGE_SIZE;
     for (size_t scanned = 0; scanned < frame_count; scanned++) {
         size_t i = (g_frame_pool_next + scanned) % frame_count;
@@ -162,15 +190,16 @@ int memory_frame_alloc(uintptr_t* out_frame) {
         uintptr_t frame = g_frame_pool_start + i * PAGE_SIZE;
         g_frame_owner_next[i] = 0;
         g_frame_owner_kind[i] = 0;
+        g_frame_refcount[i] = 1;
 #ifdef ASAN
         asan_unpoison_region(frame, PAGE_SIZE);
 #endif
         _real_memset(memory_frame_pointer(frame), 0, PAGE_SIZE);
         *out_frame = frame;
-        spinlock_unlock_enable_irq(&g_frame_pool_lock);
+        frame_pool_unlock(pool_irq_flags);
         return 0;
     }
-    spinlock_unlock_enable_irq(&g_frame_pool_lock);
+    frame_pool_unlock(pool_irq_flags);
     return -PAL_ERROR_NOMEM;
 }
 
@@ -182,20 +211,21 @@ int memory_frame_free(uintptr_t frame) {
 
     size_t i = (frame - g_frame_pool_start) / PAGE_SIZE;
     uint8_t mask = 1U << (i % 8);
-    spinlock_lock_disable_irq(&g_frame_pool_lock);
+    uint64_t pool_irq_flags = frame_pool_lock();
     if (!(g_frame_pool_bitmap[i / 8] & mask)) {
-        spinlock_unlock_enable_irq(&g_frame_pool_lock);
+        frame_pool_unlock(pool_irq_flags);
         return -PAL_ERROR_INVAL;
     }
     g_frame_pool_bitmap[i / 8] &= ~mask;
     g_frame_owner_next[i] = 0;
     g_frame_owner_kind[i] = 0;
+    g_frame_refcount[i] = 0;
     if (i < g_frame_pool_next)
         g_frame_pool_next = i;
 #ifdef ASAN
     asan_poison_region(frame, PAGE_SIZE, ASAN_POISON_USER);
 #endif
-    spinlock_unlock_enable_irq(&g_frame_pool_lock);
+    frame_pool_unlock(pool_irq_flags);
     return 0;
 }
 
@@ -208,7 +238,7 @@ int memory_frame_alloc_contiguous(size_t size, void** out_alias) {
     if (!pages || pages > frame_count)
         return -PAL_ERROR_NOMEM;
 
-    spinlock_lock_disable_irq(&g_frame_pool_lock);
+    uint64_t pool_irq_flags = frame_pool_lock();
     size_t first = g_frame_pool_next;
     for (size_t scanned = 0; scanned < frame_count; scanned++) {
         size_t start = (first + scanned) % frame_count;
@@ -232,14 +262,15 @@ int memory_frame_alloc_contiguous(size_t size, void** out_alias) {
             g_frame_pool_bitmap[i / 8] |= 1U << (i % 8);
             g_frame_owner_next[i] = 0;
             g_frame_owner_kind[i] = 0;
+            g_frame_refcount[i] = 1;
             _real_memset(memory_frame_pointer(frame + j * PAGE_SIZE), 0, PAGE_SIZE);
         }
         g_frame_pool_next = (start + pages) % frame_count;
         *out_alias = memory_frame_pointer(frame);
-        spinlock_unlock_enable_irq(&g_frame_pool_lock);
+        frame_pool_unlock(pool_irq_flags);
         return 0;
     }
-    spinlock_unlock_enable_irq(&g_frame_pool_lock);
+    frame_pool_unlock(pool_irq_flags);
     return -PAL_ERROR_NOMEM;
 }
 
@@ -256,11 +287,11 @@ int memory_frame_free_contiguous(void* alias, size_t size) {
         return -PAL_ERROR_INVAL;
 
     size_t start = (frame - g_frame_pool_start) / PAGE_SIZE;
-    spinlock_lock_disable_irq(&g_frame_pool_lock);
+    uint64_t pool_irq_flags = frame_pool_lock();
     for (size_t j = 0; j < pages; j++) {
         size_t i = start + j;
         if (!(g_frame_pool_bitmap[i / 8] & (1U << (i % 8)))) {
-            spinlock_unlock_enable_irq(&g_frame_pool_lock);
+            frame_pool_unlock(pool_irq_flags);
             return -PAL_ERROR_INVAL;
         }
     }
@@ -269,11 +300,57 @@ int memory_frame_free_contiguous(void* alias, size_t size) {
         g_frame_pool_bitmap[i / 8] &= ~(1U << (i % 8));
         g_frame_owner_next[i] = 0;
         g_frame_owner_kind[i] = 0;
+        g_frame_refcount[i] = 0;
     }
     if (start < g_frame_pool_next)
         g_frame_pool_next = start;
-    spinlock_unlock_enable_irq(&g_frame_pool_lock);
+    frame_pool_unlock(pool_irq_flags);
     return 0;
+}
+
+static bool is_frame_pool_frame(uintptr_t frame) {
+    return g_frame_pool_bitmap && frame >= g_frame_pool_start &&
+           frame < g_frame_pool_start + g_frame_pool_size &&
+           IS_ALIGNED_POW2(frame, PAGE_SIZE);
+}
+
+/* Takes another leaf reference on an allocated pool frame; other frames are ignored. */
+static void memory_frame_get(uintptr_t frame) {
+    if (!is_frame_pool_frame(frame))
+        return;
+    size_t i = (frame - g_frame_pool_start) / PAGE_SIZE;
+    uint64_t pool_irq_flags = frame_pool_lock();
+    if (!(g_frame_pool_bitmap[i / 8] & (1U << (i % 8))) || g_frame_refcount[i] == UINT16_MAX) {
+        frame_pool_unlock(pool_irq_flags);
+        log_error("Invalid reference to frame %p", (void*)frame);
+        BUG();
+    }
+    g_frame_refcount[i]++;
+    frame_pool_unlock(pool_irq_flags);
+}
+
+/* Drops a leaf reference; the last one returns the frame to the pool. The caller must have
+ * flushed stale translations of the leaf it removed. */
+static void memory_frame_put(uintptr_t frame) {
+    if (!is_frame_pool_frame(frame))
+        return;
+    size_t i = (frame - g_frame_pool_start) / PAGE_SIZE;
+    uint64_t pool_irq_flags = frame_pool_lock();
+    if (!(g_frame_pool_bitmap[i / 8] & (1U << (i % 8))) || !g_frame_refcount[i]) {
+        frame_pool_unlock(pool_irq_flags);
+        log_error("Unbalanced release of frame %p", (void*)frame);
+        BUG();
+    }
+    bool last = --g_frame_refcount[i] == 0;
+    if (last)
+        g_frame_refcount[i] = 1; /* memory_frame_free() below releases it */
+    frame_pool_unlock(pool_irq_flags);
+    if (last && memory_frame_free(frame) < 0)
+        BUG();
+}
+
+bool memory_frame_pool_active(void) {
+    return !!g_frame_pool_bitmap;
 }
 
 size_t memory_frame_allocated_count(void) {
@@ -281,10 +358,10 @@ size_t memory_frame_allocated_count(void) {
         return 0;
     size_t count = 0;
     size_t frame_count = g_frame_pool_size / PAGE_SIZE;
-    spinlock_lock_disable_irq(&g_frame_pool_lock);
+    uint64_t pool_irq_flags = frame_pool_lock();
     for (size_t i = 0; i < frame_count; i++)
         count += !!(g_frame_pool_bitmap[i / 8] & (1U << (i % 8)));
-    spinlock_unlock_enable_irq(&g_frame_pool_lock);
+    frame_pool_unlock(pool_irq_flags);
     return count;
 }
 
@@ -374,28 +451,49 @@ int memory_address_space_clone(uint64_t base_root, struct memory_address_space* 
     return 0;
 }
 
+/* Whether a leaf holds a reference on its frame: every pool frame mapped at a user address does;
+ * the supervisor identity mapping of the pool itself (inherited from the boot tables) does not. */
+static bool leaf_holds_reference(uintptr_t va, uint64_t entry) {
+    uintptr_t frame = entry & 0x00000ffffffff000UL;
+    return is_frame_pool_frame(frame) && frame != va;
+}
+
 /* Descendants get private copies of every page-table page. Their leaves keep the same physical
  * mappings; process-private memory is copied separately by the caller. */
 static int address_space_copy_table_tree(struct memory_address_space* target, uint64_t* table,
-                                         unsigned int level) {
+                                         unsigned int level, uintptr_t va_base) {
     const uint64_t addr_mask = 0x00000ffffffff000UL;
     size_t alias_pml4_idx = (FRAME_POOL_ALIAS_BASE >> 39) & 0x1ff;
     for (size_t i = 0; i < 512; i++) {
         uint64_t entry = table[i];
-        if (!(entry & PTE_PRESENT) || level == 1 ||
+        if (level == 1) {
+            /* the child's leaf shares the frame (present or kept in a PROT_NONE entry) */
+            if (leaf_holds_reference(va_base + i * PAGE_SIZE, entry))
+                memory_frame_get(entry & addr_mask);
+            continue;
+        }
+        if (!(entry & PTE_PRESENT) ||
                 ((level == 2 || level == 3) && (entry & PTE_HUGE)) ||
                 (level == 4 && i == alias_pml4_idx))
             continue;
 
         uint64_t* child;
         int ret = address_space_alloc_table_page(target, &child);
-        if (ret < 0)
+        if (ret < 0) {
+            /* entries from `i` on still point to the source's tables: drop them, so that the
+             * caller's destroy releases only what this copy referenced */
+            memset(&table[i], 0, (512 - i) * sizeof(*table));
             return ret;
+        }
         memcpy(child, memory_frame_pointer(entry & addr_mask), PAGE_SIZE);
         table[i] = (entry & ~addr_mask) | (memory_frame_from_pointer(child) & addr_mask);
-        ret = address_space_copy_table_tree(target, child, level - 1);
-        if (ret < 0)
+        uintptr_t shift = level == 4 ? 39 : level == 3 ? 30 : 21;
+        ret = address_space_copy_table_tree(target, child, level - 1, va_base + (i << shift));
+        if (ret < 0) {
+            if (i + 1 < 512)
+                memset(&table[i + 1], 0, (512 - i - 1) * sizeof(*table));
             return ret;
+        }
     }
     return 0;
 }
@@ -413,15 +511,38 @@ int memory_address_space_clone_from(const struct memory_address_space* source,
     out_space->root = root;
     out_space->root_phys = memory_frame_from_pointer(root);
     out_space->base_root = NULL;
-    ret = address_space_copy_table_tree(out_space, root, 4);
+    ret = address_space_copy_table_tree(out_space, root, 4, 0);
     if (ret < 0)
         memory_address_space_destroy(out_space);
     return ret;
 }
 
+/* Drops the leaf references of the tables this space owns. Tables still shared with the boot root
+ * (not pool frames) are not descended into: they hold no references. */
+static void address_space_put_leaves(uint64_t* table, unsigned int level, uintptr_t va_base) {
+    const uint64_t addr_mask = 0x00000ffffffff000UL;
+    size_t alias_pml4_idx = (FRAME_POOL_ALIAS_BASE >> 39) & 0x1ff;
+    for (size_t i = 0; i < 512; i++) {
+        uint64_t entry = table[i];
+        uintptr_t frame = entry & addr_mask;
+        if (level == 1) {
+            if (leaf_holds_reference(va_base + i * PAGE_SIZE, entry))
+                memory_frame_put(frame);
+            continue;
+        }
+        if (!(entry & PTE_PRESENT) || ((level == 2 || level == 3) && (entry & PTE_HUGE)) ||
+                (level == 4 && i == alias_pml4_idx) || !is_frame_pool_frame(frame))
+            continue;
+        uintptr_t shift = level == 4 ? 39 : level == 3 ? 30 : 21;
+        address_space_put_leaves(memory_frame_pointer(frame), level - 1, va_base + (i << shift));
+    }
+}
+
 size_t memory_address_space_destroy(struct memory_address_space* space) {
     if (!space)
         return 0;
+    if (space->root && space->root_phys && g_frame_pool_bitmap)
+        address_space_put_leaves(space->root, 4, 0);
     uintptr_t frame = space->owned_frame_head;
     size_t released = 0;
     while (frame) {
@@ -462,15 +583,26 @@ int memory_address_space_copy_private_range(struct memory_address_space* source,
             return ret;
         memcpy(memory_frame_pointer(frame),
                memory_frame_pointer(*source_entry & 0x00000ffffffff000UL), PAGE_SIZE);
-        ret = address_space_track_frame(target, frame, /*is_page_table=*/false);
+        uint64_t* target_entry;
+        ret = address_space_get_leaf_entry(target, va, /*make_private=*/true, &target_entry);
         if (ret < 0) {
             memory_frame_free(frame);
             return ret;
         }
+        uintptr_t old_frame = *target_entry & 0x00000ffffffff000UL;
         ret = memory_address_space_map(target, va, frame, /*write=*/true, /*execute=*/false,
                                        /*usermode=*/false);
-        if (ret < 0)
+        if (ret < 0) {
+            memory_frame_free(frame);
             return ret;
+        }
+        /* the new leaf owns `frame`; the reference of the replaced leaf goes after the flush */
+        if (is_frame_pool_frame(old_frame)) {
+            ret = memory_address_space_flush_range(va, PAGE_SIZE);
+            if (ret < 0)
+                return ret;
+            memory_frame_put(old_frame);
+        }
     }
     return memory_address_space_flush_range(addr, size);
 }
@@ -566,6 +698,37 @@ int memory_address_space_map(struct memory_address_space* space, uintptr_t addr,
     return 0;
 }
 
+int memory_address_space_map_owned(struct memory_address_space* space, uintptr_t addr,
+                                   uintptr_t frame, bool write, bool execute, bool usermode) {
+    uint64_t* pte;
+    int ret = address_space_get_leaf_entry(space, addr, /*make_private=*/true, &pte);
+    if (ret < 0)
+        return ret;
+    uintptr_t old_frame = *pte & 0x00000ffffffff000UL;
+    ret = memory_address_space_map(space, addr, frame, write, execute, usermode);
+    if (ret < 0)
+        return ret;
+    if (is_frame_pool_frame(old_frame) && old_frame != frame) {
+        ret = memory_address_space_flush_range(addr, PAGE_SIZE);
+        if (ret < 0)
+            return ret;
+        memory_frame_put(old_frame);
+    }
+    return 0;
+}
+
+int memory_address_space_map_shared_frame(struct memory_address_space* space, uintptr_t addr,
+                                          uintptr_t frame, bool write, bool execute) {
+    if (!is_frame_pool_frame(frame))
+        return -PAL_ERROR_INVAL;
+    memory_frame_get(frame);
+    int ret = memory_address_space_map_owned(space, addr, frame, write, execute,
+                                             /*usermode=*/true);
+    if (ret < 0)
+        memory_frame_put(frame);
+    return ret;
+}
+
 int memory_address_space_share_range(struct memory_address_space* source,
                                     struct memory_address_space* target, uintptr_t addr,
                                     size_t size) {
@@ -598,6 +761,15 @@ int memory_address_space_share_range_noflush(struct memory_address_space* source
             return ret;
         if (*target_pte == entry)
             continue;
+        uintptr_t old_frame = *target_pte & addr_mask;
+        if (old_frame != (entry & addr_mask)) {
+            if (leaf_holds_reference(va, *target_pte)) {
+                /* releasing it would need a flush first; no caller replaces owned frames here */
+                return -PAL_ERROR_DENIED;
+            }
+            if (leaf_holds_reference(va, entry))
+                memory_frame_get(entry & addr_mask);
+        }
         *target_pte = entry;
         changed = true;
         uint64_t current_root;
@@ -1549,17 +1721,6 @@ int memory_free(void* addr, size_t size) {
 }
 
 #ifdef __x86_64__
-struct frame_alloc_record {
-    uintptr_t next;
-    uint64_t old_pte;
-};
-
-static bool is_frame_pool_frame(uintptr_t frame) {
-    return g_frame_pool_bitmap && frame >= g_frame_pool_start &&
-           frame < g_frame_pool_start + g_frame_pool_size &&
-           IS_ALIGNED_POW2(frame, PAGE_SIZE);
-}
-
 static int address_space_restore_pte(struct memory_address_space* space, uintptr_t addr,
                                      uint64_t pte) {
     uint64_t* entry;
@@ -1594,105 +1755,124 @@ int memory_address_space_alloc(struct memory_address_space* space, void* addr, s
         return -PAL_ERROR_DENIED;
 
     if (!read && !write && !execute) {
+        /* An inaccessible reservation has no backing: a later mprotect() gives it fresh frames
+         * (keeping the identity frame here would share it with every other process). A pool frame
+         * of a previous mapping stays in the non-present entry until after the flush. */
         for (uintptr_t va = (uintptr_t)addr; va < (uintptr_t)addr + size; va += PAGE_SIZE) {
             uint64_t* entry;
             int ret = address_space_get_leaf_entry(space, va, /*make_private=*/false, &entry);
             if (ret < 0)
                 return ret;
             uint64_t physical = *entry & 0x00000ffffffff000UL;
-            ret = address_space_restore_pte(space, va, physical);
+            ret = address_space_restore_pte(space, va, is_frame_pool_frame(physical) ? physical : 0);
             if (ret < 0)
                 return ret;
         }
         int ret = memory_address_space_flush_range((uintptr_t)addr, size);
         if (ret < 0)
             return ret;
+        for (uintptr_t va = (uintptr_t)addr; va < (uintptr_t)addr + size; va += PAGE_SIZE) {
+            uint64_t* entry;
+            ret = address_space_get_leaf_entry(space, va, /*make_private=*/false, &entry);
+            if (ret < 0)
+                return ret;
+            memory_frame_put(*entry & 0x00000ffffffff000UL);
+            *entry = 0;
+        }
 #ifdef ASAN
         asan_poison_region((uintptr_t)addr, size, ASAN_POISON_USER);
 #endif
         return 0;
     }
 
-    /* Allocate all frames first and keep rollback data in each not-yet-mapped frame. */
-    uintptr_t frame_list = 0;
+    /* Demand-zero paging: install lazy entries; memory_address_space_handle_fault() gives each
+     * page a zeroed frame on first access, so a process pays only for the pages it touches. */
+    uint64_t lazy = PTE_LAZY | (write ? PTE_WRITE : 0) | (execute ? 0 : PTE_NX);
     for (uintptr_t va = (uintptr_t)addr; va < (uintptr_t)addr + size; va += PAGE_SIZE) {
-        uintptr_t frame;
-        int ret = memory_frame_alloc(&frame);
-        if (ret < 0) {
-            while (frame_list) {
-                struct frame_alloc_record* record = memory_frame_pointer(frame_list);
-                uintptr_t next = record->next;
-                memory_frame_free(frame_list);
-                frame_list = next;
-            }
+        /* create all page tables first, so that a failure changes no mapping */
+        uint64_t* entry;
+        int ret = address_space_get_leaf_entry(space, va, /*make_private=*/true, &entry);
+        if (ret < 0)
             return ret;
-        }
-
-        uint64_t* old_pte;
-        ret = address_space_get_leaf_entry(space, va, /*make_private=*/false, &old_pte);
-        if (ret < 0) {
-            memory_frame_free(frame);
-            while (frame_list) {
-                struct frame_alloc_record* record = memory_frame_pointer(frame_list);
-                uintptr_t next = record->next;
-                memory_frame_free(frame_list);
-                frame_list = next;
-            }
-            return ret;
-        }
-        struct frame_alloc_record* record = memory_frame_pointer(frame);
-        record->next = frame_list;
-        record->old_pte = *old_pte;
-        frame_list = frame;
     }
-
-    uintptr_t frame = frame_list;
-    size_t mapped_pages = 0;
-    for (uintptr_t va = (uintptr_t)addr + size - PAGE_SIZE;; va -= PAGE_SIZE) {
-        struct frame_alloc_record* record = memory_frame_pointer(frame);
-        uintptr_t next = record->next;
-        int ret = memory_address_space_map(space, va, frame, write, execute, /*usermode=*/true);
-        if (ret < 0) {
-            uintptr_t rollback_frame = frame_list;
-            for (size_t i = 0; i < mapped_pages; i++) {
-                struct frame_alloc_record* rollback_record = memory_frame_pointer(rollback_frame);
-                uintptr_t rollback_next = rollback_record->next;
-                uintptr_t rollback_va = (uintptr_t)addr + size - PAGE_SIZE - i * PAGE_SIZE;
-                address_space_restore_pte(space, rollback_va, rollback_record->old_pte);
-                rollback_frame = rollback_next;
-            }
-            if (mapped_pages && memory_address_space_flush_range((uintptr_t)addr, size) < 0)
-                BUG();
-            rollback_frame = frame_list;
-            for (size_t i = 0; i < mapped_pages; i++) {
-                struct frame_alloc_record* rollback_record = memory_frame_pointer(rollback_frame);
-                uintptr_t rollback_next = rollback_record->next;
-                memory_frame_free(rollback_frame);
-                rollback_frame = rollback_next;
-            }
-            while (rollback_frame) {
-                struct frame_alloc_record* rollback_record = memory_frame_pointer(rollback_frame);
-                uintptr_t rollback_next = rollback_record->next;
-                memory_frame_free(rollback_frame);
-                rollback_frame = rollback_next;
-            }
+    bool replaced_frames = false;
+    for (uintptr_t va = (uintptr_t)addr; va < (uintptr_t)addr + size; va += PAGE_SIZE) {
+        uint64_t* entry;
+        int ret = address_space_get_leaf_entry(space, va, /*make_private=*/true, &entry);
+        if (ret < 0)
             return ret;
+        if (leaf_holds_reference(va, *entry)) {
+            /* keep the frame in a non-present entry until other vCPUs dropped it */
+            *entry &= ~PTE_PRESENT;
+            replaced_frames = true;
+        } else {
+            *entry = lazy;
         }
-        mapped_pages++;
-        frame = next;
-        if (va == (uintptr_t)addr)
-            break;
+        uint64_t current_root;
+        __asm__ volatile("mov %%cr3, %0" : "=r"(current_root));
+        if ((current_root & 0x00000ffffffff000UL) == space->root_phys)
+            __asm__ volatile("invlpg (%0)" : : "r"(va) : "memory");
     }
 
     int ret = memory_address_space_flush_range((uintptr_t)addr, size);
     if (ret < 0)
         return ret;
 
+    if (replaced_frames) {
+        for (uintptr_t va = (uintptr_t)addr; va < (uintptr_t)addr + size; va += PAGE_SIZE) {
+            uint64_t* entry;
+            ret = address_space_get_leaf_entry(space, va, /*make_private=*/false, &entry);
+            if (ret < 0)
+                return ret;
+            if (leaf_holds_reference(va, *entry)) {
+                memory_frame_put(*entry & 0x00000ffffffff000UL);
+                *entry = lazy;
+            }
+        }
+    }
+
 #ifdef ASAN
     asan_unpoison_region((uintptr_t)addr, size);
 #endif
-    memset(addr, 0, size);
     return 0;
+}
+
+/* Page-fault hook: materializes a demand-zero page of the current address space. Returns false
+ * for any other fault. Runs in interrupt context, for faults from user and kernel mode alike. */
+bool memory_address_space_handle_fault(uintptr_t addr, uint64_t error_code) {
+    const uint64_t addr_mask = 0x00000ffffffff000UL;
+    if (!g_frame_pool_bitmap || (error_code & PTE_PRESENT) || addr >= 512UL * 1024 * 1024 * 1024)
+        return false; /* protection violation on a present page, or not a user address */
+
+    uint64_t root;
+    __asm__ volatile("mov %%cr3, %0" : "=r"(root));
+    uint64_t* table = memory_frame_pointer(root & addr_mask);
+    for (unsigned int shift = 39; shift > 12; shift -= 9) {
+        uint64_t entry = table[(addr >> shift) & 0x1ff];
+        if (!(entry & PTE_PRESENT) || (entry & PTE_HUGE))
+            return false;
+        table = memory_frame_pointer(entry & addr_mask);
+    }
+    uint64_t* pte = &table[(addr >> 12) & 0x1ff];
+    uint64_t old = __atomic_load_n(pte, __ATOMIC_ACQUIRE);
+    if (old & PTE_PRESENT)
+        return true; /* another vCPU materialized it meanwhile */
+    if (!(old & PTE_LAZY))
+        return false;
+    if ((error_code & PTE_WRITE) && !(old & PTE_WRITE))
+        return false; /* write to a read-only page: a genuine fault */
+
+    uintptr_t frame;
+    if (memory_frame_alloc(&frame) < 0) {
+        log_error("Out of frames for a demand-zero page at 0x%lx", addr);
+        return false;
+    }
+    uint64_t new = frame | PTE_PRESENT | (old & PTE_WRITE) | PTE_USER | (old & PTE_NX);
+    if (!__atomic_compare_exchange_n(pte, &old, new, /*weak=*/false, __ATOMIC_ACQ_REL,
+                                     __ATOMIC_ACQUIRE)) {
+        memory_frame_free(frame); /* lost a race; the winner's mapping (or change) stands */
+    }
+    return true;
 }
 
 __attribute_no_sanitize_address
@@ -1743,9 +1923,8 @@ int memory_address_space_free(struct memory_address_space* space, void* addr, si
             return ret;
         uintptr_t frame = *entry & addr_mask;
         if (is_frame_pool_frame(frame)) {
-            ret = memory_frame_free(frame);
-            if (ret < 0)
-                return ret;
+            memory_frame_put(frame);
+            *entry = 0;
         }
     }
 #ifdef ASAN
@@ -1780,7 +1959,12 @@ int memory_address_space_protect(struct memory_address_space* space, void* addr,
         if (ret < 0)
             return ret;
         uintptr_t frame = *entry & addr_mask;
-        if (!read && !write && !execute) {
+        if (!(*entry & PTE_PRESENT) && !leaf_holds_reference(va, *entry)) {
+            /* an unbacked page (never touched, or a PROT_NONE reservation) stays demand-zero */
+            uint64_t lazy = (!read && !write && !execute)
+                            ? 0 : PTE_LAZY | (write ? PTE_WRITE : 0) | (execute ? 0 : PTE_NX);
+            ret = address_space_restore_pte(space, va, lazy);
+        } else if (!read && !write && !execute) {
             ret = address_space_restore_pte(space, va, frame);
         } else {
             ret = memory_address_space_map(space, va, frame, write, execute, /*usermode=*/true);

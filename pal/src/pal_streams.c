@@ -105,7 +105,9 @@ int _PalStreamOpen(PAL_HANDLE* handle, const char* typed_uri, enum pal_access ac
 int PalStreamOpen(const char* typed_uri, enum pal_access access, pal_share_flags_t share,
                   enum pal_create_mode create, pal_stream_options_t options, PAL_HANDLE* handle) {
     *handle = NULL;
-    return _PalStreamOpen(handle, typed_uri, access, share, create, options);
+    int ret = _PalStreamOpen(handle, typed_uri, access, share, create, options);
+    PAL_TRACK_HANDLE(ret, *handle);
+    return ret;
 }
 
 static int _PalStreamWaitForClient(PAL_HANDLE handle, PAL_HANDLE* client,
@@ -125,7 +127,9 @@ static int _PalStreamWaitForClient(PAL_HANDLE handle, PAL_HANDLE* client,
 
 int PalStreamWaitForClient(PAL_HANDLE handle, PAL_HANDLE* client, pal_stream_options_t options) {
     *client = NULL;
-    return _PalStreamWaitForClient(handle, client, options);
+    int ret = _PalStreamWaitForClient(handle, client, options);
+    PAL_TRACK_HANDLE(ret, *client);
+    return ret;
 }
 
 int _PalStreamDelete(PAL_HANDLE handle, enum pal_delete_mode delete_mode) {
@@ -374,7 +378,9 @@ int PalReceiveHandle(PAL_HANDLE source_process, PAL_HANDLE* out_cargo) {
     }
 
     *out_cargo = NULL;
-    return _PalReceiveHandle(source_process, out_cargo);
+    int ret = _PalReceiveHandle(source_process, out_cargo);
+    PAL_TRACK_HANDLE(ret, *out_cargo);
+    return ret;
 }
 
 int PalStreamChangeName(PAL_HANDLE hdl, const char* typed_uri) {

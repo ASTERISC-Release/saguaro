@@ -43,6 +43,9 @@ noreturn static void __libos_syscall_execve_rtld(void* new_argp, elf_auxv_t* new
         /* Don't free the current stack */
         if (vma->addr == cur_thread->stack || vma->addr == cur_thread->stack_red)
             continue;
+        /* Keep PAL reservations for MAP_FIXED users (they exist from process start on) */
+        if (is_untouched_user_reserved_range(vma))
+            continue;
 
         void* tmp_vma = NULL;
         if (bkeep_munmap(vma->addr, vma->length, !!(vma->flags & VMA_INTERNAL), &tmp_vma) < 0) {

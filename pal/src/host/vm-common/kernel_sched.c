@@ -108,7 +108,8 @@ static void save_userland_context(struct thread* curr_thread, struct isr_regs* u
 
 static bool thread_is_exiting(struct thread* thread) {
     return thread->address_space && __atomic_load_n(&thread->address_space->exiting,
-                                                    __ATOMIC_ACQUIRE);
+                                                    __ATOMIC_ACQUIRE)
+           && thread->address_space->exit_thread != thread;
 }
 
 static struct thread* find_next_thread(struct thread* curr_thread) {
@@ -378,6 +379,21 @@ void sched_thread_set_exit_cleanup(void (*cleanup)(void*), void* arg) {
 }
 
 #ifdef __x86_64__
+bool sched_thread_space_has_other_running(struct memory_address_space* space,
+                                          struct thread* self) {
+    bool running = false;
+    spinlock_lock_disable_irq(&g_thread_list_lock);
+    struct thread* thread;
+    LISTP_FOR_EACH_ENTRY(thread, &g_thread_list, list) {
+        if (thread->address_space == space && thread != self && thread->state == THREAD_RUNNING) {
+            running = true;
+            break;
+        }
+    }
+    spinlock_unlock_enable_irq(&g_thread_list_lock);
+    return running;
+}
+
 size_t sched_thread_remove_exiting(struct memory_address_space* space, struct thread** out_threads,
                                    size_t max, bool* out_running) {
     size_t count = 0;

@@ -73,6 +73,7 @@ DEFINE_LISTP(pal_handle);
 /* Set if an error was seen on this handle. Currently only set by `_PalStreamsWaitEvents`. */
 #define PAL_HANDLE_FD_ERROR     4
 
+void vm_set_reserved_ranges(const uintptr_t (*ranges)[2], size_t count);
 int vm_process_stream_selfcheck(void);
 int vm_process_runtime_copy_selfcheck(void);
 int vm_process_send_handle(PAL_HANDLE target_process, PAL_HANDLE cargo);

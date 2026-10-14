@@ -121,6 +121,9 @@ int dump_vmas_in_range(uintptr_t begin, uintptr_t end, bool include_unmapped,
                        struct libos_vma_info** out_infos, size_t* out_count);
 void free_vma_info_array(struct libos_vma_info* vma_infos, size_t count);
 
+/* Whether `vma` is exactly a PAL-reserved range for later MAP_FIXED users, still untouched. */
+bool is_untouched_user_reserved_range(const struct libos_vma_info* vma);
+
 /* Implementation of madvise(MADV_DONTNEED) syscall */
 int madvise_dontneed_range(uintptr_t begin, uintptr_t end);
 

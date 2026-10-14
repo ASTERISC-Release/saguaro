@@ -27,6 +27,9 @@ void _PalObjectDestroy(PAL_HANDLE handle) {
 
 void PalObjectDestroy(PAL_HANDLE handle) {
     assert(handle);
+#if defined(PAL_HOST_VM) && defined(__x86_64__)
+    vm_untrack_handle(handle);
+#endif
     _PalObjectDestroy(handle);
 }
 

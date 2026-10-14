@@ -8,6 +8,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "spinlock.h"
+
 #define PAGE_TABLES_ADDR 0x20000000UL          /* page tables occupy [512MB, 658MB) */
 #define PAGE_TABLES_SIZE (146UL * 1024 * 1024) /* 146MB, enough to describe 64GB of addr space +
                                                 * AddressSanitizer shadow memory for these 64GB */
@@ -55,6 +57,8 @@ int memory_frame_alloc_contiguous(size_t size, void** out_alias);
 int memory_frame_free_contiguous(void* alias, size_t size);
 bool memory_frame_is_alias_pointer(const void* pointer);
 size_t memory_frame_allocated_count(void);
+/* True once the experimental multiprocess support has set up the frame pool. */
+bool memory_frame_pool_active(void);
 /* Return the stable supervisor alias for a physical frame address. */
 void* memory_frame_pointer(uintptr_t frame);
 
@@ -64,9 +68,16 @@ struct memory_address_space {
     uint64_t* base_root;
     uintptr_t owned_frame_head;
     uintptr_t owner_frame;
-    /* set when the process exits: its remaining threads are never scheduled again and are
-     * removed before the address space is destroyed */
+    /* set when the process exits: its remaining threads (except `exit_thread`, which performs
+     * the exit) are never scheduled again and are removed before the address space is destroyed */
     uint32_t exiting;
+    void* exit_thread;
+    /* PAL handles this process obtained through the PAL API and has not destroyed; the process's
+     * exit destroys them (see vm_track_handle()); array in PAL memory, guarded by the lock */
+    void** handles;
+    size_t handles_count;
+    size_t handles_cap;
+    spinlock_t handles_lock;
 };
 struct memory_address_space* memory_address_space_boot(void);
 int memory_address_space_clone(uint64_t base_root, struct memory_address_space* out_space);
@@ -78,6 +89,15 @@ int memory_address_space_copy_private_range(struct memory_address_space* source,
                                             size_t size);
 int memory_address_space_map(struct memory_address_space* space, uintptr_t addr,
                              uintptr_t frame, bool write, bool execute, bool usermode);
+/* Maps `frame` at `addr` and hands the caller's reference on it to the leaf (the address space
+ * releases it when the leaf is replaced or the space is destroyed); releases the replaced leaf's
+ * frame. memory_address_space_map() is the raw variant that moves no references. */
+int memory_address_space_map_owned(struct memory_address_space* space, uintptr_t addr,
+                                   uintptr_t frame, bool write, bool execute, bool usermode);
+/* Maps a frame that stays referenced elsewhere too (a shared file page): the leaf takes its own
+ * reference. */
+int memory_address_space_map_shared_frame(struct memory_address_space* space, uintptr_t addr,
+                                          uintptr_t frame, bool write, bool execute);
 int memory_address_space_share_range(struct memory_address_space* source,
                                      struct memory_address_space* target, uintptr_t addr,
                                      size_t size);
@@ -91,6 +111,7 @@ int memory_address_space_free(struct memory_address_space* space, void* addr, si
 int memory_address_space_protect(struct memory_address_space* space, void* addr, size_t size,
                                  bool read, bool write, bool execute);
 int memory_address_space_switch(const struct memory_address_space* space);
+bool memory_address_space_handle_fault(uintptr_t addr, uint64_t error_code);
 int memory_address_space_switch_root(uint64_t root);
 #endif
 

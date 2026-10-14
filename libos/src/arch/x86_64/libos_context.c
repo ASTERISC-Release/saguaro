@@ -251,6 +251,12 @@ void prepare_sigframe(PAL_CONTEXT* context, siginfo_t* siginfo, void* handler, v
         uint64_t user_rip;
         void* user_rip_ptr = (char*)pal_get_tcb() + g_pal_public_state->vm_user_rip_offset;
         memcpy(&user_rip, user_rip_ptr, sizeof(user_rip));
+        if (context->rip == (uint64_t)&libos_syscall_entry) {
+            /* restart_syscall() asked to re-run the interrupted syscall (RAX already holds its
+             * number): after the handler, return to the app's 2-byte `syscall` instruction, as
+             * Linux does, instead of past it. */
+            user_rip -= 2;
+        }
         ucontext_set_ip(&sigframe->uc, user_rip);
     }
 

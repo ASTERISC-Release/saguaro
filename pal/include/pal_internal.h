@@ -315,6 +315,16 @@ void init_slab_mgr(void);
 int pal_enable_shared_frame_slab_allocator(void);
 /* Drops one reference of a handle shared with another process; true if others still hold it. */
 bool vm_handle_release_share(PAL_HANDLE handle);
+/* Per-process record of the handles given to the LibOS, destroyed when the process exits. */
+void vm_track_handle(PAL_HANDLE handle);
+void vm_untrack_handle(PAL_HANDLE handle);
+#define PAL_TRACK_HANDLE(ret, handle)              \
+    do {                                           \
+        if ((ret) >= 0 && (handle))                \
+            vm_track_handle(handle);               \
+    } while (0)
+#else
+#define PAL_TRACK_HANDLE(ret, handle) do {} while (0)
 #endif
 void* malloc(size_t size);
 void* calloc(size_t num, size_t size);
