@@ -12,6 +12,9 @@
 #include "kernel_interrupts.h"
 #include "kernel_memory.h"
 
+extern char __process_data_start[];
+extern char __process_data_end[];
+
 #define PROC_STREAM_CAPACITY 1984
 
 struct proc_ring {
@@ -288,6 +291,98 @@ int vm_process_stream_selfcheck(void) {
 out:
     proc_destroy(parent);
     proc_destroy(child);
+    if (memory_frame_allocated_count() != initial_frames)
+        return -PAL_ERROR_DENIED;
+    return ret;
+}
+
+static int vm_process_copy_runtime(const struct memory_address_space* source,
+                                   struct memory_address_space* target, size_t* out_pages) {
+    int ret = memory_address_space_clone(g_pml4_table_base, target);
+    if (ret < 0)
+        return ret;
+
+    size_t copied_pages = ((uintptr_t)__process_data_end - (uintptr_t)__process_data_start) /
+                          PAGE_SIZE;
+    ret = memory_address_space_copy_private_range(
+            (struct memory_address_space*)source, target, (uintptr_t)__process_data_start,
+            (uintptr_t)__process_data_end - (uintptr_t)__process_data_start);
+    if (ret < 0)
+        goto fail;
+
+    for (size_t i = 0; i < g_pal_public_state.initial_mem_ranges_len; i++) {
+        const struct pal_initial_mem_range* range = &g_pal_public_state.initial_mem_ranges[i];
+        if (range->is_free || range->is_user_reserved ||
+                strcmp(range->comment, "PAL internal memory"))
+            continue;
+        size_t size = range->end - range->start;
+        ret = memory_address_space_copy_private_range(
+                (struct memory_address_space*)source, target, range->start, size);
+        if (ret < 0)
+            goto fail;
+        copied_pages += size / PAGE_SIZE;
+    }
+
+    if (out_pages)
+        *out_pages = copied_pages;
+    return 0;
+
+fail:
+    memory_address_space_destroy(target);
+    return ret;
+}
+
+int vm_process_runtime_copy_selfcheck(void) {
+    const struct memory_address_space* boot = memory_address_space_boot();
+    struct memory_address_space copy = {0};
+    size_t initial_frames = memory_frame_allocated_count();
+    size_t copied_pages = 0;
+    size_t manifest_size = g_pal_common_state.raw_manifest_data
+            ? strlen(g_pal_common_state.raw_manifest_data) : 0;
+    char manifest_prefix[32] = {0};
+    bool address_space_active = false;
+    if (manifest_size)
+        memcpy(manifest_prefix, g_pal_common_state.raw_manifest_data,
+               MIN(manifest_size, sizeof(manifest_prefix) - 1));
+
+    int ret = vm_process_copy_runtime(boot, &copy, &copied_pages);
+    if (ret < 0)
+        return ret;
+
+    ret = memory_address_space_switch(&copy);
+    if (ret < 0)
+        goto out;
+    address_space_active = true;
+
+    bool isolated_state = g_pal_public_state.manifest_root &&
+                          g_pal_common_state.raw_manifest_data &&
+                          !memcmp(g_pal_common_state.raw_manifest_data, manifest_prefix,
+                                  MIN(manifest_size, sizeof(manifest_prefix) - 1));
+    bool multiprocess_enabled = false;
+    if (isolated_state && toml_bool_in(g_pal_public_state.manifest_root,
+                                      "sys.experimental__multiprocess", false,
+                                      &multiprocess_enabled) < 0)
+        isolated_state = false;
+    isolated_state &= multiprocess_enabled;
+
+    ret = memory_address_space_switch_root(g_pml4_table_base);
+    if (ret < 0)
+        goto out;
+    address_space_active = false;
+    if (!isolated_state) {
+        ret = -PAL_ERROR_DENIED;
+        goto out;
+    }
+
+    log_always("Child PAL runtime copy check passed (%zu pages)", copied_pages);
+
+out:
+    if (address_space_active) {
+        int restore_ret = memory_address_space_switch_root(g_pml4_table_base);
+        if (restore_ret < 0)
+            return restore_ret;
+    }
+    memory_address_space_destroy(&copy);
     if (memory_frame_allocated_count() != initial_frames)
         return -PAL_ERROR_DENIED;
     return ret;

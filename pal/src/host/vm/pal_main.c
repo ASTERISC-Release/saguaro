@@ -132,6 +132,10 @@ static int init_multiprocess_frame_pool(void) {
             if (!warmup_succeeded)
                 return -PAL_ERROR_DENIED;
 
+            ret = vm_process_runtime_copy_selfcheck();
+            if (ret < 0)
+                return ret;
+
             size_t initial_frame_count = memory_frame_allocated_count();
             uintptr_t frame1, frame2, reused_frame;
             ret = memory_frame_alloc(&frame1);
