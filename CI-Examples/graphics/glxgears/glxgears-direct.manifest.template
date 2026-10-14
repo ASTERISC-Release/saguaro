@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (C) 2026 The ASTERISC Research Lab
+
+# glxgears under gramine-direct on the host GPU (Documentation/devel/graphics-direct/). The preload
+# library runs in its native mode (EGL on GBM on the render node, presentation through its own X
+# connection); X is reached over TCP (`DISPLAY = "127.0.0.1:N"`), relayed to the host X socket.
+
+libos.entrypoint = "/glxgears"
+
+loader.log_level = "{{ log_level }}"
+loader.insecure__use_host_env = true
+loader.insecure__use_cmdline_argv = true
+
+loader.env.LD_LIBRARY_PATH = "/lib:/usr/lib:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu"
+loader.env.LD_PRELOAD = "/libgraphics.so"
+loader.env.DISPLAY = "{{ display }}"
+loader.env.GALLIUM_THREAD = "0"
+loader.env.vblank_mode = "0"
+loader.env.GBM_BACKEND = "dri"
+loader.env.EGL_GRAMINE = "0"
+loader.env.EGL_DISCRETE = "{{ egl_discrete }}"
+
+sys.stack.size = "32M"
+
+fs.mounts = [
+  { path = "/glxgears", uri = "file:glxgears" },
+  { path = "/libgraphics.so", uri = "file:{{ gramine.libgraphics }}" },
+  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "/usr", type = "chroot", uri = "file:/usr" },
+  { path = "/etc/ld.so.cache", uri = "file:/etc/ld.so.cache" },
+  { path = "/dev/dri", type = "chroot", uri = "file:/dev/dri" },
+  { path = "/sys", type = "chroot", uri = "file:/sys" },
+  { path = "/root/.cache", type = "chroot", uri = "file:{{ env.HOME }}/.cache" },
+]

@@ -1,0 +1,44 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (C) 2026 The ASTERISC Research Lab
+
+# Yamagi Quake II under gramine-direct on the host GPU (Documentation/devel/graphics-direct/). The
+# preload library runs in its native mode; X is reached over TCP, relayed to the host X socket.
+
+libos.entrypoint = "/quake2_bin/release/quake2"
+
+loader.log_level = "{{ log_level }}"
+loader.insecure__use_host_env = true
+loader.insecure__use_cmdline_argv = true
+
+# Quake II refuses to run as root.
+loader.uid = 1000
+loader.gid = 1000
+
+loader.env.LD_LIBRARY_PATH = "/lib:/usr/lib:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu"
+loader.env.LD_PRELOAD = "/libgraphics.so"
+loader.env.HOME = "/root"
+loader.env.USER = "root_user"
+loader.env.DISPLAY = "{{ display }}"
+loader.env.GALLIUM_THREAD = "0"
+loader.env.vblank_mode = "0"
+loader.env.ALSOFT_DRIVERS = "null"
+loader.env.SDL_AUDIODRIVER = "dummy"
+loader.env.PULSE_SERVER = "none"
+loader.env.PIPEWIRE_REMOTE = "none"
+loader.env.GBM_BACKEND = "dri"
+loader.env.EGL_GRAMINE = "0"
+loader.env.EGL_DISCRETE = "{{ egl_discrete }}"
+
+sys.stack.size = "32M"
+
+fs.mounts = [
+  { path = "/libgraphics.so", uri = "file:{{ gramine.libgraphics }}" },
+  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "/usr", type = "chroot", uri = "file:/usr" },
+  { path = "/etc/ld.so.cache", uri = "file:/etc/ld.so.cache" },
+  { path = "/dev/dri", type = "chroot", uri = "file:/dev/dri" },
+  { path = "/sys", type = "chroot", uri = "file:/sys" },
+  { path = "/quake2_bin", type = "chroot", uri = "file:quake2_bin" },
+  { path = "/root/.yq2", type = "chroot", uri = "file:{{ env.HOME }}/.yq2" },
+  { path = "/root/.cache", type = "chroot", uri = "file:{{ env.HOME }}/.cache" },
+]
