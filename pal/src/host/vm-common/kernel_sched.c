@@ -41,7 +41,7 @@ static spinlock_t g_thread_list_lock = INIT_SPINLOCK_UNLOCKED;
 bool g_kick_sched_thread = false;
 
 static void switch_to_thread_address_space(struct thread* thread) {
-    uint64_t root = thread->address_space ? (uintptr_t)thread->address_space->root
+    uint64_t root = thread->address_space ? thread->address_space->root_phys
                                          : g_pml4_table_base;
     int ret = memory_address_space_switch_root(root);
     if (ret < 0) {

@@ -31,8 +31,77 @@
 static uintptr_t g_frame_pool_start;
 static size_t g_frame_pool_size;
 static size_t g_frame_pool_next;
+static size_t g_frame_alias_mapped_size;
 static uint8_t* g_frame_pool_bitmap;
+static uintptr_t* g_frame_owner_next;
+static uint8_t* g_frame_owner_kind;
 static spinlock_t g_frame_pool_lock = INIT_SPINLOCK_UNLOCKED;
+
+/* A supervisor-only direct-map window gives every root stable access to physical frames and
+ * page tables, even when a process remaps their identity addresses. */
+#define FRAME_POOL_ALIAS_BASE 0xffff800000000000UL
+#define FRAME_POOL_ALIAS_SIZE (512UL * 1024 * 1024 * 1024)
+#define PAGE_2M_SIZE (2UL * 1024 * 1024)
+#define PTE_PRESENT 0x001UL
+#define PTE_WRITE   0x002UL
+#define PTE_HUGE    0x080UL
+#define PTE_NX      (1UL << 63)
+
+static struct memory_address_space g_boot_address_space;
+
+void* memory_frame_pointer(uintptr_t frame) {
+    if (g_frame_alias_mapped_size && frame < g_frame_alias_mapped_size)
+        return (void*)(FRAME_POOL_ALIAS_BASE + frame);
+    return (void*)frame;
+}
+
+static uintptr_t memory_frame_from_pointer(const void* pointer) {
+    uintptr_t addr = (uintptr_t)pointer;
+    if (g_frame_alias_mapped_size && addr >= FRAME_POOL_ALIAS_BASE &&
+            addr < FRAME_POOL_ALIAS_BASE + g_frame_alias_mapped_size)
+        return addr - FRAME_POOL_ALIAS_BASE;
+    return addr;
+}
+
+static int memory_frame_pool_map_alias(size_t memory_size) {
+    if (!memory_size || memory_size > FRAME_POOL_ALIAS_SIZE)
+        return -PAL_ERROR_INVAL;
+    size_t mapped_size = ALIGN_UP(memory_size, PAGE_2M_SIZE);
+    if (mapped_size > FRAME_POOL_ALIAS_SIZE)
+        return -PAL_ERROR_INVAL;
+
+    uint64_t* pdpt = memory_get_shared_region(PAGE_SIZE);
+    size_t pd_count = UDIV_ROUND_UP(mapped_size, 1024UL * 1024 * 1024);
+    uint64_t* pd_tables = memory_get_shared_region(pd_count * PAGE_SIZE);
+    if (!pdpt || !pd_tables)
+        return -PAL_ERROR_NOMEM;
+
+    for (size_t pdpt_idx = 0; pdpt_idx < pd_count; pdpt_idx++) {
+        uint64_t* pd = (uint64_t*)((uintptr_t)pd_tables + pdpt_idx * PAGE_SIZE);
+        pdpt[pdpt_idx] = (uintptr_t)pd | PTE_PRESENT | PTE_WRITE;
+        size_t remaining = (mapped_size - pdpt_idx * 1024UL * 1024 * 1024) / PAGE_2M_SIZE;
+        size_t pages_in_pd = MIN(512UL, remaining);
+        for (size_t i = 0; i < pages_in_pd; i++) {
+            uintptr_t physical = pdpt_idx * 1024UL * 1024 * 1024 + i * PAGE_2M_SIZE;
+            pd[i] = physical | PTE_PRESENT | PTE_WRITE | PTE_HUGE | PTE_NX;
+        }
+    }
+
+    size_t pml4_idx = (FRAME_POOL_ALIAS_BASE >> 39) & 0x1ff;
+    uint64_t* pml4 = (uint64_t*)g_pml4_table_base;
+    if (pml4[pml4_idx] & PTE_PRESENT)
+        return -PAL_ERROR_DENIED;
+    pml4[pml4_idx] = (uintptr_t)pdpt | PTE_PRESENT | PTE_WRITE;
+    g_frame_alias_mapped_size = mapped_size;
+    g_frame_pool_bitmap = memory_frame_pointer((uintptr_t)g_frame_pool_bitmap);
+    g_frame_owner_next = memory_frame_pointer((uintptr_t)g_frame_owner_next);
+    g_frame_owner_kind = memory_frame_pointer((uintptr_t)g_frame_owner_kind);
+    g_boot_address_space.root = memory_frame_pointer(g_pml4_table_base);
+    g_boot_address_space.root_phys = g_pml4_table_base;
+    g_boot_address_space.base_root = g_boot_address_space.root;
+    __asm__ volatile("mov %%cr3, %%rax; mov %%rax, %%cr3" : : : "rax", "memory");
+    return 0;
+}
 
 int memory_frame_pool_init(uintptr_t addr, size_t size) {
     if (g_frame_pool_bitmap || !size || !IS_ALIGNED_POW2(addr, PAGE_SIZE) ||
@@ -55,6 +124,17 @@ int memory_frame_pool_init(uintptr_t addr, size_t size) {
     g_frame_pool_start = addr;
     g_frame_pool_size = size;
     g_frame_pool_bitmap = bitmap;
+    size_t owner_next_size = frame_count * sizeof(*g_frame_owner_next);
+    size_t owner_kind_size = frame_count * sizeof(*g_frame_owner_kind);
+    g_frame_owner_next = memory_get_shared_region(owner_next_size);
+    g_frame_owner_kind = memory_get_shared_region(owner_kind_size);
+    if (!g_frame_owner_next || !g_frame_owner_kind)
+        return -PAL_ERROR_NOMEM;
+    memset(g_frame_owner_next, 0, owner_next_size);
+    memset(g_frame_owner_kind, 0, owner_kind_size);
+    ret = memory_frame_pool_map_alias((uintptr_t)g_pal_public_state.memory_address_end);
+    if (ret < 0)
+        return ret;
     log_always("Private frame pool: [%p, %p), %zu frames", (void*)addr, (void*)(addr + size),
                frame_count);
     return 0;
@@ -75,10 +155,12 @@ int memory_frame_alloc(uintptr_t* out_frame) {
         g_frame_pool_bitmap[i / 8] |= mask;
         g_frame_pool_next = (i + 1) % frame_count;
         uintptr_t frame = g_frame_pool_start + i * PAGE_SIZE;
+        g_frame_owner_next[i] = 0;
+        g_frame_owner_kind[i] = 0;
 #ifdef ASAN
         asan_unpoison_region(frame, PAGE_SIZE);
 #endif
-        _real_memset((void*)frame, 0, PAGE_SIZE);
+        _real_memset(memory_frame_pointer(frame), 0, PAGE_SIZE);
         *out_frame = frame;
         spinlock_unlock_enable_irq(&g_frame_pool_lock);
         return 0;
@@ -101,6 +183,8 @@ int memory_frame_free(uintptr_t frame) {
         return -PAL_ERROR_INVAL;
     }
     g_frame_pool_bitmap[i / 8] &= ~mask;
+    g_frame_owner_next[i] = 0;
+    g_frame_owner_kind[i] = 0;
     if (i < g_frame_pool_next)
         g_frame_pool_next = i;
 #ifdef ASAN
@@ -122,11 +206,6 @@ size_t memory_frame_allocated_count(void) {
     return count;
 }
 
-struct address_space_table_page {
-    struct address_space_table_page* next;
-    uintptr_t frame;
-};
-
 /* Mapping helpers invalidate the current vCPU while changing individual entries. Range operations
  * call this once after updating all entries so other vCPUs cannot retain stale translations for
  * threads sharing the address space. */
@@ -140,15 +219,17 @@ static int memory_address_space_flush_range(uintptr_t addr, size_t size) {
 static int address_space_get_leaf_entry(struct memory_address_space* space, uintptr_t addr,
                                         bool make_private, uint64_t** out_entry);
 
-static int address_space_track_frame(struct memory_address_space* space, uintptr_t frame) {
+static int address_space_track_frame(struct memory_address_space* space, uintptr_t frame,
+                                    bool is_page_table) {
     if (!g_frame_pool_bitmap)
         return 0;
-    struct address_space_table_page* node = memory_get_shared_region(sizeof(*node));
-    if (!node)
-        return -PAL_ERROR_NOMEM;
-    node->frame = frame;
-    node->next = space->owned_table_pages;
-    space->owned_table_pages = node;
+    if (frame < g_frame_pool_start || frame >= g_frame_pool_start + g_frame_pool_size ||
+            !IS_ALIGNED_POW2(frame, PAGE_SIZE))
+        return -PAL_ERROR_INVAL;
+    size_t i = (frame - g_frame_pool_start) / PAGE_SIZE;
+    g_frame_owner_next[i] = space->owned_frame_head;
+    g_frame_owner_kind[i] = is_page_table;
+    space->owned_frame_head = frame;
     return 0;
 }
 
@@ -162,12 +243,12 @@ static int address_space_alloc_table_page(struct memory_address_space* space, ui
     int ret = memory_frame_alloc(&frame);
     if (ret < 0)
         return ret;
-    ret = address_space_track_frame(space, frame);
+    ret = address_space_track_frame(space, frame, /*is_page_table=*/true);
     if (ret < 0) {
         memory_frame_free(frame);
         return ret;
     }
-    *out_page = (uint64_t*)frame;
+    *out_page = memory_frame_pointer(frame);
     return 0;
 }
 
@@ -187,11 +268,11 @@ static int address_space_get_private_child(uint64_t* entry, uint64_t base_entry,
         int ret = address_space_alloc_table_page(space, &copy);
         if (ret < 0)
             return ret;
-        memcpy(copy, (void*)(*entry & addr_mask), PAGE_SIZE);
-        *entry = (*entry & ~addr_mask) | ((uintptr_t)copy & addr_mask);
+        memcpy(copy, memory_frame_pointer(*entry & addr_mask), PAGE_SIZE);
+        *entry = (*entry & ~addr_mask) | (memory_frame_from_pointer(copy) & addr_mask);
     }
 
-    *out_child = (uint64_t*)(*entry & addr_mask);
+    *out_child = memory_frame_pointer(*entry & addr_mask);
     return 0;
 }
 
@@ -204,27 +285,75 @@ int memory_address_space_clone(uint64_t base_root, struct memory_address_space* 
     int ret = address_space_alloc_table_page(out_space, &root);
     if (ret < 0)
         return ret;
-    memcpy(root, (void*)base_root, PAGE_SIZE);
+    memcpy(root, memory_frame_pointer(base_root), PAGE_SIZE);
     out_space->root = root;
-    out_space->base_root = (uint64_t*)base_root;
+    out_space->root_phys = memory_frame_from_pointer(root);
+    out_space->base_root = memory_frame_pointer(base_root);
     return 0;
+}
+
+/* Descendants get private copies of every page-table page. Their leaves keep the same physical
+ * mappings; process-private memory is copied separately by the caller. */
+static int address_space_copy_table_tree(struct memory_address_space* target, uint64_t* table,
+                                         unsigned int level) {
+    const uint64_t addr_mask = 0x00000ffffffff000UL;
+    size_t alias_pml4_idx = (FRAME_POOL_ALIAS_BASE >> 39) & 0x1ff;
+    for (size_t i = 0; i < 512; i++) {
+        uint64_t entry = table[i];
+        if (!(entry & PTE_PRESENT) || level == 1 ||
+                ((level == 2 || level == 3) && (entry & PTE_HUGE)) ||
+                (level == 4 && i == alias_pml4_idx))
+            continue;
+
+        uint64_t* child;
+        int ret = address_space_alloc_table_page(target, &child);
+        if (ret < 0)
+            return ret;
+        memcpy(child, memory_frame_pointer(entry & addr_mask), PAGE_SIZE);
+        table[i] = (entry & ~addr_mask) | (memory_frame_from_pointer(child) & addr_mask);
+        ret = address_space_copy_table_tree(target, child, level - 1);
+        if (ret < 0)
+            return ret;
+    }
+    return 0;
+}
+
+int memory_address_space_clone_from(const struct memory_address_space* source,
+                                    struct memory_address_space* out_space) {
+    if (!source || !source->root || !source->root_phys || !out_space)
+        return -PAL_ERROR_INVAL;
+    memset(out_space, 0, sizeof(*out_space));
+    uint64_t* root;
+    int ret = address_space_alloc_table_page(out_space, &root);
+    if (ret < 0)
+        return ret;
+    memcpy(root, source->root, PAGE_SIZE);
+    out_space->root = root;
+    out_space->root_phys = memory_frame_from_pointer(root);
+    out_space->base_root = NULL;
+    ret = address_space_copy_table_tree(out_space, root, 4);
+    if (ret < 0)
+        memory_address_space_destroy(out_space);
+    return ret;
 }
 
 size_t memory_address_space_destroy(struct memory_address_space* space) {
     if (!space)
         return 0;
-    struct address_space_table_page* node = space->owned_table_pages;
+    uintptr_t frame = space->owned_frame_head;
     size_t released = 0;
-    while (node) {
-        struct address_space_table_page* next = node->next;
-        int ret = memory_frame_free(node->frame);
+    while (frame) {
+        size_t i = (frame - g_frame_pool_start) / PAGE_SIZE;
+        uintptr_t next = g_frame_owner_next[i];
+        int ret = memory_frame_free(frame);
         if (ret < 0) {
-            log_error("Failed to release address-space page-table frame %p: %s",
-                      (void*)node->frame, pal_strerror(ret));
+            log_error("Failed to release address-space %s frame %p: %s",
+                      g_frame_owner_kind[i] ? "page-table" : "private-data",
+                      (void*)frame, pal_strerror(ret));
             BUG();
         }
         released++;
-        node = next;
+        frame = next;
     }
     memset(space, 0, sizeof(*space));
     return released;
@@ -249,8 +378,9 @@ int memory_address_space_copy_private_range(struct memory_address_space* source,
         ret = memory_frame_alloc(&frame);
         if (ret < 0)
             return ret;
-        memcpy((void*)frame, (void*)(*source_entry & 0x00000ffffffff000UL), PAGE_SIZE);
-        ret = address_space_track_frame(target, frame);
+        memcpy(memory_frame_pointer(frame),
+               memory_frame_pointer(*source_entry & 0x00000ffffffff000UL), PAGE_SIZE);
+        ret = address_space_track_frame(target, frame, /*is_page_table=*/false);
         if (ret < 0) {
             memory_frame_free(frame);
             return ret;
@@ -266,7 +396,7 @@ int memory_address_space_copy_private_range(struct memory_address_space* source,
 static int address_space_get_leaf_entry(struct memory_address_space* space, uintptr_t addr,
                                         bool make_private, uint64_t** out_entry) {
     const uint64_t addr_mask = 0x00000ffffffff000UL;
-    if (!space || !space->root || !space->base_root ||
+    if (!space || !space->root || !space->root_phys ||
             addr >= 512UL * 1024 * 1024 * 1024 || !IS_ALIGNED_POW2(addr, PAGE_SIZE))
         return -PAL_ERROR_INVAL;
 
@@ -274,46 +404,53 @@ static int address_space_get_leaf_entry(struct memory_address_space* space, uint
     size_t pdpt_idx = (addr >> 30) & 0x1ff;
     size_t pd_idx = (addr >> 21) & 0x1ff;
     size_t pt_idx = (addr >> 12) & 0x1ff;
+    uint64_t* base_root = space->base_root;
+    uint64_t* base_pdpt = NULL;
+    uint64_t* base_pd = NULL;
     uint64_t* pdpt;
-    int ret;
-    if (make_private) {
-        ret = address_space_get_private_child(&space->root[pml4_idx],
-                                               space->base_root[pml4_idx], space, &pdpt);
-    } else {
-        if (!(space->root[pml4_idx] & 1) || !(space->base_root[pml4_idx] & 1))
-            return -PAL_ERROR_INVAL;
-        pdpt = (uint64_t*)(space->root[pml4_idx] & addr_mask);
-        ret = 0;
-    }
+    int ret = 0;
+    if (base_root && make_private)
+        ret = address_space_get_private_child(&space->root[pml4_idx], base_root[pml4_idx],
+                                              space, &pdpt);
+    else if (!(space->root[pml4_idx] & PTE_PRESENT))
+        return -PAL_ERROR_INVAL;
+    else
+        pdpt = memory_frame_pointer(space->root[pml4_idx] & addr_mask);
     if (ret < 0)
         return ret;
 
-    uint64_t* base_pdpt = (uint64_t*)(space->base_root[pml4_idx] & addr_mask);
-    if ((pdpt[pdpt_idx] | base_pdpt[pdpt_idx]) & (1UL << 7))
+    if (base_root) {
+        if (!(base_root[pml4_idx] & PTE_PRESENT))
+            return -PAL_ERROR_INVAL;
+        base_pdpt = memory_frame_pointer(base_root[pml4_idx] & addr_mask);
+    }
+    if ((pdpt[pdpt_idx] | (base_pdpt ? base_pdpt[pdpt_idx] : 0)) & PTE_HUGE)
         return -PAL_ERROR_INVAL; /* splitting a 1-GiB page is not implemented */
     uint64_t* pd;
-    if (make_private) {
+    if (base_root && make_private) {
         ret = address_space_get_private_child(&pdpt[pdpt_idx], base_pdpt[pdpt_idx], space, &pd);
     } else {
-        if (!(pdpt[pdpt_idx] & 1) || !(base_pdpt[pdpt_idx] & 1))
+        if (!(pdpt[pdpt_idx] & PTE_PRESENT))
             return -PAL_ERROR_INVAL;
-        pd = (uint64_t*)(pdpt[pdpt_idx] & addr_mask);
-        ret = 0;
+        pd = memory_frame_pointer(pdpt[pdpt_idx] & addr_mask);
     }
     if (ret < 0)
         return ret;
 
-    uint64_t* base_pd = (uint64_t*)(base_pdpt[pdpt_idx] & addr_mask);
-    if ((pd[pd_idx] | base_pd[pd_idx]) & (1UL << 7))
+    if (base_pdpt) {
+        if (!(base_pdpt[pdpt_idx] & PTE_PRESENT))
+            return -PAL_ERROR_INVAL;
+        base_pd = memory_frame_pointer(base_pdpt[pdpt_idx] & addr_mask);
+    }
+    if ((pd[pd_idx] | (base_pd ? base_pd[pd_idx] : 0)) & PTE_HUGE)
         return -PAL_ERROR_INVAL; /* splitting a 2-MiB page is not implemented */
     uint64_t* pt;
-    if (make_private) {
+    if (base_root && make_private) {
         ret = address_space_get_private_child(&pd[pd_idx], base_pd[pd_idx], space, &pt);
     } else {
-        if (!(pd[pd_idx] & 1) || !(base_pd[pd_idx] & 1))
+        if (!(pd[pd_idx] & PTE_PRESENT))
             return -PAL_ERROR_INVAL;
-        pt = (uint64_t*)(pd[pd_idx] & addr_mask);
-        ret = 0;
+        pt = memory_frame_pointer(pd[pd_idx] & addr_mask);
     }
     if (ret < 0)
         return ret;
@@ -326,7 +463,7 @@ __attribute_no_sanitize_address
 int memory_address_space_map(struct memory_address_space* space, uintptr_t addr,
                              uintptr_t frame, bool write, bool execute, bool usermode) {
     const uint64_t addr_mask = 0x00000ffffffff000UL;
-    if (!space || !space->root || !space->base_root ||
+    if (!space || !space->root || !space->root_phys ||
             addr >= 512UL * 1024 * 1024 * 1024 || !IS_ALIGNED_POW2(addr, PAGE_SIZE) ||
             !IS_ALIGNED_POW2(frame, PAGE_SIZE) || (frame & ~addr_mask))
         return -PAL_ERROR_INVAL;
@@ -342,7 +479,7 @@ int memory_address_space_map(struct memory_address_space* space, uintptr_t addr,
 
     uint64_t current_root;
     __asm__ volatile("mov %%cr3, %0" : "=r"(current_root));
-    if ((current_root & addr_mask) == (uintptr_t)space->root)
+    if ((current_root & addr_mask) == space->root_phys)
         __asm__ volatile("invlpg (%0)" : : "r"(addr) : "memory");
     return 0;
 }
@@ -368,16 +505,17 @@ int memory_address_space_share_range(struct memory_address_space* source,
         *target_pte = entry;
         uint64_t current_root;
         __asm__ volatile("mov %%cr3, %0" : "=r"(current_root));
-        if ((current_root & addr_mask) == (uintptr_t)target->root)
+        if ((current_root & addr_mask) == target->root_phys)
             __asm__ volatile("invlpg (%0)" : : "r"(va) : "memory");
     }
     return memory_address_space_flush_range(addr, size);
 }
 
 int memory_address_space_switch(const struct memory_address_space* space) {
-    if (!space || !space->root || !IS_ALIGNED_POW2((uintptr_t)space->root, PAGE_SIZE))
+    if (!space || !space->root || !space->root_phys ||
+            !IS_ALIGNED_POW2(space->root_phys, PAGE_SIZE))
         return -PAL_ERROR_INVAL;
-    return memory_address_space_switch_root((uintptr_t)space->root);
+    return memory_address_space_switch_root(space->root_phys);
 }
 
 int memory_address_space_switch_root(uint64_t root) {
@@ -503,8 +641,6 @@ static inline bool is_egl_redirect_data_region_range(void* addr, size_t size) {
 uint64_t g_pml4_table_base = 0;
 
 #ifdef __x86_64__
-static struct memory_address_space g_boot_address_space;
-
 struct memory_address_space* memory_address_space_boot(void) {
     return &g_boot_address_space;
 }
@@ -557,7 +693,7 @@ int memory_free_shared_region(void* addr, size_t size) {
 __attribute_no_sanitize_address
 int memory_find_page_table_entry(uint64_t addr, uint64_t** out_pte_addr) {
     assert(g_pml4_table_base);
-    uint64_t* pml4_table = (uint64_t*)g_pml4_table_base;
+    uint64_t* pml4_table = memory_frame_pointer(g_pml4_table_base);
 
     /* the mask covers bits 12:43 which covers the address space [0, 16TB); note that we do not
      * cover up to 12:51 because bit 47 or 51 can be specially used (e.g. "shared" bit in TDX) */
@@ -565,16 +701,18 @@ int memory_find_page_table_entry(uint64_t addr, uint64_t** out_pte_addr) {
 
     /* there is a single entry in the PML4 table, see also memory_pagetables_init();
      * in this entry, bits 12:51 contain the address of the PDPT table */
-    uint64_t* pdpt_table = (uint64_t*)(pml4_table[0] & page_table_entry_addr_mask);
+    uint64_t* pdpt_table = memory_frame_pointer(pml4_table[0] & page_table_entry_addr_mask);
 
     /* each PDPT table entry covers 1GB of memory, starting from addr 0x00 */
     size_t pdpt_table_idx = addr / 1024 / 1024 / 1024;
-    uint64_t* pd_table = (uint64_t*)(pdpt_table[pdpt_table_idx] & page_table_entry_addr_mask);
+    uint64_t* pd_table = memory_frame_pointer(pdpt_table[pdpt_table_idx] &
+                                              page_table_entry_addr_mask);
 
     /* each PD table entry covers 2MB of memory in the 1GB memory region determined via PDPT table
      * entry (recall that there are 512 PD entries in one PD table) */
     size_t pd_table_idx = (addr / 1024 / 1024 / 2) % 512;
-    uint64_t* pt_table = (uint64_t*)(pd_table[pd_table_idx] & page_table_entry_addr_mask);
+    uint64_t* pt_table = memory_frame_pointer(pd_table[pd_table_idx] &
+                                              page_table_entry_addr_mask);
 
     /* each PT table entry covers 4KB of memory in the 2MB memory region determined via PD table
      * entry (recall that there are 512 PD entries in one PT table) */
@@ -972,6 +1110,7 @@ int memory_pagetables_init(void* memory_address_end, bool current_page_tables_co
     g_pml4_table_base = pml4_table_base;
 #ifdef __x86_64__
     g_boot_address_space.root = (uint64_t*)pml4_table_base;
+    g_boot_address_space.root_phys = pml4_table_base;
     g_boot_address_space.base_root = (uint64_t*)pml4_table_base;
 #endif
     return 0;
@@ -1332,7 +1471,7 @@ static int address_space_restore_pte(struct memory_address_space* space, uintptr
     *entry = pte;
     uint64_t current_root;
     __asm__ volatile("mov %%cr3, %0" : "=r"(current_root));
-    if ((current_root & 0x00000ffffffff000UL) == (uintptr_t)space->root)
+    if ((current_root & 0x00000ffffffff000UL) == space->root_phys)
         __asm__ volatile("invlpg (%0)" : : "r"(addr) : "memory");
     return 0;
 }
@@ -1383,7 +1522,7 @@ int memory_address_space_alloc(struct memory_address_space* space, void* addr, s
         int ret = memory_frame_alloc(&frame);
         if (ret < 0) {
             while (frame_list) {
-                struct frame_alloc_record* record = (void*)frame_list;
+                struct frame_alloc_record* record = memory_frame_pointer(frame_list);
                 uintptr_t next = record->next;
                 memory_frame_free(frame_list);
                 frame_list = next;
@@ -1396,14 +1535,14 @@ int memory_address_space_alloc(struct memory_address_space* space, void* addr, s
         if (ret < 0) {
             memory_frame_free(frame);
             while (frame_list) {
-                struct frame_alloc_record* record = (void*)frame_list;
+                struct frame_alloc_record* record = memory_frame_pointer(frame_list);
                 uintptr_t next = record->next;
                 memory_frame_free(frame_list);
                 frame_list = next;
             }
             return ret;
         }
-        struct frame_alloc_record* record = (void*)frame;
+        struct frame_alloc_record* record = memory_frame_pointer(frame);
         record->next = frame_list;
         record->old_pte = *old_pte;
         frame_list = frame;
@@ -1412,13 +1551,13 @@ int memory_address_space_alloc(struct memory_address_space* space, void* addr, s
     uintptr_t frame = frame_list;
     size_t mapped_pages = 0;
     for (uintptr_t va = (uintptr_t)addr + size - PAGE_SIZE;; va -= PAGE_SIZE) {
-        struct frame_alloc_record* record = (void*)frame;
+        struct frame_alloc_record* record = memory_frame_pointer(frame);
         uintptr_t next = record->next;
         int ret = memory_address_space_map(space, va, frame, write, execute, /*usermode=*/true);
         if (ret < 0) {
             uintptr_t rollback_frame = frame_list;
             for (size_t i = 0; i < mapped_pages; i++) {
-                struct frame_alloc_record* rollback_record = (void*)rollback_frame;
+                struct frame_alloc_record* rollback_record = memory_frame_pointer(rollback_frame);
                 uintptr_t rollback_next = rollback_record->next;
                 uintptr_t rollback_va = (uintptr_t)addr + size - PAGE_SIZE - i * PAGE_SIZE;
                 address_space_restore_pte(space, rollback_va, rollback_record->old_pte);
@@ -1428,13 +1567,13 @@ int memory_address_space_alloc(struct memory_address_space* space, void* addr, s
                 BUG();
             rollback_frame = frame_list;
             for (size_t i = 0; i < mapped_pages; i++) {
-                struct frame_alloc_record* rollback_record = (void*)rollback_frame;
+                struct frame_alloc_record* rollback_record = memory_frame_pointer(rollback_frame);
                 uintptr_t rollback_next = rollback_record->next;
                 memory_frame_free(rollback_frame);
                 rollback_frame = rollback_next;
             }
             while (rollback_frame) {
-                struct frame_alloc_record* rollback_record = (void*)rollback_frame;
+                struct frame_alloc_record* rollback_record = memory_frame_pointer(rollback_frame);
                 uintptr_t rollback_next = rollback_record->next;
                 memory_frame_free(rollback_frame);
                 rollback_frame = rollback_next;
@@ -1490,7 +1629,7 @@ int memory_address_space_free(struct memory_address_space* space, void* addr, si
 
         uint64_t current_root;
         __asm__ volatile("mov %%cr3, %0" : "=r"(current_root));
-        if ((current_root & addr_mask) == (uintptr_t)space->root)
+    if ((current_root & addr_mask) == space->root_phys)
             __asm__ volatile("invlpg (%0)" : : "r"(va) : "memory");
     }
     int ret = memory_address_space_flush_range((uintptr_t)addr, size);

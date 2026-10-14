@@ -39,8 +39,8 @@ int pal_common_thread_create(struct pal_handle** handle, int (*callback)(void*),
 int pal_common_thread_create_with_address_space(struct pal_handle** handle,
                                                int (*callback)(void*), const void* param,
                                                struct memory_address_space* address_space) {
-    if (!address_space || !address_space->root ||
-            !IS_ALIGNED_POW2((uintptr_t)address_space->root, PAGE_SIZE))
+    if (!address_space || !address_space->root || !address_space->root_phys ||
+            !IS_ALIGNED_POW2(address_space->root_phys, PAGE_SIZE))
         return -PAL_ERROR_INVAL;
 
     /*

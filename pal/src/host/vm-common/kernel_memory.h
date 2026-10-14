@@ -52,14 +52,19 @@ int memory_frame_pool_init(uintptr_t addr, size_t size);
 int memory_frame_alloc(uintptr_t* out_frame);
 int memory_frame_free(uintptr_t frame);
 size_t memory_frame_allocated_count(void);
+/* Return the stable supervisor alias for a physical frame address. */
+void* memory_frame_pointer(uintptr_t frame);
 
 struct memory_address_space {
     uint64_t* root;
+    uintptr_t root_phys;
     uint64_t* base_root;
-    void* owned_table_pages;
+    uintptr_t owned_frame_head;
 };
 struct memory_address_space* memory_address_space_boot(void);
 int memory_address_space_clone(uint64_t base_root, struct memory_address_space* out_space);
+int memory_address_space_clone_from(const struct memory_address_space* source,
+                                    struct memory_address_space* out_space);
 size_t memory_address_space_destroy(struct memory_address_space* space);
 int memory_address_space_copy_private_range(struct memory_address_space* source,
                                             struct memory_address_space* target, uintptr_t addr,

@@ -47,6 +47,8 @@ static struct memory_address_space g_initial_process_address_space;
 extern char __process_data_start[];
 extern char __process_data_end[];
 static volatile uint64_t g_process_data_selfcheck __attribute__((section(".process_data")));
+static volatile uint64_t g_address_space_selfcheck_page[PAGE_SIZE / sizeof(uint64_t)]
+        __attribute__((aligned(PAGE_SIZE), section(".process_data")));
 
 struct address_space_thread_check {
     volatile uint64_t* addr;
@@ -100,6 +102,31 @@ static int init_multiprocess_frame_pool(void) {
             if (ret < 0)
                 return ret;
 
+            /* PAL thread stacks are intentionally recycled instead of freed from their own
+             * stacks. Warm one stack before the frame-reclamation baseline is measured. */
+            struct address_space_thread_check warmup_check = {
+                .addr = g_address_space_selfcheck_page,
+            };
+            atomic_init(&warmup_check.done, false);
+            PAL_HANDLE warmup_thread;
+            ret = pal_common_thread_create_with_address_space(
+                    &warmup_thread, address_space_thread_check, &warmup_check,
+                    memory_address_space_boot());
+            if (ret < 0)
+                return ret;
+            while (!atomic_load_explicit(&warmup_check.done, memory_order_acquire))
+                _PalThreadYieldExecution();
+            while (!sched_thread_is_stopped(warmup_thread->thread.kernel_thread))
+                _PalThreadYieldExecution();
+            bool warmup_succeeded = warmup_check.observed == 0 &&
+                                    *g_address_space_selfcheck_page ==
+                                            0x7766554433221100UL;
+            PalObjectDestroy(warmup_thread);
+            *g_address_space_selfcheck_page = 0;
+            if (!warmup_succeeded)
+                return -PAL_ERROR_DENIED;
+
+            size_t initial_frame_count = memory_frame_allocated_count();
             uintptr_t frame1, frame2, reused_frame;
             ret = memory_frame_alloc(&frame1);
             if (ret < 0)
@@ -115,7 +142,7 @@ static int init_multiprocess_frame_pool(void) {
                 memory_frame_free(frame2);
                 return -PAL_ERROR_DENIED;
             }
-            *(uint64_t*)frame1 = 0xfeedfacecafebeefUL;
+            *(uint64_t*)memory_frame_pointer(frame1) = 0xfeedfacecafebeefUL;
             ret = memory_frame_free(frame1);
             if (ret < 0) {
                 memory_frame_free(frame2);
@@ -130,13 +157,13 @@ static int init_multiprocess_frame_pool(void) {
                 memory_frame_free(frame2);
                 return ret;
             }
-            if (reused_frame != frame1 || *(uint64_t*)reused_frame != 0) {
+            if (reused_frame != frame1 || *(uint64_t*)memory_frame_pointer(reused_frame) != 0) {
                 memory_frame_free(frame2);
                 memory_frame_free(reused_frame);
                 return -PAL_ERROR_DENIED;
             }
 
-            uintptr_t test_addr = candidate + 16UL * 1024 * 1024;
+            uintptr_t test_addr = (uintptr_t)g_address_space_selfcheck_page;
             volatile uint64_t* parent_value = (volatile uint64_t*)test_addr;
             uint64_t original_value = *parent_value;
             const uint64_t parent_marker = 0x1122334455667788UL;
@@ -146,6 +173,7 @@ static int init_multiprocess_frame_pool(void) {
             g_process_data_selfcheck = parent_marker;
 
             struct memory_address_space child_space = {0};
+            struct memory_address_space grandchild_space = {0};
             ret = memory_address_space_clone(g_pml4_table_base, &child_space);
             if (ret == 0) {
                 ret = memory_address_space_copy_private_range(
@@ -179,24 +207,94 @@ static int init_multiprocess_frame_pool(void) {
             bool child_process_data_initial = g_process_data_selfcheck == parent_marker;
             g_process_data_selfcheck = child_marker;
 
+            const uint64_t grandchild_marker = 0x1029384756abcdefUL;
+            ret = memory_address_space_clone_from(&child_space, &grandchild_space);
+            if (ret == 0)
+                ret = memory_address_space_copy_private_range(
+                        &child_space, &grandchild_space, (uintptr_t)__process_data_start,
+                        (uintptr_t)__process_data_end - (uintptr_t)__process_data_start);
+            if (ret == 0)
+                ret = memory_address_space_map(&grandchild_space, test_addr, frame2,
+                                               /*write=*/true, /*execute=*/false,
+                                               /*usermode=*/true);
+            if (ret < 0) {
+                memory_address_space_switch_root(g_pml4_table_base);
+                memory_address_space_destroy(&grandchild_space);
+                memory_address_space_destroy(&child_space);
+                memory_frame_free(frame2);
+                memory_frame_free(reused_frame);
+                return ret;
+            }
+
+            ret = memory_address_space_switch(&grandchild_space);
+            if (ret < 0) {
+                memory_address_space_switch_root(g_pml4_table_base);
+                memory_address_space_destroy(&grandchild_space);
+                memory_address_space_destroy(&child_space);
+                memory_frame_free(frame2);
+                memory_frame_free(reused_frame);
+                return ret;
+            }
+            bool grandchild_isolated = *(volatile uint64_t*)test_addr == 0 &&
+                                       g_process_data_selfcheck == child_marker;
+            *(volatile uint64_t*)test_addr = grandchild_marker;
+            g_process_data_selfcheck = grandchild_marker;
+
             struct memory_address_space parent_space = {
-                .root = (uint64_t*)g_pml4_table_base,
-                .base_root = (uint64_t*)g_pml4_table_base,
+                .root = memory_frame_pointer(g_pml4_table_base),
+                .root_phys = g_pml4_table_base,
+                .base_root = memory_frame_pointer(g_pml4_table_base),
             };
             ret = memory_address_space_switch(&parent_space);
-            if (ret < 0)
+            if (ret < 0) {
+                memory_address_space_switch_root(g_pml4_table_base);
+                memory_address_space_destroy(&grandchild_space);
+                memory_address_space_destroy(&child_space);
+                memory_frame_free(frame2);
+                memory_frame_free(reused_frame);
                 return ret;
+            }
 
             bool isolated = child_initial_value == 0 && child_process_data_initial &&
+                            grandchild_isolated &&
                             g_process_data_selfcheck == parent_marker &&
                             *parent_value == parent_marker &&
-                            *(volatile uint64_t*)reused_frame == child_marker;
+                            *(volatile uint64_t*)memory_frame_pointer(reused_frame) == child_marker &&
+                            *(volatile uint64_t*)memory_frame_pointer(frame2) == grandchild_marker;
+            if (!isolated)
+                log_error("Address-space isolation failed: child=%lx pdata=%d grandchild=%d parent=%lx child-frame=%lx grandchild-frame=%lx",
+                          child_initial_value, child_process_data_initial, grandchild_isolated,
+                          *parent_value, *(volatile uint64_t*)memory_frame_pointer(reused_frame),
+                          *(volatile uint64_t*)memory_frame_pointer(frame2));
             g_process_data_selfcheck = original_process_data_value;
             if (!isolated) {
                 *parent_value = original_value;
+                memory_address_space_destroy(&grandchild_space);
+                memory_address_space_destroy(&child_space);
                 memory_frame_free(frame2);
                 memory_frame_free(reused_frame);
                 return -PAL_ERROR_DENIED;
+            }
+
+            /* A descendant owns a full private table tree and must survive its parent's teardown. */
+            memory_address_space_destroy(&child_space);
+            ret = memory_address_space_switch(&grandchild_space);
+            if (ret < 0) {
+                memory_address_space_switch_root(g_pml4_table_base);
+                memory_address_space_destroy(&grandchild_space);
+                memory_frame_free(frame2);
+                memory_frame_free(reused_frame);
+                return ret;
+            }
+            bool grandchild_survived_parent =
+                    *(volatile uint64_t*)test_addr == grandchild_marker &&
+                    g_process_data_selfcheck == grandchild_marker;
+            ret = memory_address_space_switch_root(g_pml4_table_base);
+            if (ret < 0) {
+                memory_address_space_destroy(&grandchild_space);
+                memory_frame_free(frame2);
+                memory_frame_free(reused_frame);
+                return ret;
             }
 
             bool scheduler_switched = true;
@@ -208,10 +306,10 @@ static int init_multiprocess_frame_pool(void) {
                 PAL_HANDLE thread_handle;
                 ret = pal_common_thread_create_with_address_space(
                         &thread_handle, address_space_thread_check, &thread_check,
-                        &child_space);
+                        &grandchild_space);
                 if (ret < 0) {
                     *parent_value = original_value;
-                    memory_address_space_destroy(&child_space);
+                    memory_address_space_destroy(&grandchild_space);
                     memory_frame_free(frame2);
                     memory_frame_free(reused_frame);
                     return ret;
@@ -222,28 +320,36 @@ static int init_multiprocess_frame_pool(void) {
                 while (!sched_thread_is_stopped(thread_handle->thread.kernel_thread))
                     _PalThreadYieldExecution();
 
-                scheduler_switched = thread_check.observed == child_marker &&
+                scheduler_switched = thread_check.observed == grandchild_marker &&
                                      *parent_value == parent_marker &&
-                                     *(volatile uint64_t*)reused_frame ==
+                                     *(volatile uint64_t*)memory_frame_pointer(frame2) ==
                                              0x7766554433221100UL;
+                if (!scheduler_switched)
+                    log_error("Scheduler root check values: observed=%lx parent=%lx child-frame=%lx grandchild-frame=%lx",
+                              thread_check.observed, *parent_value,
+                              *(volatile uint64_t*)memory_frame_pointer(reused_frame),
+                              *(volatile uint64_t*)memory_frame_pointer(frame2));
                 PalObjectDestroy(thread_handle);
             } else {
                 log_always("Skipping scheduled address-space check with %u vCPUs", g_num_cpus);
             }
             *parent_value = original_value;
-            size_t frames_before_destroy = memory_frame_allocated_count();
-            size_t table_pages_released = memory_address_space_destroy(&child_space);
-            bool table_frames_reclaimed = memory_frame_allocated_count() + table_pages_released ==
-                                          frames_before_destroy;
+            memory_address_space_destroy(&grandchild_space);
             memory_frame_free(frame2);
             ret = memory_frame_free(reused_frame);
             if (ret < 0)
                 return ret;
-            if (!table_frames_reclaimed)
+            if (memory_frame_allocated_count() != initial_frame_count)
+                log_error("Address-space frame leak: started %zu, ended %zu",
+                          initial_frame_count, memory_frame_allocated_count());
+            if (memory_frame_allocated_count() != initial_frame_count)
                 return -PAL_ERROR_DENIED;
-            if (!scheduler_switched)
+            if (!scheduler_switched || !grandchild_survived_parent)
+                log_error("Address-space teardown/scheduler failed: scheduler=%d descendant=%d",
+                          scheduler_switched, grandchild_survived_parent);
+            if (!scheduler_switched || !grandchild_survived_parent)
                 return -PAL_ERROR_DENIED;
-            log_always("Address-space mapping and scheduler switch self-check passed");
+            log_always("Address-space isolation, nested clone, parent teardown, frame reclaim, and scheduler self-check passed");
             return 0;
         }
     }
