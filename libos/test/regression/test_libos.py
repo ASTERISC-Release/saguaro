@@ -1412,6 +1412,38 @@ class TC_40_FileSystem(RegressionTestCase):
         stdout, _ = self.run_binary(['close_range'])
         self.assertIn('TEST OK', stdout)
 
+    def test_081a_file_times_chroot(self):
+        stdout, _ = self.run_binary(['file_times', 'tmp'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_081b_file_times_tmpfs(self):
+        stdout, _ = self.run_binary(['file_times', '/mnt/tmpfs'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_082a_links_chroot(self):
+        stdout, _ = self.run_binary(['links', 'tmp'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_082b_links_tmpfs(self):
+        stdout, _ = self.run_binary(['links', '/mnt/tmpfs'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_083a_renameat2_chroot(self):
+        stdout, _ = self.run_binary(['renameat2', 'tmp', 'chroot'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_083b_renameat2_tmpfs(self):
+        stdout, _ = self.run_binary(['renameat2', '/mnt/tmpfs', 'tmpfs'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_084a_credentials_chroot(self):
+        stdout, _ = self.run_binary(['credentials', 'tmp'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_084b_credentials_tmpfs(self):
+        stdout, _ = self.run_binary(['credentials', '/mnt/tmpfs'])
+        self.assertIn('TEST OK', stdout)
+
 class TC_50_GDB(RegressionTestCase):
     def setUp(self):
         if not self.has_debug():

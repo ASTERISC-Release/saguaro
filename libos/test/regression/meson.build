@@ -13,6 +13,7 @@ tests = {
     },
     'close_range': {},
     'console': {},
+    'credentials': {},
     'debug': {
         'c_args': '-g3',
     },
@@ -40,6 +41,7 @@ tests = {
     'fdleak': {},
     'file_check_policy': {},
     'file_size': {},
+    'file_times': {},
     'flock_lock': {},
     'fopen_cornercases': {},
     'fork_and_access_file': {},
@@ -71,6 +73,7 @@ tests = {
     'large_dir_read': {},
     'large_file': {},
     'large_mmap': {},
+    'links': {},
     'madvise': {},
     'mkfifo': {},
     'mmap_file': {},
@@ -103,6 +106,7 @@ tests = {
     'readdir': {},
     'rename_unlink': {},
     'rename_unlink_fchown': {},
+    'renameat2': {},
     'run_test': {
         'include_directories': include_directories(
             # for `gramine_entry_api.h`
