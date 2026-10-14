@@ -1,3 +1,4 @@
+import glob
 import os
 import platform
 import re
@@ -1200,6 +1201,19 @@ class TC_40_FileSystem(RegressionTestCase):
 
     def test_002_device_passthrough(self):
         stdout, _ = self.run_binary(['device_passthrough'])
+        self.assertIn('TEST OK', stdout)
+
+    @unittest.skipIf(HAS_SGX, 'raw device ioctls exist only in the Linux PAL')
+    @unittest.skipUnless(glob.glob('/dev/dri/renderD*'), 'no DRM render node on this host')
+    def test_006_device_drm(self):
+        stdout, _ = self.run_binary(['device_drm'])
+        self.assertIn('TEST OK', stdout)
+        self.assertIn('driver ', stdout)
+
+    @unittest.skipIf(HAS_SGX, 'the SGX PAL refuses undescribed ioctls in its own way')
+    @unittest.skipUnless(glob.glob('/dev/dri/renderD*'), 'no DRM render node on this host')
+    def test_007_device_drm_denied(self):
+        stdout, _ = self.run_binary(['device_drm_denied', 'denied'])
         self.assertIn('TEST OK', stdout)
 
     @unittest.skipUnless(IS_VM, '/dev/gramine_test_dev is available only on some Jenkins machines')

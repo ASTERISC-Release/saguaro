@@ -228,6 +228,19 @@ static int mount_one_nonroot(toml_table_t* mount, const char* prefix) {
         goto out;
     }
 
+    bool host_symlinks = false;
+    ret = toml_bool_in(mount, "host_symlinks", /*defaultval=*/false, &host_symlinks);
+    if (ret < 0) {
+        log_error("Cannot parse '%s.host_symlinks'", prefix);
+        ret = -EINVAL;
+        goto out;
+    }
+    if (host_symlinks && mount_type && strcmp(mount_type, "chroot")) {
+        log_error("'%s.host_symlinks' applies only to chroot mounts", prefix);
+        ret = -EINVAL;
+        goto out;
+    }
+
     if (!mount_path) {
         log_error("No value provided for '%s.path'", prefix);
         ret = -EINVAL;
@@ -273,6 +286,7 @@ static int mount_one_nonroot(toml_table_t* mount, const char* prefix) {
         .path = mount_path,
         .uri = mount_uri,
         .key_name = mount_key_name,
+        .host_symlinks = host_symlinks,
     };
     ret = mount_fs(&params);
 
@@ -445,6 +459,7 @@ static int mount_fs_at_dentry(struct libos_mount_params* params, struct libos_de
     }
     mount->fs = fs;
     mount->data = mount_data;
+    mount->host_symlinks = params->host_symlinks;
 
     /* Attach mount to mountpoint, and the other way around */
 

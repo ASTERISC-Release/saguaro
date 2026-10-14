@@ -67,6 +67,8 @@ static int generic_istat(struct libos_inode* inode, struct stat* buf) {
     buf->st_atime = inode->atime;
     buf->st_mtime = inode->mtime;
     buf->st_ctime = inode->ctime;
+    if (inode->type == S_IFCHR)
+        buf->st_rdev = libos_makedev(inode->rdev_major, inode->rdev_minor);
 
     /* Some programs (e.g. some tests from LTP) require this value. We've picked some random,
      * pretty looking constant - exact value should not affect anything (perhaps except

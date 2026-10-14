@@ -35,6 +35,9 @@ struct libos_mount_params {
 
     /* Key name (used by `chroot_encrypted` filesystem), or NULL if not applicable */
     const char* key_name;
+
+    /* `host_symlinks` (chroot only): readlink() reports the host's symbolic links */
+    bool host_symlinks;
 };
 
 struct libos_fs_ops {
@@ -268,6 +271,10 @@ struct libos_inode {
     /* File size */
     file_off_t size;
 
+    /* Device number of a character device (`st_rdev`), if the filesystem knows it */
+    uint32_t rdev_major;
+    uint32_t rdev_minor;
+
     /* credentials */
     IDTYPE uid, gid;
 
@@ -486,6 +493,12 @@ struct libos_fs {
 };
 
 DEFINE_LIST(libos_mount);
+/* A `dev_t` in the kernel's encoding (as glibc's makedev()). */
+static inline uint64_t libos_makedev(uint32_t major, uint32_t minor) {
+    return (((uint64_t)(major & 0x00000fffu)) <<  8) | (((uint64_t)(major & 0xfffff000u)) << 32) |
+           (((uint64_t)(minor & 0x000000ffu)) <<  0) | (((uint64_t)(minor & 0xffffff00u)) << 12);
+}
+
 struct libos_mount {
     struct libos_fs* fs;
 
@@ -493,6 +506,9 @@ struct libos_mount {
 
     char* path;
     char* uri;
+
+    /* chroot: readlink() reports the host's symbolic links (manifest `host_symlinks`) */
+    bool host_symlinks;
 
     struct libos_dentry* root;
 
@@ -978,3 +994,6 @@ int synthetic_setup_dentry(struct libos_dentry* dent, mode_t type, mode_t perm);
 int fifo_setup_dentry(struct libos_dentry* dent, mode_t perm, int fd_read, int fd_write);
 
 int chroot_readdir(struct libos_dentry* dent, readdir_callback_t callback, void* arg);
+/* readlink() of a host symbolic link under a chroot mount with `host_symlinks`; returns the length
+ * copied into `buf` (truncated as readlink() does) or a negative error (-EINVAL: not a link) */
+int chroot_host_readlink(struct libos_dentry* dent, char* buf, size_t bufsize);

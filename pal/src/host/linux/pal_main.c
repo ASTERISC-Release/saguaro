@@ -387,6 +387,12 @@ noreturn void pal_linux_main(void* initial_rsp, void* fini_callback) {
         INIT_FAIL("Cannot parse 'sys.enable_extra_runtime_domain_names_conf'");
     }
 
+    ret = toml_bool_in(g_pal_public_state.manifest_root, "sys.insecure__allow_raw_device_ioctl",
+                       /*defaultval=*/false, &g_pal_linux_state.raw_device_ioctl);
+    if (ret < 0) {
+        INIT_FAIL("Cannot parse 'sys.insecure__allow_raw_device_ioctl'");
+    }
+
     /* Get host /etc information only for the first process. This information will be
      * checkpointed and restored during forking of the child process(es). */
     if (first_process) {

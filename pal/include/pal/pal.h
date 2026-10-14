@@ -505,6 +505,11 @@ typedef struct _PAL_STREAM_ATTR {
             bool tcp_nodelay;
             bool ipv6_v6only;
         } socket;
+        struct {
+            /* device number of a character device (`st_rdev`); 0:0 if the PAL does not know it */
+            uint32_t rdev_major;
+            uint32_t rdev_minor;
+        } dev;
     };
 } PAL_STREAM_ATTR;
 
@@ -933,6 +938,25 @@ int PalSegmentBaseSet(enum pal_segment_reg reg, uintptr_t addr);
  * This function corresponds to ioctl() in UNIX systems and DeviceIoControl() in Windows.
  */
 int PalDeviceIoControl(PAL_HANDLE handle, uint32_t cmd, unsigned long arg, int* out_ret);
+
+/*
+ * Host passthrough (Linux PAL only, i.e. `gramine-direct`). These calls give the LibOS access to
+ * host objects that have no PAL abstraction. Every other PAL returns -PAL_ERROR_NOTIMPLEMENTED.
+ * The LibOS uses them only when the manifest opts in (see Documentation/manifest-syntax.rst).
+ */
+
+/*!
+ * \brief Read the target of a host symbolic link.
+ *
+ * \param         typed_uri  URI of the link (`file:`, `dir:` or `dev:`).
+ * \param[out]    buf        Buffer for the target (not NUL-terminated).
+ * \param[in,out] size       Size of \p buf; on success the length of the target (truncated to the
+ *                           size of \p buf, as readlink() does).
+ *
+ * \returns 0 on success, -PAL_ERROR_INVAL if the host object is not a symbolic link, another
+ *          negative error code on failure.
+ */
+int PalHostReadlink(const char* typed_uri, char* buf, size_t* size);
 
 /*!
  * \brief Obtain the attestation report (local) with `user_report_data` embedded into it.

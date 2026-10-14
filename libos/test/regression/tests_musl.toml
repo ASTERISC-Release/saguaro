@@ -16,6 +16,8 @@ manifests = [
   "debug_log_file",
   "debug_log_inline",
   "devfs",
+  "device_drm",
+  "device_drm_denied",
   "device_passthrough",
   "double_fork",
   "env_from_file",

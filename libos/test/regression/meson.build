@@ -17,6 +17,7 @@ tests = {
         'c_args': '-g3',
     },
     'devfs': {},
+    'device_drm': {},
     'device_passthrough': {},
     'double_fork': {},
     'epoll_epollet': {},

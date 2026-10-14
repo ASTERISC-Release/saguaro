@@ -188,6 +188,8 @@ static int dev_attrquery(const char* type, const char* uri, PAL_STREAM_ATTR* att
     attr->pending_size = stat_buf.st_size;
     attr->handle_type = PAL_TYPE_DEV;
     attr->nonblocking = false;
+    attr->dev.rdev_major = host_dev_major(stat_buf.st_rdev);
+    attr->dev.rdev_minor = host_dev_minor(stat_buf.st_rdev);
     return 0;
 }
 
@@ -203,6 +205,8 @@ static int dev_attrquerybyhdl(PAL_HANDLE handle, PAL_STREAM_ATTR* attr) {
     attr->pending_size = stat_buf.st_size;
     attr->handle_type  = PAL_TYPE_DEV;
     attr->nonblocking  = handle->dev.nonblocking;
+    attr->dev.rdev_major = host_dev_major(stat_buf.st_rdev);
+    attr->dev.rdev_minor = host_dev_minor(stat_buf.st_rdev);
     return 0;
 }
 
@@ -241,6 +245,21 @@ int _PalDeviceIoControl(PAL_HANDLE handle, uint32_t cmd, unsigned long arg, int*
         fd = handle->sock.fd;
     else
         return -PAL_ERROR_INVAL;
+
+    if (g_pal_linux_state.raw_device_ioctl) {
+        /* `sys.insecure__allow_raw_device_ioctl`: the application shares the address space with
+         * the host kernel here, so its argument pointer is passed unchanged, with no description
+         * of the argument and no copy. Pointers inside the argument reach the host kernel as they
+         * are, and fds in it are host fds (the LibOS translates the ones it knows about). */
+        static bool warned = false;
+        if (!__atomic_exchange_n(&warned, true, __ATOMIC_RELAXED)) {
+            log_warning("Device ioctls are passed to the host unchecked "
+                        "(sys.insecure__allow_raw_device_ioctl = true); "
+                        "this is insecure and must not be used in production.");
+        }
+        *out_ret = DO_SYSCALL(ioctl, fd, cmd, arg);
+        return 0;
+    }
 
     /* find this IOCTL request in the manifest */
     toml_table_t* manifest_sys = toml_table_in(g_pal_public_state.manifest_root, "sys");
