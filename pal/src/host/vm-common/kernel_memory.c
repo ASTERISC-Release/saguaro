@@ -55,6 +55,12 @@ void* memory_frame_pointer(uintptr_t frame) {
     return (void*)frame;
 }
 
+bool memory_frame_is_alias_pointer(const void* pointer) {
+    uintptr_t addr = (uintptr_t)pointer;
+    return g_frame_alias_mapped_size && addr >= FRAME_POOL_ALIAS_BASE &&
+           addr < FRAME_POOL_ALIAS_BASE + g_frame_alias_mapped_size;
+}
+
 static uintptr_t memory_frame_from_pointer(const void* pointer) {
     uintptr_t addr = (uintptr_t)pointer;
     if (g_frame_alias_mapped_size && addr >= FRAME_POOL_ALIAS_BASE &&
@@ -189,6 +195,83 @@ int memory_frame_free(uintptr_t frame) {
 #ifdef ASAN
     asan_poison_region(frame, PAGE_SIZE, ASAN_POISON_USER);
 #endif
+    spinlock_unlock_enable_irq(&g_frame_pool_lock);
+    return 0;
+}
+
+int memory_frame_alloc_contiguous(size_t size, void** out_alias) {
+    if (!g_frame_pool_bitmap || !size || !out_alias || size > SIZE_MAX - PAGE_SIZE + 1)
+        return -PAL_ERROR_INVAL;
+
+    size_t pages = UDIV_ROUND_UP(size, PAGE_SIZE);
+    size_t frame_count = g_frame_pool_size / PAGE_SIZE;
+    if (!pages || pages > frame_count)
+        return -PAL_ERROR_NOMEM;
+
+    spinlock_lock_disable_irq(&g_frame_pool_lock);
+    size_t first = g_frame_pool_next;
+    for (size_t scanned = 0; scanned < frame_count; scanned++) {
+        size_t start = (first + scanned) % frame_count;
+        if (start + pages > frame_count)
+            continue;
+
+        size_t j;
+        for (j = 0; j < pages; j++) {
+            size_t i = start + j;
+            if (g_frame_pool_bitmap[i / 8] & (1U << (i % 8)))
+                break;
+        }
+        if (j != pages) {
+            scanned += j;
+            continue;
+        }
+
+        uintptr_t frame = g_frame_pool_start + start * PAGE_SIZE;
+        for (j = 0; j < pages; j++) {
+            size_t i = start + j;
+            g_frame_pool_bitmap[i / 8] |= 1U << (i % 8);
+            g_frame_owner_next[i] = 0;
+            g_frame_owner_kind[i] = 0;
+            _real_memset(memory_frame_pointer(frame + j * PAGE_SIZE), 0, PAGE_SIZE);
+        }
+        g_frame_pool_next = (start + pages) % frame_count;
+        *out_alias = memory_frame_pointer(frame);
+        spinlock_unlock_enable_irq(&g_frame_pool_lock);
+        return 0;
+    }
+    spinlock_unlock_enable_irq(&g_frame_pool_lock);
+    return -PAL_ERROR_NOMEM;
+}
+
+int memory_frame_free_contiguous(void* alias, size_t size) {
+    if (!g_frame_pool_bitmap || !memory_frame_is_alias_pointer(alias) || !size ||
+            size > SIZE_MAX - PAGE_SIZE + 1 ||
+            !IS_ALIGNED_POW2((uintptr_t)alias, PAGE_SIZE))
+        return -PAL_ERROR_INVAL;
+
+    uintptr_t frame = (uintptr_t)alias - FRAME_POOL_ALIAS_BASE;
+    size_t pages = UDIV_ROUND_UP(size, PAGE_SIZE);
+    if (frame < g_frame_pool_start || pages > g_frame_pool_size / PAGE_SIZE ||
+            frame - g_frame_pool_start > g_frame_pool_size - pages * PAGE_SIZE)
+        return -PAL_ERROR_INVAL;
+
+    size_t start = (frame - g_frame_pool_start) / PAGE_SIZE;
+    spinlock_lock_disable_irq(&g_frame_pool_lock);
+    for (size_t j = 0; j < pages; j++) {
+        size_t i = start + j;
+        if (!(g_frame_pool_bitmap[i / 8] & (1U << (i % 8)))) {
+            spinlock_unlock_enable_irq(&g_frame_pool_lock);
+            return -PAL_ERROR_INVAL;
+        }
+    }
+    for (size_t j = 0; j < pages; j++) {
+        size_t i = start + j;
+        g_frame_pool_bitmap[i / 8] &= ~(1U << (i % 8));
+        g_frame_owner_next[i] = 0;
+        g_frame_owner_kind[i] = 0;
+    }
+    if (start < g_frame_pool_next)
+        g_frame_pool_next = start;
     spinlock_unlock_enable_irq(&g_frame_pool_lock);
     return 0;
 }

@@ -87,19 +87,26 @@ int pal_common_thread_create_with_address_space(struct pal_handle** handle,
 
 #ifdef __x86_64__
     /* Every root must be able to traverse the shared scheduler list, including the TCB node for a
-     * thread created after that root was cloned. */
+     * thread created after that root was cloned. Stacks allocated from the supervisor frame alias
+     * are already mapped identically in every root. */
     size_t stack_size = THREAD_STACK_SIZE + ALT_STACK_SIZE + g_xsave_size + VM_XSAVE_ALIGN;
     uintptr_t stack_start = ALIGN_DOWN((uintptr_t)stack, PAGE_SIZE);
     uintptr_t stack_end = ALIGN_UP((uintptr_t)stack + stack_size, PAGE_SIZE);
-    ret = sched_thread_share_stack(current_space, address_space, stack_start,
-                                   stack_end - stack_start);
-    if (ret < 0) {
-        if (handle_frame)
-            memory_frame_free(handle_frame);
-        else
-            free(thread_handle);
-        return ret;
+#if defined(PAL_HOST_VM)
+    if (!memory_frame_is_alias_pointer(stack)) {
+#endif
+        ret = sched_thread_share_stack(current_space, address_space, stack_start,
+                                       stack_end - stack_start);
+        if (ret < 0) {
+            if (handle_frame)
+                memory_frame_free(handle_frame);
+            else
+                free(thread_handle);
+            return ret;
+        }
+#if defined(PAL_HOST_VM)
     }
+#endif
 #endif
 
     /* init TCB in the highest part of the allocated stack region */

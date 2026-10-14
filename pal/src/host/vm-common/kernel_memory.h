@@ -51,6 +51,9 @@ int memory_pagetables_init(void* memory_address_end, bool current_page_tables_co
 int memory_frame_pool_init(uintptr_t addr, size_t size);
 int memory_frame_alloc(uintptr_t* out_frame);
 int memory_frame_free(uintptr_t frame);
+int memory_frame_alloc_contiguous(size_t size, void** out_alias);
+int memory_frame_free_contiguous(void* alias, size_t size);
+bool memory_frame_is_alias_pointer(const void* pointer);
 size_t memory_frame_allocated_count(void);
 /* Return the stable supervisor alias for a physical frame address. */
 void* memory_frame_pointer(uintptr_t frame);

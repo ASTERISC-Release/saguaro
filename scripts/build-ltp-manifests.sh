@@ -55,3 +55,26 @@ for manifest in root.glob("*.manifest"):
 print(f"Configured /dev/shm as tmpfs in {configured} VM manifests ({changed} changed)")
 PY
 fi
+
+# Process-syscall measurements must opt in explicitly while the VM PAL implementation is
+# experimental. Keep the default manifests suitable for the existing single-process baseline.
+if [[ ${LTP_VM_MULTIPROCESS:-0} == 1 ]]; then
+    python3 - "$test_dir" <<'PY'
+from pathlib import Path
+import sys
+
+root = Path(sys.argv[1])
+changed = 0
+for manifest in root.glob("*.manifest"):
+    text = manifest.read_text()
+    marker = "[sys]\n"
+    if marker not in text:
+        continue
+    if "experimental__multiprocess" in text:
+        continue
+    text = text.replace(marker, marker + "experimental__multiprocess = true\n", 1)
+    manifest.write_text(text)
+    changed += 1
+print(f"Enabled experimental VM multiprocess support in {changed} LTP manifests")
+PY
+fi

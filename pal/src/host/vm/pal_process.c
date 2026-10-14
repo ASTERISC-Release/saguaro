@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
 /* Copyright (C) 2023 Intel Corporation */
 
-/* VM PAL process handles use a frame shared by all address spaces. Process creation itself is
- * enabled only after child startup and process lifetime management are implemented. */
+/* VM PAL process handles use frames shared by all address spaces. The experimental manifest key
+ * gates process creation until the x86_64 address-space and process-stream checks pass. */
 
 #include "api.h"
 #include "pal.h"

@@ -102,6 +102,9 @@ static int init_multiprocess_frame_pool(void) {
             ret = memory_frame_pool_init(candidate, pool_size);
             if (ret < 0)
                 return ret;
+            ret = pal_enable_shared_frame_slab_allocator();
+            if (ret < 0)
+                return ret;
 
             ret = vm_process_stream_selfcheck();
             if (ret < 0)
@@ -140,11 +143,14 @@ static int init_multiprocess_frame_pool(void) {
             size_t initial_frame_count = memory_frame_allocated_count();
             uintptr_t frame1, frame2, reused_frame;
             ret = memory_frame_alloc(&frame1);
-            if (ret < 0)
+            if (ret < 0) {
+                log_error("frame-pool self-check allocation 1 failed: %s", pal_strerror(ret));
                 return ret;
+            }
             ret = memory_frame_alloc(&frame2);
             if (ret < 0) {
                 memory_frame_free(frame1);
+                log_error("frame-pool self-check allocation 2 failed: %s", pal_strerror(ret));
                 return ret;
             }
             if (frame1 == frame2 || !IS_ALIGNED_POW2(frame1, PAGE_SIZE) ||
@@ -157,10 +163,13 @@ static int init_multiprocess_frame_pool(void) {
             ret = memory_frame_free(frame1);
             if (ret < 0) {
                 memory_frame_free(frame2);
+                log_error("frame-pool self-check free failed: %s", pal_strerror(ret));
                 return ret;
             }
-            if (memory_frame_free(frame1) != -PAL_ERROR_INVAL) {
+            ret = memory_frame_free(frame1);
+            if (ret != -PAL_ERROR_INVAL) {
                 memory_frame_free(frame2);
+                log_error("frame-pool self-check double-free returned %s", pal_strerror(ret));
                 return -PAL_ERROR_DENIED;
             }
             ret = memory_frame_alloc(&reused_frame);
@@ -168,6 +177,7 @@ static int init_multiprocess_frame_pool(void) {
                 memory_frame_free(frame2);
                 return ret;
             }
+            log_always("Frame-pool allocate, double-free rejection, and frame-reuse self-check passed");
             if (reused_frame != frame1 || *(uint64_t*)memory_frame_pointer(reused_frame) != 0) {
                 memory_frame_free(frame2);
                 memory_frame_free(reused_frame);
@@ -199,6 +209,8 @@ static int init_multiprocess_frame_pool(void) {
             }
             if (ret < 0) {
                 *parent_value = original_value;
+                log_error("Address-space child clone/map self-check failed: %s",
+                          pal_strerror(ret));
                 memory_address_space_destroy(&child_space);
                 memory_frame_free(frame2);
                 memory_frame_free(reused_frame);
@@ -208,6 +220,8 @@ static int init_multiprocess_frame_pool(void) {
             ret = memory_address_space_switch(&child_space);
             if (ret < 0) {
                 *parent_value = original_value;
+                log_error("Address-space child switch self-check failed: %s",
+                          pal_strerror(ret));
                 memory_address_space_destroy(&child_space);
                 memory_frame_free(frame2);
                 memory_frame_free(reused_frame);
@@ -230,6 +244,8 @@ static int init_multiprocess_frame_pool(void) {
                                                /*usermode=*/true);
             if (ret < 0) {
                 memory_address_space_switch_root(g_pml4_table_base);
+                log_error("Address-space grandchild clone/map self-check failed: %s",
+                          pal_strerror(ret));
                 memory_address_space_destroy(&grandchild_space);
                 memory_address_space_destroy(&child_space);
                 memory_frame_free(frame2);
@@ -240,6 +256,8 @@ static int init_multiprocess_frame_pool(void) {
             ret = memory_address_space_switch(&grandchild_space);
             if (ret < 0) {
                 memory_address_space_switch_root(g_pml4_table_base);
+                log_error("Address-space grandchild switch self-check failed: %s",
+                          pal_strerror(ret));
                 memory_address_space_destroy(&grandchild_space);
                 memory_address_space_destroy(&child_space);
                 memory_frame_free(frame2);
@@ -259,6 +277,8 @@ static int init_multiprocess_frame_pool(void) {
             ret = memory_address_space_switch(&parent_space);
             if (ret < 0) {
                 memory_address_space_switch_root(g_pml4_table_base);
+                log_error("Address-space parent switch self-check failed: %s",
+                          pal_strerror(ret));
                 memory_address_space_destroy(&grandchild_space);
                 memory_address_space_destroy(&child_space);
                 memory_frame_free(frame2);
@@ -292,6 +312,8 @@ static int init_multiprocess_frame_pool(void) {
             ret = memory_address_space_switch(&grandchild_space);
             if (ret < 0) {
                 memory_address_space_switch_root(g_pml4_table_base);
+                log_error("Address-space grandchild resume self-check failed: %s",
+                          pal_strerror(ret));
                 memory_address_space_destroy(&grandchild_space);
                 memory_frame_free(frame2);
                 memory_frame_free(reused_frame);
@@ -320,6 +342,8 @@ static int init_multiprocess_frame_pool(void) {
                         &grandchild_space);
                 if (ret < 0) {
                     *parent_value = original_value;
+                    log_error("Address-space scheduler-thread create self-check failed: %s",
+                              pal_strerror(ret));
                     memory_address_space_destroy(&grandchild_space);
                     memory_frame_free(frame2);
                     memory_frame_free(reused_frame);
@@ -346,8 +370,10 @@ static int init_multiprocess_frame_pool(void) {
             memory_address_space_destroy(&grandchild_space);
             memory_frame_free(frame2);
             ret = memory_frame_free(reused_frame);
-            if (ret < 0)
+            if (ret < 0) {
+                log_error("Address-space final frame free failed: %s", pal_strerror(ret));
                 return ret;
+            }
             if (memory_frame_allocated_count() != initial_frame_count)
                 log_error("Address-space frame leak: started %zu, ended %zu",
                           initial_frame_count, memory_frame_allocated_count());

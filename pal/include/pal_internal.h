@@ -301,6 +301,9 @@ int pal_internal_memory_free(void* addr, size_t size);
 void pal_disable_early_memory_bookkeeping(void);
 
 void init_slab_mgr(void);
+#if defined(PAL_HOST_VM) && defined(__x86_64__)
+int pal_enable_shared_frame_slab_allocator(void);
+#endif
 void* malloc(size_t size);
 void* calloc(size_t num, size_t size);
 void free(void* mem);

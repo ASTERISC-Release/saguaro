@@ -100,6 +100,12 @@ static int pipe_connect(struct pal_handle** handle, const char* name,
         sched_thread_wakeup(&g_streams_waiting_events_futex);
     sched_thread_wakeup(&found_server_pipe->pipe.connect_futex);
 
+    /* Do not return a connected handle until the server has accepted it. Otherwise the client can
+     * close and disappear from g_connecting_pipes_list before a process in another root wakes to
+     * accept it. */
+    while (!pipe->pipe.pipe_buf)
+        sched_thread_wait(&pipe->pipe.connect_futex, &g_connecting_pipes_lock);
+
     *handle = pipe;
     ret = 0;
 out:
@@ -183,6 +189,7 @@ int pal_common_pipe_waitforclient(struct pal_handle* server, struct pal_handle**
     pipe->pipe.pipe_buf = pipe_buf;
     found_connecting_pipe->pipe.pipe_buf = pipe_buf;
     pipe_buf->refcount = 2;
+    sched_thread_wakeup(&found_connecting_pipe->pipe.connect_futex);
 
     *client = pipe;
     ret = 0;
