@@ -16,6 +16,7 @@ extern char __process_data_start[];
 extern char __process_data_end[];
 
 #define PROC_STREAM_CAPACITY 1984
+#define PROC_HANDLE_CAPACITY 8
 
 struct proc_ring {
     atomic_flag lock;
@@ -26,18 +27,41 @@ struct proc_ring {
     uint8_t data[PROC_STREAM_CAPACITY];
 };
 
+struct proc_handle_queue {
+    atomic_flag lock;
+    PAL_HANDLE handles[PROC_HANDLE_CAPACITY];
+    uint64_t head;
+    uint64_t tail;
+    bool reader_closed;
+    bool writer_closed;
+};
+
 struct proc_shared_stream {
     atomic_uint refs;
+    atomic_uint side_refs[2];
     uintptr_t handles_frame;
     struct proc_ring directions[2];
 };
 static_assert(sizeof(struct proc_shared_stream) <= PAGE_SIZE, "process stream must fit one frame");
+static_assert(ALIGN_UP(2 * sizeof(struct pal_handle), _Alignof(struct proc_handle_queue)) +
+                      2 * sizeof(struct proc_handle_queue) <= PAGE_SIZE,
+              "process handle queues must fit the endpoint frame");
 static_assert(2 * sizeof(struct pal_handle) <= PAGE_SIZE,
               "process endpoints must fit one handle frame");
 
 static struct proc_shared_stream* proc_stream(PAL_HANDLE handle) {
     return memory_frame_pointer(handle->process.shared_stream_frame);
 }
+
+static struct proc_handle_queue* proc_handle_queue(struct proc_shared_stream* shared,
+                                                    size_t direction) {
+    uintptr_t queues = ALIGN_UP(2 * sizeof(struct pal_handle),
+                                _Alignof(struct proc_handle_queue));
+    return (struct proc_handle_queue*)((char*)memory_frame_pointer(shared->handles_frame) +
+                                       queues) + direction;
+}
+
+static void proc_destroy(PAL_HANDLE handle);
 
 static void proc_ring_lock(struct proc_ring* ring) {
     while (atomic_flag_test_and_set_explicit(&ring->lock, memory_order_acquire))
@@ -46,6 +70,33 @@ static void proc_ring_lock(struct proc_ring* ring) {
 
 static void proc_ring_unlock(struct proc_ring* ring) {
     atomic_flag_clear_explicit(&ring->lock, memory_order_release);
+}
+
+static void proc_handle_queue_lock(struct proc_handle_queue* queue) {
+    while (atomic_flag_test_and_set_explicit(&queue->lock, memory_order_acquire))
+        __asm__ volatile("pause" ::: "memory");
+}
+
+static void proc_handle_queue_unlock(struct proc_handle_queue* queue) {
+    atomic_flag_clear_explicit(&queue->lock, memory_order_release);
+}
+
+static void proc_handle_queue_close(struct proc_handle_queue* queue, bool reader, bool writer) {
+    PAL_HANDLE pending[PROC_HANDLE_CAPACITY];
+    size_t pending_count = 0;
+    proc_handle_queue_lock(queue);
+    if (reader) {
+        queue->reader_closed = true;
+        while (queue->head != queue->tail) {
+            pending[pending_count++] = queue->handles[queue->head++ % PROC_HANDLE_CAPACITY];
+        }
+    }
+    if (writer)
+        queue->writer_closed = true;
+    proc_handle_queue_unlock(queue);
+
+    for (size_t i = 0; i < pending_count; i++)
+        proc_destroy(pending[i]);
 }
 
 static size_t proc_ring_copy_out(struct proc_ring* ring, void* buffer, size_t count) {
@@ -129,25 +180,98 @@ static int proc_delete(PAL_HANDLE handle, enum pal_delete_mode mode) {
         proc_ring_lock(incoming);
         incoming->reader_closed = true;
         proc_ring_unlock(incoming);
+        proc_handle_queue_close(proc_handle_queue(shared, 1 - handle->process.side), true, false);
         handle->flags &= ~PAL_HANDLE_FD_READABLE;
     }
     if (mode == PAL_DELETE_WRITE || mode == PAL_DELETE_ALL) {
         proc_ring_lock(outgoing);
         outgoing->writer_closed = true;
         proc_ring_unlock(outgoing);
+        proc_handle_queue_close(proc_handle_queue(shared, handle->process.side), false, true);
         handle->flags &= ~PAL_HANDLE_FD_WRITABLE;
     }
     return 0;
 }
 
 static void proc_destroy(PAL_HANDLE handle) {
-    (void)proc_delete(handle, PAL_DELETE_ALL);
     uintptr_t frame = handle->process.shared_stream_frame;
     struct proc_shared_stream* shared = memory_frame_pointer(frame);
+    uintptr_t private_frame = handle->private_frame;
+    if (atomic_fetch_sub_explicit(&shared->side_refs[handle->process.side], 1,
+                                  memory_order_acq_rel) == 1)
+        (void)proc_delete(handle, PAL_DELETE_ALL);
     if (atomic_fetch_sub_explicit(&shared->refs, 1, memory_order_acq_rel) == 1) {
         uintptr_t handles_frame = shared->handles_frame;
         (void)memory_frame_free(frame);
         (void)memory_frame_free(handles_frame);
+    }
+    if (private_frame)
+        (void)memory_frame_free(private_frame);
+}
+
+int vm_process_send_handle(PAL_HANDLE target_process, PAL_HANDLE cargo) {
+    if (!target_process || target_process->hdr.type != PAL_TYPE_PROCESS)
+        return -PAL_ERROR_BADHANDLE;
+    if (!cargo || cargo->hdr.type != PAL_TYPE_PROCESS)
+        return -PAL_ERROR_NOTIMPLEMENTED;
+
+    struct proc_shared_stream* shared = proc_stream(target_process);
+    struct proc_handle_queue* queue = proc_handle_queue(shared, target_process->process.side);
+    PAL_HANDLE copy = NULL;
+    uintptr_t copy_frame = 0;
+    int ret = memory_frame_alloc(&copy_frame);
+    if (ret < 0)
+        return ret;
+    copy = memory_frame_pointer(copy_frame);
+    memcpy(copy, cargo, sizeof(*copy));
+    copy->private_frame = copy_frame;
+
+    struct proc_shared_stream* cargo_shared = proc_stream(copy);
+    atomic_fetch_add_explicit(&cargo_shared->refs, 1, memory_order_relaxed);
+    atomic_fetch_add_explicit(&cargo_shared->side_refs[copy->process.side], 1,
+                              memory_order_relaxed);
+    while (true) {
+        proc_handle_queue_lock(queue);
+        if (queue->reader_closed || queue->writer_closed) {
+            proc_handle_queue_unlock(queue);
+            proc_destroy(copy);
+            return -PAL_ERROR_DENIED;
+        }
+        if (queue->tail - queue->head < PROC_HANDLE_CAPACITY) {
+            queue->handles[queue->tail++ % PROC_HANDLE_CAPACITY] = copy;
+            proc_handle_queue_unlock(queue);
+            return 0;
+        }
+        proc_handle_queue_unlock(queue);
+        if (target_process->process.nonblocking) {
+            proc_destroy(copy);
+            return -PAL_ERROR_TRYAGAIN;
+        }
+        _PalThreadYieldExecution();
+    }
+}
+
+int vm_process_receive_handle(PAL_HANDLE source_process, PAL_HANDLE* out_cargo) {
+    if (!source_process || source_process->hdr.type != PAL_TYPE_PROCESS || !out_cargo)
+        return -PAL_ERROR_BADHANDLE;
+
+    struct proc_shared_stream* shared = proc_stream(source_process);
+    struct proc_handle_queue* queue = proc_handle_queue(shared,
+                                                        1 - source_process->process.side);
+    while (true) {
+        proc_handle_queue_lock(queue);
+        if (queue->head != queue->tail) {
+            *out_cargo = queue->handles[queue->head++ % PROC_HANDLE_CAPACITY];
+            proc_handle_queue_unlock(queue);
+            return 0;
+        }
+        bool eof = queue->writer_closed || queue->reader_closed;
+        proc_handle_queue_unlock(queue);
+        if (eof)
+            return -PAL_ERROR_DENIED;
+        if (source_process->process.nonblocking)
+            return -PAL_ERROR_TRYAGAIN;
+        _PalThreadYieldExecution();
     }
 }
 
@@ -189,11 +313,15 @@ static int proc_create_pair(PAL_HANDLE* parent, PAL_HANDLE* child) {
     struct proc_shared_stream* shared = memory_frame_pointer(frame);
     memset(shared, 0, PAGE_SIZE);
     atomic_init(&shared->refs, 2);
+    atomic_init(&shared->side_refs[0], 1);
+    atomic_init(&shared->side_refs[1], 1);
     shared->handles_frame = handles_frame;
     atomic_flag_clear(&shared->directions[0].lock);
     atomic_flag_clear(&shared->directions[1].lock);
     PAL_HANDLE handles = memory_frame_pointer(handles_frame);
     memset(handles, 0, PAGE_SIZE);
+    atomic_flag_clear(&proc_handle_queue(shared, 0)->lock);
+    atomic_flag_clear(&proc_handle_queue(shared, 1)->lock);
     for (size_t i = 0; i < 2; i++) {
         init_handle_hdr(&handles[i], PAL_TYPE_PROCESS);
         handles[i].flags = PAL_HANDLE_FD_READABLE | PAL_HANDLE_FD_WRITABLE;
@@ -223,6 +351,7 @@ int vm_process_stream_selfcheck(void) {
     size_t initial_frames = memory_frame_allocated_count();
     PAL_HANDLE parent = NULL;
     PAL_HANDLE child = NULL;
+    PAL_HANDLE received = NULL;
     int ret = proc_create_pair(&parent, &child);
     if (ret < 0)
         return ret;
@@ -276,6 +405,20 @@ int vm_process_stream_selfcheck(void) {
         goto out;
     }
 
+    ret = vm_process_send_handle(parent, parent);
+    if (ret < 0)
+        goto out;
+    ret = vm_process_receive_handle(child, &received);
+    if (ret < 0)
+        goto out;
+    if (proc_write(received, 0, 1, source) != 1 || proc_read(child, 0, 1, result) != 1 ||
+            result[0] != source[0]) {
+        ret = -PAL_ERROR_DENIED;
+        goto out;
+    }
+    proc_destroy(received);
+    received = NULL;
+
     ret = proc_delete(child, PAL_DELETE_WRITE);
     if (ret < 0 || proc_read(parent, 0, 1, result) != 0) {
         ret = -PAL_ERROR_DENIED;
@@ -289,6 +432,8 @@ int vm_process_stream_selfcheck(void) {
     ret = 0;
 
 out:
+    if (received)
+        proc_destroy(received);
     proc_destroy(parent);
     proc_destroy(child);
     if (memory_frame_allocated_count() != initial_frames)

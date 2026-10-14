@@ -105,7 +105,7 @@ static int init_multiprocess_frame_pool(void) {
             ret = vm_process_stream_selfcheck();
             if (ret < 0)
                 return ret;
-            log_always("Process stream read/write, attributes, shutdown, and frame-reclaim "
+            log_always("Process stream I/O, endpoint transfer, shutdown, and frame-reclaim "
                        "self-check passed");
 
             /* PAL thread stacks are intentionally recycled instead of freed from their own

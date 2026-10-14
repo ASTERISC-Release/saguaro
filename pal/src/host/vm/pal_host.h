@@ -71,6 +71,8 @@ DEFINE_LISTP(pal_handle);
 
 int vm_process_stream_selfcheck(void);
 int vm_process_runtime_copy_selfcheck(void);
+int vm_process_send_handle(PAL_HANDLE target_process, PAL_HANDLE cargo);
+int vm_process_receive_handle(PAL_HANDLE source_process, PAL_HANDLE* out_cargo);
 
 #ifdef __x86_64__
 noreturn void pal_start_c(void);
