@@ -101,8 +101,6 @@ static ssize_t timerfd_write(struct libos_handle* hdl, const void* buf, size_t c
 }
 
 static void timerfd_post_poll(struct libos_handle* hdl, pal_wait_flags_t* pal_ret_events) {
-    assert(*pal_ret_events && !(*pal_ret_events & ~PAL_WAIT_ALL));
-
     struct libos_timerfd_handle* t = &hdl->info.timerfd;
 
     if (t->broken_in_child) {
