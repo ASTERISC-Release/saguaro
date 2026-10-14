@@ -157,6 +157,7 @@ tests = {
     'syscall': {},
     'syscall_restart': {},
     'sysfs_common': {},
+    'sysv_shm': {},
     'tcp_ancillary': {},
     'tcp_einprogress': {},
     'tcp_ipv6_v6only': {},

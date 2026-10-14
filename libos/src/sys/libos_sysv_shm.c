@@ -20,6 +20,7 @@
 #include "libos_lock.h"
 #include "libos_process.h"
 #include "libos_table.h"
+#include "libos_vma.h"
 #include "linux_abi/errors.h"
 #include "linux_abi/ipc.h"
 #include "linux_abi/memory.h"
@@ -85,6 +86,61 @@ static bool shm_may_attach(const struct sysv_shm_seg* seg, bool rdonly) {
     return (shm_class_bits(seg) & need) == need;
 }
 
+/*
+ * Which backing directory actually provides a shared file mapping is a PAL property: the direct
+ * PAL maps host files (`/tmp`, via `PalStreamMap`) and two attaches then share pages live; the VM
+ * PAL cannot map host files `MAP_SHARED` and must fall back to the LibOS tmpfs (`/dev/shm`),
+ * whose `mmap` is emulated (contents are copied into the new mapping — hence the flush of the
+ * existing mappings in `shmat()`, so a new attach at least sees the current data, though not
+ * later live writes; recorded in Documentation/devel/libos-syscalls/TODO.md). Probe once.
+ */
+static const char* const g_backing_dirs[] = {"/tmp", "/dev/shm"};
+static int g_backing_dir = -1; /* index into g_backing_dirs once the probe succeeded */
+
+static int shm_pick_backing_dir(uint64_t probe_id) {
+    if (g_backing_dir >= 0)
+        return g_backing_dir;
+    int creatable = -1; /* a directory we may create in, even if the mapping probe failed there */
+    for (size_t i = 0; i < ARRAY_SIZE(g_backing_dirs); i++) {
+        char path[96];
+        int n = snprintf(path, sizeof(path), "%s/.gramine-sysv-shm-probe-%llu",
+                         g_backing_dirs[i], (unsigned long long)probe_id);
+        if (n < 0 || (size_t)n >= sizeof(path))
+            continue;
+        long fd = libos_openat_internal(AT_FDCWD, path, O_RDWR | O_CREAT | O_EXCL, 0666);
+        if (fd < 0) {
+            /* a directory this process may not create in is not a PAL property; skip it quietly */
+            log_debug("sysv shm probe: cannot create in %s: %d", path, (int)fd);
+            continue;
+        }
+        bool can_create = libos_syscall_ftruncate((int)fd, 4096) == 0;
+        if (can_create)
+            creatable = creatable < 0 ? (int)i : creatable;
+        bool can_map = false;
+        void* p = NULL;
+        if (can_create) {
+            p = libos_syscall_mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_SHARED, (int)fd, 0);
+            long pv = (long)p;
+            can_map = !(pv < 0 && pv >= -4095); /* else: an errno in the error range */
+            if (can_map)
+                libos_syscall_munmap(p, 4096);
+        }
+        libos_syscall_close((int)fd);
+        libos_unlink_internal(path);
+        if (can_map) {
+            /* cache only a confirmed working combination (PAL property, credential independent) */
+            g_backing_dir = (int)i;
+            return g_backing_dir;
+        }
+    }
+    /* Nothing mapped `MAP_SHARED` under the current credentials: still create the segment where
+     * creation works (a later `shmat()` reports what the PAL says about the mapping itself). Do
+     * not cache this: another credential set may well map where this one could not. */
+    if (creatable >= 0)
+        return creatable;
+    return -ENOENT;
+}
+
 long libos_syscall_shmget(int key, size_t size, int shmflg) {
     if (shmflg & LINUX_SHM_HUGETLB)
         return -EPERM; /* no hugetlb backing, as for memfd_create's MFD_HUGETLB */
@@ -148,11 +204,18 @@ long libos_syscall_shmget(int key, size_t size, int shmflg) {
      * that dies without IPC_RMID still leaks nothing. The name mirrors the memfd backing files. */
     static uint64_t next_shm_id;
     uint64_t id = __atomic_add_fetch(&next_shm_id, 1, __ATOMIC_RELAXED);
+    int dir = shm_pick_backing_dir(id);
+    if (dir < 0) {
+        unlock(&g_sysv_shm_lock);
+        return dir;
+    }
     char path[96];
     long fd = -1;
-    static const char* const backing_dirs[] = {"/dev/shm", "/tmp"};
-    for (size_t i = 0; i < ARRAY_SIZE(backing_dirs); i++) {
-        int n = snprintf(path, sizeof(path), "%s/.gramine-sysv-shm-%u-%llu", backing_dirs[i],
+    for (size_t attempt = 0; attempt < ARRAY_SIZE(g_backing_dirs); attempt++) {
+        size_t i = (size_t)dir + attempt < ARRAY_SIZE(g_backing_dirs)
+                       ? (size_t)dir + attempt
+                       : (size_t)dir + attempt - ARRAY_SIZE(g_backing_dirs);
+        int n = snprintf(path, sizeof(path), "%s/.gramine-sysv-shm-%u-%llu", g_backing_dirs[i],
                          g_process.pid, (unsigned long long)id);
         if (n < 0 || (size_t)n >= sizeof(path)) {
             unlock(&g_sysv_shm_lock);
@@ -167,11 +230,14 @@ long libos_syscall_shmget(int key, size_t size, int shmflg) {
         fd = libos_openat_internal(AT_FDCWD, path, O_RDWR | O_CREAT | O_EXCL, 0666);
         if (fd >= 0)
             break;
-        if (i + 1 == ARRAY_SIZE(backing_dirs) ||
-                (fd != -ENOENT && fd != -EROFS && fd != -EACCES)) {
+        if (fd != -ENOENT && fd != -EROFS && fd != -EACCES) {
             unlock(&g_sysv_shm_lock);
             return fd;
         }
+    }
+    if (fd < 0) {
+        unlock(&g_sysv_shm_lock);
+        return fd;
     }
 
     long ret = libos_syscall_ftruncate((int)fd, (loff_t)size);
@@ -252,7 +318,24 @@ long libos_syscall_shmat(int shmid, const void* shmaddr, int shmflg) {
     int flags = MAP_SHARED | ((shmflg & LINUX_SHM_REMAP) ? MAP_FIXED : 0);
     size_t size = seg->size;
     int fd = seg->fd;
+
+    /* Flush the current mappings before the new one is created: on the tmpfs backing the new
+     * mapping copies the file contents, and flushed mappings are the only way to carry the data
+     * written through them so far. */
+    uintptr_t flush_begin[8];
+    uintptr_t flush_end[8];
+    size_t nflush = 0;
+    for (size_t i = 0; i < MAX_SYSV_SHM_ATTACH && nflush < ARRAY_SIZE(flush_begin); i++) {
+        if (g_sysv_shm_attaches[i].used && g_sysv_shm_attaches[i].shmid == shmid) {
+            flush_begin[nflush] = g_sysv_shm_attaches[i].addr;
+            flush_end[nflush] = g_sysv_shm_attaches[i].addr + g_sysv_shm_attaches[i].len;
+            nflush++;
+        }
+    }
     unlock(&g_sysv_shm_lock);
+
+    for (size_t i = 0; i < nflush; i++)
+        msync_range(flush_begin[i], flush_end[i]);
 
     void* ret = libos_syscall_mmap((void*)addr, size, prot, flags, fd, 0);
     if ((long)ret < 0 && (long)ret >= -4095)
