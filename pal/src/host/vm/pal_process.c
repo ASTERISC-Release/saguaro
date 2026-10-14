@@ -14,6 +14,8 @@
 
 extern char __process_data_start[];
 extern char __process_data_end[];
+static int vm_process_copy_runtime(const struct memory_address_space* source,
+                                   struct memory_address_space* target, size_t* out_pages);
 
 #define PROC_STREAM_CAPACITY 1984
 #define PROC_HANDLE_CAPACITY 8
@@ -443,7 +445,7 @@ out:
 
 static int vm_process_copy_runtime(const struct memory_address_space* source,
                                    struct memory_address_space* target, size_t* out_pages) {
-    int ret = memory_address_space_clone(g_pml4_table_base, target);
+    int ret = memory_address_space_clone_from(source, target);
     if (ret < 0)
         return ret;
 
