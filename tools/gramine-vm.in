@@ -444,10 +444,25 @@ if lsof /tmp/gramine_vhostfs_"$GRAMINE_VM_ID".pid 2>/dev/null; then
     echo "Error: /tmp/gramine_vhostfs_"$GRAMINE_VM_ID".pid is already in use."
     exit 2
 fi
-virtiofsd --socket-path /tmp/gramine_vhostfs_"$GRAMINE_VM_ID" --shared-dir / --log-level error \
+# A stripped environment (the LibOS regression tests pass `env=`, which wipes PATH) leaves bash's
+# built-in default PATH, which lacks the distro's virtiofsd directories. Find it explicitly, the
+# same way QEMU_PATH allows overriding the QEMU binary.
+VIRTIOFSD=${VIRTIOFSD:-$(command -v virtiofsd || true)}
+[ -n "$VIRTIOFSD" ] || VIRTIOFSD=$(ls /usr/lib/qemu/virtiofsd /usr/libexec/virtiofsd 2>/dev/null | head -n 1)
+if [ -z "$VIRTIOFSD" ]; then
+    echo "Error: virtiofsd not found in PATH (set VIRTIOFSD to its path)." >&2
+    exit 2
+fi
+"$VIRTIOFSD" --socket-path /tmp/gramine_vhostfs_"$GRAMINE_VM_ID" --shared-dir / --log-level error \
 --sandbox none --no-announce-submounts &
 VIRTIOFSD_PID=$!
-while [ ! -e /tmp/gramine_vhostfs_"$GRAMINE_VM_ID" ]; do sleep 0.1; done
+# bounded, so a virtiofsd that died at startup is an error here and not a hang until the test timeout
+for _ in $(seq 100); do [ -e /tmp/gramine_vhostfs_"$GRAMINE_VM_ID" ] && break; sleep 0.1; done
+if [ ! -e /tmp/gramine_vhostfs_"$GRAMINE_VM_ID" ]; then
+    echo "Error: virtiofsd ($VIRTIOFSD) did not create its socket /tmp/gramine_vhostfs_$GRAMINE_VM_ID." >&2
+    kill "$VIRTIOFSD_PID" 2>/dev/null
+    exit 2
+fi
 
 # (not `exec`: the exit code has to be recovered from the console log after QEMU is gone)
 env "${CMD[@]}"
