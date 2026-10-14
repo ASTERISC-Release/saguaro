@@ -16,13 +16,11 @@
 #include "toml.h"
 #include "toml_utils.h"
 
-struct pal_common_state g_pal_common_state
-        __attribute__((section(".process_data"), aligned(4096)));
+struct pal_common_state g_pal_common_state PAL_PROCESS_DATA_PAGE;
 
 extern struct pal_initial_mem_range g_initial_mem_ranges[];
 
-struct pal_public_state g_pal_public_state
-        __attribute__((section(".process_data"), aligned(4096))) = {
+struct pal_public_state g_pal_public_state PAL_PROCESS_DATA_PAGE = {
     /* Enable log to catch early initialization errors; it will be overwritten in pal_main(). */
     .log_level = PAL_LOG_DEFAULT_LEVEL,
     .dns_host = {

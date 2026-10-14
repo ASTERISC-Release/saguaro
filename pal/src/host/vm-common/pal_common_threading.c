@@ -61,6 +61,8 @@ int pal_common_thread_create_with_address_space(struct pal_handle** handle,
             : memory_address_space_boot();
     struct pal_handle* thread_handle = NULL;
     uintptr_t handle_frame = 0;
+#ifdef PAL_HOST_VM
+    /* only the VM PAL creates threads in another process's root (TDX has a single root) */
     if (address_space != current_space) {
         int ret = memory_frame_alloc(&handle_frame);
         if (ret < 0)
@@ -68,7 +70,9 @@ int pal_common_thread_create_with_address_space(struct pal_handle** handle,
         thread_handle = memory_frame_pointer(handle_frame);
         memset(thread_handle, 0, PAGE_SIZE);
         thread_handle->private_frame = handle_frame;
-    } else {
+    } else
+#endif
+    {
         thread_handle = calloc(1, sizeof(*thread_handle));
         if (!thread_handle)
             return -PAL_ERROR_NOMEM;

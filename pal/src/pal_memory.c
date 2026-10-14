@@ -58,19 +58,16 @@ int PalVirtualMemoryProtect(void* addr, size_t size, pal_prot_flags_t prot) {
  * them only once (multiple passes might be too slow). The ranges are kept sorted, so we only have
  * to hold the last seen reserved range and the last address we allocated at.
  */
-static int (*g_mem_bkeep_alloc_upcall)(size_t size, uintptr_t* out_addr)
-        __attribute__((section(".process_data")));
-static int (*g_mem_bkeep_free_upcall)(uintptr_t addr, size_t size)
-        __attribute__((section(".process_data")));
-static bool g_bookkeeping_initialized __attribute__((section(".process_data")));
+static int (*g_mem_bkeep_alloc_upcall)(size_t size, uintptr_t* out_addr) PAL_PROCESS_DATA;
+static int (*g_mem_bkeep_free_upcall)(uintptr_t addr, size_t size) PAL_PROCESS_DATA;
+static bool g_bookkeeping_initialized PAL_PROCESS_DATA;
 
-static bool g_initial_mem_disabled __attribute__((section(".process_data")));
-static uintptr_t g_last_alloc_addr __attribute__((section(".process_data"))) = UINTPTR_MAX;
-static uintptr_t g_last_reserved_range_start __attribute__((section(".process_data"))) = UINTPTR_MAX;
-static uintptr_t g_last_reserved_range_end __attribute__((section(".process_data"))) = UINTPTR_MAX;
+static bool g_initial_mem_disabled PAL_PROCESS_DATA;
+static uintptr_t g_last_alloc_addr PAL_PROCESS_DATA = UINTPTR_MAX;
+static uintptr_t g_last_reserved_range_start PAL_PROCESS_DATA = UINTPTR_MAX;
+static uintptr_t g_last_reserved_range_end PAL_PROCESS_DATA = UINTPTR_MAX;
 /* Array of initial (PAL) memory ranges. Must be kept sorted in descending order. */
-struct pal_initial_mem_range g_initial_mem_ranges[0x100]
-        __attribute__((section(".process_data"))) = { 0 };
+struct pal_initial_mem_range g_initial_mem_ranges[0x100] PAL_PROCESS_DATA = { 0 };
 
 void PalSetMemoryBookkeepingUpcalls(int (*alloc)(size_t size, uintptr_t* out_addr),
                                     int (*free)(uintptr_t addr, size_t size)) {

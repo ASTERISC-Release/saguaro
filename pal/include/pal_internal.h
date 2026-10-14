@@ -300,6 +300,16 @@ int pal_internal_memory_alloc(size_t size, void** out_addr);
 int pal_internal_memory_free(void* addr, size_t size);
 void pal_disable_early_memory_bookkeeping(void);
 
+/* The x86_64 VM PAL copies the `.process_data` section privately into each process address space
+ * (see pal/src/host/vm/pal.lds); every other PAL keeps these variables in ordinary sections. */
+#if defined(PAL_HOST_VM) && defined(__x86_64__)
+#define PAL_PROCESS_DATA      __attribute__((section(".process_data")))
+#define PAL_PROCESS_DATA_PAGE __attribute__((section(".process_data"), aligned(4096)))
+#else
+#define PAL_PROCESS_DATA
+#define PAL_PROCESS_DATA_PAGE
+#endif
+
 void init_slab_mgr(void);
 #if defined(PAL_HOST_VM) && defined(__x86_64__)
 int pal_enable_shared_frame_slab_allocator(void);

@@ -100,12 +100,6 @@ static int pipe_connect(struct pal_handle** handle, const char* name,
         sched_thread_wakeup(&g_streams_waiting_events_futex);
     sched_thread_wakeup(&found_server_pipe->pipe.connect_futex);
 
-    /* A blocking client must stay alive until accepted, or a process in another root might miss it
-     * after the client closes. Nonblocking clients are used by the local create-and-accept
-     * sequence (e.g. pollable events), so they must return before the server calls waitforclient. */
-    while (!pipe->pipe.nonblocking && !pipe->pipe.pipe_buf)
-        sched_thread_wait(&pipe->pipe.connect_futex, &g_connecting_pipes_lock);
-
     *handle = pipe;
     ret = 0;
 out:
@@ -187,14 +181,23 @@ int pal_common_pipe_waitforclient(struct pal_handle* server, struct pal_handle**
     LISTP_DEL(found_connecting_pipe, &g_connecting_pipes_list, list);
 
     pipe->pipe.pipe_buf = pipe_buf;
-    found_connecting_pipe->pipe.pipe_buf = pipe_buf;
-    pipe_buf->refcount = 2;
-    sched_thread_wakeup(&found_connecting_pipe->pipe.connect_futex);
+    if (found_connecting_pipe->pipe.closed_pending) {
+        /* the client closed before being accepted (see pal_common_pipe_destroy): like an accepted
+         * socket whose peer already closed, this end sees end-of-stream */
+        pipe_buf->refcount = 1;
+        pipe_buf->readable = pipe_buf->writable = false;
+    } else {
+        found_connecting_pipe->pipe.pipe_buf = pipe_buf;
+        pipe_buf->refcount = 2;
+        found_connecting_pipe = NULL;
+    }
 
     *client = pipe;
     ret = 0;
 out:
     spinlock_unlock(&g_connecting_pipes_lock);
+    if (ret == 0 && found_connecting_pipe)
+        free(found_connecting_pipe); /* the closed client's handle, owned by the list until now */
     if (ret < 0) {
         free(pipe_buf);
         free(pipe);
@@ -357,10 +360,28 @@ void pal_common_pipe_destroy(struct pal_handle* handle) {
         }
     }
 
-    if (found_server_pipe)
+    if (found_server_pipe) {
         LISTP_DEL(handle, &g_server_pipes_list, list);
-    if (found_connecting_pipe)
-        LISTP_DEL(handle, &g_connecting_pipes_list, list);
+        /* nobody can accept the closed clients that were waiting for this server any more */
+        struct pal_handle* connecting_pipe;
+        struct pal_handle* tmp;
+        LISTP_FOR_EACH_ENTRY_SAFE(connecting_pipe, tmp, &g_connecting_pipes_list, list) {
+            if (connecting_pipe->pipe.closed_pending
+                    && strcmp(connecting_pipe->pipe.name, handle->pipe.name) == 0) {
+                LISTP_DEL(connecting_pipe, &g_connecting_pipes_list, list);
+                free(connecting_pipe);
+            }
+        }
+    }
+    if (found_connecting_pipe) {
+        /* A client that closes before the server accepted it stays queued, so that the server's
+         * accept still completes (with end-of-stream), as with a Unix socket. Without this, a server
+         * waiting in another process would never see a short-lived client. The queue owns the
+         * handle from now on; waitforclient (or the server's destroy) frees it. */
+        handle->pipe.closed_pending = true;
+        spinlock_unlock(&g_connecting_pipes_lock);
+        return;
+    }
 
     if (handle->hdr.type == PAL_TYPE_PIPE || handle->hdr.type == PAL_TYPE_PIPECLI) {
         pipe_buf = handle->pipe.pipe_buf;

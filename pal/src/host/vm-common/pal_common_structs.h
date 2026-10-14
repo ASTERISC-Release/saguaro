@@ -77,6 +77,9 @@ struct pal_handle_inner_pipe {
     int  connect_futex;
     bool connect_poll_waiting; /* for PalStreamsWaitEvents; protected by g_connecting_pipes_lock */
 
+    /* only for pipe type: closed before a server accepted it; protected by g_connecting_pipes_lock */
+    bool closed_pending;
+
     /* only for pipe/pipecli types -- read/write ends of the pipe */
     struct pal_handle_inner_pipe_buf* pipe_buf; /* protected by g_connecting_pipes_lock */
 };
