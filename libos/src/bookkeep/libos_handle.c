@@ -427,7 +427,7 @@ static int __set_new_fd_handle(uint32_t fd, struct libos_handle* hdl, int fd_fla
         }
     }
 
-    if (fd >= get_rlimit_cur(RLIMIT_NOFILE)) {
+    if (fd >= fd_table_limit(hdl)) {
         // log_always("FD: %d;  get_rlimit_cur(RLIMIT_NOFILE)=%d\n", fd,  get_rlimit_cur(RLIMIT_NOFILE));
         ret = -EMFILE;
         goto out;

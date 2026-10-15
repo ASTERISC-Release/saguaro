@@ -135,6 +135,12 @@ static int proc_pipe_max_size_load(struct libos_dentry* dent, char** out_data, s
     return proc_uint_load(1024 * 1024, out_data, out_size);
 }
 
+/* `/proc/sys/fs/nr_open`: the bound of RLIMIT_NOFILE (see `sys/libos_getrlimit.c`) */
+static int proc_nr_open_load(struct libos_dentry* dent, char** out_data, size_t* out_size) {
+    __UNUSED(dent);
+    return proc_uint_load(1024 * 1024, out_data, out_size);
+}
+
 static int proc_sem_load(struct libos_dentry* dent, char** out_data, size_t* out_size) {
     __UNUSED(dent);
     return sysv_sem_limits_load(out_data, out_size);
@@ -166,6 +172,7 @@ int init_procfs(void) {
 
     struct pseudo_node* fs_node = pseudo_add_dir(sys, "fs");
     pseudo_add_str(fs_node, "pipe-max-size", &proc_pipe_max_size_load);
+    pseudo_add_str(fs_node, "nr_open", &proc_nr_open_load);
     struct pseudo_node* inotify_node = pseudo_add_dir(fs_node, "inotify");
     pseudo_add_str(inotify_node, "max_queued_events", &proc_inotify_max_queued_events_load);
     pseudo_add_str(inotify_node, "max_user_instances", &proc_inotify_max_user_instances_load);

@@ -1094,6 +1094,10 @@ class TC_30_Syscall(RegressionTestCase):
         stdout, _ = self.run_binary(['sysv_msg'])
         self.assertIn('TEST OK', stdout)
 
+    def test_09a_fd_limits(self):
+        stdout, _ = self.run_binary(['fd_limits'])
+        self.assertIn('TEST OK', stdout)
+
     def test_099_sysv_sem(self):
         stdout, _ = self.run_binary(['sysv_sem'])
         self.assertIn('TEST OK', stdout)

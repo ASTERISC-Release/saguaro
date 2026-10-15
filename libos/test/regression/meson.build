@@ -78,6 +78,7 @@ tests = {
     'mkfifo': {},
     'mmap_file': {},
     'fcntl_misc': {},
+    'fd_limits': {},
     'memfd_exec': {},
     'memfd_rw': {},
     'memfd_seals': {},

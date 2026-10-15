@@ -211,6 +211,9 @@ bool is_user_memory_readable_no_skip(const void* addr, size_t size);
 bool is_user_memory_writable_no_skip(const void* addr, size_t size);
 
 uint64_t get_rlimit_cur(int resource);
+struct libos_handle;
+/* the descriptor-number limit for `hdl` (RLIMIT_NOFILE, plus the graphics host-fd range) */
+uint64_t fd_table_limit(struct libos_handle* hdl);
 void set_rlimit_cur(int resource, uint64_t rlim);
 
 int event_wait_with_retry(PAL_HANDLE handle);

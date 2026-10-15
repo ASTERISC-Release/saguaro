@@ -6,6 +6,7 @@
  */
 
 #include "libos_checkpoint.h"
+#include "libos_handle.h"
 #include "libos_internal.h"
 #include "libos_lock.h"
 #include "libos_process.h"
@@ -33,6 +34,8 @@
                     * our headers. */
 #define MLOCK_LIMIT     (64 * 1024)
 #define MQ_BYTES_MAX    819200
+#define NR_OPEN_MAX     (1024 * 1024) /* /proc/sys/fs/nr_open: no RLIMIT_NOFILE may exceed it */
+#define LIBOS_CAP_SYS_RESOURCE 24
 
 static struct __kernel_rlimit64 __rlim[RLIM_NLIMITS] __attribute_migratable = {
     [RLIMIT_CPU]     = {RLIM_INFINITY, RLIM_INFINITY},
@@ -67,8 +70,22 @@ uint64_t get_rlimit_cur(int resource) {
     assert(resource >= 0 && RLIM_NLIMITS > resource);
     lock(&rlimit_lock);
     uint64_t rlim = __rlim[resource].rlim_cur;
-    if (resource == RLIMIT_NOFILE) rlim += 4096;
     unlock(&rlimit_lock);
+    return rlim;
+}
+
+/* The highest descriptor number + 1 that `hdl` may occupy: RLIMIT_NOFILE, except that the
+ * graphics host-redirected handles live in their own range above it (their guest fd is the host
+ * fd plus an offset), which once raised RLIMIT_NOFILE itself by 4096 for every descriptor and so
+ * broke the EMFILE behaviour of ordinary files (LTP open04, dup03, getdtablesize01 and more). */
+uint64_t fd_table_limit(struct libos_handle* hdl) {
+    uint64_t rlim = get_rlimit_cur(RLIMIT_NOFILE);
+#ifdef ENABLE_GRAPHICS
+    if (hdl && (hdl->type == TYPE_HOST || hdl->type == TYPE_HOST_IDENTITY))
+        rlim += 4096;
+#else
+    __UNUSED(hdl);
+#endif
     return rlim;
 }
 
@@ -104,9 +121,6 @@ long libos_syscall_getrusage(int who, struct __kernel_rusage* usage) {
     return 0;
 }
 long libos_syscall_setrlimit(int resource, struct __kernel_rlimit* rlim) {
-    struct libos_thread* cur_thread = get_cur_thread();
-    assert(cur_thread);
-
     if (resource < 0 || RLIM_NLIMITS <= resource)
         return -EINVAL;
     if (!is_user_memory_readable(rlim, sizeof(*rlim)))
@@ -114,8 +128,11 @@ long libos_syscall_setrlimit(int resource, struct __kernel_rlimit* rlim) {
     if (rlim->rlim_cur > rlim->rlim_max)
         return -EINVAL;
 
+    if (resource == RLIMIT_NOFILE && rlim->rlim_max > NR_OPEN_MAX)
+        return -EPERM; /* the kernel's sysctl_nr_open bound, root included */
+
     lock(&rlimit_lock);
-    if (rlim->rlim_max > __rlim[resource].rlim_max && cur_thread->euid) {
+    if (rlim->rlim_max > __rlim[resource].rlim_max && !libos_capable(LIBOS_CAP_SYS_RESOURCE)) {
         unlock(&rlimit_lock);
         return -EPERM;
     }
@@ -128,8 +145,6 @@ long libos_syscall_setrlimit(int resource, struct __kernel_rlimit* rlim) {
 
 long libos_syscall_prlimit64(pid_t pid, int resource, const struct __kernel_rlimit64* new_rlim,
                              struct __kernel_rlimit64* old_rlim) {
-    struct libos_thread* cur_thread = get_cur_thread();
-    assert(cur_thread);
     int ret = 0;
 
     // XXX: Do not support setting/getting the rlimit of other processes yet.
@@ -158,7 +173,9 @@ long libos_syscall_prlimit64(pid_t pid, int resource, const struct __kernel_rlim
     lock(&rlimit_lock);
 
     if (new_rlim) {
-        if (new_rlim->rlim_max > __rlim[resource].rlim_max && cur_thread->euid) {
+        if ((resource == RLIMIT_NOFILE && new_rlim->rlim_max > NR_OPEN_MAX) ||
+                (new_rlim->rlim_max > __rlim[resource].rlim_max &&
+                 !libos_capable(LIBOS_CAP_SYS_RESOURCE))) {
             ret = -EPERM;
             goto out;
         }
