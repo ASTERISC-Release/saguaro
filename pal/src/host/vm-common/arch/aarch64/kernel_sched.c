@@ -47,6 +47,25 @@ static LISTP_TYPE(thread) g_thread_list = LISTP_INIT;
  */
 static spinlock_t g_thread_list_lock = INIT_SPINLOCK_UNLOCKED;
 
+/* spinlock_lock_disable_irq(&g_thread_list_lock), except that the waiting is done with the
+ * caller's IRQ state, and only the acquisition masks IRQs. The scheduler lock is taken in tight
+ * loops (the idle and bottom-half threads, a parent and child handing a process stream back and
+ * forth), and the spinlock is not fair: a CPU that waited for it with IRQs masked lost to the
+ * others for long stretches and could not answer a TLB-shootdown SGI meanwhile, which stalled the
+ * sender and with it the forks at 4 vCPUs ("still waiting for acks (3/4 responded)"). */
+static void thread_list_lock_disable_irq(void) {
+    uint64_t daif;
+    __asm__ volatile("mrs %0, daif" : "=r"(daif));
+    while (true) {
+        cli();
+        if (spinlock_lock_timeout(&g_thread_list_lock, /*iterations=*/0))
+            return;
+        __asm__ volatile("msr daif, %0" : : "r"(daif) : "memory");
+        while (__atomic_load_n(&g_thread_list_lock.lock, __ATOMIC_RELAXED) != SPINLOCK_UNLOCKED)
+            CPU_RELAX();
+    }
+}
+
 /* Atomic variable used to kick sched_thread() into action (instead of waiting for some time) */
 bool g_kick_sched_thread = false;
 
@@ -93,7 +112,15 @@ void sched_post_switch(void) {
         return;
     g_post_switch[cpu_id] = NULL;
     g_post_switch_arg[cpu_id] = NULL;
+    /* With IRQs unmasked: the cleanup waits for the exiting process's threads that still run on
+     * other CPUs (vm_process_reap_threads()), and such a thread may itself wait for this CPU's
+     * TLB-shootdown acknowledgement (an munmap in its process): masked, that is a deadlock ("still
+     * waiting for acks (3/4 responded)" at 4 vCPUs). An IRQ here only acknowledges, wakes or
+     * flushes: from EL1 the tick does not preempt, and the handler runs on the interrupt stack,
+     * not on this scheduling stack. */
+    __asm__ volatile("msr daifclr, #2" ::: "memory");
     cleanup(arg);
+    __asm__ volatile("msr daifset, #2" ::: "memory");
 }
 
 static bool thread_is_exiting(struct thread* thread) {
@@ -284,7 +311,7 @@ void sched_thread(uint32_t* lock_to_unlock, int* clear_child_tid) {
                                      (uintptr_t)get_per_cpu_data()->cur_tcb);
     struct thread* curr_thread = curr_tcb_base ? get_thread_ptr(curr_tcb_base) : NULL;
 
-    spinlock_lock_disable_irq(&g_thread_list_lock); /* will be unlocked during save_context */
+    thread_list_lock_disable_irq(); /* will be unlocked during save_context */
     struct thread* next_thread = find_next_thread(curr_thread);
     if (curr_thread && curr_thread->state == THREAD_RUNNING)
         curr_thread->state = THREAD_RUNNABLE;
@@ -320,7 +347,7 @@ void sched_thread_wait(int* futex_word, spinlock_t* lock) {
 
     /* this order of locks is required to guarantee that we won't miss any wakeup on this futex word
      * (recall that each wakeup grabs g_thread_list_lock) */
-    spinlock_lock_disable_irq(&g_thread_list_lock); /* will be unlocked during save_context */
+    thread_list_lock_disable_irq(); /* will be unlocked during save_context */
     spinlock_unlock(lock);
 
     uint64_t curr_tcb_base     = (uintptr_t)get_per_cpu_data()->cur_tcb;
@@ -382,19 +409,19 @@ void sched_thread_wakeup_uninterruptable(int* futex_word) {
 }
 
 void sched_thread_wakeup(int* futex_word) {
-    spinlock_lock_disable_irq(&g_thread_list_lock);
+    thread_list_lock_disable_irq();
     sched_thread_wakeup_common(futex_word);
     spinlock_unlock_enable_irq(&g_thread_list_lock);
 }
 
 void sched_thread_add(struct thread* thread) {
-    spinlock_lock_disable_irq(&g_thread_list_lock);
+    thread_list_lock_disable_irq();
     LISTP_ADD_TAIL(thread, &g_thread_list, list);
     spinlock_unlock_enable_irq(&g_thread_list_lock);
 }
 
 void sched_thread_remove(struct thread* thread) {
-    spinlock_lock_disable_irq(&g_thread_list_lock);
+    thread_list_lock_disable_irq();
     LISTP_DEL(thread, &g_thread_list, list);
     thread->state      = THREAD_STOPPED;
     thread->blocked_on = NULL;
@@ -405,7 +432,7 @@ void sched_thread_set_cpu_affinity(struct thread* thread, unsigned long* cpu_mas
                                    size_t cpu_mask_len) {
     assert(g_num_cpus >= 1 && g_num_cpus <= MAX_NUM_CPUS);
 
-    spinlock_lock_disable_irq(&g_thread_list_lock);
+    thread_list_lock_disable_irq();
     memset(thread->cpu_mask, 0, MAX_NUM_CPU_LONGS * 8);
     for (size_t i = 0; i < g_num_cpus; i++) {
         size_t cpu_mask_idx = i / BITS_IN_TYPE(*cpu_mask);
@@ -427,7 +454,7 @@ void sched_thread_set_exit_cleanup(void (*cleanup)(void*), void* arg) {
 }
 
 bool sched_thread_is_stopped(struct thread* thread) {
-    spinlock_lock_disable_irq(&g_thread_list_lock);
+    thread_list_lock_disable_irq();
     bool stopped = thread->state == THREAD_STOPPED;
     spinlock_unlock_enable_irq(&g_thread_list_lock);
     return stopped;
@@ -437,7 +464,7 @@ bool sched_thread_is_stopped(struct thread* thread) {
 bool sched_thread_space_has_other_running(struct memory_address_space* space,
                                           struct thread* self) {
     bool running = false;
-    spinlock_lock_disable_irq(&g_thread_list_lock);
+    thread_list_lock_disable_irq();
     struct thread* thread;
     LISTP_FOR_EACH_ENTRY(thread, &g_thread_list, list) {
         if (thread->address_space == space && thread != self && thread->state == THREAD_RUNNING) {
@@ -453,7 +480,7 @@ size_t sched_thread_remove_exiting(struct memory_address_space* space, struct th
                                    size_t max, bool* out_running) {
     size_t count = 0;
     bool running = false;
-    spinlock_lock_disable_irq(&g_thread_list_lock);
+    thread_list_lock_disable_irq();
     struct thread* thread;
     struct thread* tmp;
     LISTP_FOR_EACH_ENTRY_SAFE(thread, tmp, &g_thread_list, list) {
@@ -481,7 +508,7 @@ int sched_thread_share_stack(struct memory_address_space* source,
                              uintptr_t addr, size_t size) {
     int ret = 0;
     bool changed = false;
-    spinlock_lock_disable_irq(&g_thread_list_lock);
+    thread_list_lock_disable_irq();
 
     /* On AArch64 the boot root is never a target: its tables are shared with the lazy copies (see
      * memory_address_space_share_range_noflush()), and a stack created before the frame pool

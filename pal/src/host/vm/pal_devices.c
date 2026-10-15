@@ -9,7 +9,7 @@
 #include "pal_internal.h"
 #include "pal_common.h"
 
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
 /* `dev:/dev/shm/...` (Gramine's untrusted_shm mount): with the experimental multiprocess support,
  * objects of the guest store in guest RAM (pal_shm.c), shared by all guest processes; without it,
  * host files reached through virtio-fs (the opened handle is an ordinary file handle). */
@@ -21,7 +21,7 @@ static bool is_dev_shm(const char* uri) {
 static int dev_open(PAL_HANDLE* handle, const char* type, const char* uri, enum pal_access access,
                     pal_share_flags_t share, enum pal_create_mode create,
                     pal_stream_options_t options) {
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
     if (is_dev_shm(uri) && vm_shm_store_active() && vm_shm_is_object_uri(uri))
         return vm_shm_open(handle, uri, access, share, create);
     if (is_dev_shm(uri))
@@ -40,7 +40,7 @@ static int dev_open(PAL_HANDLE* handle, const char* type, const char* uri, enum 
 }
 
 static int64_t dev_read(PAL_HANDLE handle, uint64_t offset, uint64_t size, void* buffer) {
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
     if (vm_shm_is_handle(handle))
         return vm_shm_read(handle, offset, size, buffer);
 #endif
@@ -52,7 +52,7 @@ static int64_t dev_read(PAL_HANDLE handle, uint64_t offset, uint64_t size, void*
 }
 
 static int64_t dev_write(PAL_HANDLE handle, uint64_t offset, uint64_t size, const void* buffer) {
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
     if (vm_shm_is_handle(handle))
         return vm_shm_write(handle, offset, size, buffer);
 #endif
@@ -64,7 +64,7 @@ static int64_t dev_write(PAL_HANDLE handle, uint64_t offset, uint64_t size, cons
 }
 
 static void dev_destroy(PAL_HANDLE handle) {
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
     if (vm_shm_is_handle(handle)) {
         vm_shm_destroy(handle);
         return;
@@ -75,7 +75,7 @@ static void dev_destroy(PAL_HANDLE handle) {
 }
 
 static int dev_delete(PAL_HANDLE handle, enum pal_delete_mode delete_mode) {
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
     if (vm_shm_is_handle(handle))
         return delete_mode == PAL_DELETE_ALL ? vm_shm_delete(handle) : -PAL_ERROR_INVAL;
 #endif
@@ -85,7 +85,7 @@ static int dev_delete(PAL_HANDLE handle, enum pal_delete_mode delete_mode) {
 }
 
 static int dev_setlength(PAL_HANDLE handle, uint64_t length) {
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
     if (vm_shm_is_handle(handle))
         return vm_shm_setlength(handle, length);
 #endif
@@ -95,7 +95,7 @@ static int dev_setlength(PAL_HANDLE handle, uint64_t length) {
 }
 
 static int dev_flush(PAL_HANDLE handle) {
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
     if (vm_shm_is_handle(handle))
         return 0;
 #endif
@@ -104,7 +104,7 @@ static int dev_flush(PAL_HANDLE handle) {
 }
 
 static int dev_attrquery(const char* type, const char* uri, PAL_STREAM_ATTR* attr) {
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
     if (is_dev_shm(uri) && vm_shm_store_active())
         return vm_shm_attrquery(uri, attr);
     if (is_dev_shm(uri))
@@ -117,7 +117,7 @@ static int dev_attrquery(const char* type, const char* uri, PAL_STREAM_ATTR* att
 }
 
 static int dev_attrquerybyhdl(PAL_HANDLE handle, PAL_STREAM_ATTR* attr) {
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
     if (vm_shm_is_handle(handle))
         return vm_shm_attrquerybyhdl(handle, attr);
 #endif
@@ -128,7 +128,7 @@ static int dev_attrquerybyhdl(PAL_HANDLE handle, PAL_STREAM_ATTR* attr) {
 
 static int dev_map(PAL_HANDLE handle, void* addr, pal_prot_flags_t prot, uint64_t offset,
                    uint64_t size) {
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
     if (vm_shm_is_handle(handle))
         return vm_shm_map(handle, addr, prot, offset, size);
 #endif

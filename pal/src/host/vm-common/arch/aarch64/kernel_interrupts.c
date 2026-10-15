@@ -71,7 +71,38 @@ static struct {
     volatile void* addr;
     volatile size_t size;
     volatile uint32_t num_responses;
+    volatile uint64_t seq; /* incremented by each request */
 } g_invalidate_tlb_request;
+
+/* This CPU's part of a shootdown in progress, outside the SGI handler: flush and acknowledge if
+ * a request is running and this CPU has not answered it yet (the same checks as the SGI case of
+ * isr_c()). Called by a CPU that waits for the request lock, possibly with IRQs masked (a demand
+ * fault, the exit cleanup of a process after a context switch): it could not take the SGI, and the
+ * sender, which holds the lock, would wait for its acknowledgement forever. */
+static void tlb_shootdown_answer(void) {
+    /* IRQs are masked here (the SGI handler, or the caller below): the checks and the answer of
+     * one request cannot be interleaved with another answer of this CPU. Each request is answered
+     * once: by its SGI, by a stale or merged SGI that arrives later, or by polling -- a duplicate
+     * answer made num_responses count a CPU twice (one CPU then never answered while the sender
+     * already went on, and the next sender found num_responses nonzero and refused: "failed
+     * protecting" in forked children at 4 vCPUs). */
+    if (!__atomic_load_n(&g_invalidate_tlb_request.in_progress, __ATOMIC_ACQUIRE))
+        return;
+    uint64_t seq = __atomic_load_n(&g_invalidate_tlb_request.seq, __ATOMIC_ACQUIRE);
+    struct per_cpu_data* me = get_per_cpu_data();
+    if (me->tlb_acked_seq == seq)
+        return;
+    tlb_invalidate_range(NULL, 0);
+    me->tlb_acked_seq = seq;
+    __atomic_fetch_add(&g_invalidate_tlb_request.num_responses, 1, __ATOMIC_ACQ_REL);
+}
+
+static void tlb_shootdown_answer_pending(void) {
+    uint64_t daif;
+    __asm__ volatile("mrs %0, daif\n\tmsr daifset, #2" : "=r"(daif) : : "memory");
+    tlb_shootdown_answer();
+    __asm__ volatile("msr daif, %0" : : "r"(daif) : "memory");
+}
 
 /*
  * Dispatch of a Group-1 IRQ. `regs` points at the asm-saved frame (from either el0_irq_entry
@@ -122,27 +153,10 @@ void isr_c(struct isr_regs* regs) {
              * loop. Unlike x86 the EOI must run even for a dropped SGI: GICv3 keeps an
              * acknowledged INTID ACTIVE until ICC_EOIR1_EL1 echoes it, so skipping the EOI
              * would permanently wedge future shootdown IPIs. */
-            if (get_per_cpu_data()->invalidate_tlb_ipi_received) {
-                /* ignore extra IPI (most probably there is a malicious host) */
-            } else if (!__atomic_load_n(&g_invalidate_tlb_request.in_progress,
-                                        __ATOMIC_ACQUIRE)) {
-                /* ignore spurious IPI (most probably there is a malicious host) */
-            } else if (!__atomic_load_n(&g_invalidate_tlb_request.num_responses,
-                                        __ATOMIC_ACQUIRE)) {
-                /* now this is weird -- some vCPU started the protocol but num of responses is 0 */
-                log_error("Panic: `invalidate TLB` IPI received, but state is inconsistent");
-                triple_fault();
-            } else {
-                /* Drop this CPU's entries. x86 invlpg()'s the request's page range; we flush
-                 * all EL1 entries (the same operation the sender performs locally --
-                 * tlb_invalidate_range ignores the range and flushes everything, see its
-                 * comment; a *narrower* receiver flush against a full sender flush would be
-                 * the actual bug). */
-                tlb_invalidate_range(NULL, 0);
-                get_per_cpu_data()->invalidate_tlb_ipi_received = 1;
-                __atomic_fetch_add(&g_invalidate_tlb_request.num_responses, 1,
-                                   __ATOMIC_ACQ_REL);
-            }
+            /* (the x86 hardening against extra and spurious IPIs is the sequence check in
+             * tlb_shootdown_answer(): an SGI for a request this CPU already answered, or with no
+             * request running, changes nothing) */
+            tlb_shootdown_answer();
             lapic_signal_interrupt_complete(intid);
             break;
         }
@@ -318,7 +332,9 @@ int send_invalidate_tlb_ipi_and_wait(void* addr, size_t size, bool invalidate_on
         return 0;
     }
 
-    spinlock_lock(&g_invalidate_tlb_request_lock);
+    /* answer another CPU's request while waiting for the lock it holds (see above) */
+    while (!spinlock_lock_timeout(&g_invalidate_tlb_request_lock, /*iterations=*/1000))
+        tlb_shootdown_answer_pending();
 
     if (g_invalidate_tlb_request.in_progress || g_invalidate_tlb_request.num_responses) {
         /* sanity check that a previous "invalidate TLB" protocol run is finished */
@@ -326,15 +342,15 @@ int send_invalidate_tlb_ipi_and_wait(void* addr, size_t size, bool invalidate_on
         goto out;
     }
 
-    for (uint32_t i = 0; i < g_num_cpus; i++) {
-        /* reset the "IPI received" flag on each vCPU */
-        g_per_cpu_data[i].invalidate_tlb_ipi_received = 0;
-    }
-
-    g_invalidate_tlb_request.in_progress = true;
+    /* order: the response count before the new sequence number, both before in_progress (a CPU
+     * that sees the new number also sees the count it adds to) */
     g_invalidate_tlb_request.addr = addr;
     g_invalidate_tlb_request.size = size;
     g_invalidate_tlb_request.num_responses = 1; /* this vCPU already invalidated */
+    uint64_t seq = g_invalidate_tlb_request.seq + 1;
+    get_per_cpu_data()->tlb_acked_seq = seq; /* a stale SGI must not answer for the sender */
+    __atomic_store_n(&g_invalidate_tlb_request.seq, seq, __ATOMIC_RELEASE);
+    __atomic_store_n(&g_invalidate_tlb_request.in_progress, true, __ATOMIC_RELEASE);
 
     /* ICC_SGI1R_EL1 (GICv3 original-spec layout, which QEMU's icc_generate_sgi decodes):
      * INTID [27:24], IRM [40] = interrupt-routing-mode "all CPUs excluding self" (the
@@ -374,11 +390,18 @@ int send_invalidate_tlb_ipi_and_wait(void* addr, size_t size, bool invalidate_on
             log_error("shootdown: still waiting for acks (%u/%u responded)",
                       __atomic_load_n(&g_invalidate_tlb_request.num_responses, __ATOMIC_RELAXED),
                       g_num_cpus);
+            /* which CPUs, and where they last were (the TRACE breadcrumbs of kernel_context.S) */
+            for (uint32_t i = 0; i < g_num_cpus; i++) {
+                if (g_per_cpu_data[i].tlb_acked_seq != seq)
+                    log_error("shootdown: CPU %u has not answered; last trace %p, last entry %p",
+                              i, (void*)g_per_cpu_data[i].dbg_irq_trace[0],
+                              (void*)g_per_cpu_data[i].dbg_irq_trace[1]);
+            }
         }
     }
 
+    __atomic_store_n(&g_invalidate_tlb_request.in_progress, false, __ATOMIC_RELEASE);
     g_invalidate_tlb_request.num_responses = 0;
-    g_invalidate_tlb_request.in_progress = false;
     ret = 0;
 
 out:

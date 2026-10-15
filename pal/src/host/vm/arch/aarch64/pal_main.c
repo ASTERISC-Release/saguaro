@@ -433,6 +433,10 @@ noreturn void pal_start_c(const void* fdt) {
                                       &g_pal_public_state.memory_address_end);
     if (ret < 0)
         INIT_FAIL("Can't determine memory range from device tree");
+    /* untrusted_shm mappings (dev:/dev/shm) live in ordinary guest memory, as on the Linux PAL
+     * (x86_64 pal_main.c does the same) */
+    g_pal_public_state.shared_address_start = g_pal_public_state.memory_address_start;
+    g_pal_public_state.shared_address_end = g_pal_public_state.memory_address_end;
 
     /* vm_bootloader.S installed identity page tables covering [0..4GB) with the QEMU-virt
      * device/normal attribute split; this builds the full VMSA tables (Milestone-B follow-up) */

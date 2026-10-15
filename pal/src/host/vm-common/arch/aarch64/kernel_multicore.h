@@ -62,6 +62,11 @@ struct per_cpu_data {
      * per CPU: a deaf CPU whose trace[1] stays 0 never entered the tick handler at all;
      * one stuck at `hang`/el1_sync shows that terminal address instead. */
     uint64_t dbg_irq_trace[2];
+
+    /* sequence number of the last TLB-shootdown request this CPU answered (kernel_interrupts.c):
+     * a request is answered exactly once, whether through its SGI, a stale or merged SGI, or the
+     * polling of a CPU that waits for the request lock */
+    uint64_t tlb_acked_seq;
 } __attribute__((packed));
 
 extern uint32_t g_num_cpus;
