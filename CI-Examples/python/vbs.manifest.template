@@ -1,0 +1,41 @@
+# Copyright (C) 2026 Gramine contributors
+# SPDX-License-Identifier: BSD-3-Clause
+
+# Python3 manifest for a Windows VBS enclave (`make VBS=1`, Documentation/vbs.rst): the counterpart
+# of python.manifest.template. The interpreter is CPython 3.12.7 built for the enclave against the
+# vbs glibc (scripts/vbs/build-python.sh, once per checkout, into build-vbs-python); it lacks the
+# modules whose libraries are not in that sysroot (zlib, OpenSSL, libffi, ...) and NumPy/SciPy.
+# Everything is packed into the signed image (vbs.packed_files, measured like sgx.trusted_files);
+# `gramine-vbs ./python scripts/helloworld.py` runs a script (the paths are relative to /app).
+
+loader.entrypoint = "file:/libsysdb.so"
+libos.entrypoint = "/usr/bin/python3.12"
+loader.log_level = "{{ log_level }}"
+
+loader.insecure__use_cmdline_argv = true
+
+loader.env.LD_LIBRARY_PATH = "{{ arch_libdir }}"
+loader.env.OMP_NUM_THREADS = "4"
+loader.env.PYTHONDONTWRITEBYTECODE = "1"
+loader.env.HOME = "/app"
+
+fs.root.uri = "file:/"
+fs.start_dir = "/app"
+# no run-time code generation in a VBS enclave
+sys.rewrite_syscalls = false
+sys.stack.size = "2M"
+
+vbs.debug = false
+vbs.enclave_size = "1G"
+vbs.max_threads = 16
+
+vbs.packed_files = [
+  { path = "/usr/bin/python3.12", uri = "file:{{ vbs.python }}/usr/bin/python3.12" },
+  # the standard library without its tests, the IDE and Tk parts, and the static library
+  { path = "/usr/lib/python3.12", uri = "file:{{ vbs.python }}/usr/lib/python3.12", exclude = [ "config-3.12-*/", "__pycache__/", "test/", "tests/", "idlelib/", "tkinter/", "turtledemo/", "lib2to3/", "ensurepip/", "pydoc_data/", "*.a" ] },
+{% for lib in ["ld-linux-aarch64.so.1", "libc.so.6", "libm.so.6"] %}
+  { path = "{{ arch_libdir }}/{{ lib }}", uri = "file:{{ vbs.sysroot }}/usr/lib/{{ lib }}" },
+{% endfor %}
+  { path = "/app/scripts", uri = "file:scripts" },
+  { path = "/etc/hosts", uri = "file:helper-files/hosts" },
+]
