@@ -35,9 +35,14 @@ static void isr_regs_to_pal_context(PAL_CONTEXT* context, struct isr_regs* regs,
     context->rip = regs->rip;
     context->efl = regs->rflags;
 
-    context->csgsfsss = 0; /* dummy */
-    context->err      = 0; /* dummy */
-    context->trapno   = 0; /* dummy */
+    /* the interrupted context's code and stack selectors (Linux's layout: cs, gs, fs, ss); Wine
+     * takes a context whose CS is not its 64-bit one for 16-bit code */
+    context->csgsfsss = (regs->cs & 0xffff) | ((uint64_t)(regs->ss & 0xffff) << 48);
+    /* the exception's vector and error code, as Linux puts them in a signal frame (REG_TRAPNO,
+     * REG_ERR): Wine's handler takes a SIGSEGV for a page fault only with trap 14 and reads the
+     * write/execute bits of the error code */
+    context->err      = regs->error_code;
+    context->trapno   = regs->int_number;
     context->oldmask  = 0; /* dummy */
     context->cr2      = faulted_addr;
 

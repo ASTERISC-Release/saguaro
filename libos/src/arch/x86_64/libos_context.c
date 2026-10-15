@@ -187,20 +187,22 @@ static bool libos_xstate_copy(struct libos_xstate* dst, const struct libos_xstat
     return src_is_xstate;
 }
 
-/* VM PAL: make `context` (a signal handler the LibOS is about to jump to itself, in ring 0, with
- * the PAL's TCB in GS) start at the PAL's stub, which loads the thread's own GS base and continues
- * at the context's RIP with every register as it is. Only for a thread that owns %gs. Not for a
- * context whose RIP is the kernel's return stub (a system call's return, a new thread's or a fork
- * child's first return): that stub loads the base itself. */
-static void vm_enter_user_through_gs_stub(PAL_CONTEXT* context) {
+/* VM PAL: the LibOS is about to jump to a signal handler itself (`context->rip`), in ring 0 and
+ * with the PAL's TCB in GS. A thread that owns %gs (arch_prctl(ARCH_SET_GS)) goes through the
+ * kernel's return stub `stub` (sysret_asm) instead: the handler's address goes to the PAL TCB's
+ * user RIP slot, the stub loads the thread's base and enters ring 3 there with the registers as
+ * restored (RCX and R11 are the sysret's; a handler does not care). Other threads keep the
+ * direct jump. (A handler's return needs nothing: the rt_sigreturn system call's own return goes
+ * through the kernel's sigreturn stub with the frame's RIP.) */
+static void vm_enter_user_through_return_stub(PAL_CONTEXT* context, uint64_t stub) {
     uintptr_t gs_base = 0;
-    if (!g_pal_public_state->vm_jump_to_user_gs ||
+    if (!g_pal_public_state->vm_user_return_stub || !stub ||
             PalSegmentBaseGet(PAL_SEGMENT_GS, &gs_base) < 0 || !gs_base)
         return;
     void* user_rip_ptr = (char*)pal_get_tcb() + g_pal_public_state->vm_user_rip_offset;
     uint64_t target = context->rip;
     memcpy(user_rip_ptr, &target, sizeof(target));
-    context->rip = (uint64_t)g_pal_public_state->vm_jump_to_user_gs;
+    context->rip = stub;
 }
 
 noreturn void restore_child_context_after_clone(struct libos_context* context) {
@@ -280,6 +282,10 @@ void prepare_sigframe(PAL_CONTEXT* context, siginfo_t* siginfo, void* handler, v
             user_rip -= 2;
         }
         ucontext_set_ip(&sigframe->uc, user_rip);
+        /* a system call's context carries Linux's selectors (syscallas.S); the VM's user mode
+         * has its own, and Wine's handlers compare the frame's CS with the one they run with */
+        if (g_pal_public_state->vm_user_csgsfs && libos_get_tcb()->context.syscall_nr >= 0)
+            sigframe->uc.uc_mcontext.csgsfsss = g_pal_public_state->vm_user_csgsfs;
     }
 
     /* XXX: Currently we assume that `struct libos_xstate`, `PAL_XREGS_STATE` and `struct _fpstate`
@@ -326,13 +332,13 @@ void prepare_sigframe(PAL_CONTEXT* context, siginfo_t* siginfo, void* handler, v
      * register arguments in `rax`. */
     context->rax = 0;
 
-    /* VM PAL, a thread that owns %gs (Wine's TEB), at a system call's return: the LibOS enters
-     * the handler itself (_return_from_syscall jumps to it, in ring 0) and GS still holds the
-     * PAL's TCB; go through the PAL's stub, which loads the application's base first. A handler
+    /* VM PAL, a thread that owns %gs (Wine's TEB), at a system call's return: the LibOS would
+     * enter the handler itself (_return_from_syscall jumps to it, in ring 0) with the PAL's TCB
+     * in GS; go through the kernel's sysret stub, which loads the application's base. A handler
      * for a fault or an interrupt is entered by the kernel's own return (iretq), which loads the
-     * base: no stub there. */
-    if (g_pal_public_state->vm_jump_to_user_gs && libos_get_tcb()->context.syscall_nr >= 0)
-        vm_enter_user_through_gs_stub(context);
+     * base: nothing to do there. */
+    if (g_pal_public_state->vm_user_return_stub && libos_get_tcb()->context.syscall_nr >= 0)
+        vm_enter_user_through_return_stub(context, (uint64_t)g_pal_public_state->vm_user_return_stub);
 
     log_debug("Created sigframe for sig: %d at %p (handler: %p, restorer: %p)",
               siginfo->si_signo, sigframe, handler, restorer);
@@ -355,6 +361,9 @@ void restore_sigreturn_context(PAL_CONTEXT* context, __sigset_t* new_mask) {
     libos_xstate_copy(syscall_fpregs_buf, (struct libos_xstate*)sigframe->uc.uc_mcontext.fpstate);
     context->fpregs = (PAL_XREGS_STATE*)syscall_fpregs_buf;
     context->is_fpregs_used = 1;
+
+    /* (VM PAL: the return goes through the kernel's sigreturn stub, whose target is the frame's
+     * RIP as ucontext_to_pal_context() put it in the TCB; the stub loads a thread's own GS base) */
 }
 
 bool maybe_emulate_syscall(PAL_CONTEXT* context) {

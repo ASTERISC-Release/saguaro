@@ -831,8 +831,9 @@ noreturn int pal_start_continue(void* cmdline_) {
 
     g_pal_public_state.attestation_type = "none";
 
-    extern void vm_jump_to_user_gs(void);
-    g_pal_public_state.vm_jump_to_user_gs = (void*)&vm_jump_to_user_gs;
+    extern void sysret_asm(void);
+    g_pal_public_state.vm_user_return_stub = (void*)&sysret_asm;
+    g_pal_public_state.vm_user_csgsfs = 0x2bULL | (0x23ULL << 48); /* kernel_events.S: user CS, SS */
     g_pal_public_state.vm_user_rip_offset = offsetof(struct pal_tcb_vm,
                                                      kernel_thread.context.user_rip);
 

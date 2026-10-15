@@ -13,7 +13,7 @@
     globl   jump_into_user_mode
     globl   syscall_asm
     globl   syscall_asm_gs
-    globl   vm_jump_to_user_gs
+    globl   sysret_asm                      // the LibOS enters a handler through it (pal_main.c)
     globl   save_context_and_restore_next
     globl   do_xsave
     globl   do_xrstor
@@ -213,25 +213,6 @@ syscall_asm_gs:
     cmp     $SYSCALL_RT_SIGRETURN, %rax
     je      .Linstall_rt_sigreturn_path
     jmp     .Linstall_sysret_path
-
-// The LibOS jumps to a signal handler of the application directly (libos_context.c, the VM
-// branch; the handler then runs in ring 0, as always on this PAL). For a thread that owns %gs
-// the LibOS puts the handler's address into the TCB (user_rip) and jumps here instead: the
-// application's base goes into GS and the handler is entered with every register as the LibOS
-// left it (RAX travels through the per-CPU scratch slot). Interrupts stay off until the jump;
-// the handler's context has IF set (the LibOS gave it RFLAGS 0x202; this stub is reached with
-// those flags, and sti restores them).
-vm_jump_to_user_gs:
-    cli
-    push    %rax
-    mov     %gs:PAL_TCB_VM_USER_RIP, %rax
-    xchg    %rax, (%rsp)                    // the target's address below the stack, RAX back
-    push    %rax
-    mov     %gs:PAL_TCB_VM_USER_GSBASE, %rax
-    wrgsbase %rax
-    pop     %rax
-    sti
-    ret
 
 // FIXME: ideally must add swapgs in the very beginning, but GS is not used by ring-3 anyway
 syscall_asm:

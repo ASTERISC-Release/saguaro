@@ -143,8 +143,14 @@ int main(void) {
     sa.sa_handler = handler;
     sigaction(SIGUSR1, &sa, NULL);
     g_in_handler = 0;
-    raw(SYS_kill, raw(SYS_getpid, 0, 0, 0), SIGUSR1, 0);
+    pid_t self = raw(SYS_getpid, 0, 0, 0);
+    raw(SYS_kill, self, SIGUSR1, 0);
+    uint64_t right_after = gs30(); /* before any further system call reloads the base */
     CHECK("gs:0x30 inside the signal handler (the TEB)", g_in_handler == (uint64_t)&g_teb);
+    CHECK("gs:0x30 right after the handler returned, before another system call", right_after == (uint64_t)&g_teb);
+    /* a fault (not a system call) delivers the next one; the handler changes nothing */
+    g_in_handler = 0;
+    raw(SYS_kill, self, SIGUSR1, 0);
     CHECK("gs:0x30 after the signal handler returned", gs30() == (uint64_t)&g_teb);
 
     /* a thread: inherits the creator's base, then sets its own */
