@@ -17,8 +17,8 @@
  * Limits of this first version: a frame reaches the X server one present later (the blit of the
  * current frame is not waited for on the CPU), FIFO is
  * paced with a timer, not the display (see read_pacing_env()), the layer submits to the device's first graphics queue
- * under its own lock (an application submitting to that queue from another thread at the same time
- * is not supported), single-plane 8-bit RGBA/BGRA formats only.
+ * and serialises every submission to the device's queues (its own and the application's) with one
+ * lock, single-plane 8-bit RGBA/BGRA formats only.
  */
 #define _GNU_SOURCE
 #define VK_NO_PROTOTYPES
@@ -93,6 +93,10 @@ struct device_data {
     PFN_vkCmdPipelineBarrier CmdPipelineBarrier;
     PFN_vkCmdBlitImage CmdBlitImage;
     PFN_vkQueueSubmit QueueSubmit;
+    PFN_vkQueueSubmit2 QueueSubmit2;
+    PFN_vkQueueSubmit2KHR QueueSubmit2KHR;
+    PFN_vkQueueWaitIdle QueueWaitIdle;
+    PFN_vkQueueBindSparse QueueBindSparse;
     PFN_vkCreateFence CreateFence;
     PFN_vkDestroyFence DestroyFence;
     PFN_vkWaitForFences WaitForFences;
@@ -578,6 +582,10 @@ static VKAPI_ATTR VkResult VKAPI_CALL layer_CreateDevice(VkPhysicalDevice pd,
     GET(CmdPipelineBarrier);
     GET(CmdBlitImage);
     GET(QueueSubmit);
+    GET(QueueSubmit2);
+    GET(QueueSubmit2KHR);
+    GET(QueueWaitIdle);
+    GET(QueueBindSparse);
     GET(CreateFence);
     GET(DestroyFence);
     GET(WaitForFences);
@@ -1072,6 +1080,55 @@ static VKAPI_ATTR VkResult VKAPI_CALL layer_GetDeviceGroupSurfacePresentModesKHR
     return VK_SUCCESS;
 }
 
+/* The application's own submissions to the queue the layer also submits to take the layer's lock
+ * too: Vulkan requires queue access to be externally synchronised, and the layer's submissions (at
+ * acquire and present) are invisible to the application's own locking. */
+static VKAPI_ATTR VkResult VKAPI_CALL layer_QueueSubmit(VkQueue queue, uint32_t n,
+                                                       const VkSubmitInfo* submits, VkFence fence) {
+    struct device_data* d = get_device(queue);
+    if (!d)
+        return VK_ERROR_DEVICE_LOST;
+    pthread_mutex_lock(&d->lock);
+    VkResult r = d->QueueSubmit(queue, n, submits, fence);
+    pthread_mutex_unlock(&d->lock);
+    return r;
+}
+
+static VKAPI_ATTR VkResult VKAPI_CALL layer_QueueSubmit2(VkQueue queue, uint32_t n,
+                                                        const VkSubmitInfo2* submits,
+                                                        VkFence fence) {
+    struct device_data* d = get_device(queue);
+    if (!d)
+        return VK_ERROR_DEVICE_LOST;
+    PFN_vkQueueSubmit2 next = d->QueueSubmit2 ? d->QueueSubmit2 : d->QueueSubmit2KHR;
+    pthread_mutex_lock(&d->lock);
+    VkResult r = next(queue, n, submits, fence);
+    pthread_mutex_unlock(&d->lock);
+    return r;
+}
+
+static VKAPI_ATTR VkResult VKAPI_CALL layer_QueueWaitIdle(VkQueue queue) {
+    struct device_data* d = get_device(queue);
+    if (!d)
+        return VK_ERROR_DEVICE_LOST;
+    pthread_mutex_lock(&d->lock);
+    VkResult r = d->QueueWaitIdle(queue);
+    pthread_mutex_unlock(&d->lock);
+    return r;
+}
+
+static VKAPI_ATTR VkResult VKAPI_CALL layer_QueueBindSparse(VkQueue queue, uint32_t n,
+                                                           const VkBindSparseInfo* info,
+                                                           VkFence fence) {
+    struct device_data* d = get_device(queue);
+    if (!d)
+        return VK_ERROR_DEVICE_LOST;
+    pthread_mutex_lock(&d->lock);
+    VkResult r = d->QueueBindSparse(queue, n, info, fence);
+    pthread_mutex_unlock(&d->lock);
+    return r;
+}
+
 /* ------------------------------------------------------------------------------------------------
  * Proc-address lookup and the loader negotiation
  */
@@ -1090,6 +1147,12 @@ static PFN_vkVoidFunction device_intercept(const char* name) {
     INTERCEPT(AcquireNextImage2KHR);
     INTERCEPT(QueuePresentKHR);
     INTERCEPT(GetDeviceGroupSurfacePresentModesKHR);
+    INTERCEPT(QueueSubmit);
+    INTERCEPT(QueueSubmit2);
+    INTERCEPT(QueueWaitIdle);
+    INTERCEPT(QueueBindSparse);
+    if (!strcmp(name, "vkQueueSubmit2KHR"))
+        return (PFN_vkVoidFunction)layer_QueueSubmit2;
     if (!strcmp(name, "vkGetDeviceProcAddr"))
         return (PFN_vkVoidFunction)layer_GetDeviceProcAddr;
     return NULL;
