@@ -4,7 +4,7 @@
 # Test programs for graphics under gramine-direct (x86_64), see
 # Documentation/devel/graphics-direct/. `make check` runs each natively and under gramine-direct.
 
-PROGRAMS = drm_info gbm_map egl_readback ioctl_bench x_roundtrip gl_bench
+PROGRAMS = drm_info gbm_map egl_readback ioctl_bench x_roundtrip gl_bench egl_surfaceless
 NODE ?= /dev/dri/renderD128
 
 CFLAGS = -Wall -Wextra -O2 $(shell pkg-config --cflags libdrm)
@@ -36,6 +36,11 @@ gl_bench: gl_bench.c
 x_roundtrip: x_roundtrip.c
 	$(CC) $(CFLAGS) $< -o $@ $(shell pkg-config --libs xcb)
 
+# EGL surfaceless platform, no GBM (works with the NVIDIA driver too); not part of `check`, it
+# takes no device argument: ./egl_surfaceless [frames] [draws]
+egl_surfaceless: egl_surfaceless.c
+	$(CC) $(CFLAGS) $(shell pkg-config --cflags egl glesv2) $< -o $@ $(shell pkg-config --libs egl glesv2)
+
 egl_readback: egl_readback.c
 	$(CC) $(CFLAGS) $(shell pkg-config --cflags gbm egl glesv2) $< -o $@ $(LDLIBS_egl_readback)
 
@@ -47,7 +52,7 @@ egl_readback: egl_readback.c
 
 .PHONY: check
 check: all
-	@for p in $(filter-out ioctl_bench x_roundtrip gl_bench,$(PROGRAMS)); do \
+	@for p in $(filter-out ioctl_bench x_roundtrip gl_bench egl_surfaceless,$(PROGRAMS)); do \
 		echo "== $$p native"; ./$$p $(NODE) || exit 1; \
 		echo "== $$p gramine-direct"; gramine-direct $$p $(NODE) || exit 1; \
 	done
