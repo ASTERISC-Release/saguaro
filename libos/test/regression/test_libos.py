@@ -18,6 +18,7 @@ from graminelibos.regression import (
     HAS_SGX,
     IS_VM,
     ON_X86,
+    USE_GRAMINE_VM,
     USES_MUSL,
     RegressionTestCase,
 )
@@ -460,7 +461,7 @@ class TC_01_Bootstrap(RegressionTestCase):
         # executed once (Documentation/devel/aarch64/hwcap/PLAN.md).
         stdout, _ = self.run_binary(['hwcap_aarch64'])
         self.assertIn('TEST OK', stdout)
-        if IS_VM:
+        if USE_GRAMINE_VM:
             return
         # gramine-direct: the words are the host kernel's, masked to the allowlist
         words = {}
