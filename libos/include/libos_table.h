@@ -277,7 +277,7 @@ long libos_syscall_timerfd_settime(int fd, int flags,
 long libos_syscall_timerfd_gettime(int fd, struct __kernel_itimerspec* curr);
 long libos_syscall_signalfd(int fd, const __sigset_t* mask, size_t sizemask);
 long libos_syscall_signalfd4(int fd, const __sigset_t* mask, size_t sizemask, int flags);
-long libos_syscall_timer_create(int clockid, struct sigevent* evp, void** out_timerid);
+long libos_syscall_timer_create(int clockid, struct sigevent* evp, int* out_timerid);
 long libos_syscall_timer_settime(void* timerid, int flags,
                                  const struct __kernel_itimerspec* new_val,
                                  struct __kernel_itimerspec* old_val);

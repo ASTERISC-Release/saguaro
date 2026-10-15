@@ -39,20 +39,21 @@ struct kernel_sigevent {
 #define SIGEV_NONE_UAPI   1
 #define SIGEV_THREAD_UAPI 2
 
-static int timer_create_raw(int clock, const struct kernel_sigevent* ev, void** id) {
+/* the kernel ABI type of a timer id (`__kernel_timer_t`) is a 32-bit int */
+static int timer_create_raw(int clock, const struct kernel_sigevent* ev, int* id) {
     return (int)syscall(__NR_timer_create, clock, ev, id);
 }
-static int timer_settime_raw(void* id, int flags, const struct itimerspec* new_val,
+static int timer_settime_raw(int id, int flags, const struct itimerspec* new_val,
                              struct itimerspec* old_val) {
     return (int)syscall(__NR_timer_settime, id, flags, new_val, old_val);
 }
-static int timer_gettime_raw(void* id, struct itimerspec* curr) {
+static int timer_gettime_raw(int id, struct itimerspec* curr) {
     return (int)syscall(__NR_timer_gettime, id, curr);
 }
-static long timer_getoverrun_raw(void* id) {
+static long timer_getoverrun_raw(int id) {
     return syscall(__NR_timer_getoverrun, id);
 }
-static int timer_delete_raw(void* id) {
+static int timer_delete_raw(int id) {
     return (int)syscall(__NR_timer_delete, id);
 }
 
@@ -66,9 +67,23 @@ static void expect_errno(const char* what, long ret, int expected) {
 
 int main(void) {
     struct kernel_sigevent sev = {0};
-    void* id = NULL;
+    int id = 0;
     struct itimerspec its;
     struct itimerspec out;
+
+    /* --- the id is written as 32 bits: a pointer-sized write smashed LTP timer_delete01's stack --- */
+    struct {
+        int id;
+        int canary;
+    } slot = {.id = 0, .canary = 0x5a5a5a5a};
+    sev.sigev_notify = SIGEV_SIGNAL_UAPI;
+    sev.sigev_signo = SIGRTMIN;
+    if (timer_create_raw(CLOCK_MONOTONIC, &sev, &slot.id))
+        fail("timer_create(slot)");
+    if (slot.canary != 0x5a5a5a5a)
+        fail("timer_create wrote past the 32-bit timer id");
+    if (timer_delete_raw(slot.id))
+        fail("timer_delete(slot)");
 
     /* --- argument validation --- */
 
@@ -98,10 +113,10 @@ int main(void) {
     /* invalid timer ids are rejected by the other four calls */
     memset(&its, 0, sizeof(its));
     expect_errno("timer_settime(bogus id)",
-                 timer_settime_raw((void*)0xdead, 0, &its, NULL), EINVAL);
-    expect_errno("timer_gettime(bogus id)", timer_gettime_raw((void*)0xdead, &out), EINVAL);
-    expect_errno("timer_getoverrun(bogus id)", timer_getoverrun_raw((void*)0xdead), EINVAL);
-    expect_errno("timer_delete(bogus id)", timer_delete_raw((void*)0xdead), EINVAL);
+                 timer_settime_raw(0xdead, 0, &its, NULL), EINVAL);
+    expect_errno("timer_gettime(bogus id)", timer_gettime_raw(0xdead, &out), EINVAL);
+    expect_errno("timer_getoverrun(bogus id)", timer_getoverrun_raw(0xdead), EINVAL);
+    expect_errno("timer_delete(bogus id)", timer_delete_raw(0xdead), EINVAL);
 
     /* a just-created timer is disarmed */
     if (timer_create_raw(CLOCK_MONOTONIC, &sev, &id)) {
