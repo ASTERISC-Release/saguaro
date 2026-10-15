@@ -69,7 +69,9 @@ int main(int argc, char** argv) {
 
     char path[64];
     char* child_argv[] = {argv[0], "child", NULL};
-    char* envp[] = {NULL};
+    /* the child keeps the environment: with the bundled glibc its loader needs the manifest's
+     * LD_LIBRARY_PATH to find libc */
+    char** envp = environ;
 
     CHECK(memfd("bad", MFD_EXEC | MFD_NOEXEC_SEAL) == -1 && errno == EINVAL);
 
