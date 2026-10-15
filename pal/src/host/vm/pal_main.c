@@ -39,8 +39,9 @@
 /* the VMM supplied a graphics-arena layout (graphics redirection configured) */
 static bool g_graphics_configured;
 
-/* the end of guest RAM; memory_address_end of the public state may be extended past it below */
-void* g_vm_physical_memory_end;
+/* the end of guest RAM (pal_memory.c); memory_address_end of the public state may be extended
+ * past it below */
+extern void* g_vm_physical_memory_end;
 
 uint64_t g_tsc_mhz;
 

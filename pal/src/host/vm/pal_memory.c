@@ -70,10 +70,15 @@ int _PalVirtualMemoryProtect(void* addr, size_t size, pal_prot_flags_t prot) {
     return memory_protect(addr, size, read, write, execute);
 }
 
+/* The end of guest RAM. The x86_64 pal_main.c sets it and may then extend the public state's
+ * memory_address_end past it (a demand-paged process's range); where it stays 0 (AArch64), the
+ * public end is the RAM end. */
+void* g_vm_physical_memory_end;
+
 unsigned long _PalMemoryQuota(void) {
-    /* the guest's RAM, not the (possibly larger) virtual range of pal_main.c */
-    extern void* g_vm_physical_memory_end;
-    return g_vm_physical_memory_end - g_pal_public_state.memory_address_start;
+    void* end = g_vm_physical_memory_end ? g_vm_physical_memory_end
+                                         : g_pal_public_state.memory_address_end;
+    return end - g_pal_public_state.memory_address_start;
 }
 
 /* Ranges the parent's application uses, given by _PalProcessCreate (sorted from high to low); a
