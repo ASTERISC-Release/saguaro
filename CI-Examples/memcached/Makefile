@@ -24,7 +24,7 @@ ifeq ($(VBS),1)
 # packed by vbs.manifest.template
 VBS_APP = memcached
 VBS_DEPS = vbs-build/memcached
-VBS_CLEAN = vbs-build
+VBS_CLEAN = vbs-build OUTPUT
 LIBEVENT_VERSION = 2.1.12-stable
 LIBEVENT_SHA256 = 92e6de1be9ec176428fd2367677e61ceffc2ee1cb119035037a27d346b0403bb
 include ../../scripts/vbs/Makefile.vbs

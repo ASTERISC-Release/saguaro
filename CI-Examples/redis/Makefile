@@ -42,7 +42,7 @@ ifeq ($(VBS),1)
 # glibc, libc malloc) in vbs-build/, packed by vbs.manifest.template
 VBS_APP = redis-server
 VBS_DEPS = vbs-build/redis-server
-VBS_CLEAN = vbs-build
+VBS_CLEAN = vbs-build OUTPUT
 include ../../scripts/vbs/Makefile.vbs
 all: vbs-all
 else
