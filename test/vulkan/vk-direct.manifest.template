@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# A Vulkan program under gramine-direct on the host GPU (Documentation/devel/vulkan/). Same keys as
+# CI-Examples/graphics/*/ *-direct.manifest.template (Documentation/devel/graphics-direct/running.md):
+# insecure by design. The Vulkan loader finds the ICD and layer files under /usr/share/vulkan (and
+# /etc/vulkan when the host has it); the program is chosen with -Dentrypoint and -Dbinary.
+
+libos.entrypoint = "{{ entrypoint }}"
+
+loader.log_level = "{{ log_level }}"
+loader.insecure__use_host_env = true
+loader.insecure__use_cmdline_argv = true
+
+loader.env.LD_LIBRARY_PATH = "/lib:/usr/lib:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu"
+loader.env.DISPLAY = ":{{ display }}"
+
+sys.stack.size = "32M"
+sys.enable_sigterm_injection = true
+
+# GPU ioctls go to the host unchanged (Linux PAL only)
+sys.insecure__allow_raw_device_ioctl = true
+# the X server's socket, with fd passing (DRI3/Present for Mesa's Vulkan WSI)
+sys.insecure__host_unix_sockets = ["/tmp/.X11-unix/X{{ display }}"]
+
+fs.mounts = [
+  { path = "{{ entrypoint }}", uri = "file:{{ binary }}" },
+  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "/usr", type = "chroot", uri = "file:/usr" },
+  { path = "/etc/ld.so.cache", uri = "file:/etc/ld.so.cache" },
+{% if etc_vulkan|string != "0" %}
+  { path = "/etc/vulkan", type = "chroot", uri = "file:/etc/vulkan" },
+{% endif %}
+  { path = "/dev/dri", type = "chroot", uri = "file:/dev/dri" },
+  { path = "/dev/shm", type = "chroot", uri = "file:/dev/shm" },
+  { path = "/sys", type = "chroot", uri = "file:/sys", host_symlinks = true },
+  { path = "/root/.cache", type = "chroot", uri = "file:{{ env.HOME }}/.cache" },
+]

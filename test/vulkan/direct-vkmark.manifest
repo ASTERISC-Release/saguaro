@@ -1,0 +1,56 @@
+[libos]
+entrypoint = "/vkmark"
+
+[loader]
+log_level = "error"
+insecure__use_host_env = true
+insecure__use_cmdline_argv = true
+entrypoint = "file:/root/.local/gramine-vm/lib/x86_64-linux-gnu/gramine/libsysdb.so"
+
+[loader.env]
+LD_LIBRARY_PATH = "/lib:/usr/lib:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu"
+DISPLAY = ":0"
+
+[sys]
+enable_sigterm_injection = true
+insecure__allow_raw_device_ioctl = true
+insecure__host_unix_sockets = [
+    "/tmp/.X11-unix/X0",
+]
+
+[sys.stack]
+size = "32M"
+
+[fs]
+mounts = [
+    { path = "/vkmark", uri = "file:/usr/bin/vkmark" },
+    { path = "/lib", uri = "file:/usr/lib/x86_64-linux-gnu" },
+    { path = "/usr", type = "chroot", uri = "file:/usr" },
+    { path = "/etc/ld.so.cache", uri = "file:/etc/ld.so.cache" },
+    { path = "/etc/vulkan", type = "chroot", uri = "file:/etc/vulkan" },
+    { path = "/dev/dri", type = "chroot", uri = "file:/dev/dri" },
+    { path = "/dev/shm", type = "chroot", uri = "file:/dev/shm" },
+    { path = "/sys", type = "chroot", uri = "file:/sys", host_symlinks = true },
+    { path = "/root/.cache", type = "chroot", uri = "file:/root/.cache" },
+]
+
+[sgx]
+trusted_files = [
+    { uri = "file:/root/.local/gramine-vm/lib/x86_64-linux-gnu/gramine/libsysdb.so" },
+]
+max_threads = 4
+isvprodid = 0
+isvsvn = 0
+remote_attestation = "none"
+debug = false
+enable_stats = false
+edmm_enable = false
+enclave_size = "256M"
+use_exinfo = false
+
+[sgx.cpu_features]
+avx = "unspecified"
+avx512 = "unspecified"
+amx = "unspecified"
+mpx = "disabled"
+pkru = "disabled"

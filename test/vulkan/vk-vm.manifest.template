@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# A Vulkan program under gramine-vm with the graphics redirection (Documentation/devel/vulkan/,
+# phase 0: measures how far the existing OpenGL redirection carries Vulkan). Based on
+# CI-Examples/graphics/glxgears/glxgears.manifest.template. The program is chosen with -Dentrypoint
+# and -Dbinary; vk-session-shim.so starts the graphics session at vkCreateInstance.
+
+libos.entrypoint = "{{ entrypoint }}"
+
+sys.stack.size = "32M"
+loader.insecure__use_host_env = true
+loader.insecure__use_cmdline_argv = true
+loader.log_level = "{{ log_level }}"
+
+loader.env.LD_LIBRARY_PATH = "/lib:/usr/lib:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu"
+loader.env.LD_PRELOAD = "./libgraphics.so:/vk-session-shim.so"
+loader.env.DISPLAY = "2:0"
+vm.net.direct_vsock_ports = [6000]
+loader.env.IVSHMEM_GRAMINE_VM = "1"
+loader.env.GLIBC_TUNABLES = "glibc.pthread.rseq=0"
+loader.env.GBM_BACKEND = "dri"
+loader.env.EGL_GRAMINE = "1"
+loader.env.EGL_SHARED_INPUT = "0"
+loader.env.EGL_DISCRETE = "{{ egl_discrete }}"
+loader.env.EGL_SYSCALL_LOG = "0"
+loader.env.EGL_IOCTL_LOG = "0"
+
+fs.mounts = [
+  { path = "{{ entrypoint }}", uri = "file:{{ binary }}" },
+  { path = "/libgraphics.so", uri = "file:{{ gramine.libgraphics }}" },
+  { path = "/vk-session-shim.so", uri = "file:vk-session-shim.so" },
+  { path = "/usr", type = "chroot", uri = "file:/usr" },
+  { path = "/etc/ld.so.cache", uri = "file:/etc/ld.so.cache" },
+{% if etc_vulkan|string != "0" %}
+  { path = "/etc/vulkan", type = "chroot", uri = "file:/etc/vulkan" },
+{% endif %}
+  { path = "/sys", type = "chroot", uri = "file:/sys" },
+  { path = "/sys/dev", type = "chroot", uri = "file:/sys/dev" },
+  { path = "/sys/devices", type = "chroot", uri = "file:/sys/devices" },
+  { path = "/sys/bus/pci", type = "chroot", uri = "file:/sys/bus/pci" },
+  { path = "/root/.cache", type = "chroot", uri = "file:/root/.cache" },
+]
