@@ -1186,8 +1186,17 @@ long libos_syscall_recvmmsg(int fd, struct mmsghdr* msg, unsigned int vlen, unsi
                 || (uint64_t)timeout->tv_nsec >= TIME_NS_IN_S) {
             return -EINVAL;
         }
-        log_warning("timeout argument to recvmmsg is broken, hence unsupported in Gramine");
-        return -EINVAL;
+    }
+    /* The kernel's (documented as broken) timeout: it is checked only after each received
+     * datagram, so a call still blocks for the first one; once the time is up the call returns
+     * what it has, and the remaining time is written back. */
+    uint64_t deadline_us = 0;
+    if (timeout) {
+        uint64_t now_us = 0;
+        int pal_ret = PalSystemTimeQuery(&now_us);
+        if (pal_ret < 0)
+            return pal_to_unix_errno(pal_ret);
+        deadline_us = now_us + timespec_to_us(timeout);
     }
 
     for (size_t i = 0; i < vlen; i++) {
@@ -1232,12 +1241,30 @@ long libos_syscall_recvmmsg(int fd, struct mmsghdr* msg, unsigned int vlen, unsi
         }
         hdr->msg_flags = this_flags;
         msg[i].msg_len = ret;
+
+        if (timeout) {
+            uint64_t now_us = 0;
+            if (PalSystemTimeQuery(&now_us) < 0 || now_us >= deadline_us) {
+                ret = i + 1;
+                goto out;
+            }
+        }
     }
 
     ret = vlen;
 
 out:
     put_handle(handle);
+    if (timeout && ret >= 0) {
+        uint64_t now_us = 0;
+        if (PalSystemTimeQuery(&now_us) < 0)
+            now_us = deadline_us;
+        uint64_t left_us = now_us < deadline_us ? deadline_us - now_us : 0;
+        if (!is_user_memory_writable(timeout, sizeof(*timeout)))
+            return -EFAULT;
+        timeout->tv_sec = left_us / TIME_US_IN_S;
+        timeout->tv_nsec = (left_us % TIME_US_IN_S) * TIME_NS_IN_US;
+    }
     return ret;
 }
 

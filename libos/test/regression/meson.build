@@ -160,6 +160,7 @@ tests = {
     'timerfd': {},
     'syscall_restart': {},
     'sysfs_common': {},
+    'recvmmsg_timeout': {},
     'sysv_msg': {},
     'sysv_shm': {},
     'tcp_ancillary': {},
