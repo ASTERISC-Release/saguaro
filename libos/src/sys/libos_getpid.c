@@ -39,10 +39,15 @@ long libos_syscall_setpgid(pid_t pid, pid_t pgid) {
     }
 
     if (!pid || g_process.pid == (IDTYPE)pid) {
-        /* TODO: Currently we do not support checking that:
-         * - the target process group to be joined (specified by `pgid`) must exist;
-         * - the process group of the joining process (specified by `pid`) and the target process
-         *   group to be joined must have the same session ID. */
+        /* The group to join must exist: this process's own id or group, or a process with that
+         * id (a group leader's pgid is its pid; groups of other processes are not tracked, so a
+         * live process is accepted). Otherwise EPERM, as LTP setpgid02 checks. The same-session
+         * rule is not checked. */
+        if (pgid && (IDTYPE)pgid != g_process.pid && (IDTYPE)pgid != g_process.pgid) {
+            long kill_ret = libos_syscall_kill(pgid, 0);
+            if (kill_ret == -ESRCH)
+                return -EPERM;
+        }
 
         rwlock_write_lock(&g_process_id_lock);
         g_process.pgid = (IDTYPE)pgid ?: g_process.pid;

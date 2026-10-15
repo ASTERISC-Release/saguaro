@@ -559,6 +559,40 @@ int PalFileCreateLink(const char* old_typed_uri, const char* new_typed_uri);
 int PalFileUnlink(const char* typed_uri);
 int PalFileRename(const char* old_typed_uri, const char* new_typed_uri);
 
+/* Exchange two host-backed files atomically (the host's `renameat2(RENAME_EXCHANGE)`). */
+int PalFileExchange(const char* typed_uri_a, const char* typed_uri_b);
+
+/*
+ * Read the target of a host-backed symbolic link without following it. `*inout_size` is the size
+ * of `buf` on entry and the target's length on return (no terminating NUL is written). Fails with
+ * -PAL_ERROR_INVAL if the path names no symbolic link.
+ */
+int PalFileReadLink(const char* typed_uri, char* buf, size_t* inout_size);
+
+/* Extended attributes of a host-backed file (`getxattr`, `setxattr`, `listxattr`,
+ * `removexattr`). */
+enum pal_xattr_op {
+    PAL_XATTR_GET,
+    PAL_XATTR_SET,
+    PAL_XATTR_LIST,
+    PAL_XATTR_REMOVE,
+};
+#define PAL_XATTR_CREATE   0x1 /* PAL_XATTR_SET: fail if the attribute exists */
+#define PAL_XATTR_REPLACE  0x2 /* PAL_XATTR_SET: fail if it does not */
+#define PAL_XATTR_NOFOLLOW 0x4 /* operate on a symbolic link itself */
+/*
+ * `name` is the attribute's name (unused for PAL_XATTR_LIST). For GET and LIST, `*inout_size` is
+ * the size of `value` on entry (0 asks only for the size) and the value's (or list's) size on
+ * return; for SET it is the size of the value to store; REMOVE ignores both. Errors follow the
+ * host: -PAL_ERROR_NOTSUPPORT where the filesystem has no attributes, -PAL_ERROR_STREAMNOTEXIST
+ * for a missing attribute (the LibOS turns these into ENOTSUP/ENODATA).
+ */
+int PalFileXattr(const char* typed_uri, enum pal_xattr_op op, const char* name, void* value,
+                 size_t* inout_size, int flags);
+
+/* CPU time consumed, in microseconds, by the whole process or (`thread`) the calling thread. */
+int PalGetCpuTime(bool thread, uint64_t* out_user_us, uint64_t* out_sys_us);
+
 struct pal_socket_addr {
     enum pal_socket_domain domain;
     union {

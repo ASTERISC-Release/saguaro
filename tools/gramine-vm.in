@@ -454,8 +454,10 @@ if [ -z "$VIRTIOFSD" ] || [ ! -x "$VIRTIOFSD" ]; then
     echo "Error: virtiofsd not found in PATH, /usr/lib/qemu or /usr/libexec (set VIRTIOFSD to its path)." >&2
     exit 2
 fi
+# --xattr: extended attributes of host files reach the guest (the PAL's FUSE_*XATTR requests);
+# without it virtiofsd answers ENOSYS and the xattr calls report EOPNOTSUPP.
 "$VIRTIOFSD" --socket-path /tmp/gramine_vhostfs_"$GRAMINE_VM_ID" --shared-dir / --log-level error \
---sandbox none --no-announce-submounts &
+--sandbox none --no-announce-submounts --xattr &
 VIRTIOFSD_PID=$!
 # bounded, so a virtiofsd that died at startup is an error here and not a hang until the test timeout
 for _ in $(seq 100); do [ -e /tmp/gramine_vhostfs_"$GRAMINE_VM_ID" ] && break; sleep 0.1; done

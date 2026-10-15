@@ -9,6 +9,7 @@
 #include "libos_internal.h"
 #include "libos_lock.h"
 #include "libos_table.h"
+#include "libos_thread.h"
 #include "linux_abi/errors.h"
 #include "linux_abi/fs.h"
 
@@ -17,6 +18,8 @@ long libos_syscall_access(const char* file, mode_t mode) {
 }
 
 static long do_faccessat(int dfd, const char* filename, mode_t mode, int flags) {
+    if (mode & ~(R_OK | W_OK | X_OK))
+        return -EINVAL;
     if (!is_user_string_readable(filename))
         return -EFAULT;
 
@@ -26,6 +29,21 @@ static long do_faccessat(int dfd, const char* filename, mode_t mode, int flags) 
 
     if (*filename != '/' && (ret = get_dirfd_dentry(dfd, &dir)) < 0)
         return ret;
+
+    /* The kernel's faccessat(): the check uses the real ids (unless AT_EACCESS), and a real uid
+     * other than 0 has no capabilities for it (LTP access01). The thread's filesystem ids and
+     * effective set are swapped for the duration of the lookup and check. */
+    struct libos_thread* cur = get_cur_thread();
+    uid_t saved_fsuid = cur->fsuid;
+    gid_t saved_fsgid = cur->fsgid;
+    uint64_t saved_caps = cur->cap_effective;
+    if (!(flags & AT_EACCESS)) {
+        lock(&cur->lock);
+        cur->fsuid = cur->uid;
+        cur->fsgid = cur->gid;
+        cur->cap_effective = cur->uid == 0 ? cur->cap_permitted : 0;
+        unlock(&cur->lock);
+    }
 
     lock(&g_dcache_lock);
 
@@ -38,6 +56,14 @@ static long do_faccessat(int dfd, const char* filename, mode_t mode, int flags) 
 
 out:
     unlock(&g_dcache_lock);
+
+    if (!(flags & AT_EACCESS)) {
+        lock(&cur->lock);
+        cur->fsuid = saved_fsuid;
+        cur->fsgid = saved_fsgid;
+        cur->cap_effective = saved_caps;
+        unlock(&cur->lock);
+    }
 
     if (dir)
         put_dentry(dir);
@@ -55,6 +81,5 @@ long libos_syscall_faccessat2(int dfd, const char* filename, mode_t mode, int fl
     if (flags & ~(AT_EACCESS | AT_SYMLINK_NOFOLLOW))
         return -EINVAL;
 
-    /* Gramine exposes a single fixed identity, so AT_EACCESS and real-ID checks are equivalent. */
     return do_faccessat(dfd, filename, mode, flags);
 }

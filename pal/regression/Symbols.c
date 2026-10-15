@@ -72,6 +72,10 @@ int main(int argc, char** argv, char** envp) {
     PRINT_SYMBOL(PalFileCreateLink);
     PRINT_SYMBOL(PalFileUnlink);
     PRINT_SYMBOL(PalFileRename);
+    PRINT_SYMBOL(PalFileExchange);
+    PRINT_SYMBOL(PalFileReadLink);
+    PRINT_SYMBOL(PalFileXattr);
+    PRINT_SYMBOL(PalGetCpuTime);
     PRINT_SYMBOL(PalStreamsWaitEvents);
 
     PRINT_SYMBOL(PalThreadCreate);

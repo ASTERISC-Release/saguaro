@@ -277,6 +277,12 @@ int virtio_fs_fuse_link(uint64_t old_nodeid, uint64_t new_dir_nodeid, const char
 int virtio_fs_fuse_rename(uint64_t old_dir_nodeid, const char* old_filename,
                           uint64_t new_dir_nodeid, const char* new_filename);
 
+int virtio_fs_fuse_rename2(uint64_t old_dir_nodeid, const char* old_filename,
+                           uint64_t new_dir_nodeid, const char* new_filename, uint32_t flags);
+int virtio_fs_fuse_getxattr(uint64_t nodeid, const char* name, void* value, uint64_t* inout_size);
+int virtio_fs_fuse_setxattr(uint64_t nodeid, const char* name, const void* value, uint64_t size,
+                            uint32_t flags);
+int virtio_fs_fuse_removexattr(uint64_t nodeid, const char* name);
 int virtio_fs_fuse_read(uint64_t nodeid, uint64_t fh, uint64_t size, uint64_t offset,
                         char* out_buf, uint64_t* out_size);
 int virtio_fs_fuse_write(uint64_t nodeid, uint64_t fh, const char* buf, uint64_t size,

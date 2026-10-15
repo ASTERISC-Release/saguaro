@@ -378,7 +378,7 @@ long libos_syscall_mprotect(void* addr, size_t length, int prot) {
      * According to the manpage, addr has to be page-aligned, but not the
      * length. mprotect() will automatically round up the length.
      */
-    if (!addr || !IS_ALLOC_ALIGNED_PTR(addr))
+    if (!IS_ALLOC_ALIGNED_PTR(addr))
         return -EINVAL;
 
     if (length == 0) {
@@ -388,8 +388,9 @@ long libos_syscall_mprotect(void* addr, size_t length, int prot) {
     if (!IS_ALLOC_ALIGNED(length))
         length = ALLOC_ALIGN_UP(length);
 
-    if (!access_ok(addr, length)) {
-        return -EINVAL;
+    /* a range that is not entirely mapped is ENOMEM, as in the kernel (LTP mprotect01) */
+    if (!addr || !access_ok(addr, length) || !is_in_adjacent_user_vmas(addr, length, /*prot=*/0)) {
+        return -ENOMEM;
     }
 
     if (prot & (PROT_WRITE | PROT_EXEC)) {
@@ -397,8 +398,14 @@ long libos_syscall_mprotect(void* addr, size_t length, int prot) {
         if (lookup_vma(addr, &vma_info) >= 0) {
             bool memfd_vma = vma_info.file && vma_info.file->is_memfd;
             unsigned int seals = memfd_vma ? vma_info.file->memfd_seals : 0;
+            /* a shared file mapping of a descriptor opened without write access cannot be made
+             * writable (EACCES) */
+            bool no_write = vma_info.file && (vma_info.flags & MAP_SHARED) &&
+                            !(vma_info.file->acc_mode & MAY_WRITE) && !memfd_vma;
             if (vma_info.file)
                 put_handle(vma_info.file);
+            if (no_write && (prot & PROT_WRITE) && !(vma_info.prot & PROT_WRITE))
+                return -EACCES;
             if (memfd_vma && (prot & PROT_EXEC) && (seals & LIBOS_F_SEAL_EXEC))
                 return -EPERM;
             /* making a shared mapping writable counts as new writable access unless it was
@@ -685,7 +692,10 @@ long libos_syscall_msync(unsigned long start, size_t len_orig, int flags) {
         flags |= MS_ASYNC;
     }
 
-    if (!is_user_memory_readable((void*)start, len)) {
+    /* ENOMEM only for a range that is not mapped (the kernel's answer): a readability probe would
+     * also refuse mapped pages that fault, e.g. a file mapping past the end of its file, or
+     * PROT_NONE ones (LTP mremap01, qmm01) */
+    if (len && !is_in_adjacent_user_vmas((void*)start, len, /*prot=*/0)) {
         return -ENOMEM;
     }
 

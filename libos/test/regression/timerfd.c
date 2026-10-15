@@ -100,6 +100,19 @@ int main(void) {
     CHECK(its.it_value.tv_sec > 90);
     CHECK(timerfd_settime(fd, 0, &zero, NULL) == 0);
 
+    /* TFD_TIMER_CANCEL_ON_SET is accepted on any clock (the kernel arms the cancellation only
+     * for an absolute CLOCK_REALTIME timer); with nobody setting the clock the timer fires */
+    CHECK(timerfd_settime(fd, TFD_TIMER_CANCEL_ON_SET, &one, NULL) == 0);
+    CHECK(timerfd_settime(fd, 0, &zero, NULL) == 0);
+    int rfd = timerfd_create(CLOCK_REALTIME, 0);
+    CHECK(rfd >= 0);
+    struct timespec rnow;
+    CHECK(clock_gettime(CLOCK_REALTIME, &rnow) == 0);
+    struct itimerspec rpast = { .it_value = { .tv_sec = rnow.tv_sec - 1 } };
+    CHECK(timerfd_settime(rfd, TFD_TIMER_ABSTIME | TFD_TIMER_CANCEL_ON_SET, &rpast, NULL) == 0);
+    CHECK(read_expirations(rfd) == 1);
+    close(rfd);
+
     /* `poll()` wakes up when the timer expires (the expiration worker thread) */
     struct pollfd pfd = { .fd = fd, .events = POLLIN };
     set_oneshot(fd, 1);

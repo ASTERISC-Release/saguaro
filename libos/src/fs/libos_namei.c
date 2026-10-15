@@ -29,12 +29,17 @@ int check_permissions(struct libos_dentry* dent, mode_t mask) {
 
     struct libos_thread* current = get_cur_thread();
     mode_t granted;
-    if (current->fsuid == 0) {
-        /* Root bypasses read/write checks, but execution still needs an execute bit. */
-        if ((mask & MAY_EXEC) && !(dent->inode->perm & (S_IXUSR | S_IXGRP | S_IXOTH)))
+    if (libos_capable(LIBOS_CAP_DAC_OVERRIDE)) {
+        /* CAP_DAC_OVERRIDE (root) bypasses read/write checks and searching a directory, but
+         * executing a file still needs an execute bit. */
+        if ((mask & MAY_EXEC) && dent->inode->type != S_IFDIR &&
+                !(dent->inode->perm & (S_IXUSR | S_IXGRP | S_IXOTH)))
             return -EACCES;
         return 0;
     }
+    if (libos_capable(LIBOS_CAP_DAC_READ_SEARCH) && !(mask & MAY_WRITE) &&
+            (dent->inode->type == S_IFDIR || !(mask & MAY_EXEC)))
+        return 0; /* CAP_DAC_READ_SEARCH: reading files, reading and searching directories */
 
     if (current->fsuid == dent->inode->uid) {
         granted = (dent->inode->perm >> 6) & 7;
@@ -45,6 +50,42 @@ int check_permissions(struct libos_dentry* dent, mode_t mask) {
         granted = in_group ? (dent->inode->perm >> 3) & 7 : dent->inode->perm & 7;
     }
     return (granted & mask) == mask ? 0 : -EACCES;
+}
+
+bool libos_in_group(gid_t gid) {
+    struct libos_thread* current = get_cur_thread();
+    if (current->fsgid == gid)
+        return true;
+    for (size_t i = 0; i < current->groups_info.count; i++)
+        if (current->groups_info.groups[i] == gid)
+            return true;
+    return false;
+}
+
+/* The kernel's `inode_init_owner()` plus `mode_strip_sgid()` for an object just created in
+ * `dent->parent`: the owner is the caller's fsuid; in a set-group-ID directory the object takes the
+ * directory's group (and a new directory the S_ISGID bit), otherwise the caller's fsgid; a
+ * non-directory created with S_ISGID and group-execute in a group the caller is not in, without
+ * CAP_FSETID, loses S_ISGID (LTP creat08, open10, mknod02-05). */
+void inode_init_owner(struct libos_dentry* dent) {
+    struct libos_inode* inode = dent->inode;
+    if (!inode)
+        return;
+    struct libos_thread* current = get_cur_thread();
+    struct libos_inode* dir = dent->parent ? dent->parent->inode : NULL;
+    lock(&inode->lock);
+    inode->uid = current->fsuid;
+    if (dir && (dir->perm & S_ISGID)) {
+        inode->gid = dir->gid;
+        if (inode->type == S_IFDIR)
+            inode->perm |= S_ISGID;
+    } else {
+        inode->gid = current->fsgid;
+    }
+    if (inode->type != S_IFDIR && (inode->perm & (S_ISGID | S_IXGRP)) == (S_ISGID | S_IXGRP) &&
+            !libos_in_group(inode->gid) && !libos_capable(LIBOS_CAP_FSETID))
+        inode->perm &= ~S_ISGID;
+    unlock(&inode->lock);
 }
 
 /* This function works like `lookup_dcache`, but if the dentry is not in cache, it creates a new,
@@ -82,11 +123,12 @@ static int lookup_dentry(struct libos_dentry* dent) {
 }
 
 static int do_path_lookupat(struct libos_dentry* start, const char* path, int flags,
-                            struct libos_dentry** found, unsigned int link_depth);
+                            struct libos_dentry** found, unsigned int link_depth,
+                            unsigned int* link_total);
 
 /* Helper function that follows a symbolic link, performing a nested call to `do_path_lookupat`  */
 static int path_lookupat_follow(struct libos_dentry* link, int flags, struct libos_dentry** found,
-                                unsigned int link_depth) {
+                                unsigned int link_depth, unsigned int* link_total) {
     int ret;
     char* target = NULL;
 
@@ -103,7 +145,7 @@ static int path_lookupat_follow(struct libos_dentry* link, int flags, struct lib
     struct libos_dentry* up = dentry_up(link);
     if (!up)
         up = g_dentry_root;
-    ret = do_path_lookupat(up, target, flags, found, link_depth);
+    ret = do_path_lookupat(up, target, flags, found, link_depth, link_total);
 
 out:
     free(target);
@@ -163,6 +205,10 @@ struct lookup {
 
     /* Depth of followed symbolic links, to avoid too deep recursion */
     unsigned int link_depth;
+
+    /* Symbolic links followed so far in the whole resolution (the kernel's MAXSYMLINKS bound of
+     * 40, LTP stat03/lstat02/readlink03 ELOOP cases), shared by the nested lookups */
+    unsigned int* link_total;
 };
 
 /* Process a new dentry in the lookup: follow mounts and symbolic links, then check if the resulting
@@ -179,7 +225,7 @@ static int lookup_enter_dentry(struct lookup* lookup) {
         /* Traverse the symbolic link. This applies to all intermediate segments, final segments
          * ending with slash, and to all final segments if LOOKUP_FOLLOW is set. */
         if (!is_final || has_slash || (lookup->flags & LOOKUP_FOLLOW)) {
-            if (lookup->link_depth >= MAX_LINK_DEPTH)
+            if (lookup->link_depth >= MAX_LINK_DEPTH || ++*lookup->link_total > MAX_LINK_TOTAL)
                 return -ELOOP;
 
             /* If this is not the final segment (or it is the final segment, but ends with slash),
@@ -193,7 +239,7 @@ static int lookup_enter_dentry(struct lookup* lookup) {
 
             struct libos_dentry* target_dent;
             ret = path_lookupat_follow(lookup->dent, sub_flags, &target_dent,
-                                       lookup->link_depth + 1);
+                                       lookup->link_depth + 1, lookup->link_total);
             if (ret < 0)
                 return ret;
 
@@ -241,6 +287,14 @@ static int lookup_advance(struct lookup* lookup) {
     const char* name = lookup->name;
     assert(*name != '/' && *name != '\0');
 
+    /* the kernel's `may_lookup()`: walking through a directory needs search (execute) permission
+     * on it (LTP stat03, lstat02, readlink03, fchdir03, chroot04 and others check EACCES) */
+    if (lookup->dent->inode && lookup->dent->inode->type == S_IFDIR) {
+        int ret = check_permissions(lookup->dent, MAY_EXEC);
+        if (ret < 0)
+            return ret;
+    }
+
     const char* name_end = name;
     while (*name_end != '\0' && *name_end != '/')
         name_end++;
@@ -278,7 +332,8 @@ static int lookup_advance(struct lookup* lookup) {
  * link depth is limited to MAX_LINK_DEPTH).
  */
 static int do_path_lookupat(struct libos_dentry* start, const char* path, int flags,
-                            struct libos_dentry** found, unsigned int link_depth) {
+                            struct libos_dentry** found, unsigned int link_depth,
+                            unsigned int* link_total) {
     assert(locked(&g_dcache_lock));
 
     struct libos_dentry* dent = NULL;
@@ -322,6 +377,7 @@ static int do_path_lookupat(struct libos_dentry* start, const char* path, int fl
         .has_slash = has_slash,
         .dent = dent,
         .link_depth = link_depth,
+        .link_total = link_total,
     };
 
     /* Main part of the algorithm. Repeatedly call `lookup_enter_dentry`, then `lookup_advance`,
@@ -350,7 +406,8 @@ err:
 
 int path_lookupat(struct libos_dentry* start, const char* path, int flags,
                    struct libos_dentry** found) {
-    return do_path_lookupat(start, path, flags, found, /*link_depth=*/0);
+    unsigned int link_total = 0;
+    return do_path_lookupat(start, path, flags, found, /*link_depth=*/0, &link_total);
 }
 
 static inline int open_flags_to_lookup_flags(int flags) {
@@ -540,7 +597,17 @@ int open_namei(struct libos_handle* hdl, struct libos_dentry* start, const char*
         ret = check_permissions(dent, acc_mode);
         if (ret < 0)
             goto out;
+
+        /* O_NOATIME only for the owner or with CAP_FOWNER (LTP open02) */
+        if ((flags & O_NOATIME) && get_cur_thread()->fsuid != dent->inode->uid &&
+                !libos_capable(LIBOS_CAP_FOWNER)) {
+            ret = -EPERM;
+            goto out;
+        }
     }
+
+    if (!existed && dent->inode)
+        inode_init_owner(dent);
 
     /* inotify: `IN_CREATE` on the parent directory's watches, only when the object was really
      * created just now (`IN_ISDIR` for `mkdir`), before any `IN_OPEN` of the new file */
