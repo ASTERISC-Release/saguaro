@@ -216,3 +216,28 @@ long libos_syscall_sysinfo(struct sysinfo* info) {
     info->procs     = 1; /* report only this Gramine process */
     return 0;
 }
+
+/* clock ticks per second of `times()` (the kernel's USER_HZ on every supported architecture) */
+#define USER_HZ 100
+
+/* The calling process's CPU times from the PAL (zero without PAL accounting, as getrusage);
+ * children's times are not collected. The return value counts ticks from an arbitrary point (the
+ * PAL's clock), as on Linux. */
+long libos_syscall_times(struct __kernel_tms* buf) {
+    if (buf) {
+        if (!is_user_memory_writable(buf, sizeof(*buf)))
+            return -EFAULT;
+        uint64_t user_us = 0, sys_us = 0;
+        if (PalGetCpuTime(/*thread=*/false, &user_us, &sys_us) < 0)
+            user_us = sys_us = 0;
+        buf->tms_utime = (long)(user_us / (TIME_US_IN_S / USER_HZ));
+        buf->tms_stime = (long)(sys_us / (TIME_US_IN_S / USER_HZ));
+        buf->tms_cutime = 0;
+        buf->tms_cstime = 0;
+    }
+    uint64_t now_us = 0;
+    int ret = PalSystemTimeQuery(&now_us);
+    if (ret < 0)
+        return pal_to_unix_errno(ret);
+    return (long)(now_us / (TIME_US_IN_S / USER_HZ));
+}

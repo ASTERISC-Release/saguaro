@@ -1114,6 +1114,10 @@ class TC_30_Syscall(RegressionTestCase):
         stdout, _ = self.run_binary(['ioctl_misc'])
         self.assertIn('TEST OK', stdout)
 
+    def test_09f_cputime(self):
+        stdout, _ = self.run_binary(['cputime'])
+        self.assertIn('TEST OK', stdout)
+
     def test_099_sysv_sem(self):
         stdout, _ = self.run_binary(['sysv_sem'])
         self.assertIn('TEST OK', stdout)

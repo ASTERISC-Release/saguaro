@@ -196,3 +196,11 @@ reason = "Fails with 'Internal memory fault with VMA at 0x17ce00' in LibOS (pass
 tests = [
   "TC_00_Unittests::test_010_gramine_run_test",
 ]
+
+[[group]]
+kind = "skip"
+category = "no-cpu-accounting"
+reason = "The VM PAL has no CPU-time accounting (PalGetCpuTime is not implemented there): getrusage and times() report zero and the CPU-time clocks fall back to the real-time clock."
+tests = [
+  "TC_30_Syscall::test_09f_cputime",
+]

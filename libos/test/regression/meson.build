@@ -13,6 +13,7 @@ tests = {
     },
     'close_range': {},
     'console': {},
+    'cputime': {},
     'credentials': {},
     'debug': {
         'c_args': '-g3',

@@ -38,6 +38,7 @@ long libos_syscall_lseek(int fd, off_t offset, int origin);
 void* libos_syscall_mmap(void* addr, size_t length, int prot, int flags, int fd,
                          unsigned long offset);
 long libos_syscall_getrusage(int who, struct __kernel_rusage* usage);
+long libos_syscall_times(struct __kernel_tms* buf);
 long libos_syscall_mprotect(void* addr, size_t len, int prot);
 long libos_syscall_munmap(void* addr, size_t len);
 void* libos_syscall_brk(void* brk);

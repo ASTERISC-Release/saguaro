@@ -11,6 +11,7 @@ manifests = [
   "bootstrap_static",
   "close_range",
   "console",
+  "cputime",
   "credentials",
   "fcntl_dupfd",
   "debug",
