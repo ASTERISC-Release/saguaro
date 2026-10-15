@@ -1,0 +1,34 @@
+# Copyright (C) 2026 The ASTERISC Research Lab
+# SPDX-License-Identifier: BSD-3-Clause
+
+# SQLite manifest for a Windows VBS enclave (`make VBS=1`, Documentation/vbs.rst): the counterpart of
+# manifest.template. The shell (vbs-build/sqlite3, from the amalgamation, built with the vbs gcc) and
+# the scripts are packed into the signed image (the shell is static: no dynamic loader). The database lives in /db/ on the host (the directory
+# is passed through by vbs.allowed_files), so it persists between runs of the enclave.
+# The arguments come from the command line: `gramine-vbs sqlite3 /db/test.db ".read /scripts/create.sql"`.
+
+loader.entrypoint = "file:/libsysdb.so"
+libos.entrypoint = "/sqlite3"
+loader.log_level = "{{ log_level }}"
+
+loader.insecure__use_cmdline_argv = true
+# Set HOME to suppress "warning: cannot find home directory; cannot read ~/.sqliterc"
+loader.env.HOME = "/"
+
+fs.root.uri = "file:/"
+# no run-time code generation in a VBS enclave
+sys.rewrite_syscalls = false
+
+vbs.debug = false
+vbs.enclave_size = "256M"
+# one thread (the main thread and the runtime's helpers)
+vbs.max_threads = 4
+# the database, its rollback journal (db/test.db-journal) and the scripts: host files under /db/
+vbs.allowed_files = [ "/db/" ]
+
+vbs.packed_files = [
+  { path = "/sqlite3", uri = "file:vbs-build/sqlite3" },
+  { path = "/scripts/create.sql", uri = "file:scripts/create.sql" },
+  { path = "/scripts/update.sql", uri = "file:scripts/update.sql" },
+  { path = "/scripts/select.sql", uri = "file:scripts/select.sql" },
+]
