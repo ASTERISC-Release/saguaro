@@ -1,0 +1,41 @@
+# Copyright (C) 2026 Gramine contributors
+# SPDX-License-Identifier: BSD-3-Clause
+
+# NGINX configuration for a Windows VBS enclave (`make VBS=1`): nginx-gramine.conf.template without
+# what a VBS enclave cannot do. One process: no master process (it would fork the workers) and one
+# worker; no daemon. HTTP only (the vbs build has no OpenSSL). Files that NGINX writes go to /tmp
+# (a tmpfs inside the enclave); the error log goes to stderr.
+
+master_process off;
+worker_processes 1;
+daemon off;
+error_log stderr error;
+pid /tmp/nginx.pid;
+
+events {
+    worker_connections  768;
+}
+
+http {
+    include            mime.types;
+    default_type       application/octet-stream;
+    sendfile           on;
+    keepalive_timeout  65;
+
+    server {
+        listen $(LISTEN_HOST):$(LISTEN_PORT);
+        server_name $(LISTEN_HOST);
+
+        location / {
+            root   html;
+            index  index.html index.htm;
+        }
+
+        error_page   500 502 503 504  /50x.html;
+        location = /50x.html {
+            root   html;
+        }
+
+        access_log off;
+    }
+}
