@@ -53,6 +53,7 @@ enum libos_handle_type {
     /* Special handles: */
     TYPE_EPOLL,      /* epoll handles, see `libos_epoll.c` */
     TYPE_EVENTFD,    /* eventfd handles, used by `eventfd` filesystem */
+    TYPE_HOSTFD,     /* host fds without a path (gramine-direct), used by `hostfd` filesystem */
     TYPE_TIMERFD,    /* timerfd handles, used by `timerfd` filesystem */
     TYPE_SIGNALFD,   /* signalfd handles, used by `signalfd` filesystem */
     TYPE_INOTIFY,    /* inotify instances, used by `inotify` filesystem */
@@ -112,6 +113,9 @@ struct libos_sock_handle {
     struct libos_lock recv_lock;
     /* This field is only used by UNIX sockets. */
     size_t force_nonblocking_users_count;
+    /* UNIX socket connected to a host socket (`sys.insecure__host_unix_sockets`, gramine-direct):
+     * `pal_handle` is the host socket and fds go along with the data (`SCM_RIGHTS`). */
+    bool host_unix;
     /* VM PAL UDP emulation owns this anonymous receive-ring mapping. */
     void* udp_rx_ring;
     size_t udp_rx_ring_size;

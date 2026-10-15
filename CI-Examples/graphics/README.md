@@ -1,8 +1,10 @@
 # Graphics examples
 
-Games and benchmarks that run under `gramine-vm` with the graphics host redirection (x86_64 only).
-This page gives the general procedure; details, caveats and results are in
-`Documentation/devel/graphics/` (`running.md`, `PLAN.md`, `FINDINGS.md`, `TODO.md`, `TESTING.md`).
+Games and benchmarks that run under `gramine-vm` with the graphics host redirection, and under
+`gramine-direct` on the host GPU (x86_64 only). This page gives the general procedure for the VM;
+details, caveats and results are in `Documentation/devel/graphics/` (`running.md`, `PLAN.md`,
+`FINDINGS.md`, `TODO.md`, `TESTING.md`). For `gramine-direct` see the section at the end and
+`Documentation/devel/graphics-direct/running.md`.
 
 ## Once per machine
 
@@ -74,7 +76,7 @@ vCPU count with every number.
 | `supertuxkart` | SuperTuxKart | `make run-startup PROFILE_TIME=<seconds>`, `make run-native-startup` |
 | `quake2` | Yamagi Quake II with the demo's game data | no |
 | `minetest` | Minetest 5.6.1 | no (prints a report every minute) |
-| `bastion` | Bastion (the GOG.com Linux build; you buy the game) | not yet run under `gramine-vm`; see its `README.md` |
+| `bastion` | Bastion (the GOG.com Linux build; you buy the game) | no; runs under `gramine-direct`, not yet run under `gramine-vm`; see its `README.md` |
 | `tf2` | Team Fortress 2 | ported, not yet run; see its `README.md` |
 
 ## Adding an application
@@ -82,3 +84,15 @@ vCPU count with every number.
 Copy the Makefile and manifest template of the closest example. The manifest has to mount the
 preload library at `/libgraphics.so` (`{{ gramine.libgraphics }}`) and preload it, set
 `EGL_GRAMINE=1` and `DISPLAY=2:0` (which is also what makes `gramine-vm` start the X relay), and mount `/usr`, `/sys` and `/root/.cache` as the examples do.
+
+## Under gramine-direct
+
+`glxgears`, `quake2`, `minetest`, `supertuxkart` and `bastion` also have a `<name>-direct.manifest.template` and a
+`make run-direct` target (Quake II: `make run-direct-timedemo`; SuperTuxKart:
+`make run-direct-startup`). The application then runs as a Linux process on the host's GPU and X
+server, with the host's Mesa (DRI3), no QEMU and no preload library; `PRELOAD=1` uses the preload
+library instead. The manifests enable three insecure options (raw GPU ioctls, the X server's Unix
+socket, host symbolic links under `/sys`): `gramine-direct` is not a sandbox, see
+`Documentation/devel/graphics-direct/running.md`. Use an install made with `scripts/install.sh`
+(direct PAL, bundled glibc). `direct-tests/` has test programs (`make check`).
+

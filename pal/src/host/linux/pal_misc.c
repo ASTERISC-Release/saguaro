@@ -60,6 +60,22 @@ int _PalGetCpuTime(bool thread, uint64_t* out_user_us, uint64_t* out_sys_us) {
     return 0;
 }
 
+int _PalHostClockMonotonic(uint64_t* out_nsec) {
+    struct timespec time;
+    int ret;
+
+    if (g_pal_linux_state.vdso_clock_gettime) {
+        ret = g_pal_linux_state.vdso_clock_gettime(CLOCK_MONOTONIC, &time);
+    } else {
+        ret = DO_SYSCALL(clock_gettime, CLOCK_MONOTONIC, &time);
+    }
+    if (ret < 0)
+        return unix_to_pal_error(ret);
+
+    *out_nsec = 1000000000ull * (uint64_t)time.tv_sec + (uint64_t)time.tv_nsec;
+    return 0;
+}
+
 int _PalRandomBitsRead(void* buffer, size_t size) {
     assert(g_rand_fd != -1);
     int ret = read_all(g_rand_fd, buffer, size);

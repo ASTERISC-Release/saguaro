@@ -9,7 +9,8 @@
  * private one also gets its modified contents copied); a moved anonymous mapping is copied. The
  * one difference from Linux: a moved MAP_SHARED|MAP_ANONYMOUS mapping becomes a copy, no longer
  * shared with a forked child (the PAL cannot map the same anonymous pages twice). The checks
- * follow the kernel's order (LTP mremap01-05).
+ * follow the kernel's order (LTP mremap01-05). Device mappings (render nodes, host fds) can only
+ * shrink.
  */
 
 #include "libos_flags_conv.h"
@@ -18,6 +19,7 @@
 #include "libos_internal.h"
 #include "libos_table.h"
 #include "libos_vma.h"
+#include "stat.h"
 #include "linux_abi/errors.h"
 #include "linux_abi/memory.h"
 
@@ -130,6 +132,22 @@ long libos_syscall_mremap(void* old_address, size_t old_size, size_t new_size, i
     size_t src_offset = old - (uintptr_t)vma.addr;
     if (!is_one_mapping(old, old_size, &vma)) {
         ret = -EFAULT;
+        goto out;
+    }
+
+    /* A device mapping (for example a GPU buffer mapped through a render node): the copy below
+     * would detach the mapping from the device. Shrinking only drops the tail; growing or moving
+     * is not supported. */
+    if (vma.file && ((vma.file->type == TYPE_CHROOT && vma.file->inode &&
+                      vma.file->inode->type == S_IFCHR) || vma.file->type == TYPE_HOSTFD)) {
+        if (new_size < old_size) {
+            ret = libos_syscall_munmap((void*)(old + new_size), old_size - new_size);
+            if (ret == 0)
+                ret = (long)old;
+        } else {
+            log_warning("mremap: growing or moving a device mapping is not supported");
+            ret = -ENOMEM;
+        }
         goto out;
     }
 

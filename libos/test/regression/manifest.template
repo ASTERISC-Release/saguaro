@@ -6,6 +6,11 @@ loader.insecure__use_cmdline_argv = true
 
 {% if env.get('REWRITE') %}sys.rewrite_syscalls = {{ env.get('REWRITE') }}{% endif %}
 
+# GRAMINE_VM_MULTIPROCESS=1 turns on the VM PAL's experimental processes (x86_64 gramine-vm; see
+# Documentation/devel/vm-multiproc/). Off by default. gramine-test keeps up-to-date manifests, so
+# change it with `gramine-test build --force`.
+{% if env.get('GRAMINE_VM_MULTIPROCESS') == '1' %}sys.experimental__multiprocess = true{% endif %}
+
 # for flock_lock test
 sys.experimental__enable_flock = true
 

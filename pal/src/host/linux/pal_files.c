@@ -162,6 +162,11 @@ static int file_attrquery(const char* type, const char* uri, PAL_STREAM_ATTR* at
         return unix_to_pal_error(ret);
 
     file_attrcopy(attr, &stat_buf);
+    if (S_ISCHR(stat_buf.st_mode)) {
+        /* a device found through a `file:` URI (a chroot mount of e.g. /dev/dri) */
+        attr->dev.rdev_major = host_dev_major(stat_buf.st_rdev);
+        attr->dev.rdev_minor = host_dev_minor(stat_buf.st_rdev);
+    }
     return 0;
 }
 
@@ -521,3 +526,21 @@ struct handle_ops g_dir_ops = {
     .attrsetbyhdl   = &file_attrsetbyhdl,
     .rename         = &dir_rename,
 };
+
+int _PalHostReadlink(const char* uri, char* buf, size_t* size) {
+    const char* path;
+    if (strstartswith(uri, URI_PREFIX_FILE))
+        path = uri + URI_PREFIX_FILE_LEN;
+    else if (strstartswith(uri, URI_PREFIX_DIR))
+        path = uri + URI_PREFIX_DIR_LEN;
+    else if (strstartswith(uri, URI_PREFIX_DEV))
+        path = uri + URI_PREFIX_DEV_LEN;
+    else
+        return -PAL_ERROR_INVAL;
+
+    long ret = DO_SYSCALL(readlinkat, AT_FDCWD, path, buf, *size);
+    if (ret < 0)
+        return unix_to_pal_error(ret);
+    *size = (size_t)ret;
+    return 0;
+}

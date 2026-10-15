@@ -64,10 +64,11 @@ long libos_syscall_pwritev2(unsigned long fd, struct iovec* vec, unsigned long v
 #else
 long libos_syscall_preadv(unsigned long fd, struct iovec* vec, unsigned long vlen, loff_t offset);
 long libos_syscall_pwritev(unsigned long fd, struct iovec* vec, unsigned long vlen, loff_t offset);
-long libos_syscall_preadv2(unsigned long fd, struct iovec* vec, unsigned long vlen, loff_t offset,
-                           int flags);
-long libos_syscall_pwritev2(unsigned long fd, struct iovec* vec, unsigned long vlen, loff_t offset,
-                            int flags);
+/* the 64-bit generic syscall ABI keeps the kernel's (pos_l, pos_h) pair; pos_h is unused */
+long libos_syscall_preadv2(unsigned long fd, struct iovec* vec, unsigned long vlen,
+                           unsigned long pos_l, unsigned long pos_h, int flags);
+long libos_syscall_pwritev2(unsigned long fd, struct iovec* vec, unsigned long vlen,
+                            unsigned long pos_l, unsigned long pos_h, int flags);
 #endif
 long libos_syscall_access(const char* file, mode_t mode);
 long libos_syscall_pipe(int* fildes);

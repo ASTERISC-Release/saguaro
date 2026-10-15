@@ -10,10 +10,14 @@
  *       implemented (without device-specific changes to LibOS layer).
  */
 
+#include <asm/socket.h>
 #include <linux/fcntl.h> /* AT_FDCWD */
+#include <linux/un.h>
+#include <stdalign.h>
 
 #include "api.h"
 #include "ioctls.h"
+#include "linux_socket.h"
 #include "pal.h"
 #include "pal_error.h"
 #include "pal_flags_conv.h"
@@ -21,6 +25,10 @@
 #include "pal_linux.h"
 #include "path_utils.h"
 #include "perm.h"
+
+/* The realpath of a device handle that wraps a host fd without a path (see _PalHostFdWrap()); such
+ * a handle must not be deleted by name. */
+#define HOST_FD_REALPATH "(host fd)"
 
 static int dev_open(PAL_HANDLE* handle, const char* type, const char* uri, enum pal_access access,
                     pal_share_flags_t share, enum pal_create_mode create,
@@ -131,6 +139,9 @@ static int dev_delete(PAL_HANDLE handle, enum pal_delete_mode delete_mode) {
     if (delete_mode != PAL_DELETE_ALL)
         return -PAL_ERROR_INVAL;
 
+    if (!strcmp(handle->dev.realpath, HOST_FD_REALPATH))
+        return -PAL_ERROR_INVAL;
+
     int ret = DO_SYSCALL(unlinkat, AT_FDCWD, handle->dev.realpath, 0);
     return ret < 0 ? unix_to_pal_error(ret) : ret;
 }
@@ -188,6 +199,9 @@ static int dev_attrquery(const char* type, const char* uri, PAL_STREAM_ATTR* att
     attr->pending_size = stat_buf.st_size;
     attr->handle_type = PAL_TYPE_DEV;
     attr->nonblocking = false;
+    attr->dev.rdev_major = host_dev_major(stat_buf.st_rdev);
+    attr->dev.rdev_minor = host_dev_minor(stat_buf.st_rdev);
+    attr->dev.host_mode = stat_buf.st_mode;
     return 0;
 }
 
@@ -203,6 +217,25 @@ static int dev_attrquerybyhdl(PAL_HANDLE handle, PAL_STREAM_ATTR* attr) {
     attr->pending_size = stat_buf.st_size;
     attr->handle_type  = PAL_TYPE_DEV;
     attr->nonblocking  = handle->dev.nonblocking;
+    attr->dev.rdev_major = host_dev_major(stat_buf.st_rdev);
+    attr->dev.rdev_minor = host_dev_minor(stat_buf.st_rdev);
+    attr->dev.host_mode = stat_buf.st_mode;
+    return 0;
+}
+
+static int dev_attrsetbyhdl(PAL_HANDLE handle, PAL_STREAM_ATTR* attr) {
+    assert(handle->hdr.type == PAL_TYPE_DEV);
+
+    if (attr->nonblocking == handle->dev.nonblocking)
+        return 0;
+    int flags = DO_SYSCALL(fcntl, handle->dev.fd, F_GETFL);
+    if (flags < 0)
+        return unix_to_pal_error(flags);
+    flags = attr->nonblocking ? (flags | O_NONBLOCK) : (flags & ~O_NONBLOCK);
+    int ret = DO_SYSCALL(fcntl, handle->dev.fd, F_SETFL, flags);
+    if (ret < 0)
+        return unix_to_pal_error(ret);
+    handle->dev.nonblocking = attr->nonblocking;
     return 0;
 }
 
@@ -217,7 +250,145 @@ struct handle_ops g_dev_ops = {
     .flush          = &dev_flush,
     .attrquery      = &dev_attrquery,
     .attrquerybyhdl = &dev_attrquerybyhdl,
+    .attrsetbyhdl   = &dev_attrsetbyhdl,
 };
+
+int _PalHostFdWrap(int host_fd, PAL_HANDLE* out_handle) {
+    int flags = DO_SYSCALL(fcntl, host_fd, F_GETFL);
+    if (flags < 0)
+        return unix_to_pal_error(flags);
+
+    int ret = DO_SYSCALL(fcntl, host_fd, F_SETFD, FD_CLOEXEC);
+    if (ret < 0)
+        return unix_to_pal_error(ret);
+
+    PAL_HANDLE hdl = calloc(1, HANDLE_SIZE(dev));
+    if (!hdl)
+        return -PAL_ERROR_NOMEM;
+    init_handle_hdr(hdl, PAL_TYPE_DEV);
+    hdl->dev.realpath = strdup(HOST_FD_REALPATH);
+    if (!hdl->dev.realpath) {
+        free(hdl);
+        return -PAL_ERROR_NOMEM;
+    }
+    hdl->dev.fd = host_fd;
+    hdl->dev.nonblocking = !!(flags & O_NONBLOCK);
+    switch (flags & O_ACCMODE) {
+        case O_RDONLY: hdl->flags |= PAL_HANDLE_FD_READABLE; break;
+        case O_WRONLY: hdl->flags |= PAL_HANDLE_FD_WRITABLE; break;
+        default:       hdl->flags |= PAL_HANDLE_FD_READABLE | PAL_HANDLE_FD_WRITABLE; break;
+    }
+    *out_handle = hdl;
+    return 0;
+}
+
+int _PalHostFdGet(PAL_HANDLE handle, int* out_host_fd) {
+    switch (handle->hdr.type) {
+        case PAL_TYPE_DEV:
+        case PAL_TYPE_FILE:
+        case PAL_TYPE_SOCKET:
+        case PAL_TYPE_EVENTFD:
+            *out_host_fd = handle->generic.fd;
+            return 0;
+        default:
+            return -PAL_ERROR_BADHANDLE;
+    }
+}
+
+int _PalHostUnixConnect(const char* path, pal_stream_options_t options, PAL_HANDLE* out_handle) {
+    struct sockaddr_un addr = {.sun_family = AF_UNIX};
+    size_t len = strlen(path);
+    if (len == 0 || len >= sizeof(addr.sun_path))
+        return -PAL_ERROR_INVAL;
+    memcpy(addr.sun_path, path, len + 1);
+
+    int fd = DO_SYSCALL(socket, AF_UNIX,
+                        SOCK_STREAM | SOCK_CLOEXEC |
+                            ((options & PAL_OPTION_NONBLOCK) ? SOCK_NONBLOCK : 0),
+                        0);
+    if (fd < 0)
+        return unix_to_pal_error(fd);
+
+    int ret = DO_SYSCALL(connect, fd, &addr, sizeof(addr));
+    if (ret < 0 && ret != -EINPROGRESS) {
+        DO_SYSCALL(close, fd);
+        return unix_to_pal_error(ret);
+    }
+
+    ret = _PalHostFdWrap(fd, out_handle);
+    if (ret < 0)
+        DO_SYSCALL(close, fd);
+    return ret;
+}
+
+/* At most this many fds go with one message; X clients pass a handful (dma-bufs, fences). */
+#define HOST_MSG_MAX_FDS 64
+
+int _PalHostSendmsg(PAL_HANDLE handle, struct iovec* iov, size_t iov_len, const int* host_fds,
+                    size_t host_fds_cnt, bool nonblocking, size_t* out_size) {
+    if (handle->hdr.type != PAL_TYPE_DEV)
+        return -PAL_ERROR_BADHANDLE;
+    if (host_fds_cnt > HOST_MSG_MAX_FDS)
+        return -PAL_ERROR_INVAL;
+
+    struct msghdr msg = {.msg_iov = iov, .msg_iovlen = iov_len};
+    alignas(struct cmsghdr) char control[CMSG_SPACE(HOST_MSG_MAX_FDS * sizeof(int))];
+    if (host_fds_cnt) {
+        msg.msg_control = control;
+        msg.msg_controllen = CMSG_SPACE(host_fds_cnt * sizeof(int));
+        struct cmsghdr* cmsg = CMSG_FIRSTHDR(&msg);
+        cmsg->cmsg_level = SOL_SOCKET;
+        cmsg->cmsg_type = SCM_RIGHTS;
+        cmsg->cmsg_len = CMSG_LEN(host_fds_cnt * sizeof(int));
+        memcpy(CMSG_DATA(cmsg), host_fds, host_fds_cnt * sizeof(int));
+    }
+
+    long ret = DO_SYSCALL(sendmsg, handle->dev.fd, &msg,
+                          MSG_NOSIGNAL | (nonblocking ? MSG_DONTWAIT : 0));
+    if (ret < 0)
+        return unix_to_pal_error(ret);
+    *out_size = (size_t)ret;
+    return 0;
+}
+
+int _PalHostRecvmsg(PAL_HANDLE handle, struct iovec* iov, size_t iov_len, int* host_fds,
+                    size_t* host_fds_cnt, bool nonblocking, size_t* out_size) {
+    if (handle->hdr.type != PAL_TYPE_DEV)
+        return -PAL_ERROR_BADHANDLE;
+
+    size_t cap = MIN(*host_fds_cnt, (size_t)HOST_MSG_MAX_FDS);
+    alignas(struct cmsghdr) char control[CMSG_SPACE(HOST_MSG_MAX_FDS * sizeof(int))];
+    struct msghdr msg = {
+        .msg_iov = iov,
+        .msg_iovlen = iov_len,
+        .msg_control = cap ? control : NULL,
+        .msg_controllen = cap ? CMSG_SPACE(cap * sizeof(int)) : 0,
+    };
+
+    long ret = DO_SYSCALL(recvmsg, handle->dev.fd, &msg,
+                          MSG_CMSG_CLOEXEC | (nonblocking ? MSG_DONTWAIT : 0));
+    if (ret < 0)
+        return unix_to_pal_error(ret);
+
+    /* one SCM_RIGHTS message at most: that is all a receiver gets from one recvmsg of a stream */
+    size_t cnt = 0;
+    struct cmsghdr* cmsg = cap ? CMSG_FIRSTHDR(&msg) : NULL;
+    if (cmsg && cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_RIGHTS &&
+            cmsg->cmsg_len >= CMSG_LEN(0)) {
+        size_t n = (cmsg->cmsg_len - CMSG_LEN(0)) / sizeof(int);
+        for (size_t i = 0; i < n; i++) {
+            int fd;
+            memcpy(&fd, (char*)CMSG_DATA(cmsg) + i * sizeof(int), sizeof(int));
+            if (cnt < cap)
+                host_fds[cnt++] = fd;
+            else
+                DO_SYSCALL(close, fd);
+        }
+    }
+    *host_fds_cnt = cnt;
+    *out_size = (size_t)ret;
+    return 0;
+}
 
 static bool memcpy_to_host(void* host_ptr, const void* ptr, size_t size) {
     memcpy(host_ptr, ptr, size);
@@ -241,6 +412,21 @@ int _PalDeviceIoControl(PAL_HANDLE handle, uint32_t cmd, unsigned long arg, int*
         fd = handle->sock.fd;
     else
         return -PAL_ERROR_INVAL;
+
+    if (g_pal_linux_state.raw_device_ioctl) {
+        /* `sys.insecure__allow_raw_device_ioctl`: the application shares the address space with
+         * the host kernel here, so its argument pointer is passed unchanged, with no description
+         * of the argument and no copy. Pointers inside the argument reach the host kernel as they
+         * are, and fds in it are host fds (the LibOS translates the ones it knows about). */
+        static bool warned = false;
+        if (!__atomic_exchange_n(&warned, true, __ATOMIC_RELAXED)) {
+            log_warning("Device ioctls are passed to the host unchecked "
+                        "(sys.insecure__allow_raw_device_ioctl = true); "
+                        "this is insecure and must not be used in production.");
+        }
+        *out_ret = DO_SYSCALL(ioctl, fd, cmd, arg);
+        return 0;
+    }
 
     /* find this IOCTL request in the manifest */
     toml_table_t* manifest_sys = toml_table_in(g_pal_public_state.manifest_root, "sys");

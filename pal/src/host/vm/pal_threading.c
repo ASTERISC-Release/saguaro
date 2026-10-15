@@ -16,9 +16,11 @@
 #include "kernel_thread.h"
 
 static void thread_destroy(PAL_HANDLE handle) {
+#ifdef __x86_64__ /* the multiprocess frame pool exists only on x86_64 */
     if (handle->private_frame)
         (void)memory_frame_free(handle->private_frame);
     else
+#endif
         free(handle);
 }
 
@@ -35,15 +37,11 @@ void _PalThreadYieldExecution(void) {
 }
 
 int _PalThreadResume(struct pal_handle* thread) {
-#ifdef __x86_64__
-    /* Experimental multiprocess support only, for now: the default VM keeps its earlier behavior.
-     * A thread blocked in the LibOS is woken by the LibOS itself; one running or preempted in user
-     * mode handles its signals at its next timer tick in user mode. */
-    if (memory_frame_pool_active()) {
-        __atomic_store_n(&thread->thread.kernel_thread->resume_pending, true, __ATOMIC_RELEASE);
-        return 0;
-    }
-#endif
+    /* Not implemented: the LibOS wakes a thread blocked in its own waits, and a thread notices a
+     * new signal at its next system call. Delivering the signal at the thread's next user-mode
+     * timer tick (resume_pending, pal_common_deliver_pending_interrupt()) was tried with the
+     * experimental multiprocess support and stalled Mono (Bastion) after its first GC
+     * suspension; see Documentation/devel/vm-multiproc/FINDINGS.md. */
     __UNUSED(thread);
     return -PAL_ERROR_NOTIMPLEMENTED;
 }

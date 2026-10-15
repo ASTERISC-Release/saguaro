@@ -96,6 +96,8 @@ void use_native_presentation_window(GLXDrawable drawable);
 
 /* =============== gramine defs/structs ===================== */
 extern bool in_gramine_vm;
+/* Starts the graphics session under the VM at the first graphics call (main.c). */
+bool graphics_ensure_session(void);
 
 /* The library-side comm region: one page at the guest address of the comm window. */
 #define SYS_COMMS_ADDR 0xf00000ULL

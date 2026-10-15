@@ -1,3 +1,4 @@
+import glob
 import os
 import platform
 import re
@@ -1258,6 +1259,19 @@ class TC_40_FileSystem(RegressionTestCase):
         stdout, _ = self.run_binary(['device_passthrough'])
         self.assertIn('TEST OK', stdout)
 
+    @unittest.skipIf(HAS_SGX, 'raw device ioctls exist only in the Linux PAL')
+    @unittest.skipUnless(glob.glob('/dev/dri/renderD*'), 'no DRM render node on this host')
+    def test_006_device_drm(self):
+        stdout, _ = self.run_binary(['device_drm'])
+        self.assertIn('TEST OK', stdout)
+        self.assertIn('driver ', stdout)
+
+    @unittest.skipIf(HAS_SGX, 'the SGX PAL refuses undescribed ioctls in its own way')
+    @unittest.skipUnless(glob.glob('/dev/dri/renderD*'), 'no DRM render node on this host')
+    def test_007_device_drm_denied(self):
+        stdout, _ = self.run_binary(['device_drm_denied', 'denied'])
+        self.assertIn('TEST OK', stdout)
+
     @unittest.skipUnless(IS_VM, '/dev/gramine_test_dev is available only on some Jenkins machines')
     def test_003_device_ioctl(self):
         stdout, _ = self.run_binary(['device_ioctl'])
@@ -1572,6 +1586,14 @@ class TC_40_FileSystem(RegressionTestCase):
         stdout, _ = self.run_binary(['credentials', '/mnt/tmpfs'])
         self.assertIn('TEST OK', stdout)
 
+    def test_085a_preadv2_pwritev2_chroot(self):
+        stdout, _ = self.run_binary(['preadv2_pwritev2', 'tmp'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_085b_preadv2_pwritev2_tmpfs(self):
+        stdout, _ = self.run_binary(['preadv2_pwritev2', '/mnt/tmpfs'])
+        self.assertIn('TEST OK', stdout)
+
 class TC_50_GDB(RegressionTestCase):
     def setUp(self):
         if not self.has_debug():
@@ -1663,6 +1685,51 @@ class TC_50_GDB(RegressionTestCase):
                 f.write('fork_and_access_file_testfile')
 
 class TC_80_Socket(RegressionTestCase):
+    @unittest.skipIf(HAS_SGX, 'host UNIX sockets exist only in the Linux PAL')
+    def test_005_host_unix_socket(self):
+        # A server on the host: receives an fd with "FD" and reads the file through it, then
+        # answers "OK" with the read end of a pipe that holds a greeting.
+        path = '/tmp/gramine_host_unix_test.sock'
+        if os.path.exists(path):
+            os.remove(path)
+        srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        srv.bind(path)
+        srv.listen(1)
+        srv.settimeout(30)
+        result = {}
+
+        def serve():
+            try:
+                conn, _ = srv.accept()
+                with conn:
+                    msg, fds, _, _ = socket.recv_fds(conn, 16, 4)
+                    result['msg'] = msg
+                    result['file'] = os.pread(fds[0], 64, 0) if fds else b''
+                    for fd in fds:
+                        os.close(fd)
+                    rfd, wfd = os.pipe()
+                    os.write(wfd, b'hello from the host')
+                    os.close(wfd)
+                    socket.send_fds(conn, [b'OK'], [rfd])
+                    os.close(rfd)
+                    conn.recv(1)  # wait for the client to close
+            except OSError as e:
+                result['error'] = e
+
+        import threading
+        thread = threading.Thread(target=serve)
+        thread.start()
+        try:
+            stdout, _ = self.run_binary(['host_unix_socket', '/tmp/gramine_host_unix_test.file'])
+        finally:
+            thread.join(30)
+            srv.close()
+            os.remove(path)
+        self.assertNotIn('error', result)
+        self.assertEqual(result.get('msg'), b'FD')
+        self.assertEqual(result.get('file'), b'hello from gramine')
+        self.assertIn('TEST OK', stdout)
+
     def test_000_getsockopt(self):
         stdout, _ = self.run_binary(['getsockopt'])
         self.assertIn('TEST OK', stdout)

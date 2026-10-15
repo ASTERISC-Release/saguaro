@@ -82,12 +82,14 @@ static int chroot_lookup(struct libos_dentry* dent) {
      * link too (it used to be reported missing). Other links (absolute targets, ones climbing out
      * with "..", e.g. into the host's /etc/alternatives) are followed on the host as before, since
      * manifests rely on that; so is a mount's root (no parent), whose host path is often itself a
-     * link (/bin -> usr/bin).
+     * link (/bin -> usr/bin). Mounts with `host_symlinks` keep host resolution for every link
+     * (readlink asks the host there, see `chroot_host_readlink()`).
      */
     PAL_STREAM_ATTR pal_attr;
     char link_buf[PATH_MAX];
     size_t link_len = sizeof(link_buf) - 1;
-    ret = dent->parent ? PalFileReadLink(uri, link_buf, &link_len) : -PAL_ERROR_INVAL;
+    bool detect = dent->parent && !(dent->mount && dent->mount->host_symlinks);
+    ret = detect ? PalFileReadLink(uri, link_buf, &link_len) : -PAL_ERROR_INVAL;
     if (ret == 0) {
         link_buf[link_len] = '\0';
         bool same_dir = link_buf[0] != '/' && strcmp(link_buf, "..") != 0 &&
@@ -111,6 +113,7 @@ static int chroot_lookup(struct libos_dentry* dent) {
         }
     }
 
+    memset(&pal_attr, 0, sizeof(pal_attr));
     ret = PalStreamAttributesQuery(uri, &pal_attr);
     if (ret < 0) {
         ret = pal_to_unix_errno(ret);
@@ -144,6 +147,11 @@ static int chroot_lookup(struct libos_dentry* dent) {
     file_off_t size = (type == S_IFREG ? pal_attr.pending_size : 0);
 
     ret = chroot_setup_dentry(dent, type, perm, size);
+    if (ret == 0 && type == S_IFCHR) {
+        /* zero unless the PAL reports it (only the Linux PAL does) */
+        dent->inode->rdev_major = pal_attr.dev.rdev_major;
+        dent->inode->rdev_minor = pal_attr.dev.rdev_minor;
+    }
 out:
     free(uri);
     return ret;
@@ -379,6 +387,23 @@ out:
     free(buf);
     PalObjectDestroy(palhdl);
     return ret;
+}
+
+int chroot_host_readlink(struct libos_dentry* dent, char* buf, size_t bufsize) {
+    assert(locked(&g_dcache_lock));
+    assert(dent->inode);
+
+    char* uri;
+    int ret = dentry_uri(dent, dent->inode->type, &uri);
+    if (ret < 0)
+        return ret;
+
+    size_t size = bufsize;
+    ret = PalHostReadlink(uri, buf, &size);
+    free(uri);
+    if (ret < 0)
+        return pal_to_unix_errno(ret);
+    return (int)size;
 }
 
 static int chroot_unlink(struct libos_dentry* dent) {

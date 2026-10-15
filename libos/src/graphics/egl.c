@@ -169,6 +169,7 @@ int offset_fd(int fd) {
 }
 
 void setup_egl(void) {
+    graphics_ensure_session();
     pthread_mutex_lock(&egl_setup_lock);
 
     /* Source calls glXMakeCurrent repeatedly even when neither the drawable size nor the

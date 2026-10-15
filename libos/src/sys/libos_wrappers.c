@@ -313,14 +313,19 @@ long libos_syscall_pwritev(unsigned long fd, struct iovec* vec, unsigned long vl
     return do_preadv_pwritev(fd, vec, vlen, offset, true, 0, false);
 }
 
-long libos_syscall_preadv2(unsigned long fd, struct iovec* vec, unsigned long vlen, loff_t offset,
-                           int flags) {
-    return do_preadv_pwritev(fd, vec, vlen, offset, false, flags, true);
+/* The kernel's preadv2/pwritev2 take (fd, vec, vlen, pos_l, pos_h, flags) on every architecture
+ * (fs/read_write.c); on a 64-bit kernel pos_from_hilo() makes the offset pos_l alone, so pos_h
+ * (the high half that libc also passes) is ignored and the flags are the sixth argument. */
+long libos_syscall_preadv2(unsigned long fd, struct iovec* vec, unsigned long vlen,
+                           unsigned long pos_l, unsigned long pos_h, int flags) {
+    __UNUSED(pos_h);
+    return do_preadv_pwritev(fd, vec, vlen, (loff_t)pos_l, false, flags, true);
 }
 
-long libos_syscall_pwritev2(unsigned long fd, struct iovec* vec, unsigned long vlen, loff_t offset,
-                            int flags) {
-    return do_preadv_pwritev(fd, vec, vlen, offset, true, flags, true);
+long libos_syscall_pwritev2(unsigned long fd, struct iovec* vec, unsigned long vlen,
+                            unsigned long pos_l, unsigned long pos_h, int flags) {
+    __UNUSED(pos_h);
+    return do_preadv_pwritev(fd, vec, vlen, (loff_t)pos_l, true, flags, true);
 }
 #endif
 

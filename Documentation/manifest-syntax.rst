@@ -523,6 +523,27 @@ Gramine currently supports the following types of mount points:
   Currently there is a limitation that each process has its own, non-shared
   tmpfs (i.e., processes don't see each other's files).
 
+Host symbolic links under a ``chroot`` mount
+""
+
+::
+
+    fs.mounts = [
+      { type = "chroot", path = "[PATH]", uri = "[URI]", host_symlinks = [true|false] },
+    ]
+    (Default: false)
+
+Under a ``chroot`` mount the host resolves symbolic links when a path is looked
+up, so a link looks like its target and ``readlink()`` fails with ``EINVAL``.
+With ``host_symlinks = true``, ``readlink()`` (and therefore ``realpath()``) of
+a path under this mount returns the target of the host's symbolic link; path
+lookup is unchanged. libdrm needs this for the links under ``/sys/dev/char``,
+for example ``{ path = "/sys", type = "chroot", uri = "file:/sys",
+host_symlinks = true }``. A relative target is resolved inside Gramine's file
+system, an absolute one too, so it must be mounted at the same path. Only the
+Linux PAL (``gramine-direct``) supports it; with other PALs ``readlink()``
+still fails.
+
 Start (current working) directory
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -688,6 +709,60 @@ all), then the ``struct`` key must be an empty string or not exist at all::
    security implications in mind. In most cases, IOCTL arguments should be
    encrypted or integrity-protected with a key pre-shared between Gramine and
    the device.
+
+.. _raw-device-ioctls:
+
+Raw device IOCTLs (``gramine-direct``)
+""
+
+::
+
+    sys.insecure__allow_raw_device_ioctl = [true|false]
+    (Default: false)
+
+With ``true``, the Linux PAL (``gramine-direct``) passes every IOCTL on a
+mounted device (for example a DRM render node under ``/dev/dri``) to the host
+unchanged: the application's argument pointer goes to the host kernel as it is,
+without ``sys.ioctl_structs`` and ``sys.allowed_ioctls`` being consulted. This
+works because under ``gramine-direct`` the application and the host kernel
+share one address space; it is what GPU drivers need, whose IOCTLs carry nested
+pointers that cannot practically be described in the manifest. Gramine logs a
+warning on the first such IOCTL. Other PALs ignore the key.
+
+.. warning::
+   This option is insecure and must not be used in production. ``gramine-direct``
+   is not a sandbox, and with this option the application can issue any IOCTL
+   to the devices it can open, with any pointers in the argument; for a GPU
+   this means submitting commands to it. File descriptors inside IOCTL arguments
+   are host file descriptors unless Gramine knows the IOCTL and translates them.
+
+.. _host-unix-sockets:
+
+Host UNIX sockets (``gramine-direct``)
+""
+
+::
+
+    sys.insecure__host_unix_sockets = ["[HOST PATH]", ...]
+    (Default: [])
+
+Gramine's UNIX sockets connect Gramine processes to each other; they cannot
+reach a socket of the host. With this list, a ``connect()`` of a UNIX stream
+socket to one of these paths (exactly as written, for example the X server's
+``"/tmp/.X11-unix/X0"``) connects to the host socket itself, through the Linux
+PAL. File descriptors passed with ``SCM_RIGHTS`` on such a socket are
+translated: an fd the application sends becomes the host fd behind it (files,
+devices, sockets, and fds returned by device IOCTLs), and an fd received from
+the host becomes a new Gramine fd. ``SCM_CREDENTIALS`` is not supported. With
+other PALs the paths are ignored (the connection fails).
+
+This is what an X11 client with GPU rendering needs: Mesa's DRI3 and the
+``Present`` extension send buffer and fence fds to the X server.
+
+.. warning::
+   This option is insecure and must not be used in production. The application
+   talks to the host service directly; in the case of the X server it can see
+   and control other clients' windows and read the keyboard.
 
 .. _experimental-flock-bsd-style-locks-support:
 

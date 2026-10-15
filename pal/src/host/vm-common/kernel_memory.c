@@ -844,6 +844,18 @@ void graphics_arenas_set_geometry(uintptr_t data_addr, size_t data_size, uintptr
                HUGEPAGE_DATA_REGION, (unsigned long)(HUGEPAGE_REGION_SIZE / 1024 / 1024));
 }
 
+/* The comm page of the graphics redirection (libos/src/graphics, SYS_COMMS_ADDR): libgraphics maps it
+ * at this guest-physical address and the host listener reads it there, so a process address space
+ * maps it identically, like the data arenas. */
+#define GRAPHICS_COMM_ADDR 0xf00000UL
+#define GRAPHICS_COMM_SIZE 0x1000UL
+
+static inline bool is_graphics_comm_range(void* addr, size_t size) {
+    uintptr_t start = (uintptr_t)addr;
+    return size && start >= GRAPHICS_COMM_ADDR && size <= GRAPHICS_COMM_SIZE
+           && start - GRAPHICS_COMM_ADDR <= GRAPHICS_COMM_SIZE - size;
+}
+
 int memory_reserve_graphics_arenas(
         int (*callback)(uintptr_t addr, size_t size, bool is_user_reserved,
                         const char* comment)) {
@@ -869,6 +881,14 @@ int memory_reserve_graphics_arenas(
                    /*is_user_reserved=*/true, "egl_redirect_huge");
     if (ret < 0)
         return -PAL_ERROR_NOMEM;
+#ifdef __x86_64__
+    /* the comm page too, so that the LibOS treats it like the arenas (a forked child inherits the
+     * identity mapping instead of a copy) and never places other memory there */
+    ret = callback(GRAPHICS_COMM_ADDR, GRAPHICS_COMM_SIZE, /*is_user_reserved=*/true,
+                   "egl_redirect_comm");
+    if (ret < 0)
+        return -PAL_ERROR_NOMEM;
+#endif
     return 0;
 }
 
@@ -1669,7 +1689,13 @@ int memory_alloc(void* addr, size_t size, bool read, bool write, bool execute) {
         log_always("Reserved GEM arena %p (size %lu); fresh memfd pages, allocations marked WC on demand",
                    addr, (unsigned long)size);
     } else {
+#ifdef __x86_64__
+        /* through the supervisor alias when it exists (multiprocess): the current root may be a
+         * process root that does not map this identity range (yet) */
+        memset(memory_frame_pointer((uintptr_t)addr), 0, size);
+#else
         memset(addr, 0, size);
+#endif
     }
     return 0;
 }
@@ -1740,7 +1766,8 @@ int memory_address_space_alloc(struct memory_address_space* space, void* addr, s
                                bool read, bool write, bool execute) {
     if (!g_frame_pool_bitmap)
         return memory_alloc(addr, size, read, write, execute);
-    if (is_egl_redirect_data_region_base(addr, size)) {
+    if (is_egl_redirect_data_region_base(addr, size) || is_graphics_comm_range(addr, size)
+            || (space && space->identity_memory)) {
         int ret = memory_alloc(addr, size, read, write, execute);
         if (ret < 0)
             return ret;
@@ -1879,7 +1906,13 @@ __attribute_no_sanitize_address
 int memory_address_space_free(struct memory_address_space* space, void* addr, size_t size) {
     if (!g_frame_pool_bitmap)
         return memory_free(addr, size);
-    if (is_egl_redirect_data_region_range(addr, size)) {
+    if (is_graphics_comm_range(addr, size) && !(space && space->identity_memory)) {
+        /* the boot root keeps the comm page: PAL helper threads (the vsock driver's input ring)
+         * read it there at any time */
+        return memory_address_space_share_range(memory_address_space_boot(), space,
+                                                (uintptr_t)addr, size);
+    }
+    if (is_egl_redirect_data_region_range(addr, size) || (space && space->identity_memory)) {
         int ret = memory_free(addr, size);
         if (ret < 0)
             return ret;
@@ -1938,7 +1971,8 @@ int memory_address_space_protect(struct memory_address_space* space, void* addr,
                                  bool read, bool write, bool execute) {
     if (!g_frame_pool_bitmap)
         return memory_protect(addr, size, read, write, execute);
-    if (is_egl_redirect_data_region_range(addr, size)) {
+    if (is_egl_redirect_data_region_range(addr, size) || is_graphics_comm_range(addr, size)
+            || (space && space->identity_memory)) {
         int ret = memory_protect(addr, size, read, write, execute);
         if (ret < 0)
             return ret;
