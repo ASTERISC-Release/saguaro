@@ -24,6 +24,27 @@ static void handler(int sig) {
 }
 
 /* reads the time without a system call (the counter register); one second of spinning */
+#if defined(__x86_64__)
+/* x86_64: the time stamp counter, its rate measured once against the clock (system calls before
+ * the spinning do not matter) */
+static unsigned long cntvct(void) {
+    unsigned int lo, hi;
+    __asm__ volatile("rdtsc" : "=a"(lo), "=d"(hi));
+    return ((unsigned long)hi << 32) | lo;
+}
+
+static unsigned long cntfrq(void) {
+    struct timespec a, b;
+    clock_gettime(CLOCK_MONOTONIC, &a);
+    unsigned long t0 = cntvct();
+    do {
+        clock_gettime(CLOCK_MONOTONIC, &b);
+    } while ((b.tv_sec - a.tv_sec) * 1000000000L + (b.tv_nsec - a.tv_nsec) < 100000000L);
+    unsigned long t1 = cntvct();
+    long ns = (b.tv_sec - a.tv_sec) * 1000000000L + (b.tv_nsec - a.tv_nsec);
+    return (unsigned long)((t1 - t0) * 1000000000.0 / ns);
+}
+#else
 static unsigned long cntvct(void) {
     unsigned long v;
     __asm__ volatile("isb; mrs %0, cntvct_el0" : "=r"(v));
@@ -35,6 +56,7 @@ static unsigned long cntfrq(void) {
     __asm__ volatile("mrs %0, cntfrq_el0" : "=r"(v));
     return v;
 }
+#endif
 
 int main(void) {
     struct sigaction sa = {.sa_handler = handler};
