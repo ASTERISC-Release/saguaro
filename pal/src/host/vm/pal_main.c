@@ -39,6 +39,9 @@
 /* the VMM supplied a graphics-arena layout (graphics redirection configured) */
 static bool g_graphics_configured;
 
+/* the end of guest RAM; memory_address_end of the public state may be extended past it below */
+void* g_vm_physical_memory_end;
+
 uint64_t g_tsc_mhz;
 
 static struct pal_handle* g_first_thread_handle = NULL;
@@ -602,6 +605,7 @@ noreturn void pal_start_c(void) {
                       &g_pal_public_state.memory_address_end);
     if (ret < 0)
         INIT_FAIL("Failed to initialize physical memory");
+    g_vm_physical_memory_end = g_pal_public_state.memory_address_end;
 #ifdef __x86_64__
     /* untrusted_shm mappings (dev:/dev/shm) live in ordinary guest memory, as on the Linux PAL */
     g_pal_public_state.shared_address_start = g_pal_public_state.memory_address_start;
@@ -851,6 +855,20 @@ noreturn int pal_start_continue(void* cmdline_) {
         ret = memory_address_space_switch(&g_initial_process_address_space);
         if (ret < 0)
             INIT_FAIL("Failed to switch to the initial process address space: %s", pal_strerror(ret));
+
+        if (!g_graphics_configured) {
+            /* Every process's memory is demand-paged from the frame pool through its own page
+             * tables, so the application's virtual range need not end with the guest RAM: it
+             * reaches the page tables' limit. The kernel's own uses of the RAM end (the frame
+             * pool, the arenas, the shared range, the free-memory walk) took their values above;
+             * the LibOS places everything beyond RAM lazily. Wine reserves and probes tens of
+             * GiB (Documentation/devel/proton-vm/PLAN.md, blocker 6). Not with graphics: the
+             * first process then keeps identity-mapped memory, which must be RAM. */
+            g_pal_public_state.memory_address_end = (void*)MEMORY_ADDRESS_SPACE_LIMIT;
+            log_always("Application address space: up to %p (demand-paged processes; guest RAM "
+                       "ends at %p)", g_pal_public_state.memory_address_end,
+                       g_vm_physical_memory_end);
+        }
     }
 #endif
 

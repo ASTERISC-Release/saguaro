@@ -33,7 +33,11 @@ int _PalVirtualMemoryAlloc(void* addr, size_t size, pal_prot_flags_t prot) {
     assert(addr);
 
     bool read    = !!(prot & PAL_PROT_READ);
-    bool write   = !!(prot & (PAL_PROT_WRITE | PAL_PROT_WRITECOPY));
+    /* PAL_PROT_WRITECOPY only says "private": the LibOS sets it on every MAP_PRIVATE mapping,
+     * PROT_NONE ones included (LINUX_PROT_TO_PAL), and the Linux PAL ignores it; taking it for
+     * write access made every private reservation readable and writable, with page tables for
+     * all of it (a 24-GiB PROT_NONE reservation of Wine cost 50 MiB of frames and 0.4 s) */
+    bool write   = !!(prot & PAL_PROT_WRITE);
     bool execute = !!(prot & PAL_PROT_EXEC);
     struct memory_address_space* address_space = current_address_space();
     if (address_space)
@@ -54,7 +58,11 @@ int _PalVirtualMemoryProtect(void* addr, size_t size, pal_prot_flags_t prot) {
     assert(addr);
 
     bool read    = !!(prot & PAL_PROT_READ);
-    bool write   = !!(prot & (PAL_PROT_WRITE | PAL_PROT_WRITECOPY));
+    /* PAL_PROT_WRITECOPY only says "private": the LibOS sets it on every MAP_PRIVATE mapping,
+     * PROT_NONE ones included (LINUX_PROT_TO_PAL), and the Linux PAL ignores it; taking it for
+     * write access made every private reservation readable and writable, with page tables for
+     * all of it (a 24-GiB PROT_NONE reservation of Wine cost 50 MiB of frames and 0.4 s) */
+    bool write   = !!(prot & PAL_PROT_WRITE);
     bool execute = !!(prot & PAL_PROT_EXEC);
     struct memory_address_space* address_space = current_address_space();
     if (address_space)
@@ -63,7 +71,9 @@ int _PalVirtualMemoryProtect(void* addr, size_t size, pal_prot_flags_t prot) {
 }
 
 unsigned long _PalMemoryQuota(void) {
-    return g_pal_public_state.memory_address_end - g_pal_public_state.memory_address_start;
+    /* the guest's RAM, not the (possibly larger) virtual range of pal_main.c */
+    extern void* g_vm_physical_memory_end;
+    return g_vm_physical_memory_end - g_pal_public_state.memory_address_start;
 }
 
 /* Ranges the parent's application uses, given by _PalProcessCreate (sorted from high to low); a
