@@ -69,3 +69,6 @@ runtime/glibc$
 
 # created by the RISC-V test guest scripts (git-ignored)
 ^\.riscv64-guest/$
+
+# the git-ignored work folder of the Proton study (prefixes, traces, downloads)
+^\.proton-vm/
