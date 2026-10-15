@@ -59,6 +59,13 @@ static inline int64_t vbs_attest(const void* user_data, void* out, size_t out_ca
  * result (negative Linux errno on failure) or a negative Linux errno of the PAL itself. */
 int64_t vbs_hostcall(uint64_t op, int64_t a0, int64_t a1, int64_t a2, int64_t a3,
                      const void* in, size_t in_len, void* out, size_t out_cap, size_t* out_len);
+/* The same with scatter/gather and no staging copy: the input is in_pre (in_pre_len bytes) followed
+ * by the bytes of in_iov, as many as fit in a host request (PAL_VBS_HOST_DATA_MAX in all); the
+ * output fills out_pre (out_pre_cap bytes), then out_iov; *out_len is the number of bytes stored. */
+int64_t vbs_hostcall_v(uint64_t op, int64_t a0, int64_t a1, int64_t a2, int64_t a3,
+                       const void* in_pre, size_t in_pre_len, const struct iovec* in_iov,
+                       size_t in_niov, void* out_pre, size_t out_pre_cap,
+                       const struct iovec* out_iov, size_t out_niov, size_t* out_len);
 
 /* host files allowed by the manifest */
 struct vbs_trusted_file {

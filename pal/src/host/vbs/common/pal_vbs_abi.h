@@ -215,7 +215,7 @@ struct pal_vbs_packed_obj {
  * code: P calls them only through its x18-restoring thunk (pal_vbs_wcall.S), because Linux code
  * may have clobbered x18 (the enclave TEB). All values are fixed-width (PLAN.md D4).
  */
-#define PAL_VBS_SERVICES_VERSION 5u
+#define PAL_VBS_SERVICES_VERSION 6u
 
 struct pal_vbs_services {
     uint64_t version;
@@ -259,6 +259,33 @@ struct pal_vbs_services {
                           * VBS attestation report package (EnclaveGetAttestationReport) with
                           * user_data as its EnclaveData; returns its size (out NULL or too small:
                           * only the size) or -(HRESULT & 0x7fffffff) */
+
+    /* host requests with scatter/gather (version 6) */
+    void* host_call_v;   /* int64_t (struct pal_vbs_hostcall_v* c): as host_call, but the input is
+                          * c->in_pre followed by the bytes of c->in_iov (as many as fit after the
+                          * prefix; req->in_len is set to what was sent) and the output goes to
+                          * c->out_pre, then c->out_iov; c->out_len is set to the bytes stored. No
+                          * staging copy in the enclave: one copy each way between the caller's
+                          * buffers and the thread's host buffer */
+};
+
+/* a buffer of the vbs PAL proper; the layout of Linux's struct iovec on AArch64 */
+struct pal_vbs_iov {
+    uint64_t base;
+    uint64_t len;
+};
+
+struct pal_vbs_hostcall_v {
+    struct pal_vbs_hostreq* req;      /* header: op, a[], in_len (set by W), out_len, result */
+    const void* in_pre;               /* input: in_pre_len bytes, then the in_iov buffers */
+    uint64_t in_pre_len;
+    const struct pal_vbs_iov* in_iov;
+    uint64_t in_niov;
+    void* out_pre;                    /* output: the first out_pre_cap bytes, then out_iov */
+    uint64_t out_pre_cap;
+    const struct pal_vbs_iov* out_iov;
+    uint64_t out_niov;
+    uint64_t out_len;                 /* set by W: bytes stored in out_pre and out_iov */
 };
 
 /*

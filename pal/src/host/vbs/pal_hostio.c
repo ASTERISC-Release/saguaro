@@ -28,27 +28,43 @@ size_t g_vbs_trusted_files_cnt;
 char** g_vbs_allowed_files;
 size_t g_vbs_allowed_files_cnt;
 
+int64_t vbs_hostcall_v(uint64_t op, int64_t a0, int64_t a1, int64_t a2, int64_t a3,
+                       const void* in_pre, size_t in_pre_len, const struct iovec* in_iov,
+                       size_t in_niov, void* out_pre, size_t out_pre_cap,
+                       const struct iovec* out_iov, size_t out_niov, size_t* out_len) {
+    _Static_assert(sizeof(struct iovec) == sizeof(struct pal_vbs_iov), "iovec layout");
+    if (in_pre_len > PAL_VBS_HOST_DATA_MAX)
+        return -22; /* -EINVAL */
+    struct pal_vbs_hostreq req;
+    memset(&req, 0, sizeof(req));
+    req.op = op;
+    req.a[0] = a0;
+    req.a[1] = a1;
+    req.a[2] = a2;
+    req.a[3] = a3;
+    struct pal_vbs_hostcall_v c = {
+        .req = &req,
+        .in_pre = in_pre,
+        .in_pre_len = in_pre_len,
+        .in_iov = (const struct pal_vbs_iov*)in_iov,
+        .in_niov = in_niov,
+        .out_pre = out_pre,
+        .out_pre_cap = out_pre_cap,
+        .out_iov = (const struct pal_vbs_iov*)out_iov,
+        .out_niov = out_niov,
+    };
+    int64_t ret = (int64_t)pal_vbs_wcall(g_vbs->host_call_v, (uint64_t)&c, 0, 0);
+    if (out_len)
+        *out_len = c.out_len;
+    return ret;
+}
+
 int64_t vbs_hostcall(uint64_t op, int64_t a0, int64_t a1, int64_t a2, int64_t a3,
                      const void* in, size_t in_len, void* out, size_t out_cap, size_t* out_len) {
     if (in_len > PAL_VBS_HOST_DATA_MAX)
         return -22; /* -EINVAL */
-    struct pal_vbs_hostreq* req = malloc(sizeof(*req) + in_len);
-    if (!req)
-        return -12; /* -ENOMEM */
-    memset(req, 0, sizeof(*req));
-    req->op = op;
-    req->a[0] = a0;
-    req->a[1] = a1;
-    req->a[2] = a2;
-    req->a[3] = a3;
-    req->in_len = in_len;
-    if (in_len)
-        memcpy((uint8_t*)(req + 1), in, in_len);
-    int64_t ret = (int64_t)pal_vbs_wcall(g_vbs->host_call, (uint64_t)req, (uint64_t)out, out_cap);
-    if (out_len)
-        *out_len = MIN(req->out_len, out_cap);
-    free(req);
-    return ret;
+    return vbs_hostcall_v(op, a0, a1, a2, a3, in, in_len, NULL, 0, out, out_cap, NULL, 0,
+                          out_len);
 }
 
 static int hexval(char c) {
