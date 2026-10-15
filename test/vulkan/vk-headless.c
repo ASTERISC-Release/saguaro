@@ -500,6 +500,67 @@ int main(void) {
         STEP("render", ok, "red %u blue %u other %u", red, blue, other);
     }
 
+    /* map churn: allocate, map, touch, unmap and free host-visible memory many times; in total far
+     * more than the VM's GEM arenas hold (2 GiB by default), so it only passes if unmapped ranges
+     * are reused */
+    {
+        int churn = getenv("VKH_CHURN") ? atoi(getenv("VKH_CHURN")) : 64;
+        VkDeviceSize csize = 64ull << 20;
+        int done = 0;
+        VkResult cr = VK_SUCCESS;
+        t0 = now_s();
+        for (; done < churn; done++) {
+            VkBuffer cbuf;
+            VkDeviceMemory cmem;
+            cr = make_buffer(csize, VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                             &cbuf, &cmem);
+            if (cr != VK_SUCCESS)
+                break;
+            uint8_t* p8;
+            cr = vkMapMemory(g_dev, cmem, 0, VK_WHOLE_SIZE, 0, (void**)&p8);
+            if (cr == VK_SUCCESS) {
+                p8[0] = 1;
+                p8[csize - 1] = 2;
+                vkUnmapMemory(g_dev, cmem);
+            }
+            vkDestroyBuffer(g_dev, cbuf, NULL);
+            vkFreeMemory(g_dev, cmem, NULL);
+            if (cr != VK_SUCCESS)
+                break;
+        }
+        t1 = now_s();
+        STEP("map-churn", done == churn, "%d of %d rounds of 64 MiB (%d MiB in total), %.1f ms; last result %d",
+             done, churn, done * 64, (t1 - t0) * 1e3, cr);
+    }
+
+    /* one mapping larger than the VM's arenas: natively it works; in the VM it has to fail cleanly
+     * (VK_ERROR_MEMORY_MAP_FAILED or an allocation error), not abort */
+    {
+        VkDeviceSize bsize = (getenv("VKH_BIGMAP_MIB") ? strtoull(getenv("VKH_BIGMAP_MIB"), NULL, 0)
+                                                      : 3072ull) << 20;
+        VkBuffer bbuf;
+        VkDeviceMemory bmem;
+        VkResult br = make_buffer(bsize, VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                      VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                                  &bbuf, &bmem);
+        VkResult mr = VK_NOT_READY;
+        if (br == VK_SUCCESS) {
+            uint8_t* p8;
+            mr = vkMapMemory(g_dev, bmem, 0, VK_WHOLE_SIZE, 0, (void**)&p8);
+            if (mr == VK_SUCCESS) {
+                p8[0] = 1;
+                p8[bsize - 1] = 2;
+                vkUnmapMemory(g_dev, bmem);
+            }
+            vkDestroyBuffer(g_dev, bbuf, NULL);
+            vkFreeMemory(g_dev, bmem, NULL);
+        }
+        STEP("big-map", true, "%" PRIu64 " MiB: allocate %d, map %d (%s)", bsize >> 20, br, mr,
+             mr == VK_SUCCESS ? "mapped" : "refused cleanly");
+    }
+
     /* export device memory as a dma-buf fd */
     if (ext_mem && props.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU && access("/dev/udmabuf", R_OK)) {
         SKIP("export-dmabuf", "CPU device without /dev/udmabuf (lavapipe exports through it)");

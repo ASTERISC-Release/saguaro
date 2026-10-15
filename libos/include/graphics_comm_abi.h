@@ -79,6 +79,7 @@ typedef enum graphics_request {
     HOST_FLOCK = 37,
     HOST_FTRUNCATE = 38,
     UPDATE_INPUT_MASK = 39,
+    GEM_FREE = 40, /* p1 = address, p2 = length: the guest unmapped this part of a GEM arena */
 } graphics_request_t;
 
 /* IOCTL requests: when p5 holds this value, p4 is (offset + 1) of an int64_t field of the argument

@@ -186,6 +186,11 @@ void* libos_syscall_mmap(void* addr, size_t length, int prot, int flags, int fd,
 
                         void* retval = (void*)comm_sync_notify(c);
                         libos_syscall_relinquish_libos_lock(_offset);
+                        if ((int64_t)(uintptr_t)retval < 0 && (int64_t)(uintptr_t)retval >= -4095) {
+                            /* the listener could not map it (arenas full: -ENOMEM) */
+                            put_handle(hdl);
+                            return retval;
+                        }
 
                         /* QEMU replaced this identity-mapped arena slice with
                          * the GEM object. Apply the requested permissions and
@@ -500,8 +505,21 @@ long libos_syscall_munmap(void* _addr, size_t length) {
     bool in_hugepage_gem_arena =
         addr >= gem_huge_start && length <= gem_huge_end - gem_huge_start &&
         addr - gem_huge_start <= (gem_huge_end - gem_huge_start) - length;
-    if (in_regular_gem_arena || in_hugepage_gem_arena)
+    if (in_regular_gem_arena || in_hugepage_gem_arena) {
+        /* The reservation itself stays (see above), but the host listener can reuse the range:
+         * it drops its device mapping there and puts the range on its free list. GEM_FREE is an
+         * ABI addition: the listener has to be built from the same tree (graphics_comm_abi.h). */
+        if (graphics_redirect_enabled()) {
+            long _offset = libos_syscall_acquire_libos_lock();
+            comm_page_t* c = comm_page(_offset);
+            c->p1 = (uint64_t)addr;
+            c->p2 = (uint64_t)length;
+            c->req_bit = GEM_FREE;
+            (void)comm_sync_notify(c);
+            libos_syscall_relinquish_libos_lock(_offset);
+        }
         return 0;
+    }
 #endif
 
     int ret;
