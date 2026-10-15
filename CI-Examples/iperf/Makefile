@@ -19,7 +19,7 @@ ifeq ($(VBS),1)
 # Windows VBS enclave (scripts/vbs/Makefile.vbs, Documentation/vbs.rst): the iperf3 server built
 # with the vbs gcc (against the vbs glibc) in vbs-build/, packed by vbs.manifest.template
 VBS_APP = iperf3
-VBS_DEPS = vbs-build/iperf3
+VBS_DEPS = vbs-build/iperf3 vbs-build/libgcc_s.so.1
 VBS_CLEAN = vbs-build OUTPUT
 include ../../scripts/vbs/Makefile.vbs
 all: vbs-all
@@ -92,6 +92,12 @@ vbs-build/iperf3: $(IPERF_SRC) | $(VBS_RUNTIME_STAMP)
 		CFLAGS="-O2 -Wno-incompatible-pointer-types"
 	$(MAKE) -C vbs-build/src
 	cp vbs-build/src/src/iperf3 $@
+
+# glibc's pthread_cancel dlopens libgcc_s.so.1 for unwinding; the vbs sysroot has none, so the
+# host's copy (the same GCC runtime) is packed
+vbs-build/libgcc_s.so.1:
+	mkdir -p vbs-build
+	cp -L "$(shell $(CC) -print-file-name=libgcc_s.so.1)" $@
 
 .PHONY: check
 check: all
