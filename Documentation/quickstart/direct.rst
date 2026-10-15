@@ -69,11 +69,6 @@ Some example suites build their application first (``redis``, ``nginx``, ...), w
 longer the first time. More ways to test: `Documentation/devel/multiarch.md
 <../devel/multiarch.md>`__.
 
-Known issue (2026-10-15): on x86_64, with the default install (bundled glibc), the LibOS suite has
-37 failures in tests that create processes (``Unexpected memory fault occurred inside PAL`` in the
-child); a build with ``scripts/install.sh --libc none`` passes them. The example suites,
-including ``bash``, pass with both builds.
-
 5. Troubleshooting
 ------------------
 
@@ -98,8 +93,10 @@ Verified
 
 - x86_64 host (Arch Linux, kernel 7.2) in the Ubuntu 24.04 container: ``scripts/install.sh``
   (1 min 21 s), hello world (``Hello, world``); ``test/test-direct.sh pal libos helloworld python``:
-  PAL 32 passed / 4 skipped, LibOS 155 passed / 37 failed / 34 skipped (the known issue above),
-  helloworld and python pass; ``bash`` and ``busybox`` pass. A second install with
+  PAL 32 passed / 4 skipped, LibOS 155 passed / 37 failed / 34 skipped (a startup fault that
+  depended on the length of the install path, fixed on 2026-10-15, see
+  `vm-multiproc/FINDINGS.md <../devel/vm-multiproc/FINDINGS.md>`__; with the fix 192 passed /
+  34 skipped), helloworld and python pass; ``bash`` and ``busybox`` pass. A second install with
   ``scripts/install.sh --libc none``: LibOS 192 passed / 34 skipped. Without ``env.sh``, ``make``
   fails as described under Troubleshooting.
 - AArch64 Ubuntu 24.04 host with an NVIDIA GB10, in the container: ``scripts/install.sh``, hello
