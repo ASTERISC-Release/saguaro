@@ -338,6 +338,8 @@ struct libos_handle* detach_fd_handle(uint32_t fd, int* flags,
     rwlock_write_unlock(&handle_map->lock);
 
     (void)clear_posix_locks(handle);
+    if (handle)
+        libos_dnotify_fd_closed((int)fd, handle);
 
     return handle;
 }

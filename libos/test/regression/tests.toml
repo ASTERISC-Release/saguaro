@@ -79,6 +79,7 @@ manifests = [
   "links",
   "madvise",
   "mkfifo",
+  "fcntl_misc",
   "memfd_exec",
   "memfd_rw",
   "memfd_seals",

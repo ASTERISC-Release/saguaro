@@ -65,6 +65,7 @@ enum libos_handle_type {
 struct libos_pipe_handle {
     bool ready_for_ops; /* true for pipes, false for FIFOs that were mknod'ed but not open'ed */
     int peer_fd; /* other end's descriptor for anonymous pipes; -1 for named FIFOs */
+    uint32_t size; /* F_SETPIPE_SZ capacity in bytes (0: the default 65536); kept on both ends */
     char name[PIPE_URI_SIZE];
 };
 
@@ -289,6 +290,12 @@ struct libos_handle {
     bool is_memfd;
     unsigned int memfd_seals;
     bool memfd_noexec; /* created with MFD_NOEXEC_SEAL: no execute permission */
+    /* fcntl() state of the open file description: a lease (F_SETLEASE; `lease_type` is F_RDLCK
+     * or F_WRLCK while `has_lease`), the F_SETSIG signal (0: SIGIO) and the F_SETOWN owner */
+    bool has_lease;
+    int lease_type;
+    int fown_signal;
+    int fown_pid;
     struct libos_lock lock;
 
     /* Lock for handle position (`pos`). Intended for operations that change the position (e.g.

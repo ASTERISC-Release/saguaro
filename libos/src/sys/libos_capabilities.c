@@ -94,3 +94,12 @@ long libos_syscall_capset(void* header_ptr, const void* data_ptr) {
     unlock(&t->lock);
     return 0;
 }
+
+/* Whether the calling thread holds capability `cap` in its effective set (the LibOS's software
+ * bookkeeping of capget/capset; root starts with all of them). */
+bool libos_capable(int cap) {
+    if (cap < 0 || cap >= 64)
+        return false;
+    struct libos_thread* t = get_cur_thread();
+    return t && (t->cap_effective & (1ULL << cap));
+}

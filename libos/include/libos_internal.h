@@ -158,6 +158,8 @@ int init_external_process_liveness_mode(void);
 int init_sysv_semaphores(void);
 int init_sysv_shm(void);
 int init_sysv_msg(void);
+/* the calling thread has capability `cap` (CAP_* number) in its effective set */
+bool libos_capable(int cap);
 /* System V message queue limits (0: MSGMNI, 1: MSGMAX, 2: MSGMNB) and `/proc/sysvipc/msg` */
 unsigned int sysv_msg_limit(int which);
 int sysv_msg_proc_load(char** out_data, size_t* out_size);

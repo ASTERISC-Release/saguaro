@@ -13,13 +13,18 @@
  * - F_GETFD, F_SETFD (file descriptor flags)
  * - F_GETFL, F_SETFL (file status flags)
  * - F_SETLK, F_SETLKW, F_GETLK (POSIX advisory locks)
- * - F_SETOWN (file descriptor owner): dummy implementation
+ * - F_SETOWN, F_GETOWN (file descriptor owner): recorded, not used for signal routing
+ * - F_SETSIG, F_GETSIG (the signal of F_NOTIFY notifications)
+ * - F_SETLEASE, F_GETLEASE (leases: process-local bookkeeping, no lease breaking)
+ * - F_NOTIFY (dnotify, from the same events as inotify, see `libos_inotify.c`)
+ * - F_GETPIPE_SZ, F_SETPIPE_SZ (the capacity is recorded, not enforced by the PAL pipe)
  */
 
 #include "libos_fs.h"
 #include "libos_graphics.h"
 #include "libos_fs_lock.h"
 #include "libos_handle.h"
+#include "libos_inotify.h"
 #include "libos_internal.h"
 #include "libos_lock.h"
 #include "libos_process.h"
@@ -28,6 +33,7 @@
 #include "libos_vma.h"
 #include "linux_abi/errors.h"
 #include "linux_abi/fs.h"
+#include "stat.h"
 #include "toml_utils.h"
 #define FCNTL_SETFL_MASK (O_APPEND | O_DIRECT | O_NOATIME | O_NONBLOCK)
 #define F_ADD_SEALS 1033
@@ -43,6 +49,149 @@
 #ifndef F_GETPIPE_SZ
 #define F_GETPIPE_SZ 1032
 #endif
+#ifndef F_SETPIPE_SZ
+#define F_SETPIPE_SZ 1031
+#endif
+#ifndef F_SETLEASE
+#define F_SETLEASE 1024
+#endif
+#ifndef F_GETLEASE
+#define F_GETLEASE 1025
+#endif
+#ifndef F_NOTIFY
+#define F_NOTIFY 1026
+#endif
+#ifndef F_SETSIG
+#define F_SETSIG 10
+#endif
+#ifndef F_GETSIG
+#define F_GETSIG 11
+#endif
+#ifndef F_SETOWN_EX
+#define F_SETOWN_EX 15
+#define F_GETOWN_EX 16
+#endif
+#define LIBOS_F_OWNER_TID  0
+#define LIBOS_F_OWNER_PID  1
+#define LIBOS_F_OWNER_PGRP 2
+struct libos_f_owner_ex {
+    int type;
+    int pid;
+};
+#define LIBOS_CAP_SYS_RESOURCE 24
+#define LIBOS_CAP_LEASE        28
+/* the kernel defaults of /proc/sys/fs/pipe-max-size and a new pipe's capacity */
+#define PIPE_MAX_SIZE     (1024 * 1024)
+#define PIPE_DEFAULT_SIZE 65536
+
+/* How many open file descriptions of this process refer to `inode`, and how many of them are open
+ * for writing / reading, `self` excluded (the kernel's `i_writecount`/`i_readcount` view for the
+ * lease conflict check; process-local, as the rest of the lease bookkeeping). */
+static void count_inode_opens(struct libos_inode* inode, struct libos_handle* self,
+                              size_t* out_writers, size_t* out_readers) {
+    *out_writers = 0;
+    *out_readers = 0;
+    struct libos_handle_map* map = get_thread_handle_map(NULL);
+    if (!map)
+        return;
+    struct libos_handle* seen[64];
+    size_t nseen = 0;
+    rwlock_read_lock(&map->lock);
+    for (uint32_t fd = 0; map->fd_top != FD_NULL && fd <= map->fd_top; fd++) {
+        if (!HANDLE_ALLOCATED(map->map[fd]))
+            continue;
+        struct libos_handle* h = map->map[fd]->handle;
+        if (!h || h == self || h->inode != inode)
+            continue;
+        bool dup = false; /* dup'ed descriptors share one open file description */
+        for (size_t i = 0; i < nseen; i++)
+            dup = dup || seen[i] == h;
+        if (dup)
+            continue;
+        if (nseen < ARRAY_SIZE(seen))
+            seen[nseen++] = h;
+        if (h->acc_mode & MAY_WRITE)
+            (*out_writers)++;
+        else
+            (*out_readers)++;
+    }
+    rwlock_read_unlock(&map->lock);
+}
+
+/* F_SETLEASE: the kernel's `generic_setlease()` checks, without lease breaking (a conflicting
+ * open later succeeds instead of breaking the lease; see the libos-syscalls TODO.md). */
+static int set_lease(struct libos_handle* hdl, unsigned long arg) {
+    if (arg != F_RDLCK && arg != F_WRLCK && arg != F_UNLCK)
+        return -EINVAL;
+    if (!hdl->inode || hdl->inode->type != S_IFREG)
+        return -EINVAL;
+    if (arg == F_UNLCK) {
+        lock(&hdl->lock);
+        hdl->has_lease = false;
+        unlock(&hdl->lock);
+        return 0;
+    }
+    /* only the file's owner, or with CAP_LEASE */
+    if ((unsigned int)libos_syscall_getuid() != hdl->inode->uid && !libos_capable(LIBOS_CAP_LEASE))
+        return -EACCES;
+    size_t writers, readers;
+    count_inode_opens(hdl->inode, hdl, &writers, &readers);
+    bool self_writes = hdl->acc_mode & MAY_WRITE;
+    if (arg == F_RDLCK) {
+        /* a read lease conflicts with any writer, this description included */
+        if (writers || self_writes)
+            return -EAGAIN;
+    } else {
+        /* a write lease needs this description to be the only one */
+        if (writers || readers)
+            return -EAGAIN;
+    }
+    lock(&hdl->lock);
+    hdl->has_lease = true;
+    hdl->lease_type = (int)arg;
+    unlock(&hdl->lock);
+    return 0;
+}
+
+/* F_SETPIPE_SZ: the kernel's checks and rounding (`pipe_set_size()`); the size is recorded on both
+ * ends and reported by F_GETPIPE_SZ, but the PAL pipe does not enforce it. */
+static int set_pipe_size(struct libos_handle* hdl, unsigned long arg) {
+    if (hdl->type != TYPE_PIPE)
+        return -EBADF;
+    if (arg > (1UL << 31))
+        return -EINVAL;
+    size_t size = arg < 4096 ? 4096 : arg;
+    /* rounded up to a power-of-two number of pages, as the kernel does */
+    size_t rounded = 4096;
+    while (rounded < size)
+        rounded *= 2;
+    if (rounded > PIPE_MAX_SIZE && !libos_capable(LIBOS_CAP_SYS_RESOURCE))
+        return -EPERM;
+
+    /* EBUSY if the pipe holds more than the new size: ask the read end how much is queued */
+    struct libos_handle* rd = hdl;
+    struct libos_handle* peer = NULL;
+    if (!(hdl->acc_mode & MAY_READ) && hdl->info.pipe.peer_fd >= 0) {
+        peer = get_fd_handle(hdl->info.pipe.peer_fd, NULL, NULL);
+        if (peer && peer->type == TYPE_PIPE && peer->pal_handle)
+            rd = peer;
+    }
+    if (rd->pal_handle) {
+        PAL_STREAM_ATTR attr;
+        if (PalStreamAttributesQueryByHandle(rd->pal_handle, &attr) == 0 &&
+                attr.pending_size > rounded) {
+            if (peer)
+                put_handle(peer);
+            return -EBUSY;
+        }
+    }
+    hdl->info.pipe.size = (uint32_t)rounded;
+    if (peer && peer != hdl && peer->type == TYPE_PIPE)
+        peer->info.pipe.size = (uint32_t)rounded;
+    if (peer)
+        put_handle(peer);
+    return (int)rounded;
+}
 
 static int memfd_has_writable_shared_mapping(struct libos_handle* handle) {
     struct libos_vma_info* vmas = NULL;
@@ -254,9 +403,48 @@ long libos_syscall_fcntl(int fd, int cmd, unsigned long arg) {
             break;
 
         case F_GETPIPE_SZ:
-            /* Report the Linux default nominal capacity. The PAL stream API does not expose or
-             * enforce a bounded FIFO ring yet; vmsplice observes that limitation. */
-            ret = hdl->type == TYPE_PIPE ? 65536 : -EINVAL;
+            /* The recorded nominal capacity. The PAL stream API does not enforce a bounded FIFO
+             * ring; vmsplice observes that limitation. */
+            if (hdl->type != TYPE_PIPE)
+                ret = -EBADF;
+            else
+                ret = hdl->info.pipe.size ? (int)hdl->info.pipe.size : PIPE_DEFAULT_SIZE;
+            break;
+
+        case F_SETPIPE_SZ:
+            ret = set_pipe_size(hdl, arg);
+            break;
+
+        case F_SETLEASE:
+            ret = set_lease(hdl, arg);
+            break;
+
+        case F_GETLEASE:
+            lock(&hdl->lock);
+            ret = hdl->has_lease ? hdl->lease_type : F_UNLCK;
+            unlock(&hdl->lock);
+            break;
+
+        /* F_SETSIG (int): 0 means SIGIO, otherwise the signal F_NOTIFY delivers (with si_fd) */
+        case F_SETSIG:
+            if (arg > SIGS_CNT) {
+                ret = -EINVAL;
+                break;
+            }
+            lock(&hdl->lock);
+            hdl->fown_signal = (int)arg;
+            unlock(&hdl->lock);
+            ret = 0;
+            break;
+
+        case F_GETSIG:
+            lock(&hdl->lock);
+            ret = hdl->fown_signal;
+            unlock(&hdl->lock);
+            break;
+
+        case F_NOTIFY:
+            ret = libos_dnotify_set(hdl, fd, arg);
             break;
 
         /* F_SETFL (int) */
@@ -376,11 +564,55 @@ long libos_syscall_fcntl(int fd, int cmd, unsigned long arg) {
             break;
         }
 
-        /* F_SETOWN (int): dummy implementation */
+        /* F_SETOWN (int): recorded and reported by F_GETOWN; signals of F_NOTIFY go to this
+         * process whatever the owner (one process in the VM, process-local state in direct) */
         case F_SETOWN:
+            lock(&hdl->lock);
+            hdl->fown_pid = (int)arg;
+            unlock(&hdl->lock);
             ret = 0;
-            /* XXX: DUMMY for now */
             break;
+
+        case F_GETOWN:
+            lock(&hdl->lock);
+            ret = hdl->fown_pid;
+            unlock(&hdl->lock);
+            break;
+
+        /* F_SETOWN_EX/F_GETOWN_EX (struct f_owner_ex*): glibc implements F_GETOWN with the
+         * latter; a process group is kept as a negative pid, as F_SETOWN does */
+        case F_SETOWN_EX: {
+            struct libos_f_owner_ex* owner = (struct libos_f_owner_ex*)arg;
+            if (!is_user_memory_readable(owner, sizeof(*owner))) {
+                ret = -EFAULT;
+                break;
+            }
+            if (owner->type != LIBOS_F_OWNER_TID && owner->type != LIBOS_F_OWNER_PID &&
+                    owner->type != LIBOS_F_OWNER_PGRP) {
+                ret = -EINVAL;
+                break;
+            }
+            lock(&hdl->lock);
+            hdl->fown_pid = owner->type == LIBOS_F_OWNER_PGRP ? -owner->pid : owner->pid;
+            unlock(&hdl->lock);
+            ret = 0;
+            break;
+        }
+
+        case F_GETOWN_EX: {
+            struct libos_f_owner_ex* owner = (struct libos_f_owner_ex*)arg;
+            if (!is_user_memory_writable(owner, sizeof(*owner))) {
+                ret = -EFAULT;
+                break;
+            }
+            lock(&hdl->lock);
+            int pid = hdl->fown_pid;
+            unlock(&hdl->lock);
+            owner->type = pid < 0 ? LIBOS_F_OWNER_PGRP : LIBOS_F_OWNER_PID;
+            owner->pid = pid < 0 ? -pid : pid;
+            ret = 0;
+            break;
+        }
 
         default:
             ret = -EINVAL;

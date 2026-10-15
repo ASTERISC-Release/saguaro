@@ -77,6 +77,7 @@ tests = {
     'madvise': {},
     'mkfifo': {},
     'mmap_file': {},
+    'fcntl_misc': {},
     'memfd_exec': {},
     'memfd_rw': {},
     'memfd_seals': {},
