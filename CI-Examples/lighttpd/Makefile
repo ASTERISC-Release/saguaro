@@ -63,14 +63,14 @@ $(LIGHTTPD_SRC).tar.gz:
 		$(foreach mirror,$(LIGHTTPD_MIRRORS),--url $(mirror)/$(LIGHTTPD_SRC).tar.gz)
 
 ifeq ($(VBS),1)
-# gcc 15 defaults to C23, in which lighttpd's build helper lemon.c (old-style definitions) does not
-# compile: the C17 dialect of earlier gcc versions for it (it runs on the build machine)
-VBS_LIGHTTPD_CFLAGS := $(shell [ "$$(gcc -dumpversion | cut -d. -f1)" -ge 15 ] 2>/dev/null && echo 'CFLAGS_FOR_BUILD=-O2 -std=gnu17')
+# gcc 15 defaults to C23, in which lighttpd (and its build helper lemon.c, old-style definitions)
+# does not compile: the C17 dialect of earlier gcc versions for both
+VBS_LIGHTTPD_CFLAGS := $(shell [ "$$(gcc -dumpversion | cut -d. -f1)" -ge 15 ] 2>/dev/null && echo '-g -O2 -std=gnu17')
 $(VBS_ROOT)/sbin/lighttpd: $(LIGHTTPD_SRC).tar.gz | $(VBS_RUNTIME_STAMP)
 	rm -rf vbs-build/src && mkdir -p vbs-build/src
 	tar -C vbs-build/src --strip-components=1 -xzf $<
 	touch vbs-build/src/configure
-	cd vbs-build/src && ./configure CC=$(VBS_GCC) $(if $(VBS_LIGHTTPD_CFLAGS),"$(VBS_LIGHTTPD_CFLAGS)") --prefix=/lighttpd \
+	cd vbs-build/src && ./configure CC=$(VBS_GCC) $(if $(VBS_LIGHTTPD_CFLAGS),CFLAGS="$(VBS_LIGHTTPD_CFLAGS)" CFLAGS_FOR_BUILD="$(VBS_LIGHTTPD_CFLAGS)") --prefix=/lighttpd \
 		--without-openssl --without-pcre --without-bzip2 --without-zlib > ../configure.log
 	$(MAKE) -C vbs-build/src
 	$(MAKE) -C vbs-build/src install DESTDIR=$(abspath vbs-build/root)
