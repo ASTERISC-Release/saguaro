@@ -13,6 +13,7 @@
 #include "libos_table.h"
 #include "linux_abi/errors.h"
 #include "linux_abi/ioctl.h"
+#include "libos_device_ioctl.h"
 #include "libos_graphics.h"
 #include "pal.h"
 #include "stat.h"
@@ -32,6 +33,128 @@ static void signal_io(IDTYPE caller, void* arg) {
     }
 }
 
+#ifdef ENABLE_GRAPHICS
+/*
+ * A device ioctl forwarded to the host listener (gramine-vm graphics redirection). Pointers inside
+ * the argument need nothing (guest RAM is mapped at the same addresses in the listener), but the
+ * fields listed in libos_device_ioctl.h do:
+ *  - FD_IN: a LibOS fd of a forwarded host object (TYPE_HOST, installed at host fd +
+ *    GRAPHICS_HOST_FD_OFFSET) is replaced by its host fd for the call; any other value is passed
+ *    unchanged (the graphics preload library hands raw host fds to Mesa itself, see egl.c);
+ *  - FD_OUT: the host fd the kernel wrote is installed as a new TYPE_HOST handle, and its LibOS fd
+ *    is written back;
+ *  - TIME_ABS: an absolute CLOCK_MONOTONIC deadline on Gramine's clock is made relative to "now",
+ *    and the listener adds its own CLOCK_MONOTONIC (the guest cannot read the host's clock); the
+ *    comm page's p4 names the field (offset + 1) and p5 carries GRAPHICS_IOCTL_TIME_REL_MAGIC.
+ * Input fields are restored after the call, so the application sees its own values.
+ */
+static int install_host_fd(int host_fd, bool cloexec) {
+    int fd = host_fd + (int)GRAPHICS_HOST_FD_OFFSET;
+    int ret = graphics_drop_stale_host_handle(fd);
+    if (ret < 0)
+        return ret;
+    struct libos_handle* hdl = get_new_handle();
+    if (!hdl)
+        return -ENOMEM;
+    hdl->type = TYPE_HOST;
+    ret = set_new_fd_handle_by_fd(fd, hdl, cloexec ? FD_CLOEXEC : 0, NULL);
+    put_handle(hdl);
+    return ret;
+}
+
+static void close_host_fd(int host_fd) {
+    long _offset = libos_syscall_acquire_libos_lock();
+    comm_page_t* c = comm_page(_offset);
+    c->p1 = (uint64_t)host_fd + GRAPHICS_HOST_FD_OFFSET;
+    c->req_bit = CLOSE;
+    (void)comm_sync_notify(c);
+    libos_syscall_relinquish_libos_lock(_offset);
+}
+
+static long forwarded_ioctl(unsigned int fd, unsigned int cmd, unsigned long arg) {
+    const struct translated_ioctl* ti = find_translated_ioctl(cmd);
+    int64_t saved[2] = {0};
+    uint64_t time_field = 0;
+    if (ti) {
+        if (!is_user_memory_writable((void*)arg, _IOC_SIZE(cmd)))
+            return -EFAULT;
+        for (size_t i = 0; i < ti->fields_cnt; i++) {
+            void* field = (void*)(arg + ti->fields[i].offset);
+            switch (ti->fields[i].kind) {
+                case FD_IN: {
+                    saved[i] = *(int32_t*)field;
+                    int in_fd = (int32_t)saved[i];
+                    struct libos_handle* h = in_fd > (int)GRAPHICS_HOST_FD_OFFSET
+                                             ? get_fd_handle(in_fd, NULL, NULL) : NULL;
+                    if (h) {
+                        if (h->type == TYPE_HOST)
+                            *(int32_t*)field = in_fd - (int)GRAPHICS_HOST_FD_OFFSET;
+                        put_handle(h);
+                    }
+                    break;
+                }
+                case TIME_ABS: {
+                    saved[i] = *(int64_t*)field;
+                    int64_t deadline = saved[i];
+                    uint64_t now_us = 0;
+                    if (deadline > 0 && deadline != INT64_MAX && PalSystemTimeQuery(&now_us) == 0) {
+                        *(int64_t*)field = deadline - (int64_t)(now_us * 1000);
+                        time_field = ti->fields[i].offset + 1;
+                    }
+                    break;
+                }
+                case FD_OUT:
+                    break;
+            }
+        }
+    }
+
+    long _offset = libos_syscall_acquire_libos_lock();
+    comm_page_t* c = comm_page(_offset);
+    c->p1 = (uint64_t)fd;
+    c->p2 = (uint64_t)cmd;
+    c->p3 = (uint64_t)arg;
+    c->p4 = time_field;
+    c->p5 = time_field ? GRAPHICS_IOCTL_TIME_REL_MAGIC : 0;
+    c->req_bit = IOCTL;
+    long ret = (long)comm_sync_notify(c);
+    libos_syscall_relinquish_libos_lock(_offset);
+
+    if (!ti)
+        return ret;
+    for (size_t i = 0; i < ti->fields_cnt; i++) {
+        void* field = (void*)(arg + ti->fields[i].offset);
+        if (ti->fields[i].kind == FD_IN) {
+            *(int32_t*)field = (int32_t)saved[i];
+            continue;
+        }
+        if (ti->fields[i].kind == TIME_ABS) {
+            *(int64_t*)field = saved[i];
+            continue;
+        }
+        if (ret < 0)
+            continue;
+        int host_fd = *(int32_t*)field;
+        if (host_fd < 0)
+            continue;
+        bool cloexec = true;
+        if (ti->cloexec_flags_offset >= 0)
+            cloexec = *(uint32_t*)(arg + ti->cloexec_flags_offset) & DRM_CLOEXEC;
+        int new_fd = install_host_fd(host_fd, cloexec);
+        if (new_fd < 0) {
+            log_warning("forwarded ioctl 0x%x: cannot install host fd %d: %d", cmd, host_fd,
+                        new_fd);
+            close_host_fd(host_fd);
+            *(int32_t*)field = -1;
+            ret = new_fd;
+            continue;
+        }
+        *(int32_t*)field = new_fd;
+    }
+    return ret;
+}
+#endif
+
 long libos_syscall_ioctl(unsigned int fd, unsigned int cmd, unsigned long arg) {
     struct libos_handle_map* handle_map = get_thread_handle_map(NULL);
     assert(handle_map);
@@ -43,19 +166,8 @@ long libos_syscall_ioctl(unsigned int fd, unsigned int cmd, unsigned long arg) {
     #ifdef ENABLE_GRAPHICS
         if(hdl->type == TYPE_HOST)
         {
-            long _offset = libos_syscall_acquire_libos_lock();
-            comm_page_t* c = comm_page(_offset);
-            c->p1 = (uint64_t) fd;
-            c->p2 = (uint64_t) cmd;
-            c->p3 = (uint64_t) arg;
-
-            // TODO: check if this is needed.
-            // __sync_synchronize();
-            c->req_bit = IOCTL;
             put_handle(hdl);
-            long retval = comm_sync_notify(c);
-            libos_syscall_relinquish_libos_lock(_offset);
-            return retval;
+            return forwarded_ioctl(fd, cmd, arg);
         }
     #endif
     int ret;

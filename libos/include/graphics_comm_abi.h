@@ -81,6 +81,12 @@ typedef enum graphics_request {
     UPDATE_INPUT_MASK = 39,
 } graphics_request_t;
 
+/* IOCTL requests: when p5 holds this value, p4 is (offset + 1) of an int64_t field of the argument
+ * that the guest made relative to its own clock (an absolute CLOCK_MONOTONIC deadline minus the
+ * guest's "now"); the listener adds its CLOCK_MONOTONIC before the call. Otherwise p4 and p5 are
+ * not used by IOCTL (older guests leave other requests' values there, hence the magic). */
+#define GRAPHICS_IOCTL_TIME_REL_MAGIC 0x54494d4552454c31ULL /* "TIMEREL1" */
+
 /* The offset between a guest fd and the forwarded host fd of the same object:
  * the guest installs host fds at (host fd + GRAPHICS_FS_OFFSET) and the host
  * listener translates request fd payloads back with the same constant. */
