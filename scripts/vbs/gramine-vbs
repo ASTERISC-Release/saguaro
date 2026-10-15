@@ -546,10 +546,15 @@ def cmd_run(args):
 
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
+    # settings of the host process that are passed on from this environment (measurement)
+    envs = '; '.join(f'$env:{k} = {psq(os.environ[k])}'
+                     for k in ('GRAMINE_VBS_HOSTCALL_STATS', 'GRAMINE_VBS_TIMER_RES')
+                     if os.environ.get(k))
     rc, _ = ps(host, f'''
 Write-Output "[gramine-vbs-pid] $PID"
 Set-Location {psq(windir)}
 {mkdirs}
+{envs}
 & .\\pal_vbs_host.exe {psq(b.name + '.dll')} {int(args.threads)} boot {psq(root)} {app_args} 2>&1 |
     Where-Object {{ {'$true' if args.verbose else "$_ -notmatch '^\\[(vbs-w|host)\\]'"} }} |
     ForEach-Object {{ "$_" }}
