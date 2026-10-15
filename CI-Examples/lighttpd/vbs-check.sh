@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Gramine contributors
 # SPDX-License-Identifier: BSD-3-Clause
 #
-# `make VBS=1 check`: NGINX in a Windows VBS enclave, checked from the Windows side (the enclave's
+# `make VBS=1 check`: lighttpd in a Windows VBS enclave, checked from the Windows side (the enclave's
 # sockets are Windows sockets): pages fetched with curl.exe and compared with the packed files.
 set -euo pipefail
 : "${GRAMINE:=../../scripts/vbs/gramine-vbs}"
