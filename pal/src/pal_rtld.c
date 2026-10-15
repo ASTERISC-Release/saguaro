@@ -551,6 +551,12 @@ static int perform_relocations(struct link_map* map) {
     return 0;
 }
 
+#ifdef PAL_HOST_VBS
+/* pal/src/host/vbs/pal_files.c: where a packed object's load image lies in the enclave image */
+int vbs_packed_base(PAL_HANDLE handle, elf_addr_t* out_base, uintptr_t* out_size,
+                    uintptr_t* out_syscall_slot);
+#endif
+
 /* `elf_file_buf` contains the beginning of ELF file (at least ELF header and all program headers);
  * we don't bother undoing _PalStreamMap() and _PalVirtualMemoryAlloc() in case of failure. */
 static int create_and_relocate_entrypoint(PAL_HANDLE handle, const char* uri,
@@ -638,6 +644,23 @@ static int create_and_relocate_entrypoint(PAL_HANDLE handle, const char* uri,
         goto out;
     }
 
+#ifdef PAL_HOST_VBS
+    /* VBS-enclave PAL: the object was packed into the signed image at build time; its load image
+     * already lies at a fixed place, which is its load address (the vbs PAL keeps that range out
+     * of every allocator). Nothing is mapped: _PalStreamMap() only adjusts protections there. */
+    if (ehdr->e_type == ET_DYN) {
+        uintptr_t packed_size, unused_slot;
+        ret = vbs_packed_base(handle, &g_entrypoint_map.l_base_diff, &packed_size, &unused_slot);
+        if (ret < 0) {
+            log_error("%s is not packed into the enclave image", uri);
+            goto out;
+        }
+    } else {
+        log_error("only position-independent objects can be packed into the enclave image");
+        ret = -PAL_ERROR_INVAL;
+        goto out;
+    }
+#else
     if (ehdr->e_type == ET_DYN) {
         /*
          * This is a position-independent shared object, bookkeep a memory area to determine
@@ -660,6 +683,7 @@ static int create_and_relocate_entrypoint(PAL_HANDLE handle, const char* uri,
         /* for EXEC (executables), force PAL memory allocator to use hard-coded segment addresses */
         g_entrypoint_map.l_base_diff = 0x0;
     }
+#endif
 
     g_entrypoint_map.l_map_start = loadcmds[0].start + g_entrypoint_map.l_base_diff;
 
@@ -711,6 +735,12 @@ static int create_and_relocate_entrypoint(PAL_HANDLE handle, const char* uri,
      * (need to first change memory permissions to writable and then revert permissions back) */
     for (size_t i = 0; i < loadcmds_cnt; i++) {
         struct loadcmd* c = &loadcmds[i];
+#ifdef PAL_HOST_VBS
+        /* packed code stays execute-read: relocations only touch writable segments, and the tail
+         * of the last code page is zero in the packed image already */
+        if (!(c->prot & PAL_PROT_WRITE))
+            continue;
+#endif
         ret = _PalVirtualMemoryProtect((void*)c->start, c->alloc_end - c->start,
                                        c->prot | PAL_PROT_WRITE);
         if (ret < 0) {
@@ -732,6 +762,10 @@ static int create_and_relocate_entrypoint(PAL_HANDLE handle, const char* uri,
 
     for (size_t i = 0; i < loadcmds_cnt; i++) {
         struct loadcmd* c = &loadcmds[i];
+#ifdef PAL_HOST_VBS
+        if (!(c->prot & PAL_PROT_WRITE))
+            continue;
+#endif
         ret = _PalVirtualMemoryProtect((void*)c->start, c->alloc_end - c->start, c->prot);
         if (ret < 0) {
             log_error("Failed to revert write memory protection on the segment from ELF file");

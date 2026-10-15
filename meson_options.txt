@@ -10,8 +10,9 @@ option('tdx', type: 'combo', choices: ['disabled', 'enabled'],
 option('skeleton', type: 'combo', choices: ['disabled', 'enabled'],
     description: 'Build skeleton PAL')
 option('vbs', type: 'combo', choices: ['disabled', 'enabled'],
-    description: 'Build Windows VBS-enclave PAL (AArch64; built with the Windows/clang toolchain, ' +
-                'not meson -- see pal/src/host/vbs and scripts/vbs; off by default)')
+    description: 'Build the Windows VBS-enclave PAL (AArch64; the vbs PAL proper and a LibOS for ' +
+                'it here, the Windows enclave runtime with scripts/vbs; must be the only PAL; ' +
+                'off by default)')
 
 # Tirith "graphics": LibOS code that forwards selected syscalls (/dev and /sys access, GPU
 # ioctls, mmap of host-device memory, ...) to a host agent through a shared communication page. It

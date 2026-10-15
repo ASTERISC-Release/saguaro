@@ -18,9 +18,15 @@
 #define MIDR_REVISION(midr)    ((midr) & 0xf)
 
 static uint64_t read_midr_el1(void) {
+#ifdef PAL_HOST_VBS
+    /* Inside a VBS enclave an ID-register read raises an exception (phase 0, step d of
+     * Documentation/devel/vbs-enclave/): report an unknown implementer instead. */
+    return 0;
+#else
     uint64_t midr;
     __asm__("mrs %0, midr_el1" : "=r"(midr));
     return midr;
+#endif
 }
 
 static const char* implementer_name(uint32_t implementer) {

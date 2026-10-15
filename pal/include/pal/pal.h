@@ -179,6 +179,19 @@ struct pal_public_state {
      * synchronous fault frame" (context->pc is the real EL0 pc, resumed by the PAL itself). */
     uintptr_t vm_syscall_return_trampoline;
 
+#ifdef PAL_HOST_VBS
+    /*
+     * VBS-enclave PAL only (the field exists only in -Dvbs=enabled builds): no memory can become
+     * executable at run time, so objects are packed into the signed image at build time. For a
+     * packed object (the application, the vDSO) this returns where its load image lies (base,
+     * extent of its PT_LOADs) and the address of its syscall-entry slot (0 if none), which the
+     * LibOS fills with `libos_syscall_entry`. Negative PAL error if `uri` is not a packed object.
+     * `uri` == NULL names the LibOS itself.
+     */
+    int (*vbs_packed_lookup)(const char* uri, uintptr_t* out_base, size_t* out_size,
+                             uintptr_t* out_syscall_slot);
+#endif
+
     /*
      * Host information
      */

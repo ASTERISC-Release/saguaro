@@ -60,6 +60,9 @@ echo "=== enclave: pal_vbs_enclave.c"
 resolve_missing /O1 /guard:cf /MT -DUNICODE $DEFS /Fo:"$OUT/pal_vbs_enclave.obj" "$VBS/enclave/pal_vbs_enclave.c"
 $CL /c /O1 /guard:cf /MT -DUNICODE $DEFS /Fo:"$OUT/pal_vbs_enclave.obj" "$VBS/enclave/pal_vbs_enclave.c"
 
+echo "=== enclave: pal_vbs_boot.c"
+$CL /c /O1 /guard:cf /MT -DUNICODE $DEFS /Fo:"$OUT/pal_vbs_boot.obj" "$VBS/enclave/pal_vbs_boot.c"
+
 echo "=== enclave: pal_vbs_selftest.c"
 $CL /c /O1 /guard:cf /MT -DUNICODE $DEFS /Fo:"$OUT/pal_vbs_selftest.obj" "$VBS/test/pal_vbs_selftest.c"
 

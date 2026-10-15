@@ -8,6 +8,8 @@ elif vm
     libpal = libpal_vm_dep
 elif tdx
     libpal = libpal_tdx_dep
+elif vbs
+    libpal = libpal_vbs_dep
 else
     error('need to link LibOS against a PAL library, but no PAL version is enabled')
 endif
@@ -194,6 +196,10 @@ libos = shared_library('sysdb',
         # pal/src/host/vm-common/arch/aarch64/pal_vm_tcb.c for the contract the kernel keeps.
         # (x86_64 needs nothing of the sort: %gs-relative addressing works at ring-3.)
         vm and host_machine.cpu_family() == 'aarch64' ? ['-DHOST_TYPE=VM', '-DPAL_HOST_VM=1'] : [],
+
+        # VBS-enclave PAL (Documentation/devel/vbs-enclave/): the LibOS maps packed objects where
+        # they lie in the signed enclave image (libos_rtld.c); x18 is the enclave TEB.
+        vbs ? ['-DPAL_HOST_VBS=1', '-ffixed-x18'] : [],
 
         # aarch64 + VM PAL (Milestone B): common_dep passes its sources (memcpy/memset/etc.)
         # through to this target, so they are compiled with these flags. -O3 would

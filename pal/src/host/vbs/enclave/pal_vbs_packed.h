@@ -62,6 +62,12 @@ const char* pal_vbs_packed_name(uint64_t i);
 int64_t pal_vbs_packed_load(const char* name, const struct pal_vbs_import* imports,
                             uint64_t nimports, struct pal_vbs_loaded* out, uint64_t* detail);
 
+/* The generated table and the bounds of the two packed sections (for the vbs PAL proper). */
+struct pal_vbs_packed_obj;
+const struct pal_vbs_packed_obj* pal_vbs_packed_table(uint64_t* count, uint64_t* blob_base,
+                                                       uint64_t* blob_size, uint64_t* files_base,
+                                                       uint64_t* files_size);
+
 /* Look up a defined dynamic symbol of a prepared object (NULL if absent). */
 void* pal_vbs_packed_sym(const struct pal_vbs_loaded* obj, const char* sym);
 

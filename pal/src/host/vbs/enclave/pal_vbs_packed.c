@@ -42,6 +42,8 @@
 
 /* the packed blob: one executable section of the image (pal_vbs_packed_blob.S, generated) */
 extern const uint8_t g_pal_vbs_packed_blob[];
+/* the original bytes of the packed files: read-only data (same generated file) */
+extern const uint8_t g_pal_vbs_packed_files[];
 
 #define VBS_PAGE 0x1000ull
 
@@ -470,6 +472,17 @@ const char* pal_vbs_packed_name(uint64_t i) {
     return i < PAL_VBS_PACKED_COUNT ? g_pal_vbs_packed_objs[i].name : NULL;
 }
 
+const struct pal_vbs_packed_obj* pal_vbs_packed_table(uint64_t* count, uint64_t* blob_base,
+                                                       uint64_t* blob_size, uint64_t* files_base,
+                                                       uint64_t* files_size) {
+    *count      = PAL_VBS_PACKED_COUNT;
+    *blob_base  = (uint64_t)(uintptr_t)g_pal_vbs_packed_blob;
+    *blob_size  = PAL_VBS_PACKED_BLOB_SIZE;
+    *files_base = (uint64_t)(uintptr_t)g_pal_vbs_packed_files;
+    *files_size = PAL_VBS_PACKED_FILES_SIZE;
+    return g_pal_vbs_packed_objs;
+}
+
 int64_t pal_vbs_packed_load(const char* name, const struct pal_vbs_import* imports,
                             uint64_t nimports, struct pal_vbs_loaded* out, uint64_t* detail) {
     uint64_t dummy;
@@ -489,8 +502,10 @@ int64_t pal_vbs_packed_load(const char* name, const struct pal_vbs_import* impor
     struct pk_obj o;
     memset(&o, 0, sizeof(o));
     o.row  = &g_pal_vbs_packed_objs[idx];
-    o.base = (uint8_t*)g_pal_vbs_packed_blob + o.row->offset;
-    o.size = o.row->size;
+    if (!o.row->image_size)
+        return PAL_VBS_PK_NOTFOUND; /* a data-only packed file, not an ELF object */
+    o.base = (uint8_t*)g_pal_vbs_packed_blob + o.row->image_offset;
+    o.size = o.row->image_size;
     if (((uintptr_t)o.base & (VBS_PAGE - 1)) || (o.size & (VBS_PAGE - 1)))
         return PAL_VBS_PK_LAYOUT;
 
@@ -558,7 +573,7 @@ int64_t pal_vbs_packed_load(const char* name, const struct pal_vbs_import* impor
 void* pal_vbs_packed_sym(const struct pal_vbs_loaded* obj, const char* sym) {
     for (uint64_t i = 0; i < PAL_VBS_PACKED_COUNT; i++) {
         const struct pal_vbs_packed_obj* row = &g_pal_vbs_packed_objs[i];
-        if ((uint8_t*)g_pal_vbs_packed_blob + row->offset != obj->base)
+        if (!row->image_size || (uint8_t*)g_pal_vbs_packed_blob + row->image_offset != obj->base)
             continue;
         struct pk_obj o;
         uint64_t detail;

@@ -29,15 +29,35 @@ typedef struct pal_vbs_env {
     int64_t  (*packed_load)(const char* name, const struct pal_vbs_import* imports,
                             uint64_t nimports, struct pal_vbs_loaded* out, uint64_t* detail);
     void*    (*packed_sym)(const struct pal_vbs_loaded* obj, const char* sym);
+    uint64_t (*x18_spin)(uint64_t iterations, uint64_t magic);
 } pal_vbs_env_t;
 
 /* The PAL-level test. Returns 0 if every step passed, else the 1-based index of the first failure.
  * Writes the number of steps run and passed. */
 int64_t pal_vbs_selftest(const pal_vbs_env_t* env, uint64_t* run, uint64_t* passed);
 
+/* boot context (pal_vbs_boundary.S) */
+struct pal_vbs_ctx {
+    uint64_t regs[23]; /* x19-x30, sp, x18, tpidr_el0, d8-d15 (184 bytes) */
+};
+int64_t pal_vbs_ctx_save(struct pal_vbs_ctx* c) __attribute__((returns_twice));
+void pal_vbs_ctx_resume(struct pal_vbs_ctx* c, int64_t v) __attribute__((noreturn));
+
+/* W services shared by the self-test env and the boot path (pal_vbs_enclave.c) */
+void     pal_vbs_w_console_write(const char* s, uint64_t len);
+uint64_t pal_vbs_w_time_ns(void);
+int64_t  pal_vbs_w_random(void* buf, uint64_t len);
+void     pal_vbs_w_log(const char* s);
+
+/* Boot the packed vbs PAL (pal_vbs_boot.c). Returns the exit code of the application, or a
+ * negative value if booting failed before the PAL took over. */
+struct pal_vbs_shared;
+int64_t pal_vbs_boot(const struct pal_vbs_shared* shared);
+
 /* boundary thunks (pal_vbs_boundary.S) */
 uint64_t pal_vbs_read_x18(void);
 uint64_t pal_vbs_enter_sysv(void* fn, uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3);
 int64_t  pal_vbs_brk0(void);
+uint64_t pal_vbs_x18_spin(uint64_t iterations, uint64_t magic);
 
 #endif /* PAL_VBS_ENCLAVE_H */

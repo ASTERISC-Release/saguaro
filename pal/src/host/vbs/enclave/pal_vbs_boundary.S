@@ -52,3 +52,73 @@ pal_vbs_brk0:
     brk     #0
     mov     x0, #0
     ret
+
+/*
+ * Boot context (phase 2): E_PalMain saves the Windows-side callee-saved state before it enters the
+ * vbs PAL proper, which never returns; the PAL's exit service resumes the saved state, so
+ * E_PalMain returns normally to the host. Saved: x19-x30, sp, x18 (the TEB), TPIDR_EL0 (the Linux
+ * code changes it for its TLS), d8-d15.
+ *
+ * int64_t pal_vbs_ctx_save(struct pal_vbs_ctx* c);          returns 0, or v when resumed
+ * void    pal_vbs_ctx_resume(struct pal_vbs_ctx* c, int64_t v);   does not return
+ */
+    .globl  pal_vbs_ctx_save
+    .p2align 2
+pal_vbs_ctx_save:
+    stp     x19, x20, [x0, #0]
+    stp     x21, x22, [x0, #16]
+    stp     x23, x24, [x0, #32]
+    stp     x25, x26, [x0, #48]
+    stp     x27, x28, [x0, #64]
+    stp     x29, x30, [x0, #80]
+    mov     x1, sp
+    str     x1, [x0, #96]
+    str     x18, [x0, #104]
+    mrs     x1, tpidr_el0
+    str     x1, [x0, #112]
+    stp     d8, d9, [x0, #120]
+    stp     d10, d11, [x0, #136]
+    stp     d12, d13, [x0, #152]
+    stp     d14, d15, [x0, #168]
+    mov     x0, #0
+    ret
+
+    .globl  pal_vbs_ctx_resume
+    .p2align 2
+pal_vbs_ctx_resume:
+    ldp     x19, x20, [x0, #0]
+    ldp     x21, x22, [x0, #16]
+    ldp     x23, x24, [x0, #32]
+    ldp     x25, x26, [x0, #48]
+    ldp     x27, x28, [x0, #64]
+    ldp     x29, x30, [x0, #80]
+    ldr     x2, [x0, #96]
+    mov     sp, x2
+    ldr     x18, [x0, #104]
+    ldr     x2, [x0, #112]
+    msr     tpidr_el0, x2
+    ldp     d8, d9, [x0, #120]
+    ldp     d10, d11, [x0, #136]
+    ldp     d12, d13, [x0, #152]
+    ldp     d14, d15, [x0, #168]
+    mov     x0, x1
+    ret
+
+/*
+ * uint64_t pal_vbs_x18_spin(uint64_t iterations, uint64_t magic);
+ *
+ * Measures whether a value other than the TEB survives in x18 while the thread is preempted (an
+ * application's glibc, not built with -ffixed-x18, may keep temporaries in x18). Puts `magic` in
+ * x18, spins `iterations` times without calling anything, returns what x18 then holds, and
+ * restores the TEB.
+ */
+    .globl  pal_vbs_x18_spin
+    .p2align 2
+pal_vbs_x18_spin:
+    mov     x9, x18
+    mov     x18, x1
+1:  subs    x0, x0, #1
+    b.ne    1b
+    mov     x0, x18
+    mov     x18, x9
+    ret

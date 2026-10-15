@@ -70,11 +70,15 @@ static uint64_t do_ocall(uint64_t no, uint64_t a0, uint64_t a1, uint64_t a2) {
 
 /* ---- PAL primitives exposed to the test (pal_vbs_env) ---- */
 
-static void pal_console_write(const char* s, uint64_t len) {
+void pal_vbs_w_console_write(const char* s, uint64_t len) {
     if (len > PAL_VBS_CONBUF_SIZE)
         len = PAL_VBS_CONBUF_SIZE;
     EnclaveCopyOutOfEnclave(g_host->conbuf, s, (SIZE_T)len);
     do_ocall(PAL_VBS_OCALL_CONSOLE_WRITE, len, 0, 0);
+}
+
+void pal_vbs_w_log(const char* s) {
+    pal_vbs_w_console_write(s, (uint64_t)strlen(s));
 }
 
 /* RW allocator over enclave memory. Phase 0: VirtualAlloc(PAGE_READWRITE) commits up to the enclave
@@ -88,11 +92,11 @@ static void pal_mem_free(void* p, uint64_t size) {
         VirtualFree(p, 0, MEM_RELEASE);
 }
 
-static uint64_t pal_time_ns(void) {
+uint64_t pal_vbs_w_time_ns(void) {
     return do_ocall(PAL_VBS_OCALL_GET_TIME_NS, 0, 0, 0);
 }
 
-static int64_t pal_random(void* buf, uint64_t len) {
+int64_t pal_vbs_w_random(void* buf, uint64_t len) {
     NTSTATUS st = BCryptGenRandom(NULL, (PUCHAR)buf, (ULONG)len, BCRYPT_USE_SYSTEM_PREFERRED_RNG);
     return BCRYPT_SUCCESS(st) ? 0 : (int64_t)st;
 }
@@ -136,14 +140,20 @@ void* pal_vbs_packed_sym(const struct pal_vbs_loaded* obj, const char* sym) {
     UNREFERENCED_PARAMETER(obj); UNREFERENCED_PARAMETER(sym);
     return NULL;
 }
+const struct pal_vbs_packed_obj* pal_vbs_packed_table(uint64_t* count, uint64_t* blob_base,
+                                                       uint64_t* blob_size, uint64_t* files_base,
+                                                       uint64_t* files_size) {
+    *count = *blob_base = *blob_size = *files_base = *files_size = 0;
+    return NULL;
+}
 #endif
 
 static const pal_vbs_env_t g_env = {
-    .console_write  = pal_console_write,
+    .console_write  = pal_vbs_w_console_write,
     .mem_alloc      = pal_mem_alloc,
     .mem_free       = pal_mem_free,
-    .time_ns        = pal_time_ns,
-    .random         = pal_random,
+    .time_ns        = pal_vbs_w_time_ns,
+    .random         = pal_vbs_w_random,
     .enter_sysv     = pal_vbs_enter_sysv,
     .read_x18       = pal_vbs_read_x18,
     .try_brk_resume = pal_try_brk_resume,
@@ -151,6 +161,7 @@ static const pal_vbs_env_t g_env = {
     .packed_name    = pal_vbs_packed_name,
     .packed_load    = pal_vbs_packed_load,
     .packed_sym     = pal_vbs_packed_sym,
+    .x18_spin       = pal_vbs_x18_spin,
 };
 
 /*
@@ -166,10 +177,22 @@ void* CALLBACK E_PalMain(void* param) {
 
     int64_t result = -1;
     uint64_t run = 0, passed = 0;
-    __try {
-        result = pal_vbs_selftest(&g_env, &run, &passed);
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        result = (int64_t)0x1000 | (int64_t)GetExceptionCode();
+    if (local.abi_version != PAL_VBS_ABI_VERSION) {
+        result = -2;
+    } else if (local.mode == PAL_VBS_MODE_BOOT) {
+        /* SEH around the boot as around the self-test: an exception the PAL does not handle is
+         * reported instead of being lost (some faults hang instead, blocker 4) */
+        __try {
+            result = pal_vbs_boot(&local);
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
+            result = (int64_t)0x1000 | (int64_t)GetExceptionCode();
+        }
+    } else {
+        __try {
+            result = pal_vbs_selftest(&g_env, &run, &passed);
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
+            result = (int64_t)0x1000 | (int64_t)GetExceptionCode();
+        }
     }
 
     /* write results back to host memory */

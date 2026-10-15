@@ -165,29 +165,56 @@ static int run_packed(const char* name) {
 }
 
 static int step_packed(void) {
-    uint64_t n = g_env->packed_count();
-    out("[selftest] step 7: %llu packed objects in the image\n", (unsigned long long)n);
-    if (!n) {
-        out("[selftest] step 7: image built without packed objects: skipped\n");
+    uint64_t n = g_env->packed_count(), ntest = 0;
+    const char* first = NULL;
+    int ok = 1;
+    for (uint64_t i = 0; i < n; i++) {
+        const char* name = g_env->packed_name(i);
+        if (strncmp(name, "libpacked", 9))
+            continue; /* the boot objects (libpal, LibOS, application) are not test objects */
+        ntest++;
+        first = first ? first : name;
+        ok &= run_packed(name);
+    }
+    out("[selftest] step 7: %llu packed objects in the image, %llu test objects\n",
+        (unsigned long long)n, (unsigned long long)ntest);
+    if (!ntest) {
+        out("[selftest] step 7: no packed test objects in this image: skipped\n");
         return 1;
     }
-    int ok = 1;
-    for (uint64_t i = 0; i < n; i++)
-        ok &= run_packed(g_env->packed_name(i));
     /* refusals: unknown name, and preparing the same object twice */
     struct pal_vbs_loaded obj;
     int64_t r1 = g_env->packed_load("no-such-object", NULL, 0, &obj, NULL);
-    int64_t r2 = g_env->packed_load(g_env->packed_name(0), NULL, 0, &obj, NULL);
+    int64_t r2 = g_env->packed_load(first, NULL, 0, &obj, NULL);
     int refused = (r1 == PAL_VBS_PK_NOTFOUND) && (r2 == PAL_VBS_PK_LOADED);
     out("[selftest] step 7: refusals (unknown %lld, twice %lld) %s\n", (long long)r1,
         (long long)r2, refused ? "ok" : "FAILED");
     return ok && refused;
 }
 
+/* ---- step 8: does a non-TEB value in x18 survive preemption? ---- */
+static int step_x18_preempt(void) {
+    const uint64_t magic = 0x5a5a18185a5a1818ull;
+    const uint64_t iterations = 4000000000ull; /* about 1.3 s at 3 GHz, one iteration per cycle */
+    uint64_t t0 = g_env->time_ns();
+    uint64_t seen = g_env->x18_spin(iterations, magic);
+    uint64_t t1 = g_env->time_ns();
+    /* A measurement of the platform, not a check of the PAL: on Windows 11 25H2 the kernel reloads
+     * x18 with the TEB when a preempted enclave thread resumes (FINDINGS.md, 2026-10-15), which is
+     * why every packed object must be built with -ffixed-x18. Either outcome passes. */
+    uint64_t teb = g_env->read_x18();
+    out("[selftest] step 8: x18 held 0x%llx for %llu ms of spinning: %s (seen 0x%llx)\n",
+        (unsigned long long)magic, (unsigned long long)((t1 - t0) / 1000000),
+        seen == magic ? "preserved" : seen == teb ? "reset to the TEB" : "CHANGED to another value",
+        (unsigned long long)seen);
+    return 1;
+}
+
 int64_t pal_vbs_selftest(const pal_vbs_env_t* env, uint64_t* run, uint64_t* passed) {
     g_env = env;
     int (*steps[])(void) = {
         step_console, step_memory, step_time, step_random, step_abi_x18, step_seh, step_packed,
+        step_x18_preempt,
     };
     uint64_t n = sizeof(steps) / sizeof(steps[0]);
     *run = 0;

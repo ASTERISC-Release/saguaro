@@ -27,7 +27,7 @@ if exist pal_vbs_packed.obj set PACKED_OBJS=pal_vbs_packed.obj pal_vbs_packed_bl
 echo === link (enclave DLL)
 link /nologo /DLL /DEBUG /NODEFAULTLIB /INTEGRITYCHECK /ENCLAVE /GUARD:MIXED ^
     /DEF:"%DEF%" /OUT:pal_vbs_enclave.dll ^
-    pal_vbs_enclave.obj pal_vbs_selftest.obj pal_vbs_boundary.obj %PACKED_OBJS% %ENCLAVE_LIBS% || exit /b 3
+    pal_vbs_enclave.obj pal_vbs_boot.obj pal_vbs_selftest.obj pal_vbs_boundary.obj %PACKED_OBJS% %ENCLAVE_LIBS% || exit /b 3
 
 echo === image layout (keep an eye on section addresses for the future packer)
 dumpbin /headers pal_vbs_enclave.dll | findstr /c:"virtual address" /c:"name" /c:"Size of image"

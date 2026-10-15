@@ -1,0 +1,12 @@
+# Manifest of the phase-2 hello world of the VBS-enclave PAL. It is packed into the signed enclave
+# image as the packed file "manifest"; every path below names a file packed into the same image.
+
+loader.entrypoint = "file:/libsysdb.so"
+libos.entrypoint = "/hello"
+loader.argv = ["/hello"]
+loader.log_level = "warning"
+
+fs.root.uri = "file:/"
+
+# the packer rewrote every `svc #0` already; no run-time patching (it would write code)
+sys.rewrite_syscalls = false

@@ -8,13 +8,15 @@
  * counterpart to the enclave DLL and follows Microsoft's VbsEnclave sample (MIT) for the create/
  * load/initialize sequence.
  *
- * Usage: pal_vbs_host.exe [image.dll] [thread_count]
+ * Usage: pal_vbs_host.exe [image.dll] [thread_count] [selftest|boot]
+ *   selftest (default): the PAL-level self-test; boot: the packed PAL, LibOS and application.
  */
 
 #include <windows.h>
 #include <enclaveapi.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "pal_vbs_abi.h"
 
@@ -107,6 +109,8 @@ int main(int argc, char** argv) {
     g_shared.enclave_size = size;
     g_shared.ocall        = (void*)pal_vbs_ocall;
     g_shared.result       = -1;
+    g_shared.mode = (argc > 3 && !strcmp(argv[3], "boot")) ? PAL_VBS_MODE_BOOT
+                                                            : PAL_VBS_MODE_SELFTEST;
 
     PENCLAVE_ROUTINE pal_main = (PENCLAVE_ROUTINE)GetProcAddress((HMODULE)enclave, "E_PalMain");
     if (!pal_main) { fail("GetProcAddress(E_PalMain)"); return 6; }
@@ -120,10 +124,14 @@ int main(int argc, char** argv) {
     if (!ok) { fail("CallEnclave(E_PalMain)"); }
 
     double us = (double)(t1.QuadPart - t0.QuadPart) * 1e6 / (double)f.QuadPart;
-    printf("[host] E_PalMain returned ok=%d ret=%p result=%lld (%llu/%llu self-tests passed) in %.1f us\n",
-           ok, out, (long long)g_shared.result,
-           (unsigned long long)g_shared.selftests_passed,
-           (unsigned long long)g_shared.selftests_run, us);
+    if (g_shared.mode == PAL_VBS_MODE_BOOT)
+        printf("[host] E_PalMain (boot) returned ok=%d result=%lld in %.1f us\n", ok,
+               (long long)g_shared.result, us);
+    else
+        printf("[host] E_PalMain returned ok=%d ret=%p result=%lld (%llu/%llu self-tests passed) "
+               "in %.1f us\n", ok, out, (long long)g_shared.result,
+               (unsigned long long)g_shared.selftests_passed,
+               (unsigned long long)g_shared.selftests_run, us);
 
     TerminateEnclave(enclave, TRUE);
     DeleteEnclave(enclave);
