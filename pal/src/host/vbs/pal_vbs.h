@@ -56,7 +56,10 @@ typedef struct pal_vbs_tcb {
     void* stack;             /* PAL stack of a thread created by _PalThreadCreate */
     int (*callback)(void*);
     void* param;
+    void* alt_stack;         /* where faults are handled (VBS_ALT_STACK_SIZE bytes) */
 } PAL_VBS_TCB;
+
+#define VBS_ALT_STACK_SIZE (64 * 1024)
 
 /* any stream became ready (pipes): waiters of _PalStreamsWaitEvents and blocking reads wait on it */
 extern uint32_t g_vbs_stream_gen;

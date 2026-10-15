@@ -178,7 +178,8 @@ noreturn void pal_vbs_start(const struct pal_vbs_services* svc) {
     /* The Windows stack of the enclave thread is small (its bounds are logged by W at boot); the
      * PAL and the LibOS's initialisation run on a PAL stack in the pool instead. */
     void* stack = malloc(VBS_FIRST_STACK_SIZE);
-    if (!stack)
+    g_first_tcb.alt_stack = malloc(VBS_ALT_STACK_SIZE);
+    if (!stack || !g_first_tcb.alt_stack)
         INIT_FAIL("Out of memory");
     pal_vbs_run_on_stack(call_pal_main, first_thread, (char*)stack + VBS_FIRST_STACK_SIZE);
 }

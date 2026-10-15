@@ -53,10 +53,12 @@ int _PalThreadCreate(PAL_HANDLE* handle, int (*callback)(void*), void* param) {
     PAL_HANDLE hdl = calloc(1, HANDLE_SIZE(thread));
     PAL_VBS_TCB* tcb = calloc(1, sizeof(*tcb));
     void* stack = malloc(VBS_THREAD_STACK_SIZE);
-    if (!hdl || !tcb || !stack) {
+    void* alt_stack = malloc(VBS_ALT_STACK_SIZE);
+    if (!hdl || !tcb || !stack || !alt_stack) {
         free(hdl);
         free(tcb);
         free(stack);
+        free(alt_stack);
         __atomic_sub_fetch(&g_live_threads, 1, __ATOMIC_ACQ_REL);
         return -PAL_ERROR_NOMEM;
     }
@@ -66,6 +68,7 @@ int _PalThreadCreate(PAL_HANDLE* handle, int (*callback)(void*), void* param) {
     tcb->common.self = &tcb->common;
     tcb->handle = hdl;
     tcb->stack = stack;
+    tcb->alt_stack = alt_stack;
     tcb->callback = callback;
     tcb->param = param;
 

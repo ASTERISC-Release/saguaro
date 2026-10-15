@@ -100,7 +100,9 @@ static void* CALLBACK pal_vbs_ocall(void* param) {
             fflush(stdout);
             fprintf(stderr, "[host] enclave thread ended the process, code=%lld (threads started "
                     "%ld)\n", (long long)a->a0, g_threads_started);
-            ExitProcess((UINT)a->a0);
+            /* TerminateProcess, not ExitProcess: other threads are still inside the enclave, and an
+             * orderly process exit faults on them (exit code 0xC0000005 instead of this one) */
+            TerminateProcess(GetCurrentProcess(), (UINT)a->a0);
             break;
         case PAL_VBS_OCALL_GET_TIME_NS:
             a->retval = host_time_ns();
@@ -210,7 +212,8 @@ int main(int argc, char** argv) {
         fprintf(stderr, "[host] enclave threads started: %ld, failed to start: %ld\n",
                 g_threads_started, g_threads_failed);
         fflush(stdout);
-        ExitProcess((UINT)g_shared.result);
+        fflush(stderr);
+        TerminateProcess(GetCurrentProcess(), (UINT)g_shared.result);
     }
     TerminateEnclave(enclave, TRUE);
     DeleteEnclave(enclave);

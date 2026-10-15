@@ -56,7 +56,49 @@ static void context_to_fault(const PAL_CONTEXT* ctx, struct pal_vbs_fault* f) {
     }
 }
 
-/* called by W (pal_vbs_boot.c) on the faulting thread; 0 = resume with the (changed) registers */
+/* Everything the trampoline needs, placed on the thread's alternate stack. */
+struct vbs_fault_frame {
+    struct pal_vbs_fault f;
+    PAL_CONTEXT ctx;
+    PAL_XREGS_STATE xs __attribute__((aligned(PAL_XSTATE_ALIGN)));
+};
+
+/* resumes `ctx` exactly: brk #PAL_BRK_RESTORE_CONTEXT with x0 = ctx, served by W's handler and
+ * pal_vbs_exception() below (the protocol the LibOS uses too) */
+static noreturn void restore_context(PAL_CONTEXT* ctx) {
+    register PAL_CONTEXT* x0 __asm__("x0") = ctx;
+    __asm__ volatile("brk %1" : : "r"(x0), "i"(PAL_BRK_RESTORE_CONTEXT) : "memory");
+    __builtin_unreachable();
+}
+
+/*
+ * Second step of a fault: runs on the thread's alternate stack in normal execution (no exception
+ * dispatch in progress), calls the LibOS's handler, which may write a signal frame on the
+ * application's stack, then resumes the resulting context.
+ */
+noreturn void pal_vbs_fault_trampoline(struct vbs_fault_frame* fr);
+noreturn void pal_vbs_fault_trampoline(struct vbs_fault_frame* fr) {
+    enum pal_event event = fr->f.kind == PAL_VBS_FAULT_MEMORY ? PAL_EVENT_MEMFAULT
+                           : fr->f.kind == PAL_VBS_FAULT_ILLEGAL ? PAL_EVENT_ILLEGAL
+                           : PAL_EVENT_ARITHMETIC_ERROR;
+    fault_to_context(&fr->f, &fr->ctx, &fr->xs);
+    pal_event_handler_t upcall = _PalGetExceptionHandler(event);
+    upcall(/*is_in_pal=*/false, fr->f.addr, &fr->ctx);
+    fr->ctx.pstate &= ~PAL_PSTATE_EXACT_CONTEXT;
+    restore_context(&fr->ctx);
+}
+
+/*
+ * Called by W (pal_vbs_boot.c) from its exception handler, on the faulting stack about 3 KiB below
+ * the faulting SP, with the registers in `f`; returns 0 to resume with the (changed) registers in
+ * `f`, negative if the fault is not handled (the process ends).
+ *
+ * The LibOS cannot be called from here: delivering a signal writes the application's signal frame
+ * just below the faulting SP -- where the dispatcher's records and this very frame are. So the
+ * fault is copied to the thread's alternate stack and the thread is redirected to
+ * pal_vbs_fault_trampoline() there; the trampoline resumes the final context with the
+ * restore-context breakpoint, which comes back here.
+ */
 int64_t pal_vbs_exception(struct pal_vbs_fault* f);
 int64_t pal_vbs_exception(struct pal_vbs_fault* f) {
     if (f->kind == PAL_VBS_FAULT_ILLEGAL) {
@@ -80,23 +122,30 @@ int64_t pal_vbs_exception(struct pal_vbs_fault* f) {
         default: return -1;
     }
 
-    uint64_t tpidr; /* the thread pointer (rewritten by pack.py to the TEB) */
-    __asm__ volatile("mrs %0, tpidr_el0" : "=r"(tpidr));
-    log_debug("vbs: %s at pc %#lx addr %#lx: x16 %#lx lr %#lx sp %#lx x0 %#lx tpidr %#lx",
-              pal_event_name(event), f->pc, f->addr, f->regs[16], f->regs[30], f->sp, f->regs[0],
-              tpidr);
+    log_debug("vbs: %s at pc %#lx addr %#lx: x16 %#lx lr %#lx sp %#lx x0 %#lx", pal_event_name(event),
+              f->pc, f->addr, f->regs[16], f->regs[30], f->sp, f->regs[0]);
+
     bool is_in_pal = f->pc >= (uintptr_t)__text_start && f->pc < (uintptr_t)__text_end;
-    pal_event_handler_t upcall = _PalGetExceptionHandler(event);
-    if (!upcall || is_in_pal) {
+    PAL_VBS_TCB* tcb = (PAL_VBS_TCB*)pal_get_tcb();
+    if (!_PalGetExceptionHandler(event) || is_in_pal || !tcb || !tcb->alt_stack) {
         log_error("vbs: unhandled %s (Windows exception %#lx) at pc %#lx, address %#lx%s",
                   pal_event_name(event), f->code, f->pc, f->addr, is_in_pal ? " in the PAL" : "");
         return -1;
     }
 
-    PAL_CONTEXT ctx;
-    PAL_XREGS_STATE xs __attribute__((aligned(PAL_XSTATE_ALIGN)));
-    fault_to_context(f, &ctx, &xs);
-    upcall(is_in_pal, f->addr, &ctx);
-    context_to_fault(&ctx, f);
+    /* place the fault on the alternate stack (below the current use if the thread faulted while
+     * already there, e.g. in a signal handler of the LibOS) */
+    uintptr_t lo = (uintptr_t)tcb->alt_stack, hi = lo + VBS_ALT_STACK_SIZE;
+    uintptr_t top = (f->sp > lo && f->sp <= hi) ? f->sp - 4096 : hi;
+    if (top < lo + sizeof(struct vbs_fault_frame) + 16 * 1024) {
+        log_error("vbs: nested faults exhausted the alternate stack");
+        return -1;
+    }
+    struct vbs_fault_frame* fr =
+        (struct vbs_fault_frame*)ALIGN_DOWN(top - sizeof(*fr), PAL_XSTATE_ALIGN);
+    memcpy(&fr->f, f, sizeof(*f));
+    f->regs[0] = (uintptr_t)fr;
+    f->sp = ALIGN_DOWN((uintptr_t)fr - 64, 16);
+    f->pc = (uintptr_t)&pal_vbs_fault_trampoline;
     return 0;
 }

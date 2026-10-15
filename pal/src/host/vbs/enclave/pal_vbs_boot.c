@@ -84,6 +84,12 @@ static int64_t svc_protect(uint64_t addr, uint64_t size, uint64_t prot) {
     DWORD p = (prot & PAL_VBS_PROT_WRITE) ? PAGE_READWRITE
               : (prot & PAL_VBS_PROT_READ) ? PAGE_READONLY : PAGE_NOACCESS;
     DWORD old = 0;
+    if (p == PAGE_READONLY) {
+        /* A write to a page that went straight from read-write to read-only hangs the thread
+         * instead of raising an access violation (FINDINGS.md, signals test); through no-access
+         * first, the same write faults normally. */
+        (void)VirtualProtect((void*)(uintptr_t)addr, (SIZE_T)size, PAGE_NOACCESS, &old);
+    }
     if (!VirtualProtect((void*)(uintptr_t)addr, (SIZE_T)size, p, &old))
         return -(int64_t)GetLastError();
     return 0;
@@ -220,7 +226,8 @@ EXCEPTION_DISPOSITION pal_vbs_packed_exception_handler(PEXCEPTION_RECORD rec, vo
         return ExceptionContinueSearch; /* the PAL did not handle it: the process ends */
 
     for (int i = 0; i < 29; i++)
-        ctx->X[i] = f.regs[i];
+        if (i != 18) /* x18 stays this thread's TEB, whatever context the PAL resumes */
+            ctx->X[i] = f.regs[i];
     ctx->Fp = f.regs[29];
     ctx->Lr = f.regs[30];
     ctx->Sp = f.sp;
