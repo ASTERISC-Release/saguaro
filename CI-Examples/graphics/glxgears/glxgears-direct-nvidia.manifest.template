@@ -1,0 +1,52 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (C) 2026 The ASTERISC Research Lab
+
+# glxgears under gramine-direct with the NVIDIA proprietary driver (AArch64 phase 0 experiment,
+# Documentation/devel/graphics-aarch64/). Insecure by design, like glxgears-direct.manifest.template.
+# It does not run yet: see FINDINGS.md there for the failures. Generate with
+#   gramine-manifest -Dlog_level=error -Ddisplay=1 -Darch=$(uname -m) -Dproc_nvidia=1 -Dpollfix=0 \
+#       glxgears-direct-nvidia.manifest.template glxgears-direct-nvidia.manifest
+# (pollfix: path of the diagnostic poll shim of TESTING.md there, or 0).
+
+libos.entrypoint = "/glxgears"
+
+loader.log_level = "{{ log_level }}"
+loader.insecure__use_host_env = true
+loader.insecure__use_cmdline_argv = true
+
+loader.env.LD_LIBRARY_PATH = "/lib:/usr/lib:/usr/lib/{{ arch }}-linux-gnu:/lib/{{ arch }}-linux-gnu"
+loader.env.DISPLAY = ":{{ display }}"
+loader.env.__GL_SYNC_TO_VBLANK = "0"
+loader.env.vblank_mode = "0"
+loader.env.__GL_SHADER_DISK_CACHE = "0"
+{% if pollfix|string != "0" %}
+# diagnostic shim (phase 0): zero pollfd.revents before poll()/ppoll()
+loader.env.LD_PRELOAD = "/pollfix.so"
+{% endif %}
+
+sys.stack.size = "32M"
+sys.enable_sigterm_injection = true
+
+sys.insecure__allow_raw_device_ioctl = true
+sys.insecure__host_unix_sockets = ["/tmp/.X11-unix/X{{ display }}"]
+
+fs.mounts = [
+  { path = "/glxgears", uri = "file:glxgears" },
+{% if pollfix|string != "0" %}
+  { path = "/pollfix.so", uri = "file:{{ pollfix }}" },
+{% endif %}
+  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "/usr", type = "chroot", uri = "file:/usr" },
+  { path = "/etc/ld.so.cache", uri = "file:/etc/ld.so.cache" },
+  { path = "/dev/dri", type = "chroot", uri = "file:/dev/dri" },
+  { path = "/dev/nvidiactl", uri = "dev:/dev/nvidiactl" },
+  { path = "/dev/nvidia0", uri = "dev:/dev/nvidia0" },
+  { path = "/dev/nvidia-modeset", uri = "dev:/dev/nvidia-modeset" },
+  { path = "/dev/nvidia-uvm", uri = "dev:/dev/nvidia-uvm" },
+  { path = "/dev/nvidia-uvm-tools", uri = "dev:/dev/nvidia-uvm-tools" },
+  { path = "/dev/shm", type = "chroot", uri = "file:/dev/shm" },
+  { path = "/sys", type = "chroot", uri = "file:/sys", host_symlinks = true },
+{% if proc_nvidia|string == "1" %}
+  { path = "/proc/driver/nvidia", type = "chroot", uri = "file:/proc/driver/nvidia" },
+{% endif %}
+]
