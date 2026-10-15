@@ -11,7 +11,7 @@
 #include "pal_common.h"
 #include "pal_error.h"
 #include "pal_internal.h"
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
 #include "kernel_memory.h"
 #endif
 #include "spinlock.h"

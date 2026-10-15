@@ -97,9 +97,9 @@ static void ring_wake_all(struct pal_pipe_ring* ring) {
 }
 
 /* Handles ride through a pipe to another process only where handle objects are shared between
- * processes: the x86_64 VM PAL (share_refs, vm_handle_release_share in pal_process.c; the same
- * guard as pal/src/pal_object.c). The TDX PAL and the AArch64 VM PAL have no processes. */
-#if defined(PAL_HOST_VM) && defined(__x86_64__)
+ * processes: the VM PAL (share_refs, vm_handle_release_share in pal_process.c; the same guard as
+ * pal/src/pal_object.c). The TDX PAL has no processes. */
+#if defined(PAL_HOST_VM) && (defined(__x86_64__) || defined(__aarch64__))
 #define PIPE_HANDLES_SHARED 1
 #endif
 

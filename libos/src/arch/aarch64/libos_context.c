@@ -189,18 +189,27 @@ void prepare_sigframe(PAL_CONTEXT* context, siginfo_t* siginfo, void* handler, v
      * return trampolines. A synchronous-fault frame (memfault upcall) instead carries the real EL0
      * pc and is resumed by the PAL itself, so there the handler address goes straight into
      * `context->pc` as on any other PAL. */
-    const bool is_vm = (!strcmp(g_pal_public_state->host_type, "VM") ||
-                        !strcmp(g_pal_public_state->host_type, "TDX")) &&
+    const bool is_vm_host = !strcmp(g_pal_public_state->host_type, "VM") ||
+                            !strcmp(g_pal_public_state->host_type, "TDX");
+    /* restart_syscall() asked to re-run the interrupted syscall (x8 and x0 already hold its
+     * number and first argument): a syscall return too, whose resume address is in the PAL TCB */
+    const bool restart = is_vm_host && context->pc == (uint64_t)&libos_syscall_entry;
+    const bool is_vm = is_vm_host &&
                        (context->pc == g_pal_public_state->vm_syscall_return_trampoline ||
-                        context->pc == g_pal_public_state->vm_signal_return_trampoline);
+                        context->pc == g_pal_public_state->vm_signal_return_trampoline ||
+                        restart);
     void* user_rip_ptr = NULL;
     if (is_vm) {
         /* Under the VM PAL `context->pc` is the PAL's return trampoline, not the application's
          * resume address (that lives in the PAL TCB, see libos_syscall_rt_sigreturn()): record the
-         * real resume address in the frame so rt_sigreturn goes back to the interrupted code. */
+         * real resume address in the frame so rt_sigreturn goes back to the interrupted code.
+         * For a restart that is the app's 4-byte `svc` itself, as Linux does (x86_64: the 2-byte
+         * `syscall`): the handler runs first, then the syscall again. */
         uint64_t user_rip;
         user_rip_ptr = (char*)pal_get_tcb() + g_pal_public_state->vm_user_rip_offset;
         memcpy(&user_rip, user_rip_ptr, sizeof(user_rip));
+        if (restart)
+            user_rip -= 4;
         sigframe->uc.uc_mcontext.pc = user_rip;
     }
 

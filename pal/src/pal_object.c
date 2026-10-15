@@ -10,7 +10,7 @@
 #include "pal_internal.h"
 
 void _PalObjectDestroy(PAL_HANDLE handle) {
-#if defined(PAL_HOST_VM) && defined(__x86_64__)
+#if defined(PAL_HOST_VM) && (defined(__x86_64__) || defined(__aarch64__))
     if (vm_handle_release_share(handle))
         return;
 #endif
@@ -27,7 +27,7 @@ void _PalObjectDestroy(PAL_HANDLE handle) {
 
 void PalObjectDestroy(PAL_HANDLE handle) {
     assert(handle);
-#if defined(PAL_HOST_VM) && defined(__x86_64__)
+#if defined(PAL_HOST_VM) && (defined(__x86_64__) || defined(__aarch64__))
     vm_untrack_handle(handle);
 #endif
     _PalObjectDestroy(handle);

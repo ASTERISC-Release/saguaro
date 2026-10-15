@@ -25,7 +25,7 @@
 #define DIRBUF_SIZE 1024
 #define DT_DIR      4
 
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
 static struct memory_address_space* current_address_space(void) {
     struct pal_tcb_vm* tcb = (struct pal_tcb_vm*)pal_get_tcb();
     return tcb ? tcb->kernel_thread.address_space : NULL;
@@ -718,7 +718,7 @@ int pal_common_file_open(struct pal_handle** handle, const char* type, const cha
         hdl->file.size = tf->size;
     }
 
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
     shared_file_note_open(hdl->file.nodeid);
 #endif
     *handle = hdl;
@@ -767,7 +767,7 @@ int64_t pal_common_file_read(struct pal_handle* handle, uint64_t offset, uint64_
             total_read_size += read_size;
         }
 
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
         shared_file_sync_buffer(handle, offset, total_read_size, buffer, /*to_cache=*/false);
 #endif
         return (int64_t)total_read_size;
@@ -816,7 +816,7 @@ int64_t pal_common_file_write(struct pal_handle* handle, uint64_t offset, uint64
         total_written_size += written_size;
     }
 
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
     shared_file_sync_buffer(handle, offset, total_written_size, (void*)buffer, /*to_cache=*/true);
 #endif
     return (int64_t)total_written_size;
@@ -825,7 +825,7 @@ int64_t pal_common_file_write(struct pal_handle* handle, uint64_t offset, uint64
 void pal_common_file_destroy(struct pal_handle* handle) {
     assert(handle->hdr.type == PAL_TYPE_FILE);
 
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
     shared_file_note_close(handle);
 #endif
     int ret = virtio_fs_fuse_release(handle->file.nodeid, handle->file.fh);
@@ -844,7 +844,7 @@ int pal_common_file_map(struct pal_handle* handle, void* addr, pal_prot_flags_t 
 
     assert(IS_ALLOC_ALIGNED(offset) && IS_ALLOC_ALIGNED(size));
 
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
     if (!(prot & PAL_PROT_WRITECOPY) && (prot & PAL_PROT_WRITE) && memory_frame_pool_active()
             && current_address_space() && !handle->file.chunk_hashes)
         return shared_file_map(handle, current_address_space(), addr, prot, offset, size);
@@ -860,7 +860,7 @@ int pal_common_file_map(struct pal_handle* handle, void* addr, pal_prot_flags_t 
     bool read  = !!(prot & PAL_PROT_READ);
     bool write = !!(prot & (PAL_PROT_WRITE | PAL_PROT_WRITECOPY));
     bool execute = !!(prot & PAL_PROT_EXEC);
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
     struct memory_address_space* address_space = current_address_space();
     ret = address_space
             ? memory_address_space_alloc(address_space, addr, size, read, /*write=*/true, execute)
@@ -907,7 +907,7 @@ int pal_common_file_map(struct pal_handle* handle, void* addr, pal_prot_flags_t 
 
     if (!write) {
         /* restore read-only permission */
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
         ret = address_space
                 ? memory_address_space_protect(address_space, addr, size, read,
                                                /*write=*/false, execute)
@@ -924,7 +924,7 @@ int pal_common_file_map(struct pal_handle* handle, void* addr, pal_prot_flags_t 
     ret = 0;
 out:
     if (ret < 0)
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
         if (address_space)
             (void)memory_address_space_free(address_space, addr, size);
         else

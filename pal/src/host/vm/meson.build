@@ -60,12 +60,15 @@ if host_machine.cpu_family() == 'x86_64'
     )
 else
     # aarch64: boot sequence (DTB entry), ELF entry trampoline (no BIOS stage), and the
-    # port-io/shared-memory callbacks as plain MMIO; single-process pal_process.c (the
-    # multiprocess support is x86_64 only).
+    # port-io/shared-memory callbacks as plain MMIO. The multiprocess support (processes,
+    # shared futexes, the guest /dev/shm) is the shared code, over the aarch64 address spaces
+    # of vm-common/arch/aarch64/kernel_memory.c.
     pal_vm_sources += files(
+        'pal_futex.c',
+        'pal_shm.c',
+        'pal_process.c',
         'arch/aarch64/pal_hwcap.c',
         'arch/aarch64/pal_main.c',
-        'arch/aarch64/pal_process.c',
         'arch/aarch64/vm_bootloader.S',
         'arch/aarch64/vm_callbacks.c',
     )

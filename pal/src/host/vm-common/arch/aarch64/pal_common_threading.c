@@ -11,6 +11,7 @@
 #include "pal_error.h"
 #include "pal_internal.h"
 
+#include "kernel_memory.h"
 #include "kernel_multicore.h"
 #include "kernel_sched.h"
 #include "kernel_thread.h"
@@ -41,6 +42,26 @@ static int assign_new_tid(void) {
 
 int pal_common_thread_create(struct pal_handle** handle, int (*callback)(void*),
                              const void* param) {
+    struct pal_tcb_vm* curr_tcb = (struct pal_tcb_vm*)pal_get_tcb();
+    struct memory_address_space* address_space = curr_tcb
+            ? curr_tcb->kernel_thread.address_space
+            : memory_address_space_boot();
+    if (!address_space)
+        address_space = memory_address_space_boot();
+    return pal_common_thread_create_with_address_space(handle, callback, param,
+                                                       address_space);
+}
+
+/* (x86 vm-common/pal_common_threading.c) A thread created in another process's root (the first
+ * thread of a child process) gets its handle in a pool frame: the handle must stay reachable from
+ * every root, and the creating process may exit first. */
+int pal_common_thread_create_with_address_space(struct pal_handle** handle,
+                                               int (*callback)(void*), const void* param,
+                                               struct memory_address_space* address_space) {
+    if (!address_space || !address_space->root || !address_space->root_phys ||
+            !IS_ALIGNED_POW2(address_space->root_phys, PAGE_SIZE))
+        return -PAL_ERROR_INVAL;
+
     /*
      * Stack layout for the new thread looks like this:
      *
@@ -53,21 +74,62 @@ int pal_common_thread_create(struct pal_handle** handle, int (*callback)(void*),
      *       stack  +--> +-------------------+
      */
 
-    struct pal_handle* thread_handle = calloc(1, sizeof(*thread_handle));
-    if (!thread_handle)
-        return -PAL_ERROR_NOMEM;
+    struct pal_tcb_vm* creator_tcb = (struct pal_tcb_vm*)pal_get_tcb();
+    struct memory_address_space* current_space = creator_tcb
+            ? creator_tcb->kernel_thread.address_space
+            : NULL;
+    if (!current_space)
+        current_space = memory_address_space_boot();
+    struct pal_handle* thread_handle = NULL;
+    uintptr_t handle_frame = 0;
+    if (address_space != current_space) {
+        int ret = memory_frame_alloc(&handle_frame);
+        if (ret < 0)
+            return ret;
+        thread_handle = memory_frame_pointer(handle_frame);
+        memset(thread_handle, 0, PAGE_SIZE);
+        thread_handle->private_frame = handle_frame;
+    } else {
+        thread_handle = calloc(1, sizeof(*thread_handle));
+        if (!thread_handle)
+            return -PAL_ERROR_NOMEM;
+    }
 
     void* stack;
     void* fpregs;
     int ret = thread_get_stack_and_fpregs(&stack, &fpregs);
     if (ret < 0) {
-        free(thread_handle);
+        if (handle_frame)
+            memory_frame_free(handle_frame);
+        else
+            free(thread_handle);
         return ret;
+    }
+
+    /* Every root must be able to traverse the shared scheduler list, including the TCB node for a
+     * thread created after that root was cloned. Stacks allocated from the frame alias (every
+     * stack once the frame pool exists: the PAL heap then comes from the pool) are already mapped
+     * identically in every root. */
+    if (memory_frame_pool_active() && !memory_frame_is_alias_pointer(stack)) {
+        size_t stack_size = THREAD_STACK_SIZE + ALT_STACK_SIZE + g_xsave_size + VM_XSAVE_ALIGN;
+        uintptr_t stack_start = ALIGN_DOWN((uintptr_t)stack, PAGE_SIZE);
+        uintptr_t stack_end = ALIGN_UP((uintptr_t)stack + stack_size, PAGE_SIZE);
+        ret = sched_thread_share_stack(current_space, address_space, stack_start,
+                                       stack_end - stack_start);
+        if (ret < 0) {
+            thread_release_stack(stack);
+            if (handle_frame)
+                memory_frame_free(handle_frame);
+            else
+                free(thread_handle);
+            return ret;
+        }
     }
 
     /* init TCB in the highest part of the allocated stack region */
     struct pal_tcb_vm* tcb = stack + THREAD_STACK_SIZE + ALT_STACK_SIZE - sizeof(*tcb);
     thread_setup(&tcb->kernel_thread, fpregs, stack, callback, param);
+    tcb->kernel_thread.address_space = address_space;
 
     thread_handle->hdr.type = PAL_TYPE_THREAD;
     thread_handle->thread.tid = assign_new_tid();
@@ -80,7 +142,7 @@ int pal_common_thread_create(struct pal_handle** handle, int (*callback)(void*),
     /* thread_handle may be created via libos_syscall_clone(); in this case the newly created
      * thread_handle jumps to the `eret`-based return-to-user trampoline (x86 `sysret_asm`), which
      * expects user_rip to point to actual EL0 rip */
-    struct pal_tcb_vm* curr_tcb = (struct pal_tcb_vm*)pal_get_tcb();
+    struct pal_tcb_vm* curr_tcb = creator_tcb;
     if (curr_tcb) {
         tcb->kernel_thread.context.user_rip = curr_tcb->kernel_thread.context.user_rip;
 

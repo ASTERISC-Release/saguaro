@@ -16,6 +16,7 @@
  * because from the PAL API level up the two architectures must behave identically.
  */
 
+#include <stdatomic.h>
 #include <stdint.h>
 
 #include "api.h"
@@ -49,6 +50,304 @@
 uint64_t g_tsc_mhz;
 
 static struct pal_handle* g_first_thread_handle = NULL;
+/* the host environment, also given to every child process (vm_pal_process_start()) */
+static const char* g_vm_envp[MAX_ENVS_CNT];
+
+/*
+ * Multiprocess support (`sys.experimental__multiprocess`, Documentation/devel/vm-multiproc-aarch64/):
+ * the frame pool, the first process's own root and the boot self-checks, as in the x86_64
+ * pal_main.c. The checks prove the address-space invariants on every boot with the key: two roots
+ * map one address to different frames, private PAL process data, a root cloned from a process
+ * root survives its parent, a scheduled thread runs in its own root, and every frame returns to
+ * the pool.
+ */
+static struct memory_address_space g_initial_process_address_space;
+extern char __process_data_start[];
+extern char __process_data_end[];
+static volatile uint64_t g_process_data_selfcheck __attribute__((section(".process_data")));
+static volatile uint64_t g_address_space_selfcheck_page[PAGE_SIZE / sizeof(uint64_t)]
+        __attribute__((aligned(PAGE_SIZE), section(".process_data")));
+
+struct address_space_thread_check {
+    volatile uint64_t* addr;
+    uint64_t observed;
+    atomic_bool done;
+};
+
+static int address_space_thread_check(void* arg) {
+    struct address_space_thread_check* check = arg;
+    check->observed = *check->addr;
+    *check->addr = 0x7766554433221100UL;
+    atomic_store_explicit(&check->done, true, memory_order_release);
+    return 0;
+}
+
+static int run_thread_in_space(struct memory_address_space* space,
+                               struct address_space_thread_check* check) {
+    atomic_init(&check->done, false);
+    PAL_HANDLE thread;
+    int ret = pal_common_thread_create_with_address_space(&thread, address_space_thread_check,
+                                                          check, space);
+    if (ret < 0)
+        return ret;
+    while (!atomic_load_explicit(&check->done, memory_order_acquire))
+        _PalThreadYieldExecution();
+    while (!sched_thread_is_stopped(thread->thread.kernel_thread))
+        _PalThreadYieldExecution();
+    PalObjectDestroy(thread);
+    return 0;
+}
+
+#define SELFCHECK(cond, ...)                 \
+    do {                                     \
+        if (!(cond)) {                       \
+            log_error(__VA_ARGS__);          \
+            ret = ret < 0 ? ret : -PAL_ERROR_DENIED; \
+            goto out;                        \
+        }                                    \
+    } while (0)
+
+/* The checks of the x86_64 boot (pal_main.c, init_multiprocess_frame_pool_sized()), plus the
+ * TTBR1 alias and a measurement of the address-space switch. */
+static int address_space_selfcheck(void) {
+    int ret = vm_process_stream_selfcheck();
+    if (ret < 0) {
+        log_error("Process stream self-check failed: %s", pal_strerror(ret));
+        return ret;
+    }
+    log_always("Process stream I/O, endpoint transfer, shutdown, and frame-reclaim self-check "
+               "passed");
+
+    /* PAL thread stacks are recycled instead of freed: warm one before the reclaim baseline */
+    struct address_space_thread_check warmup = {.addr = g_address_space_selfcheck_page};
+    ret = run_thread_in_space(memory_address_space_boot(), &warmup);
+    if (ret < 0)
+        return ret;
+    bool warmup_ok = warmup.observed == 0 && *g_address_space_selfcheck_page == 0x7766554433221100UL;
+    *g_address_space_selfcheck_page = 0;
+    if (!warmup_ok)
+        return -PAL_ERROR_DENIED;
+
+    ret = vm_process_runtime_copy_selfcheck();
+    if (ret < 0) {
+        log_error("PAL root state self-check failed: %s", pal_strerror(ret));
+        return ret;
+    }
+
+    size_t initial_frames = memory_frame_allocated_count();
+    uintptr_t frame1 = 0, frame2 = 0, reused = 0;
+    bool frame2_owned = false, reused_owned = false;
+    struct memory_address_space child = {0};
+    struct memory_address_space grandchild = {0};
+    bool child_live = false, grandchild_live = false;
+    uintptr_t test_addr = (uintptr_t)g_address_space_selfcheck_page;
+    volatile uint64_t* parent_value = (volatile uint64_t*)test_addr;
+    uint64_t original_value = *parent_value;
+    uint64_t original_pdata = g_process_data_selfcheck;
+    const uint64_t parent_marker = 0x1122334455667788UL;
+    const uint64_t child_marker = 0x8877665544332211UL;
+    const uint64_t grandchild_marker = 0x1029384756abcdefUL;
+
+    /* frames: distinct, aligned, double free rejected, reuse zeroed; the TTBR1 alias reaches the
+     * same memory as the identity address (which the boot root maps EL1-only) */
+    ret = memory_frame_alloc(&frame1);
+    SELFCHECK(ret == 0, "frame-pool self-check allocation 1 failed: %s", pal_strerror(ret));
+    ret = memory_frame_alloc(&frame2);
+    SELFCHECK(ret == 0, "frame-pool self-check allocation 2 failed: %s", pal_strerror(ret));
+    SELFCHECK(frame1 != frame2 && IS_ALIGNED(frame1, PAGE_SIZE) && IS_ALIGNED(frame2, PAGE_SIZE),
+              "frame-pool self-check: bad frames %lx %lx", frame1, frame2);
+    SELFCHECK(memory_frame_pointer(frame1) != (void*)frame1 &&
+              memory_frame_is_alias_pointer(memory_frame_pointer(frame1)),
+              "frame alias self-check: frame %lx has no TTBR1 alias", frame1);
+    *(volatile uint64_t*)memory_frame_pointer(frame1) = 0xfeedfacecafebeefUL;
+    SELFCHECK(*(volatile uint64_t*)frame1 == 0xfeedfacecafebeefUL,
+              "frame alias self-check: alias and identity differ at %lx", frame1);
+    ret = memory_frame_free(frame1);
+    SELFCHECK(ret == 0, "frame-pool self-check free failed: %s", pal_strerror(ret));
+    ret = memory_frame_free(frame1);
+    SELFCHECK(ret == -PAL_ERROR_INVAL, "frame-pool self-check double-free returned %s",
+              pal_strerror(ret));
+    ret = memory_frame_alloc(&reused);
+    SELFCHECK(ret == 0 && reused == frame1 && *(uint64_t*)memory_frame_pointer(reused) == 0,
+              "frame-pool self-check: frame %lx not reused zeroed (%lx)", frame1, reused);
+    frame1 = 0;
+    log_always("Frame-pool allocate, double-free rejection, frame-reuse and TTBR1 alias "
+               "self-check passed");
+
+    *parent_value = parent_marker;
+    g_process_data_selfcheck = parent_marker;
+
+    /* a lazy copy of the boot root with private process data and its own frame at test_addr */
+    ret = memory_address_space_clone(g_pml4_table_base, &child);
+    child_live = ret == 0;
+    if (ret == 0)
+        ret = memory_address_space_copy_private_range(
+                memory_address_space_boot(), &child, (uintptr_t)__process_data_start,
+                (uintptr_t)__process_data_end - (uintptr_t)__process_data_start);
+    if (ret == 0) {
+        ret = memory_address_space_map_owned(&child, test_addr, reused, /*write=*/true,
+                                             /*execute=*/false, /*usermode=*/true);
+        reused_owned = ret == 0;
+    }
+    SELFCHECK(ret == 0, "Address-space child clone/map self-check failed: %s", pal_strerror(ret));
+
+    ret = memory_address_space_switch(&child);
+    SELFCHECK(ret == 0, "Address-space child switch self-check failed: %s", pal_strerror(ret));
+    uint64_t child_initial = *(volatile uint64_t*)test_addr;
+    *(volatile uint64_t*)test_addr = child_marker;
+    bool child_pdata_initial = g_process_data_selfcheck == parent_marker;
+    g_process_data_selfcheck = child_marker;
+
+    /* a full copy of the child (as a fork) with its own frame at test_addr */
+    ret = memory_address_space_clone_from(&child, &grandchild);
+    grandchild_live = ret == 0;
+    if (ret == 0)
+        ret = memory_address_space_copy_private_range(
+                &child, &grandchild, (uintptr_t)__process_data_start,
+                (uintptr_t)__process_data_end - (uintptr_t)__process_data_start);
+    if (ret == 0) {
+        ret = memory_address_space_map_owned(&grandchild, test_addr, frame2, /*write=*/true,
+                                             /*execute=*/false, /*usermode=*/true);
+        frame2_owned = ret == 0;
+    }
+    if (ret < 0)
+        memory_address_space_switch_root(g_pml4_table_base);
+    SELFCHECK(ret == 0, "Address-space grandchild clone/map self-check failed: %s",
+              pal_strerror(ret));
+
+    ret = memory_address_space_switch(&grandchild);
+    if (ret < 0)
+        memory_address_space_switch_root(g_pml4_table_base);
+    SELFCHECK(ret == 0, "Address-space grandchild switch self-check failed: %s",
+              pal_strerror(ret));
+    bool grandchild_isolated = *(volatile uint64_t*)test_addr == 0 &&
+                               g_process_data_selfcheck == child_marker;
+    *(volatile uint64_t*)test_addr = grandchild_marker;
+    g_process_data_selfcheck = grandchild_marker;
+
+    ret = memory_address_space_switch_root(g_pml4_table_base);
+    SELFCHECK(ret == 0, "Address-space boot switch self-check failed: %s", pal_strerror(ret));
+    bool isolated = child_initial == 0 && child_pdata_initial && grandchild_isolated &&
+                    g_process_data_selfcheck == parent_marker && *parent_value == parent_marker &&
+                    *(volatile uint64_t*)memory_frame_pointer(reused) == child_marker &&
+                    *(volatile uint64_t*)memory_frame_pointer(frame2) == grandchild_marker;
+    SELFCHECK(isolated, "Address-space isolation failed: child=%lx pdata=%d grandchild=%d "
+              "parent=%lx child-frame=%lx grandchild-frame=%lx", child_initial,
+              child_pdata_initial, grandchild_isolated, *parent_value,
+              *(volatile uint64_t*)memory_frame_pointer(reused),
+              *(volatile uint64_t*)memory_frame_pointer(frame2));
+
+    /* the cost of an address-space switch (TTBR0 write and a full local TLB invalidation; no
+     * ASIDs), measured on this vCPU: decision 4 of the plan */
+    uint64_t t0 = get_tsc();
+    for (int i = 0; i < 1000; i++) {
+        memory_address_space_switch(&child);
+        (void)*(volatile uint64_t*)test_addr;
+        memory_address_space_switch_root(g_pml4_table_base);
+        (void)*(volatile uint64_t*)test_addr;
+    }
+    uint64_t t1 = get_tsc();
+    log_always("Address-space switch: %lu ns per switch (TTBR0 + full local TLB invalidation, "
+               "2000 switches)", (unsigned long)((t1 - t0) * 1000 / g_tsc_mhz / 2000));
+
+    /* a descendant owns a full private table tree and must survive its parent's teardown */
+    memory_address_space_destroy(&child);
+    child_live = false;
+    reused_owned = false; /* released with the child */
+    reused = 0;
+    ret = memory_address_space_switch(&grandchild);
+    if (ret < 0)
+        memory_address_space_switch_root(g_pml4_table_base);
+    SELFCHECK(ret == 0, "Address-space grandchild resume self-check failed: %s",
+              pal_strerror(ret));
+    bool survived = *(volatile uint64_t*)test_addr == grandchild_marker &&
+                    g_process_data_selfcheck == grandchild_marker;
+    ret = memory_address_space_switch_root(g_pml4_table_base);
+    SELFCHECK(ret == 0 && survived, "Address-space descendant did not survive its parent");
+
+    /* a thread scheduled in the grandchild's root sees the grandchild's frame */
+    struct address_space_thread_check check = {.addr = (volatile uint64_t*)test_addr};
+    ret = run_thread_in_space(&grandchild, &check);
+    SELFCHECK(ret == 0, "Address-space scheduler-thread create self-check failed: %s",
+              pal_strerror(ret));
+    bool scheduled = check.observed == grandchild_marker && *parent_value == parent_marker &&
+                     *(volatile uint64_t*)memory_frame_pointer(frame2) == 0x7766554433221100UL;
+    SELFCHECK(scheduled, "Scheduler root check values: observed=%lx parent=%lx frame=%lx",
+              check.observed, *parent_value, *(volatile uint64_t*)memory_frame_pointer(frame2));
+
+    memory_address_space_destroy(&grandchild);
+    grandchild_live = false;
+    frame2_owned = false;
+    frame2 = 0;
+    SELFCHECK(memory_frame_allocated_count() == initial_frames,
+              "Address-space frame leak: started %zu, ended %zu", initial_frames,
+              memory_frame_allocated_count());
+    log_always("Address-space isolation, nested clone, parent teardown, frame reclaim, and "
+               "scheduler self-check passed");
+    ret = 0;
+
+out:
+    *parent_value = original_value;
+    g_process_data_selfcheck = original_pdata;
+    if (grandchild_live)
+        memory_address_space_destroy(&grandchild);
+    if (child_live)
+        memory_address_space_destroy(&child);
+    if (frame1)
+        memory_frame_free(frame1);
+    if (frame2 && !frame2_owned)
+        memory_frame_free(frame2);
+    if (reused && !reused_owned)
+        memory_frame_free(reused);
+    return ret;
+}
+
+/* The pool takes half of the largest free stretch of guest RAM (2 MB aligned, at most 4 GB): its
+ * identity addresses are reserved from application use, and on AArch64 the PAL's early
+ * allocations sit at the top of RAM, so there is no 1-GB-aligned stretch to take as on x86_64.
+ * Every process's memory (the LibOS included) and, after the switch below, the PAL heap come
+ * from the pool; the other half stays application address space. */
+static int init_multiprocess_frame_pool(void) {
+    extern struct pal_initial_mem_range g_initial_mem_ranges[];
+    const uintptr_t align = 2UL * 1024 * 1024;
+    uintptr_t lo = ALIGN_UP((uintptr_t)g_pal_public_state.memory_address_start, align);
+    uintptr_t hi = ALIGN_DOWN((uintptr_t)g_pal_public_state.memory_address_end, align);
+
+    /* the ranges are sorted from high to low addresses */
+    uintptr_t best_start = 0, best_size = 0;
+    uintptr_t gap_end = hi;
+    for (size_t i = 0; i <= g_pal_public_state.initial_mem_ranges_len; i++) {
+        uintptr_t gap_start = lo;
+        uintptr_t next_end = 0;
+        if (i < g_pal_public_state.initial_mem_ranges_len) {
+            gap_start = MAX(lo, ALIGN_UP(g_initial_mem_ranges[i].end, align));
+            next_end = ALIGN_DOWN(g_initial_mem_ranges[i].start, align);
+        }
+        if (gap_end > gap_start && gap_end - gap_start > best_size) {
+            best_start = gap_start;
+            best_size = gap_end - gap_start;
+        }
+        if (i < g_pal_public_state.initial_mem_ranges_len)
+            gap_end = MIN(gap_end, next_end);
+        if (gap_end <= lo)
+            break;
+    }
+    size_t pool_size = MIN(4UL * 1024 * 1024 * 1024, ALIGN_DOWN(best_size / 2, align));
+    if (pool_size < 64UL * 1024 * 1024)
+        return -PAL_ERROR_NOMEM;
+
+    int ret = pal_add_initial_range(best_start, pool_size, /*prot=*/0, /*is_user_reserved=*/false,
+                                    "private_frame_pool");
+    if (ret < 0)
+        return ret;
+    ret = memory_frame_pool_init(best_start, pool_size);
+    if (ret < 0)
+        return ret;
+    ret = pal_enable_shared_frame_slab_allocator();
+    if (ret < 0)
+        return ret;
+    return address_space_selfcheck();
+}
 
 /* ticks per microsecond, the role g_tsc_mhz plays on x86 (kernel_time.c does
  * `diff_tsc / g_tsc_mhz`); computed from the generic counter frequency with round-to-nearest.
@@ -134,6 +433,10 @@ noreturn void pal_start_c(const void* fdt) {
                                       &g_pal_public_state.memory_address_end);
     if (ret < 0)
         INIT_FAIL("Can't determine memory range from device tree");
+    /* untrusted_shm mappings (dev:/dev/shm) live in ordinary guest memory, as on the Linux PAL
+     * (x86_64 pal_main.c does the same) */
+    g_pal_public_state.shared_address_start = g_pal_public_state.memory_address_start;
+    g_pal_public_state.shared_address_end = g_pal_public_state.memory_address_end;
 
     /* vm_bootloader.S installed identity page tables covering [0..4GB) with the QEMU-virt
      * device/normal attribute split; this builds the full VMSA tables (Milestone-B follow-up) */
@@ -273,9 +576,8 @@ noreturn int pal_start_continue(void* cmdline_) {
         INIT_FAIL("Failed to read Gramine arguments");
 
     static int envp_cnt = 0;
-    static const char* envp[MAX_ENVS_CNT] = { NULL };
 
-    ret = cmdline_read_gramine_envs(g_envs, &envp_cnt, &envp[0]);
+    ret = cmdline_read_gramine_envs(g_envs, &envp_cnt, &g_vm_envp[0]);
     if (ret < 0)
         INIT_FAIL("Failed to read host environment variables");
 
@@ -302,15 +604,20 @@ noreturn int pal_start_continue(void* cmdline_) {
     if (!g_pal_public_state.manifest_root)
         INIT_FAIL_MANIFEST(errbuf);
 
-    /* the experimental multiprocess support is x86_64 only (arch/aarch64/pal_process.c) */
     bool enable_multiprocess;
     ret = toml_bool_in(g_pal_public_state.manifest_root, "sys.experimental__multiprocess",
                        /*defaultval=*/false, &enable_multiprocess);
     if (ret < 0)
         INIT_FAIL("Cannot parse 'sys.experimental__multiprocess'");
-    if (enable_multiprocess)
-        log_always("'sys.experimental__multiprocess' is supported only on x86_64; ignored, this "
-                   "VM stays single-process");
+    if (enable_multiprocess) {
+        log_always("'sys.experimental__multiprocess' on AArch64 is work in progress "
+                   "(Documentation/devel/vm-multiproc-aarch64/)");
+        ret = init_multiprocess_frame_pool();
+        if (ret < 0)
+            INIT_FAIL("Cannot initialize the multiprocess frame pool: %s", pal_strerror(ret));
+        /* writable shared file mappings come from the PAL's per-file cache (pal_common_files.c) */
+        g_pal_public_state.file_maps_write_back = true;
+    }
 
     ret = toml_bool_in(g_pal_public_state.manifest_root,
                        "sys.enable_extra_runtime_domain_names_conf", /*defaultval=*/false,
@@ -343,7 +650,45 @@ noreturn int pal_start_continue(void* cmdline_) {
     if (ret < 0)
         INIT_FAIL("Failed to get topology information: %s", pal_strerror(ret));
 
-    pal_main(/*instance_id=*/0, /*parent_process=*/NULL, g_first_thread_handle, argv + 1, envp,
-             /*post_callback=*/NULL);
+    if (enable_multiprocess) {
+        ret = memory_address_space_clone(g_pml4_table_base, &g_initial_process_address_space);
+        if (ret < 0)
+            INIT_FAIL("Failed to create the initial process address space: %s", pal_strerror(ret));
+        struct pal_tcb_vm* current_tcb = (struct pal_tcb_vm*)pal_get_tcb();
+        if (!current_tcb)
+            INIT_FAIL("Cannot find the initial thread control block");
+        current_tcb->kernel_thread.address_space = &g_initial_process_address_space;
+        ret = memory_address_space_switch(&g_initial_process_address_space);
+        if (ret < 0)
+            INIT_FAIL("Failed to switch to the initial process address space: %s",
+                      pal_strerror(ret));
+    }
+
+    pal_main(/*instance_id=*/0, /*parent_process=*/NULL, g_first_thread_handle, argv + 1,
+             g_vm_envp, /*post_callback=*/NULL);
     __builtin_unreachable();
+}
+
+/* the child's PAL is initialized; what it allocated until here is freed at its exit */
+static void vm_pal_process_started(void) {
+    pal_startup_allocs_record(false);
+}
+
+/* First code of a child process, on its first thread in its own root (pal_process.c). */
+noreturn void vm_pal_process_start(PAL_HANDLE parent_process, const char** arguments);
+noreturn void vm_pal_process_start(PAL_HANDLE parent_process, const char** arguments) {
+    struct pal_tcb_vm* tcb = (struct pal_tcb_vm*)pal_get_tcb();
+    if (!tcb || !tcb->thread_handle)
+        INIT_FAIL("Child process has no PAL thread handle");
+
+    /* The copied process-data segment inherited the parent's LibOS memory callbacks. The child
+     * must install its own callbacks during LibOS initialization. */
+    PalResetMemoryBookkeepingUpcallsForChild();
+
+    /* All processes of one Gramine instance share its instance id (it names the IPC pipes). The
+     * copied process-data segment still holds the parent's public state at this point. */
+    uint64_t instance_id = g_pal_public_state.instance_id;
+    pal_startup_allocs_record(true);
+    pal_main(instance_id, parent_process, tcb->thread_handle, arguments, g_vm_envp,
+             vm_pal_process_started);
 }

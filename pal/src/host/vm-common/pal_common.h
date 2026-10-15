@@ -121,7 +121,7 @@ int pal_common_socket_create(enum pal_socket_domain domain, enum pal_socket_type
 
 int pal_common_thread_create(struct pal_handle** handle, int (*callback)(void*),
                              const void* param);
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
 int pal_common_thread_create_with_address_space(struct pal_handle** handle,
                                                 int (*callback)(void*), const void* param,
                                                 struct memory_address_space* address_space);

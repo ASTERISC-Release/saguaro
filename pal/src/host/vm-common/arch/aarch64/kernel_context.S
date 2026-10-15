@@ -520,15 +520,16 @@ save_context_and_restore_next:
      * our own argument values here; dead for .Lscr_resume_yield, harmless elsewhere --
      * preempted-user threads are saved by save_userland_context() instead, which never
      * goes through this function (curr_tcb is 0 there, x86 parity) */
-    stp     x1, x2, [x0, #PAL_TCB_VM_CONTEXT_REGS + 1 * 8]
-    stp     x3, x4, [x0, #PAL_TCB_VM_CONTEXT_REGS + 3 * 8]
-    stp     x5, x6, [x0, #PAL_TCB_VM_CONTEXT_REGS + 5 * 8]
-    stp     x7, x8, [x0, #PAL_TCB_VM_CONTEXT_REGS + 7 * 8]
-    stp     x9, x10, [x0, #PAL_TCB_VM_CONTEXT_REGS + 9 * 8]
-    stp     x11, x12, [x0, #PAL_TCB_VM_CONTEXT_REGS + 11 * 8]
-    stp     x13, x14, [x0, #PAL_TCB_VM_CONTEXT_REGS + 13 * 8]
-    stp     x15, x16, [x0, #PAL_TCB_VM_CONTEXT_REGS + 15 * 8]
-    stp     x17, x18, [x0, #PAL_TCB_VM_CONTEXT_REGS + 17 * 8]
+    /* x7 still holds &context.regs (the ±512 stp window again) */
+    stp     x1, x2, [x7, #1 * 8]
+    stp     x3, x4, [x7, #3 * 8]
+    stp     x5, x6, [x7, #5 * 8]
+    stp     x7, x8, [x7, #7 * 8]
+    stp     x9, x10, [x7, #9 * 8]
+    stp     x11, x12, [x7, #11 * 8]
+    stp     x13, x14, [x7, #13 * 8]
+    stp     x15, x16, [x7, #15 * 8]
+    stp     x17, x18, [x7, #17 * 8]
 
     /* do_xsave() is C and clobbers x0-x17: stash (next_tcb, locks, sched stack) on the
      * outgoing thread's stack; this stack cannot be raced on -- we hold
@@ -570,6 +571,19 @@ save_context_and_restore_next:
     cbz     x5, .Lscr_stack_done
     mov     sp, x5
 .Lscr_stack_done:
+    /* Multiprocess support (g_sched_switch_roots, set once the frame pool exists): install the
+     * next thread's page-table root only now. The previous thread's stack (a LibOS syscall runs on
+     * the user stack, process-private memory) may be mapped differently, or not at all, in the
+     * next root, while the scheduling and interrupt stacks are kernel-image memory mapped
+     * identically in every root. cur_tcb already holds the next thread (x86: the same call in
+     * kernel_events.S). x1 is reloaded from cur_tcb below; x4 survives on this stack. */
+    adrp    x6, g_sched_switch_roots
+    ldrb    w6, [x6, :lo12:g_sched_switch_roots]
+    cbz     w6, .Lscr_root_done
+    stp     x4, x30, [sp, #-16]!
+    bl      sched_switch_to_current_thread_root
+    ldp     x4, x30, [sp], #16
+.Lscr_root_done:
     /* RELEASE store, like the C spinlock_unlock(): everything this CPU wrote while saving the
      * outgoing context (regs, sp, pc, pstate, thread state, FP area) must be visible to any CPU
      * that acquires g_thread_list_lock after this store. x86's plain `mov` is a release under TSO;
@@ -577,6 +591,17 @@ save_context_and_restore_next:
      * half-written context and dispatch it while this CPU's save was still in flight -- the
      * thread then ran on two CPUs at once on one stack (SMP>=2 only; SMP=1 has no second CPU). */
     stlr    wzr, [x4]                            /* leave the critical section */
+
+    /* an exit cleanup taken by sched_thread() (it may destroy the previous thread's root and
+     * stacks): only now, on the scheduling stack, in the next root and out of the scheduler
+     * lock (x86: post_switch in kernel_events.S) */
+    adrp    x6, g_sched_switch_roots
+    ldrb    w6, [x6, :lo12:g_sched_switch_roots]
+    cbz     w6, .Lscr_post_switch_done
+    bl      sched_post_switch
+.Lscr_post_switch_done:
+    mrs     x16, tpidr_el1
+    ldr     x1, [x16, #PER_CPU_DATA_CUR_TCB]
 
     ldr     x0, [x1, #PAL_TCB_VM_CONTEXT_FPREGS]
     bl      do_xrstor                            /* C: clobbers x1 too, reload below */
@@ -657,6 +682,7 @@ thread_main_wrapper:
     .equ ISR_ELR,         256
     .equ ISR_SPSR,        264
     .equ ISR_SP,          272             /* SP to resume (user SP_EL0 or kernel)*/
+    .equ INTERRUPT_STACK_SIZE_ASM, 0x4000 /* INTERRUPT_STACK_SIZE (kernel_interrupts.h) */
 
     .balign 128
 el0_irq_entry:
@@ -832,72 +858,97 @@ el1_irq_entry:
 
     .balign 128
 el1_sync_entry:
-    /* A synchronous exception inside the kernel proper is a kernel bug (x86:
-     * #PF/#GP/#UD panic with no fixup). Save the frame only to report it.
-     * If SP is poisoned (top byte set -- every real pointer is < 256TB; e.g.
-     * a wild `mov sp,xN` from a corrupt context slot), the 48-byte scratch must
-     * NOT touch the bad SP: that faulted -> re-entered this vector with DAIF
-     * masked = an infinite silent storm that starves the tick. Redirect the
-     * scratch under our per-CPU interrupt stack instead, so isr_kernel_c gets
-     * to report the original ELR/ESR/FAR and the full register state. */
-    mov     x17, sp
-    tst     x17, #0xff00000000000000
-    b.ne    .Lel1_sync_sp_bad
-    tst     x17, #0xffffffffc0000000          /* below DRAM base (0x40000000): a NULL-ish
-                                               * SP (e.g. 0x18) is just as unusable */
-    b.eq    .Lel1_sync_sp_bad
-    tst     x17, #0xf                         /* misaligned SP: the 48-byte stp below would
-                                               * itself take an SP-alignment fault */
-    b.eq    .Lel1_sync_sp_ok
-.Lel1_sync_sp_bad:
-    mrs     x17, tpidr_el1
-    ldr     x17, [x17, #PER_CPU_DATA_INTERRUPT_STACK]
-    sub     x17, x17, #(ISR_FRAME_SIZE + 48)
-    mov     sp, x17
-.Lel1_sync_sp_ok:
-    sub     sp, sp, #48
-    stp     x29, x30, [sp]
-    mrs     x29, elr_el1
-    mrs     x30, spsr_el1
-    stp     x29, x30, [sp, #16]
-    add     x29, sp, #48
+    /* A synchronous exception inside the kernel proper. With the multiprocess support, the LibOS
+     * and PAL code that runs at EL1 (syscalls run on the user stack) touches demand-zero pages,
+     * whose first access is a translation fault resolved here and resumed; anything else is a
+     * kernel bug (x86: #PF/#GP/#UD panic with no fixup), reported and stopped.
+     *
+     * The incoming SP is never written: it may be the very page that faulted (a user stack
+     * growing into a demand-zero page), or poisoned (a wild `mov sp, xN`). The bootstrap parks x30
+     * in TPIDRRO_EL0 (restored from TPIDR_EL1 below; EL0 cannot run before it is) and swaps x29
+     * with SP arithmetically, which leaves two scratch registers without any memory access. The
+     * frame goes below the current SP when the exception came from code already running on the
+     * per-CPU interrupt stack (an EL0 fault or IRQ handler that touches a demand-zero page, whose
+     * frame sits at the top of that stack), else at the top of the interrupt stack. */
+    msr     tpidrro_el0, x30
+    add     sp, sp, x29                       /* sp = sp + x29 */
+    sub     x29, sp, x29                      /* x29 = the incoming sp */
+    sub     sp, sp, x29                       /* sp = the incoming x29 */
+    mrs     x30, tpidr_el1
+    ldr     x30, [x30, #PER_CPU_DATA_INTERRUPT_STACK]
+    sub     x30, x30, x29                     /* top - incoming sp */
+    cmp     x30, #INTERRUPT_STACK_SIZE_ASM
+    b.hs    .Lel1_sync_frame_top              /* not on the interrupt stack (or above its top) */
+    sub     x30, x29, #(ISR_FRAME_SIZE + 64)
+    and     x30, x30, #~15
+    b       .Lel1_sync_frame
+.Lel1_sync_frame_top:
     mrs     x30, tpidr_el1
     ldr     x30, [x30, #PER_CPU_DATA_INTERRUPT_STACK]
     sub     x30, x30, #ISR_FRAME_SIZE
-    str     x29, [x30, #ISR_SP]
-    ldr     x29, [sp]
-    str     x29, [x30, #ISR_REGS + 29 * 8]
-    ldr     x29, [sp, #16]
-    str     x29, [x30, #ISR_ELR]
-    ldr     x29, [sp, #24]
-    str     x29, [x30, #ISR_SPSR]
-    ldr     x29, [sp, #8]
-    str     x29, [x30, #ISR_REGS + 30 * 8]
+.Lel1_sync_frame:
+    str     x29, [x30, #ISR_SP]               /* the incoming sp */
+    mov     x29, sp
+    str     x29, [x30, #ISR_REGS + 29 * 8]    /* the incoming x29 */
+    mrs     x29, tpidrro_el0
+    str     x29, [x30, #ISR_REGS + 30 * 8]    /* the incoming x30 */
+    mrs     x29, tpidr_el1
+    add     x29, x29, #PER_CPU_DATA_CUR_TCB
+    msr     tpidrro_el0, x29                  /* EL0's TCB cell again (vm_bootloader.S) */
+    mov     sp, x30
+    mrs     x29, elr_el1
+    str     x29, [sp, #ISR_ELR]
+    mrs     x29, spsr_el1
+    str     x29, [sp, #ISR_SPSR]
     mrs     x29, tpidr_el1
     ldr     x29, [x29, #PER_CPU_DATA_INTERRUPT_FPSIMD_AREA]
-    str     x29, [x30, #ISR_FPREGS]
-    stp     x0,  x1,  [x30, #ISR_REGS + 0]
-    stp     x2,  x3,  [x30, #ISR_REGS + 16]
-    stp     x4,  x5,  [x30, #ISR_REGS + 32]
-    stp     x6,  x7,  [x30, #ISR_REGS + 48]
-    stp     x8,  x9,  [x30, #ISR_REGS + 64]
-    stp     x10, x11, [x30, #ISR_REGS + 80]
-    stp     x12, x13, [x30, #ISR_REGS + 96]
-    stp     x14, x15, [x30, #ISR_REGS + 112]
-    stp     x16, x17, [x30, #ISR_REGS + 128]
-    stp     x18, x19, [x30, #ISR_REGS + 144]
-    stp     x20, x21, [x30, #ISR_REGS + 160]
-    stp     x22, x23, [x30, #ISR_REGS + 176]
-    stp     x24, x25, [x30, #ISR_REGS + 192]
-    stp     x26, x27, [x30, #ISR_REGS + 208]
-    ldr     x29, [sp]                     /* x29 was FP-area scratch above: re-fetch the
-                                             interrupted code's x29 from the entry scratch
-                                             (else every IRQ replaced it with a kernel ptr) */
-    stp     x28, x29, [x30, #ISR_REGS + 224]
-    mov     sp, x30
-    TRACE 1                               /* TODO(diag SMP B7): el1_sync entry (kernel bug) */
+    str     x29, [sp, #ISR_FPREGS]
+    stp     x0,  x1,  [sp, #ISR_REGS + 0]
+    stp     x2,  x3,  [sp, #ISR_REGS + 16]
+    stp     x4,  x5,  [sp, #ISR_REGS + 32]
+    stp     x6,  x7,  [sp, #ISR_REGS + 48]
+    stp     x8,  x9,  [sp, #ISR_REGS + 64]
+    stp     x10, x11, [sp, #ISR_REGS + 80]
+    stp     x12, x13, [sp, #ISR_REGS + 96]
+    stp     x14, x15, [sp, #ISR_REGS + 112]
+    stp     x16, x17, [sp, #ISR_REGS + 128]
+    stp     x18, x19, [sp, #ISR_REGS + 144]
+    stp     x20, x21, [sp, #ISR_REGS + 160]
+    stp     x22, x23, [sp, #ISR_REGS + 176]
+    stp     x24, x25, [sp, #ISR_REGS + 192]
+    stp     x26, x27, [sp, #ISR_REGS + 208]
+    str     x28, [sp, #ISR_REGS + 224]
+    TRACE 1                               /* TODO(diag SMP B7): el1_sync entry */
     mov     x0, sp
-    bl      isr_kernel_c                  /* noreturn: logs and triple_fault()s */
-    udf     #0
+    bl      el1_sync_c                    /* returns only when the fault is resolved; the PAL
+                                             is built -mgeneral-regs-only, so the interrupted
+                                             FP/SIMD state is untouched */
+
+    /* resume the interrupted EL1 code from the frame (its SP last: eret restores no GPR) */
+    mov     x16, sp
+    ldr     x17, [x16, #ISR_ELR]
+    msr     elr_el1, x17
+    ldr     x17, [x16, #ISR_SPSR]
+    msr     spsr_el1, x17
+    ldr     x17, [x16, #ISR_SP]
+    mov     sp, x17
+    ldp     x0,  x1,  [x16, #ISR_REGS + 0]
+    ldp     x2,  x3,  [x16, #ISR_REGS + 16]
+    ldp     x4,  x5,  [x16, #ISR_REGS + 32]
+    ldp     x6,  x7,  [x16, #ISR_REGS + 48]
+    ldp     x8,  x9,  [x16, #ISR_REGS + 64]
+    ldp     x10, x11, [x16, #ISR_REGS + 80]
+    ldp     x12, x13, [x16, #ISR_REGS + 96]
+    ldp     x14, x15, [x16, #ISR_REGS + 112]
+    ldp     x18, x19, [x16, #ISR_REGS + 144]
+    ldp     x20, x21, [x16, #ISR_REGS + 160]
+    ldp     x22, x23, [x16, #ISR_REGS + 176]
+    ldp     x24, x25, [x16, #ISR_REGS + 192]
+    ldp     x26, x27, [x16, #ISR_REGS + 208]
+    ldp     x28, x29, [x16, #ISR_REGS + 224]
+    ldr     x30, [x16, #ISR_REGS + 240]
+    ldr     x17, [x16, #ISR_REGS + 136]
+    ldr     x16, [x16, #ISR_REGS + 128]
+    eret
 
     .section .note.GNU-stack, "", %progbits      /* the kernel never executes the stack */

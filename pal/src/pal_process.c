@@ -26,7 +26,7 @@ noreturn void PalProcessExit(int exitcode) {
 
 int PalFutexSharedAdd(uint32_t* addr, uint32_t val, uint32_t bitset, PAL_HANDLE event,
                       void** out_waiter) {
-#if defined(PAL_HOST_VM) && defined(__x86_64__)
+#if defined(PAL_HOST_VM) && (defined(__x86_64__) || defined(__aarch64__))
     return _PalFutexSharedAdd(addr, val, bitset, event, out_waiter);
 #else
     __UNUSED(addr);
@@ -39,7 +39,7 @@ int PalFutexSharedAdd(uint32_t* addr, uint32_t val, uint32_t bitset, PAL_HANDLE 
 }
 
 int PalFutexSharedRemove(void* waiter, bool* out_woken) {
-#if defined(PAL_HOST_VM) && defined(__x86_64__)
+#if defined(PAL_HOST_VM) && (defined(__x86_64__) || defined(__aarch64__))
     return _PalFutexSharedRemove(waiter, out_woken);
 #else
     __UNUSED(waiter);
@@ -49,7 +49,7 @@ int PalFutexSharedRemove(void* waiter, bool* out_woken) {
 }
 
 int PalFutexSharedWake(uint32_t* addr, uint32_t bitset, int count, int* out_woken) {
-#if defined(PAL_HOST_VM) && defined(__x86_64__)
+#if defined(PAL_HOST_VM) && (defined(__x86_64__) || defined(__aarch64__))
     return _PalFutexSharedWake(addr, bitset, count, out_woken);
 #else
     __UNUSED(addr);

@@ -26,7 +26,7 @@ enum thread_state {
     THREAD_RUNNING,
 };
 
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
 struct memory_address_space;
 #endif
 
@@ -151,7 +151,7 @@ struct thread {
     int* blocked_on;
     bool is_helper; /* is it an idle or bottomhalves thread */
 
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
     struct memory_address_space* address_space;
     /* set by _PalThreadResume(): deliver PAL_EVENT_INTERRUPTED when the thread next runs in user
      * mode (see pal_common_deliver_pending_interrupt()) */

@@ -12,7 +12,7 @@
 #include "pal_error.h"
 #include "pal_internal.h"
 
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
 static struct memory_address_space* current_address_space(void) {
     struct pal_tcb_vm* tcb = (struct pal_tcb_vm*)pal_get_tcb();
     return tcb ? tcb->kernel_thread.address_space : NULL;
