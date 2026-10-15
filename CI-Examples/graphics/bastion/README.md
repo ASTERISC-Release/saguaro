@@ -21,6 +21,9 @@ game and started a new game: keyboard and mouse input reach the game through the
 (`[input] shared input enabled`), and gameplay starts. The game drew at 3840x2160 into the floating
 1920x1080 window, so only the top-left quarter of the picture was visible (see below).
 
+Input on the menus also works with this branch's later builds (maintainer-reported). Injecting keys
+with `xdotool` (XTEST) into the host's Xwayland did not reach the game.
+
 `MULTIPROC=1` adds `sys.experimental__multiprocess = true` and a `/bin` mount (FMOD runs `/bin/sh`).
 Without a profile the game draws at the desktop size (3840x2160 on a 4K screen), and a
 1920x1080 window shows only the top-left quarter in the menus. The game's own setting fixes it:
