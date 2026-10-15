@@ -14,14 +14,14 @@ CL="clang --driver-mode=cl --target=aarch64-pc-windows-msvc -fms-compatibility-v
 for d in "$HDR/sdk" "$HDR/vc"; do
     find "$d" -type f | while read -r f; do
         l="$(dirname "$f")/$(basename "$f" | tr A-Z a-z)"
-        [ "$f" != "$l" ] && [ ! -e "$l" ] && ln -s "$(basename "$f")" "$l"
+        if [ "$f" != "$l" ] && [ ! -e "$l" ]; then ln -s "$(basename "$f")" "$l"; fi
     done
 done
 for i in $(seq 1 50); do
     miss=$($CL /c /O1 /guard:cf /MT -DUNICODE /Fo:"$out" "$src" 2>&1 | grep -oE "'[^']+' file not found" | head -1 | cut -d"'" -f2) || true
-    [ -z "$miss" ] && break
+    if [ -z "$miss" ]; then break; fi
     f=$(find "$HDR/sdk" "$HDR/vc" -iname "$(basename "$miss")" -not -type l | head -1)
-    [ -z "$f" ] && { echo "header not found: $miss"; exit 1; }
+    if [ -z "$f" ]; then echo "header not found: $miss"; exit 1; fi
     ln -sf "$(basename "$f")" "$(dirname "$f")/$(basename "$miss")"
 done
 $CL /c /O1 /guard:cf /MT -DUNICODE /Fo:"$out" "$src"
