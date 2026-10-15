@@ -100,6 +100,8 @@ static long forwarded_ioctl(unsigned int fd, unsigned int cmd, unsigned long arg
                     if (deadline > 0 && deadline != INT64_MAX && PalSystemTimeQuery(&now_us) == 0) {
                         *(int64_t*)field = deadline - (int64_t)(now_us * 1000);
                         time_field = ti->fields[i].offset + 1;
+                        log_debug("forwarded ioctl 0x%x: deadline %ld ns, %ld ns from now", cmd,
+                                  (long)deadline, (long)*(int64_t*)field);
                     }
                     break;
                 }

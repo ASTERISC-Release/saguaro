@@ -53,13 +53,14 @@ struct waiter {
     VkSemaphore sem;
     uint64_t value;
     VkResult result;
-    double woke_at;
+    double started_at, woke_at;
 };
 
 static void* wait_thread(void* arg) {
     struct waiter* w = arg;
     VkSemaphoreWaitInfo wi = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO, .semaphoreCount = 1,
                               .pSemaphores = &w->sem, .pValues = &w->value};
+    w->started_at = now_s();
     w->result = vkWaitSemaphores(g_dev, &wi, 10000000000ull);
     w->woke_at = now_s();
     return NULL;
@@ -100,8 +101,9 @@ static void wait_test(const char* name, bool gpu) {
     pthread_join(th, NULL);
     double latency = w.woke_at - signalled;
     STEP(name, r == VK_SUCCESS && w.result == VK_SUCCESS && latency < 1.0,
-         "signal call %d took %.1f ms; waiter result %d, woke %.1f ms after the signal", r,
-         (call_done - signalled) * 1e3, w.result, latency * 1e3);
+         "signal call %d took %.1f ms; waiter result %d after %.1f ms, woke %.1f ms after the signal",
+         r, (call_done - signalled) * 1e3, w.result, (w.woke_at - w.started_at) * 1e3,
+         latency * 1e3);
     vkDestroySemaphore(g_dev, w.sem, NULL);
 }
 

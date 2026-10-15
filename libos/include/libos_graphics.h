@@ -7,6 +7,7 @@
 #include <assert.h>
 #include "libos_lock.h"
 #include "log.h"
+#include "pal.h"
 
 /*
  * The shared Tirith graphics ABI -- the comm page, the request ids and the
@@ -64,7 +65,13 @@ static __attribute__((unused)) uint64_t comm_sync_notify(comm_page_t* c) {
     /* The dedicated host listener normally completes these shared-memory requests immediately.
      * A minimal load/test loop avoids AMD KVM's PAUSE-filter path and minimizes round-trip
      * latency; this path is used only while an graphics host request is outstanding. */
+    /* A request that takes long (a GPU wait) must not keep the vCPU from the guest's other
+     * threads: with one vCPU, the thread that would signal the awaited event could not run until
+     * the wait timed out. So after a short spin (about 50-100 us), yield between polls. */
+    unsigned long spins = 0;
     while (__atomic_load_n(&c->req_bit, __ATOMIC_ACQUIRE) != 0) {
+        if (++spins > 100000)
+            PalThreadYieldExecution();
     }
 
     return c->ret;
