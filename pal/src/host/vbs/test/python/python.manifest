@@ -1,0 +1,12 @@
+# Phase-3e Python test of the VBS-enclave PAL (packed as the file "manifest"): CPython 3.12 built
+# with scripts/vbs/build-python.sh; interpreter, modules and standard library are packed.
+loader.entrypoint = "file:/libsysdb.so"
+libos.entrypoint = "/usr/bin/python3.12"
+loader.argv = ["/usr/bin/python3.12", "/app/test.py"]
+loader.log_level = "warning"
+loader.env.LD_LIBRARY_PATH = "/usr/lib"
+loader.env.PYTHONDONTWRITEBYTECODE = "1"
+loader.env.HOME = "/app"
+fs.root.uri = "file:/"
+sys.rewrite_syscalls = false
+vbs.max_threads = 8

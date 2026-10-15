@@ -53,6 +53,8 @@ number of threads the signed image allows inside the enclave at once, written in
 pal_vbs_image_config.h for the image's IMAGE_ENCLAVE_CONFIG (the host must initialise the enclave
 with at most that ThreadCount).
 
+Arguments may also come from a file, one per line: pack.py @args.txt (many packed files).
+
 Outputs in DIR: packed.bin, files.bin, pal_vbs_packed_blob.S, pal_vbs_packed_table.h,
 pal_vbs_image_config.h
 """
@@ -334,7 +336,7 @@ def c_str(s):
 
 
 def main():
-    ap = argparse.ArgumentParser(description=__doc__,
+    ap = argparse.ArgumentParser(description=__doc__, fromfile_prefix_chars='@',
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--out', required=True)
     ap.add_argument('--obj', action='append', default=[], metavar='KIND:NAME:SRC[:PATH]')
