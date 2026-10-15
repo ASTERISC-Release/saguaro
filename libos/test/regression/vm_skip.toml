@@ -116,6 +116,14 @@ tests = [
 
 [[group]]
 kind = "skip"
+category = "no-shared-host-file-mappings"
+reason = "The VM PAL cannot map a host (virtio-fs) file MAP_SHARED and writable; it does so only on its own tmpfs, where the tmpfs variant of the test runs."
+tests = [
+  "TC_40_FileSystem::test_076a_mremap_misc_chroot",
+]
+
+[[group]]
+kind = "skip"
 category = "host-environment"
 reason = "gramine-vm is a bash launcher (bash rewrites PWD/_/SHLVL in the forwarded environment) and the guest has its own hostname."
 tests = [
