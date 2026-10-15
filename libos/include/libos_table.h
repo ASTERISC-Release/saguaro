@@ -47,7 +47,7 @@ long libos_syscall_rt_sigaction(int signum, const struct __kernel_sigaction* act
 long libos_syscall_rt_sigprocmask(int how, const __sigset_t* set, __sigset_t* oldset,
                                   size_t sigsetsize);
 long libos_syscall_rt_sigreturn(void);
-long libos_syscall_ioctl(unsigned int fd, unsigned int cmd, unsigned long arg);
+long libos_syscall_ioctl(unsigned int fd, unsigned long cmd_reg, unsigned long arg);
 long libos_syscall_pread64(int fd, char* buf, size_t count, loff_t pos);
 long libos_syscall_pwrite64(int fd, char* buf, size_t count, loff_t pos);
 long libos_syscall_readv(unsigned long fd, struct iovec* vec, unsigned long vlen);
