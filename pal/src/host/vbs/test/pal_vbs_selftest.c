@@ -17,6 +17,7 @@
 #include <string.h>
 
 #include "pal_vbs_enclave.h"
+#include "packed/packed_abi.h"
 
 static const pal_vbs_env_t* g_env;
 
@@ -112,16 +113,87 @@ static int step_seh(void) {
     return ok;
 }
 
+/* ---- step 7: packed objects (phase 2) ---- */
+
+/* the PAL table handed to the packed object: write() goes to the host console */
+static int64_t packed_write(int64_t fd, const char* buf, int64_t len) {
+    (void)fd;
+    if (len < 0)
+        return -1;
+    g_env->console_write(buf, (uint64_t)len);
+    return len;
+}
+
+/* bound by the loader to the packed object's undefined symbol of the same name */
+static int64_t import_triple(int64_t x) {
+    return 3 * x;
+}
+
+static int run_packed(const char* name) {
+    static const struct pal_vbs_import imports[] = {
+        { "pal_vbs_import_triple", (void*)import_triple },
+    };
+    struct pal_vbs_loaded obj;
+    uint64_t detail = 0;
+    int64_t ret = g_env->packed_load(name, imports, sizeof(imports) / sizeof(imports[0]), &obj,
+                                     &detail);
+    if (ret < 0) {
+        out("[selftest] step 7: load %s FAILED: %lld (detail 0x%llx)\n", name, (long long)ret,
+            (unsigned long long)detail);
+        return 0;
+    }
+    out("[selftest] step 7: %s at %p size 0x%llx: %llu relocations, %llu imports bound, "
+        "%llu RELRO pages read-only\n", name, (void*)obj.base, (unsigned long long)obj.size,
+        (unsigned long long)obj.nrela, (unsigned long long)obj.nimports,
+        (unsigned long long)obj.nrelro);
+    void* sym = g_env->packed_sym(&obj, "packed_entry");
+    if (!obj.entry || sym != obj.entry) {
+        out("[selftest] step 7: entry %p, symbol lookup %p: MISMATCH\n", obj.entry, sym);
+        return 0;
+    }
+    struct pal_vbs_packed_table table = { .write = packed_write };
+    uint64_t x18_before = g_env->read_x18();
+    int64_t r = (int64_t)g_env->enter_sysv(obj.entry, (uint64_t)(uintptr_t)&table, 0, 0, 0);
+    uint64_t x18_after = g_env->read_x18();
+    /* the message is 59 bytes; see packed_test.c */
+    int64_t want = PAL_VBS_PACKED_EXPECT(59);
+    int ok = (r == want) && (x18_before == x18_after);
+    out("[selftest] step 7: %s packed_entry returned %lld, expected %lld, x18 %s: %s\n", name,
+        (long long)r, (long long)want, x18_before == x18_after ? "preserved" : "CLOBBERED",
+        ok ? "ok" : "FAILED");
+    return ok;
+}
+
+static int step_packed(void) {
+    uint64_t n = g_env->packed_count();
+    out("[selftest] step 7: %llu packed objects in the image\n", (unsigned long long)n);
+    if (!n) {
+        out("[selftest] step 7: image built without packed objects: skipped\n");
+        return 1;
+    }
+    int ok = 1;
+    for (uint64_t i = 0; i < n; i++)
+        ok &= run_packed(g_env->packed_name(i));
+    /* refusals: unknown name, and preparing the same object twice */
+    struct pal_vbs_loaded obj;
+    int64_t r1 = g_env->packed_load("no-such-object", NULL, 0, &obj, NULL);
+    int64_t r2 = g_env->packed_load(g_env->packed_name(0), NULL, 0, &obj, NULL);
+    int refused = (r1 == PAL_VBS_PK_NOTFOUND) && (r2 == PAL_VBS_PK_LOADED);
+    out("[selftest] step 7: refusals (unknown %lld, twice %lld) %s\n", (long long)r1,
+        (long long)r2, refused ? "ok" : "FAILED");
+    return ok && refused;
+}
+
 int64_t pal_vbs_selftest(const pal_vbs_env_t* env, uint64_t* run, uint64_t* passed) {
     g_env = env;
     int (*steps[])(void) = {
-        step_console, step_memory, step_time, step_random, step_abi_x18, step_seh,
+        step_console, step_memory, step_time, step_random, step_abi_x18, step_seh, step_packed,
     };
     uint64_t n = sizeof(steps) / sizeof(steps[0]);
     *run = 0;
     *passed = 0;
     int64_t first_fail = 0;
-    out("[selftest] VBS PAL phase-1 self-test: %llu steps\n", (unsigned long long)n);
+    out("[selftest] VBS PAL self-test: %llu steps\n", (unsigned long long)n);
     for (uint64_t i = 0; i < n; i++) {
         (*run)++;
         if (steps[i]()) {

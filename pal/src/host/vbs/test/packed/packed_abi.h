@@ -15,7 +15,13 @@ struct pal_vbs_packed_table {
     int64_t (*write)(int64_t fd, const char* buf, int64_t len);
 };
 
-/* value packed_entry() returns on success: bytes written + 7 * 1000 + 100 * 1000000 */
-#define PAL_VBS_PACKED_EXPECT(bytes_written) ((int64_t)(bytes_written) + 7000 + 100000000)
+/* An undefined symbol of the packed object, bound by the in-enclave loader to a function of the
+ * enclave (the way the LibOS's imports are bound to the PAL's exports). Returns 3 * x. */
+int64_t pal_vbs_import_triple(int64_t x);
+
+/* value packed_entry() returns on success:
+ * bytes written + 7 * 1000 + 100 * 1000000 + pal_vbs_import_triple(1000000000) */
+#define PAL_VBS_PACKED_EXPECT(bytes_written) \
+    ((int64_t)(bytes_written) + 7000 + 100000000 + 3000000000ll)
 
 #endif /* PAL_VBS_PACKED_ABI_H */

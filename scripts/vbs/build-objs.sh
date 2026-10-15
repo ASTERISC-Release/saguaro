@@ -12,7 +12,11 @@
 #   HDR/sdk/{um,shared,ucrt}   from  <SDK>/Include/<ver>/{um,shared,ucrt}
 #   HDR/vc/include             from  <VC>/Tools/MSVC/<ver>/include
 #
-# Usage: HDR=<scratch> [OUT=<dir>] scripts/vbs/build-objs.sh
+# Packed objects (phase 2): PACK names the output folder of scripts/vbs/pack.py (packed.bin,
+# pal_vbs_packed_blob.S, pal_vbs_packed_table.h); the in-enclave loader and the blob are then built
+# too. Without PACK the image carries no packed objects and no loader (the phase-1 build).
+#
+# Usage: HDR=<scratch> [OUT=<dir>] [PACK=<pack.py output>] scripts/vbs/build-objs.sh
 set -e
 
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -23,6 +27,13 @@ OUT=${OUT:-"$ROOT/build-vbs/obj"}
 mkdir -p "$OUT"
 
 INC="-I$VBS/common -I$VBS/enclave"
+DEFS=""
+if [ -n "$PACK" ]; then
+    PACK=$(cd "$PACK" && pwd)
+    INC="$INC -I$PACK"
+else
+    DEFS="-DPAL_VBS_NO_PACKED"
+fi
 CL="clang --driver-mode=cl --target=aarch64-pc-windows-msvc -fms-compatibility-version=19.50 \
     /imsvc $HDR/vc/include /imsvc $HDR/sdk/ucrt /imsvc $HDR/sdk/um /imsvc $HDR/sdk/shared \
     -Wno-everything $INC"
@@ -46,11 +57,19 @@ resolve_missing() {
 }
 
 echo "=== enclave: pal_vbs_enclave.c"
-resolve_missing /O1 /guard:cf /MT -DUNICODE /Fo:"$OUT/pal_vbs_enclave.obj" "$VBS/enclave/pal_vbs_enclave.c"
-$CL /c /O1 /guard:cf /MT -DUNICODE /Fo:"$OUT/pal_vbs_enclave.obj" "$VBS/enclave/pal_vbs_enclave.c"
+resolve_missing /O1 /guard:cf /MT -DUNICODE $DEFS /Fo:"$OUT/pal_vbs_enclave.obj" "$VBS/enclave/pal_vbs_enclave.c"
+$CL /c /O1 /guard:cf /MT -DUNICODE $DEFS /Fo:"$OUT/pal_vbs_enclave.obj" "$VBS/enclave/pal_vbs_enclave.c"
 
 echo "=== enclave: pal_vbs_selftest.c"
-$CL /c /O1 /guard:cf /MT -DUNICODE /Fo:"$OUT/pal_vbs_selftest.obj" "$VBS/test/pal_vbs_selftest.c"
+$CL /c /O1 /guard:cf /MT -DUNICODE $DEFS /Fo:"$OUT/pal_vbs_selftest.obj" "$VBS/test/pal_vbs_selftest.c"
+
+if [ -n "$PACK" ]; then
+    echo "=== enclave: pal_vbs_packed.c (loader of the packed objects)"
+    $CL /c /O1 /guard:cf /MT -DUNICODE /W4 /Fo:"$OUT/pal_vbs_packed.obj" "$VBS/enclave/pal_vbs_packed.c"
+    echo "=== enclave: packed blob ($PACK/packed.bin)"
+    (cd "$PACK" && clang --target=aarch64-pc-windows-msvc -c pal_vbs_packed_blob.S \
+        -o "$OUT/pal_vbs_packed_blob.obj")
+fi
 
 echo "=== enclave: pal_vbs_boundary.S (clang integrated assembler)"
 clang --target=aarch64-pc-windows-msvc -c "$VBS/enclave/pal_vbs_boundary.S" -o "$OUT/pal_vbs_boundary.obj"

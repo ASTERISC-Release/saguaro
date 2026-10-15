@@ -37,7 +37,7 @@ const IMAGE_ENCLAVE_CONFIG __enclave_config = {
     PAL_VBS_POLICY,
     0, 0, 0,
     { 0xFE, 0xFE },    /* family id */
-    { 0x01, 0x03 },    /* image id (0x03: the phase-1 PAL skeleton) */
+    { 0x01, 0x04 },    /* image id (0x04: the PAL skeleton with packed objects, phase 2) */
     0,                 /* version */
     0,                 /* SVN */
     PAL_VBS_SIZE,
@@ -122,6 +122,22 @@ static int64_t pal_try_brk_resume(void) {
     return code ? code : -1;
 }
 
+#ifdef PAL_VBS_NO_PACKED
+/* An image built without packed objects (scripts/vbs/build-objs.sh without PACK): no loader. */
+uint64_t pal_vbs_packed_count(void) { return 0; }
+const char* pal_vbs_packed_name(uint64_t i) { UNREFERENCED_PARAMETER(i); return NULL; }
+int64_t pal_vbs_packed_load(const char* name, const struct pal_vbs_import* imports,
+                            uint64_t nimports, struct pal_vbs_loaded* out, uint64_t* detail) {
+    UNREFERENCED_PARAMETER(name); UNREFERENCED_PARAMETER(imports);
+    UNREFERENCED_PARAMETER(nimports); UNREFERENCED_PARAMETER(out); UNREFERENCED_PARAMETER(detail);
+    return PAL_VBS_PK_NOTFOUND;
+}
+void* pal_vbs_packed_sym(const struct pal_vbs_loaded* obj, const char* sym) {
+    UNREFERENCED_PARAMETER(obj); UNREFERENCED_PARAMETER(sym);
+    return NULL;
+}
+#endif
+
 static const pal_vbs_env_t g_env = {
     .console_write  = pal_console_write,
     .mem_alloc      = pal_mem_alloc,
@@ -131,6 +147,10 @@ static const pal_vbs_env_t g_env = {
     .enter_sysv     = pal_vbs_enter_sysv,
     .read_x18       = pal_vbs_read_x18,
     .try_brk_resume = pal_try_brk_resume,
+    .packed_count   = pal_vbs_packed_count,
+    .packed_name    = pal_vbs_packed_name,
+    .packed_load    = pal_vbs_packed_load,
+    .packed_sym     = pal_vbs_packed_sym,
 };
 
 /*
