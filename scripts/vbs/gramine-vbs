@@ -41,6 +41,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import time
 import tomllib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -249,6 +250,7 @@ def run_recipe(b, recipe):
                VBS_CC_DYNAMIC=os.path.join(HERE, 'cc-dynamic-pie.sh'),
                VBS_GCC=os.path.join(HERE, 'vbs-gcc'))
     log(f'vbs.build: {recipe}')
+    t0 = time.monotonic()
     os.makedirs(b.dir, exist_ok=True)
     with open(os.path.join(b.dir, 'recipe.log'), 'w') as lf:
         r = subprocess.run(['sh', '-c', recipe], cwd=os.path.dirname(b.manifest), env=env,
@@ -256,6 +258,7 @@ def run_recipe(b, recipe):
     if r.returncode:
         sys.stdout.write(open(os.path.join(b.dir, 'recipe.log')).read()[-3000:])
         die(f'vbs.build failed (exit {r.returncode}, recipe.log)')
+    log(f'vbs.build: {time.monotonic() - t0:.1f} s')
 
 
 def cmd_build(args):

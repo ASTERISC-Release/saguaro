@@ -12,6 +12,7 @@
 #   gramine-vbs build  <manifest> [-Out DIR] [-NoSign]
 #   gramine-vbs sign   <manifest|DIR>
 #   gramine-vbs run    <manifest|DIR> [-Threads N] [-Root DIR] [-Rebuild] [-ShowHost] [-- ARGS]
+#                      (builds first when the image is missing or a source file changed)
 #   gramine-vbs verify <manifest|DIR> -Report FILE [-- verifier options]
 #
 # Options for all commands: -Distro NAME (default $env:GRAMINE_VBS_DISTRO or Ubuntu-24.04),
@@ -160,6 +161,36 @@ function Sync-Folder([string]$WinDir, [string]$Dest) {
     }
 }
 
+# ---- what a build was made from: names, sizes and times of the files that are copied to WSL ----
+
+function Add-Stamp($sb, [string]$dir, [string]$rel) {
+    foreach ($e in [IO.Directory]::EnumerateFileSystemEntries($dir)) {
+        $n = [IO.Path]::GetFileName($e)
+        $r = if ($rel) { "$rel/$n" } else { $n }
+        if ([IO.Directory]::Exists($e)) {
+            # the folders Sync-Folder leaves out
+            if ($n -eq '.git' -or $n -like '*.vbs' -or (-not $rel -and ($n -like 'build-vbs*' -or $n -eq 'build')) -or
+                $r -eq 'subprojects/packagecache') { continue }
+            Add-Stamp $sb $e $r
+        } else {
+            $i = New-Object IO.FileInfo($e)
+            [void]$sb.Append($r).Append('|').Append($i.Length).Append('|').Append($i.LastWriteTimeUtc.Ticks).Append("`n")
+        }
+    }
+}
+
+function Sources-Stamp($b) {
+    $sb = New-Object Text.StringBuilder
+    Add-Stamp $sb $RepoWin ''
+    $mdir = Split-Path -Parent $b.manifest
+    if (-not $b.manifest.StartsWith($RepoWin + '\', [StringComparison]::OrdinalIgnoreCase)) {
+        [void]$sb.Append("== $mdir`n"); Add-Stamp $sb $mdir ''
+    }
+    $sha = [Security.Cryptography.SHA256]::Create()
+    return (($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($sb.ToString())) |
+        ForEach-Object { $_.ToString('x2') }) -join '')
+}
+
 # ---- the build folder ----
 
 function Resolve-Build([string]$t, [switch]$MustExist) {
@@ -186,6 +217,7 @@ function Resolve-Build([string]$t, [switch]$MustExist) {
 
 function Do-Build($b) {
     $t = Need-Toolchain
+    $stamp = Sources-Stamp $b
     $home_ = Wsl-Home
     $mirror = "$home_/.cache/gramine-vbs/checkouts/$(Safe-Leaf $RepoWin)-$(Short-Hash $RepoWin)"
     $t0 = Get-Date
@@ -221,6 +253,7 @@ function Do-Build($b) {
     if ($rc -eq 11) { Fail "the WSL distribution lacks build tools: run 'gramine-vbs setup' (then -Install or -Apt)" }
     if ($rc -ne 0) { Fail "the Linux side of the build failed in WSL (exit $rc)" }
     Set-Content -Path (Join-Path $b.out 'manifest-path.txt') -Value $b.manifest -Encoding UTF8
+    Set-Content -Path (Join-Path $b.out 'sources.stamp') -Value $stamp -Encoding ASCII
     Remove-Item -Force (Join-Path $b.out "$($b.name).dll") -ErrorAction SilentlyContinue
     Say ("Linux side done in {0:N1} s" -f ((Get-Date) - $t1).TotalSeconds)
     if (-not $NoSign) { Do-Sign $b $t }
@@ -341,8 +374,11 @@ switch ($Command) {
     'run' {
         $b = Resolve-Build $Target
         $dll = Join-Path $b.out "$($b.name).dll"
-        if ($b.manifest -and ($Rebuild -or -not (Test-Path $dll) -or
-                (Get-Item $b.manifest).LastWriteTime -gt (Get-Item $dll).LastWriteTime)) {
+        # rebuild when asked, when unsigned, or when a file of the checkout (or of the manifest's
+        # folder, if it is outside) changed since the build: names, sizes and times
+        $old = Join-Path $b.out 'sources.stamp'
+        if ($b.manifest -and ($Rebuild -or -not (Test-Path $dll) -or -not (Test-Path $old) -or
+                (Get-Content -Raw $old).Trim() -ne (Sources-Stamp $b))) {
             $NoSign = $false
             Do-Build $b
         }

@@ -10,7 +10,8 @@
 #       GV_TAR   tar file (translated); GV_DEST  folder in the distribution
 #       Files with CRLF line ends (a checkout made with core.autocrlf=true) get LF line ends and
 #       files starting with #! the executable bit (NTFS keeps none); modification times are kept,
-#       so unchanged files do not rebuild.
+#       so unchanged files do not rebuild. Files of the previous sync that are no longer in the
+#       tar are removed (the list is in GV_DEST/.gramine-vbs-synced).
 #   wsl-build.sh objs      compile the Windows enclave runtime and host (build-objs.sh)
 #       GV_PACK  pack.py output folder in the distribution (empty: no packed objects)
 #   wsl-build.sh manifest  the whole Linux side for a manifest: the vbs glibc and the meson build of
@@ -47,10 +48,12 @@ if [ "$MODE" = sync ]; then
 import os, sys, tarfile
 dest, tar = sys.argv[1], sys.argv[2]
 n = 0
+names = set()
 with tarfile.open(tar) as t:
     for m in t:
         if not m.isfile():
             continue
+        names.add(os.path.normpath(m.name))
         p = os.path.join(dest, m.name)
         with open(p, 'rb') as f:
             data = f.read()
@@ -65,6 +68,23 @@ with tarfile.open(tar) as t:
         n += 1
 if n:
     print(f'[wsl] {n} files had Windows (CRLF) line ends: converted to LF')
+# files of the previous sync that are gone on Windows are removed here too (build outputs, which
+# were never synced, stay)
+lst = os.path.join(dest, '.gramine-vbs-synced')
+try:
+    old = set(open(lst).read().splitlines())
+except OSError:
+    old = set()
+gone = sorted(old - names)
+for name in gone:
+    try:
+        os.remove(os.path.join(dest, name))
+    except OSError:
+        pass
+if gone:
+    print(f'[wsl] {len(gone)} files deleted on Windows: removed from the copy')
+with open(lst, 'w') as f:
+    f.write('\n'.join(sorted(names)) + '\n')
 PY
     exit 0
 fi

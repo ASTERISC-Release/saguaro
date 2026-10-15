@@ -1,6 +1,7 @@
-# CPython in a Windows VBS enclave (Documentation/vbs.rst). Build CPython and the vbs glibc for the
-# enclave on an aarch64 Linux machine (scripts/vbs/build-glibc.sh, scripts/vbs/build-python.sh);
-# the paths below are relative to this file. Then: gramine-vbs run python.manifest
+# CPython in a Windows VBS enclave (Documentation/vbs.rst): gramine-vbs run python.manifest
+# vbs.build builds CPython 3.12.7 for the enclave once (scripts/vbs/build-python.sh, against the vbs
+# glibc, into <repo>/build-vbs-python; later builds reuse it); the paths below are relative to this
+# file.
 loader.entrypoint = "file:/libsysdb.so"
 libos.entrypoint = "/usr/bin/python3.12"
 loader.argv = ["/usr/bin/python3.12", "/app/hello.py"]
@@ -14,6 +15,7 @@ sys.rewrite_syscalls = false
 vbs.debug = false
 vbs.max_threads = 8
 vbs.enclave_size = "512M"
+vbs.build = "sh $GRAMINE_REPO/scripts/vbs/build-python.sh --if-needed"
 vbs.packed_files = [
   { path = "/usr/bin/python3.12", uri = "file:../../../build-vbs-python/usr/bin/python3.12" },
   # the standard library without its tests, the IDE and Tk parts, and the static library
