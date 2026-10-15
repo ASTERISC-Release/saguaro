@@ -256,12 +256,12 @@ static void* do_mmap(void* addr, size_t length, int prot, int flags, int fd,
      * dynamic loader's first, executable mapping of such a file (offset 0, no fixed address) is
      * therefore placed at the object's packed address, and the object's syscall-entry slot is
      * filled; its later MAP_FIXED mappings then match the packed segments. */
-    if (hdl && (prot & PROT_EXEC) && !(flags & (MAP_FIXED | MAP_FIXED_NOREPLACE)) && offset == 0
+    if (hdl && VBS_FIRST_MAP_PROT_OK(prot) && !(flags & (MAP_FIXED | MAP_FIXED_NOREPLACE)) && offset == 0
             && g_pal_public_state->vbs_packed_lookup) {
         uintptr_t packed_base, packed_slot;
         size_t packed_size;
         if (g_pal_public_state->vbs_packed_lookup(hdl->uri, &packed_base, &packed_size,
-                                                  &packed_slot) == 0 && length <= packed_size) {
+                                                  &packed_slot) == 0 && length <= packed_size VBS_FIRST_MAP_LEN_OK(prot, length, packed_size)) {
             if (packed_slot)
                 *(uintptr_t*)packed_slot = (uintptr_t)&libos_syscall_entry;
             addr = (void*)packed_base;

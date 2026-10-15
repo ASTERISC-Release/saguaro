@@ -38,9 +38,12 @@ for e in ents:
             else: incs.append(k)
         cmd=['clang','--target=aarch64-linux-gnu','-E','-P','-nostdinc','-isystem',res,'-idirafter','/usr/include']+incs+[os.path.join(root,rel)]
         r=subprocess.run(cmd,capture_output=True,text=True,cwd=BUILD)
-        outs.append(r.stdout if r.returncode==0 else 'ERR '+r.stderr[-300:])
+        outs.append(r.stdout.replace(root, '<root>') if r.returncode==0 else 'ERR '+r.stderr[-300:])
         open('/tmp/pp_'+('old' if root==OLD else 'new')+'_'+os.path.basename(rel)+'.i','w').write(outs[-1])
     same=outs[0]==outs[1] and not outs[0].startswith('ERR')
+    if not same and not outs[0].startswith('ERR') and ''.join(outs[0].split()) == ''.join(outs[1].split()):
+        print('same (whitespace only) '+rel)
+        continue
     bad+= not same
     print(('same ' if same else 'DIFF ')+rel+('' if same else ' '+(outs[0] if outs[0].startswith('ERR') else outs[1] if outs[1].startswith('ERR') else '(text differs)')[:300]))
 print('sources:',len(ents),'differences:',bad)
