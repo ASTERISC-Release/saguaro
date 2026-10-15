@@ -297,15 +297,24 @@ SHM_HOST = '{ type = "untrusted_shm", path = "/dev/shm", uri = "dev:/dev/shm" },
 SHM_TMPFS = '{ type = "tmpfs", path = "/dev/shm" },'
 
 
+MULTIPROCESS_RE = re.compile(r"^\s*experimental__multiprocess\s*=\s*true\s*$", re.MULTILINE)
+
+
 def set_manifest_shm(manifests, kind):
     """Give the manifests the /dev/shm mount `kind` needs: "tmpfs" for the VM PAL (it has no
     dev: stream), "host" for gramine-direct (LTP's library shares its result counters with the
     forked test process through /dev/shm; a LibOS tmpfs is private to one process, so the counts
-    of a forking test would be lost). Returns the number of manifests changed."""
-    old, new = (SHM_HOST, SHM_TMPFS) if kind == "tmpfs" else (SHM_TMPFS, SHM_HOST)
+    of a forking test would be lost). "vm" picks per manifest: "host" when the manifest enables
+    the VM PAL's experimental multiprocess support (`sys.experimental__multiprocess`, see
+    Documentation/devel/vm-multiproc/; the x86_64 VM PAL then opens `dev:/dev/shm` as a host file
+    shared between guest processes), "tmpfs" otherwise. Returns the number of manifests changed."""
     changed = 0
     for manifest in manifests:
         text = manifest.read_text()
+        want = kind
+        if kind == "vm":
+            want = "host" if MULTIPROCESS_RE.search(text) else "tmpfs"
+        old, new = (SHM_HOST, SHM_TMPFS) if want == "tmpfs" else (SHM_TMPFS, SHM_HOST)
         if old in text:
             manifest.write_text(text.replace(old, new))
             changed += 1
@@ -438,7 +447,7 @@ def main():
             link.symlink_to(os.path.relpath(args.ltp_root.resolve(), args.harness_dir.resolve()))
         manifests = sorted({args.harness_dir / f"{ltp_test_command(scenarios[name])}.manifest"
                             for name in active})
-        changed = set_manifest_shm(manifests, "tmpfs" if args.loader == "vm" else "host")
+        changed = set_manifest_shm(manifests, "vm" if args.loader == "vm" else "host")
         if changed:
             print(f"note: switched /dev/shm in {changed} manifests for the {args.loader} loader",
                   file=sys.stderr)
