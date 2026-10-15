@@ -396,6 +396,14 @@ def run_one(name, command, args, per_test_timeout, reserved_cid=None):
         raise
     if args.loader == "vm":
         remove_guest_files(cid)
+    else:
+        # Processes the test left in its process group (the group outlives its leader): forked
+        # gramine-direct PAL children survived the SIGTERM of a timeout and stayed forever (182 of
+        # them after the AArch64 direct run, from futex_wake03, shmctl01, kill08, kill06, signal01).
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
     duration = time.monotonic() - start
     subtests, counts = parse_output(output)
     returncode = proc.returncode
