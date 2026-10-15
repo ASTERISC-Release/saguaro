@@ -43,7 +43,6 @@ pal_vm_sources = files(
     'pal_misc.c',
     'pal_object.c',
     'pal_pipes.c',
-    'pal_process.c',
     'pal_rtld.c',
     'pal_sockets.c',
     'pal_streams.c',
@@ -53,14 +52,17 @@ pal_vm_sources = files(
 if host_machine.cpu_family() == 'x86_64'
     pal_vm_sources += files(
         'pal_main.c',
+        'pal_process.c',
         'vm_bootloader.S',
         'vm_callbacks.c',
     )
 else
     # aarch64: boot sequence (DTB entry), ELF entry trampoline (no BIOS stage), and the
-    # port-io/shared-memory callbacks as plain MMIO.
+    # port-io/shared-memory callbacks as plain MMIO; single-process pal_process.c (the
+    # multiprocess support is x86_64 only).
     pal_vm_sources += files(
         'arch/aarch64/pal_main.c',
+        'arch/aarch64/pal_process.c',
         'arch/aarch64/vm_bootloader.S',
         'arch/aarch64/vm_callbacks.c',
     )
