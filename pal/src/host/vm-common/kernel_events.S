@@ -104,6 +104,7 @@ _isr_common:
     // is "GS equals the thread's recorded base": a dummy TCB in GS (thread exit) or another TCB
     // (a switch in progress) is left alone. Threads without their own %gs skip this at the first
     // compare.
+    xor     %r8d, %r8d                      // isr_regs.gs_swapped (r8 was saved above)
     mov     PER_CPU_DATA_CURRENT_TCB(%rax), %rdi
     test    %rdi, %rdi
     jz      .Lisr_gs_ok
@@ -114,8 +115,9 @@ _isr_common:
     cmp     %rdx, %rsi
     jne     .Lisr_gs_ok
     wrgsbase %rdi
-    movq    $1, PAL_TCB_VM_GS_SWAPPED_BY_ISR(%rdi)
+    mov     $1, %r8d
 .Lisr_gs_ok:
+    push    %r8                             // isr_regs.gs_swapped
 
     mov     PER_CPU_DATA_XSAVE_AREA(%rax), %rdi
     push    %rdi
@@ -132,12 +134,13 @@ _isr_common:
     pop     %rdi
     callq   do_xrstor
 
-    // returning to the context the entry swapped the TCB in over: its base goes back in (with
-    // interrupts off until iretq restores RFLAGS; the registers below are popped afterwards)
-    cmpq    $0, %gs:PAL_TCB_VM_GS_SWAPPED_BY_ISR
-    je      .Lisr_ret_gs_done
+    // returning to the context the entry swapped the TCB in over (isr_regs.gs_swapped): its base
+    // goes back in (with interrupts off until iretq restores RFLAGS; the registers below are
+    // popped afterwards)
+    pop     %rdi
+    test    %rdi, %rdi
+    jz      .Lisr_ret_gs_done
     cli
-    movq    $0, %gs:PAL_TCB_VM_GS_SWAPPED_BY_ISR
     mov     %gs:PAL_TCB_VM_USER_GSBASE, %rdi
     wrgsbase %rdi
 .Lisr_ret_gs_done:
@@ -220,11 +223,13 @@ syscall_asm_gs:
 // those flags, and sti restores them).
 vm_jump_to_user_gs:
     cli
+    push    %rax
     mov     %gs:PAL_TCB_VM_USER_RIP, %rax
-    push    %rax                            // the handler's address, on the handler's stack
+    xchg    %rax, (%rsp)                    // the target's address below the stack, RAX back
+    push    %rax
     mov     %gs:PAL_TCB_VM_USER_GSBASE, %rax
     wrgsbase %rax
-    xor     %eax, %eax                      // a handler expects RAX = 0 (libos_context.c)
+    pop     %rax
     sti
     ret
 

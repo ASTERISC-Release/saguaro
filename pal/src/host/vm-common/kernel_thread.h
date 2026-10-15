@@ -203,8 +203,9 @@ struct thread {
      * loads it again. Threads with 0 run the old paths unchanged. (Last in the thread, which is
      * last in the TCB: the offsets of every other field stay as they were.) */
     uint64_t user_gsbase;
-    /* set by _isr_common when it swapped the TCB in over the application's base; the matching
-     * return (iretq) loads the base back and clears it */
+    /* the interrupted context ran with the application's base (isr_regs.gs_swapped) and returns
+     * through isr_iret_to_userland (a preempted thread, a deferred upcall), which loads the base
+     * back and clears this */
     uint64_t gs_swapped_by_isr;
 #endif
 

@@ -20,6 +20,12 @@ struct isr_regs {
     void* fpregs;
 
 #ifdef __x86_64__
+    /* 1 when _isr_common put the PAL TCB into GS over the interrupted context's own base (a
+     * thread that owns %gs, kernel_events.S): the matching return loads the base back. On this
+     * frame, not in the thread, so that a nested interrupt's return leaves the outer kernel
+     * context alone; a return that goes through isr_iret_to_userland instead (a preempted thread,
+     * a deferred upcall) carries it in thread.gs_swapped_by_isr. */
+    uint64_t gs_swapped;
     /* all GPRs except those pushed by the CPU, pushed by ISRs in *.S */
     uint64_t r8;
     uint64_t r9;

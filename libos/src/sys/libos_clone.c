@@ -99,8 +99,10 @@ static int clone_implementation_wrapper(void* arg_) {
      * uninitialized FS base. */
     set_tls(arg->tls);
 #ifdef __x86_64__
-    if (arg->gs_base)
+    if (arg->gs_base) {
         (void)PalSegmentBaseSet(PAL_SEGMENT_GS, arg->gs_base);
+        tcb->gs_base = arg->gs_base; /* restore_child_context_after_clone() enters user code with it */
+    }
 #endif
 
     /* Diagnostic: log the TLS values we just set so we can verify per-thread FS base. */

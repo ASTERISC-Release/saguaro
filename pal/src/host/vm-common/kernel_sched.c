@@ -107,6 +107,8 @@ static void save_userland_context(struct thread* curr_thread, struct isr_regs* u
     curr_thread->irq_pseudo_stack.rflags = userland_regs->rflags;
     curr_thread->irq_pseudo_stack.rsp    = userland_regs->rsp;
     curr_thread->irq_pseudo_stack.ss     = userland_regs->ss;
+    /* the interrupt's own return is skipped: isr_iret_to_userland loads the base back */
+    curr_thread->gs_swapped_by_isr = userland_regs->gs_swapped;
 
     curr_thread->context.rip    = (uint64_t)&isr_iret_to_userland;
     curr_thread->context.rsp    = (uint64_t)&curr_thread->irq_pseudo_stack;
@@ -380,6 +382,21 @@ int sched_thread_wait_interruptible(int* futex_word, spinlock_t* lock) {
 
 void sched_thread_interrupt(struct thread* thread) {
     spinlock_lock_disable_irq(&g_thread_list_lock);
+    /* The LibOS may resume a thread whose PAL thread has already exited (its stack and TCB, where
+     * `struct thread` lives, are freed): only a thread still on the list is touched, as the Linux
+     * PAL's tgkill() of a gone tid is harmless. */
+    bool alive = false;
+    struct thread* t;
+    LISTP_FOR_EACH_ENTRY(t, &g_thread_list, list) {
+        if (t == thread) {
+            alive = true;
+            break;
+        }
+    }
+    if (!alive) {
+        spinlock_unlock_enable_irq(&g_thread_list_lock);
+        return;
+    }
     if (thread->state == THREAD_BLOCKED && thread->wait_interruptible) {
         /* the wait's -PAL_ERROR_INTERRUPTED return is the delivery; nothing stays pending */
         thread->state              = THREAD_RUNNABLE;

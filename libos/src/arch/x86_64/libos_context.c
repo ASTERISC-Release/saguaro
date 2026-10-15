@@ -187,6 +187,22 @@ static bool libos_xstate_copy(struct libos_xstate* dst, const struct libos_xstat
     return src_is_xstate;
 }
 
+/* VM PAL: make `context` (a signal handler the LibOS is about to jump to itself, in ring 0, with
+ * the PAL's TCB in GS) start at the PAL's stub, which loads the thread's own GS base and continues
+ * at the context's RIP with every register as it is. Only for a thread that owns %gs. Not for a
+ * context whose RIP is the kernel's return stub (a system call's return, a new thread's or a fork
+ * child's first return): that stub loads the base itself. */
+static void vm_enter_user_through_gs_stub(PAL_CONTEXT* context) {
+    uintptr_t gs_base = 0;
+    if (!g_pal_public_state->vm_jump_to_user_gs ||
+            PalSegmentBaseGet(PAL_SEGMENT_GS, &gs_base) < 0 || !gs_base)
+        return;
+    void* user_rip_ptr = (char*)pal_get_tcb() + g_pal_public_state->vm_user_rip_offset;
+    uint64_t target = context->rip;
+    memcpy(user_rip_ptr, &target, sizeof(target));
+    context->rip = (uint64_t)g_pal_public_state->vm_jump_to_user_gs;
+}
+
 noreturn void restore_child_context_after_clone(struct libos_context* context) {
     assert(context->regs);
 
@@ -197,8 +213,11 @@ noreturn void restore_child_context_after_clone(struct libos_context* context) {
 
     set_tls(context->tls);
     libos_tcb_t* tcb = container_of(context, libos_tcb_t, context);
-    if (tcb->gs_base)
+    if (tcb->gs_base) {
+        /* (the child continues through the kernel's return stub, context->regs->rip, which loads
+         * the base: no vm_enter_user_through_gs_stub() here) */
         (void)PalSegmentBaseSet(PAL_SEGMENT_GS, tcb->gs_base);
+    }
 
     PAL_CONTEXT* regs = context->regs;
     context->regs = NULL;
@@ -307,17 +326,13 @@ void prepare_sigframe(PAL_CONTEXT* context, siginfo_t* siginfo, void* handler, v
      * register arguments in `rax`. */
     context->rax = 0;
 
-    /* VM PAL, a thread that owns %gs (Wine's TEB): the jump above would enter the handler with the
-     * PAL's TCB in GS; go through the PAL's stub, which loads the application's base first. */
-    if (g_pal_public_state->vm_jump_to_user_gs) {
-        uintptr_t gs_base = 0;
-        if (PalSegmentBaseGet(PAL_SEGMENT_GS, &gs_base) == 0 && gs_base) {
-            void* user_rip_ptr = (char*)pal_get_tcb() + g_pal_public_state->vm_user_rip_offset;
-            uint64_t target = (uint64_t)handler;
-            memcpy(user_rip_ptr, &target, sizeof(target));
-            context->rip = (uint64_t)g_pal_public_state->vm_jump_to_user_gs;
-        }
-    }
+    /* VM PAL, a thread that owns %gs (Wine's TEB), at a system call's return: the LibOS enters
+     * the handler itself (_return_from_syscall jumps to it, in ring 0) and GS still holds the
+     * PAL's TCB; go through the PAL's stub, which loads the application's base first. A handler
+     * for a fault or an interrupt is entered by the kernel's own return (iretq), which loads the
+     * base: no stub there. */
+    if (g_pal_public_state->vm_jump_to_user_gs && libos_get_tcb()->context.syscall_nr >= 0)
+        vm_enter_user_through_gs_stub(context);
 
     log_debug("Created sigframe for sig: %d at %p (handler: %p, restorer: %p)",
               siginfo->si_signo, sigframe, handler, restorer);

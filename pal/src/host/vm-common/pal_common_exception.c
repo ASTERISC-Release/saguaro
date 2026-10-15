@@ -161,6 +161,8 @@ static noreturn void defer_user_upcall(enum pal_event event, uint64_t addr, stru
     thread->upcall_fpregs = fpregs;
     thread->upcall_addr   = addr;
     thread->upcall_event  = event;
+    /* the interrupt's own return is skipped: isr_iret_to_userland loads the base back */
+    thread->gs_swapped_by_isr = regs->gs_swapped;
     thread->context.rip    = (uint64_t)&deferred_upcall_trampoline;
     thread->context.rsp    = ALIGN_DOWN((uintptr_t)fpregs - 64, 16) - 8; /* as after a call */
     thread->context.rflags = 0x202;
