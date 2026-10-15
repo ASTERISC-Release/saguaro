@@ -83,6 +83,8 @@ tests = {
     'memfd_rw': {},
     'memfd_seals': {},
     'perm_checks': {},
+    'prctl_misc': {},
+    'sched_errnos': {},
     'mmap_file_backed': {},
     'mmap_file_emulated': {},
     'mprotect_file_fork': {},

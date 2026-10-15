@@ -311,6 +311,10 @@ struct libos_thread* get_new_thread(void) {
     thread->sgid      = cur_thread->sgid;
     thread->fsuid     = cur_thread->fsuid;
     thread->fsgid     = cur_thread->fsgid;
+    memcpy(thread->comm, cur_thread->comm, sizeof(thread->comm)); /* a new thread keeps the name */
+    thread->keepcaps = cur_thread->keepcaps;
+    thread->no_new_privs = cur_thread->no_new_privs;
+    thread->timer_slack_ns = cur_thread->timer_slack_ns;
     thread->cap_effective = cur_thread->cap_effective;
     thread->cap_permitted = cur_thread->cap_permitted;
     thread->cap_inheritable = cur_thread->cap_inheritable;

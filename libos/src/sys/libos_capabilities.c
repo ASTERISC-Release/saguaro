@@ -110,7 +110,8 @@ bool libos_capable(int cap) {
 void cred_fix_caps_setuid(struct libos_thread* t, uid_t old_ruid, uid_t old_euid, uid_t old_suid) {
     if ((old_ruid == 0 || old_euid == 0 || old_suid == 0) &&
             (t->uid != 0 && t->euid != 0 && t->suid != 0)) {
-        t->cap_permitted = 0;
+        if (!t->keepcaps) /* PR_SET_KEEPCAPS keeps the permitted set */
+            t->cap_permitted = 0;
         t->cap_effective = 0;
     }
     if (old_euid == 0 && t->euid != 0)
