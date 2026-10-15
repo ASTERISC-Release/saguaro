@@ -2,14 +2,17 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 # iperf3 manifest for a Windows VBS enclave (`make VBS=1`, Documentation/vbs.rst): the counterpart of
-# iperf3.manifest.template. iperf3 (built with the vbs gcc against the vbs glibc, in vbs-build/) is
-# the server; it runs in one process (no -D: the enclave cannot fork) and listens on the loopback.
+# iperf3.manifest.template. iperf3 (built with the vbs gcc against the vbs glibc, in vbs-build/) runs
+# in one process (no -D: the enclave cannot fork) as a server on the loopback or as a client.
 
 loader.entrypoint = "file:/libsysdb.so"
 libos.entrypoint = "/iperf3"
 loader.log_level = "{{ log_level }}"
 
-loader.argv = ["iperf3", "-s", "-p", "{{ env.get('IPERF_PORT', '5201') }}", "-B", "127.0.0.1"]
+# the arguments come from the command line (`gramine-vbs iperf3 -s ...`), so the same image runs the
+# server and a client; the default is the server on the loopback
+loader.insecure__use_cmdline_argv = true
+loader.argv = ["iperf3", "-s", "-p", "5201", "-B", "127.0.0.1"]
 loader.env.LD_LIBRARY_PATH = "{{ arch_libdir }}"
 
 fs.root.uri = "file:/"
