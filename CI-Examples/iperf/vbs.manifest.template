@@ -9,10 +9,9 @@ loader.entrypoint = "file:/libsysdb.so"
 libos.entrypoint = "/iperf3"
 loader.log_level = "{{ log_level }}"
 
-# the arguments come from the command line (`gramine-vbs iperf3 -s ...`), so the same image runs the
-# server and a client; the default is the server on the loopback
+# the arguments come from the command line (`gramine-vbs iperf3 -s -p 5201 -B 127.0.0.1` for the
+# server, `gramine-vbs iperf3 -c 127.0.0.1 -p 5201` for a client), so the same image runs both
 loader.insecure__use_cmdline_argv = true
-loader.argv = ["iperf3", "-s", "-p", "5201", "-B", "127.0.0.1"]
 loader.env.LD_LIBRARY_PATH = "{{ arch_libdir }}"
 
 fs.root.uri = "file:/"
