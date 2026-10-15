@@ -86,7 +86,8 @@ jobs:
 
       - name: Build the TDX PAL
         run: |
+          # graphics off: with a VM-type PAL it would build libgraphics.so, which needs EGL headers
           meson setup build-tdx -Dtdx=enabled -Ddirect=enabled -Dsgx=disabled -Dvm=disabled \
-              -Dlibc=none -Dtests=disabled -Dbuildtype=release
+              -Dgraphics=disabled -Dlibc=none -Dtests=disabled -Dbuildtype=release
           ninja -C build-tdx
           test -x build-tdx/pal/src/host/tdx/pal
