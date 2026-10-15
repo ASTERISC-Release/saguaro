@@ -225,6 +225,9 @@ int main(int argc, const char** argv) {
     write_file(inner, "x");
     if (rmdir(d) == 0 || errno != ENOTEMPTY)
         errx(1, "rmdir(non-empty): want ENOTEMPTY, got %d", errno);
+    /* the same through unlinkat(AT_REMOVEDIR), which is what rmdir() is on aarch64 */
+    if (unlinkat(AT_FDCWD, d, AT_REMOVEDIR) == 0 || errno != ENOTEMPTY)
+        errx(1, "unlinkat(non-empty, AT_REMOVEDIR): want ENOTEMPTY, got %d", errno);
     unlink(inner);
     if (rmdir(d))
         err(1, "rmdir(empty)");
