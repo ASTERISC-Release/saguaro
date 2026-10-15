@@ -34,8 +34,12 @@ struct libos_clone_args {
 /* the thread's own GS base, 0 where the PAL does not hand GS to the application */
 static unsigned long current_gs_base(void) {
     unsigned long gs_base = 0;
+#ifdef __x86_64__
+    /* PalSegmentBaseGet exists on x86_64 only (pal/src/pal_misc.c); other architectures have no
+     * second segment register to hand over */
     if (PalSegmentBaseGet(PAL_SEGMENT_GS, &gs_base) < 0)
         gs_base = 0;
+#endif
     return gs_base;
 }
 
@@ -94,8 +98,10 @@ static int clone_implementation_wrapper(void* arg_) {
      * the scheduler might try to restore the thread on another vCPU and install an
      * uninitialized FS base. */
     set_tls(arg->tls);
+#ifdef __x86_64__
     if (arg->gs_base)
         (void)PalSegmentBaseSet(PAL_SEGMENT_GS, arg->gs_base);
+#endif
 
     /* Diagnostic: log the TLS values we just set so we can verify per-thread FS base. */
 #ifdef __x86_64__
