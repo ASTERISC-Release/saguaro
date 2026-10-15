@@ -1500,6 +1500,34 @@ class TC_40_FileSystem(RegressionTestCase):
         stdout, _ = self.run_binary(['mremap_misc', '/mnt/tmpfs'])
         self.assertIn('TEST OK', stdout)
 
+    def test_077c_symlink_created_on_host(self):
+        os.makedirs('tmp', exist_ok=True)
+        target = 'tmp/symlink_host_target'
+        live = 'tmp/symlink_host_live'
+        dangling = 'tmp/symlink_host_dangling'
+        for path in (live, dangling):
+            if os.path.lexists(path):
+                os.unlink(path)
+        with open(target, 'w') as f:
+            f.write('x')
+        os.symlink('symlink_host_target', live)
+        os.symlink('symlink_host_missing', dangling)
+        try:
+            stdout, _ = self.run_binary(['symlink_host', live, 'symlink_host_target', dangling])
+            self.assertIn('TEST OK', stdout)
+        finally:
+            for path in (live, dangling, target):
+                if os.path.lexists(path):
+                    os.unlink(path)
+
+    def test_077a_xattr_misc_chroot(self):
+        stdout, _ = self.run_binary(['xattr_misc', 'tmp'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_077b_xattr_misc_tmpfs(self):
+        stdout, _ = self.run_binary(['xattr_misc', '/mnt/tmpfs'])
+        self.assertIn('TEST OK', stdout)
+
     def test_071_memfd_on_shm_mount(self):
         stdout, _ = self.run_binary(['memfd_rw'])
         self.assertIn('TEST OK', stdout)

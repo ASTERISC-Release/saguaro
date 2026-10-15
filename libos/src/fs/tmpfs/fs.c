@@ -292,6 +292,12 @@ static int tmpfs_exchange(struct libos_dentry* old, struct libos_dentry* new) {
     return 0;
 }
 
+/* attributes live in the inode (`libos_xattr_store_op()`) */
+static int tmpfs_xattr(struct libos_dentry* dent, int op, const char* name, void* value,
+                       size_t* size, int flags) {
+    return libos_xattr_store_op(dent->inode, op, name, value, size, flags);
+}
+
 static int tmpfs_chmod(struct libos_dentry* dent, mode_t perm) {
     __UNUSED(dent);
     __UNUSED(perm);
@@ -445,6 +451,7 @@ struct libos_d_ops tmp_d_ops = {
     .unlink      = &tmpfs_unlink,
     .rename      = &tmpfs_rename,
     .exchange    = &tmpfs_exchange,
+    .xattr       = &tmpfs_xattr,
     .chmod       = &tmpfs_chmod,
     .set_times   = &tmpfs_set_times,
     .symlink     = &tmpfs_symlink,

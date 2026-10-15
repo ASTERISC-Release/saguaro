@@ -75,7 +75,42 @@ static int chroot_lookup(struct libos_dentry* dent) {
     if (ret < 0)
         goto out;
 
+    /*
+     * A host symbolic link (one made by an earlier process of this session, or before it) is
+     * shown as a link when resolving it inside Gramine is the same as on the host: a relative
+     * target without ".." stays in the same directory of the same mount. A dangling link is a
+     * link too (it used to be reported missing). Other links (absolute targets, ones climbing out
+     * with "..", e.g. into the host's /etc/alternatives) are followed on the host as before, since
+     * manifests rely on that; so is a mount's root (no parent), whose host path is often itself a
+     * link (/bin -> usr/bin).
+     */
     PAL_STREAM_ATTR pal_attr;
+    char link_buf[PATH_MAX];
+    size_t link_len = sizeof(link_buf) - 1;
+    ret = dent->parent ? PalFileReadLink(uri, link_buf, &link_len) : -PAL_ERROR_INVAL;
+    if (ret == 0) {
+        link_buf[link_len] = '\0';
+        bool same_dir = link_buf[0] != '/' && strcmp(link_buf, "..") != 0 &&
+                        strncmp(link_buf, "../", 3) != 0 && !strstr(link_buf, "/../") &&
+                        !(link_len >= 3 && !strcmp(link_buf + link_len - 3, "/.."));
+        bool as_link = same_dir ||
+                       PalStreamAttributesQuery(uri, &pal_attr) == -PAL_ERROR_STREAMNOTEXIST;
+        if (as_link) {
+            char* target = strdup(link_buf);
+            if (!target) {
+                ret = -ENOMEM;
+                goto out;
+            }
+            ret = chroot_setup_dentry(dent, S_IFLNK, PERM_rwxrwxrwx, link_len);
+            if (ret < 0) {
+                free(target);
+                goto out;
+            }
+            dent->inode->data = target;
+            goto out;
+        }
+    }
+
     ret = PalStreamAttributesQuery(uri, &pal_attr);
     if (ret < 0) {
         ret = pal_to_unix_errno(ret);
@@ -441,6 +476,55 @@ static int chroot_follow_link(struct libos_dentry* dent, char** out_target) {
     return *out_target ? 0 : -ENOMEM;
 }
 
+/* RENAME_EXCHANGE on the host (atomic there); the caller swaps the inodes */
+static int chroot_exchange(struct libos_dentry* a, struct libos_dentry* b) {
+    assert(locked(&g_dcache_lock));
+    char* uri_a = NULL;
+    char* uri_b = NULL;
+    /* path operations take "file:" URIs whatever the object (as for symlinks above) */
+    int ret = dentry_uri(a, S_IFREG, &uri_a);
+    if (ret == 0)
+        ret = dentry_uri(b, S_IFREG, &uri_b);
+    if (ret == 0) {
+        ret = PalFileExchange(uri_a, uri_b);
+        if (ret == -PAL_ERROR_NOTSUPPORT)
+            ret = -EOPNOTSUPP;
+        else if (ret < 0)
+            ret = pal_to_unix_errno(ret);
+    }
+    free(uri_a);
+    free(uri_b);
+    return ret;
+}
+
+/* extended attributes are the host file's (`PalFileXattr`), with the PAL's errors mapped to the
+ * ones the xattr calls need */
+static int chroot_xattr(struct libos_dentry* dent, int op, const char* name, void* value,
+                        size_t* size, int flags) {
+    assert(locked(&g_dcache_lock));
+    char* uri = NULL;
+    int ret = dentry_uri(dent, S_IFREG, &uri);
+    if (ret < 0)
+        return ret;
+    /* the LibOS has resolved the path already: `dent` is the object itself */
+    ret = PalFileXattr(uri, (enum pal_xattr_op)op, name, value, size, flags | PAL_XATTR_NOFOLLOW);
+    free(uri);
+    switch (ret) {
+        case 0:
+            return 0;
+        case -PAL_ERROR_STREAMNOTEXIST:
+            return -ENODATA;
+        case -PAL_ERROR_NOTSUPPORT:
+            return -EOPNOTSUPP;
+        case -PAL_ERROR_TOOLONG:
+            return op == PAL_XATTR_SET ? -E2BIG : -ERANGE;
+        case -PAL_ERROR_STREAMEXIST:
+            return -EEXIST;
+        default:
+            return pal_to_unix_errno(ret);
+    }
+}
+
 static void chroot_idrop(struct libos_inode* inode) {
     if (inode->type == S_IFLNK)
         free(inode->data);
@@ -607,6 +691,8 @@ struct libos_d_ops chroot_d_ops = {
     .symlink = &chroot_symlink,
     .link = &chroot_link,
     .follow_link = &chroot_follow_link,
+    .exchange = &chroot_exchange,
+    .xattr = &chroot_xattr,
     .idrop = &chroot_idrop,
 };
 

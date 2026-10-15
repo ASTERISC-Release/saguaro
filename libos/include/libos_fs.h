@@ -298,6 +298,10 @@ struct libos_inode {
     /* Number of VMAs the file is mmapped to; should be accessed using atomic operations. */
     uint64_t num_mmapped;
 
+    /* Extended attributes kept by the LibOS itself (filesystems without host storage, e.g. tmpfs);
+     * see `libos_xattr_store_*()`. Protected by `lock`. */
+    struct libos_xattr_entry* xattrs;
+
     struct libos_lock lock;
     refcount_t ref_count;
 };
@@ -453,6 +457,18 @@ struct libos_d_ops {
      * dentries (this hook only updates the filesystem's own state, e.g. timestamps).
      */
     int (*exchange)(struct libos_dentry* old, struct libos_dentry* new);
+
+    /*!
+     * \brief Get, set, list or remove an extended attribute of the file (`op` is a
+     * `enum pal_xattr_op`, `flags` `PAL_XATTR_CREATE`/`REPLACE`).
+     *
+     * `*size` works as in `PalFileXattr()`: the buffer size in (0 asks for the needed size) and
+     * the value's or list's size out for GET/LIST, the value's size for SET. Returns 0 or a
+     * negative errno (ENODATA, ERANGE, E2BIG, EEXIST, EOPNOTSUPP ...). The caller holds
+     * `g_dcache_lock`. Filesystems without this hook have no extended attributes (EOPNOTSUPP).
+     */
+    int (*xattr)(struct libos_dentry* dent, int op, const char* name, void* value, size_t* size,
+                 int flags);
 
     /*!
      * \brief List all files in the directory.
@@ -622,6 +638,13 @@ void dump_dcache(struct libos_dentry* dent);
  * `dentry` can be negative (in which case the function will return -ENOENT).
  */
 int check_permissions(struct libos_dentry* dent, mode_t mask);
+
+/* An extended-attribute store kept in a LibOS inode (for tmpfs), same contract as the `xattr`
+ * hook; the store is freed with the inode. */
+struct libos_xattr_entry;
+int libos_xattr_store_op(struct libos_inode* inode, int op, const char* name, void* value,
+                         size_t* size, int flags);
+void libos_xattr_store_free(struct libos_inode* inode);
 /* the caller's fsgid or a supplementary group is `gid` */
 bool libos_in_group(gid_t gid);
 /* owner, group and set-group-ID handling of a just-created object (`inode_init_owner()`) */

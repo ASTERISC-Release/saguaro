@@ -165,6 +165,7 @@ tests = {
     },
     'ptimer': {},
     'stat_invalid_args': {},
+    'symlink_host': {},
     'synthetic': {},
     'syscall': {},
     'timerfd': {},
@@ -184,6 +185,7 @@ tests = {
     'uid_gid': {},
     'unix': {},
     'vfork_and_exec': {},
+    'xattr_misc': {},
 }
 
 if host_machine.cpu_family() == 'x86_64'

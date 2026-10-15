@@ -143,6 +143,7 @@ manifests = [
   "spinlock",
   "ptimer",
   "stat_invalid_args",
+  "symlink_host",
   "synthetic",
   "syscall",
   "timerfd",
@@ -163,6 +164,7 @@ manifests = [
   "uid_gid",
   "unix",
   "vfork_and_exec",
+  "xattr_misc",
 ]
 
 [arch.x86_64]
