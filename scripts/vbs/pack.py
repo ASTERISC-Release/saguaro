@@ -44,6 +44,18 @@ hands the fault to the PAL.
 Every packed file (ELF objects and data files such as the manifest) is also kept as its original
 bytes in a read-only data section (`.gxfile`), from which the PAL serves file reads.
 
+x86_64 (Documentation/devel/vbs-enclave/PLAN-x64.md). The objects' machine decides; all must agree.
+A `syscall` returns an error in a VBS enclave instead of trapping (FINDINGS-x64.md), so every
+`syscall` (found by disassembling the executable sections) becomes `ud2` -- the same two bytes, so
+nothing moves -- and its offset in the blob goes into a sorted table (g_pal_vbs_syscall_sites in
+pal_vbs_packed_table.h); W's exception handler sends a `ud2` at a listed site into the LibOS's
+syscall entry, with rcx and r11 as `syscall` leaves them. Objects listed with --no-svc must contain
+no `syscall`. Exception delivery leaves the red zone below %rsp intact (FINDINGS-x64.md), so packed
+code may use it; --red-zone-check lists (and refuses) instructions that address memory below %rsp,
+outside functions listed with --red-zone-allow, should that ever be needed. The x18 and TPIDR_EL0
+handling is AArch64 only. The unwind data are x64 RUNTIME_FUNCTIONs, one per executable range, whose UNWIND_INFO
+(no unwind codes) names the same handler.
+
 Usage:
   pack.py --out DIR [--obj KIND:NAME:SRC[:PATH]]... [--file NAME:SRC:PATH]... [--no-svc NAME]...
     KIND is pal (loaded by the PAL side) or user (mapped by the LibOS); PATH is the absolute path
@@ -126,6 +138,9 @@ def enc_brk(imm):
 NOP = 0xD503201F
 
 
+EM_AARCH64, EM_X86_64 = 183, 62
+
+
 def make_stub(stub, site, slot):
     """Stub at image offset `stub` for the svc at `site`; all offsets are image-relative, which is
     enough because the image base is 4 KiB aligned (adrp works on 4 KiB pages)."""
@@ -151,8 +166,9 @@ class Elf:
         if d[:4] != b'\x7fELF' or d[4] != 2 or d[5] != 1:
             sys.exit(f'{path}: not a little-endian ELF64')
         self.e_type = read_u(d, 16, 2)
-        if read_u(d, 18, 2) != 183:
-            sys.exit(f'{path}: not AArch64')
+        self.machine = read_u(d, 18, 2)
+        if self.machine not in (EM_AARCH64, EM_X86_64):
+            sys.exit(f'{path}: neither AArch64 nor x86_64')
         if self.e_type != 3:
             sys.exit(f'{path}: not ET_DYN (a PIE or shared object is required)')
         self.e_entry = read_u(d, 24, 8)
@@ -308,6 +324,61 @@ def x18_uses(path):
     return hits
 
 
+def objdump_lines(path):
+    """(function, address, instruction text) for every instruction of the executable sections"""
+    tool = os.environ.get('OBJDUMP') or shutil.which('llvm-objdump') or shutil.which('objdump')
+    if not tool:
+        sys.exit('no llvm-objdump/objdump to disassemble the packed objects (set OBJDUMP)')
+    out = subprocess.run([tool, '-d', '--no-show-raw-insn', path], check=True,
+                         capture_output=True, text=True).stdout
+    func = '?'
+    for line in out.splitlines():
+        m = FUNC_RE.match(line)
+        if m:
+            func = m.group(1)
+            continue
+        m = INSN_RE.match(line)
+        if m:
+            yield func, int(m.group(1), 16), m.group(2).split('#')[0].strip()
+
+
+SYSCALL_RE = re.compile(r'^syscall\b')
+REDZONE_RE = re.compile(r'-0x[0-9a-f]+\(%rsp\)')
+
+
+def x86_scan(path):
+    """syscall sites (vaddrs) and red-zone uses (function, vaddr, instruction) of an x86_64 object"""
+    sites, redzone = [], []
+    for func, addr, insn in objdump_lines(path):
+        if SYSCALL_RE.match(insn):
+            sites.append(addr)
+        elif REDZONE_RE.search(insn) and not insn.startswith('lea'):
+            redzone.append((func, addr, insn))
+    return sites, redzone
+
+
+def rewrite_syscall(path, img, sites):
+    """syscall (0f 05) -> ud2 (0f 0b) at every site; returns the sites"""
+    for v in sites:
+        if img[v:v + 2] != b'\x0f\x05':
+            sys.exit(f'{path}: no syscall bytes at {v:#x}')
+        img[v + 1] = 0x0b
+    return sites
+
+
+def unwind_data_x64(ranges):
+    """static .pdata/.xdata for x86_64 packed code: one RUNTIME_FUNCTION per executable range,
+    UNWIND_INFO version 1, UNW_FLAG_EHANDLER, no prologue and no unwind codes"""
+    xdata = ('gx_xdata_x64:\n    .byte 0x09, 0, 0, 0\n'
+             '    .rva pal_vbs_packed_exception_handler\n    .long 0\n')
+    pdata = ''.join(f'    .rva g_pal_vbs_packed_blob + {lo:#x}\n'
+                    f'    .rva g_pal_vbs_packed_blob + {hi:#x}\n    .rva gx_xdata_x64\n'
+                    for lo, hi in sorted(ranges) if hi > lo)
+    return ('/* unwind data of the packed code: faults there reach W\'s exception handler */\n'
+            '    .section .xdata,"dr"\n    .p2align 2\n' + xdata +
+            '    .section .pdata,"dr"\n    .p2align 2\n' + pdata)
+
+
 XDATA_MAX = 0x3FFFF * 4    # largest function length of an ARM64 .xdata record (18 bits, words)
 
 
@@ -345,6 +416,10 @@ def main():
     ap.add_argument('--x18-allow', action='append', default=[], metavar='NAME:FUNC[,FUNC...]',
                     help='functions of object NAME allowed to name x18')
     ap.add_argument('--skip-x18-check', action='store_true')
+    ap.add_argument('--red-zone-allow', action='append', default=[], metavar='NAME:FUNC[,FUNC...]',
+                    help='x86_64: functions of object NAME allowed to address the red zone')
+    ap.add_argument('--red-zone-check', action='store_true',
+                    help='x86_64: refuse code that addresses memory below %%rsp')
     ap.add_argument('--entry', default='pal_vbs_start packed_entry',
                     help='entry symbol names tried in order (else e_entry)')
     ap.add_argument('objs', nargs='*', metavar='NAME=PATH',
@@ -356,6 +431,12 @@ def main():
     for spec in a.x18_allow:
         n, _, funcs = spec.partition(':')
         x18_allow.setdefault(n, set()).update(f for f in funcs.split(',') if f)
+    rz_allow = {}
+    for spec in a.red_zone_allow:
+        n, _, funcs = spec.partition(':')
+        rz_allow.setdefault(n, set()).update(f for f in funcs.split(',') if f)
+    machine = None
+    syscall_sites = []
 
     specs = [s.split(':', 3) for s in a.obj]
     specs += [['pal'] + s.split('=', 1) for s in a.objs]
@@ -376,6 +457,45 @@ def main():
         name, src = spec[1], spec[2]
         path = spec[3] if len(spec) > 3 else ''
         e = Elf(src)
+        if machine is None:
+            machine = e.machine
+        elif e.machine != machine:
+            sys.exit(f'{src}: a different machine than the objects before it')
+        if machine == EM_X86_64:
+            img = e.load_image()
+            map_size = len(img)
+            sites, redzone = x86_scan(src)
+            bad = [h for h in redzone if h[0] not in rz_allow.get(name, set())]
+            if bad and a.red_zone_check:
+                funcs = sorted({h[0] for h in bad})
+                sys.exit(f'{src}: {len(bad)} instructions use the red zone (below %rsp) in '
+                         f'{len(funcs)} functions: {", ".join(funcs[:12])}'
+                         f'{" ..." if len(funcs) > 12 else ""} (first: {bad[0][2]} at '
+                         f'{bad[0][1]:#x}) (--red-zone-check)')
+            if name in a.no_svc and sites:
+                sys.exit(f'{src}: {len(sites)} syscall (first at {sites[0]:#x}) in an object that '
+                         f'must have none (--no-svc {name})')
+            rewrite_syscall(src, img, sites)
+            off = align_up(len(blob), ALIGN)
+            blob += b'\0' * (off - len(blob)) + img
+            syscall_sites += [off + v for v in sites]
+            entry = 0
+            for sym in a.entry.split():
+                entry = e.dynsym_value(sym)
+                if entry:
+                    break
+            entry = entry or e.e_entry
+            foff, fsize = add_file(src)
+            for p_ in e.loads():
+                if p_['flags'] & PF_X:
+                    code_ranges.append((off + p_['vaddr'], off + p_['vaddr'] + p_['filesz']))
+            rows.append(dict(name=name, path=path, kind=kind, foff=foff, fsize=fsize, ioff=off,
+                             isize=len(img), map_size=map_size, entry=entry,
+                             dynamic=e.dynamic_vaddr(), slot=0, nsvc=len(sites)))
+            print(f'{name}: {spec[0]} x86_64 image {len(img):#x} at pack+{off:#x} entry={entry:#x} '
+                  f'dynamic={e.dynamic_vaddr():#x} syscall->ud2={len(sites)} red-zone-insns='
+                  f'{len(redzone)}' + (f' path={path}' if path else ''))
+            continue
         if not a.skip_x18_check:
             bad = [h for h in x18_uses(src) if h[0] not in x18_allow.get(name, set())]
             if bad:
@@ -484,7 +604,7 @@ def main():
                 '    .section .gxpack,"xr"\n    .p2align 12\n'
                 '    .globl g_pal_vbs_packed_blob\ng_pal_vbs_packed_blob:\n'
                 '    .incbin "packed.bin"\n'
-                + unwind_data(code_ranges) +
+                + (unwind_data_x64(code_ranges) if machine == EM_X86_64 else unwind_data(code_ranges)) +
                 '/* original bytes of the packed files: read-only data */\n'
                 '    .section .gxfile,"dr"\n    .p2align 12\n'
                 '    .globl g_pal_vbs_packed_files\ng_pal_vbs_packed_files:\n'
@@ -502,6 +622,13 @@ def main():
                     f'{r["fsize"]:#x}, {r["ioff"]:#x}, {r["isize"]:#x}, {r["map_size"]:#x}, '
                     f'{r["entry"]:#x}, {r["dynamic"]:#x}, {r["slot"]:#x}, {r["nsvc"]} }},\n')
         f.write('};\n')
+        if machine == EM_X86_64:
+            # the syscall sites rewritten into ud2, as offsets in the blob (sorted)
+            sites = sorted(syscall_sites)
+            assert all(x < 1 << 32 for x in sites)
+            f.write(f'#define PAL_VBS_SYSCALL_SITE_COUNT {len(sites)}ull\n'
+                    'static const uint32_t g_pal_vbs_syscall_sites[] = {'
+                    + (', '.join(f'{x:#x}' for x in sites) if sites else '0') + '};\n')
     with open(os.path.join(a.out, 'pal_vbs_image_config.h'), 'w') as f:
         f.write('/* generated by scripts/vbs/pack.py from the manifest: the enclave configuration */\n'
                 '#pragma once\n'

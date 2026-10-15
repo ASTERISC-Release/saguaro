@@ -26,7 +26,7 @@ T exec2     @('exec', '2') 20000
 T exec3     @('exec', '3')
 T basic     @('basic', '0x2FD')
 T exec-nx   @('basic', '0x2') 20000
-T write-code @('basic', '0x100') 20000
+T write-code @('basic', '0x108') 20000
 T fsbase    @('fsbase')
 T fsocall   @('fsocall', '100000') 300000
 T fsspin    @('fsspin', '4000000000') 120000
@@ -36,6 +36,9 @@ T offstack2 @('offstack', '2') 20000
 T offstack3 @('offstack', '3') 20000
 T stack     @('stack')
 T teb       @('teb')
+T stackgrow64 @('stackgrow', '64')
+T stackgrow900 @('stackgrow', '900')
+T stackgrow2000 @('stackgrow', '2000')
 T cfg       @('cfg') 20000
 T cost      @('cost', '100000') 300000
 T threads   @('threads', '16', '15')
@@ -44,17 +47,23 @@ T spin      @('spin', '16', '2000')
 T tls       @('tls')
 T api       @('api')
 T hostread  @('hostread')
+T rpm       @('rpm') 120000
+T rpm-nodebug @('rpm', 'nodebug') 120000
+T exccost   @('exccost', '10000')
+T fsexc     @('fsexc')
 T loaddata  @('loaddata')
 T nodebug   @('nodebug')
 if (-not $Only.Count -or ($Only -contains 'contention')) {
-    # FS base and registers under contention: $Procs processes spinning at once on 22 logical processors
+    # FS base and registers under contention: $Procs processes at once on 22 logical processors, half
+    # spinning (fsspin), half doing OCALLs (fsocall)
     $env:PROBE_WATCHDOG_MS = '300000'
     $ps = 1..$Procs | ForEach-Object {
-        Start-Process -FilePath $exe -ArgumentList 'fsspin', '20000000000' -NoNewWindow -PassThru `
+        $a = if ($_ % 2) { @('fsspin', '20000000000') } else { @('fsocall', '1000000') }
+        Start-Process -FilePath $exe -ArgumentList $a -NoNewWindow -PassThru `
             -RedirectStandardOutput (Join-Path $out "contention-$_.txt")
     }
     $ps | Wait-Process
-    Get-ChildItem (Join-Path $out 'contention-*.txt') | Select-String 'spin:' | ForEach-Object { $_.Line } |
+    Get-ChildItem (Join-Path $out 'contention-*.txt') | Select-String 'spin:|ocall:' | ForEach-Object { $_.Line } |
         Set-Content (Join-Path $out 'contention.txt')
     "contention     $Procs processes; summary in results\contention.txt"
 }

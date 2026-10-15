@@ -36,12 +36,23 @@ static void out(const char* fmt, ...) {
 
 /* A trivial "System V / AAPCS64" callee: it clobbers x18 (via an asm statement) to prove the
  * boundary thunk restores it. It just sums its four arguments. */
+#if defined(_M_X64)
+/* x64: a System V function that clobbers rsi, rdi and xmm6-xmm7 (caller-saved in System V,
+ * callee-saved in Windows x64): the thunk must restore them for its Windows caller */
+static __attribute__((sysv_abi, noinline)) uint64_t sysv_callee(uint64_t a0, uint64_t a1,
+                                                               uint64_t a2, uint64_t a3) {
+    __asm__ __volatile__("xor %%esi, %%esi; xor %%edi, %%edi; pxor %%xmm6, %%xmm6; pxor %%xmm7, %%xmm7"
+                         ::: "rsi", "rdi", "xmm6", "xmm7");
+    return a0 + a1 + a2 + a3;
+}
+#else
 static uint64_t sysv_callee(uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3) {
 #if defined(__aarch64__)
     __asm__ __volatile__("mov x18, #0xBAD" ::: "x18"); /* a Linux-style clobber of the TEB reg */
 #endif
     return a0 + a1 + a2 + a3;
 }
+#endif
 
 static int step_console(void) {
     out("[selftest] step 1: console OCALL works (you are reading this through the host)\n");
@@ -116,7 +127,7 @@ static int step_seh(void) {
 /* ---- step 7: packed objects (phase 2) ---- */
 
 /* the PAL table handed to the packed object: write() goes to the host console */
-static int64_t packed_write(int64_t fd, const char* buf, int64_t len) {
+static PAL_VBS_LINUX_ABI int64_t packed_write(int64_t fd, const char* buf, int64_t len) {
     (void)fd;
     if (len < 0)
         return -1;
@@ -125,7 +136,7 @@ static int64_t packed_write(int64_t fd, const char* buf, int64_t len) {
 }
 
 /* bound by the loader to the packed object's undefined symbol of the same name */
-static int64_t import_triple(int64_t x) {
+static PAL_VBS_LINUX_ABI int64_t import_triple(int64_t x) {
     return 3 * x;
 }
 
@@ -194,7 +205,12 @@ static int step_packed(void) {
 
 /* ---- step 8: does a non-TEB value in x18 survive preemption? ---- */
 static int step_x18_preempt(void) {
+#if defined(_M_X64)
+    /* x64: the FS base (a canonical address; the TEB register GS is never written) */
+    const uint64_t magic = 0x00005a5a18180000ull;
+#else
     const uint64_t magic = 0x5a5a18185a5a1818ull;
+#endif
     const uint64_t iterations = 4000000000ull; /* about 1.3 s at 3 GHz, one iteration per cycle */
     uint64_t t0 = g_env->time_ns();
     uint64_t seen = g_env->x18_spin(iterations, magic);
@@ -205,7 +221,11 @@ static int step_x18_preempt(void) {
     uint64_t teb = g_env->read_x18();
     out("[selftest] step 8: x18 held 0x%llx for %llu ms of spinning: %s (seen 0x%llx)\n",
         (unsigned long long)magic, (unsigned long long)((t1 - t0) / 1000000),
+#if defined(_M_X64)
+        seen == magic ? "preserved" : seen == 0 ? "reset to 0" : "CHANGED to another value",
+#else
         seen == magic ? "preserved" : seen == teb ? "reset to the TEB" : "CHANGED to another value",
+#endif
         (unsigned long long)seen);
     return 1;
 }
@@ -226,7 +246,11 @@ static int step_regs_preempt(void) {
 /* ---- step 12: does TPIDR_EL0 survive OCALLs (enclave -> host -> enclave)? measurement ---- */
 static int step_tpidr_ocall(void) {
     uint64_t saved = g_env->get_tpidr();
+#if defined(_M_X64)
+    const uint64_t magic = 0x00007ee200000000ull; /* the FS base: canonical addresses only */
+#else
     const uint64_t magic = 0x7ee2000000000000ull;
+#endif
     uint64_t changed = 0, first_seen = 0, n = 20000;
     uint64_t t0 = g_env->time_ns();
     for (uint64_t i = 0; i < n; i++) {

@@ -200,7 +200,7 @@ libos = shared_library('sysdb',
 
         # VBS-enclave PAL (Documentation/devel/vbs-enclave/): the LibOS maps packed objects where
         # they lie in the signed enclave image (libos_rtld.c); x18 is the enclave TEB.
-        vbs ? ['-DPAL_HOST_VBS=1', '-ffixed-x18'] : [],
+        vbs ? ['-DPAL_HOST_VBS=1'] + cflags_vbs_arch : [],
 
         # aarch64 + VM PAL (Milestone B): common_dep passes its sources (memcpy/memset/etc.)
         # through to this target, so they are compiled with these flags. -O3 would

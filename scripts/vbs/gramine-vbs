@@ -55,6 +55,7 @@ import fnmatch
 import hashlib
 import json
 import os
+import platform
 import shlex
 import shutil
 import signal
@@ -65,12 +66,17 @@ import tomllib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
+# the architecture of the Linux side and of the enclave image: aarch64 (ARM64 Windows) or x86_64
+# (x64 Windows, Documentation/devel/vbs-enclave/PLAN-x64.md); GRAMINE_VBS_ARCH overrides
+ARCH = os.environ.get('GRAMINE_VBS_ARCH') or ('x86_64' if platform.machine() in ('x86_64', 'AMD64')
+                                              else 'aarch64')
+ELF_MACHINE = 62 if ARCH == 'x86_64' else 183
 
 # objects of the runtime: (pack name, kind, file name, possible places in a meson build dir, path)
 RUNTIME = [
     ('libpal', 'pal', 'libpal.so', ['pal/src/host/vbs/libpal.so'], None),
     ('libsysdb', 'pal', 'libsysdb.so', ['libos/src/libsysdb.so'], '/libsysdb.so'),
-    ('vdso', 'user', 'vdso.so', ['libos/src/vdso/arch/aarch64/vdso.so'], '/gramine/vdso.so'),
+    ('vdso', 'user', 'vdso.so', [f'libos/src/vdso/arch/{ARCH}/vdso.so'], '/gramine/vdso.so'),
 ]
 # functions of the vbs glibc (scripts/vbs/build-glibc.sh) that may use x18: they save and restore
 # it or run only where the TEB is not needed (see FINDINGS.md of Documentation/devel/vbs-enclave)
@@ -78,7 +84,7 @@ X18_DEFAULTS = {
     'libsysdb.so': ['libos_syscall_entry', '_return_from_syscall'],
     'ld-linux-aarch64.so.1': ['_dl_tlsdesc_dynamic'],
     'libc.so.6': ['getcontext', 'swapcontext'],
-}
+} if ARCH == 'aarch64' else {}   # x86_64 has no x18
 
 
 def die(msg):
@@ -296,19 +302,20 @@ def find_runtime(rt):
                 break
         else:
             die(f'{fname} not found in the runtime directory {rt} (--runtime): build Gramine with '
-                f'`meson setup build-vbs -Dvbs=enabled ...` on an aarch64 Linux machine')
+                f'`meson setup build-vbs -Dvbs=enabled ...` on an {ARCH} Linux machine')
     return found
 
 
 def is_packable_elf(path):
-    """an AArch64 ELF shared object or PIE (ET_DYN): packed as a loadable object"""
+    """an ELF shared object or PIE (ET_DYN) of the image's architecture: packed as a loadable
+    object"""
     try:
         with open(path, 'rb') as f:
             h = f.read(20)
     except OSError:
         return False
     return (len(h) == 20 and h[:4] == b'\x7fELF' and h[4] == 2 and h[16] == 3 and h[17] == 0
-            and int.from_bytes(h[18:20], 'little') == 183)
+            and int.from_bytes(h[18:20], 'little') == ELF_MACHINE)
 
 
 def packed_entries(manifest, m):
@@ -448,7 +455,7 @@ def cmd_build(args):
             log(line.strip())
 
     log(f'Windows objects (clang) -> {obj_dir}')
-    env = dict(os.environ, HDR=hdr, OUT=obj_dir, PACK=pack_dir)
+    env = dict(os.environ, HDR=hdr, OUT=obj_dir, PACK=pack_dir, VBS_ARCH=ARCH)
     with open(os.path.join(b.dir, 'objs.log'), 'w') as lf:
         r = subprocess.run(['sh', os.path.join(HERE, 'build-objs.sh')], env=env, stdout=lf,
                            stderr=subprocess.STDOUT)
@@ -607,6 +614,8 @@ def jinja_env():
         'sysroot': os.environ.get('GRAMINE_VBS_SYSROOT',       # the vbs glibc
                                   os.path.join(ROOT, 'build-vbs-glibc')),
         'python': os.path.join(ROOT, 'build-vbs-python'),      # scripts/vbs/build-python.sh
+        # the dynamic loader of the vbs glibc (in /usr/lib of the sysroot and of the enclave)
+        'ldso': 'ld-linux-x86-64.so.2' if ARCH == 'x86_64' else 'ld-linux-aarch64.so.1',
     }
     return env
 
@@ -678,14 +687,18 @@ def cmd_runtime(_args):
 # ---- programs on the Windows side ----
 
 def vs_cmd_script(lines):
-    """a cmd script that runs `lines` with the ARM64 MSVC environment (as link-sign.cmd)"""
+    """a cmd script that runs `lines` with the MSVC environment of the image's architecture (as
+    link-sign.cmd)"""
     return '\r\n'.join([
         '@echo off', 'setlocal',
         'if "%VS_INSTALL_DIR%"=="" for /f "usebackq delims=" %%i in (`"%ProgramFiles(x86)%\\'
         'Microsoft Visual Studio\\Installer\\vswhere.exe" -latest -products * -property '
         'installationPath`) do set VS_INSTALL_DIR=%%i',
         'if "%VS_INSTALL_DIR%"=="" (echo no Visual Studio found & exit /b 1)',
-        'call "%VS_INSTALL_DIR%\\Common7\\Tools\\VsDevCmd.bat" -arch=arm64 -host_arch=arm64 '
+        'set VBS_HOST_ARCH=arm64',
+        'if /i "%PROCESSOR_ARCHITECTURE%"=="AMD64" set VBS_HOST_ARCH=x64',
+        f'call "%VS_INSTALL_DIR%\\Common7\\Tools\\VsDevCmd.bat" '
+        f'-arch={"x64" if ARCH == "x86_64" else "arm64"} -host_arch=%VBS_HOST_ARCH% '
         '-no_logo || exit /b 1', *lines, ''])
 
 

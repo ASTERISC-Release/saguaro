@@ -29,7 +29,7 @@ vbs.max_threads = 16
 
 vbs.packed_files = [
   { path = "/redis-server", uri = "file:vbs-build/redis-server" },
-{% for lib in ["ld-linux-aarch64.so.1", "libc.so.6", "libm.so.6"] %}
+{% for lib in [vbs.ldso, "libc.so.6", "libm.so.6"] %}
   { path = "{{ arch_libdir }}/{{ lib }}", uri = "file:{{ vbs.sysroot }}/usr/lib/{{ lib }}" },
 {% endfor %}
 ]

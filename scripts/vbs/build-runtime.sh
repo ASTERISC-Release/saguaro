@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
-# The runtime of a VBS enclave image, on an aarch64 Linux machine (WSL, the build container): the
+# The runtime of a VBS enclave image, on an aarch64 or x86_64 Linux machine (WSL, the build container): the
 # vbs glibc (scripts/vbs/build-glibc.sh, into build-vbs-glibc) and the meson build of the vbs PAL
 # and LibOS (build-vbs) when missing, then ninja. Used by wsl-build.sh (gramine-vbs.ps1 on
 # Windows) and by `gramine-vbs runtime` (the make VBS=1 flow). Step logs: build-vbs-logs/.
@@ -33,13 +33,18 @@ if [ ! -f build-vbs-glibc/usr/lib/libc.so.6 ]; then
     timed glibc sh scripts/vbs/build-glibc.sh
     rm -rf build-vbs-glibc.build
 fi
-if [ ! -f build-vbs-glibc/usr/lib/libsoftfp-x18.a ]; then
+if [ "$(uname -m)" != x86_64 ] && [ ! -f build-vbs-glibc/usr/lib/libsoftfp-x18.a ]; then
     # a sysroot from before build-glibc.sh installed the x18-free soft-float routines
     timed softfp sh scripts/vbs/build-glibc.sh --softfp
 fi
+# gcc 14 and later make incompatible pointer types an error, which a few LibOS sources still have
+# (gcc 15 of Ubuntu 26.04, the x64 machine's WSL); they stay warnings there
+CARGS=
+[ "$(gcc -dumpversion | cut -d. -f1)" -ge 14 ] 2>/dev/null \
+    && CARGS=-Dc_args=-Wno-error=incompatible-pointer-types
 if [ ! -f build-vbs/build.ninja ]; then
     log "first build: meson setup of the vbs PAL and LibOS"
     timed meson-setup meson setup build-vbs -Ddirect=disabled -Dvbs=enabled -Dlibc=none \
-        -Dtests=disabled -Dbuildtype=release -Dgraphics=disabled
+        -Dtests=disabled -Dbuildtype=release -Dgraphics=disabled $CARGS
 fi
 timed ninja ninja -C build-vbs

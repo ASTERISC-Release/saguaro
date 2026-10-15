@@ -237,6 +237,45 @@ int main(int argc, char** argv)
         g_io.args[0] = !strcmp(t, "stack") ? 9 : !strcmp(t, "cfg") ? 10 : 11;
         call("E_Exec", &g_io);
         finish();
+    } else if (!strcmp(t, "fsexc")) {
+        if (!create(1)) return 3;
+        memset(&g_io, 0, sizeof(g_io));
+        g_io.args[0] = 14;
+        call("E_Exec", &g_io);
+        finish();
+    } else if (!strcmp(t, "exccost")) {      // exccost [n]
+        if (!create(1)) return 3;
+        memset(&g_io, 0, sizeof(g_io));
+        g_io.args[0] = 13; g_io.args[1] = argc > 2 ? strtoull(argv[2], nullptr, 0) : 10000;
+        for (int rep = 0; rep < 3; rep++) call("E_Exec", &g_io);
+        finish();
+    } else if (!strcmp(t, "rpm")) {          // rpm [nodebug]: can the host read enclave memory with ReadProcessMemory?
+        bool dbg = !(argc > 2 && !strcmp(argv[2], "nodebug"));
+        if (!create(1, dbg)) return 3;
+        memset(&g_io, 0, sizeof(g_io));
+        g_io.args[0] = 9;
+        call("E_Exec", &g_io);   // leaves "StackBase=" in the enclave's log buffer (enclave .data)
+        static unsigned char page[4096];
+        size_t readable = 0, total = 0, hits = 0, nonzero = 0;
+        for (SIZE_T off = 0; off < g_size; off += 4096) {
+            SIZE_T n = 0;
+            total++;
+            if (!ReadProcessMemory(GetCurrentProcess(), (char*)g_enclave + off, page, 4096, &n) || n != 4096) continue;
+            readable++;
+            bool nz = false;
+            for (int i = 0; i < 4096; i++) if (page[i]) { nz = true; break; }
+            if (nz) nonzero++;
+            for (int i = 0; i + 10 <= 4096; i++) if (!memcmp(page + i, "StackBase=", 10)) { hits++; if (hits == 1) printf("found the enclave's log text at enclave+0x%zx\n", (size_t)off + i); }
+        }
+        printf("ReadProcessMemory over the enclave (debug=%d): %zu of %zu pages readable, %zu of them non-zero, %zu hits of the enclave's log text\n", dbg, readable, total, nonzero, hits);
+        finish();
+    } else if (!strcmp(t, "stackgrow")) {    // stackgrow [KiB]
+        if (!create(1)) return 3;
+        memset(&g_io, 0, sizeof(g_io));
+        g_io.args[0] = 12; g_io.args[1] = argc > 2 ? strtoull(argv[2], nullptr, 0) : 256;
+        bool ok = call("E_Exec", &g_io);
+        printf("E_Exec returned to the host: %d\n", ok);
+        finish();
     } else if (!strcmp(t, "hostcpu")) {       // host-only survey (no enclave): the same probes in a normal process
         static const unsigned leaves[][2] = {
             { 0, 0 }, { 1, 0 }, { 6, 0 }, { 7, 0 }, { 7, 1 }, { 0xb, 0 }, { 0xd, 0 }, { 0xd, 1 }, { 0x14, 0 }, { 0x19, 0 },
@@ -281,7 +320,7 @@ int main(int argc, char** argv)
         unsigned long long iters = argc > 2 ? strtoull(argv[2], nullptr, 0) : 2000000000ull;
         double t0 = now_ns();
         long long rz = probe_redzone_spin(iters);
-        printf("  host red zone through a %llu-iteration spin (%.0f ms): %lld of 16 qwords changed\n", iters, (now_ns() - t0) / 1e6, rz);
+        printf("  host red zone through a %llu-iteration spin (%.0f ms): changed mask 0x%llx\n", iters, (now_ns() - t0) / 1e6, rz);
         t0 = now_ns();
         long long m = probe_regs_spin(iters / 2);
         printf("  host registers through a %llu-iteration spin (%.0f ms): changed mask 0x%llx\n", iters / 2, (now_ns() - t0) / 1e6, m);

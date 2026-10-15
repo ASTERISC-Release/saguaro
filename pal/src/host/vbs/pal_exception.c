@@ -12,7 +12,7 @@
  * pal_arch.h: x0 = the PAL_CONTEXT to resume) and the svc stub's `brk #0x5653` (a packed object's
  * syscall slot was never filled: a bug, reported).
  */
-
+#if !defined(__x86_64__) /* x86_64: arch/x86_64/pal_vbs_exception.c */
 #include "api.h"
 #include "pal.h"
 #include "pal_error.h"
@@ -165,3 +165,5 @@ int64_t pal_vbs_exception(struct pal_vbs_fault* f) {
     f->pc = (uintptr_t)&pal_vbs_fault_trampoline;
     return 0;
 }
+
+#endif /* !__x86_64__ */

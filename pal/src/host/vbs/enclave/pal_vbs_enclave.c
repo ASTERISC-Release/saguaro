@@ -29,6 +29,13 @@
 #endif
 #endif
 
+/* resume after the trapping instruction of the probes: brk (4 bytes) on AArch64, ud2 (2) on x64 */
+#if defined(_M_X64)
+#define PAL_VBS_SKIP_TRAP(ctx) ((ctx)->Rip += 2)
+#else
+#define PAL_VBS_SKIP_TRAP(ctx) ((ctx)->Pc += 4)
+#endif
+
 #ifndef PAL_VBS_POLICY
 #define PAL_VBS_POLICY IMAGE_ENCLAVE_POLICY_DEBUGGABLE /* DO NOT SHIP DEBUGGABLE ENCLAVES */
 #endif
@@ -160,7 +167,15 @@ uint64_t pal_vbs_w_ocall(uint64_t no, uint64_t a0, uint64_t a1, uint64_t a2) {
     pal_vbs_ocall_args_t args = { no, a0, a1, a2, 0 };
     EnclaveCopyOutOfEnclave(t->host_args, &args, sizeof(args));
     void* ret = NULL;
+#if defined(_M_X64)
+    /* the FS base (the Linux thread pointer) can come back stale from an OCALL (FINDINGS-x64.md) */
+    uint64_t fs;
+    __asm__ volatile("rdfsbase %0" : "=r"(fs));
     CallEnclave((LPENCLAVE_ROUTINE)g_ocall, t->host_args, TRUE, &ret);
+    __asm__ volatile("wrfsbase %0" : : "r"(fs) : "memory");
+#else
+    CallEnclave((LPENCLAVE_ROUTINE)g_ocall, t->host_args, TRUE, &ret);
+#endif
     EnclaveCopyIntoEnclave(&args, t->host_args, sizeof(args));
     return args.retval;
 }
@@ -209,7 +224,7 @@ int64_t pal_vbs_w_random(void* buf, uint64_t len) {
  * handler can resume at Pc+4). No AddVectoredExceptionHandler exists; SEH only. */
 static LONG seh_resume_filter(EXCEPTION_POINTERS* ep, int64_t* code) {
     *code = (int64_t)ep->ExceptionRecord->ExceptionCode;
-    ep->ContextRecord->Pc += 4; /* skip the faulting brk */
+    PAL_VBS_SKIP_TRAP(ep->ContextRecord); /* skip the faulting brk */
     return EXCEPTION_CONTINUE_EXECUTION;
 }
 static int64_t pal_try_brk_resume(void) {
@@ -250,6 +265,9 @@ const struct pal_vbs_packed_obj* pal_vbs_packed_table(uint64_t* count, uint64_t*
     *count = *blob_base = *blob_size = *files_base = *files_size = 0;
     return NULL;
 }
+#if defined(_M_X64)
+int pal_vbs_is_syscall_site(uint64_t rip) { UNREFERENCED_PARAMETER(rip); return 0; }
+#endif
 #endif
 
 static int64_t pal_spin_foreign_stack(uint64_t iterations) {
@@ -289,7 +307,7 @@ EXCEPTION_DISPOSITION pal_vbs_probe_handler(PEXCEPTION_RECORD rec, void* frame, 
     UNREFERENCED_PARAMETER(frame);
     UNREFERENCED_PARAMETER(dispatcher_ctx);
     g_probe_code = (int64_t)rec->ExceptionCode;
-    ctx->Pc += 4;
+    PAL_VBS_SKIP_TRAP(ctx);
     return ExceptionContinueExecution;
 }
 

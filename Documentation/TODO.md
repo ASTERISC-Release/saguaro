@@ -38,7 +38,7 @@ short on purpose; an item that is fixed is removed from the topic list first and
 | Item | Details |
 |---|---|
 | **Evaluate the three VBS PAL changes in more detail** (counter-based clock, `CTR_EL0` emulation, skipping the clear of never-used pool memory); the maintainer's first look found them fine | `devel/vbs-enclave/TODO.md` ("Review and x86_64") |
-| **Port VBS to x86_64 Windows 11**: phase 0 started on an x64 machine (build side works; Smart App Control blocks running test-signed enclaves, the maintainer has to turn it off before G0) | `devel/vbs-enclave/PLAN-x64.md`, `devel/vbs-enclave/TODO.md` ("Review and x86_64") |
+| **Port VBS to x86_64 Windows 11**: done through phase 3 on an x64 machine (2026-10-15: gate, tests, tools, six application examples); regression subset 72/103 (same failures as ARM64); left: x86_64 variants of the static `CI-Examples/vbs` manifests, the patched-glibc fast path, a review | `devel/vbs-enclave/PLAN-x64.md`, `devel/vbs-enclave/TODO.md` ("Review and x86_64") |
 | `fork` (a multi-enclave design), sealing, remote attestation (Azure Attestation, RA-TLS), production signing | `devel/vbs-enclave/TODO.md` |
 | Networking: fewer host calls per request, TLS inside the enclave bound to the attestation report | `devel/vbs-enclave/TODO.md` ("Networking") |
 | A pure-Windows build (no WSL) and a prebuilt sysroot bundle as a GitHub release; verification of the fresh-machine guide with a second WSL distribution | `devel/vbs-enclave/PLAN-windows-build.md`, `devel/vbs-enclave/windows-fresh-machine.md` |

@@ -32,7 +32,7 @@ vbs.max_threads = 16
 
 vbs.packed_files = [
   { path = "/memcached", uri = "file:vbs-build/memcached" },
-{% for lib in ["ld-linux-aarch64.so.1", "libc.so.6", "libm.so.6"] %}
+{% for lib in [vbs.ldso, "libc.so.6", "libm.so.6"] %}
   { path = "{{ arch_libdir }}/{{ lib }}", uri = "file:{{ vbs.sysroot }}/usr/lib/{{ lib }}" },
 {% endfor %}
 ]

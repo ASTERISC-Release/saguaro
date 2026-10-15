@@ -95,7 +95,7 @@ struct libos_xstate {
                       "8, 4, 2, or 1-byte(s) members");                 \
         __asm__("mov %%gs:%c1, %0\n"                                    \
                 : "=r"(ret)                                             \
-                : "i" (offsetof(PAL_TCB, libos_tcb) +                   \
+                : "i" (PAL_TCB_GS_OFFSET + offsetof(PAL_TCB, libos_tcb) +                   \
                        offsetof(libos_tcb_t, member))                   \
                 : "memory");                                            \
         ret;                                                            \
@@ -114,28 +114,28 @@ struct libos_xstate {
         case 8:                                                         \
             __asm__("movq %0, %%gs:%c1\n"                               \
                     :: "ir"(value),                                     \
-                     "i"(offsetof(PAL_TCB, libos_tcb) +                 \
+                     "i"(PAL_TCB_GS_OFFSET + offsetof(PAL_TCB, libos_tcb) +                 \
                          offsetof(libos_tcb_t, member))                 \
                     : "memory");                                        \
             break;                                                      \
         case 4:                                                         \
             __asm__("movl %0, %%gs:%c1\n"                               \
                     :: "ir"(value),                                     \
-                     "i"(offsetof(PAL_TCB, libos_tcb) +                 \
+                     "i"(PAL_TCB_GS_OFFSET + offsetof(PAL_TCB, libos_tcb) +                 \
                          offsetof(libos_tcb_t, member))                 \
                     : "memory");                                        \
             break;                                                      \
         case 2:                                                         \
             __asm__("movw %0, %%gs:%c1\n"                               \
                     :: "ir"(value),                                     \
-                     "i"(offsetof(PAL_TCB, libos_tcb) +                 \
+                     "i"(PAL_TCB_GS_OFFSET + offsetof(PAL_TCB, libos_tcb) +                 \
                          offsetof(libos_tcb_t, member))                 \
                     : "memory");                                        \
             break;                                                      \
         case 1:                                                         \
             __asm__("movb %0, %%gs:%c1\n"                               \
                     :: "ir"(value),                                     \
-                     "i"(offsetof(PAL_TCB, libos_tcb) +                 \
+                     "i"(PAL_TCB_GS_OFFSET + offsetof(PAL_TCB, libos_tcb) +                 \
                          offsetof(libos_tcb_t, member))                 \
                     : "memory");                                        \
             break;                                                      \

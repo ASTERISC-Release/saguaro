@@ -33,7 +33,7 @@ vbs.packed_files = [
   { path = "/usr/bin/python3.12", uri = "file:{{ vbs.python }}/usr/bin/python3.12" },
   # the standard library without its tests, the IDE and Tk parts, and the static library
   { path = "/usr/lib/python3.12", uri = "file:{{ vbs.python }}/usr/lib/python3.12", exclude = [ "config-3.12-*/", "__pycache__/", "test/", "tests/", "idlelib/", "tkinter/", "turtledemo/", "lib2to3/", "ensurepip/", "pydoc_data/", "*.a" ] },
-{% for lib in ["ld-linux-aarch64.so.1", "libc.so.6", "libm.so.6"] %}
+{% for lib in [vbs.ldso, "libc.so.6", "libm.so.6"] %}
   { path = "{{ arch_libdir }}/{{ lib }}", uri = "file:{{ vbs.sysroot }}/usr/lib/{{ lib }}" },
 {% endfor %}
   { path = "/app/scripts", uri = "file:scripts" },

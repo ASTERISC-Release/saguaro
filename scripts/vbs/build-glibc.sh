@@ -8,7 +8,12 @@
 # never use it (Documentation/devel/vbs-enclave/FINDINGS.md). No Gramine syscall patch is needed:
 # pack.py rewrites the `svc #0` instructions at pack time.
 #
-# Usage (aarch64 build container): scripts/vbs/build-glibc.sh [SYSROOT]   (default build-vbs-glibc)
+# On x86_64 (Documentation/devel/vbs-enclave/PLAN-x64.md) no special compiler flag is needed: the
+# same glibc is built as it is (no -ffixed-x18, no setcontext change, no soft-float routines), so
+# that the applications, their libraries and the loader come from one known glibc in the same
+# sysroot layout (/usr/lib) as on AArch64.
+#
+# Usage (aarch64 or x86_64 build container): scripts/vbs/build-glibc.sh [SYSROOT]   (default build-vbs-glibc)
 # Then link a static PIE with scripts/vbs/cc-static-pie.sh.
 #   scripts/vbs/build-glibc.sh --softfp [SYSROOT]   only (re)build SYSROOT/usr/lib/libsoftfp-x18.a
 #                                                    (for a sysroot made before it existed)
@@ -16,6 +21,7 @@ set -e
 
 SOFTFP_ONLY=
 [ "$1" = --softfp ] && { SOFTFP_ONLY=1; shift; }
+ARCH=$(uname -m)
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 SYSROOT=$(realpath -m "${1:-$ROOT/build-vbs-glibc}")
 TARBALL="$ROOT/subprojects/packagecache/glibc-2.39.tar.gz"
@@ -38,6 +44,10 @@ build_softfp() {  # source tree, output folder
     rm -f "$2/libsoftfp-x18.a"
     ar rcs "$2/libsoftfp-x18.a" "$2/divtf3.o" "$2/multf3.o"
 }
+if [ -n "$SOFTFP_ONLY" ] && [ "$ARCH" = x86_64 ]; then
+    echo "x86_64: no soft-float routines are needed"
+    exit 0
+fi
 if [ -n "$SOFTFP_ONLY" ]; then
     [ -f "$SYSROOT/usr/lib/libc.so.6" ] || { echo "no vbs glibc in $SYSROOT"; exit 1; }
     T=$(mktemp -d "${TMPDIR:-/tmp}/vbs-softfp.XXXXXX")
@@ -53,6 +63,21 @@ mkdir -p "$WORK/build"
 tar -C "$WORK" -xzf "$TARBALL"
 patch --quiet -p1 --directory "$WORK/glibc-2.39" \
     < "$ROOT/subprojects/packagefiles/glibc-2.39/fix-fortify-source.patch"
+if [ "$ARCH" = x86_64 ]; then
+    cd "$WORK"
+    mkdir -p build
+    cd build
+    printf 'slibdir=/usr/lib\nrtlddir=/usr/lib\n' > configparms
+    ../glibc-2.39/configure --prefix=/usr --libdir=/usr/lib --with-tls --without-gd \
+        --without-selinux --disable-sanity-checks --disable-test --disable-nscd --disable-werror \
+        CC="gcc -Wl,-z,max-page-size=0x1000 -Wl,-z,common-page-size=0x1000" \
+        CFLAGS="-O2 -Wno-unused-value" >"$WORK/configure.log" 2>&1
+    make -j"$(nproc)" >"$WORK/make.log" 2>&1 || { tail -30 "$WORK/make.log"; exit 1; }
+    make install DESTDIR="$SYSROOT" >"$WORK/install.log" 2>&1 \
+        || { tail -30 "$WORK/install.log"; exit 1; }
+    echo "glibc (x86_64) installed in $SYSROOT/usr"
+    exit 0
+fi
 # setcontext() must not load x18 from the saved context: x18 is the TEB of the *current* thread
 # (a context saved on one thread may be resumed on another). getcontext/swapcontext only store it.
 sed -i 's/^\tldp\tx18, x19, \[x0, oX0 + 18 \* SZREG\]$/\tldr\tx19, [x0, oX0 + 19 * SZREG]/' \

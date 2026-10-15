@@ -116,6 +116,29 @@ typedef struct {
 #define R_AARCH64_JUMP_SLOT 1026
 #define R_AARCH64_RELATIVE  1027
 
+#if defined(_M_X64)
+/* x86_64 (PLAN-x64.md): the same four kinds of relocation, S + A for the symbol ones */
+#define EM_X86_64           62
+#define R_X86_64_NONE       0
+#define R_X86_64_64         1
+#define R_X86_64_GLOB_DAT   6
+#define R_X86_64_JUMP_SLOT  7
+#define R_X86_64_RELATIVE   8
+#define VBS_EM              EM_X86_64
+#define VBS_R_NONE          R_X86_64_NONE
+#define VBS_R_ABS64         R_X86_64_64
+#define VBS_R_GLOB_DAT      R_X86_64_GLOB_DAT
+#define VBS_R_JUMP_SLOT     R_X86_64_JUMP_SLOT
+#define VBS_R_RELATIVE      R_X86_64_RELATIVE
+#else
+#define VBS_EM              EM_AARCH64
+#define VBS_R_NONE          R_AARCH64_NONE
+#define VBS_R_ABS64         R_AARCH64_ABS64
+#define VBS_R_GLOB_DAT      R_AARCH64_GLOB_DAT
+#define VBS_R_JUMP_SLOT     R_AARCH64_JUMP_SLOT
+#define VBS_R_RELATIVE      R_AARCH64_RELATIVE
+#endif
+
 #define MAX_SEGS 16
 
 /* everything known about one object while it is being prepared */
@@ -177,7 +200,7 @@ static int64_t parse_headers(struct pk_obj* o, uint64_t* detail) {
     const vbs_elf64_ehdr* eh = (const vbs_elf64_ehdr*)o->base;
     if (!in_image(o, 0, sizeof(*eh)) || memcmp(eh->e_ident, "\177ELF", 4) != 0 ||
         eh->e_ident[4] != 2 /* ELFCLASS64 */ || eh->e_ident[5] != 1 /* little endian */ ||
-        eh->e_type != ET_DYN || eh->e_machine != EM_AARCH64 ||
+        eh->e_type != ET_DYN || eh->e_machine != VBS_EM ||
         eh->e_phentsize != sizeof(vbs_elf64_phdr) ||
         !in_image(o, eh->e_phoff, (uint64_t)eh->e_phnum * sizeof(vbs_elf64_phdr))) {
         *detail = 0;
@@ -426,7 +449,7 @@ static int64_t do_relocs(struct pk_obj* o, uint64_t off, uint64_t sz, int apply,
     for (uint64_t i = 0; i < n; i++) {
         uint32_t type = (uint32_t)(r[i].r_info & 0xffffffffu);
         uint64_t symidx = r[i].r_info >> 32;
-        if (type == R_AARCH64_NONE)
+        if (type == VBS_R_NONE)
             continue;
         if (!in_writable(o, r[i].r_offset, 8)) {
             *detail = r[i].r_offset;
@@ -434,18 +457,18 @@ static int64_t do_relocs(struct pk_obj* o, uint64_t off, uint64_t sz, int apply,
         }
         uint64_t value;
         switch (type) {
-            case R_AARCH64_RELATIVE:
+            case VBS_R_RELATIVE:
                 value = (uint64_t)(uintptr_t)o->base + (uint64_t)r[i].r_addend;
                 break;
-            case R_AARCH64_ABS64:
-            case R_AARCH64_GLOB_DAT:
-            case R_AARCH64_JUMP_SLOT: {
+            case VBS_R_ABS64:
+            case VBS_R_GLOB_DAT:
+            case VBS_R_JUMP_SLOT: {
                 uint64_t s = 0, ignored = 0;
                 int64_t ret = resolve_sym(o, symidx, imp, nimp, &s, apply ? &ignored : nbound,
                                           detail);
                 if (ret < 0)
                     return ret;
-                value = s + (uint64_t)r[i].r_addend; /* S + A for all three on AArch64 */
+                value = s + (uint64_t)r[i].r_addend; /* S + A for all three (AArch64, x86_64) */
                 break;
             }
             default:
@@ -588,3 +611,32 @@ void* pal_vbs_packed_sym(const struct pal_vbs_loaded* obj, const char* sym) {
     }
     return NULL;
 }
+
+#if defined(_M_X64)
+/*
+ * The `syscall` instructions of the packed code that pack.py rewrote into `ud2` (PLAN-x64.md, X3):
+ * their offsets from the packed blob, sorted (pal_vbs_packed_table.h). W's exception handler sends a
+ * `ud2` at one of them into the LibOS's syscall entry; any other `ud2` is an illegal instruction.
+ */
+int pal_vbs_is_syscall_site(uint64_t rip) {
+#ifdef PAL_VBS_SYSCALL_SITE_COUNT
+    uint64_t base = (uint64_t)(uintptr_t)g_pal_vbs_packed_blob;
+    if (rip < base || rip - base >= PAL_VBS_PACKED_BLOB_SIZE)
+        return 0;
+    uint32_t off = (uint32_t)(rip - base);
+    uint64_t lo = 0, hi = PAL_VBS_SYSCALL_SITE_COUNT;
+    while (lo < hi) {
+        uint64_t mid = (lo + hi) / 2;
+        if (g_pal_vbs_syscall_sites[mid] < off)
+            lo = mid + 1;
+        else
+            hi = mid;
+    }
+    return lo < PAL_VBS_SYSCALL_SITE_COUNT && g_pal_vbs_syscall_sites[lo] == off &&
+           ((const uint8_t*)(uintptr_t)rip)[0] == 0x0f && ((const uint8_t*)(uintptr_t)rip)[1] == 0x0b;
+#else
+    (void)rip;
+    return 0;
+#endif
+}
+#endif

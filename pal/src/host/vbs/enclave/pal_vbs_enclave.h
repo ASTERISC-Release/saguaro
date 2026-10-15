@@ -44,7 +44,12 @@ int64_t pal_vbs_selftest(const pal_vbs_env_t* env, uint64_t* run, uint64_t* pass
 
 /* boot context (pal_vbs_boundary.S) */
 struct pal_vbs_ctx {
+#if defined(_M_X64)
+    uint64_t regs[32]; /* rbx rbp rdi rsi r12-r15, rsp, rip, fs base, mxcsr+fpcw, xmm6-xmm15 (256
+                        * bytes; pal_vbs_boundary_x86_64.S) */
+#else
     uint64_t regs[23]; /* x19-x30, sp, x18, tpidr_el0, d8-d15 (184 bytes) */
+#endif
 };
 int64_t pal_vbs_ctx_save(struct pal_vbs_ctx* c) __attribute__((returns_twice));
 void pal_vbs_ctx_resume(struct pal_vbs_ctx* c, int64_t v) __attribute__((noreturn));

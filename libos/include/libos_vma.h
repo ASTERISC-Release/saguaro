@@ -149,3 +149,20 @@ size_t get_peak_memory_usage(void);
 
 /* Returns total memory usage */
 size_t get_total_memory_usage(void);
+
+#ifdef PAL_HOST_VBS
+/*
+ * VBS-enclave PAL: the first mapping of a packed shared object that libos_mmap.c places at the
+ * object's packed address. On AArch64 that is its first, executable mapping. On x86_64 ld.so's first
+ * mapping of an object linked with -z separate-code is its read-only first segment, which spans the
+ * whole object (Documentation/devel/vbs-enclave/PLAN-x64.md), so a mapping of the object's full
+ * extent qualifies too.
+ */
+#if defined(__x86_64__)
+#define VBS_FIRST_MAP_PROT_OK(prot) 1
+#define VBS_FIRST_MAP_LEN_OK(prot, length, size) && ((prot & PROT_EXEC) || ALLOC_ALIGN_UP(length) == size)
+#else
+#define VBS_FIRST_MAP_PROT_OK(prot) (prot & PROT_EXEC)
+#define VBS_FIRST_MAP_LEN_OK(prot, length, size)
+#endif
+#endif

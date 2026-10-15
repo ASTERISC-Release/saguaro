@@ -24,7 +24,7 @@ vbs.enclave_size = "256M"
 
 vbs.packed_files = [
   { path = "/tls-echo", uri = "file:vbs-build/tls-echo" },
-{% for lib in ["ld-linux-aarch64.so.1", "libc.so.6"] %}
+{% for lib in [vbs.ldso, "libc.so.6"] %}
   { path = "{{ arch_libdir }}/{{ lib }}", uri = "file:{{ vbs.sysroot }}/usr/lib/{{ lib }}" },
 {% endfor %}
 ]

@@ -225,7 +225,9 @@ if host_machine.cpu_family() == 'x86_64'
         '-fstack-protector-strong',
         '-mstack-protector-guard=tls',
         '-mstack-protector-guard-reg=%gs',
-        '-mstack-protector-guard-offset=8',
+        # the canary is PAL_TCB's second field; the VBS-enclave PAL keeps the PAL_TCB at offset
+        # 0x800 of the Windows TEB that %gs points to (pal/include/arch/x86_64/pal_tcb_gs.h)
+        '-mstack-protector-guard-offset=@0@'.format(vbs ? 0x800 + 8 : 8),
     ]
 else
     # aarch64 (Milestone A, single-threaded stopgap) and riscv64: PAL_TCB is reached via a plain
@@ -293,9 +295,11 @@ tomlc99_src = tomlc99_proj.get_variable('tomlc99_src')
 uthash_dep = subproject('uthash-2.1.0').get_variable('uthash_dep')
 
 # VBS-enclave PAL: every object packed into the enclave image must leave x18 (the enclave TEB)
-# alone, including mbedtls (Documentation/devel/vbs-enclave/FINDINGS.md)
+# alone, including mbedtls (Documentation/devel/vbs-enclave/FINDINGS.md); x86_64 needs no such flag
+# (PLAN-x64.md)
+cflags_vbs_arch = host_machine.cpu_family() == 'x86_64' ? [] : ['-ffixed-x18']
 mbedtls_proj = subproject('mbedtls-3.6.0',
-                          default_options: vbs ? ['extra_cflags=-ffixed-x18'] : [])
+                          default_options: vbs ? ['extra_cflags=' + ' '.join(cflags_vbs_arch)] : [])
 mbedtls_static_dep = mbedtls_proj.get_variable('mbedtls_static_dep')
 mbedtls_pal_dep = mbedtls_proj.get_variable('mbedtls_pal_dep')
 

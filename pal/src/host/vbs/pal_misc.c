@@ -38,6 +38,7 @@ int _PalRandomBitsRead(void* buffer, size_t size) {
     return vbs_random(buffer, size) == 0 ? 0 : -PAL_ERROR_DENIED;
 }
 
+#if !defined(__x86_64__) /* x86_64: arch/x86_64/pal_vbs_arch.c */
 int _PalSegmentBaseGet(enum pal_segment_reg reg, uintptr_t* addr) {
     __UNUSED(reg);
     __UNUSED(addr);
@@ -56,6 +57,7 @@ int _PalCpuIdRetrieve(uint32_t leaf, uint32_t subleaf, uint32_t values[4]) {
     __UNUSED(values);
     return -PAL_ERROR_NOTIMPLEMENTED;
 }
+#endif
 
 /*
  * Attestation (PLAN.md, phase 4): the VBS attestation report package of EnclaveGetAttestationReport,

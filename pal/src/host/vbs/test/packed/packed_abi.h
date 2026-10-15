@@ -10,14 +10,23 @@
 
 #include <stdint.h>
 
+/* The Linux side's calling convention, as seen from the enclave side: on Windows x64 the enclave's
+ * functions that Linux code calls must use System V (rdi, rsi, ...); on AArch64 the conventions
+ * agree for these arguments. */
+#if defined(_M_X64)
+#define PAL_VBS_LINUX_ABI __attribute__((sysv_abi))
+#else
+#define PAL_VBS_LINUX_ABI
+#endif
+
 struct pal_vbs_packed_table {
     /* write(fd, buf, len) -> bytes written; the enclave logs the bytes through the host console */
-    int64_t (*write)(int64_t fd, const char* buf, int64_t len);
+    int64_t (PAL_VBS_LINUX_ABI *write)(int64_t fd, const char* buf, int64_t len);
 };
 
 /* An undefined symbol of the packed object, bound by the in-enclave loader to a function of the
  * enclave (the way the LibOS's imports are bound to the PAL's exports). Returns 3 * x. */
-int64_t pal_vbs_import_triple(int64_t x);
+PAL_VBS_LINUX_ABI int64_t pal_vbs_import_triple(int64_t x);
 
 /* value packed_entry() returns on success:
  * bytes written + 7 * 1000 + 100 * 1000000 + pal_vbs_import_triple(1000000000) */

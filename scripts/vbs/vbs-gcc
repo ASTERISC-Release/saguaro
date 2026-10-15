@@ -11,6 +11,9 @@
 # Usage: SYSROOT=<repo>/build-vbs-glibc scripts/vbs/vbs-gcc ...
 # Links take the x18-free soft-float routines of the sysroot (libsoftfp-x18.a, build-glibc.sh) ahead
 # of libgcc's (__multf3 and __divtf3 of libgcc use x18: long double arithmetic).
+# On x86_64 (PLAN-x64.md) the same without -ffixed-x18 and soft-float routines, with the standard
+# /lib64/ld-linux-x86-64.so.2 as interpreter (programs then also run on the build machine, which
+# configure scripts need; in the enclave the LibOS finds the sysroot's loader in LD_LIBRARY_PATH).
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 SYSROOT=${SYSROOT:-$ROOT/build-vbs-glibc}
 SOFTFP=
@@ -18,7 +21,11 @@ SOFTFP=
 for a in "$@"; do
     case "$a" in -c|-S|-E|-M|-MM|-r|-dump*|-print-*|--version|--help|-###) SOFTFP= ;; esac
 done
-exec gcc --sysroot="$SYSROOT" -ffixed-x18 \
-    -idirafter /usr/include/aarch64-linux-gnu -idirafter /usr/include \
+case "$(uname -m)" in
+    x86_64) X18=; LDSO=/lib64/ld-linux-x86-64.so.2 ;;
+    *) X18=-ffixed-x18; LDSO=/usr/lib/ld-linux-aarch64.so.1 ;;
+esac
+exec gcc --sysroot="$SYSROOT" $X18 \
+    -idirafter /usr/include/$(gcc -dumpmachine) -idirafter /usr/include \
     -Wl,-z,max-page-size=0x1000 -Wl,-z,common-page-size=0x1000 \
-    -Wl,--dynamic-linker=/usr/lib/ld-linux-aarch64.so.1 "$@" $SOFTFP
+    -Wl,--dynamic-linker=$LDSO "$@" $SOFTFP

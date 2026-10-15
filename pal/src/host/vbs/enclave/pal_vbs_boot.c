@@ -23,6 +23,14 @@
 #include "pal_vbs_enclave.h"
 #include "pal_vbs_packed.h"
 
+#if defined(_M_X64)
+/* where the PAL_TCB of a thread lives in its TEB on x64 (PLAN-x64.md, X2; must match
+ * pal/include/arch/x86_64/pal_tcb_gs.h), and the offset in it of the LibOS's syscall entry
+ * (GRAMINE_SYSCALL_OFFSET of libos/include/arch/x86_64/gramine_entry_api.h) */
+#define PAL_VBS_TEB_TCB_OFFSET    0x800
+#define PAL_VBS_TCB_SYSCALL_ENTRY 24
+#endif
+
 #ifndef PAL_VBS_POOL_SIZE
 #define PAL_VBS_POOL_SIZE 0x8000000ull /* at least 128 MiB of the enclave committed for the PAL */
 #endif
@@ -75,16 +83,33 @@ static volatile uint64_t g_clk_cnt;
 static volatile uint64_t g_clk_last; /* the latest reading returned */
 static uint64_t g_clk_frq;
 
+#if defined(_M_X64)
+/* x64: the counter is QueryPerformanceCounter (vertdll; no generic timer) */
+static inline uint64_t clk_counter(void) {
+    LARGE_INTEGER c;
+    QueryPerformanceCounter(&c);
+    return (uint64_t)c.QuadPart;
+}
+static inline uint64_t clk_frequency(void) {
+    LARGE_INTEGER f;
+    return QueryPerformanceFrequency(&f) ? (uint64_t)f.QuadPart : 0;
+}
+#else
 static inline uint64_t clk_counter(void) {
     uint64_t v;
     __asm__ volatile("isb; mrs %0, cntvct_el0" : "=r"(v) :: "memory");
     return v;
 }
+#endif
 
 static uint64_t svc_time_ns(void) {
     uint64_t frq = __atomic_load_n(&g_clk_frq, __ATOMIC_RELAXED);
     if (!frq) {
+#if defined(_M_X64)
+        frq = clk_frequency();
+#else
         __asm__ volatile("mrs %0, cntfrq_el0" : "=r"(frq));
+#endif
         if (!frq || frq > 1000000000ull)
             return pal_vbs_w_time_ns(); /* no usable counter: an OCALL per reading */
         __atomic_store_n(&g_clk_frq, frq, __ATOMIC_RELAXED);
@@ -166,10 +191,17 @@ LONG pal_vbs_report_exception(EXCEPTION_POINTERS* ep, const char* where) {
     pal_vbs_w_log(where);
     pal_vbs_w_log("\n");
     log_kv("  code", ep->ExceptionRecord->ExceptionCode);
+#if defined(_M_X64)
+    log_kv("  rip ", ep->ContextRecord->Rip);
+    log_kv("  rsp ", ep->ContextRecord->Rsp);
+    log_kv("  rax ", ep->ContextRecord->Rax);
+    log_kv("  rdi ", ep->ContextRecord->Rdi);
+#else
     log_kv("  pc  ", ep->ContextRecord->Pc);
     log_kv("  sp  ", ep->ContextRecord->Sp);
     log_kv("  lr  ", ep->ContextRecord->Lr);
     log_kv("  x0  ", ep->ContextRecord->X0);
+#endif
     if (ep->ExceptionRecord->NumberParameters >= 2)
         log_kv("  addr", ep->ExceptionRecord->ExceptionInformation[1]);
     log_kv("  pack", g_svc.pack_base);
@@ -220,6 +252,112 @@ static void* g_pal_exception_entry; /* pal_vbs_exception of the packed PAL, NULL
  * application, restore a saved context); the thread then continues with them. Nothing is unwound
  * through the Linux frames, which have no unwind data.
  */
+#if defined(_M_X64)
+/*
+ * x64 (PLAN-x64.md, X1 and X3). Three things reach this handler besides real faults:
+ *  - a lost FS base: preemption resets the FS base to 0 and an OCALL may leave a stale value
+ *    (FINDINGS-x64.md); the packed code's thread pointer is kept in NT_TIB.ArbitraryUserPointer, so
+ *    a fault with a different FS base is repaired and retried (a wrfsbase in the handler survives
+ *    the resume);
+ *  - a system call: pack.py rewrote every `syscall` of the packed code into `ud2` (same 2 bytes) and
+ *    listed the sites; the thread enters the LibOS's syscall entry with rcx = the next instruction
+ *    and r11 = the flags, which is what `syscall` would have left. The entry is the LibOS TCB's
+ *    syscall-entry field of the thread's PAL_TCB, which lives in the TEB (X2);
+ *  - everything else goes to the PAL as on AArch64.
+ */
+static inline uint64_t rd_fsbase(void) {
+    uint64_t v;
+    __asm__ volatile("rdfsbase %0" : "=r"(v));
+    return v;
+}
+static inline void wr_fsbase(uint64_t v) {
+    __asm__ volatile("wrfsbase %0" : : "r"(v) : "memory");
+}
+
+EXCEPTION_DISPOSITION pal_vbs_packed_exception_handler(PEXCEPTION_RECORD rec, void* frame,
+                                                       PCONTEXT ctx, void* dispatcher_ctx) {
+    UNREFERENCED_PARAMETER(frame);
+    UNREFERENCED_PARAMETER(dispatcher_ctx);
+    if (rec->ExceptionFlags & (EXCEPTION_UNWINDING | EXCEPTION_EXIT_UNWIND))
+        return ExceptionContinueSearch;
+
+    NT_TIB* tib = (NT_TIB*)NtCurrentTeb();
+    uint64_t fs = (uint64_t)(uintptr_t)tib->ArbitraryUserPointer;
+    if (fs && rd_fsbase() != fs) {
+        wr_fsbase(fs);
+        return ExceptionContinueExecution;
+    }
+    if (!g_pal_exception_entry)
+        return ExceptionContinueSearch;
+
+    if (rec->ExceptionCode == EXCEPTION_ILLEGAL_INSTRUCTION && pal_vbs_is_syscall_site(ctx->Rip)) {
+        uint64_t entry = *(const uint64_t*)((const uint8_t*)tib + PAL_VBS_TEB_TCB_OFFSET +
+                                            PAL_VBS_TCB_SYSCALL_ENTRY);
+        if (entry) {
+            ctx->Rcx = ctx->Rip + 2;
+            ctx->R11 = ctx->EFlags;
+            ctx->Rip = entry;
+            return ExceptionContinueExecution;
+        }
+    }
+
+    struct pal_vbs_fault f;
+    memset(&f, 0, sizeof(f));
+    f.code = rec->ExceptionCode;
+    f.addr = ctx->Rip;
+    switch (rec->ExceptionCode) {
+        case EXCEPTION_ACCESS_VIOLATION:
+        case EXCEPTION_IN_PAGE_ERROR:
+        case EXCEPTION_DATATYPE_MISALIGNMENT:
+            f.kind = PAL_VBS_FAULT_MEMORY;
+            if (rec->NumberParameters >= 2) {
+                f.access = rec->ExceptionInformation[0];
+                f.addr = rec->ExceptionInformation[1];
+            }
+            break;
+        case EXCEPTION_ILLEGAL_INSTRUCTION:
+        case EXCEPTION_PRIV_INSTRUCTION:
+        case EXCEPTION_BREAKPOINT:
+            f.kind = PAL_VBS_FAULT_ILLEGAL;
+            break;
+        case EXCEPTION_INT_DIVIDE_BY_ZERO:
+        case EXCEPTION_INT_OVERFLOW:
+        case EXCEPTION_FLT_DIVIDE_BY_ZERO:
+        case EXCEPTION_FLT_INVALID_OPERATION:
+        case EXCEPTION_FLT_OVERFLOW:
+        case EXCEPTION_FLT_UNDERFLOW:
+        case EXCEPTION_FLT_INEXACT_RESULT:
+        case EXCEPTION_FLT_DENORMAL_OPERAND:
+        case EXCEPTION_FLT_STACK_CHECK:
+            f.kind = PAL_VBS_FAULT_ARITHMETIC;
+            break;
+        default:
+            return ExceptionContinueSearch;
+    }
+    memcpy(f.regs, &ctx->Rax, sizeof(f.regs)); /* Rax..R15 are contiguous in CONTEXT */
+    f.rip = ctx->Rip;
+    f.rflags = ctx->EFlags;
+    f.fsbase = fs ? fs : rd_fsbase();
+    memcpy(f.fxsave, &ctx->FltSave, sizeof(f.fxsave));
+
+    int64_t ret = (int64_t)pal_vbs_enter_sysv(g_pal_exception_entry, (uint64_t)(uintptr_t)&f,
+                                              0, 0, 0);
+    if (ret < 0)
+        return ExceptionContinueSearch; /* the PAL did not handle it: the process ends */
+
+    memcpy(&ctx->Rax, f.regs, sizeof(f.regs));
+    ctx->Rip = f.rip;
+    /* the PAL may change the arithmetic flags, DF and TF; never IOPL, IF or other system flags */
+    ctx->EFlags = (ctx->EFlags & ~0x4dd5u) | ((DWORD)f.rflags & 0x4dd5u);
+    memcpy(&ctx->FltSave, f.fxsave, sizeof(f.fxsave));
+    ctx->MxCsr = ctx->FltSave.MxCsr;
+    if (f.fsbase != fs) {
+        tib->ArbitraryUserPointer = (void*)(uintptr_t)f.fsbase;
+        wr_fsbase(f.fsbase);
+    }
+    return ExceptionContinueExecution;
+}
+#else
 EXCEPTION_DISPOSITION pal_vbs_packed_exception_handler(PEXCEPTION_RECORD rec, void* frame,
                                                        PCONTEXT ctx, void* dispatcher_ctx) {
     UNREFERENCED_PARAMETER(frame);
@@ -287,6 +425,7 @@ EXCEPTION_DISPOSITION pal_vbs_packed_exception_handler(PEXCEPTION_RECORD rec, vo
     memcpy(ctx->V, f.vregs, sizeof(f.vregs));
     return ExceptionContinueExecution;
 }
+#endif
 
 /* ---- host requests (files, sockets) ---- */
 

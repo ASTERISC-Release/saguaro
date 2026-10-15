@@ -20,6 +20,7 @@
  */
 
 #include "asm_offsets.h"
+#include "pal_tcb_gs.h"
 
 .extern libos_emulate_syscall
 .extern libos_xstate_size
@@ -41,7 +42,7 @@ libos_syscall_entry:
     .cfi_undefined %r11
     .cfi_register %rsp, %r11
     .cfi_def_cfa_register %r11
-    mov %gs:(LIBOS_TCB_OFF + LIBOS_TCB_LIBOS_STACK_OFF), %rsp
+    mov %gs:(PAL_TCB_GS_OFFSET + LIBOS_TCB_OFF + LIBOS_TCB_LIBOS_STACK_OFF), %rsp
 
     # Create PAL_CONTEXT struct on the stack.
 
@@ -261,10 +262,10 @@ _return_from_syscall:
     pop %rax
     pop %rcx # rip
     popfq
-    mov %rcx, %gs:(LIBOS_TCB_OFF + LIBOS_TCB_SCRATCH_PC_OFF)
+    mov %rcx, %gs:(PAL_TCB_GS_OFFSET + LIBOS_TCB_OFF + LIBOS_TCB_SCRATCH_PC_OFF)
     pop %rcx
     pop %rsp
-    jmp *%gs:(LIBOS_TCB_OFF + LIBOS_TCB_SCRATCH_PC_OFF)
+    jmp *%gs:(PAL_TCB_GS_OFFSET + LIBOS_TCB_OFF + LIBOS_TCB_SCRATCH_PC_OFF)
 
 .Lrestore_xstate:
     mov PAL_CONTEXT_FPREGS_OFF(%rbx), %rdi
