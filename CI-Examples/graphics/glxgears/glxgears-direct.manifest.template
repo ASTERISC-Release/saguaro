@@ -11,7 +11,7 @@ loader.log_level = "{{ log_level }}"
 loader.insecure__use_host_env = true
 loader.insecure__use_cmdline_argv = true
 
-loader.env.LD_LIBRARY_PATH = "/lib:/usr/lib:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu"
+loader.env.LD_LIBRARY_PATH = "/lib:/usr/lib:/usr{{ arch_libdir }}:{{ arch_libdir }}"
 {% if preload|string != "0" %}
 # The preload library in its native ("process") mode: EGL on GBM, presentation with DRI3.
 loader.env.LD_PRELOAD = "/libgraphics.so"
@@ -21,6 +21,8 @@ loader.env.GBM_BACKEND = "dri"
 {% endif %}
 loader.env.DISPLAY = ":{{ display }}"
 loader.env.vblank_mode = "0"
+# the same for the NVIDIA driver
+loader.env.__GL_SYNC_TO_VBLANK = "0"
 
 sys.stack.size = "32M"
 # `timeout` and Ctrl-C-less stops: let SIGTERM through once so the program can exit cleanly
@@ -40,6 +42,13 @@ fs.mounts = [
   { path = "/usr", type = "chroot", uri = "file:/usr" },
   { path = "/etc/ld.so.cache", uri = "file:/etc/ld.so.cache" },
   { path = "/dev/dri", type = "chroot", uri = "file:/dev/dri" },
+{% if nvidia|string == "1" %}
+  # the NVIDIA proprietary driver (Documentation/devel/graphics-aarch64/)
+  { path = "/dev/nvidiactl", uri = "dev:/dev/nvidiactl" },
+  { path = "/dev/nvidia0", uri = "dev:/dev/nvidia0" },
+  { path = "/dev/nvidia-modeset", uri = "dev:/dev/nvidia-modeset" },
+  { path = "/proc/driver/nvidia", type = "chroot", uri = "file:/proc/driver/nvidia" },
+{% endif %}
   # libxshmfence's fences when there is no memfd_create
   { path = "/dev/shm", type = "chroot", uri = "file:/dev/shm" },
   { path = "/sys", type = "chroot", uri = "file:/sys", host_symlinks = true },

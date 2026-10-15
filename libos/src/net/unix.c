@@ -53,6 +53,19 @@ static bool is_host_unix_socket(const char* path, size_t pathlen) {
     return false;
 }
 
+/* Whether the manifest lists any host UNIX socket (sys.insecure__host_unix_sockets). */
+static bool host_unix_sockets_configured(void) {
+    static int configured = -1;
+    int val = __atomic_load_n(&configured, __ATOMIC_RELAXED);
+    if (val < 0) {
+        toml_table_t* sys = toml_table_in(g_manifest_root, "sys");
+        toml_array_t* paths = sys ? toml_array_in(sys, "insecure__host_unix_sockets") : NULL;
+        val = paths && toml_array_nelem(paths) > 0;
+        __atomic_store_n(&configured, val, __ATOMIC_RELAXED);
+    }
+    return val;
+}
+
 static int host_unix_send(struct libos_handle* handle, PAL_HANDLE pal_handle, struct iovec* iov,
                           size_t iov_len, void* msg_control, size_t msg_controllen,
                           size_t* out_size, bool force_nonblocking) {
@@ -678,6 +691,16 @@ static int recv(struct libos_handle* handle, struct iovec* iov, size_t iov_len, 
     }
 
     if (handle->info.sock.host_unix) {
+        return host_unix_recv(handle, pal_handle, iov, iov_len, msg_control, msg_controllen_ptr,
+                              out_size, force_nonblocking);
+    }
+
+    /* A socketpair end whose peer end was sent to a host process (for example the X server, see
+     * host_unix_send()) can receive fds from it. With host UNIX sockets configured, a receive that
+     * asks for control data goes through the host path when the PAL exposes the host socket. */
+    int unused_host_fd;
+    if (msg_control && msg_controllen_ptr && *msg_controllen_ptr && host_unix_sockets_configured()
+            && PalHostFdGet(pal_handle, &unused_host_fd) == 0) {
         return host_unix_recv(handle, pal_handle, iov, iov_len, msg_control, msg_controllen_ptr,
                               out_size, force_nonblocking);
     }

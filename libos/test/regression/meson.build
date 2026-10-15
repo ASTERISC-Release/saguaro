@@ -110,6 +110,7 @@ tests = {
     'poll': {},
     'poll_closed_fd': {},
     'poll_many_types': {},
+    'poll_timeout_revents': {},
     'ppoll': {},
     'proc_common': {},
     'proc_cpuinfo': {},

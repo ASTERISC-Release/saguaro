@@ -4,8 +4,12 @@
 # Test programs for graphics under gramine-direct (x86_64), see
 # Documentation/devel/graphics-direct/. `make check` runs each natively and under gramine-direct.
 
-PROGRAMS = drm_info gbm_map egl_readback ioctl_bench x_roundtrip gl_bench
+PROGRAMS = drm_info gbm_map egl_readback ioctl_bench x_roundtrip gl_bench egl_surfaceless
 NODE ?= /dev/dri/renderD128
+# The host's library directory of this architecture, and the NVIDIA driver's device nodes when the
+# host has them (NVIDIA=0 or 1 overrides).
+ARCH_LIBDIR ?= /lib/$(shell $(CC) -dumpmachine)
+NVIDIA ?= $(if $(wildcard /dev/nvidiactl),1,0)
 
 CFLAGS = -Wall -Wextra -O2 $(shell pkg-config --cflags libdrm)
 LDLIBS_drm_info = $(shell pkg-config --libs libdrm)
@@ -36,18 +40,23 @@ gl_bench: gl_bench.c
 x_roundtrip: x_roundtrip.c
 	$(CC) $(CFLAGS) $< -o $@ $(shell pkg-config --libs xcb)
 
+# EGL surfaceless platform, no GBM (works with the NVIDIA driver too); not part of `check`, it
+# takes no device argument: ./egl_surfaceless [frames] [draws]
+egl_surfaceless: egl_surfaceless.c
+	$(CC) $(CFLAGS) $(shell pkg-config --cflags egl glesv2) $< -o $@ $(shell pkg-config --libs egl glesv2)
+
 egl_readback: egl_readback.c
 	$(CC) $(CFLAGS) $(shell pkg-config --cflags gbm egl glesv2) $< -o $@ $(LDLIBS_egl_readback)
 
 %.manifest: direct-tests.manifest.template FORCE
-	gramine-manifest -Dlog_level=$(GRAMINE_LOG_LEVEL) -Dentrypoint=$* $< $@
+	gramine-manifest -Dlog_level=$(GRAMINE_LOG_LEVEL) -Darch_libdir=$(ARCH_LIBDIR) -Dnvidia=$(NVIDIA) -Dentrypoint=$* $< $@
 	gramine-manifest-check $@
 
 .PHONY: FORCE
 
 .PHONY: check
 check: all
-	@for p in $(filter-out ioctl_bench x_roundtrip gl_bench,$(PROGRAMS)); do \
+	@for p in $(filter-out ioctl_bench x_roundtrip gl_bench egl_surfaceless,$(PROGRAMS)); do \
 		echo "== $$p native"; ./$$p $(NODE) || exit 1; \
 		echo "== $$p gramine-direct"; gramine-direct $$p $(NODE) || exit 1; \
 	done
@@ -57,7 +66,7 @@ eglinfo: eglinfo.manifest
 	gramine-direct eglinfo -B
 
 eglinfo.manifest: direct-tests.manifest.template FORCE
-	gramine-manifest -Dlog_level=$(GRAMINE_LOG_LEVEL) -Dentrypoint=/usr/bin/eglinfo $< $@
+	gramine-manifest -Dlog_level=$(GRAMINE_LOG_LEVEL) -Darch_libdir=$(ARCH_LIBDIR) -Dnvidia=$(NVIDIA) -Dentrypoint=/usr/bin/eglinfo $< $@
 	gramine-manifest-check $@
 
 .PHONY: clean

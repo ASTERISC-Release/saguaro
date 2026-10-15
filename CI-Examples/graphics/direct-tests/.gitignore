@@ -4,4 +4,5 @@
 /ioctl_bench
 /x_roundtrip
 /gl_bench
+/egl_surfaceless
 /*.manifest

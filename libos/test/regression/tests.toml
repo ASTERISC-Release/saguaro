@@ -110,6 +110,7 @@ manifests = [
   "poll",
   "poll_closed_fd",
   "poll_many_types",
+  "poll_timeout_revents",
   "ppoll",
   "preadv2_pwritev2",
   "proc_common",
