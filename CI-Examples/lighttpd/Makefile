@@ -26,9 +26,24 @@ endif
 CONF_FILES = lighttpd-server.conf lighttpd.conf
 
 .PHONY: all
+ifeq ($(VBS),1)
+# Windows VBS enclave (scripts/vbs/Makefile.vbs, Documentation/vbs.rst): lighttpd built with the vbs
+# gcc (no OpenSSL, PCRE, zlib or bzip2: not in the vbs sysroot) and installed with its modules, its
+# configuration and the test files into vbs-build/root/lighttpd, packed by vbs.manifest.template
+VBS_APP = lighttpd
+VBS_ROOT = vbs-build/root/lighttpd
+VBS_RANDOM_FILES = $(foreach n,1 2 3 4 5 6 7 8 9 10,2K.$n.html) $(foreach n,1 2 3 4 5,10K.$n.html) \
+	$(foreach n,1 2 3 4 5,100K.$n.html) $(foreach n,1 2 3,1M.$n.html) $(foreach n,1 2 3,100.$n.html)
+VBS_TEST_DATA = $(addprefix $(VBS_ROOT)/html/random/,$(VBS_RANDOM_FILES))
+VBS_DEPS = $(VBS_ROOT)/sbin/lighttpd $(VBS_ROOT)/conf/lighttpd-vbs.conf $(VBS_TEST_DATA)
+VBS_CLEAN = vbs-build
+include ../../scripts/vbs/Makefile.vbs
+all: vbs-all
+else
 all: $(INSTALL_DIR)/sbin/lighttpd lighttpd.manifest $(CONF_FILES) testdata
 ifeq ($(SGX),1)
 all: lighttpd.manifest.sgx lighttpd.sig
+endif
 endif
 
 $(INSTALL_DIR)/sbin/lighttpd: $(LIGHTTPD_SRC)/configure
@@ -46,6 +61,29 @@ $(LIGHTTPD_SRC)/configure: $(LIGHTTPD_SRC).tar.gz
 $(LIGHTTPD_SRC).tar.gz:
 	../common_tools/download --output $@ --sha256 $(LIGHTTPD_HASH) \
 		$(foreach mirror,$(LIGHTTPD_MIRRORS),--url $(mirror)/$(LIGHTTPD_SRC).tar.gz)
+
+ifeq ($(VBS),1)
+$(VBS_ROOT)/sbin/lighttpd: $(LIGHTTPD_SRC).tar.gz | $(VBS_RUNTIME_STAMP)
+	rm -rf vbs-build/src && mkdir -p vbs-build/src
+	tar -C vbs-build/src --strip-components=1 -xzf $<
+	touch vbs-build/src/configure
+	cd vbs-build/src && ./configure CC=$(VBS_GCC) --prefix=/lighttpd \
+		--without-openssl --without-pcre --without-bzip2 --without-zlib > ../configure.log
+	$(MAKE) -C vbs-build/src
+	$(MAKE) -C vbs-build/src install DESTDIR=$(abspath vbs-build/root)
+
+$(VBS_ROOT)/conf/lighttpd-vbs.conf: lighttpd-vbs.conf.template $(VBS_ROOT)/sbin/lighttpd
+	mkdir -p $(dir $@)
+	sed -e 's|$$(PORT)|$(PORT)|g' -e 's|$$(HOST)|$(HOST)|g' $< > $@
+
+$(VBS_ROOT)/html/random/%.html: $(VBS_ROOT)/sbin/lighttpd
+	mkdir -p $(VBS_ROOT)/html/random
+	dd if=/dev/urandom of=$@ count=1 bs=$(basename $(basename $(notdir $@))) status=none
+
+.PHONY: check
+check: all
+	GRAMINE="$(GRAMINE)" PORT=$(PORT) ./vbs-check.sh
+endif
 
 lighttpd.manifest: lighttpd.manifest.template
 	gramine-manifest \
@@ -100,7 +138,9 @@ testdata: $(TEST_DATA)
 start-native-server: all
 	$(INSTALL_DIR)/sbin/lighttpd -D -m $(INSTALL_DIR)/lib -f lighttpd.conf
 
-ifeq ($(SGX),)
+ifeq ($(VBS),1)
+# GRAMINE is gramine-vbs (Makefile.vbs)
+else ifeq ($(SGX),)
 GRAMINE = gramine-direct
 else
 GRAMINE = gramine-sgx
