@@ -25,6 +25,7 @@ libos_sources = files(
     'fs/dev/fs.c',
     'fs/etc/fs.c',
     'fs/eventfd/fs.c',
+    'fs/hostfd/fs.c',
     'fs/timerfd/fs.c',
     'fs/signalfd/fs.c',
   'fs/inotify/fs.c',

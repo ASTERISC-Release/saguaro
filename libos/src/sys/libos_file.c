@@ -40,6 +40,29 @@ long libos_syscall_unlink(const char* file) {
     return libos_syscall_unlinkat(AT_FDCWD, file, 0);
 }
 
+static int rmdir_check_empty_callback(const char* name, void* arg) {
+    bool* found = arg;
+    if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0)
+        return 0;
+    *found = true;
+    return 0;
+}
+
+/* `ENOTEMPTY` for a directory with entries, checked before the filesystem's unlink: the PAL delete
+ * reports "directory not empty" only as a generic error. Shared by rmdir() and
+ * unlinkat(AT_REMOVEDIR) (aarch64's glibc implements rmdir() with the latter, which once returned
+ * EACCES here). Filesystems without a readdir hook are left to their own unlink. */
+static int check_dir_empty(struct libos_dentry* dent) {
+    struct libos_fs* fs = dent->inode->fs;
+    if (!fs || !fs->d_ops || !fs->d_ops->readdir)
+        return 0;
+    bool not_empty = false;
+    int ret = fs->d_ops->readdir(dent, &rmdir_check_empty_callback, &not_empty);
+    if (ret < 0)
+        return ret;
+    return not_empty ? -ENOTEMPTY : 0;
+}
+
 static long do_unlinkat(int dfd, const char* pathname, int flag, bool user_pointer) {
     if (user_pointer && !is_user_string_readable(pathname))
         return -EFAULT;
@@ -77,6 +100,11 @@ static long do_unlinkat(int dfd, const char* pathname, int flag, bool user_point
     }
 
     struct libos_fs* fs = dent->inode->fs;
+    if ((flag & AT_REMOVEDIR) && fs->d_ops && fs->d_ops->unlink) {
+        ret = check_dir_empty(dent);
+        if (ret < 0)
+            goto out;
+    }
     if (fs->d_ops && fs->d_ops->unlink) {
         ret = fs->d_ops->unlink(dent);
         if (ret < 0) {
@@ -165,14 +193,6 @@ out:
     return ret;
 }
 
-static int rmdir_check_empty_callback(const char* name, void* arg) {
-    bool* found = arg;
-    if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0)
-        return 0;
-    *found = true;
-    return 0;
-}
-
 long libos_syscall_rmdir(const char* pathname) {
     int ret = 0;
     struct libos_dentry* dent = NULL;
@@ -205,18 +225,9 @@ long libos_syscall_rmdir(const char* pathname) {
     /* Check emptiness here: the PAL delete reports "directory not empty" only as a generic
      * error, and `ENOTEMPTY` is the answer Linux gives. Filesystems without a readdir hook are
      * left to their own unlink implementation. */
-    if (fs->d_ops->readdir) {
-        bool not_empty = false;
-        int rd = fs->d_ops->readdir(dent, &rmdir_check_empty_callback, &not_empty);
-        if (rd < 0) {
-            ret = rd;
-            goto out;
-        }
-        if (not_empty) {
-            ret = -ENOTEMPTY;
-            goto out;
-        }
-    }
+    ret = check_dir_empty(dent);
+    if (ret < 0)
+        goto out;
 
     ret = fs->d_ops->unlink(dent);
     if (ret < 0)

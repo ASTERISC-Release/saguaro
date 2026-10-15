@@ -42,7 +42,9 @@ _fs_base = (
 )
 
 _fs_root = Any(*_fs_base)
-_fs_mount = Any(*({**d, Required('path'): str} for d in _fs_base))
+# `host_symlinks` (readlink() of host symbolic links) is a property of a chroot mount, not of fs.root
+_fs_mount = Any(*({**d, Required('path'): str, **({'host_symlinks': bool} if d.get('type') == 'chroot' else {})}
+                  for d in _fs_base))
 
 GramineManifestSchema = Schema({
     Required('fs'): {
@@ -122,7 +124,11 @@ GramineManifestSchema = Schema({
         'experimental__enable_host_sysv_semaphores': bool,
         'experimental__enable_flock': bool,
         'experimental__shared_input_ring': bool,
+        # x86_64 VM PAL: processes in separate address spaces (Documentation/devel/vm-multiproc/)
+        'experimental__multiprocess': bool,
         'insecure__allow_eventfd': bool,
+        'insecure__allow_raw_device_ioctl': bool,
+        'insecure__host_unix_sockets': [str],
         'rewrite_syscalls': bool,
 
         # Description of this thing will be both very hard to write, and mostly useless, since

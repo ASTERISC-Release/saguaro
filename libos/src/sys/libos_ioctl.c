@@ -66,15 +66,7 @@ long libos_syscall_ioctl(unsigned int fd, unsigned int cmd, unsigned long arg) {
     unlock(&g_dcache_lock);
 
     if (is_host_dev) {
-        int cmd_ret;
-        ret = PalDeviceIoControl(hdl->pal_handle, cmd, arg, &cmd_ret);
-        if (ret < 0) {
-            ret = pal_to_unix_errno(ret);
-            goto out;
-        }
-
-        assert(ret == 0);
-        ret = cmd_ret;
+        ret = raw_device_ioctl(hdl, cmd, arg);
         goto out;
     }
 

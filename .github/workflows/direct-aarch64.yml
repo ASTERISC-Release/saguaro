@@ -4,6 +4,12 @@
 # platforms have workflows of their own: direct-x86_64.yml, direct-riscv64-emulated.yml (cross-built,
 # tested in an emulated guest) and vm-x86_64.yml (the vm PAL).
 #
+# With the `vm_build` input on (the default), a second job builds and installs the aarch64 VM PAL
+# (gramine-vm) and renders and checks the helloworld manifest with it. Build only: the hosted aarch64
+# runners have no usable KVM (run it on an aarch64 machine with /dev/kvm: test/test-vm.sh). It exists
+# because main once stopped building the aarch64 VM PAL unnoticed (the x86_64-only multiprocess work,
+# Documentation/devel/syscall-compat/TODO.md).
+#
 # Manual trigger only (Actions tab -> "Direct PAL (aarch64)" -> Run workflow).
 name: Direct PAL (aarch64)
 
@@ -25,6 +31,10 @@ on:
           - none
           - glibc
         default: none
+      vm_build:
+        description: "also build and install the aarch64 vm PAL (build only, no KVM on the runner)"
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -81,3 +91,32 @@ jobs:
             test-logs
             /tmp/rewrite-stress-fail
           if-no-files-found: ignore
+
+  vm-build:
+    name: vm PAL build (aarch64, no KVM)
+    if: ${{ inputs.vm_build }}
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    env:
+      GRAMINE_PREFIX: ${{ github.workspace }}/.install-vm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: scripts/dependencies.sh --build-only
+
+      - name: Build and install Gramine (vm PAL, graphics disabled)
+        run: scripts/install.sh --vm --graphics disabled --prefix "$GRAMINE_PREFIX" -j "$(nproc)"
+
+      - name: Check the installed vm PAL
+        run: |
+          . "$GRAMINE_PREFIX/env.sh"
+          command -v gramine-vm
+          pal=$(find "$GRAMINE_PREFIX" -path '*/gramine/vm/pal' -type f | head -n 1)
+          test -n "$pal"
+          file "$pal"
+
+      - name: Render and check a VM manifest (helloworld)
+        run: |
+          . "$GRAMINE_PREFIX/env.sh"
+          make -C CI-Examples/helloworld helloworld helloworld.manifest   # also runs gramine-manifest-check

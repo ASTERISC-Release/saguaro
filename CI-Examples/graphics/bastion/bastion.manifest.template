@@ -8,6 +8,11 @@ libos.entrypoint = "/bastion/Bastion.bin.x86_64"
 fs.start_dir = "/bastion"
 
 sys.stack.size = "32M"
+{% if multiproc|string == "1" %}
+# Processes in the VM (experimental, Documentation/devel/vm-multiproc/): FMOD runs
+# `sh -c "pulseaudio --check"`.
+sys.experimental__multiprocess = true
+{% endif %}
 libos.check_invalid_pointers = false
 {% if shared_input|string != "0" %}
 # Key, button and pointer events come through the shared-memory ring in the comm page; build with
@@ -22,7 +27,7 @@ loader.argv = ["Bastion.bin.x86_64", "-windowed"]
 
 # The game's own libraries (Mono, FMOD, MojoShader) are found through /bastion/lib64.
 loader.env.LD_LIBRARY_PATH = "/bastion/lib64:/lib:/usr/lib:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu"
-loader.env.LD_PRELOAD = "./libgraphics.so"
+loader.env.LD_PRELOAD = "/libgraphics.so"
 loader.env.HOME = "/root"
 loader.env.USER = "root_user"
 loader.env.DISPLAY = "2:0"
@@ -53,6 +58,10 @@ fs.mounts = [
   { path = "/usr", type = "chroot", uri = "file:/usr" },
 
   { path = "/etc/ld.so.cache", uri = "file:/etc/ld.so.cache" },
+{% if multiproc|string == "1" %}
+  # /bin/sh for FMOD's probe
+  { path = "/bin", uri = "file:/bin" },
+{% endif %}
   { path = "/sys", type = "chroot", uri = "file:/sys" },
   { path = "/sys/dev", type = "chroot", uri = "file:/sys/dev" },
   { path = "/sys/devices", type = "chroot", uri = "file:/sys/devices" },

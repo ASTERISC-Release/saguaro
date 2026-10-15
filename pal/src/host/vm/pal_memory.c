@@ -12,10 +12,21 @@
 #include "pal_error.h"
 #include "pal_internal.h"
 
+#ifdef __x86_64__
 static struct memory_address_space* current_address_space(void) {
     struct pal_tcb_vm* tcb = (struct pal_tcb_vm*)pal_get_tcb();
     return tcb ? tcb->kernel_thread.address_space : NULL;
 }
+#else
+/* Per-process address spaces (the experimental multiprocess support) exist only on x86_64: other
+ * architectures have no current address space, so the memory_address_space_*() calls below are
+ * never reached there. */
+#define current_address_space() ((void*)NULL)
+#define memory_address_space_alloc(...) (-PAL_ERROR_NOTIMPLEMENTED)
+#define memory_address_space_free(...) (-PAL_ERROR_NOTIMPLEMENTED)
+#define memory_address_space_protect(...) (-PAL_ERROR_NOTIMPLEMENTED)
+struct memory_address_space;
+#endif
 
 int _PalVirtualMemoryAlloc(void* addr, size_t size, pal_prot_flags_t prot) {
     assert(WITHIN_MASK(prot, PAL_PROT_MASK));

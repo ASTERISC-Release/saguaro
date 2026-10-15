@@ -11,6 +11,10 @@
 #               (helloworld, a multi-threaded example) that must pass, then the LibOS regression suite
 #               under the VM harness (informational at first: the skip list was measured on aarch64 and
 #               x86_64 results may differ; see the job summary).
+#               With the `multiprocess` input on, it then also runs the checks of the VM PAL's
+#               experimental processes (sys.experimental__multiprocess = true) with assertions:
+#               test/vm-multiproc/check-probes.sh, one step per check (see
+#               Documentation/devel/vm-multiproc/TESTING.md, "CI").
 #
 # Manual trigger only (Actions tab -> "VM PAL (x86_64)" -> Run workflow).
 name: VM PAL (x86_64)
@@ -30,6 +34,10 @@ on:
         description: "x86_64-vm: guest vCPUs (GRAMINE_CPU_NUM)"
         required: false
         default: "2"
+      multiprocess:
+        description: "x86_64-vm: also run the multi-process checks (sys.experimental__multiprocess = true)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -81,6 +89,7 @@ jobs:
           uname -r
 
       - name: Build and install Gramine (direct + vm PALs, graphics disabled)
+        id: build
         run: scripts/install.sh --vm --graphics disabled --prefix "$GRAMINE_PREFIX" -j "$(nproc)"
 
       - name: Show the glibc build log (build failed)
@@ -148,6 +157,84 @@ jobs:
             gramine-test pytest -- -q -rfEsxX --tb=short -p no:cacheprovider test_libos.py \
             2>&1 | tee ../../../vm-libos.log
 
+      # Multi-process checks (the `multiprocess` input), after the default-manifest steps so that
+      # those run unchanged. Each check is its own step, runs even when an earlier one failed, and
+      # reruns a failing check once (hosted guests are slow); the full guest output of each attempt
+      # is in the vm-mp-logs/ of the uploaded artifact. Where the key comes from: the probe manifest
+      # templates (test/vm-multiproc/*.manifest.template), GRAMINE_VM_MULTIPROCESS=1 for the LibOS
+      # regression manifests, and an edit of the examples' generated manifests (restored after).
+      - name: Multi-process - spawn (sh pipeline and command substitution, system(), posix_spawn)
+        if: ${{ !cancelled() && inputs.multiprocess && steps.build.outcome == 'success' }}
+        run: |
+          . "$GRAMINE_PREFIX/env.sh"
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "GRAMINE_PREFIX=$GRAMINE_PREFIX" \
+            "GRAMINE_CPU_NUM=$GRAMINE_CPU_NUM" "LOGDIR=$GITHUB_WORKSPACE/vm-mp-logs" TIMEOUT_SCALE=2 \
+            test/vm-multiproc/check-probes.sh spawn 2>&1 | tee vm-mp-spawn.log
+          exit "${PIPESTATUS[0]}"
+
+      - name: Multi-process - signals between processes (bash, sig.sh)
+        if: ${{ !cancelled() && inputs.multiprocess && steps.build.outcome == 'success' }}
+        run: |
+          . "$GRAMINE_PREFIX/env.sh"
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "GRAMINE_PREFIX=$GRAMINE_PREFIX" \
+            "GRAMINE_CPU_NUM=$GRAMINE_CPU_NUM" "LOGDIR=$GITHUB_WORKSPACE/vm-mp-logs" TIMEOUT_SCALE=2 \
+            test/vm-multiproc/check-probes.sh signals 2>&1 | tee vm-mp-signals.log
+          exit "${PIPESTATUS[0]}"
+
+      - name: Multi-process - fork stress (1000 sequential, 64 in batches of 8)
+        if: ${{ !cancelled() && inputs.multiprocess && steps.build.outcome == 'success' }}
+        run: |
+          . "$GRAMINE_PREFIX/env.sh"
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "GRAMINE_PREFIX=$GRAMINE_PREFIX" \
+            "GRAMINE_CPU_NUM=$GRAMINE_CPU_NUM" "LOGDIR=$GITHUB_WORKSPACE/vm-mp-logs" TIMEOUT_SCALE=2 \
+            test/vm-multiproc/check-probes.sh forks 2>&1 | tee vm-mp-forks.log
+          exit "${PIPESTATUS[0]}"
+
+      - name: Multi-process - forked child (SysV IPC, memfd, file calls, timers, inotify)
+        if: ${{ !cancelled() && inputs.multiprocess && steps.build.outcome == 'success' }}
+        run: |
+          . "$GRAMINE_PREFIX/env.sh"
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "GRAMINE_PREFIX=$GRAMINE_PREFIX" \
+            "GRAMINE_CPU_NUM=$GRAMINE_CPU_NUM" "LOGDIR=$GITHUB_WORKSPACE/vm-mp-logs" TIMEOUT_SCALE=2 \
+            test/vm-multiproc/check-probes.sh misc 2>&1 | tee vm-mp-misc.log
+          exit "${PIPESTATUS[0]}"
+
+      - name: Multi-process - System V IPC between processes (shm, queues, semaphores)
+        if: ${{ !cancelled() && inputs.multiprocess && steps.build.outcome == 'success' }}
+        run: |
+          . "$GRAMINE_PREFIX/env.sh"
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "GRAMINE_PREFIX=$GRAMINE_PREFIX" \
+            "GRAMINE_CPU_NUM=$GRAMINE_CPU_NUM" "LOGDIR=$GITHUB_WORKSPACE/vm-mp-logs" TIMEOUT_SCALE=2 \
+            test/vm-multiproc/check-probes.sh sysv 2>&1 | tee vm-mp-sysv.log
+          exit "${PIPESTATUS[0]}"
+
+      - name: Multi-process - LibOS regressions fork_and_exec and vfork_and_exec
+        if: ${{ !cancelled() && inputs.multiprocess && steps.build.outcome == 'success' }}
+        run: |
+          . "$GRAMINE_PREFIX/env.sh"
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "GRAMINE_PREFIX=$GRAMINE_PREFIX" \
+            "GRAMINE_CPU_NUM=$GRAMINE_CPU_NUM" "LOGDIR=$GITHUB_WORKSPACE/vm-mp-logs" TIMEOUT_SCALE=2 \
+            test/vm-multiproc/check-probes.sh libos 2>&1 | tee vm-mp-libos.log
+          exit "${PIPESTATUS[0]}"
+
+      - name: Multi-process - examples (helloworld, thread-tls, python, bash 7 checks)
+        if: ${{ !cancelled() && inputs.multiprocess && steps.build.outcome == 'success' }}
+        run: |
+          . "$GRAMINE_PREFIX/env.sh"
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "GRAMINE_PREFIX=$GRAMINE_PREFIX" \
+            "GRAMINE_CPU_NUM=$GRAMINE_CPU_NUM" "LOGDIR=$GITHUB_WORKSPACE/vm-mp-logs" TIMEOUT_SCALE=2 \
+            test/vm-multiproc/check-probes.sh examples 2>&1 | tee vm-mp-examples.log
+          exit "${PIPESTATUS[0]}"
+
+      - name: Multi-process - redis BGSAVE (forked child writes the dump)
+        if: ${{ !cancelled() && inputs.multiprocess && steps.build.outcome == 'success' }}
+        run: |
+          . "$GRAMINE_PREFIX/env.sh"
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "GRAMINE_PREFIX=$GRAMINE_PREFIX" \
+            "GRAMINE_CPU_NUM=$GRAMINE_CPU_NUM" "LOGDIR=$GITHUB_WORKSPACE/vm-mp-logs" TIMEOUT_SCALE=2 \
+            test/vm-multiproc/check-probes.sh redis 2>&1 | tee vm-mp-redis.log
+          exit "${PIPESTATUS[0]}"
+
       - name: Summary
         if: always()
         run: |
@@ -161,6 +248,12 @@ jobs:
             tail -n 1 vm-redis.log 2>/dev/null || echo "(Redis relay test not run)"
             echo '--- libos suite'
             tail -n 1 vm-libos.log 2>/dev/null || echo "(suite not run)"
+            if [ "${{ inputs.multiprocess }}" = true ]; then
+              echo '--- multi-process checks (sys.experimental__multiprocess = true)'
+              for c in spawn signals forks misc libos examples redis; do
+                grep -E "^(PASS|FAIL) $c" "vm-mp-$c.log" 2>/dev/null || echo "(not run) $c"
+              done
+            fi
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -172,4 +265,5 @@ jobs:
           if-no-files-found: ignore
           path: |
             vm-*.log
+            vm-mp-logs/
             build-vm-x86_64/subprojects/glibc-2.39-1/glibc-build.log

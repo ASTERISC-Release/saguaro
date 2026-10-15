@@ -11,7 +11,7 @@ set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
 REPO=$(cd "$HERE/../.." && pwd); export REPO
 WORK=${WORK:-$REPO/.mp-probes}
-. ~/.local/gramine-vm/env.sh
+. "${GRAMINE_PREFIX:-$HOME/.local/gramine-vm}/env.sh"
 mkdir -p "$WORK" && cd "$WORK"
 cp "$HERE"/spawn.c "$HERE"/forks.c "$HERE"/misc-fork.c "$HERE"/sig.sh "$HERE"/manifest.template "$HERE"/misc-fork.manifest.template .
 gcc -O2 -o spawn spawn.c && gcc -O2 -o forks forks.c && gcc -O2 -o misc-fork misc-fork.c

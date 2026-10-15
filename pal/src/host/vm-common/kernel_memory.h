@@ -78,6 +78,10 @@ struct memory_address_space {
      * the exit) are never scheduled again and are removed before the address space is destroyed */
     uint32_t exiting;
     void* exit_thread;
+    /* the application memory of this space is the identity-mapped guest RAM of the boot layout,
+     * as without processes: set for the first process when the graphics redirection is
+     * configured, whose host side reads guest pointers as guest-physical addresses */
+    bool identity_memory;
     /* PAL handles this process obtained through the PAL API and has not destroyed; the process's
      * exit destroys them (see vm_track_handle()); array in PAL memory, guarded by the lock */
     void** handles;

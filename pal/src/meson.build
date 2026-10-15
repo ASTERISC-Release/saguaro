@@ -7,6 +7,7 @@ cflags_pal_common = [
 pal_common_sources = files(
     'pal_events.c',
     'pal_exception.c',
+    'pal_host.c',
     'pal_main.c',
     'pal_memory.c',
     'pal_misc.c',

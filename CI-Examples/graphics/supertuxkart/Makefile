@@ -70,6 +70,33 @@ run: all dirs
 run-startup: all dirs
 	gramine-vm supertuxkart-startup
 
+# gramine-direct on the host GPU (Documentation/devel/graphics-direct/): stock Mesa with DRI3 by
+# default; PRELOAD=1 uses the preload library instead (needs an install built with a VM-type PAL).
+# The X server is the one of $(DISPLAY), reached through its Unix socket.
+PRELOAD ?= 0
+X_DISPLAY_NUM = $(patsubst :%,%,$(firstword $(subst ., ,$(DISPLAY))))
+DIRECT_MANIFEST_ARGS = $(MANIFEST_ARGS) -Ddisplay=$(X_DISPLAY_NUM) -Dpreload=$(PRELOAD) \
+	-Degl_discrete=$${EGL_DISCRETE:-0}
+
+supertuxkart-direct.manifest: supertuxkart-direct.manifest.template $(STK_BIN) FORCE
+	gramine-manifest $(DIRECT_MANIFEST_ARGS) $< $@
+	gramine-manifest-check $@
+
+supertuxkart-direct-startup.manifest: supertuxkart-direct.manifest.template $(STK_BIN) FORCE
+	gramine-manifest $(DIRECT_MANIFEST_ARGS) -Dstartup_probe=1 $< $@
+	gramine-manifest-check $@
+
+.PHONY: run-direct run-direct-startup
+run-direct: supertuxkart-direct.manifest dirs
+	gramine-direct supertuxkart-direct
+run-direct-startup: supertuxkart-direct-startup.manifest dirs
+	gramine-direct supertuxkart-direct-startup
+
+# The benchmark without Gramine and without the preload library (stock Mesa), for comparison.
+.PHONY: run-native-stock-startup
+run-native-stock-startup: $(STK_BIN) dirs
+	cd $(dir $(STK_BIN)) && SDL_AUDIODRIVER=dummy vblank_mode=0 ./supertuxkart $(STK_STARTUP_ARGS)
+
 .PHONY: clean
 clean:
 	$(RM) *.manifest

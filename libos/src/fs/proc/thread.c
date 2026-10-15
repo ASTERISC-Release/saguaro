@@ -288,6 +288,7 @@ static char* describe_handle(struct libos_handle* hdl) {
         case TYPE_EVENTFD: str = "eventfd:[?]"; break;
         case TYPE_TIMERFD: str = "timerfd:[?]"; break;
         case TYPE_SIGNALFD: str = "signalfd:[?]"; break;
+        case TYPE_HOSTFD:  str = "hostfd:[?]";  break;
         case TYPE_SHM:     str = "shm:[?]";     break;
         default:           str = "unknown:[?]"; break;
     }

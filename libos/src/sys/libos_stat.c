@@ -153,8 +153,13 @@ long libos_syscall_readlinkat(int dirfd, const char* file, char* buf, int bufsiz
     ret = -EINVAL;
     /* The correct behavior is to return -EINVAL if file is not a
        symbolic link */
-    if (dent->inode->type != S_IFLNK)
+    if (dent->inode->type != S_IFLNK) {
+        /* A chroot mount with `host_symlinks`: the host resolved the link during lookup, so the
+         * dentry has the type of the target; ask the host whether the path is a link. */
+        if (dent->mount && dent->mount->host_symlinks && dent->mount->fs == &chroot_builtin_fs)
+            ret = chroot_host_readlink(dent, buf, bufsize);
         goto out;
+    }
 
     struct libos_fs* fs = dent->inode->fs;
     if (!fs->d_ops || !fs->d_ops->follow_link)

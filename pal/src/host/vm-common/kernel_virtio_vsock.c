@@ -782,13 +782,21 @@ static uint64_t pick_new_port(void) {
     if (!first_port)
         first_port = VSOCK_STARTING_PORT + get_tsc() % VSOCK_STARTING_PORT_SPREAD;
 
-    uint64_t max_port = first_port;
+    /* Never hand out a port that was just released either: the host side of a connection the guest
+     * has just closed can still exist for a moment, and a new REQUEST from the same guest port is
+     * then refused (seen with SDL opening, closing and reopening its X connection at one vCPU).
+     * So the ports keep increasing; after the last port they start over above the busy ones. */
+    static uint64_t last_port = 0;
+    uint64_t max_port = last_port > first_port ? last_port : first_port;
+    if (max_port >= UINT32_MAX - 1)
+        max_port = first_port;
     for (uint32_t i = 0; i < g_vsock->conns_size; i++) {
         struct virtio_vsock_connection* conn = g_vsock->conns[i];
         if (conn && conn->guest_port > max_port)
             max_port = conn->guest_port;
     }
-    return max_port + 1;
+    last_port = max_port + 1;
+    return last_port;
 }
 
 /* A REQUEST deferred because it collided with a closing connection (see process_packet): the
