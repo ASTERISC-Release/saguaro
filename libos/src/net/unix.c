@@ -35,8 +35,10 @@
 #define HOST_UNIX_MAX_FDS 64
 
 static bool is_host_unix_socket(const char* path, size_t pathlen) {
-    toml_array_t* paths = toml_array_in(toml_table_in(g_manifest_root, "sys"),
-                                        "insecure__host_unix_sockets");
+    toml_table_t* sys = toml_table_in(g_manifest_root, "sys");
+    if (!sys)
+        return false;
+    toml_array_t* paths = toml_array_in(sys, "insecure__host_unix_sockets");
     if (!paths)
         return false;
     for (int i = 0; i < toml_array_nelem(paths); i++) {
