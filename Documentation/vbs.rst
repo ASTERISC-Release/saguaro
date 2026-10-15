@@ -325,6 +325,57 @@ old ``all`` in the ``else`` branch. ``CI-Examples/helloworld`` is the smallest e
 ``loader.entrypoint = "file:/libsysdb.so"``, ``sys.rewrite_syscalls = false`` and
 ``fs.root.uri = "file:/"``, the ``vbs.*`` keys (:ref:`vbs-syntax`) and no ``sgx.*`` keys.
 
+Applications
+------------
+
+These examples have a ``vbs.manifest.template`` and run with ``make VBS=1`` and ``make VBS=1
+check`` in WSL (measurements in ``Documentation/devel/vbs-enclave/TESTING.md``):
+
+============================  ======================================================================
+``CI-Examples/helloworld``    a static PIE
+``CI-Examples/python``        CPython 3.12.7 (built once), ``scripts/`` packed as ``/app/scripts``;
+                              the check runs the hello world and an HTTP server and client in two
+                              enclaves (NumPy and SciPy are not available)
+``CI-Examples/redis``         Redis 6.0.5: ``--save ""``, ``--appendonly no`` (no fork: no BGSAVE,
+                              no AOF; data lives as long as the enclave), 127.0.0.1:6379
+``CI-Examples/nginx``         NGINX 1.22.0: ``master_process off``, one worker, HTTP only (no
+                              OpenSSL, zlib or PCRE in the vbs sysroot), static files packed,
+                              127.0.0.1:8002
+``CI-Examples/memcached``     memcached 1.6.21 with libevent 2.1.12 (static), 4 workers,
+                              127.0.0.1:11211
+``CI-Examples/lighttpd``      lighttpd 1.4.59 in the foreground, modules loaded with ``dlopen`` from
+                              the image, 127.0.0.1:8003
+============================  ======================================================================
+
+For example::
+
+    cd CI-Examples/redis
+    make VBS=1 && make VBS=1 check
+    ../../scripts/vbs/gramine-vbs redis-server &
+    ../../scripts/vbs/gramine-vbs net redis 6379 SET greeting hello
+    ../../scripts/vbs/gramine-vbs net bench redis-get 6379 -c 8 -n 100000
+    kill %%
+
+What applications have to give up in a VBS enclave, and how the examples do it:
+
+- **No fork** (one process per enclave): servers run without a master process or daemonising
+  (NGINX ``master_process off``, lighttpd ``-D``), and features that fork are off (Redis
+  snapshots and the append-only file).
+- **Only packed code**: everything that runs, including modules loaded with ``dlopen``, is in
+  ``vbs.packed_files`` and built with the vbs gcc against the vbs glibc; libraries that the vbs
+  sysroot lacks are built for the enclave too (memcached's libevent) or their features left out
+  (OpenSSL, zlib, PCRE, libcrypt).
+- **Read-only packed files**: files the application writes go to a ``tmpfs`` mount or to
+  ``vbs.allowed_files``.
+- **Sockets are the Windows host's**: listen on 127.0.0.1 (another interface would need a
+  firewall rule); clients run on Windows (``gramine-vbs net``), since WSL2 in NAT mode cannot
+  reach Windows' loopback.
+
+Measured on the test machine with eight connections, event-loop servers serve 11,000-12,500
+small requests per second in the enclave (about 60-80 % of the same binary natively in WSL reached
+from Windows), memcached with its four threads 36,000; pipelined Redis 164,000 per second; large
+responses about 230 MB/s per thread. The servers listen 0.2-0.7 s after the host process starts.
+
 ``gramine-vbs``
 ---------------
 
