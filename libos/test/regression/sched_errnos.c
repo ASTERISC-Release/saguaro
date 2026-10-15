@@ -4,7 +4,10 @@
 /*
  * The scheduler and priority calls check their target like the kernel (LTP sched_getparam03,
  * sched_setparam04, sched_getscheduler02, sched_setscheduler01, getpriority02): a NULL parameter
- * or a negative pid is EINVAL, a bad pointer EFAULT, and a pid that names no process ESRCH.
+ * or a negative pid is EINVAL, a bad pointer EFAULT, and a pid that names no process ESRCH. Also
+ * the related process-level checks: setpgid() into a group that does not exist is EPERM
+ * (setpgid02), sethostname()/setdomainname() without CAP_SYS_ADMIN are EPERM (sethostname03,
+ * setdomainname03).
  */
 
 #define _GNU_SOURCE
@@ -43,6 +46,15 @@ int main(void) {
     errno = 0;
     CHECK(getpriority(PRIO_PROCESS, NO_SUCH_PID) == -1 && errno == ESRCH);
     CHECK(getpriority(77, 0) == -1 && errno == EINVAL);
+    CHECK(setpgid(0, 0) == 0);
+    CHECK(setpgid(0, NO_SUCH_PID) == -1 && errno == EPERM);
+    CHECK(setpgid(0, -1) == -1 && errno == EINVAL);
+
+    CHECK(seteuid(65534) == 0);
+    CHECK(sethostname("x", 1) == -1 && errno == EPERM);
+    CHECK(setdomainname("x", 1) == -1 && errno == EPERM);
+    CHECK(seteuid(0) == 0);
+
     puts("TEST OK");
     return 0;
 }
