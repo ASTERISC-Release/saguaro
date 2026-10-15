@@ -37,6 +37,11 @@ int main(void) {
     CHECK(prctl(PR_SET_NAME, "prctl_misc_long_name") == 0);
     CHECK(prctl(PR_GET_NAME, name) == 0 && strcmp(name, "prctl_misc_long") == 0); /* 15 chars */
     CHECK(prctl(PR_SET_NAME, (char*)1) == -1 && errno == EFAULT);
+    char comm_path[64], comm[32] = {0};
+    snprintf(comm_path, sizeof(comm_path), "/proc/self/task/%d/comm", (int)gettid());
+    FILE* f = fopen(comm_path, "r");
+    CHECK(f && fgets(comm, sizeof(comm), f) && strcmp(comm, "prctl_misc_long\n") == 0);
+    fclose(f);
 
     CHECK(prctl(PR_GET_DUMPABLE) == 1);
     CHECK(prctl(PR_SET_DUMPABLE, 2) == -1 && errno == EINVAL);

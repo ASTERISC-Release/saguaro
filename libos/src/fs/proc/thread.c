@@ -629,3 +629,38 @@ int proc_thread_stat_load(struct libos_dentry* dent, char** out_data, size_t* ou
     *out_size = size;
     return 0;
 }
+
+/* `/proc/<pid>/comm` and `/proc/<pid>/task/<tid>/comm`: the thread's name (PR_SET_NAME), or the
+ * executable's name truncated to 15 characters (LTP prctl05) */
+int proc_thread_comm_load(struct libos_dentry* dent, char** out_data, size_t* out_size) {
+    unsigned long id = 0;
+    struct libos_thread* thread = NULL;
+    if (dent->parent && pseudo_parse_ulong(dent->parent->name, IDTYPE_MAX, &id) == 0)
+        thread = lookup_thread((IDTYPE)id);
+    char comm[16] = {0};
+    if (thread) {
+        lock(&thread->lock);
+        memcpy(comm, thread->comm, sizeof(comm));
+        unlock(&thread->lock);
+        put_thread(thread);
+    }
+    if (!comm[0]) {
+        lock(&g_process.fs_lock);
+        if (g_process.exec && g_process.exec->dentry) {
+            size_t len = g_process.exec->dentry->name_len;
+            memcpy(comm, g_process.exec->dentry->name, len > 15 ? 15 : len);
+        }
+        unlock(&g_process.fs_lock);
+    }
+    comm[15] = '\0';
+    size_t len = strlen(comm);
+    char* buf = malloc(len + 2);
+    if (!buf)
+        return -ENOMEM;
+    memcpy(buf, comm, len);
+    buf[len] = '\n';
+    buf[len + 1] = '\0';
+    *out_data = buf;
+    *out_size = len + 1;
+    return 0;
+}

@@ -123,11 +123,12 @@ static int lookup_dentry(struct libos_dentry* dent) {
 }
 
 static int do_path_lookupat(struct libos_dentry* start, const char* path, int flags,
-                            struct libos_dentry** found, unsigned int link_depth);
+                            struct libos_dentry** found, unsigned int link_depth,
+                            unsigned int* link_total);
 
 /* Helper function that follows a symbolic link, performing a nested call to `do_path_lookupat`  */
 static int path_lookupat_follow(struct libos_dentry* link, int flags, struct libos_dentry** found,
-                                unsigned int link_depth) {
+                                unsigned int link_depth, unsigned int* link_total) {
     int ret;
     char* target = NULL;
 
@@ -144,7 +145,7 @@ static int path_lookupat_follow(struct libos_dentry* link, int flags, struct lib
     struct libos_dentry* up = dentry_up(link);
     if (!up)
         up = g_dentry_root;
-    ret = do_path_lookupat(up, target, flags, found, link_depth);
+    ret = do_path_lookupat(up, target, flags, found, link_depth, link_total);
 
 out:
     free(target);
@@ -204,6 +205,10 @@ struct lookup {
 
     /* Depth of followed symbolic links, to avoid too deep recursion */
     unsigned int link_depth;
+
+    /* Symbolic links followed so far in the whole resolution (the kernel's MAXSYMLINKS bound of
+     * 40, LTP stat03/lstat02/readlink03 ELOOP cases), shared by the nested lookups */
+    unsigned int* link_total;
 };
 
 /* Process a new dentry in the lookup: follow mounts and symbolic links, then check if the resulting
@@ -220,7 +225,7 @@ static int lookup_enter_dentry(struct lookup* lookup) {
         /* Traverse the symbolic link. This applies to all intermediate segments, final segments
          * ending with slash, and to all final segments if LOOKUP_FOLLOW is set. */
         if (!is_final || has_slash || (lookup->flags & LOOKUP_FOLLOW)) {
-            if (lookup->link_depth >= MAX_LINK_DEPTH)
+            if (lookup->link_depth >= MAX_LINK_DEPTH || ++*lookup->link_total > MAX_LINK_TOTAL)
                 return -ELOOP;
 
             /* If this is not the final segment (or it is the final segment, but ends with slash),
@@ -234,7 +239,7 @@ static int lookup_enter_dentry(struct lookup* lookup) {
 
             struct libos_dentry* target_dent;
             ret = path_lookupat_follow(lookup->dent, sub_flags, &target_dent,
-                                       lookup->link_depth + 1);
+                                       lookup->link_depth + 1, lookup->link_total);
             if (ret < 0)
                 return ret;
 
@@ -327,7 +332,8 @@ static int lookup_advance(struct lookup* lookup) {
  * link depth is limited to MAX_LINK_DEPTH).
  */
 static int do_path_lookupat(struct libos_dentry* start, const char* path, int flags,
-                            struct libos_dentry** found, unsigned int link_depth) {
+                            struct libos_dentry** found, unsigned int link_depth,
+                            unsigned int* link_total) {
     assert(locked(&g_dcache_lock));
 
     struct libos_dentry* dent = NULL;
@@ -371,6 +377,7 @@ static int do_path_lookupat(struct libos_dentry* start, const char* path, int fl
         .has_slash = has_slash,
         .dent = dent,
         .link_depth = link_depth,
+        .link_total = link_total,
     };
 
     /* Main part of the algorithm. Repeatedly call `lookup_enter_dentry`, then `lookup_advance`,
@@ -399,7 +406,8 @@ err:
 
 int path_lookupat(struct libos_dentry* start, const char* path, int flags,
                    struct libos_dentry** found) {
-    return do_path_lookupat(start, path, flags, found, /*link_depth=*/0);
+    unsigned int link_total = 0;
+    return do_path_lookupat(start, path, flags, found, /*link_depth=*/0, &link_total);
 }
 
 static inline int open_flags_to_lookup_flags(int flags) {

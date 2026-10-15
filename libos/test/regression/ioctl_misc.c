@@ -34,6 +34,10 @@ int main(void) {
     int ent = -1;
     CHECK(ioctl(fd, RNDGETENTCNT, &ent) == 0 && ent >= 0);
     CHECK(ioctl(fd, RNDGETENTCNT, NULL) == -1 && errno == EFAULT);
+    FILE* f = fopen("/proc/sys/kernel/random/entropy_avail", "r");
+    int avail_bits = -1;
+    CHECK(f && fscanf(f, "%d", &avail_bits) == 1 && avail_bits >= 0);
+    fclose(f);
     CHECK(ioctl(fd, 0x12345678, &ent) == -1 && errno == EINVAL); /* the random driver's answer */
     close(fd);
     fd = open("/dev/urandom", O_RDONLY);

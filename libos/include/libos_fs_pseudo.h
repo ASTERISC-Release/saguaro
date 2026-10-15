@@ -219,6 +219,7 @@ int proc_thread_follow_link(struct libos_dentry* dent, char** out_target);
 int proc_thread_maps_load(struct libos_dentry* dent, char** out_data, size_t* out_size);
 int proc_thread_cmdline_load(struct libos_dentry* dent, char** out_data, size_t* out_size);
 int proc_thread_status_load(struct libos_dentry* dent, char** out_data, size_t* out_size);
+int proc_thread_comm_load(struct libos_dentry* dent, char** out_data, size_t* out_size);
 int proc_thread_statm_load(struct libos_dentry* dent, char** out_data, size_t* out_size);
 int proc_thread_stat_load(struct libos_dentry* dent, char** out_data, size_t* out_size);
 bool proc_thread_fd_name_exists(struct libos_dentry* parent, const char* name);

@@ -651,6 +651,8 @@ void inode_init_owner(struct libos_dentry* dent);
 
 /* Maximum number of nested symlinks that `path_lookupat` and related functions will follow */
 #define MAX_LINK_DEPTH 8
+/* symbolic links followed in one path resolution, the kernel's MAXSYMLINKS */
+#define MAX_LINK_TOTAL 40
 
 /*!
  * \brief Look up a path, retrieving a dentry.

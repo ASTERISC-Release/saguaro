@@ -109,7 +109,6 @@ long libos_syscall_sched_setparam(pid_t pid, struct __kernel_sched_param* param)
         return -EFAULT;
     if (!pid_exists(pid))
         return -ESRCH;
-
     return 0;
 }
 

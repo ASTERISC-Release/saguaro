@@ -169,13 +169,16 @@ static int set_pipe_size(struct libos_handle* hdl, unsigned long arg) {
         return -EPERM;
 
     /* EBUSY if the pipe holds more than the new size: ask the read end how much is queued */
-    struct libos_handle* rd = hdl;
     struct libos_handle* peer = NULL;
-    if (!(hdl->acc_mode & MAY_READ) && hdl->info.pipe.peer_fd >= 0) {
+    if (hdl->info.pipe.peer_fd >= 0) {
         peer = get_fd_handle(hdl->info.pipe.peer_fd, NULL, NULL);
-        if (peer && peer->type == TYPE_PIPE && peer->pal_handle)
-            rd = peer;
+        if (peer && peer->type != TYPE_PIPE) {
+            put_handle(peer);
+            peer = NULL;
+        }
     }
+    struct libos_handle* rd = (!(hdl->acc_mode & MAY_READ) && peer && peer->pal_handle) ? peer
+                                                                                       : hdl;
     if (rd->pal_handle) {
         PAL_STREAM_ATTR attr;
         if (PalStreamAttributesQueryByHandle(rd->pal_handle, &attr) == 0 &&

@@ -692,7 +692,10 @@ long libos_syscall_msync(unsigned long start, size_t len_orig, int flags) {
         flags |= MS_ASYNC;
     }
 
-    if (!is_user_memory_readable((void*)start, len)) {
+    /* ENOMEM only for a range that is not mapped (the kernel's answer): a readability probe would
+     * also refuse mapped pages that fault, e.g. a file mapping past the end of its file, or
+     * PROT_NONE ones (LTP mremap01, qmm01) */
+    if (len && !is_in_adjacent_user_vmas((void*)start, len, /*prot=*/0)) {
         return -ENOMEM;
     }
 

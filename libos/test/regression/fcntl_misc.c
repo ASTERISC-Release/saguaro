@@ -93,6 +93,8 @@ int main(int argc, char** argv) {
      * user's pipe budget natively) */
     CHECK(fcntl(pfd[1], F_SETPIPE_SZ, 5000) == 8192);
     CHECK(fcntl(pfd[0], F_GETPIPE_SZ) == 8192); /* one pipe, both ends */
+    CHECK(fcntl(pfd[0], F_SETPIPE_SZ, 0) == 4096); /* from the read end, at least a page */
+    CHECK(fcntl(pfd[1], F_GETPIPE_SZ) == 4096);
     CHECK(fcntl(pfd[1], F_SETPIPE_SZ, (1U << 31) + 1) == -1 && errno == EINVAL);
     char data[8192];
     memset(data, 'x', sizeof(data));

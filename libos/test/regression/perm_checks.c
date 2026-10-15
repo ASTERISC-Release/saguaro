@@ -6,7 +6,9 @@
  * lstat02, readlink03, fchdir03, chroot04, rmdir03, open02): walking through a directory needs
  * search permission (EACCES), chdir/fchdir/chroot need it on the target, removing an entry needs
  * write and search permission on its directory and, in a sticky directory, ownership (EPERM),
- * O_NOATIME is for the owner, and chroot without CAP_SYS_CHROOT is EPERM.
+ * O_NOATIME is for the owner, and chroot without CAP_SYS_CHROOT is EPERM. access() checks with the
+ * real ids (here: root) unless AT_EACCESS (LTP access01), and a path resolution follows at most 40
+ * symbolic links (ELOOP; stat03, lstat02, readlink03).
  *
  * Usage: perm_checks <scratch directory>      (runs as root, drops to uid/gid 65534)
  */
@@ -91,11 +93,29 @@ int main(int argc, char** argv) {
     CHECK(unlink(path("sticky/mine")) == 0); /* own entries may go */
 
     CHECK(open(path("rootfile"), O_RDONLY | O_NOATIME) == -1 && errno == EPERM);
+    /* access(): the real uid is still root */
+    CHECK(access(path("closed/file"), R_OK) == 0);
+    CHECK(faccessat(AT_FDCWD, path("closed/file"), R_OK, AT_EACCESS) == -1 && errno == EACCES);
+    CHECK(access(path("rootfile"), 8) == -1 && errno == EINVAL);
     int fd = open(path("rootfile"), O_RDONLY);
     CHECK(fd >= 0);
     close(fd);
     CHECK(seteuid(0) == 0 && setegid(0) == 0);
     close(closed_fd);
+
+    /* 41 symbolic links in one resolution: ELOOP (each link alone is fine) */
+    CHECK(mkdir(path("loop"), 0755) == 0);
+    CHECK(symlink("../loop", path("loop/loop")) == 0);
+    char deep[2048];
+    snprintf(deep, sizeof(deep), "%s", path("loop"));
+    for (int i = 0; i < 39; i++)
+        strcat(deep, "/loop");
+    struct stat st2;
+    CHECK(stat(deep, &st2) == 0); /* 39 links */
+    strcat(deep, "/loop/loop");
+    CHECK(stat(deep, &st2) == -1 && errno == ELOOP); /* 41 */
+    unlink(path("loop/loop"));
+    rmdir(path("loop"));
 
     unlink(path("closed/link"));
     unlink(path("closed/file"));
