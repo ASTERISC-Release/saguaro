@@ -15,7 +15,7 @@
 #   wsl-build.sh objs      compile the Windows enclave runtime and host (build-objs.sh)
 #       GV_PACK  pack.py output folder in the distribution (empty: no packed objects)
 #   wsl-build.sh manifest  the whole Linux side for a manifest: the vbs glibc and the meson build of
-#                          the runtime when missing, then `gramine-vbs build --no-sign` (the
+#                          the runtime when missing (build-runtime.sh), then `gramine-vbs build --no-sign` (the
 #                          manifest's vbs.build recipe, pack.py, build-objs.sh)
 #       GV_MANIFEST  the manifest in the distribution
 #   objs and manifest also take
@@ -105,14 +105,6 @@ if [ ! -f "$HDR/.complete" ]; then
 fi
 mkdir -p "$GV_OUT"
 
-LOGS=$ROOT/build-vbs-logs
-timed() {  # name command...: run a step with its output in a log, print its time
-    _n=$1; shift
-    _s=$(date +%s)
-    "$@" >"$LOGS/$_n.log" 2>&1 || { tail -30 "$LOGS/$_n.log"; log "$_n failed ($LOGS/$_n.log)"; exit 1; }
-    log "$_n: $(( $(date +%s) - _s )) s"
-}
-
 if [ "$MODE" = objs ]; then
     OBJ=$(mktemp -d "${TMPDIR:-/tmp}/gramine-vbs-obj.XXXXXX")
     trap 'rm -rf "$OBJ" "$OBJ.log"' EXIT
@@ -120,24 +112,11 @@ if [ "$MODE" = objs ]; then
         || { tail -30 "$OBJ.log"; exit 1; }
 else
     : "${GV_MANIFEST:?}"
-    mkdir -p "$LOGS"
-    cd "$ROOT"
-    if [ ! -f build-vbs-glibc/usr/lib/libc.so.6 ]; then
-        log "first build: the vbs glibc (about 2-3 minutes)"
-        [ -f subprojects/packagecache/glibc-2.39.tar.gz ] \
-            || timed glibc-download meson subprojects download glibc-2.39-1
-        timed glibc sh scripts/vbs/build-glibc.sh
-        rm -rf build-vbs-glibc.build
-    fi
-    if [ ! -f build-vbs/build.ninja ]; then
-        log "first build: meson setup of the vbs PAL and LibOS"
-        timed meson-setup meson setup build-vbs -Ddirect=disabled -Dvbs=enabled -Dlibc=none \
-            -Dtests=disabled -Dbuildtype=release -Dgraphics=disabled
-    fi
-    timed ninja ninja -C build-vbs
+    GRAMINE_VBS_LOG_PREFIX=[wsl] sh "$HERE/build-runtime.sh"
     python3 -I "$HERE/gramine-vbs" build "$GV_MANIFEST" --no-sign --runtime "$ROOT/build-vbs" \
         --headers "$HDR"
     B=${GV_MANIFEST%.toml}
+    B=${B%.vbs}
     OBJ=${B%.manifest}.vbs/obj
     python3 -I - "$GV_MANIFEST" > "$GV_OUT/host-dirs.txt" <<'PY'
 import sys, tomllib

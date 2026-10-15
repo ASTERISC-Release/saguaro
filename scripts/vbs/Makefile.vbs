@@ -1,0 +1,86 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 Gramine contributors
+#
+# `make VBS=1` for the application examples: the VBS counterpart of `make SGX=1`
+# (Documentation/vbs.rst, "Makefile flow: make VBS=1"). An example's Makefile includes this file
+# under `ifeq ($(VBS),1)` and sets, before the include:
+#
+#   VBS_APP      the application's name: vbs.manifest.template is rendered into
+#                $(VBS_APP).manifest.vbs, and the image is built in $(VBS_APP).vbs/
+#   VBS_DEPS     files the image is made from (the application built for the enclave, scripts,
+#                data): the image is rebuilt when one of them changes
+#   VBS_DEFINES  extra -Dkey=value for the template (optional)
+#   VBS_CLEAN    what `make VBS=1 clean` removes besides the image and the manifest (optional)
+#
+# and makes its `all` depend on vbs-all. Everything that goes into the enclave is listed in the
+# template's vbs.packed_files (measured into the signed image); the application is built with
+# $(VBS_GCC) (a gcc for the vbs glibc: dynamic PIE, -ffixed-x18) or $(VBS_CC_STATIC) /
+# $(VBS_CC_DYNAMIC), into a folder of its own so that the direct and SGX builds are not touched.
+#
+# Where the image is linked and signed: in WSL with interop, on the Windows of the same machine
+# (gramine-vbs copies the objects to a Windows folder; see gramine-vbs --help for
+# GRAMINE_VBS_WINDOWS_BASE); elsewhere on the Windows machine named by GRAMINE_VBS_WINDOWS (ssh);
+# with GRAMINE_VBS_WINDOWS=none or no Windows only the Linux half is built (`make VBS=1 vbs-sign`
+# later). $(GRAMINE) runs the application like gramine-direct: `$(GRAMINE) $(VBS_APP) args`.
+
+VBS_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+GRAMINE_VBS_REPO ?= $(abspath $(VBS_DIR)/../..)
+
+GRAMINE_VBS := $(VBS_DIR)/gramine-vbs
+GRAMINE = $(GRAMINE_VBS)
+VBS_SYSROOT := $(GRAMINE_VBS_REPO)/build-vbs-glibc
+VBS_GCC := $(VBS_DIR)/vbs-gcc
+VBS_CC_STATIC := env SYSROOT=$(VBS_SYSROOT) $(VBS_DIR)/cc-static-pie.sh
+VBS_CC_DYNAMIC := env SYSROOT=$(VBS_SYSROOT) $(VBS_DIR)/cc-dynamic-pie.sh
+# the in-enclave folder of the vbs glibc's libraries (loader, libc, libm, ...)
+VBS_LIBDIR := /usr/lib
+
+ifeq ($(VBS_APP),)
+$(error set VBS_APP before including Makefile.vbs)
+endif
+VBS_TEMPLATE ?= vbs.manifest.template
+VBS_MANIFEST := $(VBS_APP).manifest.vbs
+VBS_IMAGE := $(VBS_APP).vbs/image.stamp
+# changes only when the runtime objects or the vbs glibc changed (gramine-vbs runtime)
+VBS_RUNTIME_STAMP := $(GRAMINE_VBS_REPO)/build-vbs/runtime.stamp
+
+GRAMINE_LOG_LEVEL ?= error
+
+# the example's own `all` stays the default goal
+.DEFAULT_GOAL := all
+
+.PHONY: vbs-all vbs-runtime vbs-sign vbs-stop vbs-clean
+vbs-all: $(VBS_IMAGE)
+
+# the vbs glibc (once, about 2 minutes), the vbs PAL and LibOS (meson + ninja)
+vbs-runtime: $(VBS_RUNTIME_STAMP)
+$(VBS_RUNTIME_STAMP): vbs-always
+	$(GRAMINE_VBS) runtime
+
+.PHONY: vbs-always
+vbs-always:
+
+$(VBS_MANIFEST): $(VBS_TEMPLATE)
+	$(GRAMINE_VBS) manifest \
+		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
+		-Darch_libdir=$(VBS_LIBDIR) \
+		$(VBS_DEFINES) \
+		$< $@
+
+# pack (gramine-vbs build), compile the Windows objects, and link and sign on Windows when one is
+# reachable; the stamp is written only when all of that succeeded
+$(VBS_IMAGE): $(VBS_MANIFEST) $(VBS_DEPS) $(VBS_RUNTIME_STAMP)
+	$(GRAMINE_VBS) build $<
+	touch $@
+
+vbs-sign: $(VBS_IMAGE)
+	$(GRAMINE_VBS) sign $(VBS_APP).vbs
+
+# stop every enclave host of this image (servers started in the background)
+vbs-stop:
+	-$(GRAMINE_VBS) stop $(VBS_APP).vbs
+
+# `make VBS=1 clean` also removes the VBS files (the Windows folder of the image stays)
+clean: vbs-clean
+vbs-clean:
+	$(RM) -r $(VBS_APP).vbs $(VBS_MANIFEST) $(VBS_CLEAN)

@@ -1,0 +1,24 @@
+# Copyright (C) 2026 Gramine contributors
+# SPDX-License-Identifier: BSD-3-Clause
+
+# Hello World manifest for a Windows VBS enclave (`make VBS=1`, Documentation/vbs.rst). The
+# counterpart of helloworld.manifest.template: everything the enclave runs is packed into the signed
+# image (vbs.packed_files, measured like sgx.trusted_files); the program is the static PIE that
+# `make VBS=1` builds into vbs-build/.
+
+loader.entrypoint = "file:/libsysdb.so"
+libos.entrypoint = "/helloworld"
+loader.log_level = "{{ log_level }}"
+
+fs.root.uri = "file:/"
+# no run-time code generation in a VBS enclave
+sys.rewrite_syscalls = false
+
+vbs.debug = false
+vbs.max_threads = 4
+# the program maps 512 MiB of anonymous memory
+vbs.enclave_size = "1G"
+
+vbs.packed_files = [
+  { path = "/helloworld", uri = "file:vbs-build/helloworld" },
+]

@@ -12,9 +12,23 @@ CFLAGS += -O3
 endif
 
 .PHONY: all
+ifeq ($(VBS),1)
+# Windows VBS enclave (scripts/vbs/Makefile.vbs, Documentation/vbs.rst): the program built for the
+# enclave (a static PIE against the vbs glibc) in vbs-build/, packed by vbs.manifest.template
+VBS_APP = helloworld
+VBS_DEPS = vbs-build/helloworld
+VBS_CLEAN = vbs-build
+include ../../scripts/vbs/Makefile.vbs
+all: vbs-all
+
+vbs-build/helloworld: helloworld.c | $(VBS_RUNTIME_STAMP)
+	mkdir -p vbs-build
+	$(VBS_CC_STATIC) $(CFLAGS) -o $@ $<
+else
 all: helloworld helloworld.manifest
 ifeq ($(SGX),1)
 all: helloworld.manifest.sgx helloworld.sig
+endif
 endif
 
 helloworld: helloworld.o
@@ -50,7 +64,9 @@ sgx_sign: helloworld.manifest helloworld
 		--output $<.sgx
 	gramine-manifest-check $<.sgx
 
-ifeq ($(SGX),)
+ifeq ($(VBS),1)
+# GRAMINE is gramine-vbs (Makefile.vbs)
+else ifeq ($(SGX),)
 GRAMINE = gramine-direct
 else
 GRAMINE = gramine-sgx
