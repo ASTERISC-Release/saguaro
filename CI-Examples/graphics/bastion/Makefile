@@ -64,6 +64,22 @@ run-native: $(GAME_BIN) dirs
 run: all dirs
 	gramine-vm bastion
 
+# gramine-direct on the host GPU (Documentation/devel/graphics-direct/): stock Mesa with DRI3 by
+# default; PRELOAD=1 uses the preload library instead (needs an install built with a VM-type PAL).
+# The X server is the one of $(DISPLAY), reached through its Unix socket. Arguments come from the
+# command line (BASTION_ARGS).
+PRELOAD ?= 0
+X_DISPLAY_NUM = $(patsubst :%,%,$(firstword $(subst ., ,$(DISPLAY))))
+
+bastion-direct.manifest: bastion-direct.manifest.template $(GAME_BIN) FORCE
+	gramine-manifest $(MANIFEST_ARGS) -Ddisplay=$(X_DISPLAY_NUM) -Dpreload=$(PRELOAD) \
+		-Degl_discrete=$${EGL_DISCRETE:-0} $< $@
+	gramine-manifest-check $@
+
+.PHONY: run-direct
+run-direct: bastion-direct.manifest dirs
+	gramine-direct bastion-direct $(BASTION_ARGS)
+
 .PHONY: clean
 clean:
 	$(RM) *.manifest

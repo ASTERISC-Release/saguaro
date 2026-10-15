@@ -28,9 +28,19 @@ extern struct pal_linux_state {
     unsigned int host_pid;
     unsigned long memory_quota;
     long int (*vdso_clock_gettime)(long int clk, struct timespec* tp);
+    /* `sys.insecure__allow_raw_device_ioctl`: device ioctls go to the host unchanged */
+    bool raw_device_ioctl;
 } g_pal_linux_state;
 
 #define DEFAULT_BACKLOG 2048
+
+/* Major and minor number of a host `dev_t` (the kernel's encoding, as glibc's major()/minor()). */
+static inline uint32_t host_dev_major(uint64_t dev) {
+    return (uint32_t)(((dev >> 8) & 0xfff) | ((dev >> 32) & ~0xfffull));
+}
+static inline uint32_t host_dev_minor(uint64_t dev) {
+    return (uint32_t)((dev & 0xff) | ((dev >> 12) & ~0xffull));
+}
 
 /* PAL main function */
 noreturn void pal_linux_main(void* initial_rsp, void* fini_callback);

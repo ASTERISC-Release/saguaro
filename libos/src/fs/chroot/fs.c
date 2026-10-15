@@ -76,6 +76,7 @@ static int chroot_lookup(struct libos_dentry* dent) {
         goto out;
 
     PAL_STREAM_ATTR pal_attr;
+    memset(&pal_attr, 0, sizeof(pal_attr));
     ret = PalStreamAttributesQuery(uri, &pal_attr);
     if (ret < 0) {
         ret = pal_to_unix_errno(ret);
@@ -109,6 +110,11 @@ static int chroot_lookup(struct libos_dentry* dent) {
     file_off_t size = (type == S_IFREG ? pal_attr.pending_size : 0);
 
     ret = chroot_setup_dentry(dent, type, perm, size);
+    if (ret == 0 && type == S_IFCHR) {
+        /* zero unless the PAL reports it (only the Linux PAL does) */
+        dent->inode->rdev_major = pal_attr.dev.rdev_major;
+        dent->inode->rdev_minor = pal_attr.dev.rdev_minor;
+    }
 out:
     free(uri);
     return ret;
@@ -344,6 +350,23 @@ out:
     free(buf);
     PalObjectDestroy(palhdl);
     return ret;
+}
+
+int chroot_host_readlink(struct libos_dentry* dent, char* buf, size_t bufsize) {
+    assert(locked(&g_dcache_lock));
+    assert(dent->inode);
+
+    char* uri;
+    int ret = dentry_uri(dent, dent->inode->type, &uri);
+    if (ret < 0)
+        return ret;
+
+    size_t size = bufsize;
+    ret = PalHostReadlink(uri, buf, &size);
+    free(uri);
+    if (ret < 0)
+        return pal_to_unix_errno(ret);
+    return (int)size;
 }
 
 static int chroot_unlink(struct libos_dentry* dent) {

@@ -49,6 +49,13 @@ PalFileUnlink
 PalFileRename
 PalStreamAttributesSetByHandle
 PalDeviceIoControl
+PalHostReadlink
+PalHostFdWrap
+PalHostFdGet
+PalHostUnixConnect
+PalHostClockMonotonic
+PalHostSendmsg
+PalHostRecvmsg
 PalDebugMapAdd
 PalDebugMapRemove
 PalDebugDescribeLocation

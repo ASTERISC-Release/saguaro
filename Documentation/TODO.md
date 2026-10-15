@@ -9,6 +9,7 @@ Open items are kept per topic, in the `TODO.md` of each directory under `Documen
 | AArch64 vm PAL (and what it shares with the x86_64 vm PAL: thread resume, timer granularity) | `devel/aarch64/vm/TODO.md` |
 | RISC-V direct PAL | `devel/riscv/TODO.md` |
 | Graphics host redirection | `devel/graphics/TODO.md` |
+| Accelerated graphics for `gramine-direct` | `devel/graphics-direct/TODO.md` |
 | Syscall interception | `devel/syscall-interception/TODO.md` |
 | Host libc instead of a built glibc | `devel/runtime-libc/TODO.md` |
 | TCP and UDP in the VM PAL | `devel/vm-network/TODO.md` |

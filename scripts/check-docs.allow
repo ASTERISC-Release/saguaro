@@ -55,9 +55,11 @@ runtime/glibc$
 ^runtest/syscalls$
 ^src/$
 
+^gramine-graphics-direct/
 # untracked run logs and probe work directories (gitignored; the documents name the logs of a run,
 # which exist only in the checkout that ran it)
 ^\.ltp-results/
 ^\.mp-probes/
 
 ^gramine-libos-
+^libos/test/ltp/install$

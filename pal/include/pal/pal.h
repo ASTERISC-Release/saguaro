@@ -516,6 +516,13 @@ typedef struct _PAL_STREAM_ATTR {
             bool tcp_nodelay;
             bool ipv6_v6only;
         } socket;
+        struct {
+            /* device number of a character device (`st_rdev`); 0:0 if the PAL does not know it */
+            uint32_t rdev_major;
+            uint32_t rdev_minor;
+            /* the host's `st_mode` (file type and permissions); 0 if the PAL does not know it */
+            uint32_t host_mode;
+        } dev;
     };
 } PAL_STREAM_ATTR;
 
@@ -950,6 +957,103 @@ int PalSegmentBaseSet(enum pal_segment_reg reg, uintptr_t addr);
  * This function corresponds to ioctl() in UNIX systems and DeviceIoControl() in Windows.
  */
 int PalDeviceIoControl(PAL_HANDLE handle, uint32_t cmd, unsigned long arg, int* out_ret);
+
+/*
+ * Host passthrough (Linux PAL only, i.e. `gramine-direct`). These calls give the LibOS access to
+ * host objects that have no PAL abstraction. Every other PAL returns -PAL_ERROR_NOTIMPLEMENTED.
+ * The LibOS uses them only when the manifest opts in (see Documentation/manifest-syntax.rst).
+ */
+
+/*!
+ * \brief Read the target of a host symbolic link.
+ *
+ * \param         typed_uri  URI of the link (`file:`, `dir:` or `dev:`).
+ * \param[out]    buf        Buffer for the target (not NUL-terminated).
+ * \param[in,out] size       Size of \p buf; on success the length of the target (truncated to the
+ *                           size of \p buf, as readlink() does).
+ *
+ * \returns 0 on success, -PAL_ERROR_INVAL if the host object is not a symbolic link, another
+ *          negative error code on failure.
+ */
+int PalHostReadlink(const char* typed_uri, char* buf, size_t* size);
+
+/*!
+ * \brief Wrap a host file descriptor into a PAL handle.
+ *
+ * \param      host_fd     A host fd of this process, for example one that a device ioctl returned
+ *                         (dma-buf, sync file). The handle takes ownership of it.
+ * \param[out] out_handle  On success contains a device handle (`PAL_TYPE_DEV`) for the fd.
+ *
+ * \returns 0 on success, negative error code on failure (\p host_fd is then left open).
+ */
+int PalHostFdWrap(int host_fd, PAL_HANDLE* out_handle);
+
+/*!
+ * \brief Get the host file descriptor of a PAL handle.
+ *
+ * \param      handle       A file, device or socket handle.
+ * \param[out] out_host_fd  On success contains the host fd (still owned by \p handle).
+ *
+ * \returns 0 on success, -PAL_ERROR_BADHANDLE if the handle has no host fd.
+ */
+int PalHostFdGet(PAL_HANDLE handle, int* out_host_fd);
+
+/*!
+ * \brief Connect to a host Unix stream socket by path.
+ *
+ * \param      path        Host path of the socket (for example `/tmp/.X11-unix/X0`).
+ * \param      options     `PAL_OPTION_NONBLOCK` or 0.
+ * \param[out] out_handle  On success contains a device handle (`PAL_TYPE_DEV`) of the connected
+ *                         socket; it supports read, write, wait and #PalHostSendmsg/#PalHostRecvmsg.
+ *
+ * \returns 0 on success, negative error code on failure.
+ */
+int PalHostUnixConnect(const char* path, pal_stream_options_t options, PAL_HANDLE* out_handle);
+
+/*!
+ * \brief Read the host's `CLOCK_MONOTONIC`.
+ *
+ * Gramine's own clocks (#PalSystemTimeQuery) are all real time; device interfaces that take
+ * absolute `CLOCK_MONOTONIC` deadlines (DRM syncobj waits) need the host's clock instead.
+ *
+ * \param[out] out_nsec  Nanoseconds.
+ *
+ * \returns 0 on success, negative error code on failure.
+ */
+int PalHostClockMonotonic(uint64_t* out_nsec);
+
+/*!
+ * \brief Send data with host fds (`SCM_RIGHTS`) on a host socket.
+ *
+ * \param      handle         Handle from #PalHostUnixConnect.
+ * \param      iov            Buffers to send.
+ * \param      iov_len        Length of \p iov.
+ * \param      host_fds       Host fds to pass with the data (see #PalHostFdGet); may be NULL.
+ * \param      host_fds_cnt   Number of \p host_fds.
+ * \param      nonblocking    Do not block, whatever the mode of the handle.
+ * \param[out] out_size       On success the number of bytes sent.
+ *
+ * \returns 0 on success, negative error code on failure.
+ */
+int PalHostSendmsg(PAL_HANDLE handle, struct iovec* iov, size_t iov_len, const int* host_fds,
+                   size_t host_fds_cnt, bool nonblocking, size_t* out_size);
+
+/*!
+ * \brief Receive data and host fds (`SCM_RIGHTS`) on a host socket.
+ *
+ * \param         handle        Handle from #PalHostUnixConnect.
+ * \param         iov           Buffers to receive into.
+ * \param         iov_len       Length of \p iov.
+ * \param[out]    host_fds      Received host fds (close-on-exec; the caller owns them).
+ * \param[in,out] host_fds_cnt  Capacity of \p host_fds; on success the number received (fds
+ *                              beyond the capacity are closed by the host).
+ * \param         nonblocking   Do not block, whatever the mode of the handle.
+ * \param[out]    out_size      On success the number of bytes received (0: end of stream).
+ *
+ * \returns 0 on success, negative error code on failure.
+ */
+int PalHostRecvmsg(PAL_HANDLE handle, struct iovec* iov, size_t iov_len, int* host_fds,
+                   size_t* host_fds_cnt, bool nonblocking, size_t* out_size);
 
 /*!
  * \brief Obtain the attestation report (local) with `user_report_data` embedded into it.

@@ -60,6 +60,35 @@ run-native: $(Q2_BIN) dirs
 run: all dirs
 	gramine-vm quake2
 
+# gramine-direct on the host GPU (Documentation/devel/graphics-direct/): stock Mesa with DRI3 by
+# default; PRELOAD=1 uses the preload library instead (needs an install built with a VM-type PAL).
+# The X server is the one of $(DISPLAY), reached through its Unix socket.
+PRELOAD ?= 0
+X_DISPLAY_NUM = $(patsubst :%,%,$(firstword $(subst ., ,$(DISPLAY))))
+
+quake2-direct.manifest: quake2-direct.manifest.template $(Q2_BIN) FORCE
+	gramine-manifest \
+		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
+		-Ddisplay=$(X_DISPLAY_NUM) \
+		-Dpreload=$(PRELOAD) \
+		-Degl_discrete=$${EGL_DISCRETE:-0} \
+		$< $@
+	gramine-manifest-check $@
+
+.PHONY: run-direct
+run-direct: quake2-direct.manifest dirs
+	gramine-direct quake2-direct $(Q2_ARGS)
+
+# Quake II's own benchmark: plays the demo's recording as fast as possible and prints
+# "633 frames, N seconds: N fps" (stop the game afterwards; it stays at the console).
+.PHONY: run-direct-timedemo run-native-timedemo
+run-direct-timedemo: quake2-direct.manifest dirs
+	gramine-direct quake2-direct +vid_maxfps 999 +timedemo 1 +map q2demo1.dm2
+run-native-timedemo: $(Q2_BIN) dirs
+	$(NATIVE_AS) $(if $(filter 1,$(PRELOAD)),LD_PRELOAD=$(GRAPHICS_LIB) EGL_DISCRETE=$${EGL_DISCRETE:-0}) \
+		vblank_mode=0 SDL_AUDIODRIVER=dummy ALSOFT_DRIVERS=null \
+		$(Q2_BIN) +vid_maxfps 999 +timedemo 1 +map q2demo1.dm2
+
 .PHONY: clean
 clean:
 	$(RM) *.manifest

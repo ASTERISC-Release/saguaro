@@ -206,15 +206,6 @@ static int count_nlink(const char* name, void* arg) {
     return 0;
 }
 
-static uint64_t makedev(unsigned int major, unsigned int minor) {
-    uint64_t dev;
-    dev  = (((uint64_t)(major & 0x00000fffu)) <<  8);
-    dev |= (((uint64_t)(major & 0xfffff000u)) << 32);
-    dev |= (((uint64_t)(minor & 0x000000ffu)) <<  0);
-    dev |= (((uint64_t)(minor & 0xffffff00u)) << 12);
-    return dev;
-}
-
 static int pseudo_istat(struct libos_dentry* dent, struct libos_inode* inode, struct stat* buf) {
     memset(buf, 0, sizeof(*buf));
     buf->st_dev = 1;
@@ -250,7 +241,7 @@ static int pseudo_istat(struct libos_dentry* dent, struct libos_inode* inode, st
             break;
         }
         case PSEUDO_DEV:
-            buf->st_rdev = makedev(node->dev.major, node->dev.minor);
+            buf->st_rdev = libos_makedev(node->dev.major, node->dev.minor);
             buf->st_nlink = 1;
             break;
         default:

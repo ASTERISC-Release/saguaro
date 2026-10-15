@@ -1,3 +1,4 @@
-# the commercial game files (unpacked by setup-bastion.sh from the GOG installer) and rendered manifests
+# the commercial game files (the GOG installer, and what setup-bastion.sh unpacks from it) and rendered manifests
+/bastion_*.sh
 /bastion_game/
 /*.manifest
