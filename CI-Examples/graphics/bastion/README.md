@@ -5,8 +5,16 @@ FNA on SDL2 and OpenGL, FMOD for audio), under `gramine-vm` with the graphics ho
 (x86_64). General setup, host requirements and caveats: `../README.md` and
 `Documentation/devel/graphics/`.
 
-**Status: not yet run under `gramine-vm`.** The manifest renders and passes `gramine-manifest-check`;
-the game was only traced natively (see below).
+**Status (2026-10-15, KVM, `make run`, nobody watched the screen; checked with X screenshots):**
+
+| Configuration | Result |
+|---|---|
+| 2 vCPUs, `MULTIPROC=0` (default) | Starts, OpenGL through the redirection, reaches the title screen ("Press Any Key") in about 90 s. FMOD's `sh -c` probe fails (`process creation failed`) and the game continues without sound. Same as `main`. |
+| 2 vCPUs, `MULTIPROC=1` | The game forks for FMOD's probe, but the `sh` child inherits `LD_PRELOAD=/libgraphics.so`, whose constructor repeats the comm-page handshake with the host and hangs, which disturbs the parent too: black window. With a guard in libgraphics (a child inheriting the graphics session skips it; `Documentation/devel/vm-multiproc/bastion-libgraphics-child-guard.patch`, not applied) the child exits 127 (`pulseaudio: not found`) and the title screen appears. |
+| 1 vCPU, either setting | No window within 120 s: the game's GL goes to the host Mesa directly (`XDG_RUNTIME_DIR` error, the AMD GPU's name) instead of the redirected EGL path. `main` does the same, so it is not caused by the multi-process work; not diagnosed (graphics redirection). |
+
+`MULTIPROC=1` adds `sys.experimental__multiprocess = true` and a `/bin` mount (FMOD runs `/bin/sh`).
+Input, sound, saving and the resolution setting (the 1920x1080 crop) were not tested.
 
 ## The game is not included
 
@@ -25,7 +33,7 @@ zip archive appended to it, into `./bastion_game` (about 1.3 GB, no root).
 
 ```sh
 make run-native      # without Gramine, with the preload library (opens a window)
-make run             # gramine-vm bastion
+make run             # gramine-vm bastion (MULTIPROC=1: with the experimental processes)
 ```
 
 Variables: `SHARED_INPUT=0` (input over the X connection), `SYSTEM_SDL=0` (use the game's bundled SDL2
