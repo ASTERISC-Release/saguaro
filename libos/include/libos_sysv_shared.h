@@ -55,3 +55,12 @@ long sysv_shared_semtimedop(int semid, const struct linux_sembuf* sops, size_t n
 void sysv_shared_fork(IDTYPE child_pid);
 void sysv_shared_exec(void);
 void sysv_shared_exit(void);
+
+/* `struct semid64_ds`: x86_64 keeps the 32-bit layout's padding words after sem_otime and
+ * sem_ctime (asm/sembuf.h), the asm-generic 64-bit layout (aarch64, riscv64) does not; the
+ * process-local libos_sem.c makes the same distinction */
+#ifdef __x86_64__
+#define SYSV_SEMID64_PAD(name) unsigned long name;
+#else
+#define SYSV_SEMID64_PAD(name)
+#endif

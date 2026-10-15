@@ -99,9 +99,9 @@ struct shared_ipc64_perm {
 struct shared_semid64_ds {
     struct shared_ipc64_perm sem_perm;
     long sem_otime;
-    unsigned long unused1;
+    SYSV_SEMID64_PAD(unused1)
     long sem_ctime;
-    unsigned long unused2;
+    SYSV_SEMID64_PAD(unused2)
     unsigned long sem_nsems;
     unsigned long unused3, unused4;
 };
