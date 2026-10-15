@@ -96,7 +96,8 @@ void isr_c(struct isr_regs* regs) {
              * it as a fatal PAL exception. */
             ret = pal_common_perform_memfault_handling(/*faulted_addr=*/0, regs);
             if (ret < 0) {
-                log_error("Panic: #GP handler failed");
+                log_error("Panic: #GP handler failed (rip=0x%lx rsp=0x%lx error code=0x%lx)",
+                          regs->rip, regs->rsp, regs->error_code);
                 triple_fault();
             }
             break;
