@@ -9,6 +9,7 @@
 #include "libos_fs_lock.h"
 #include "libos_handle.h"
 #include "libos_ipc.h"
+#include "libos_sysv_shared.h"
 #include "libos_lock.h"
 #include "libos_process.h"
 #include "libos_signal.h"
@@ -170,6 +171,9 @@ noreturn void thread_exit(int error_code, int term_signal) {
         log_warning("error clearing file (POSIX) locks: %s", unix_strerror(ret));
 
     detach_all_fds();
+
+    /* System V attachments and SEM_UNDO adjustments (guest-wide tables only) */
+    sysv_shared_exit();
 
     /* This is the last thread of the process. Let parent know we exited. */
     ret = ipc_cld_exit_send(error_code, term_signal);

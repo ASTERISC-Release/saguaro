@@ -112,6 +112,7 @@ libos_sources = files(
     'sys/libos_sem.c',
     'sys/libos_sysv_msg.c',
     'sys/libos_sysv_shm.c',
+    'sys/libos_sysv_shared.c',
     'sys/libos_sigaction.c',
     'sys/libos_sleep.c',
     'sys/libos_socket.c',

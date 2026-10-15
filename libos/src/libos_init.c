@@ -20,6 +20,7 @@
 #include "libos_process.h"
 #include "libos_sync.h"
 #include "libos_tcb.h"
+#include "libos_sysv_shared.h"
 #include "libos_thread.h"
 #include "libos_utils.h"
 #include "libos_vma.h"
@@ -409,6 +410,7 @@ noreturn void libos_init(const char* const* argv, const char* const* envp) {
     RUN_INIT(init_sysv_semaphores);
     RUN_INIT(init_sysv_shm);
     RUN_INIT(init_sysv_msg);
+    RUN_INIT(init_sysv_shared);
 
     log_debug("LibOS loaded at %p, ready to initialize", &__load_address);
 

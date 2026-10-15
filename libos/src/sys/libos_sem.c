@@ -3,6 +3,7 @@
 
 #include "libos_lock.h"
 #include "libos_internal.h"
+#include "libos_sysv_shared.h"
 #include "libos_graphics.h"
 #include "libos_signal.h"
 #include "libos_table.h"
@@ -97,6 +98,10 @@ int init_sysv_semaphores(void) {
 }
 
 long libos_syscall_semget(int key, int nsems, int semflg) {
+    /* --- guest-wide System V IPC (VM, sys.experimental__multiprocess): libos_sysv_shared.c --- */
+    if (sysv_shared_sem_enabled())
+        return sysv_shared_semget(key, nsems, semflg);
+    /* --- end of guest-wide System V IPC --- */
     if (g_use_host_sysv_semaphores)
         return host_sem_request(SYSV_SEMGET, key, nsems, semflg, 0);
 
@@ -158,6 +163,10 @@ long libos_syscall_semget(int key, int nsems, int semflg) {
 }
 
 long libos_syscall_semctl(int semid, int semnum, int cmd, unsigned long arg) {
+    /* --- guest-wide System V IPC (VM, sys.experimental__multiprocess): libos_sysv_shared.c --- */
+    if (sysv_shared_sem_enabled())
+        return sysv_shared_semctl(semid, semnum, cmd, arg);
+    /* --- end of guest-wide System V IPC --- */
     if (g_use_host_sysv_semaphores)
         return host_sem_request(SYSV_SEMCTL, semid, semnum, cmd, arg);
 
@@ -340,11 +349,19 @@ static long do_semop(int semid, const struct linux_sembuf* sops, size_t nsops,
 }
 
 long libos_syscall_semop(int semid, const struct linux_sembuf* sops, size_t nsops) {
+    /* --- guest-wide System V IPC (VM, sys.experimental__multiprocess): libos_sysv_shared.c --- */
+    if (sysv_shared_sem_enabled())
+        return sysv_shared_semtimedop(semid, sops, nsops, /*timeout=*/NULL);
+    /* --- end of guest-wide System V IPC --- */
     return do_semop(semid, sops, nsops, /*timeout_us=*/NULL);
 }
 
 long libos_syscall_semtimedop(int semid, const struct linux_sembuf* sops, size_t nsops,
                               const struct __kernel_timespec* timeout) {
+    /* --- guest-wide System V IPC (VM, sys.experimental__multiprocess): libos_sysv_shared.c --- */
+    if (sysv_shared_sem_enabled())
+        return sysv_shared_semtimedop(semid, sops, nsops, timeout);
+    /* --- end of guest-wide System V IPC --- */
     if (!timeout)
         return do_semop(semid, sops, nsops, /*timeout_us=*/NULL);
     if (!is_user_memory_readable(timeout, sizeof(*timeout)))

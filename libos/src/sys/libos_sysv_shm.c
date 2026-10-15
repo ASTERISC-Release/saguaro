@@ -17,6 +17,7 @@
 
 #include "libos_handle.h"
 #include "libos_internal.h"
+#include "libos_sysv_shared.h"
 #include "libos_lock.h"
 #include "libos_process.h"
 #include "libos_table.h"
@@ -142,6 +143,10 @@ static int shm_pick_backing_dir(uint64_t probe_id) {
 }
 
 long libos_syscall_shmget(int key, size_t size, int shmflg) {
+    /* --- guest-wide System V IPC (VM, sys.experimental__multiprocess): libos_sysv_shared.c --- */
+    if (sysv_shared_enabled())
+        return sysv_shared_shmget(key, size, shmflg);
+    /* --- end of guest-wide System V IPC --- */
     if (shmflg & LINUX_SHM_HUGETLB)
         return -EPERM; /* no hugetlb backing, as for memfd_create's MFD_HUGETLB */
     if (shmflg & ~(LINUX_IPC_CREAT | LINUX_IPC_EXCL | 0777 | LINUX_SHM_NORESERVE))
@@ -277,6 +282,10 @@ err_fd:
 }
 
 long libos_syscall_shmat(int shmid, const void* shmaddr, int shmflg) {
+    /* --- guest-wide System V IPC (VM, sys.experimental__multiprocess): libos_sysv_shared.c --- */
+    if (sysv_shared_enabled())
+        return sysv_shared_shmat(shmid, shmaddr, shmflg);
+    /* --- end of guest-wide System V IPC --- */
     if (shmflg & ~(LINUX_SHM_RDONLY | LINUX_SHM_RND | LINUX_SHM_REMAP | LINUX_SHM_EXEC))
         return -EINVAL;
 
@@ -372,6 +381,10 @@ long libos_syscall_shmat(int shmid, const void* shmaddr, int shmflg) {
 }
 
 long libos_syscall_shmdt(const void* shmaddr) {
+    /* --- guest-wide System V IPC (VM, sys.experimental__multiprocess): libos_sysv_shared.c --- */
+    if (sysv_shared_enabled())
+        return sysv_shared_shmdt(shmaddr);
+    /* --- end of guest-wide System V IPC --- */
     uintptr_t addr = (uintptr_t)shmaddr;
     if (!addr || (addr % SYSV_SHM_PAGE_SIZE))
         return -EINVAL;
@@ -437,6 +450,10 @@ static void shm_fill_ds(const struct sysv_shm_seg* seg, struct linux_shmid_ds* d
 }
 
 long libos_syscall_shmctl(int shmid, int cmd, void* buf) {
+    /* --- guest-wide System V IPC (VM, sys.experimental__multiprocess): libos_sysv_shared.c --- */
+    if (sysv_shared_enabled())
+        return sysv_shared_shmctl(shmid, cmd, buf);
+    /* --- end of guest-wide System V IPC --- */
     switch (cmd) {
         case LINUX_IPC_INFO: {
             if (!buf)
@@ -624,6 +641,10 @@ long libos_syscall_shmctl(int shmid, int cmd, void* buf) {
  * a Linux kernel with unswapped segments shows, and what `shmctl(SHM_INFO)` reports here, so the
  * two views stay consistent (the check LTP shmctl04 performs). */
 int sysv_shm_proc_load(char** out_data, size_t* out_size) {
+    /* --- guest-wide System V IPC (VM, sys.experimental__multiprocess): libos_sysv_shared.c --- */
+    if (sysv_shared_enabled())
+        return sysv_shared_shm_proc_load(out_data, out_size);
+    /* --- end of guest-wide System V IPC --- */
     static const char header[] =
         "key      shmid perms                  size  cpid  lpid nattch   uid   gid  cuid  cgid"
         "      atime      dtime      ctime                   rss                  swap\n";

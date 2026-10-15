@@ -11,6 +11,7 @@
 #include "libos_checkpoint.h"
 #include "libos_flags_conv.h"
 #include "libos_internal.h"
+#include "libos_sysv_shared.h"
 #include "libos_ipc.h"
 #include "libos_process.h"
 #include "libos_thread.h"
@@ -640,6 +641,9 @@ int create_process_and_send_checkpoint(migrate_func_t migrate_func,
      * already connected to us, but is waiting for an acknowledgement, so it will not send any IPC
      * messages yet. */
     add_child_process(child_process);
+    /* the child inherits the System V attachments (guest-wide tables only); it waits for the ack
+     * below before running */
+    sysv_shared_fork(child_process->pid);
 
     dummy_c = 0;
     ret = write_exact(pal_process, &dummy_c, sizeof(dummy_c));
