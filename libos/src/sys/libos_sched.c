@@ -11,6 +11,7 @@
 #include "api.h"
 #include "libos_internal.h"
 #include "libos_lock.h"
+#include "libos_process.h"
 #include "libos_table.h"
 #include "libos_thread.h"
 #include "linux_abi/errors.h"
@@ -42,11 +43,44 @@ long libos_syscall_sched_yield(void) {
 }
 
 /* dummy implementation: ignore user-supplied niceval and return success */
-long libos_syscall_setpriority(int which, int who, int niceval) {
-    __UNUSED(who);
+/* Whether the process (or thread) `pid` exists: this process and its threads are known locally,
+ * other processes are asked through the IPC signal path (kill with signal 0); EPERM means it
+ * exists. The kernel answers ESRCH for the rest (LTP sched_getparam03, sched_getscheduler02,
+ * getpriority02 and more). */
+static bool pid_exists(pid_t pid) {
+    if (pid == 0 || (IDTYPE)pid == g_process.pid)
+        return true;
+    struct libos_thread* thread = lookup_thread((IDTYPE)pid);
+    if (thread) {
+        put_thread(thread);
+        return true;
+    }
+    long ret = libos_syscall_kill(pid, 0);
+    return ret != -ESRCH && ret != -EINVAL;
+}
 
+/* the target of getpriority()/setpriority(): a process, a process group (this one's only, the
+ * LibOS tracks no others) or a user (the caller's) */
+static int prio_target_check(int which, int who) {
+    switch (which) {
+        case PRIO_PROCESS:
+            return who >= 0 && pid_exists(who) ? 0 : -ESRCH;
+        case PRIO_PGRP:
+            return who == 0 || (IDTYPE)who == g_process.pgid ? 0 : -ESRCH;
+        case PRIO_USER:
+            return who == 0 || (unsigned int)who == (unsigned int)libos_syscall_geteuid()
+                   ? 0 : -ESRCH;
+        default:
+            return -EINVAL;
+    }
+}
+
+long libos_syscall_setpriority(int which, int who, int niceval) {
     if (which != PRIO_PROCESS && which != PRIO_PGRP && which != PRIO_USER)
         return -EINVAL;
+    int check = prio_target_check(which, who);
+    if (check < 0)
+        return check;
 
     if (niceval < 1 || niceval > 40)
         return -EACCES;
@@ -56,32 +90,36 @@ long libos_syscall_setpriority(int which, int who, int niceval) {
 
 /* dummy implementation: always return the default nice value of 20 */
 long libos_syscall_getpriority(int which, int who) {
-    __UNUSED(who);
-
     if (which != PRIO_PROCESS && which != PRIO_PGRP && which != PRIO_USER)
         return -EINVAL;
+    int check = prio_target_check(which, who);
+    if (check < 0)
+        return check;
 
     return 20; /* default nice value on Linux */
 }
 
 /* dummy implementation: ignore user-supplied param and return success */
 long libos_syscall_sched_setparam(pid_t pid, struct __kernel_sched_param* param) {
+    /* the kernel's order: a NULL param or negative pid is EINVAL, a bad pointer EFAULT, an unknown
+     * pid ESRCH (LTP sched_setparam04) */
+    if (!param || pid < 0)
+        return -EINVAL;
     if (!is_user_memory_readable(param, sizeof(*param)))
         return -EFAULT;
-
-    if (pid < 0)
-        return -EINVAL;
-
+    if (!pid_exists(pid))
+        return -ESRCH;
     return 0;
 }
 
 /* dummy implementation: always return sched_priority of 0 (implies non-real-time sched policy) */
 long libos_syscall_sched_getparam(pid_t pid, struct __kernel_sched_param* param) {
+    if (!param || pid < 0)
+        return -EINVAL;
+    if (!pid_exists(pid))
+        return -ESRCH;
     if (!is_user_memory_writable(param, sizeof(*param)))
         return -EFAULT;
-
-    if (pid < 0)
-        return -EINVAL;
 
     param->__sched_priority = 0;
     return 0;
@@ -91,11 +129,12 @@ long libos_syscall_sched_getparam(pid_t pid, struct __kernel_sched_param* param)
 long libos_syscall_sched_setscheduler(pid_t pid, int policy, struct __kernel_sched_param* param) {
     policy &= ~SCHED_RESET_ON_FORK; /* ignore reset-on-fork flag */
 
+    if (policy < 0 || !param || pid < 0)
+        return -EINVAL;
     if (!is_user_memory_readable(param, sizeof(*param)))
         return -EFAULT;
-
-    if (pid < 0)
-        return -EINVAL;
+    if (!pid_exists(pid))
+        return -ESRCH;
 
     /* fail on unrecognized policies */
     if (policy != SCHED_NORMAL && policy != SCHED_BATCH &&
@@ -120,6 +159,8 @@ long libos_syscall_sched_setscheduler(pid_t pid, int policy, struct __kernel_sch
 long libos_syscall_sched_getscheduler(pid_t pid) {
     if (pid < 0)
         return -EINVAL;
+    if (!pid_exists(pid))
+        return -ESRCH;
 
     return SCHED_NORMAL;
 }

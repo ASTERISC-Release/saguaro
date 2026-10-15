@@ -1083,51 +1083,53 @@ static int pal_common_udp_send(struct pal_handle *handle,
     uint8_t *data = ring_data(r);
     uint32_t cap = r->cap;
 
+    /* One datagram per send, whatever the number of iovecs (a record per iovec split a gathered
+     * sendmsg()/sendmmsg() into several datagrams; LTP sendmmsg01). */
     size_t total = 0;
+    for (size_t i = 0; i < iov_len; i++) {
+        if (iov[i].iov_base && iov[i].iov_len) {
+            if (iov[i].iov_len > 65507 - total)
+                return -PAL_ERROR_TOOLONG;
+            total += iov[i].iov_len;
+        }
+    }
+    uint32_t len  = (uint32_t)total;
+    uint32_t need = sizeof(uint32_t) + len;
 
     spinlock_lock(&handle->sock.lock);
 
-    for (size_t i = 0; i < iov_len; i++) {
-        if (!iov[i].iov_base || !iov[i].iov_len)
-            continue;
+    uint32_t head = __atomic_load_n(&r->head, __ATOMIC_ACQUIRE);
+    uint32_t tail = __atomic_load_n(&r->tail, __ATOMIC_RELAXED);
 
-        uint32_t len  = (uint32_t)iov[i].iov_len;
-        uint32_t need = sizeof(uint32_t) + len;
-
-        uint32_t head = __atomic_load_n(&r->head, __ATOMIC_ACQUIRE);
-        uint32_t tail = __atomic_load_n(&r->tail, __ATOMIC_RELAXED);
-
-        // total space check
-        if (ring_free(head, tail, cap) < need) {
-            // UDP semantics: silently drop
-            total += len;
-            continue;
-        }
-        
-        // contiguous space check
+    /* total space check; UDP semantics: a datagram that does not fit is silently dropped */
+    if (ring_free(head, tail, cap) >= need) {
+        /* contiguous space check */
         if (tail + need > cap) {
-            // emit wrap marker if it fits
+            /* emit wrap marker if it fits */
             if (cap - tail >= sizeof(uint32_t)) {
                 uint32_t marker = WRAP_MARKER;
                 memcpy(data + tail, &marker, sizeof(marker));
             }
             tail = 0;
-            // log_always("Wrapped around to TAIL=0; HEAD=%d; CAP=%d; NEED=%d\n", tail, head, cap, need);
         }
 
-        // write record: [len][payload]
+        /* write record: [len][payload] */
         memcpy(data + tail, &len, sizeof(uint32_t));
+        size_t off = tail + sizeof(uint32_t);
+        for (size_t i = 0; i < iov_len; i++) {
+            if (!iov[i].iov_base || !iov[i].iov_len)
+                continue;
+            memcpy(data + off, iov[i].iov_base, iov[i].iov_len);
+            off += iov[i].iov_len;
+        }
 
-        memcpy(data + tail + sizeof(uint32_t), iov[i].iov_base, len);
-        // log_always("Written size: %d at %p and %s  - to the shmem at %p, size=%d\n", len, data + tail, iov[i].iov_base, data + tail + sizeof(uint32_t), len);
-
-        // publish tail last (release)
+        /* publish tail last (release) */
         __atomic_store_n(&r->tail, tail + need, __ATOMIC_RELEASE);
-        __atomic_store_n(&r->sender_port, fetch_guest_port_given_sockfd(handle->sock.fd), __ATOMIC_RELEASE);
+        __atomic_store_n(&r->sender_port, fetch_guest_port_given_sockfd(handle->sock.fd),
+                         __ATOMIC_RELEASE);
 
         sched_thread_wakeup(&r->udp_rx_futex);
         sched_thread_wakeup(&g_streams_waiting_events_futex);
-        total += len;
     }
 
     spinlock_unlock(&handle->sock.lock);
@@ -1371,13 +1373,15 @@ static int pal_common_udp_recv(struct pal_handle *handle,
             continue;   // retry under same lock
         }
 
-        uint32_t copy = len;
-        if (copy > iov[0].iov_len)
-            copy = iov[0].iov_len;
-
-        memcpy(iov[0].iov_base,
-               data + head + sizeof(uint32_t),
-               copy);
+        /* scatter the datagram over the iovecs; what does not fit is dropped, as for UDP */
+        size_t copy = 0;
+        for (size_t i = 0; i < iov_len && copy < len; i++) {
+            if (!iov[i].iov_base || !iov[i].iov_len)
+                continue;
+            size_t n = MIN(iov[i].iov_len, (size_t)len - copy);
+            memcpy(iov[i].iov_base, data + head + sizeof(uint32_t) + copy, n);
+            copy += n;
+        }
         // log_always("My port is: %d\n", fetch_guest_port_given_sockfd(handle->sock.fd));
         // log_always("Read size = %d at %p and  %s  - from the shmem at %p - size=%d\n", len, data + head, data + head + sizeof(uint32_t), data + head + sizeof(uint32_t), copy);
 

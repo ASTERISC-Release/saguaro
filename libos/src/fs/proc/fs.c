@@ -101,6 +101,7 @@ static void init_thread_dir(struct pseudo_node* ent) {
     pseudo_add_str(ent, "maps", &proc_thread_maps_load);
     pseudo_add_str(ent, "cmdline", &proc_thread_cmdline_load);
     pseudo_add_str(ent, "status", &proc_thread_status_load);
+    pseudo_add_str(ent, "comm", &proc_thread_comm_load);
     pseudo_add_str(ent, "statm", &proc_thread_statm_load);
     pseudo_add_str(ent, "stat", &proc_thread_stat_load);
 
@@ -128,6 +129,36 @@ static int proc_msgmnb_load(struct libos_dentry* dent, char** out_data, size_t* 
     return proc_uint_load(sysv_msg_limit(2), out_data, out_size);
 }
 
+/* `/proc/sys/fs/pipe-max-size`: the largest F_SETPIPE_SZ without CAP_SYS_RESOURCE (the kernel's
+ * default; see `sys/libos_fcntl.c`) */
+static int proc_pipe_max_size_load(struct libos_dentry* dent, char** out_data, size_t* out_size) {
+    __UNUSED(dent);
+    return proc_uint_load(1024 * 1024, out_data, out_size);
+}
+
+/* `/proc/sys/fs/nr_open`: the bound of RLIMIT_NOFILE (see `sys/libos_getrlimit.c`) */
+static int proc_nr_open_load(struct libos_dentry* dent, char** out_data, size_t* out_size) {
+    __UNUSED(dent);
+    return proc_uint_load(1024 * 1024, out_data, out_size);
+}
+
+/* `/proc/sys/kernel/random/{entropy_avail,poolsize}`: a full pool (the PAL's random source never
+ * runs dry; LTP ioctl07 compares this with RNDGETENTCNT) */
+static int proc_entropy_avail_load(struct libos_dentry* dent, char** out_data, size_t* out_size) {
+    __UNUSED(dent);
+    return proc_uint_load(256, out_data, out_size);
+}
+
+static int proc_poolsize_load(struct libos_dentry* dent, char** out_data, size_t* out_size) {
+    __UNUSED(dent);
+    return proc_uint_load(256, out_data, out_size);
+}
+
+static int proc_sem_load(struct libos_dentry* dent, char** out_data, size_t* out_size) {
+    __UNUSED(dent);
+    return sysv_sem_limits_load(out_data, out_size);
+}
+
 static int proc_sysvipc_msg_load(struct libos_dentry* dent, char** out_data, size_t* out_size) {
     __UNUSED(dent);
     return sysv_msg_proc_load(out_data, out_size);
@@ -150,8 +181,14 @@ int init_procfs(void) {
     pseudo_add_str(kernel, "msgmni", &proc_msgmni_load);
     pseudo_add_str(kernel, "msgmax", &proc_msgmax_load);
     pseudo_add_str(kernel, "msgmnb", &proc_msgmnb_load);
+    pseudo_add_str(kernel, "sem", &proc_sem_load);
+    struct pseudo_node* random_node = pseudo_add_dir(kernel, "random");
+    pseudo_add_str(random_node, "entropy_avail", &proc_entropy_avail_load);
+    pseudo_add_str(random_node, "poolsize", &proc_poolsize_load);
 
     struct pseudo_node* fs_node = pseudo_add_dir(sys, "fs");
+    pseudo_add_str(fs_node, "pipe-max-size", &proc_pipe_max_size_load);
+    pseudo_add_str(fs_node, "nr_open", &proc_nr_open_load);
     struct pseudo_node* inotify_node = pseudo_add_dir(fs_node, "inotify");
     pseudo_add_str(inotify_node, "max_queued_events", &proc_inotify_max_queued_events_load);
     pseudo_add_str(inotify_node, "max_user_instances", &proc_inotify_max_user_instances_load);

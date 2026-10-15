@@ -8,8 +8,21 @@
 #define MFD_CLOEXEC       0x0001U
 #define MFD_ALLOW_SEALING 0x0002U
 #define MFD_HUGETLB       0x0004U
-#define MFD_FLAGS         (MFD_CLOEXEC | MFD_ALLOW_SEALING | MFD_HUGETLB)
+#define MFD_NOEXEC_SEAL   0x0008U
+#define MFD_EXEC          0x0010U
+#define MFD_FLAGS         (MFD_CLOEXEC | MFD_ALLOW_SEALING | MFD_HUGETLB | MFD_NOEXEC_SEAL | MFD_EXEC)
 #define F_SEAL_SEAL       0x0001
+
+/* a memfd needs read(), write() and mmap() on its backing file */
+static bool memfd_backing_usable(int fd) {
+    struct libos_handle* hdl = get_fd_handle(fd, NULL, NULL);
+    if (!hdl)
+        return false;
+    bool usable = hdl->fs && hdl->fs->fs_ops && hdl->fs->fs_ops->read && hdl->fs->fs_ops->write
+                  && hdl->fs->fs_ops->mmap;
+    put_handle(hdl);
+    return usable;
+}
 
 long libos_syscall_memfd_create(const char* name, unsigned int flags) {
     if (!name)
@@ -27,6 +40,9 @@ long libos_syscall_memfd_create(const char* name, unsigned int flags) {
         return -EINVAL;
     if (flags & MFD_HUGETLB)
         return -EPERM;
+    /* MFD_EXEC and MFD_NOEXEC_SEAL exclude each other (Linux 6.3) */
+    if ((flags & MFD_EXEC) && (flags & MFD_NOEXEC_SEAL))
+        return -EINVAL;
 
     static uint64_t next_memfd_id;
     char path[96];
@@ -41,6 +57,13 @@ long libos_syscall_memfd_create(const char* name, unsigned int flags) {
                 return -ENAMETOOLONG;
             fd = (int)libos_openat_internal(AT_FDCWD, path, O_RDWR | O_CREAT | O_EXCL |
                                             ((flags & MFD_CLOEXEC) ? O_CLOEXEC : 0), 0600);
+            if (fd >= 0 && !memfd_backing_usable(fd)) {
+                /* e.g. an `untrusted_shm` /dev/shm (gramine-direct's default): it maps but
+                 * cannot read() or write(), which a memfd must; try the next directory */
+                libos_syscall_close(fd);
+                libos_unlink_internal(path);
+                fd = -ENOENT;
+            }
             if (fd >= 0 || fd == -EEXIST)
                 break;
             if (i + 1 == ARRAY_SIZE(backing_dirs) || (fd != -ENOENT && fd != -EROFS))
@@ -68,6 +91,11 @@ long libos_syscall_memfd_create(const char* name, unsigned int flags) {
     lock(&hdl->lock);
     hdl->is_memfd = true;
     hdl->memfd_seals = (flags & MFD_ALLOW_SEALING) ? 0 : F_SEAL_SEAL;
+    if (flags & MFD_NOEXEC_SEAL) {
+        /* as in the kernel: no execute permission, sealable, and the execute bits sealed */
+        hdl->memfd_noexec = true;
+        hdl->memfd_seals = LIBOS_F_SEAL_EXEC;
+    }
     unlock(&hdl->lock);
     put_handle(hdl);
     return fd;

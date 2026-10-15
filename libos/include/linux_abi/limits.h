@@ -14,6 +14,14 @@
 
 #include "linux_abi/time.h"
 
+/* `times()`: CPU times in clock ticks (USER_HZ) */
+struct __kernel_tms {
+    long tms_utime;
+    long tms_stime;
+    long tms_cutime;
+    long tms_cstime;
+};
+
 struct __kernel_rusage {
     struct __kernel_timeval ru_utime; /* user time used */
     struct __kernel_timeval ru_stime; /* system time used */

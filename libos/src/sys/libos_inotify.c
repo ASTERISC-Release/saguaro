@@ -23,6 +23,7 @@
 #include "libos_handle.h"
 #include "libos_inotify.h"
 #include "libos_internal.h"
+#include "libos_signal.h"
 #include "libos_table.h"
 #include "libos_utils.h"
 #include "stat.h"
@@ -176,8 +177,173 @@ static void inotify_free_deliveries(struct inotify_delivery* list) {
  * non-NULL `name` (already padded) is a directory-level event reported with that name. `cookie`
  * links a MOVED_FROM/MOVED_TO pair. ONESHOT watches are removed as they fire.
  */
+/*
+ * dnotify (`fcntl(F_NOTIFY)`): a directory descriptor asks for a signal when the directory or an
+ * entry in it changes. It reuses the inotify event points: every event delivered to a watched
+ * directory dentry is also checked against the dnotify marks. The signal is the descriptor's
+ * F_SETSIG signal with `si_fd`/`si_code = POLL_MSG` (or a plain SIGIO when none was set), queued
+ * on this process (the kernel's `send_sigio()`). Marks are process-local and are dropped when
+ * the descriptor is closed (`libos_dnotify_fd_closed()`).
+ */
+#define DN_ACCESS    0x00000001
+#define DN_MODIFY    0x00000002
+#define DN_CREATE    0x00000004
+#define DN_DELETE    0x00000008
+#define DN_RENAME    0x00000010
+#define DN_ATTRIB    0x00000020
+#define DN_MULTISHOT 0x80000000
+#define LINUX_POLL_MSG 3 /* si_code of a SIGIO for a message (dnotify) */
+
+struct dnotify_mark {
+    struct dnotify_mark* next;
+    struct libos_dentry* dir; /* holds a reference */
+    struct libos_handle* hdl; /* not refcounted: the mark is dropped when the fd is closed */
+    int fd;
+    unsigned long mask;
+};
+
+static spinlock_t g_dnotify_lock = INIT_SPINLOCK_UNLOCKED;
+static struct dnotify_mark* g_dnotify_marks; /* protected by `g_dnotify_lock` */
+
+static unsigned long dnotify_mask_of(unsigned int in_mask) {
+    unsigned long dn = 0;
+    if (in_mask & IN_ACCESS)
+        dn |= DN_ACCESS;
+    if (in_mask & IN_MODIFY)
+        dn |= DN_MODIFY;
+    if (in_mask & IN_CREATE)
+        dn |= DN_CREATE;
+    if (in_mask & IN_DELETE)
+        dn |= DN_DELETE;
+    if (in_mask & (IN_MOVED_FROM | IN_MOVED_TO))
+        dn |= DN_RENAME;
+    if (in_mask & IN_ATTRIB)
+        dn |= DN_ATTRIB;
+    return dn;
+}
+
+int libos_dnotify_set(struct libos_handle* hdl, int fd, unsigned long arg) {
+    if (!hdl->dentry || !hdl->inode || !S_ISDIR(hdl->inode->type))
+        return -ENOTDIR;
+    unsigned long mask = arg & (DN_ACCESS | DN_MODIFY | DN_CREATE | DN_DELETE | DN_RENAME |
+                                DN_ATTRIB | DN_MULTISHOT);
+
+    struct libos_dentry* drop = NULL;
+    struct dnotify_mark* fresh = NULL;
+    if (mask & ~DN_MULTISHOT) {
+        fresh = malloc(sizeof(*fresh));
+        if (!fresh)
+            return -ENOMEM;
+    }
+    spinlock_lock(&g_dnotify_lock);
+    struct dnotify_mark** pp = &g_dnotify_marks;
+    while (*pp) {
+        struct dnotify_mark* m = *pp;
+        if (m->hdl == hdl && m->fd == fd) {
+            /* one mark per descriptor: a new F_NOTIFY adds to its mask (DN_MULTISHOT stays, as
+             * in the kernel's `attach_dn()`), 0 removes it */
+            if (fresh) {
+                m->mask |= mask;
+                free(fresh);
+                fresh = NULL;
+                spinlock_unlock(&g_dnotify_lock);
+                return 0;
+            }
+            *pp = m->next;
+            drop = m->dir;
+            free(m);
+            break;
+        }
+        pp = &m->next;
+    }
+    if (fresh) {
+        get_dentry(hdl->dentry);
+        *fresh = (struct dnotify_mark){.next = g_dnotify_marks, .dir = hdl->dentry, .hdl = hdl,
+                                       .fd = fd, .mask = mask};
+        g_dnotify_marks = fresh;
+    }
+    spinlock_unlock(&g_dnotify_lock);
+    if (drop)
+        put_dentry(drop);
+    return 0;
+}
+
+void libos_dnotify_fd_closed(int fd, struct libos_handle* hdl) {
+    struct libos_dentry* drop[8];
+    size_t ndrop = 0;
+    spinlock_lock(&g_dnotify_lock);
+    struct dnotify_mark** pp = &g_dnotify_marks;
+    while (*pp) {
+        struct dnotify_mark* m = *pp;
+        if (m->fd == fd && m->hdl == hdl && ndrop < ARRAY_SIZE(drop)) {
+            *pp = m->next;
+            drop[ndrop++] = m->dir;
+            free(m);
+            continue;
+        }
+        pp = &m->next;
+    }
+    spinlock_unlock(&g_dnotify_lock);
+    for (size_t i = 0; i < ndrop; i++)
+        put_dentry(drop[i]);
+}
+
+static void dnotify_deliver(struct libos_dentry* dir, unsigned int in_mask) {
+    unsigned long dn = dnotify_mask_of(in_mask);
+    if (!dn || !g_dnotify_marks)
+        return;
+    struct {
+        int fd;
+        int sig;
+    } sends[8];
+    size_t nsend = 0;
+    struct libos_dentry* drop[8];
+    size_t ndrop = 0;
+
+    spinlock_lock(&g_dnotify_lock);
+    struct dnotify_mark** pp = &g_dnotify_marks;
+    while (*pp) {
+        struct dnotify_mark* m = *pp;
+        if (m->dir != dir || !(m->mask & dn) || nsend >= ARRAY_SIZE(sends)) {
+            pp = &m->next;
+            continue;
+        }
+        sends[nsend].fd = m->fd;
+        sends[nsend].sig = __atomic_load_n(&m->hdl->fown_signal, __ATOMIC_RELAXED);
+        nsend++;
+        if (!(m->mask & DN_MULTISHOT) && ndrop < ARRAY_SIZE(drop)) {
+            /* a one-shot mark is gone after its first event */
+            *pp = m->next;
+            drop[ndrop++] = m->dir;
+            free(m);
+            continue;
+        }
+        pp = &m->next;
+    }
+    spinlock_unlock(&g_dnotify_lock);
+    for (size_t i = 0; i < ndrop; i++)
+        put_dentry(drop[i]);
+
+    for (size_t i = 0; i < nsend; i++) {
+        siginfo_t info = {0};
+        if (sends[i].sig) {
+            info.si_signo = sends[i].sig;
+            info.si_code = LINUX_POLL_MSG;
+            info.si_band = 0x0001 | 0x0040 | 0x0400; /* POLLIN | POLLRDNORM | POLLMSG */
+            info.si_fd = sends[i].fd;
+        } else {
+            info.si_signo = SIGIO;
+            info.si_code = SI_KERNEL;
+        }
+        append_signal(/*thread=*/NULL, &info);
+        libos_signal_wake_waiters(info.si_signo);
+    }
+}
+
 static void inotify_deliver(struct libos_dentry* dir, unsigned int mask, const char* name,
                             unsigned int name_len, bool isdir, unsigned int cookie) {
+    dnotify_deliver(dir, mask);
+
     struct inotify_delivery* head = NULL;
     struct inotify_delivery* tail = NULL;
     struct libos_dentry* freed_dentry = NULL; /* ONESHOT removals: at most one dentry per event */

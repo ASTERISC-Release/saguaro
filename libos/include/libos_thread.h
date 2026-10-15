@@ -80,6 +80,14 @@ struct libos_thread {
         gid_t* groups;
     } groups_info;
 
+    /* prctl() state: PR_SET_PDEATHSIG, PR_SET_NAME (empty: the executable's name),
+     * PR_SET_KEEPCAPS, PR_SET_NO_NEW_PRIVS, PR_SET_TIMERSLACK (0: the default) */
+    int pdeath_signal;
+    char comm[16];
+    bool keepcaps;
+    bool no_new_privs;
+    uint64_t timer_slack_ns;
+
     /* thread pal handle */
     PAL_HANDLE pal_handle;
 

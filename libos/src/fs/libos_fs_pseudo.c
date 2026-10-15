@@ -12,6 +12,7 @@
 
 #include "libos_fs_pseudo.h"
 #include "libos_lock.h"
+#include "linux_abi/ioctl.h"
 #include "stat.h"
 
 LISTP_TYPE(pseudo_node) g_pseudo_roots = LISTP_INIT;
@@ -578,7 +579,28 @@ struct pseudo_node* pseudo_add_dev(struct pseudo_node* parent_node, const char* 
     return node;
 }
 
+/* A device's own ioctl, if it has one; FIONREAD keeps the generic answer (size minus position) of
+ * the other pseudo files; everything else is ENOTTY, as before devices had ioctls. */
+static int pseudo_ioctl(struct libos_handle* hdl, unsigned int cmd, unsigned long arg) {
+    struct pseudo_node* node = hdl->inode ? hdl->inode->data : NULL;
+    if (node && node->type == PSEUDO_DEV && node->dev.dev_ops.ioctl)
+        return node->dev.dev_ops.ioctl(hdl, cmd, arg);
+    if (cmd == FIONREAD) {
+        struct stat st;
+        int ret = pseudo_hstat(hdl, &st);
+        if (ret < 0)
+            return ret;
+        int64_t pos = pseudo_seek(hdl, 0, SEEK_CUR);
+        if (pos < 0)
+            pos = 0;
+        *(int*)arg = (int)(st.st_size - pos);
+        return 0;
+    }
+    return -ENOTTY;
+}
+
 struct libos_fs_ops pseudo_fs_ops = {
+    .ioctl    = &pseudo_ioctl,
     .mount    = &pseudo_mount,
     .hstat    = &pseudo_hstat,
     .read     = &pseudo_read,

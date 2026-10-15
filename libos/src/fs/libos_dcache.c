@@ -483,6 +483,7 @@ void put_inode(struct libos_inode* inode) {
 
         put_mount(inode->mount);
 
+        libos_xattr_store_free(inode);
         destroy_lock(&inode->lock);
         free(inode);
     }

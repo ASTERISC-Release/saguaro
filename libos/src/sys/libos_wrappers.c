@@ -127,12 +127,22 @@ long libos_syscall_writev(unsigned long fd, struct iovec* vec, unsigned long vle
         goto out;
     }
 
+    ret = handle_append_position(hdl, &hdl->pos);
+    if (ret < 0)
+        goto out;
+
     ssize_t bytes = 0;
     for (size_t i = 0; i < vlen; i++) {
         if (!vec[i].iov_base)
             continue;
 
-        ssize_t b_vec = hdl->fs->fs_ops->write(hdl, vec[i].iov_base, vec[i].iov_len, &hdl->pos);
+        size_t len = vec[i].iov_len;
+        ret = handle_fsize_limit(hdl, hdl->pos, &len);
+        if (ret < 0) {
+            ret = bytes ?: ret;
+            goto out;
+        }
+        ssize_t b_vec = hdl->fs->fs_ops->write(hdl, vec[i].iov_base, len, &hdl->pos);
         if (b_vec < 0) {
             ret = bytes ?: b_vec;
             goto out;
@@ -228,6 +238,8 @@ static long do_preadv_pwritev(unsigned long fd, struct iovec* vec, unsigned long
         offset = hdl->inode->size;
         unlock(&hdl->inode->lock);
     }
+    if (write && (ret = handle_append_position(hdl, &offset)) < 0)
+        goto out;
     if (write && (ret = libos_memfd_check_write(hdl, offset, total_len)) < 0)
         goto out;
     if (write ? !hdl->fs->fs_ops->write : !hdl->fs->fs_ops->read) {

@@ -5,7 +5,7 @@
  *
  * The two LTP tests for renameat2 are gated on a reported kernel version and never run under
  * Gramine, so the flag behavior is checked directly here: RENAME_NOREPLACE on tmpfs and on the
- * host-backed filesystem, RENAME_EXCHANGE on tmpfs (the filesystem that supports it), and the
+ * host-backed filesystem, RENAME_EXCHANGE on tmpfs and on the host-backed filesystem, and the
  * Linux flag-combination validation results (EINVAL / EOPNOTSUPP / ENOENT / EEXIST).
  *
  * Usage: renameat2 <base-dir> <kind>   where kind is "tmpfs" or "chroot"
@@ -253,11 +253,18 @@ int main(int argc, const char** argv) {
         if (rmdir(d2) || rmdir(pf) || rmdir(p) || unlink(d1))
             err(1, "cleanup of the directory exchange");
     } else {
-        /* 6. the host-backed filesystem has no exchange hook: honest EOPNOTSUPP */
+        /* 6. the host-backed filesystem exchanges atomically on the host (PalFileExchange) */
         write_file(a, "AAA\n");
+        write_file(b, "BBB\n");
         r = do_renameat2(a, b, RENAME_EXCHANGE);
-        if (r == 0 || errno != EOPNOTSUPP)
-            errx(1, "EXCHANGE on chroot: want EOPNOTSUPP, got r=%ld errno=%d", r, errno);
+        if (r)
+            err(1, "EXCHANGE on chroot");
+        read_file(a, buf, sizeof(buf));
+        if (strcmp(buf, "BBB\n") != 0)
+            errx(1, "chroot EXCHANGE: a does not have the old content of b");
+        read_file(b, buf, sizeof(buf));
+        if (strcmp(buf, "AAA\n") != 0)
+            errx(1, "chroot EXCHANGE: b does not have the old content of a");
     }
 
     /* 7. flag validation, same on every filesystem */

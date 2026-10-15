@@ -344,8 +344,10 @@ long libos_syscall_timerfd_settime(int fd, int flags,
     if (flags & ~(TFD_TIMER_ABSTIME | TFD_TIMER_CANCEL_ON_SET))
         return -EINVAL;
 
-    /* `TFD_TIMER_CANCEL_ON_SET` needs the realtime clock and clock re-setting notifications;
-     * reject it like a clock that has no such notion */
+    /* `TFD_TIMER_CANCEL_ON_SET` is accepted on every clock, as in the kernel (it only arms the
+     * cancellation for an absolute CLOCK_REALTIME timer). The cancellation itself never fires
+     * here: nothing can set the realtime clock (`clock_settime()`/`settimeofday()` are refused),
+     * which is what a Linux timer sees while nobody sets the clock. */
     struct libos_handle* hdl = get_fd_handle(fd, NULL, NULL);
     if (!hdl)
         return -EBADF;
@@ -362,11 +364,6 @@ long libos_syscall_timerfd_settime(int fd, int flags,
     if (t->broken_in_child) {
         log_warning("Child process tried to use a timerfd created by its parent");
         ret = -EACCES;
-        goto out;
-    }
-
-    if ((flags & TFD_TIMER_CANCEL_ON_SET) && t->clock_id != CLOCK_REALTIME) {
-        ret = -EINVAL;
         goto out;
     }
 
