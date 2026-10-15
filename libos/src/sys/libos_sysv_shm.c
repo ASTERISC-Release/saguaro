@@ -171,8 +171,10 @@ long libos_syscall_shmget(int key, size_t size, int shmflg) {
                 return -EINVAL;
             }
             /* Linux checks the requested access (the permission bits given in `shmflg`)
-             * against the segment's IPC permissions when finding an existing key. */
-            unsigned short need = (unsigned short)(shmflg & 0600);
+             * against the segment's IPC permissions when finding an existing key; like the
+             * kernel's ipcperms(), the requested bits of every class are folded into one 3-bit
+             * class to compare with the caller's class bits. */
+            unsigned short need = (unsigned short)(((shmflg >> 6) | (shmflg >> 3) | shmflg) & 07);
             if ((shm_class_bits(seg) & need) != need) {
                 unlock(&g_sysv_shm_lock);
                 return -EACCES;
