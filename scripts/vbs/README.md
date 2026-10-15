@@ -31,7 +31,8 @@ hand (the commands used for the phase-2 hello world):
    ```sh
    scripts/vbs/pack.py --out PACK --obj pal:libpal:libpal.so \
        --obj pal:libsysdb:libsysdb.so:/libsysdb.so --obj user:vdso:vdso.so:/gramine/vdso.so \
-       --obj user:app:hello:/hello --file manifest:hello.manifest:/hello.manifest --no-svc libpal
+       --obj user:app:hello:/hello --file manifest:hello.manifest:/hello.manifest --no-svc libpal \
+       --x18-allow libsysdb:libos_syscall_entry,_return_from_syscall
    ```
 
 3. **Windows objects** (`build-objs.sh`, on Linux): needs the Windows SDK and MSVC headers copied
@@ -48,3 +49,9 @@ hand (the commands used for the phase-2 hello world):
 
 5. **Run** on Windows: `pal_vbs_host.exe pal_vbs_enclave.dll 1 boot` runs the application;
    `pal_vbs_host.exe pal_vbs_enclave.dll 1` runs the PAL-level self-test.
+
+**On one Windows machine** (no second Linux machine; `Documentation/devel/vbs-enclave/PLAN-windows-build.md`):
+steps 1 and 2 run inside a WSL2 Ubuntu 24.04 aarch64 distribution (`wsl-setup.sh` checks and installs
+its tools, with apt or, without sudo, into a user prefix), and `build-enclave.ps1` does steps 3 to 5
+from Windows PowerShell: it compiles the objects with clang inside WSL (`wsl-objs.sh`, against this
+machine's SDK and MSVC headers), then links, signs and runs them on Windows.

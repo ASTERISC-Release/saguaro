@@ -34,17 +34,21 @@ if [ -n "$PACK" ]; then
 else
     DEFS="-DPAL_VBS_NO_PACKED"
 fi
-CL="clang --driver-mode=cl --target=aarch64-pc-windows-msvc -fms-compatibility-version=19.50 \
+# /Brepro and -mno-incremental-linker-compatible: no time stamp in the COFF header (reproducible objects)
+CL="clang --driver-mode=cl --target=aarch64-pc-windows-msvc -fms-compatibility-version=19.50 /Brepro \
     /imsvc $HDR/vc/include /imsvc $HDR/sdk/ucrt /imsvc $HDR/sdk/um /imsvc $HDR/sdk/shared \
     -Wno-everything $INC"
 
-# Case-insensitive header shims (the copied headers include each other with mixed case).
+# Case-insensitive header shims (the copied headers include each other with mixed case); made once
+# per header folder.
 for d in "$HDR/sdk" "$HDR/vc"; do
     [ -d "$d" ] || continue
+    [ -f "$d/.shims-done" ] && continue
     find "$d" -type f | while read -r f; do
         l="$(dirname "$f")/$(basename "$f" | tr A-Z a-z)"
         if [ "$f" != "$l" ] && [ ! -e "$l" ]; then ln -s "$(basename "$f")" "$l"; fi
     done
+    touch "$d/.shims-done"
 done
 resolve_missing() {
     for _ in $(seq 1 60); do
@@ -57,30 +61,30 @@ resolve_missing() {
 }
 
 echo "=== enclave: pal_vbs_enclave.c"
-resolve_missing /O1 /guard:cf /MT -DUNICODE $DEFS /Fo:"$OUT/pal_vbs_enclave.obj" "$VBS/enclave/pal_vbs_enclave.c"
-$CL /c /O1 /guard:cf /MT -DUNICODE $DEFS /Fo:"$OUT/pal_vbs_enclave.obj" "$VBS/enclave/pal_vbs_enclave.c"
+resolve_missing /O1 /guard:cf /MT -DUNICODE $DEFS /Fo"$OUT/pal_vbs_enclave.obj" "$VBS/enclave/pal_vbs_enclave.c"
+$CL /c /O1 /guard:cf /MT -DUNICODE $DEFS /Fo"$OUT/pal_vbs_enclave.obj" "$VBS/enclave/pal_vbs_enclave.c"
 
 echo "=== enclave: pal_vbs_boot.c"
-$CL /c /O1 /guard:cf /MT -DUNICODE $DEFS /Fo:"$OUT/pal_vbs_boot.obj" "$VBS/enclave/pal_vbs_boot.c"
+$CL /c /O1 /guard:cf /MT -DUNICODE $DEFS /Fo"$OUT/pal_vbs_boot.obj" "$VBS/enclave/pal_vbs_boot.c"
 
 echo "=== enclave: pal_vbs_selftest.c"
-$CL /c /O1 /guard:cf /MT -DUNICODE $DEFS /Fo:"$OUT/pal_vbs_selftest.obj" "$VBS/test/pal_vbs_selftest.c"
+$CL /c /O1 /guard:cf /MT -DUNICODE $DEFS /Fo"$OUT/pal_vbs_selftest.obj" "$VBS/test/pal_vbs_selftest.c"
 
 if [ -n "$PACK" ]; then
     echo "=== enclave: pal_vbs_packed.c (loader of the packed objects)"
-    $CL /c /O1 /guard:cf /MT -DUNICODE /W4 /Fo:"$OUT/pal_vbs_packed.obj" "$VBS/enclave/pal_vbs_packed.c"
+    $CL /c /O1 /guard:cf /MT -DUNICODE /W4 /Fo"$OUT/pal_vbs_packed.obj" "$VBS/enclave/pal_vbs_packed.c"
     echo "=== enclave: packed blob ($PACK/packed.bin)"
-    (cd "$PACK" && clang --target=aarch64-pc-windows-msvc -c pal_vbs_packed_blob.S \
+    (cd "$PACK" && clang --target=aarch64-pc-windows-msvc -mno-incremental-linker-compatible -c pal_vbs_packed_blob.S \
         -o "$OUT/pal_vbs_packed_blob.obj")
 fi
 
 echo "=== enclave: pal_vbs_boundary.S (clang integrated assembler)"
-clang --target=aarch64-pc-windows-msvc -c "$VBS/enclave/pal_vbs_boundary.S" -o "$OUT/pal_vbs_boundary.obj"
+clang --target=aarch64-pc-windows-msvc -mno-incremental-linker-compatible -c "$VBS/enclave/pal_vbs_boundary.S" -o "$OUT/pal_vbs_boundary.obj"
 
 echo "=== host: pal_vbs_host.c"
-$CL /c /O2 /MT -DUNICODE -I"$VBS/common" /Fo:"$OUT/pal_vbs_host.obj" "$VBS/host/pal_vbs_host.c"
-$CL /c /O2 /MT -DUNICODE -I"$VBS/common" /Fo:"$OUT/pal_vbs_host_io.obj" "$VBS/host/pal_vbs_host_io.c"
-$CL /c /O2 /MT -DUNICODE -I"$VBS/common" /Fo:"$OUT/pal_vbs_verify.obj" "$VBS/host/pal_vbs_verify.c"
+$CL /c /O2 /MT -DUNICODE -I"$VBS/common" /Fo"$OUT/pal_vbs_host.obj" "$VBS/host/pal_vbs_host.c"
+$CL /c /O2 /MT -DUNICODE -I"$VBS/common" /Fo"$OUT/pal_vbs_host_io.obj" "$VBS/host/pal_vbs_host_io.c"
+$CL /c /O2 /MT -DUNICODE -I"$VBS/common" /Fo"$OUT/pal_vbs_verify.obj" "$VBS/host/pal_vbs_verify.c"
 
 echo "objects in $OUT:"
 ls -l "$OUT"
