@@ -1,0 +1,36 @@
+# Copyright (C) 2026 The ASTERISC Research Lab
+# SPDX-License-Identifier: LGPL-3.0-or-later
+
+# The LibOS regression subset in one VBS image (run-regress.sh): regress.manifest with the programs
+# that build.sh built packed into /tests (`tests` is the list of their names, from run-regress.sh).
+loader.entrypoint = "file:/libsysdb.so"
+libos.entrypoint = "/runner"
+loader.insecure__use_cmdline_argv = true
+loader.log_level = "warning"
+loader.env.LD_LIBRARY_PATH = "/usr/lib"
+fs.root.uri = "file:/"
+fs.start_dir = "/tests"
+fs.mounts = [
+  { type = "tmpfs", path = "/tmp" },
+  { type = "tmpfs", path = "/mnt/tmpfs" },
+  { type = "encrypted", path = "/tmp_enc", uri = "file:/tests/tmp_enc", key_name = "my_custom_key" },
+]
+sys.rewrite_syscalls = false
+sys.experimental__enable_flock = true
+fs.insecure__keys.default = "ffeeddccbbaa99887766554433221100"
+fs.insecure__keys.my_custom_key = "00112233445566778899aabbccddeeff"
+vbs.debug = false
+vbs.max_threads = 16
+vbs.enclave_size = "512M"
+# the current directory is writable, as in the suite (the packed programs take precedence)
+vbs.allowed_files = [ "/tests/" ]
+vbs.packed_files = [
+  { path = "/runner", uri = "file:{{ out }}/runner" },
+  { path = "/exec_victim", uri = "file:{{ out }}/exec_victim" },
+{% for t in tests.split() %}
+  { path = "/tests/{{ t }}", uri = "file:{{ out }}/tests/{{ t }}" },
+{% endfor %}
+{% for lib in ["ld-linux-aarch64.so.1", "libc.so.6", "libm.so.6"] %}
+  { path = "{{ arch_libdir }}/{{ lib }}", uri = "file:{{ vbs.sysroot }}/usr/lib/{{ lib }}" },
+{% endfor %}
+]
