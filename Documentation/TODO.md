@@ -24,6 +24,7 @@ short on purpose; an item that is fixed is removed from the topic list first and
 | `vm` | multi-process (`fork`) is not implemented (plan: `devel/vm-multiproc-aarch64/PLAN.md`); async signal resume (`_PalThreadResume`); panics on a signal frame past the stack and on a LibOS user-memory fault; timer granularity; `dev:`/`/sys`/attestation streams; 2 MiB pages | `devel/aarch64/vm/TODO.md`, `devel/syscall-compat/TODO.md` |
 | `direct` with graphics (NVIDIA proprietary driver) | remaining NVIDIA fd-bearing ioctls; several GPU nodes; Vulkan and CUDA untested; `SCM_RIGHTS` on plain socketpairs; syscall cost of Minetest | `devel/graphics-aarch64/TODO.md` |
 | `vm` with graphics | not available: the QEMU fork's listener and the comm-page address are x86-only; redesign deferred (`virtio-gpu` as one option) | `devel/graphics-aarch64/PLAN.md` |
+| all AArch64 PALs: CPU feature words | `AT_HWCAP`/`AT_HWCAP2` passed (allowlist); SVE, PAC, BTI, MTE stay masked until the LibOS supports them; EL0 ID-register reads not emulated under vm; VBS features without a `PF_ARM_*` number not advertised | `devel/aarch64/hwcap/TODO.md` |
 
 ## RISC-V (RV64)
 
@@ -60,6 +61,7 @@ short on purpose; an item that is fixed is removed from the topic list first and
 |---|---|
 | AArch64 direct PAL | `devel/aarch64/direct/TODO.md` |
 | AArch64 vm PAL (and what it shares with the x86_64 vm PAL: thread resume, timer granularity) | `devel/aarch64/vm/TODO.md` |
+| `AT_HWCAP`/`AT_HWCAP2` on AArch64 | `devel/aarch64/hwcap/TODO.md` |
 | RISC-V direct PAL | `devel/riscv/TODO.md` |
 | RISC-V hardware validation | `devel/riscv-hardware/TODO.md` |
 | Graphics host redirection (vm) | `devel/graphics/TODO.md` |
