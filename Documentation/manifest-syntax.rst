@@ -727,7 +727,10 @@ without ``sys.ioctl_structs`` and ``sys.allowed_ioctls`` being consulted. This
 works because under ``gramine-direct`` the application and the host kernel
 share one address space; it is what GPU drivers need, whose IOCTLs carry nested
 pointers that cannot practically be described in the manifest. Gramine logs a
-warning on the first such IOCTL. Other PALs ignore the key.
+warning on the first such IOCTL. Other PALs ignore the key. File descriptors
+inside the arguments of known IOCTLs are translated between Gramine fds and
+host fds: DRM PRIME and syncobj, dma-buf sync files, and the NVIDIA driver's
+IOCTLs on its character devices (major 195) that carry an fd.
 
 .. warning::
    This option is insecure and must not be used in production. ``gramine-direct``
@@ -752,8 +755,10 @@ socket to one of these paths (exactly as written, for example the X server's
 ``"/tmp/.X11-unix/X0"``) connects to the host socket itself, through the Linux
 PAL. File descriptors passed with ``SCM_RIGHTS`` on such a socket are
 translated: an fd the application sends becomes the host fd behind it (files,
-devices, sockets, and fds returned by device IOCTLs), and an fd received from
-the host becomes a new Gramine fd. ``SCM_CREDENTIALS`` is not supported. With
+devices, sockets, ends of a ``socketpair()``, and fds returned by device
+IOCTLs), and an fd received from the host becomes a new Gramine fd. A
+``socketpair()`` end whose peer end was sent to the host also receives fds that
+the host process sends back through it. ``SCM_CREDENTIALS`` is not supported. With
 other PALs the paths are ignored (the connection fails).
 
 This is what an X11 client with GPU rendering needs: Mesa's DRI3 and the
