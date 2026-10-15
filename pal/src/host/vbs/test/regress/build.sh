@@ -4,7 +4,7 @@
 #
 # Build the runner and the LibOS regression programs that report "TEST OK" with scripts/vbs/vbs-gcc
 # (dynamically linked against the vbs glibc). Programs that do not build this way are listed and
-# skipped. Usage (aarch64 build container): build.sh OUTDIR
+# skipped. Usage (aarch64 or x86_64 build container): build.sh OUTDIR
 set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../../../../../.." && pwd)
