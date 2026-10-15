@@ -308,11 +308,23 @@ int main(void) {
     CHECK("fence-wait", vkWaitForFences(g_dev, 1, &fence, VK_TRUE, 5000000000ull));
     double t1 = now_s();
     STEP("fence-wait", true, "%.3f ms", (t1 - t0) * 1e3);
-    uint32_t bad = 0;
+    uint32_t bad = 0, stale = 0, from_zero = 0, first_bad = UINT32_MAX;
     for (uint32_t i = 0; i < n; i++)
-        if (data[i] != i * 3u + 1u)
+        if (data[i] != i * 3u + 1u) {
             bad++;
-    STEP("compute", bad == 0, "%u of %u values wrong", bad, n);
+            if (first_bad == UINT32_MAX)
+                first_bad = i;
+            if (data[i] == i)
+                stale++; /* the CPU still sees its own value: the GPU's store is not visible */
+            else if (data[i] == 1u)
+                from_zero++; /* the GPU read 0: the CPU's store was not visible to it */
+        }
+    if (bad)
+        STEP("compute", false, "%u of %u values wrong (first at %u; %u still the CPU's value, %u "
+             "computed from 0, %u other)", bad, n, first_bad, stale, from_zero,
+             bad - stale - from_zero);
+    else
+        STEP("compute", true, "0 of %u values wrong", n);
 
     /* timeline semaphore: GPU signals value 1 after an empty submit, host waits; then host signals 2 */
     VkSemaphoreTypeCreateInfo stci = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
