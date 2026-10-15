@@ -11,11 +11,14 @@ set -e
 : "${SYSROOT:?set SYSROOT to the vbs glibc sysroot}"
 CC=${CC:-gcc}
 LIB="$SYSROOT/usr/lib"
+# the x18-free soft-float routines ahead of libgcc's (build-glibc.sh)
+SOFTFP=
+[ -f "$LIB/libsoftfp-x18.a" ] && SOFTFP=$LIB/libsoftfp-x18.a
 exec $CC -O2 -ffixed-x18 -fPIE -static-pie -nostdinc -nostartfiles -nodefaultlibs \
     -isystem "$($CC -print-file-name=include)" -isystem "$SYSROOT/usr/include" \
     -idirafter /usr/include/$($CC -dumpmachine) -idirafter /usr/include \
     -Wl,-z,max-page-size=0x10000 \
     "$LIB/rcrt1.o" "$LIB/crti.o" "$($CC -print-file-name=crtbeginS.o)" \
     "$@" \
-    -L"$LIB" -Wl,--start-group -lc -lgcc -lgcc_eh -Wl,--end-group \
+    $SOFTFP -L"$LIB" -Wl,--start-group -lc -lgcc -lgcc_eh -Wl,--end-group \
     "$($CC -print-file-name=crtendS.o)" "$LIB/crtn.o"

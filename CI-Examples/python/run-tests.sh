@@ -5,6 +5,8 @@
 
 set -e
 
+# VBS=1: GRAMINE is scripts/vbs/gramine-vbs (make VBS=1 check); the servers listen on Windows, so
+# the port is awaited and fetched on the Windows side (gramine-vbs net / win)
 if test -z "${GRAMINE:-}"; then
     if test -n "$SGX"; then
         GRAMINE=gramine-sgx
@@ -42,7 +44,11 @@ else
 fi
 echo $! > server.PID
 trap stop_http_server EXIT INT TERM
-../../scripts/wait_for_server 300 127.0.0.1 "$HTTP_PORT"
+if test -n "${VBS:-}"; then
+    "$GRAMINE" net wait "$HTTP_PORT" 300
+else
+    ../../scripts/wait_for_server 300 127.0.0.1 "$HTTP_PORT"
+fi
 
 echo -e "\n\nRunning HTTP client test-http.py:"
 if test "${GRAMINE_VM:-0}" = 1; then
@@ -52,7 +58,11 @@ if test "${GRAMINE_VM:-0}" = 1; then
 else
     "$GRAMINE" ./python scripts/test-http.py 127.0.0.1 "$GUEST_HTTP_PORT" > OUTPUT1
 fi
-wget -q "http://127.0.0.1:$HTTP_PORT/" -O OUTPUT2
+if test -n "${VBS:-}"; then
+    "$GRAMINE" win curl.exe -s "http://127.0.0.1:$HTTP_PORT/" > OUTPUT2
+else
+    wget -q "http://127.0.0.1:$HTTP_PORT/" -O OUTPUT2
+fi
 echo >> OUTPUT2  # include newline since wget doesn't add it
 # check if all lines from OUTPUT2 are included in OUTPUT1
 # TODO: simplify after fixing Gramine logging subsystem, which currently mixes its output with the
@@ -61,6 +71,11 @@ diff OUTPUT1 OUTPUT2 | grep -q '^>' || echo "[ Success 2/4 ]"
 stop_http_server
 trap - EXIT INT TERM
 rm -f OUTPUT1 OUTPUT2
+
+if test -n "${VBS:-}"; then
+    echo "NumPy and SciPy are not built for the VBS enclave: 3/4 and 4/4 skipped"
+    exit 0
+fi
 
 # === numpy ===
 $GRAMINE ./python scripts/test-numpy.py > OUTPUT

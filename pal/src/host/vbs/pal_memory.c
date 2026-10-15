@@ -171,6 +171,42 @@ int vbs_packed_lookup(const char* uri, uintptr_t* out_base, size_t* out_size,
 
 /* ---- PAL memory API ---- */
 
+/*
+ * Pool memory that was never handed out since boot is still zero (W committed it with
+ * VirtualAlloc), so a first allocation need not clear it. Clearing it anyway costs a first touch of
+ * every page, which is slow in a VBS enclave (CI-Examples/helloworld maps 512 MiB it never uses: 3-8
+ * s). One bit per 64 KiB granule of the pool says whether any part of it was ever allocated.
+ */
+#define POOL_GRANULE_SHIFT 16
+#define POOL_MAX_SIZE      (64ull << 30) /* the largest vbs.enclave_size */
+static uint8_t g_pool_used[POOL_MAX_SIZE >> POOL_GRANULE_SHIFT >> 3];
+
+static bool pool_granule_used(size_t g) {
+    return g_pool_used[g >> 3] & (1u << (g & 7));
+}
+
+/* clears [a, a + size) of the pool except whole granules that were never allocated, and marks every
+ * granule the range touches as allocated */
+static void pool_clear(uintptr_t a, size_t size) {
+    if (g_vbs->pool_size > POOL_MAX_SIZE) {
+        memset((void*)a, 0, size);
+        return;
+    }
+    uintptr_t end = a + size;
+    uintptr_t base = g_vbs->pool_base;
+    uintptr_t cur = a;
+    while (cur < end) {
+        size_t g = (cur - base) >> POOL_GRANULE_SHIFT;
+        uintptr_t g_lo = base + ((uintptr_t)g << POOL_GRANULE_SHIFT);
+        uintptr_t g_hi = g_lo + (1ul << POOL_GRANULE_SHIFT);
+        uintptr_t lo = cur, hi = MIN(end, g_hi);
+        if (pool_granule_used(g) || lo != g_lo || hi != g_hi)
+            memset((void*)lo, 0, hi - lo);
+        __atomic_fetch_or(&g_pool_used[g >> 3], (uint8_t)(1u << (g & 7)), __ATOMIC_RELAXED);
+        cur = hi;
+    }
+}
+
 int _PalVirtualMemoryAlloc(void* addr, size_t size, pal_prot_flags_t prot) {
     assert(WITHIN_MASK(prot, PAL_PROT_MASK));
     uintptr_t a = (uintptr_t)addr;
@@ -189,7 +225,10 @@ int _PalVirtualMemoryAlloc(void* addr, size_t size, pal_prot_flags_t prot) {
         log_error("vbs: protect(%p, %#lx, RW) failed: %ld", addr, size, ret);
         return -PAL_ERROR_DENIED;
     }
-    memset(addr, 0, size);
+    if (vbs_in_pool(a, size))
+        pool_clear(a, size);
+    else
+        memset(addr, 0, size);
     pal_prot_flags_t p = prot & (PAL_PROT_READ | PAL_PROT_WRITE);
     if (p != (PAL_PROT_READ | PAL_PROT_WRITE) && vbs_protect(a, size, p) < 0) {
         /* a weaker protection than asked is harmless here; note it once */

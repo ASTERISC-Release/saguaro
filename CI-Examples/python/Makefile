@@ -10,9 +10,22 @@ GRAMINE_LOG_LEVEL = error
 endif
 
 .PHONY: all
+ifeq ($(VBS),1)
+# Windows VBS enclave (scripts/vbs/Makefile.vbs, Documentation/vbs.rst): CPython built for the
+# enclave once (scripts/vbs/build-python.sh), packed with the scripts by vbs.manifest.template
+VBS_PYTHON_STAMP = ../../build-vbs-python/.vbs-python
+VBS_APP = python
+VBS_DEPS = $(wildcard scripts/*.py) helper-files/hosts $(VBS_PYTHON_STAMP)
+include ../../scripts/vbs/Makefile.vbs
+all: vbs-all
+
+$(VBS_PYTHON_STAMP): | $(VBS_RUNTIME_STAMP)
+	sh $(VBS_DIR)/build-python.sh --if-needed
+else
 all: python.manifest
 ifeq ($(SGX),1)
 all: python.manifest.sgx python.sig
+endif
 endif
 
 RA_TYPE ?= none
@@ -43,6 +56,12 @@ sgx_sign: python.manifest
 
 .PHONY: check
 check: all
+ifeq ($(VBS),1)
+	GRAMINE="$(GRAMINE)" VBS=1 ./run-tests.sh > TEST_STDOUT 2> TEST_STDERR
+	@grep -q "Success 1/4" TEST_STDOUT
+	@grep -q "Success 2/4" TEST_STDOUT
+	@echo "[ Success: 1/4 and 2/4; NumPy and SciPy are not in the vbs CPython ]"
+else
 	./run-tests.sh > TEST_STDOUT 2> TEST_STDERR
 	@grep -q "Success 1/4" TEST_STDOUT
 	@grep -q "Success 2/4" TEST_STDOUT
@@ -51,6 +70,7 @@ check: all
 ifeq ($(SGX),1)
 	@grep -q "Success SGX report" TEST_STDOUT
 	@grep -q "Success SGX quote" TEST_STDOUT
+endif
 endif
 
 .PHONY: clean

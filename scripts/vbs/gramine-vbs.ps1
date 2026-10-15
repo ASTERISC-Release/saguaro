@@ -205,7 +205,7 @@ function Resolve-Build([string]$t, [switch]$MustExist) {
         if (-not (Test-Path -PathType Leaf $t)) { Fail "no manifest $t" }
         $b.manifest = (Resolve-Path $t).Path
         $leaf = Split-Path -Leaf $b.manifest
-        $b.name = $leaf -replace '\.manifest\.toml$', '' -replace '\.manifest$', ''
+        $b.name = $leaf -replace '\.manifest\.toml$', '' -replace '\.manifest\.vbs$', '' -replace '\.manifest$', ''
         $b.out = if ($Out) { Full-Path $Out } else {
             Join-Path (Split-Path -Parent $b.manifest) "$($b.name).vbs" }
     }

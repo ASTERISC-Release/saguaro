@@ -43,3 +43,17 @@ https://github.com/giltene/wrk2 for more information.
     ../common_tools/benchmark-http.sh http://127.0.0.1:8003
 
 Use Ctrl-C to terminate the server once you are finished testing lighttpd.
+
+# lighttpd in a Windows VBS enclave
+
+In WSL on an ARM64 Windows machine with VBS (`Documentation/vbs.rst`, "Makefile flow"):
+
+```sh
+make VBS=1          # lighttpd built with the vbs gcc, installed into vbs-build/root, packed, signed
+make VBS=1 check    # start it in an enclave; fetch pages with Windows' curl.exe (vbs-check.sh)
+```
+
+lighttpd runs in the foreground (`-D`) as one process on 127.0.0.1:8003 with
+`lighttpd-vbs.conf.template` (no mod_deflate: the vbs build has no zlib, OpenSSL, PCRE or bzip2).
+Its modules are loaded with `dlopen` from `/lighttpd/lib`; they are packed into the signed image
+like the binary.

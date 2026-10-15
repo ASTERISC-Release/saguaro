@@ -1,0 +1,35 @@
+# Copyright (C) 2026 Gramine contributors
+# SPDX-License-Identifier: BSD-3-Clause
+
+# Redis manifest for a Windows VBS enclave (`make VBS=1`, Documentation/vbs.rst): the counterpart of
+# redis-server.manifest.template. Redis is built with the vbs gcc against the vbs glibc
+# (vbs-build/redis-server, a dynamic PIE) and packed with the glibc libraries it needs.
+
+loader.entrypoint = "file:/libsysdb.so"
+libos.entrypoint = "/redis-server"
+loader.log_level = "{{ log_level }}"
+
+# A VBS enclave holds one process (no fork): no RDB snapshots (`save ""`; BGSAVE and BGREWRITEAOF
+# would fork and fail), no append-only file. The enclave's sockets are the Windows host's: listen
+# on the loopback only (a listener on other interfaces would need a firewall rule).
+loader.argv = ["redis-server", "--save", "", "--appendonly", "no",
+               "--bind", "127.0.0.1", "--port", "{{ env.get('REDIS_PORT', '6379') }}"]
+
+loader.env.LD_LIBRARY_PATH = "{{ arch_libdir }}"
+
+fs.root.uri = "file:/"
+# no run-time code generation in a VBS enclave
+sys.rewrite_syscalls = false
+
+vbs.debug = false
+# Redis keeps its data in memory: the enclave size bounds the data set
+vbs.enclave_size = "{{ env.get('VBS_ENCLAVE_SIZE', '1G') }}"
+# the main thread, three background (bio) threads and the I/O threads if enabled
+vbs.max_threads = 16
+
+vbs.packed_files = [
+  { path = "/redis-server", uri = "file:vbs-build/redis-server" },
+{% for lib in ["ld-linux-aarch64.so.1", "libc.so.6", "libm.so.6"] %}
+  { path = "{{ arch_libdir }}/{{ lib }}", uri = "file:{{ vbs.sysroot }}/usr/lib/{{ lib }}" },
+{% endfor %}
+]

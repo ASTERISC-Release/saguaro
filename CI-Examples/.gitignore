@@ -5,3 +5,7 @@
 *.o
 *~
 *.swp
+# make VBS=1 (scripts/vbs/Makefile.vbs): rendered manifests, image folders, enclave builds
+*.manifest.vbs
+*.vbs/
+vbs-build/

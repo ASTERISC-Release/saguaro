@@ -24,9 +24,26 @@ GRAMINE_LOG_LEVEL = error
 endif
 
 .PHONY: all
+ifeq ($(VBS),1)
+# Windows VBS enclave (scripts/vbs/Makefile.vbs, Documentation/vbs.rst): NGINX built with the vbs
+# gcc (HTTP only, no basic authentication: no OpenSSL, zlib, PCRE or libcrypt in the vbs sysroot)
+# and installed with its
+# configuration and test files into vbs-build/root/nginx, all packed by vbs.manifest.template
+VBS_APP = nginx
+VBS_ROOT = vbs-build/root/nginx
+VBS_RANDOM_FILES = $(foreach n,1 2 3 4 5 6 7 8 9 10,2K.$n.html) $(foreach n,1 2 3 4 5,10K.$n.html) \
+	$(foreach n,1 2 3 4 5,100K.$n.html) $(foreach n,1 2 3,1M.$n.html) $(foreach n,1 2 3,100.$n.html)
+VBS_TEST_DATA = $(addprefix $(VBS_ROOT)/html/random/,$(VBS_RANDOM_FILES))
+VBS_DEPS = $(VBS_ROOT)/sbin/nginx $(VBS_ROOT)/conf/nginx-vbs.conf $(VBS_TEST_DATA)
+VBS_DEFINES = -Dlisten_port=$(LISTEN_PORT)
+VBS_CLEAN = vbs-build
+include ../../scripts/vbs/Makefile.vbs
+all: vbs-all
+else
 all: $(INSTALL_DIR)/sbin/nginx nginx.manifest config testdata ssldata nginx_args
 ifeq ($(SGX),1)
 all: nginx.manifest.sgx nginx.sig
+endif
 endif
 
 # Note that Gramine doesn't support PR_SET_DUMPABLE, so we manually overwrite this macro in the
@@ -49,6 +66,40 @@ $(NGINX_SRC)/configure: $(NGINX_SRC).tar.gz
 $(NGINX_SRC).tar.gz:
 	../common_tools/download --output $@ --sha256 $(NGINX_SHA256) \
 		$(foreach mirror,$(NGINX_MIRRORS),--url $(mirror)/$(NGINX_SRC).tar.gz)
+
+ifeq ($(VBS),1)
+# One process (master_process off in the configuration), paths that are written to below /tmp (a
+# tmpfs in the enclave; the packed files are read-only), the error log on stderr. The eventfd and
+# PR_SET_DUMPABLE changes are those of the direct build.
+$(VBS_ROOT)/sbin/nginx: $(NGINX_SRC).tar.gz | $(VBS_RUNTIME_STAMP)
+	rm -rf vbs-build/src && mkdir -p vbs-build/src
+	tar --touch -C vbs-build/src --strip-components=1 -xzf $<
+	cd vbs-build/src && ./configure --with-cc=$(VBS_GCC) --prefix=/nginx \
+		--error-log-path=stderr --pid-path=/tmp/nginx.pid --http-log-path=/tmp/access.log \
+		--http-client-body-temp-path=/tmp/client_body_temp --http-proxy-temp-path=/tmp/proxy_temp \
+		--http-fastcgi-temp-path=/tmp/fastcgi_temp --http-uwsgi-temp-path=/tmp/uwsgi_temp \
+		--http-scgi-temp-path=/tmp/scgi_temp \
+		--without-http_rewrite_module --without-http_gzip_module \
+		--without-http_auth_basic_module > ../configure.log
+	sed -e "s|#define NGX_HAVE_EVENTFD[[:space:]]\+1|#define NGX_HAVE_EVENTFD 0|g" \
+		-e "s|#define NGX_HAVE_SYS_EVENTFD_H[[:space:]]\+1|#define NGX_HAVE_SYS_EVENTFD_H 0|g" \
+		-e "s|#define NGX_HAVE_PR_SET_DUMPABLE[[:space:]]\+1|#define NGX_HAVE_PR_SET_DUMPABLE 0|g" \
+		-i vbs-build/src/objs/ngx_auto_config.h
+	$(MAKE) -C vbs-build/src
+	$(MAKE) -C vbs-build/src install DESTDIR=$(abspath vbs-build/root)
+
+$(VBS_ROOT)/conf/nginx-vbs.conf: nginx-vbs.conf.template $(VBS_ROOT)/sbin/nginx
+	sed -e 's|$$(LISTEN_PORT)|'"$(LISTEN_PORT)"'|g' -e 's|$$(LISTEN_HOST)|'"$(LISTEN_HOST)"'|g' \
+		$< > $@
+
+$(VBS_ROOT)/html/random/%.html: $(VBS_ROOT)/sbin/nginx
+	mkdir -p $(VBS_ROOT)/html/random
+	dd if=/dev/urandom of=$@ count=1 bs=$(basename $(basename $(notdir $@))) status=none
+
+.PHONY: check
+check: all
+	GRAMINE="$(GRAMINE)" LISTEN_PORT=$(LISTEN_PORT) ./vbs-check.sh
+endif
 
 nginx.manifest: nginx.manifest.template
 	gramine-manifest \
@@ -122,7 +173,9 @@ nginx_args:
 start-native-server: all
 	$(INSTALL_DIR)/sbin/nginx -c conf/nginx-gramine.conf
 
-ifeq ($(SGX),)
+ifeq ($(VBS),1)
+# GRAMINE is gramine-vbs (Makefile.vbs)
+else ifeq ($(SGX),)
 GRAMINE = gramine-direct
 else
 GRAMINE = gramine-sgx

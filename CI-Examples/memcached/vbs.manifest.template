@@ -1,0 +1,38 @@
+# Copyright (C) 2026 Gramine contributors
+# SPDX-License-Identifier: BSD-3-Clause
+
+# Memcached manifest for a Windows VBS enclave (`make VBS=1`, Documentation/vbs.rst): the
+# counterpart of memcached.manifest.template. memcached (libevent linked in statically, both built
+# with the vbs gcc) and the glibc libraries are packed into the signed image.
+
+loader.entrypoint = "file:/libsysdb.so"
+libos.entrypoint = "/memcached"
+loader.log_level = "{{ log_level }}"
+
+# Listen on the loopback only (the enclave's sockets are the Windows host's; another interface
+# would need a firewall rule), TCP only; 4 worker threads and a 64 MiB cache (the defaults).
+loader.argv = ["memcached", "-l", "127.0.0.1", "-p", "{{ env.get('MEMCACHED_PORT', '11211') }}",
+               "-U", "0", "-t", "4", "-m", "64"]
+loader.env.LD_LIBRARY_PATH = "{{ arch_libdir }}"
+
+# as in memcached.manifest.template: a non-root user, so that memcached does not try to drop
+# privileges
+loader.uid = 1000
+loader.gid = 1000
+
+fs.root.uri = "file:/"
+# no run-time code generation in a VBS enclave
+sys.rewrite_syscalls = false
+
+vbs.debug = false
+vbs.enclave_size = "{{ env.get('VBS_ENCLAVE_SIZE', '512M') }}"
+# the main thread, 4 workers and memcached's maintenance threads (LRU crawler and maintainer,
+# hash table expansion, logger, idle-connection killer)
+vbs.max_threads = 16
+
+vbs.packed_files = [
+  { path = "/memcached", uri = "file:vbs-build/memcached" },
+{% for lib in ["ld-linux-aarch64.so.1", "libc.so.6", "libm.so.6"] %}
+  { path = "{{ arch_libdir }}/{{ lib }}", uri = "file:{{ vbs.sysroot }}/usr/lib/{{ lib }}" },
+{% endfor %}
+]

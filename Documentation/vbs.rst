@@ -251,6 +251,131 @@ The manifest packs the interpreter, the standard library (58 extension modules
 and 523 other files without tests and Tk) and the vbs glibc; the first run took
 24.6 s including the build, a later one 1.9 s.
 
+Makefile flow: ``make VBS=1``
+-----------------------------
+
+The application examples in ``CI-Examples/<application>/`` keep the structure they have for SGX and
+gain a VBS variant: next to ``<app>.manifest.template`` (direct and SGX) there is a
+``vbs.manifest.template``, and the example's ``Makefile`` includes ``scripts/vbs/Makefile.vbs``
+when ``VBS=1`` is given. In WSL on the Windows machine (or, for the Linux half, in any aarch64
+Linux shell)::
+
+    cd CI-Examples/helloworld
+    make VBS=1              # build for the enclave, render, pack, link and sign
+    make VBS=1 check        # run the example's check against the enclave
+    make VBS=1 clean
+
+``make`` and ``make SGX=1`` without ``VBS=1`` are unchanged. What ``make VBS=1`` does:
+
+#. **The runtime**, once per checkout: the vbs glibc (``build-vbs-glibc``, about 2 minutes) and
+   the vbs PAL and LibOS (``build-vbs``, meson and ninja), then a ``ninja`` on every ``make``
+   (``gramine-vbs runtime``). The build tools are those of `Windows only (WSL)`_ (``gramine-vbs``
+   uses the user-level ones of ``setup -Install`` by itself).
+#. **The application for the enclave**, by the example's own rules, with ``$(VBS_GCC)``
+   (``scripts/vbs/vbs-gcc``: a dynamic PIE against the vbs glibc, ``-ffixed-x18``) or
+   ``$(VBS_CC_STATIC)``, into a folder of its own (``vbs-build/``), so that the direct build is
+   not touched.
+#. **The manifest**: ``vbs.manifest.template`` is rendered into ``<app>.manifest.vbs`` by
+   ``gramine-vbs manifest``, with the Jinja environment of ``gramine-manifest`` (``{{ log_level
+   }}``, ``{{ arch_libdir }}`` which is ``/usr/lib`` here, ``env``, ...; no installed Gramine is
+   needed) and the globals ``vbs.repo``, ``vbs.sysroot`` (the vbs glibc) and ``vbs.python`` (the
+   CPython of ``scripts/vbs/build-python.sh``). Everything the enclave runs is listed in
+   ``vbs.packed_files``, the counterpart of ``sgx.trusted_files``: it is packed into the signed
+   image and measured.
+#. **The image**: ``gramine-vbs build`` packs and compiles the Windows objects into
+   ``<app>.vbs/``; then, on the Windows side, ``link-sign.cmd`` links, ``veiid``-processes and
+   signs ``<app>.dll`` (the counterpart of ``<app>.manifest.sgx`` and ``<app>.sig``).
+
+**The hand-off to Windows from WSL.** A checkout in the distribution's home is not visible to the
+Windows tools, so ``gramine-vbs`` works the other way round from ``gramine-vbs.cmd``: in WSL with
+interop (and ``GRAMINE_VBS_WINDOWS`` unset or ``local``) it reaches the Windows of the same machine
+through ``powershell.exe`` and ``/mnt/<drive>`` paths, copies the objects into a Windows folder
+``%USERPROFILE%\gramine-vbs\wsl\<app>-<hash>`` (one per build folder; the base is
+``GRAMINE_VBS_WINDOWS_BASE``), and links, signs and runs there. The Windows SDK headers come from
+the copy ``gramine-vbs.cmd`` already left in the distribution, or are fetched once. From another
+aarch64 Linux machine, ``GRAMINE_VBS_WINDOWS=user@host`` does the same over ssh;
+``GRAMINE_VBS_WINDOWS=none`` builds only the Linux half (``make VBS=1 vbs-sign`` later).
+
+**Running.** ``gramine-vbs <app> [args]`` runs ``<app>.manifest.vbs`` of the current folder, like
+``gramine-direct <app>``; in the Makefiles ``$(GRAMINE)`` is ``gramine-vbs`` when ``VBS=1``.
+Arguments reach the application with ``loader.insecure__use_cmdline_argv = true``. ``SIGTERM`` or
+``SIGINT`` stop the enclave's host process on Windows, so a script stops a server with ``kill``;
+``make VBS=1 vbs-stop`` stops every host of the image.
+
+**Clients.** The enclave's sockets are Windows sockets of the host process, and WSL2 in its default
+NAT networking mode cannot reach Windows' loopback. Checks therefore run their clients on Windows:
+``gramine-vbs net`` runs a small Winsock client (``scripts/vbs/win/vbs-net.c``, compiled with MSVC
+in ``<base>\tools`` the first time)::
+
+    gramine-vbs net wait PORT [SECONDS]          # wait until the port accepts connections
+    gramine-vbs net req PORT 'GET / HTTP/1.0\r\n\r\n'
+    gramine-vbs net redis PORT SET key value     # one Redis command, printed like redis-cli
+    gramine-vbs net bench redis-get PORT -c 8 -n 100000 [-P 16] [-d 64]
+                                                 # also redis-set, redis-ping, memcached-get,
+                                                 # memcached-set, http (-p PATH)
+
+and ``gramine-vbs win PROGRAM ARGS`` runs another Windows program (``curl.exe`` for example).
+
+**Writing the VBS part of an example**: in its ``Makefile``, under ``ifeq ($(VBS),1)``, set
+``VBS_APP`` (the name), ``VBS_DEPS`` (the files the image is made from), optionally
+``VBS_DEFINES`` and ``VBS_CLEAN``, include ``../../scripts/vbs/Makefile.vbs``, make ``all``
+depend on ``vbs-all``, and add the rules that build the application with ``$(VBS_GCC)``; keep the
+old ``all`` in the ``else`` branch. ``CI-Examples/helloworld`` is the smallest example,
+``CI-Examples/python`` builds CPython once and packs scripts. The manifest template needs
+``loader.entrypoint = "file:/libsysdb.so"``, ``sys.rewrite_syscalls = false`` and
+``fs.root.uri = "file:/"``, the ``vbs.*`` keys (:ref:`vbs-syntax`) and no ``sgx.*`` keys.
+
+Applications
+------------
+
+These examples have a ``vbs.manifest.template`` and run with ``make VBS=1`` and ``make VBS=1
+check`` in WSL (measurements in ``Documentation/devel/vbs-enclave/TESTING.md``):
+
+============================  ======================================================================
+``CI-Examples/helloworld``    a static PIE
+``CI-Examples/python``        CPython 3.12.7 (built once), ``scripts/`` packed as ``/app/scripts``;
+                              the check runs the hello world and an HTTP server and client in two
+                              enclaves (NumPy and SciPy are not available)
+``CI-Examples/redis``         Redis 6.0.5: ``--save ""``, ``--appendonly no`` (no fork: no BGSAVE,
+                              no AOF; data lives as long as the enclave), 127.0.0.1:6379
+``CI-Examples/nginx``         NGINX 1.22.0: ``master_process off``, one worker, HTTP only (no
+                              OpenSSL, zlib or PCRE in the vbs sysroot), static files packed,
+                              127.0.0.1:8002
+``CI-Examples/memcached``     memcached 1.6.21 with libevent 2.1.12 (static), 4 workers,
+                              127.0.0.1:11211
+``CI-Examples/lighttpd``      lighttpd 1.4.59 in the foreground, modules loaded with ``dlopen`` from
+                              the image, 127.0.0.1:8003
+============================  ======================================================================
+
+For example::
+
+    cd CI-Examples/redis
+    make VBS=1 && make VBS=1 check
+    ../../scripts/vbs/gramine-vbs redis-server &
+    ../../scripts/vbs/gramine-vbs net redis 6379 SET greeting hello
+    ../../scripts/vbs/gramine-vbs net bench redis-get 6379 -c 8 -n 100000
+    kill %%
+
+What applications have to give up in a VBS enclave, and how the examples do it:
+
+- **No fork** (one process per enclave): servers run without a master process or daemonising
+  (NGINX ``master_process off``, lighttpd ``-D``), and features that fork are off (Redis
+  snapshots and the append-only file).
+- **Only packed code**: everything that runs, including modules loaded with ``dlopen``, is in
+  ``vbs.packed_files`` and built with the vbs gcc against the vbs glibc; libraries that the vbs
+  sysroot lacks are built for the enclave too (memcached's libevent) or their features left out
+  (OpenSSL, zlib, PCRE, libcrypt).
+- **Read-only packed files**: files the application writes go to a ``tmpfs`` mount or to
+  ``vbs.allowed_files``.
+- **Sockets are the Windows host's**: listen on 127.0.0.1 (another interface would need a
+  firewall rule); clients run on Windows (``gramine-vbs net``), since WSL2 in NAT mode cannot
+  reach Windows' loopback.
+
+Measured on the test machine with eight connections, event-loop servers serve 11,000-12,500
+small requests per second in the enclave (about 60-80 % of the same binary natively in WSL reached
+from Windows), memcached with its four threads 36,000; pipelined Redis 164,000 per second; large
+responses about 230 MB/s per thread. The servers listen 0.2-0.7 s after the host process starts.
+
 ``gramine-vbs``
 ---------------
 

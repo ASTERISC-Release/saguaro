@@ -1,0 +1,15 @@
+# Copyright (C) 2026 Gramine contributors
+# SPDX-License-Identifier: BSD-3-Clause
+
+# lighttpd configuration for a Windows VBS enclave (`make VBS=1`): lighttpd-server.conf and
+# lighttpd-generic.conf without mod_deflate (no zlib in the vbs build). lighttpd runs in the
+# foreground (-D) as one process (server.max-worker stays 0: workers would be forked).
+
+server.document-root   = "/lighttpd/html"
+server.port            = $(PORT)
+server.bind            = "$(HOST)"
+server.event-handler   = "linux-sysepoll"
+server.max-connections = 1024
+index-file.names       = ( "index.html" )
+mimetype.assign        = ( ".html" => "text/html", ".txt" => "text/plain",
+                           "" => "application/octet-stream" )
