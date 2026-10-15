@@ -67,6 +67,7 @@ reason = "The VM PAL has no device streams (dev: URIs), so opening /dev/* host d
 tests = [
   "TC_40_FileSystem::test_001_devfs",
   "TC_40_FileSystem::test_002_device_passthrough",
+  "TC_40_FileSystem::test_071_memfd_on_shm_mount",
   "TC_40_FileSystem::test_080_close_range",
   "TC_80_Socket::test_020_poll",
 ]

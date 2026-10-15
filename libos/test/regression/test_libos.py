@@ -1436,6 +1436,10 @@ class TC_40_FileSystem(RegressionTestCase):
         stdout, _ = self.run_binary(['shm'])
         self.assertIn("TEST OK", stdout)
 
+    def test_071_memfd_on_shm_mount(self):
+        stdout, _ = self.run_binary(['memfd_rw'])
+        self.assertIn('TEST OK', stdout)
+
     def test_080_close_range(self):
         stdout, _ = self.run_binary(['close_range'])
         self.assertIn('TEST OK', stdout)
