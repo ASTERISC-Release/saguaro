@@ -144,6 +144,13 @@ static int file_map(PAL_HANDLE handle, void* addr, pal_prot_flags_t prot, uint64
     uintptr_t a = (uintptr_t)addr;
     pal_prot_flags_t p = prot & (PAL_PROT_READ | PAL_PROT_WRITE | PAL_PROT_EXEC);
 
+    /* a dynamic loader's first mapping of a packed object: the whole extent at the packed base,
+     * with the first segment's protection; the image is there already (its writable segments
+     * become read-write when the loader maps them on their own) */
+    if (obj->image_size && a == (uintptr_t)vbs_image_base(obj) && offset == 0 &&
+            size <= ALLOC_ALIGN_UP(obj->map_size) && !(p & PAL_PROT_WRITE))
+        return 0;
+
     const elf_phdr_t* seg = packed_segment_at(obj, a, offset, size);
     if (seg) {
         if (seg->p_flags & PF_X) {
