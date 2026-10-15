@@ -37,9 +37,14 @@ if [ "$(uname -m)" != x86_64 ] && [ ! -f build-vbs-glibc/usr/lib/libsoftfp-x18.a
     # a sysroot from before build-glibc.sh installed the x18-free soft-float routines
     timed softfp sh scripts/vbs/build-glibc.sh --softfp
 fi
+# gcc 14 and later make incompatible pointer types an error, which a few LibOS sources still have
+# (gcc 15 of Ubuntu 26.04, the x64 machine's WSL); they stay warnings there
+CARGS=
+[ "$(gcc -dumpversion | cut -d. -f1)" -ge 14 ] 2>/dev/null \
+    && CARGS=-Dc_args=-Wno-error=incompatible-pointer-types
 if [ ! -f build-vbs/build.ninja ]; then
     log "first build: meson setup of the vbs PAL and LibOS"
     timed meson-setup meson setup build-vbs -Ddirect=disabled -Dvbs=enabled -Dlibc=none \
-        -Dtests=disabled -Dbuildtype=release -Dgraphics=disabled
+        -Dtests=disabled -Dbuildtype=release -Dgraphics=disabled $CARGS
 fi
 timed ninja ninja -C build-vbs

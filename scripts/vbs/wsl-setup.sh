@@ -26,6 +26,8 @@ PKGS="gcc:gcc make:make patch:patch git:git gawk:gawk bison:bison m4:m4 pkgconf:
       meson:meson ninja-build:ninja python3:python3 python3-click:py.click
       python3-jinja2:py.jinja2 python3-tomli:py.tomli python3-tomli-w:py.tomli_w
       python3-voluptuous:py.voluptuous python3-pyelftools:py.elftools"
+# x86_64: the LibOS and common sources have nasm files
+[ "$(uname -m)" = x86_64 ] && PKGS="$PKGS nasm:nasm"
 # libraries the packages above need that a minimal Ubuntu may lack (only for the user prefix)
 DEPS="pkgconf-bin libpkgconf3"
 if [ "$2" = clang ]; then
@@ -75,7 +77,12 @@ user)
     m=$(missing)
     [ -z "$m" ] && { echo "nothing is missing"; exit 0; }
     get=""
-    for p in $m $DEPS; do dpkg -s "$p" >/dev/null 2>&1 || get="$get $p"; done
+    for p in $m $DEPS; do
+        dpkg -s "$p" >/dev/null 2>&1 && continue
+        # a library this release does not have (or names differently) is not needed from here
+        apt-cache show "$p" >/dev/null 2>&1 || { echo "skipping $p (not in this release)"; continue; }
+        get="$get $p"
+    done
     mkdir -p "$TOOLS/debs"
     echo "downloading:$get"
     (cd "$TOOLS/debs" && apt-get download $get)
