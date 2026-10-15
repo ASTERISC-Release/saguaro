@@ -87,7 +87,9 @@ $(IPERF_SRC):
 vbs-build/iperf3: $(IPERF_SRC) | $(VBS_RUNTIME_STAMP)
 	rm -rf vbs-build/src && mkdir -p vbs-build/src
 	tar -C vbs-build/src --strip-components=1 -xf $(IPERF_SRC)
-	cd vbs-build/src && CC=$(VBS_GCC) ./configure --disable-shared --without-openssl
+# -Wno-incompatible-pointer-types: GCC 14+ makes iperf's callback assignments (iperf_api.c) errors
+	cd vbs-build/src && CC=$(VBS_GCC) ./configure --disable-shared --without-openssl \
+		CFLAGS="-O2 -Wno-incompatible-pointer-types"
 	$(MAKE) -C vbs-build/src
 	cp vbs-build/src/src/iperf3 $@
 
