@@ -3,7 +3,8 @@ Gramine Library OS with Multi-Architectural Support
 *****************************************************
 
 *A Linux-compatible library OS for multi-process applications, on Intel x86_64, AMD64 and AArch64,
-with an experimental RISC-V (RV64) port.*
+with an experimental RISC-V (RV64) port, experimental graphics for the direct PAL and experimental
+support for Windows VBS enclaves on ARM64.*
 
 Gramine is a lightweight library OS: it runs an unmodified Linux application
 in an isolated environment, with its own implementation of the Linux system
@@ -26,6 +27,9 @@ Current work:
 
 - multi-architecture support: AMD64, AArch64 and RISC-V
 - graphics through redirection to the host GPU (see `Tirith <https://arxiv.org/abs/2609.17525>`__)
+  in the ``vm`` PAL, and, experimentally, direct use of the host's GPU by ``gramine-direct`` on x86_64
+  and AArch64
+- running applications inside Windows VBS enclaves (experimental, AArch64 only: Windows 11 on ARM64)
 - richer system call support (for example `uFork <https://arxiv.org/pdf/2509.09439>`__)
 
 What it is for:
@@ -41,10 +45,20 @@ What it is for:
   (page tables, scheduler, interrupts, virtio drivers, SMP) are readable, with design logs under
   ``Documentation/devel/``.
 - **Using the inherited confidential-computing back ends** (Intel TDX and SGX) on x86_64.
+- **Running an application in a Windows VBS enclave** (experimental, ARM64 Windows 11): the library
+  OS, a glibc and the application are packed into a signed enclave image at build time and run
+  protected from the rest of Windows, with local attestation (``gramine-vbs``; see
+  `Documentation/vbs.rst <Documentation/vbs.rst>`__). Limits: no ``fork``, no run-time code loading
+  (no JIT), debug enclaves signed with a test certificate.
+- **Using the host's GPU from** ``gramine-direct`` (experimental, x86_64 with Intel or AMD GPUs and
+  AArch64 with NVIDIA's proprietary driver): opt-in manifest keys let an unmodified OpenGL application
+  (and, on x86_64, a Vulkan application) use the host's render node and X server. ``gramine-direct`` is not a sandbox, and these
+  keys give the application access to the GPU; see
+  `Documentation/devel/graphics-direct/running.md <Documentation/devel/graphics-direct/running.md>`__.
 
 The features added so far, and the planned ones, are listed in
 `Documentation/FEATURES.md <Documentation/FEATURES.md>`__. Not available yet: a RISC-V ``vm`` PAL,
-graphics on AArch64, delivery of asynchronous signals to blocked threads in the ``vm`` PAL, and a
+graphics in the ``vm`` PAL on AArch64, VBS enclaves on x86_64, delivery of asynchronous signals to blocked threads in the ``vm`` PAL, and a
 finer-grained timer. The AArch64 ``vm`` PAL runs single-process applications; TCP and UDP work
 through a vsock relay. See `Documentation/TODO.md <Documentation/TODO.md>`__ for open items.
 
@@ -90,6 +104,17 @@ Symbol      Meaning
      - ⚠️
      - 🛫
      - ❌
+   * - ↳ ``direct`` with graphics (host GPU through the render node; opt-in manifest keys)
+     - ⚠️
+     - ⚠️
+     - ⚠️
+     - ❌
+   * - ``vbs`` (Windows VBS enclaves, ``gramine-vbs``): the application is packed into a signed enclave
+       image
+     - ❌
+     - ❌
+     - ⚠️
+     - ➖
    * - ``tdx`` (Intel TDX) and ``sgx`` (Intel SGX)
      - ✅
      - ➖
@@ -97,7 +122,11 @@ Symbol      Meaning
      - ➖
 
 Per-cell details, build options and the verification status are in
-`Documentation/devel/multiarch.md <Documentation/devel/multiarch.md>`__.
+`Documentation/devel/multiarch.md <Documentation/devel/multiarch.md>`__. Notes on the experimental
+rows: ``direct`` with graphics was measured on Intel and AMD GPUs (x86_64) and on NVIDIA's GB10
+with the proprietary driver (AArch64), at 76 to 100 % of native speed for the games tried;
+``vbs`` runs on Windows 11 on ARM64 with VBS enabled and needs the Windows-side tools described in
+`Documentation/vbs.rst <Documentation/vbs.rst>`__.
 
 Installation
 ============
@@ -146,8 +175,12 @@ Documentation
 - `Multi-architecture notes <Documentation/devel/multiarch.md>`__: configurations, build options,
   tests, benchmarks and CI workflows.
 - `Differences from upstream gramine-tdx <Documentation/devel/graphics/tirith-delta.md>`__.
-- `Graphics examples <CI-Examples/graphics/>`__ (x86_64) and how to run them:
-  `Documentation/devel/graphics/ <Documentation/devel/graphics/>`__.
+- `Graphics examples <CI-Examples/graphics/>`__ and how to run them: in the ``vm`` PAL (x86_64)
+  `Documentation/devel/graphics/ <Documentation/devel/graphics/>`__, in ``gramine-direct``
+  `Documentation/devel/graphics-direct/ <Documentation/devel/graphics-direct/>`__ (x86_64) and
+  `Documentation/devel/graphics-aarch64/ <Documentation/devel/graphics-aarch64/>`__ (AArch64).
+- `Windows VBS enclaves <Documentation/vbs.rst>`__: the manual (installation on Windows, quick
+  start, the ``gramine-vbs`` tool, attestation, limits).
 - For features shared with Gramine in general (manifest syntax, ...) the
   `upstream documentation <https://gramine.readthedocs.io>`__ is a useful reference; details may
   differ in this tree.
