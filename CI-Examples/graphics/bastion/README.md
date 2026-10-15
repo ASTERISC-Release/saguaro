@@ -15,8 +15,14 @@ FNA on SDL2 and OpenGL, FMOD for audio), under `gramine-vm` with the graphics ho
 | 2 vCPUs, `MULTIPROC=1` | The game forks for FMOD's probe, but the `sh` child inherits `LD_PRELOAD=/libgraphics.so`, whose constructor repeats the comm-page handshake with the host and hangs, which disturbs the parent too: black window. With a guard in libgraphics (a child inheriting the graphics session skips it; `Documentation/devel/vm-multiproc/bastion-libgraphics-child-guard.patch`, not applied) the child exits 127 (`pulseaudio: not found`) and the title screen appears. |
 | 1 vCPU, either setting | No window within 120 s: the game's GL goes to the host Mesa directly (`XDG_RUNTIME_DIR` error, the AMD GPU's name) instead of the redirected EGL path. `main` does the same, so it is not caused by the multi-process work; not diagnosed (graphics redirection). |
 
+**Played (maintainer-reported, 2026-10-14):** in a run with 2 vCPUs, `MULTIPROC=0`, the merge of
+`main` at 8451eec3 (before the libgraphics change), shared input ring on, the maintainer played the
+game and started a new game: keyboard and mouse input reach the game through the shared input ring
+(`[input] shared input enabled`), and gameplay starts. The game drew at 3840x2160 into the floating
+1920x1080 window, so only the top-left quarter of the picture was visible (see below).
+
 `MULTIPROC=1` adds `sys.experimental__multiprocess = true` and a `/bin` mount (FMOD runs `/bin/sh`).
-Input, sound, saving and the resolution setting (the 1920x1080 crop) were not tested.
+Sound, saving and the resolution setting (the 1920x1080 crop) were not tested yet.
 
 ## The game is not included
 
