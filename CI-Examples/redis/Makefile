@@ -6,6 +6,8 @@
 # - make               -- create non-SGX no-debug-log manifest
 # - make SGX=1         -- create SGX no-debug-log manifest
 # - make SGX=1 DEBUG=1 -- create SGX debug-log manifest
+# - make VBS=1         -- build Redis for a Windows VBS enclave, pack and sign it (in WSL; see
+#                         Documentation/vbs.rst); make VBS=1 check runs it and checks it
 #
 # Any of these invocations clones Redis' git repository and builds Redis in
 # default configuration and in the latest-to-date (6.0.5) version.
@@ -35,9 +37,19 @@ GRAMINE_LOG_LEVEL = error
 endif
 
 .PHONY: all
+ifeq ($(VBS),1)
+# Windows VBS enclave (scripts/vbs/Makefile.vbs): Redis built with the vbs gcc (against the vbs
+# glibc, libc malloc) in vbs-build/, packed by vbs.manifest.template
+VBS_APP = redis-server
+VBS_DEPS = vbs-build/redis-server
+VBS_CLEAN = vbs-build
+include ../../scripts/vbs/Makefile.vbs
+all: vbs-all
+else
 all: redis-server redis-server.manifest
 ifeq ($(SGX),1)
 all: redis-server.manifest.sgx redis-server.sig
+endif
 endif
 
 ############################## REDIS EXECUTABLE ###############################
@@ -62,6 +74,29 @@ $(SRCDIR)/src/redis-server: $(SRCDIR)/Makefile
 else
 $(SRCDIR)/src/redis-server: $(SRCDIR)/Makefile
 	$(MAKE) -C $(SRCDIR)
+endif
+
+ifeq ($(VBS),1)
+redis.tar.gz:
+	../common_tools/download --output $@ \
+		--sha256 $(TAR_SHA256) \
+		--url https://github.com/antirez/redis/archive/$(COMMIT).tar.gz \
+		--url https://packages.gramineproject.io/distfiles/redis-$(COMMIT).tar.gz
+
+vbs-build/src/Makefile: redis.tar.gz
+	mkdir -p vbs-build/src
+	tar -C vbs-build/src --strip-components=1 -xf redis.tar.gz
+	touch $@
+
+# MALLOC=libc: the vbs glibc's malloc instead of the bundled jemalloc (fewer moving parts in the
+# enclave); CC reaches the bundled dependencies (hiredis, lua, linenoise) through MAKEFLAGS
+vbs-build/redis-server: vbs-build/src/Makefile | $(VBS_RUNTIME_STAMP)
+	$(MAKE) -C vbs-build/src CC=$(VBS_GCC) MALLOC=libc
+	cp vbs-build/src/src/redis-server $@
+
+.PHONY: check
+check: all
+	GRAMINE="$(GRAMINE)" ./vbs-check.sh
 endif
 
 ################################ REDIS MANIFEST ###############################
@@ -107,7 +142,9 @@ redis-server: $(SRCDIR)/src/redis-server
 start-native-server: all
 	./redis-server --save '' --protected-mode no
 
-ifeq ($(SGX),)
+ifeq ($(VBS),1)
+# GRAMINE is gramine-vbs (Makefile.vbs)
+else ifeq ($(SGX),)
 GRAMINE = gramine-direct
 else
 GRAMINE = gramine-sgx
