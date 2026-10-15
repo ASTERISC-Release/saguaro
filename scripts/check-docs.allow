@@ -61,3 +61,4 @@ runtime/glibc$
 ^\.mp-probes/
 
 ^gramine-libos-
+^libos/test/ltp/install$
