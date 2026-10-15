@@ -148,6 +148,16 @@ void __attribute__((constructor)) sharedgl_entry(void) {
          * (for example a `sh -c` child of a game) must not run the handshake, which would wait
          * for a listener that is serving the parent and reset the comm page under it. */
         in_gramine_vm = true;
+        /* EGL_EAGER_SESSION=1: start the session here, for programs that make no GLX, EGL or
+         * Vulkan instance call through this library first (Vulkan programs that load the Vulkan
+         * loader with dlopen(), see vulkan.c). The comm-page handshake needs this library's
+         * constructor to run once per process that draws, so only set it for such programs. */
+        const char *eager = getenv("EGL_EAGER_SESSION");
+        if (eager && strcmp(eager, "1") == 0) {
+            fprintf(stderr, "[.] RUNTIME: Gramine VM (EGL_EAGER_SESSION: graphics session starts now)\n");
+            graphics_ensure_session();
+            return;
+        }
         fprintf(stderr, "[.] RUNTIME: Gramine VM (graphics session starts at the first graphics call)\n");
         return;
     }

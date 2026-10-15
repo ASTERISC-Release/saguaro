@@ -31,6 +31,7 @@ libgraphics = shared_library('graphics',
     'gramine.c',
     'log.c',
     'main.c',
+    'vulkan.c',
     'xcb.c',
 
     # libos/include for the shared graphics ABI header (graphics_comm_abi.h; also used by the
