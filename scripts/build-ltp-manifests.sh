@@ -7,6 +7,15 @@ repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 prefix=${GRAMINE_PREFIX:-"$HOME/.local/gramine-vm"}
 ltp_root=${LTP_PREFIX:-"$repo_root/.ltp-install"}
 test_dir="$repo_root/libos/test/ltp"
+# LTP_HARNESS_DIR: build the manifests in another directory, a copy of libos/test/ltp's harness
+# files, for a second Gramine install whose manifests differ (on aarch64 the direct PAL and the vm
+# PAL are separate installs, each rendering its own libsysdb.so path into the manifests).
+harness_dir=${LTP_HARNESS_DIR:-"$test_dir"}
+if [[ "$(realpath -m "$harness_dir")" != "$test_dir" ]]; then
+    mkdir -p "$harness_dir"
+    cp "$test_dir"/{manifest.template,tests.toml,test_ltp.py,ltp.cfg,ltp_all.cfg,ltp_sgx.cfg} "$harness_dir"/
+    test_dir=$(realpath "$harness_dir")
+fi
 
 [[ -x "$ltp_root/testcases/bin/getpid01" ]] || {
     echo "LTP not installed under $ltp_root; run scripts/fetch-ltp.sh first" >&2

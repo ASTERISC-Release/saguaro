@@ -63,3 +63,5 @@ runtime/glibc$
 
 ^gramine-libos-
 ^libos/test/ltp/install$
+# the direct-PAL LTP manifests of an aarch64 run (scripts/build-ltp-manifests.sh, LTP_HARNESS_DIR)
+^\.ltp-harness-direct/
