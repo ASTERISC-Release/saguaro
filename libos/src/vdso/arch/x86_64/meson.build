@@ -8,6 +8,11 @@ if vm
     c_vdso_args += ['-DVDSO_USE_SYSCALL_INSTR']
 endif
 
+if vbs
+    # VBS-enclave PAL: the PAL_TCB is in the Windows TEB (pal_tcb_gs.h); no red zone in packed code
+    c_vdso_args += ['-DPAL_HOST_VBS=1'] + cflags_vbs_arch
+endif
+
 vdso_so_dbg = shared_library('vdso',
     'vdso.c',
     'vdso_note.S',

@@ -10,8 +10,8 @@
 # -Dvbs=enabled builds the vbs PAL proper (aarch64 only) and a LibOS built for it
 # (-DPAL_HOST_VBS=1, libos/src/meson.build). It must be the only PAL enabled.
 
-if host_machine.cpu_family() != 'aarch64'
-    error('-Dvbs=enabled: the VBS-enclave PAL targets AArch64 only (ARM64 Windows)')
+if host_machine.cpu_family() not in ['aarch64', 'x86_64']
+    error('-Dvbs=enabled: the VBS-enclave PAL targets AArch64 (ARM64 Windows) and x86_64 (x64 Windows)')
 endif
 
 if direct or sgx or vm or tdx or skeleton
@@ -29,8 +29,10 @@ pal_vbs_map = custom_target('pal.map[vbs]',
 cflags_vbs = [
     '-DHOST_TYPE=VBS',
     '-DPAL_HOST_VBS=1',
-    # x18 is the enclave TEB of the Windows runtime (PLAN.md D4): no Linux code of ours uses it
-    '-ffixed-x18',
+    # AArch64: x18 is the enclave TEB of the Windows runtime (PLAN.md D4): no Linux code of ours
+    # uses it. x86_64: exception delivery in the enclave overwrites the qword at rsp-128, so no
+    # packed code may keep data in the red zone (PLAN-x64.md, X5).
+    cflags_vbs_arch,
 ]
 
 libpal_vbs = shared_library('pal',

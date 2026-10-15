@@ -24,6 +24,13 @@ const struct pal_vbs_services* g_vbs;
 const size_t g_page_size = PRESET_PAGESIZE;
 
 static PAL_VBS_TCB g_first_tcb;
+#if defined(__x86_64__)
+/* x86_64: the first thread's TCB is the copy in its TEB (pal_vbs.h, vbs_arch_place_tcb) */
+static PAL_VBS_TCB* g_first_tcb_p = &g_first_tcb;
+#define FIRST_TCB (*g_first_tcb_p)
+#else
+#define FIRST_TCB g_first_tcb
+#endif
 
 noreturn void vbs_exit(int64_t code) {
     pal_vbs_wcall(g_vbs->exit, (uint64_t)code, 0, 0);
@@ -137,10 +144,15 @@ noreturn void pal_vbs_start(const struct pal_vbs_services* svc) {
     }
 
     /* A TCB with a default canary before anything that may use the stack protector. */
-    g_first_tcb.common.self = &g_first_tcb.common;
-    pal_tcb_arch_set_stack_canary(&g_first_tcb.common, STACK_PROTECTOR_CANARY_DEFAULT);
-    pal_set_tcb(&g_first_tcb.common);
-    g_pal_tcb_singleton = &g_first_tcb.common;
+#if defined(__x86_64__)
+    g_first_tcb_p = vbs_arch_place_tcb(&g_first_tcb);
+#endif
+    FIRST_TCB.common.self = &FIRST_TCB.common;
+    pal_tcb_arch_set_stack_canary(&FIRST_TCB.common, STACK_PROTECTOR_CANARY_DEFAULT);
+    pal_set_tcb(&FIRST_TCB.common);
+#if !defined(__x86_64__)
+    g_pal_tcb_singleton = &FIRST_TCB.common;
+#endif
 
     /* W relocated this object already (pal_vbs_packed.c); only record its symbols. */
     ret = setup_pal_binary(/*apply_relocations=*/false);
@@ -162,7 +174,7 @@ noreturn void pal_vbs_start(const struct pal_vbs_services* svc) {
 
     uint64_t canary;
     if (vbs_random(&canary, sizeof(canary)) == 0)
-        pal_tcb_arch_set_stack_canary(&g_first_tcb.common, canary);
+        pal_tcb_arch_set_stack_canary(&FIRST_TCB.common, canary);
 
     set_pal_binary_name("libpal");
     init_slab_mgr();
@@ -176,7 +188,7 @@ noreturn void pal_vbs_start(const struct pal_vbs_services* svc) {
         INIT_FAIL("Out of memory");
     init_handle_hdr(first_thread, PAL_TYPE_THREAD);
     first_thread->thread.tid = 1;
-    g_first_tcb.handle = first_thread;
+    FIRST_TCB.handle = first_thread;
 
     char* manifest = read_manifest();
     if (!manifest)
@@ -197,8 +209,8 @@ noreturn void pal_vbs_start(const struct pal_vbs_services* svc) {
     /* The Windows stack of the enclave thread is small (its bounds are logged by W at boot); the
      * PAL and the LibOS's initialisation run on a PAL stack in the pool instead. */
     void* stack = malloc(VBS_FIRST_STACK_SIZE);
-    g_first_tcb.alt_stack = malloc(VBS_ALT_STACK_SIZE);
-    if (!stack || !g_first_tcb.alt_stack)
+    FIRST_TCB.alt_stack = malloc(VBS_ALT_STACK_SIZE);
+    if (!stack || !FIRST_TCB.alt_stack)
         INIT_FAIL("Out of memory");
     pal_vbs_run_on_stack(call_pal_main, first_thread, (char*)stack + VBS_FIRST_STACK_SIZE);
 }

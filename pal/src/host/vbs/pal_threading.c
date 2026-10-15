@@ -33,6 +33,9 @@ static noreturn void thread_main(void* arg) {
 noreturn void pal_vbs_thread_entry(PAL_VBS_TCB* tcb, void* w_ctx);
 __attribute_no_stack_protector
 noreturn void pal_vbs_thread_entry(PAL_VBS_TCB* tcb, void* w_ctx) {
+#if defined(__x86_64__)
+    tcb = vbs_arch_place_tcb(tcb); /* into this thread's TEB (the heap copy stays unused) */
+#endif
     tcb->w_ctx = w_ctx;
     pal_tcb_arch_set_stack_canary(&tcb->common, STACK_PROTECTOR_CANARY_DEFAULT);
     pal_set_tcb(&tcb->common);

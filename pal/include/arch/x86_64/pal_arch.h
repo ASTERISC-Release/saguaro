@@ -32,7 +32,8 @@ typedef struct pal_tcb PAL_TCB;
 typedef struct pal_tcb {
     struct pal_tcb* self;
     /* random per-thread canary used by GCC's stack protector; must be at %gs:[0x8]
-     * because we specify `-mstack-protector-guard-reg=%gs -mstack-protector-guard-offset=8` */
+     * because we specify `-mstack-protector-guard-reg=%gs -mstack-protector-guard-offset=8`
+     * (PAL_TCB_GS_OFFSET + 8 for the VBS-enclave PAL, see pal_tcb_gs.h) */
     uint64_t stack_protector_canary;
     /* uint64_t for alignment */
     uint64_t libos_tcb[(PAL_LIBOS_TCB_SIZE + sizeof(uint64_t) - 1) / sizeof(uint64_t)];
@@ -48,10 +49,12 @@ static_assert(offsetof(PAL_TCB, stack_protector_canary) == 0x8,
               "unexpected offset of stack_protector_canary in PAL_TCB struct");
 
 #include "pal_host_arch.h"
+#include "pal_tcb_gs.h"
 
 static inline PAL_TCB* pal_get_tcb(void) {
     PAL_TCB* tcb;
-    __asm__("movq %%gs:%c1, %0" : "=r"(tcb) : "i"(offsetof(struct pal_tcb, self)) : "memory");
+    __asm__("movq %%gs:%c1, %0" : "=r"(tcb)
+            : "i"(PAL_TCB_GS_OFFSET + offsetof(struct pal_tcb, self)) : "memory");
     return tcb;
 }
 

@@ -97,6 +97,26 @@ typedef struct pal_vbs_tcb {
 
 #define VBS_ALT_STACK_SIZE (64 * 1024)
 
+#if defined(__x86_64__)
+/*
+ * x86_64 (PLAN-x64.md, X2): the thread's PAL_VBS_TCB lives inside its Windows TEB, at
+ * PAL_TCB_GS_OFFSET, so that the %gs-relative TCB accesses of the PAL and the LibOS reach it. The
+ * range 0x800-0x1138 of an x64 TEB (Win32 client information and the OpenGL dispatch table) is never
+ * used in an enclave. Copies `tcb` there, fixes its self pointer and returns the TEB copy.
+ */
+#define VBS_TEB_TCB_END 0x1138
+static_assert(PAL_TCB_GS_OFFSET + sizeof(PAL_VBS_TCB) <= VBS_TEB_TCB_END,
+              "PAL_VBS_TCB does not fit into the unused part of the TEB");
+__attribute_no_stack_protector
+static inline PAL_VBS_TCB* vbs_arch_place_tcb(PAL_VBS_TCB* tcb) {
+    PAL_VBS_TCB* t = (PAL_VBS_TCB*)(pal_vbs_teb() + PAL_TCB_GS_OFFSET);
+    if (t != tcb)
+        memcpy(t, tcb, sizeof(*t));
+    t->common.self = &t->common;
+    return t;
+}
+#endif
+
 /* any stream became ready (pipes): waiters of _PalStreamsWaitEvents and blocking reads wait on it */
 extern uint32_t g_vbs_stream_gen;
 void vbs_streams_changed(void);
