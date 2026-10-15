@@ -611,6 +611,7 @@ noreturn void _PalProcessExit(int exitcode) {
             _PalThreadYieldExecution();
         vm_futex_shared_purge(space);
         vm_destroy_tracked_handles(space, /*keep_threads=*/true);
+        pal_startup_allocs_free();
         log_always("[ VM child exited with code %d ]", exitcode);
         sched_thread_set_exit_cleanup(vm_process_exit_cleanup, (void*)owner_frame);
         pal_common_thread_exit(NULL);

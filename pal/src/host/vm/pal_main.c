@@ -846,6 +846,11 @@ noreturn int pal_start_continue(void* cmdline_) {
     __builtin_unreachable();
 }
 
+/* the child's PAL is initialized; what it allocated until here is freed at its exit */
+static void vm_pal_process_started(void) {
+    pal_startup_allocs_record(false);
+}
+
 noreturn void vm_pal_process_start(PAL_HANDLE parent_process, const char** arguments) {
     struct pal_tcb_vm* tcb = (struct pal_tcb_vm*)pal_get_tcb();
     if (!tcb || !tcb->thread_handle)
@@ -858,6 +863,7 @@ noreturn void vm_pal_process_start(PAL_HANDLE parent_process, const char** argum
     /* All processes of one Gramine instance share its instance id (it names the IPC pipes). The
      * copied process-data segment still holds the parent's public state at this point. */
     uint64_t instance_id = g_pal_public_state.instance_id;
+    pal_startup_allocs_record(true);
     pal_main(instance_id, parent_process, tcb->thread_handle, arguments, g_vm_envp,
-             /*post_callback=*/NULL);
+             vm_pal_process_started);
 }

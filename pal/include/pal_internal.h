@@ -325,6 +325,9 @@ void pal_disable_early_memory_bookkeeping(void);
 void init_slab_mgr(void);
 #if defined(PAL_HOST_VM) && defined(__x86_64__)
 int pal_enable_shared_frame_slab_allocator(void);
+/* Records the PAL allocations of a starting child process, to free them when it exits. */
+void pal_startup_allocs_record(bool on);
+void pal_startup_allocs_free(void);
 /* Drops one reference of a handle shared with another process; true if others still hold it. */
 bool vm_handle_release_share(PAL_HANDLE handle);
 /* Per-process record of the handles given to the LibOS, destroyed when the process exits. */
