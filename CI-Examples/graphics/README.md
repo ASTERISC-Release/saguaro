@@ -87,7 +87,7 @@ preload library at `/libgraphics.so` (`{{ gramine.libgraphics }}`) and preload i
 
 ## Under gramine-direct
 
-`glxgears`, `quake2`, `minetest` and `supertuxkart` also have a `<name>-direct.manifest.template` and a
+`glxgears`, `quake2`, `minetest`, `supertuxkart` and `bastion` also have a `<name>-direct.manifest.template` and a
 `make run-direct` target (Quake II: `make run-direct-timedemo`; SuperTuxKart:
 `make run-direct-startup`). The application then runs as a Linux process on the host's GPU and X
 server, with the host's Mesa (DRI3), no QEMU and no preload library; `PRELOAD=1` uses the preload

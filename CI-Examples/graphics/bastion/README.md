@@ -33,6 +33,18 @@ instead of the host's, which is the default so that the graphics preload library
 library), `DATA_DIR` (host directory for save games and settings, default
 `~/.local/share/gramine-bastion`), `DEBUG=1`.
 
+## Under gramine-direct
+
+```sh
+make run-direct          # gramine-direct, the host's Mesa (DRI3) on the host GPU
+make run-native-stock    # the same without Gramine and without the preload library
+```
+
+On 2026-10-15 the game started under `gramine-direct` on the Intel GPU and drew its title screen,
+cropped to a corner as in the native run below
+(`Documentation/devel/graphics-direct/FINDINGS.md`). `SDL_VIDEO_X11_WMCLASS` sets the window's
+class for a window rule.
+
 ## What is known
 
 A native trace with `scripts/syscall-profile.py` (virtual display, software rendering, about a
