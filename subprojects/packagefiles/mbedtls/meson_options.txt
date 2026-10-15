@@ -1,1 +1,3 @@
 option('libc', type: 'combo', choices: ['none', 'glibc', 'musl'], value: 'glibc', yield: true)
+option('extra_cflags', type: 'string', value: '',
+    description: 'extra compiler flags for the mbedTLS libraries (-ffixed-x18 for the vbs PAL)')

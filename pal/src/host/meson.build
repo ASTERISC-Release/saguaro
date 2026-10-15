@@ -18,3 +18,6 @@ endif
 if tdx
     subdir('tdx')
 endif
+if vbs
+    subdir('vbs')
+endif
