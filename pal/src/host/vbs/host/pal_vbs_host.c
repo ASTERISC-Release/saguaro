@@ -8,7 +8,7 @@
  * counterpart to the enclave DLL and follows Microsoft's VbsEnclave sample (MIT) for the create/
  * load/initialize sequence.
  *
- * Usage: pal_vbs_host.exe [image.dll] [thread_count] [selftest|boot]
+ * Usage: pal_vbs_host.exe [image.dll] [thread_count] [selftest|boot] [host root directory]
  *   selftest (default): the PAL-level self-test; boot: the packed PAL, LibOS and application.
  */
 
@@ -47,6 +47,8 @@ static uint64_t host_time_ns(void) {
  * The signature matches LPENCLAVE_ROUTINE (void* CALLBACK fn(void*)).
  */
 static void* CALLBACK pal_vbs_ocall(void* param);
+void pal_vbs_host_io_init(const char* root);
+void pal_vbs_host_request(uint8_t* buf);
 
 /* A host thread for the enclave: enters E_ThreadStart with its own block; returns when the enclave
  * thread exits. CallEnclave waits for a free enclave thread slot (ThreadCount). */
@@ -96,6 +98,11 @@ static void* CALLBACK pal_vbs_ocall(void* param) {
             }
             break;
         }
+        case PAL_VBS_OCALL_HOST:
+            /* a0: the calling thread's I/O buffer (g_shared.iobuf or its thread block) */
+            pal_vbs_host_request((uint8_t*)(uintptr_t)a->a0);
+            a->retval = 0;
+            break;
         case PAL_VBS_OCALL_EXIT_PROCESS:
             fflush(stdout);
             fprintf(stderr, "[host] enclave thread ended the process, code=%lld (threads started "
@@ -185,6 +192,7 @@ int main(int argc, char** argv) {
                     : PAL_VBS_MODE_SELFTEST;
 
     InitializeCriticalSection(&g_console_lock);
+    pal_vbs_host_io_init(argc > 4 ? argv[4] : NULL);
     g_thread_start = (PENCLAVE_ROUTINE)GetProcAddress((HMODULE)enclave, "E_ThreadStart");
     PENCLAVE_ROUTINE pal_main = (PENCLAVE_ROUTINE)GetProcAddress((HMODULE)enclave, "E_PalMain");
     if (!pal_main) { fail("GetProcAddress(E_PalMain)"); return 6; }

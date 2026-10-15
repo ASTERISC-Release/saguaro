@@ -55,7 +55,9 @@ uint64_t pal_vbs_w_time_ns(void);
 int64_t  pal_vbs_w_random(void* buf, uint64_t len);
 void     pal_vbs_w_log(const char* s);
 uint64_t pal_vbs_w_ocall(uint64_t no, uint64_t a0, uint64_t a1, uint64_t a2);
-int64_t  pal_vbs_w_register_thread(struct pal_vbs_ocall_args* host_args, uint8_t* host_conbuf);
+int64_t  pal_vbs_w_register_thread(struct pal_vbs_ocall_args* host_args, uint8_t* host_conbuf,
+                                   uint8_t* host_iobuf);
+uint8_t* pal_vbs_w_get_iobuf(void);
 void     pal_vbs_w_unregister_thread(void);
 void     pal_vbs_w_set_exit_state(void* st);
 void*    pal_vbs_w_get_exit_state(void);

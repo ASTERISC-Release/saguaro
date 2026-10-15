@@ -173,6 +173,10 @@ noreturn void pal_vbs_start(const struct pal_vbs_services* svc) {
     if (!g_pal_public_state.manifest_root)
         INIT_FAIL_MANIFEST(errbuf);
 
+    ret = vbs_init_host_files();
+    if (ret < 0)
+        INIT_FAIL("vbs.trusted_files / vbs.allowed_files: %s", pal_strerror(ret));
+
     g_pal_public_state.vbs_packed_lookup = vbs_packed_lookup;
 
     /* The Windows stack of the enclave thread is small (its bounds are logged by W at boot); the

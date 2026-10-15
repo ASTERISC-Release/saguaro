@@ -48,6 +48,25 @@ static inline void vbs_wake(uint32_t* addr, bool all) {
     pal_vbs_wcall(g_vbs->wake, (uint64_t)addr, all, 0);
 }
 
+/* A host request (files, sockets): `in` (in_len bytes) goes to the host after the header; the
+ * host's output (at most out_cap bytes) lands in `out`, its length in *out_len. Returns the host's
+ * result (negative Linux errno on failure) or a negative Linux errno of the PAL itself. */
+int64_t vbs_hostcall(uint64_t op, int64_t a0, int64_t a1, int64_t a2, int64_t a3,
+                     const void* in, size_t in_len, void* out, size_t out_cap, size_t* out_len);
+
+/* host files allowed by the manifest */
+struct vbs_trusted_file {
+    char* path;
+    uint8_t sha256[32];
+};
+extern struct vbs_trusted_file* g_vbs_trusted_files;
+extern size_t g_vbs_trusted_files_cnt;
+extern char** g_vbs_allowed_files; /* path prefixes */
+extern size_t g_vbs_allowed_files_cnt;
+int vbs_init_host_files(void);
+const struct vbs_trusted_file* vbs_find_trusted(const char* path);
+bool vbs_is_allowed(const char* path);
+
 /* the PAL's per-thread control block */
 typedef struct pal_vbs_tcb {
     PAL_TCB common;

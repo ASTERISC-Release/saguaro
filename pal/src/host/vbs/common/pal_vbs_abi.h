@@ -38,10 +38,77 @@ enum pal_vbs_ocall {
     PAL_VBS_OCALL_THREAD_CREATE = 3, /* a0 = token: start a host thread that enters E_ThreadStart */
     PAL_VBS_OCALL_EXIT_PROCESS  = 4, /* a0 = exit code: end the whole process now (exit from a
                                         thread other than the first one) */
+    PAL_VBS_OCALL_HOST          = 5, /* a request in the calling thread's I/O buffer
+                                        (struct pal_vbs_hostreq): files and sockets */
     PAL_VBS_OCALL_MAX
 };
 
 #define PAL_VBS_CONBUF_SIZE 4096u /* host-owned bounce buffer for console OCALLs */
+#define PAL_VBS_IOBUF_SIZE  (64u * 1024u) /* host-owned buffer of host requests, per thread */
+
+/*
+ * Host requests (PAL_VBS_OCALL_HOST): host files and host sockets, served by the untrusted host
+ * with Win32 file and Winsock calls. The vbs PAL builds a request (header + input bytes), W copies
+ * it into the calling thread's I/O buffer in host memory, the host replaces the header (result,
+ * output length) and puts its output bytes after it, and W copies them back. Values follow Linux:
+ * open flags, socket domains (AF_INET 2, AF_INET6 10), struct sockaddr layouts, and negative Linux
+ * errno values as results. Paths are absolute Linux-style paths that the host maps below its host
+ * root directory. Nothing the host returns is trusted by the PAL beyond its declared lengths.
+ */
+enum pal_vbs_host_op {
+    PAL_VBS_HOST_OPEN = 1,      /* in: path; a: flags (O_*), mode -> id */
+    PAL_VBS_HOST_PREAD,         /* a: id, offset, len -> bytes read (out) */
+    PAL_VBS_HOST_PWRITE,        /* in: bytes; a: id, offset -> bytes written */
+    PAL_VBS_HOST_FSTAT,         /* a: id -> out: struct pal_vbs_host_stat */
+    PAL_VBS_HOST_STAT,          /* in: path -> out: struct pal_vbs_host_stat */
+    PAL_VBS_HOST_CLOSE,         /* a: id (file or socket) */
+    PAL_VBS_HOST_FTRUNCATE,     /* a: id, length */
+    PAL_VBS_HOST_UNLINK,        /* in: path; a: is_dir */
+    PAL_VBS_HOST_RENAME,        /* in: old path '\0' new path */
+    PAL_VBS_HOST_MKDIR,         /* in: path; a: mode */
+    PAL_VBS_HOST_LISTDIR,       /* in: path; a: first index -> out: names '\0' (dirs end in '/'),
+                                   result: number of names */
+    PAL_VBS_HOST_SOCKET = 32,   /* a: domain, type (SOCK_STREAM 1 / SOCK_DGRAM 2), nonblocking */
+    PAL_VBS_HOST_BIND,          /* in: sockaddr; a: id -> out: bound sockaddr */
+    PAL_VBS_HOST_LISTEN,        /* a: id, backlog */
+    PAL_VBS_HOST_ACCEPT,        /* a: id, nonblocking -> id; out: peer sockaddr */
+    PAL_VBS_HOST_CONNECT,       /* in: sockaddr; a: id -> 0 or -EINPROGRESS; out: local sockaddr */
+    PAL_VBS_HOST_SEND,          /* in: [sockaddr_len u32][sockaddr][bytes]; a: id, dontwait */
+    PAL_VBS_HOST_RECV,          /* a: id, len, dontwait -> out: [sockaddr 128][bytes]; result:
+                                   bytes received */
+    PAL_VBS_HOST_SHUTDOWN,      /* a: id, how */
+    PAL_VBS_HOST_SETNONBLOCK,   /* a: id, on */
+    PAL_VBS_HOST_SETSOCKOPT,    /* a: id, level, name, value (Linux constants) */
+    PAL_VBS_HOST_GETSOCKNAME,   /* a: id -> out: sockaddr */
+    PAL_VBS_HOST_FIONREAD,      /* a: id -> bytes pending */
+    PAL_VBS_HOST_POLL,          /* in: struct pal_vbs_host_pollfd[n]; a: n, timeout_ms ->
+                                   out: the same array with revents; result: ready count */
+};
+
+#define PAL_VBS_HOST_SOCKADDR_MAX 128u
+
+struct pal_vbs_hostreq {
+    uint64_t op;         /* enum pal_vbs_host_op */
+    int64_t  a[6];       /* arguments */
+    int64_t  result;     /* written by the host */
+    uint64_t in_len;     /* bytes after the header, from the enclave */
+    uint64_t out_len;    /* bytes after the header, from the host */
+    /* followed by the input or output bytes */
+};
+
+#define PAL_VBS_HOST_DATA_MAX (PAL_VBS_IOBUF_SIZE - sizeof(struct pal_vbs_hostreq))
+
+struct pal_vbs_host_stat {
+    uint64_t size;
+    uint64_t is_dir;
+    uint64_t mode;
+};
+
+struct pal_vbs_host_pollfd {
+    int64_t id;
+    uint32_t events;     /* Linux POLLIN 1, POLLOUT 4 */
+    uint32_t revents;    /* POLLIN, POLLOUT, POLLERR 8, POLLHUP 16, POLLNVAL 32 */
+};
 
 /*
  * The host OCALL dispatcher. The host passes its address into the enclave in `pal_vbs_shared.ocall`.
@@ -72,6 +139,7 @@ typedef struct pal_vbs_shared {
     void*    ocall;                /* host dispatcher, type pal_vbs_ocall_fn */
     pal_vbs_ocall_args_t ocall_args;
     uint8_t  conbuf[PAL_VBS_CONBUF_SIZE];
+    uint8_t  iobuf[PAL_VBS_IOBUF_SIZE];
 
     /* what E_PalMain should do (PAL_VBS_MODE_*) and the arguments of the application (boot) */
     uint64_t mode;
@@ -94,9 +162,10 @@ typedef struct pal_vbs_thread_block {
     void*    ocall;      /* host dispatcher, as pal_vbs_shared.ocall */
     pal_vbs_ocall_args_t ocall_args;
     uint8_t  conbuf[PAL_VBS_CONBUF_SIZE];
+    uint8_t  iobuf[PAL_VBS_IOBUF_SIZE];
 } pal_vbs_thread_block_t;
 
-#define PAL_VBS_ABI_VERSION 3u
+#define PAL_VBS_ABI_VERSION 4u
 
 #define PAL_VBS_MODE_SELFTEST 0u /* run the PAL-level self-test (phases 1 and 2) */
 #define PAL_VBS_MODE_BOOT     1u /* boot the packed vbs PAL, the LibOS and the application */
@@ -135,7 +204,7 @@ struct pal_vbs_packed_obj {
  * code: P calls them only through its x18-restoring thunk (pal_vbs_wcall.S), because Linux code
  * may have clobbered x18 (the enclave TEB). All values are fixed-width (PLAN.md D4).
  */
-#define PAL_VBS_SERVICES_VERSION 2u
+#define PAL_VBS_SERVICES_VERSION 3u
 
 struct pal_vbs_services {
     uint64_t version;
@@ -166,6 +235,11 @@ struct pal_vbs_services {
     void* wait;          /* int64_t (uint32_t* addr, uint32_t expected, uint64_t timeout_ns):
                           * WaitOnAddress; 0 woken or changed, -1 timed out; UINT64_MAX = forever */
     void* wake;          /* void (uint32_t* addr, uint64_t all) */
+
+    /* host requests (version 3) */
+    void* host_call;     /* int64_t (struct pal_vbs_hostreq* req, void* out, uint64_t out_cap):
+                          * req (header + in_len input bytes) goes to the host; the result is
+                          * returned, req->out_len set, min(out_len, out_cap) bytes copied to out */
 };
 
 /*

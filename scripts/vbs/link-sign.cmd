@@ -42,5 +42,5 @@ echo signtool exit code: %SIGNRC% (2 = signed with a warning)
 if %SIGNRC% NEQ 0 if %SIGNRC% NEQ 2 (type signtool.log & exit /b 5)
 
 echo === link (host exe)
-link /nologo /DEBUG /OUT:pal_vbs_host.exe pal_vbs_host.obj onecore.lib libcmt.lib || exit /b 6
+link /nologo /DEBUG /OUT:pal_vbs_host.exe pal_vbs_host.obj pal_vbs_host_io.obj onecore.lib ws2_32.lib libcmt.lib || exit /b 6
 echo === build done

@@ -1,0 +1,10 @@
+# Phase-3e TCP server test of the VBS-enclave PAL (packed as the file "manifest").
+loader.entrypoint = "file:/libsysdb.so"
+libos.entrypoint = "/tcpserver"
+loader.argv = ["/tcpserver"]
+loader.log_level = "warning"
+fs.root.uri = "file:/"
+sys.rewrite_syscalls = false
+vbs.max_threads = 8
+
+# host files (below the host root directory, the 4th argument of pal_vbs_host.exe)

@@ -75,6 +75,7 @@ struct w_thread {
     volatile uint64_t teb;
     pal_vbs_ocall_args_t* host_args;
     uint8_t* host_conbuf;
+    uint8_t* host_iobuf;
     void* exit_state;   /* E_ThreadStart's context of the thread (NULL: the first thread) */
 };
 static struct w_thread g_threads[W_MAX_THREADS];
@@ -83,12 +84,14 @@ static uint64_t current_teb(void) {
     return (uint64_t)(uintptr_t)NtCurrentTeb();
 }
 
-int64_t pal_vbs_w_register_thread(pal_vbs_ocall_args_t* host_args, uint8_t* host_conbuf) {
+int64_t pal_vbs_w_register_thread(pal_vbs_ocall_args_t* host_args, uint8_t* host_conbuf,
+                                  uint8_t* host_iobuf) {
     uint64_t teb = current_teb();
     for (int i = 0; i < W_MAX_THREADS; i++) {
         if (InterlockedCompareExchange64((volatile LONG64*)&g_threads[i].teb, (LONG64)teb, 0) == 0) {
             g_threads[i].host_args = host_args;
             g_threads[i].host_conbuf = host_conbuf;
+            g_threads[i].host_iobuf = host_iobuf;
             g_threads[i].exit_state = NULL;
             return 0;
         }
@@ -112,6 +115,14 @@ void pal_vbs_w_set_exit_state(void* st) {
     for (int i = 0; i < W_MAX_THREADS; i++)
         if (g_threads[i].teb == teb)
             g_threads[i].exit_state = st;
+}
+
+uint8_t* pal_vbs_w_get_iobuf(void) {
+    uint64_t teb = current_teb();
+    for (int i = 0; i < W_MAX_THREADS; i++)
+        if (g_threads[i].teb == teb)
+            return g_threads[i].host_iobuf;
+    return NULL;
 }
 
 void* pal_vbs_w_get_exit_state(void) {
@@ -323,11 +334,12 @@ static const pal_vbs_env_t g_env = {
  * rather than hanging, and write the result back out. The return value also carries the result.
  */
 void* CALLBACK E_PalMain(void* param) {
-    pal_vbs_shared_t local;
+    /* static, not on the 8 KiB Windows stack of the enclave thread (FINDINGS.md); E_PalMain runs once */
+    static pal_vbs_shared_t local;
     g_host = (pal_vbs_shared_t*)param;
     EnclaveCopyIntoEnclave(&local, g_host, sizeof(local));
     g_ocall = (pal_vbs_ocall_fn)local.ocall;
-    pal_vbs_w_register_thread(&g_host->ocall_args, g_host->conbuf);
+    pal_vbs_w_register_thread(&g_host->ocall_args, g_host->conbuf, g_host->iobuf);
 
     int64_t result = -1;
     uint64_t run = 0, passed = 0;

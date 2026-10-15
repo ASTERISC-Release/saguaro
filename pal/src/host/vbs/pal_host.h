@@ -23,13 +23,44 @@ typedef struct {
 
     union {
         struct {
-            const struct pal_vbs_packed_obj* obj; /* the packed file (never NULL) */
+            const struct pal_vbs_packed_obj* obj; /* a packed file, or NULL for a host file */
+            int64_t host_id;      /* host file: the host's id (allowed files), else -1 */
+            uint8_t* data;        /* trusted host file: its verified bytes in enclave memory */
+            uint64_t size;        /* ... and their number */
+            char* path;           /* host file: its path */
         } file;
 
         struct {
             char* path;      /* normalized absolute path of the directory, no trailing '/' */
             uint64_t cursor; /* index of the next packed entry to look at */
+            bool host;       /* also list the host directory (an allowed path) */
+            uint64_t host_cursor;
+            bool host_done;
         } dir;
+
+        struct {
+            int64_t host_id;
+            enum pal_socket_domain domain;
+            enum pal_socket_type type;
+            struct socket_ops* ops;
+            uint64_t linger;
+            size_t recv_buf_size;
+            size_t send_buf_size;
+            uint64_t recvtimeout_us;
+            uint64_t sendtimeout_us;
+            bool is_nonblocking;
+            bool reuseaddr;
+            bool reuseport;
+            bool broadcast;
+            bool keepalive;
+            bool tcp_cork;
+            uint32_t tcp_user_timeout;
+            uint32_t tcp_keepidle;
+            uint32_t tcp_keepintvl;
+            uint8_t tcp_keepcnt;
+            bool tcp_nodelay;
+            bool ipv6_v6only;
+        } sock;
 
         struct {
             bool writable;

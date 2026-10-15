@@ -239,6 +239,32 @@ EXCEPTION_DISPOSITION pal_vbs_packed_exception_handler(PEXCEPTION_RECORD rec, vo
     return ExceptionContinueExecution;
 }
 
+/* ---- host requests (files, sockets) ---- */
+
+/* Copies the request into the calling thread's I/O buffer in host memory, lets the host serve it,
+ * and copies the result and at most out_cap output bytes back (the host's lengths are clamped). */
+static int64_t svc_host_call(struct pal_vbs_hostreq* req, void* out, uint64_t out_cap) {
+    if (req->in_len > PAL_VBS_HOST_DATA_MAX)
+        return -22; /* -EINVAL */
+    uint8_t* hb = pal_vbs_w_get_iobuf();
+    if (!hb)
+        return -5; /* -EIO: no channel to the host for this thread */
+    EnclaveCopyOutOfEnclave(hb, req, (SIZE_T)(sizeof(*req) + req->in_len));
+    pal_vbs_w_ocall(PAL_VBS_OCALL_HOST, (uint64_t)(uintptr_t)hb, 0, 0);
+    struct pal_vbs_hostreq h;
+    EnclaveCopyIntoEnclave(&h, hb, sizeof(h));
+    uint64_t n = h.out_len;
+    if (n > out_cap)
+        n = out_cap;
+    if (n > PAL_VBS_HOST_DATA_MAX)
+        n = PAL_VBS_HOST_DATA_MAX;
+    if (n)
+        EnclaveCopyIntoEnclave(out, hb + sizeof(h), (SIZE_T)n);
+    req->out_len = n;
+    req->result = h.result;
+    return h.result;
+}
+
 /* ---- threads ---- */
 
 /*
@@ -341,7 +367,7 @@ void* CALLBACK E_ThreadStart(void* param) {
     }
     if (!entry)
         return (void*)(intptr_t)-2; /* not a request of this enclave */
-    if (pal_vbs_w_register_thread(&host->ocall_args, host->conbuf) < 0)
+    if (pal_vbs_w_register_thread(&host->ocall_args, host->conbuf, host->iobuf) < 0)
         return (void*)(intptr_t)-3;
 
     struct thread_exit_state st;
@@ -431,6 +457,7 @@ int64_t pal_vbs_boot(const struct pal_vbs_shared* shared) {
     g_svc.thread_exit   = (void*)svc_thread_exit;
     g_svc.wait          = (void*)svc_wait;
     g_svc.wake          = (void*)svc_wake;
+    g_svc.host_call     = (void*)svc_host_call;
     g_first_teb         = (uint64_t)(uintptr_t)NtCurrentTeb();
 
     g_pal_exception_entry = pal_vbs_packed_sym(&pal, "pal_vbs_exception");
