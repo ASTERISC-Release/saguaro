@@ -614,6 +614,8 @@ def jinja_env():
         'sysroot': os.environ.get('GRAMINE_VBS_SYSROOT',       # the vbs glibc
                                   os.path.join(ROOT, 'build-vbs-glibc')),
         'python': os.path.join(ROOT, 'build-vbs-python'),      # scripts/vbs/build-python.sh
+        # the dynamic loader of the vbs glibc (in /usr/lib of the sysroot and of the enclave)
+        'ldso': 'ld-linux-x86-64.so.2' if ARCH == 'x86_64' else 'ld-linux-aarch64.so.1',
     }
     return env
 

@@ -26,7 +26,7 @@ vbs.max_threads = 8
 
 vbs.packed_files = [
   { path = "/lighttpd", uri = "file:vbs-build/root/lighttpd", exclude = [ "*.la", "share/" ] },
-{% for lib in ["ld-linux-aarch64.so.1", "libc.so.6", "libm.so.6"] %}
+{% for lib in [vbs.ldso, "libc.so.6", "libm.so.6"] %}
   { path = "{{ arch_libdir }}/{{ lib }}", uri = "file:{{ vbs.sysroot }}/usr/lib/{{ lib }}" },
 {% endfor %}
 ]
