@@ -127,8 +127,8 @@ rows: ``direct`` with graphics was measured on Intel and AMD GPUs (x86_64) and o
 with the proprietary driver (AArch64), at 76 to 100 % of native speed for the games tried;
 ``vbs`` runs on Windows 11 on ARM64 with VBS enabled and needs the Windows-side tools described in
 `Documentation/vbs.rst <Documentation/vbs.rst>`__. The ``tdx`` and ``sgx`` rows are inherited from
-gramine-tdx and have not been run on TDX or SGX hardware here; as of 2026-10-15 the ``tdx`` PAL does
-not build (`Documentation/quickstart/tdx-sgx.rst <Documentation/quickstart/tdx-sgx.rst>`__).
+gramine-tdx and have not been run on TDX or SGX hardware here; the ``tdx`` PAL is compiled in CI
+(build only, see `Documentation/quickstart/tdx-sgx.rst <Documentation/quickstart/tdx-sgx.rst>`__).
 
 Installation
 ============

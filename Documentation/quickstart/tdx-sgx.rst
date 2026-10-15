@@ -36,10 +36,15 @@ Needs an Intel CPU and host kernel with TDX, a QEMU with TDX support and the TD-
 described by the upstream gramine-tdx project. The build is ``scripts/install.sh --vm --tdx``; the
 launcher is ``gramine-tdx`` (the TDX variant of ``gramine-vm``, ``tools/gramine-vm.in``).
 
-Known issue (2026-10-15): the ``tdx`` PAL does not build at ``9e28ea81``
+The install step links the PAL with TD-shim: it runs ``cargo run -p td-shim-tools`` in
+``$HOME/td-shim``, so that checkout (built as upstream gramine-tdx describes) must exist, or the
+install stops there after everything has compiled.
+
+Fixed issue (2026-10-15): until the ``dev-tdx-build`` fix the ``tdx`` PAL did not compile
 (``pal/src/host/vm-common/pal_common_sockets.c``: ``invalid application of 'sizeof' to incomplete
-type 'struct udp_rx_ring'``): the network code shared by the vm PALs uses a structure that only
-the ``vm`` PAL's host header defines.
+type 'struct udp_rx_ring'``): the network code shared by the vm PALs used a structure that only the
+``vm`` PAL's host header defined. The structure is now in the shared ``vm-common`` header, and the
+``tdx-build`` job of ``direct-x86_64.yml`` compiles the ``tdx`` PAL on every manual run.
 
 Verified
 --------
@@ -52,4 +57,9 @@ signed ``helloworld.manifest.sgx`` and ``helloworld.sig``; ``gramine-sgx hellowo
 ``Cannot open SGX driver device``, as expected without SGX. ``scripts/install.sh --tdx`` and
 ``--vm --tdx`` failed with the build error above.
 
-Not verified: running anything under SGX or TDX, attestation, and the TDX QEMU and firmware.
+2026-10-15, after the fix (same container, no TDX): ``scripts/install.sh --tdx`` and ``--vm --tdx``
+compile everything, including the ``tdx`` PAL (``pal/src/host/tdx/pal``), and stop at the TD-shim
+link step of the install (no ``$HOME/td-shim`` here).
+
+Not verified: running anything under SGX or TDX, attestation, the TD-shim link step, and the TDX
+QEMU and firmware.

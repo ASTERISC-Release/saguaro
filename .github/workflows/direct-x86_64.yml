@@ -14,6 +14,11 @@ on:
         description: "test/test-direct.sh suites (default: PAL and LibOS regression and the python example; see test/test-direct.sh --list for the other application suites)"
         required: false
         default: "pal libos python"
+      tdx_build:
+        description: "Also compile the TDX PAL (build only: it cannot run without TDX hardware, and the td-shim link step of the install is skipped)"
+        type: boolean
+        required: false
+        default: true
 
 permissions:
   contents: read
@@ -64,3 +69,24 @@ jobs:
             test-logs
             /tmp/rewrite-stress-fail
           if-no-files-found: ignore
+
+  tdx-build:
+    # The TDX PAL shares vm-common with the vm PAL, so a vm-only change can break it without any
+    # test noticing; this job only compiles it (meson + ninja, no install: the install links the
+    # PAL with td-shim, which is not on the runner).
+    name: TDX PAL build (x86_64, build only)
+    if: ${{ inputs.tdx_build }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: scripts/dependencies.sh --build-only
+
+      - name: Build the TDX PAL
+        run: |
+          meson setup build-tdx -Dtdx=enabled -Ddirect=enabled -Dsgx=disabled -Dvm=disabled \
+              -Dlibc=none -Dtests=disabled -Dbuildtype=release
+          ninja -C build-tdx
+          test -x build-tdx/pal/src/host/tdx/pal
