@@ -67,10 +67,13 @@ long libos_syscall_dup(unsigned int fd) {
             return (long)comm_ret;
         }
 
-        /* Create a new handle and mark it the same as the old handle */
+        /* Create a new handle and mark it the same as the old handle. A stale TYPE_HOST handle at
+         * that slot (its host fd closed behind the LibOS's back) is dropped first. */
         struct libos_handle* hdl_dup = get_new_handle();
         hdl_dup->type = hdl->type; 
-        int ret = set_new_fd_handle_by_fd(comm_ret, hdl_dup, 0, NULL);
+        int ret = graphics_drop_stale_host_handle((int)comm_ret);
+        if (ret == 0)
+            ret = set_new_fd_handle_by_fd(comm_ret, hdl_dup, 0, NULL);
         if (ret < 0) {
             log_always("Failed to set new fd handle for dup: %d", ret);
             put_handle(hdl_dup);

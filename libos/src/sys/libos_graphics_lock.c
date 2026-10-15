@@ -145,8 +145,12 @@ long libos_syscall_acquire_libos_lock(void) {
     int index = get_cur_tid() % NUM_COMM_PAGES;
     ensure_lock_ready(&comm_locks[index]);
     lock(&comm_locks[index]);
-    while (__atomic_exchange_n(&g_slot_busy[index], 1, __ATOMIC_ACQUIRE))
+    /* The VM PAL schedules cooperatively: yield, or the slot's holder may never run again on
+     * this vCPU (seen with four Mesa shader-cache threads and one vCPU). */
+    while (__atomic_exchange_n(&g_slot_busy[index], 1, __ATOMIC_ACQUIRE)) {
         CPU_RELAX();
+        PalThreadYieldExecution();
+    }
     g_slot_queued_holder[index] = true;
     return index * sizeof(comm_page_t);
 }
