@@ -1,0 +1,58 @@
+loader.entrypoint = "file:{{ gramine.libos }}"
+# the generic manifest plus host eventfds: a passed eventfd must be one the host holds
+sys.insecure__allow_eventfd = true
+
+libos.entrypoint = "{{ entrypoint }}"
+
+loader.env.LD_LIBRARY_PATH = "/lib:{{ arch_libdir }}:/usr/{{ arch_libdir }}"
+loader.insecure__use_cmdline_argv = true
+
+{% if env.get('REWRITE') %}sys.rewrite_syscalls = {{ env.get('REWRITE') }}{% endif %}
+
+# GRAMINE_VM_MULTIPROCESS=1 turns on the VM PAL's experimental processes (x86_64 gramine-vm; see
+# Documentation/devel/vm-multiproc/). Off by default. gramine-test keeps up-to-date manifests, so
+# change it with `gramine-test build --force`.
+{% if env.get('GRAMINE_VM_MULTIPROCESS') == '1' %}sys.experimental__multiprocess = true{% endif %}
+
+# for flock_lock test
+sys.experimental__enable_flock = true
+
+fs.mounts = [
+  { path = "/lib", uri = "file:{{ gramine.runtimedir(libc) }}" },
+  { path = "/{{ entrypoint }}", uri = "file:{{ binary_dir }}/{{ entrypoint }}" },
+  { path = "/exec_victim", uri = "file:{{ binary_dir }}/exec_victim" },
+  { path = "{{ arch_libdir }}", uri = "file:{{ arch_libdir }}" },
+  { path = "/usr/{{ arch_libdir }}", uri = "file:/usr/{{ arch_libdir }}" },
+  { path = "/bin", uri = "file:/bin" },
+
+  { type = "tmpfs", path = "/mnt/tmpfs" },
+  { type = "encrypted", path = "/tmp_enc", uri = "file:tmp_enc", key_name = "my_custom_key" },
+  { type = "encrypted", path = "/tmp_enc/mrenclaves", uri = "file:tmp_enc/mrenclaves", key_name = "_sgx_mrenclave" },
+  { type = "encrypted", path = "/tmp_enc/mrsigners", uri = "file:tmp_enc/mrsigners", key_name = "_sgx_mrsigner" },
+]
+
+sgx.max_threads = {{ '1' if env.get('EDMM', '0') == '1' else '16' }}
+sgx.debug = true
+sgx.edmm_enable = {{ 'true' if env.get('EDMM', '0') == '1' else 'false' }}
+
+sgx.allowed_files = [
+  "file:tmp/",
+  "file:root",     # for getdents test
+  "file:testfile", # for mmap_file test
+  "file:scripts/", # for exec_script test
+]
+
+sgx.trusted_files = [
+  "file:{{ gramine.libos }}",
+  "file:{{ gramine.runtimedir(libc) }}/",
+  "file:{{ arch_libdir }}/libgcc_s.so.1",
+  "file:/usr{{ arch_libdir }}/libstdc++.so.6",
+  "file:{{ binary_dir }}/{{ entrypoint }}",
+  "file:{{ binary_dir }}/exec_victim",
+  "file:/bin/sh",
+  "file:/bin/sleep",
+]
+
+# See the `keys.c` test.
+fs.insecure__keys.default = "ffeeddccbbaa99887766554433221100"
+fs.insecure__keys.my_custom_key = "00112233445566778899aabbccddeeff"

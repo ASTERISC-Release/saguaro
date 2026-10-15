@@ -1251,12 +1251,26 @@ noreturn void execute_elf_object(struct link_map* exec_map, void* argp, elf_auxv
     auxp[12].a_type     = AT_EGID;
     auxp[12].a_un.a_val = cur_thread->egid;
 
-    auxp[13].a_type     = AT_NULL;
-    auxp[13].a_un.a_val = 0;
+#ifdef __aarch64__
+    /* CPU feature words from the PAL, already masked to what the PAL supports
+     * (Documentation/devel/aarch64/hwcap/PLAN.md); without them glibc, libgcc's outline atomics,
+     * mbedtls and OpenSSL see no AES/SHA/PMULL/CRC32/LSE and take their portable paths */
+    static_assert(REQUIRED_ELF_AUXV >= 16, "not enough space on stack for auxv");
+    const struct pal_cpu_info* cpu_info = &g_pal_public_state->cpu_info;
+    auxp[13].a_type     = AT_HWCAP;
+    auxp[13].a_un.a_val = cpu_info->cpu_hwcap;
+    auxp[14].a_type     = AT_HWCAP2;
+    auxp[14].a_un.a_val = cpu_info->cpu_hwcap2;
+    const size_t auxp_null = 15;
+#else
+    const size_t auxp_null = 13;
+#endif
+    auxp[auxp_null].a_type     = AT_NULL;
+    auxp[auxp_null].a_un.a_val = 0;
 
     /* populate extra memory space for aux vector data */
     static_assert(REQUIRED_ELF_AUXV_SPACE >= 16, "not enough space on stack for auxv");
-    elf_addr_t auxp_extra = (elf_addr_t)&auxp[14];
+    elf_addr_t auxp_extra = (elf_addr_t)&auxp[auxp_null + 1];
 
     elf_addr_t random = auxp_extra; /* random 16B for AT_RANDOM */
     ret = PalRandomBitsRead((void*)random, 16);

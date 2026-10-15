@@ -12,6 +12,7 @@ reason = "The VM PAL is single-process (no PalProcessCreate / IPC): the test nee
 tests = [
   "TC_01_Bootstrap::test_010_console",
   "TC_01_Bootstrap::test_202_fork_and_exec",
+  "TC_01_Bootstrap::test_2025_fork_reservation",
   "TC_01_Bootstrap::test_2045_fork_pacret",
   "TC_01_Bootstrap::test_204_vfork_and_exec",
   "TC_01_Bootstrap::test_205_exec_fork",
@@ -47,6 +48,7 @@ tests = [
   "TC_80_Socket::test_092_pipe_ocloexec",
   "TC_80_Socket::test_095_mkfifo",
   "TC_80_Socket::test_100_socket_unix",
+  "TC_80_Socket::test_101_socket_unix_fdpass",
   "TC_80_Socket::test_200_socket_udp",
   "TC_80_Socket::test_300_socket_tcp_msg_peek",
   "TC_80_Socket::test_301_socket_tcp_ancillary",

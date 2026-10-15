@@ -11,7 +11,9 @@
 
 #include "kernel_thread.h"
 
-#define PIPE_BUF_SIZE PAGE_SIZE
+#ifndef PIPE_BUF_SIZE
+#define PIPE_BUF_SIZE PAGE_SIZE   /* also in pal_common_structs.h */
+#endif
 
 struct pal_tcb_vm {
     PAL_TCB common;
@@ -93,6 +95,12 @@ int64_t pal_common_pipe_read(struct pal_handle* handle, uint64_t offset, uint64_
                              void* buffer);
 int64_t pal_common_pipe_write(struct pal_handle* handle, uint64_t offset, uint64_t len,
                               const void* buffer);
+int64_t pal_common_pipe_writehandles(struct pal_handle* handle, const void* buffer, size_t len,
+                                     struct pal_handle** cargo, size_t cargo_count,
+                                     const void* meta, size_t meta_size);
+int64_t pal_common_pipe_readhandles(struct pal_handle* handle, void* buffer, size_t len,
+                                    struct pal_handle** out_cargo, size_t* cargo_count,
+                                    void* meta, size_t* meta_size, bool* out_truncated);
 void pal_common_pipe_destroy(struct pal_handle* handle);
 int pal_common_pipe_delete(struct pal_handle* handle, enum pal_delete_mode delete_mode);
 int pal_common_pipe_attrquerybyhdl(struct pal_handle* handle, PAL_STREAM_ATTR* attr);

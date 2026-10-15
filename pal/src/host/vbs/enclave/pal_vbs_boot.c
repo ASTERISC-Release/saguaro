@@ -314,6 +314,58 @@ static int64_t svc_host_call(struct pal_vbs_hostreq* req, void* out, uint64_t ou
     return h.result;
 }
 
+/* The same with scatter/gather: the input goes straight from the caller's buffers into the host
+ * buffer and the output straight back, without a staging copy in the enclave. */
+static int64_t svc_host_call_v(struct pal_vbs_hostcall_v* c) {
+    struct pal_vbs_hostreq* req = c->req;
+    uint8_t* hb = pal_vbs_w_get_iobuf();
+    if (!hb)
+        return -5; /* -EIO */
+    if (c->in_pre_len > PAL_VBS_HOST_DATA_MAX || c->out_pre_cap > PAL_VBS_HOST_DATA_MAX)
+        return -22; /* -EINVAL */
+    uint64_t pos = 0;
+    uint8_t* data = hb + sizeof(*req);
+    if (c->in_pre_len) {
+        EnclaveCopyOutOfEnclave(data, c->in_pre, (SIZE_T)c->in_pre_len);
+        pos = c->in_pre_len;
+    }
+    for (uint64_t i = 0; i < c->in_niov && pos < PAL_VBS_HOST_DATA_MAX; i++) {
+        uint64_t n = c->in_iov[i].len;
+        if (n > PAL_VBS_HOST_DATA_MAX - pos)
+            n = PAL_VBS_HOST_DATA_MAX - pos;
+        if (n)
+            EnclaveCopyOutOfEnclave(data + pos, (const void*)(uintptr_t)c->in_iov[i].base,
+                                    (SIZE_T)n);
+        pos += n;
+    }
+    req->in_len = pos;
+    EnclaveCopyOutOfEnclave(hb, req, sizeof(*req));
+    pal_vbs_w_ocall(PAL_VBS_OCALL_HOST, (uint64_t)(uintptr_t)hb, 0, 0);
+    struct pal_vbs_hostreq h;
+    EnclaveCopyIntoEnclave(&h, hb, sizeof(h));
+    uint64_t n = h.out_len; /* the host's length: clamped to the buffer */
+    if (n > PAL_VBS_HOST_DATA_MAX)
+        n = PAL_VBS_HOST_DATA_MAX;
+    uint64_t done = 0;
+    uint64_t k = n < c->out_pre_cap ? n : c->out_pre_cap;
+    if (k) {
+        EnclaveCopyIntoEnclave(c->out_pre, data, (SIZE_T)k);
+        done = k;
+    }
+    for (uint64_t i = 0; i < c->out_niov && done < n; i++) {
+        k = c->out_iov[i].len;
+        if (k > n - done)
+            k = n - done;
+        if (k)
+            EnclaveCopyIntoEnclave((void*)(uintptr_t)c->out_iov[i].base, data + done, (SIZE_T)k);
+        done += k;
+    }
+    c->out_len = done;
+    req->out_len = done;
+    req->result = h.result;
+    return h.result;
+}
+
 /* ---- threads ---- */
 
 /*
@@ -552,7 +604,12 @@ int64_t pal_vbs_boot(const struct pal_vbs_shared* shared) {
     g_svc.wait          = (void*)svc_wait;
     g_svc.wake          = (void*)svc_wake;
     g_svc.host_call     = (void*)svc_host_call;
+    g_svc.host_call_v   = (void*)svc_host_call_v;
     g_svc.attest        = (void*)svc_attest;
+    /* the enclave's own view of the CPU features (it differs from the host's: phase 0 (d)) */
+    for (uint32_t n = 0; n < 128; n++)
+        if (IsProcessorFeaturePresent(n))
+            g_svc.arm_pf[n / 64] |= 1ull << (n % 64);
     /* host arguments: already copied into the enclave with the shared block (E_PalMain); bounded
      * and NUL-terminated here */
     static char args[PAL_VBS_ARGS_SIZE + 1];

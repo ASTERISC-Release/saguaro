@@ -67,6 +67,7 @@ else
         'pal_futex.c',
         'pal_shm.c',
         'pal_process.c',
+        'arch/aarch64/pal_hwcap.c',
         'arch/aarch64/pal_main.c',
         'arch/aarch64/vm_bootloader.S',
         'arch/aarch64/vm_callbacks.c',

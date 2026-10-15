@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
+# The probes of the Proton feasibility study (test/proton-vm/probes.c) under gramine-direct and
+# gramine-vm, after test/vm-multiproc/misc-fork.manifest.template: the experimental multi-process
+# key of the VM PAL, the host-backed eventfd (shared with children), a host /tmp for memfd and shm.
+libos.entrypoint = "{{ entry }}"
+loader.log_level = "{{ log_level }}"
+loader.env.LD_LIBRARY_PATH = "/lib:{{ arch_libdir }}:/usr{{ arch_libdir }}"
+loader.env.PATH = "/usr/bin:/bin"
+loader.insecure__use_cmdline_argv = true
+loader.env.PROBES_TRAP = { passthrough = true }
+sys.experimental__multiprocess = true
+sys.insecure__allow_eventfd = true
+sys.stack.size = "8M"
+fs.mounts = [
+  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "{{ arch_libdir }}", uri = "file:{{ arch_libdir }}" },
+  { path = "/usr", uri = "file:/usr" },
+  { path = "/bin", uri = "file:/bin" },
+  { path = "/probe", uri = "file:{{ probedir }}" },
+  { path = "/tmp", uri = "file:{{ probedir }}/tmp" },
+]

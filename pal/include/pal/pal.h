@@ -480,6 +480,54 @@ int PalStreamRead(PAL_HANDLE handle, uint64_t offset, size_t* count, void* buffe
  */
 int PalStreamWrite(PAL_HANDLE handle, uint64_t offset, size_t* count, void* buffer);
 
+/*!
+ * \brief Write to a connected pipe stream with PAL handles attached to the data.
+ *
+ * The handles travel with the bytes as `SCM_RIGHTS` fds do on a Unix socket: the reader that
+ * receives the first byte of this write gets them (#PalStreamReadWithHandles). The caller keeps its
+ * own handles; the receiver gets its own references to the same objects (the direct PAL duplicates
+ * the host fds, the VM PAL shares the handle objects). Only pipe streams support this.
+ *
+ * \param      handle       A connected pipe (`pipe:` or `pipecli:`).
+ * \param      buffer       The data.
+ * \param[in,out] count     In: the size of \p buffer; out: the bytes written.
+ * \param      cargo        The handles to attach.
+ * \param      cargo_count  Their number (at most #PAL_STREAM_MAX_HANDLES).
+ * \param      meta         An opaque blob delivered to the receiver with the handles (may be NULL).
+ * \param      meta_size    Its size.
+ *
+ * \returns 0 on success, negative error code on failure (`-PAL_ERROR_NOTIMPLEMENTED` on PALs
+ *          without the feature).
+ */
+int PalStreamWriteWithHandles(PAL_HANDLE handle, const void* buffer, size_t* count,
+                              PAL_HANDLE* cargo, size_t cargo_count, const void* meta,
+                              size_t meta_size);
+
+/*!
+ * \brief Read from a connected pipe stream and receive the handles attached to the data.
+ *
+ * A read stops before data that has handles attached, and a read that starts at such data returns
+ * the handles and the blob sent with them. Handles beyond \p cargo_count and blob bytes beyond
+ * \p meta_size are dropped and \p out_truncated is set.
+ *
+ * \param      handle         A connected pipe.
+ * \param      buffer         The buffer for the data.
+ * \param[in,out] count       In: the size of \p buffer; out: the bytes read.
+ * \param[out] out_cargo      The received handles.
+ * \param[in,out] cargo_count In: the capacity of \p out_cargo; out: the handles received.
+ * \param[out] meta           The buffer for the blob.
+ * \param[in,out] meta_size   In: its capacity; out: the blob's size (0 when no handles came).
+ * \param[out] out_truncated  Set when handles or blob bytes were dropped.
+ *
+ * \returns 0 on success, negative error code on failure.
+ */
+int PalStreamReadWithHandles(PAL_HANDLE handle, void* buffer, size_t* count, PAL_HANDLE* out_cargo,
+                             size_t* cargo_count, void* meta, size_t* meta_size,
+                             bool* out_truncated);
+
+/* the most handles one #PalStreamWriteWithHandles may attach (Linux's SCM_MAX_FD) */
+#define PAL_STREAM_MAX_HANDLES 253
+
 enum pal_delete_mode {
     PAL_DELETE_ALL,  /*!< delete the whole resource / shut down both directions */
     PAL_DELETE_READ,  /*!< shut down the read side only */

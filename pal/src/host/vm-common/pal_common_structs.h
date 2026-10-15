@@ -56,18 +56,45 @@ struct pal_handle_inner_dir {
     bool endofstream;
 };
 
-/* sub-object of pal_handle_inner_pipe: two pipe objects share one pipe_buf object */
+#ifndef PIPE_BUF_SIZE
+#define PIPE_BUF_SIZE PAGE_SIZE   /* also in pal_common.h */
+#endif
+
+/* Handles attached to the data at a position of a ring (PalStreamWriteWithHandles): the reader
+ * that reaches `pos` gets them, as SCM_RIGHTS fds come with their bytes. `cargo` and `meta` are
+ * PAL memory, which every process maps. */
+#define PIPE_RING_HANDLE_SLOTS 8
+struct pal_pipe_ring_handles {
+    uint64_t pos;
+    struct pal_handle** cargo;
+    size_t count;
+    void* meta;
+    size_t meta_size;
+};
+
+/* One direction of a connection: a ring written by one end and read by the other. */
+struct pal_pipe_ring {
+    bool       open_write;   /* the writing end is open; else readers get end-of-stream after draining */
+    bool       open_read;    /* the reading end is open; else writes fail */
+    uint64_t   write_pos;    /* must be always used as buf[write_pos % PIPE_BUF_SIZE] */
+    uint64_t   read_pos;     /* must be always used as buf[read_pos % PIPE_BUF_SIZE] */
+    int        writer_futex; /* waited on by a writer of a full ring */
+    int        reader_futex; /* waited on by a reader of an empty ring */
+    uint32_t   hq_head;      /* handle queue, in position order; hq_tail - hq_head entries */
+    uint32_t   hq_tail;
+    struct pal_pipe_ring_handles hq[PIPE_RING_HANDLE_SLOTS];
+    char       buf[PIPE_BUF_SIZE];
+};
+
+/* sub-object of pal_handle_inner_pipe: two pipe objects (the two ends of a connection) share one
+ * pipe_buf object, which holds one ring per direction (a connection is bidirectional, as a Unix
+ * socket; one-way `pipe()`s use one of the rings): ring[0] is written by the connecting end
+ * (PAL_TYPE_PIPE) and read by the accepted end (PAL_TYPE_PIPECLI), ring[1] the other way round */
 struct pal_handle_inner_pipe_buf {
     spinlock_t lock;
     int        refcount;
-    bool       writable;
-    bool       readable;
-    uint64_t   write_pos;    /* must be always used as buf[write_pos % PIPE_BUF_SIZE] */
-    uint64_t   read_pos;     /* must be always used as buf[read_pos % PIPE_BUF_SIZE] */
-    int        writer_futex;
-    int        reader_futex;
     bool       poll_waiting; /* for PalStreamsWaitEvents; protected by lock */
-    char       buf[];        /* ring buffer of size PIPE_BUF_SIZE */
+    struct pal_pipe_ring ring[2];
 };
 
 struct pal_handle_inner_pipe {

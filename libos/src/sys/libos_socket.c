@@ -995,7 +995,7 @@ ssize_t do_recvmsg(struct libos_handle* handle, struct iovec* iov, size_t iov_le
         unlock(&sock->lock);
         size_t size = 0;
         ret = sock->ops->recv(handle, iov, iov_len, msg_control, msg_controllen_ptr, &size, addr,
-                              addrlen_ptr, force_nonblocking);
+                              addrlen_ptr, force_nonblocking, !!(*flags & MSG_CMSG_CLOEXEC));
         if (ret < 0) {
             return ret;
         }
@@ -1016,9 +1016,10 @@ ssize_t do_recvmsg(struct libos_handle* handle, struct iovec* iov, size_t iov_le
         return ret;
     }
     unlock(&sock->lock);
-    if (!WITHIN_MASK(*flags, MSG_PEEK | MSG_DONTWAIT | MSG_TRUNC)) {
+    if (!WITHIN_MASK(*flags, MSG_PEEK | MSG_DONTWAIT | MSG_TRUNC | MSG_CMSG_CLOEXEC)) {
         return -EOPNOTSUPP;
     }
+    bool cmsg_cloexec = !!(*flags & MSG_CMSG_CLOEXEC);
     
     /* Note this only indicates whether this operation was requested to be nonblocking. If it's
      * `false`, but the handle is in nonblocking mode, this read won't block. */
@@ -1110,7 +1111,7 @@ ssize_t do_recvmsg(struct libos_handle* handle, struct iovec* iov, size_t iov_le
 
             ret = sock->ops->recv(handle, &tmp_iov, 1, /*msg_control=*/NULL,
                                   /*msg_controllen_ptr=*/NULL, &tmp_iov.iov_len, /*addr=*/NULL,
-                                  /*addrlen_ptr=*/NULL, force_nonblocking);
+                                  /*addrlen_ptr=*/NULL, force_nonblocking, cmsg_cloexec);
             if (ret == -EAGAIN && sock->peek.data_size) {
                 /* We will just return what we have already. */
                 ret = 0;
@@ -1154,7 +1155,7 @@ ssize_t do_recvmsg(struct libos_handle* handle, struct iovec* iov, size_t iov_le
 
     size_t size = 0;
     ret = sock->ops->recv(handle, iov, iov_len, msg_control, msg_controllen_ptr, &size, addr,
-                          addrlen_ptr, force_nonblocking);
+                          addrlen_ptr, force_nonblocking, cmsg_cloexec);
     maybe_epoll_et_trigger(handle, ret, /*in=*/true, !ret ? size < total_size : false);
     if (!ret) {
         ret = *flags & MSG_TRUNC ? size : MIN(size, total_size);

@@ -3,7 +3,10 @@
 
 /* Waiting on streams in the vbs PAL proper: pipes (in-memory), the console, files, and host
  * sockets. Pipes wake a waiter through the stream-change counter g_vbs_stream_gen; host sockets
- * are polled on the host (in slices of 10 ms when pipes are waited on too). */
+ * are polled on the host. A wait on both (the LibOS's epoll always adds the thread's wake-up pipe)
+ * polls the host with a waker (PAL_VBS_HOST_WAKER): a change of an in-enclave stream wakes every
+ * such poll through its waker, so the poll can wait for the whole timeout. Without a waker (none
+ * free or the host refused one) it polls in slices of 10 ms as before. */
 
 #include "api.h"
 #include "pal.h"
@@ -22,9 +25,51 @@
 
 uint32_t g_vbs_stream_gen;
 
+/* Wakers of the host, lent to the waits on sockets and in-enclave streams at once. `busy` is set
+ * (sequentially consistent) before the waiter looks at its in-enclave streams, and a writer
+ * changes a stream, then counts g_vbs_stream_gen up and looks at `busy` (also sequentially
+ * consistent): either the waiter sees the change or the writer sees the waiter and wakes it. A
+ * waker stays with the pool; a wake left over from an earlier user only ends a poll early. */
+#define MAX_WAKERS 64
+static struct {
+    int64_t id;    /* host id + 1; 0: not created yet */
+    uint32_t busy;
+} g_wakers[MAX_WAKERS];
+
+static int waker_acquire(void) {
+    for (int i = 0; i < MAX_WAKERS; i++) {
+        uint32_t zero = 0;
+        if (!__atomic_compare_exchange_n(&g_wakers[i].busy, &zero, 1, false, __ATOMIC_SEQ_CST,
+                                         __ATOMIC_RELAXED))
+            continue;
+        if (!__atomic_load_n(&g_wakers[i].id, __ATOMIC_SEQ_CST)) {
+            int64_t id = vbs_hostcall(PAL_VBS_HOST_WAKER, 0, 0, 0, 0, NULL, 0, NULL, 0, NULL);
+            if (id < 0) {
+                __atomic_store_n(&g_wakers[i].busy, 0, __ATOMIC_SEQ_CST);
+                return -1;
+            }
+            __atomic_store_n(&g_wakers[i].id, id + 1, __ATOMIC_SEQ_CST);
+        }
+        return i;
+    }
+    return -1;
+}
+
+static void waker_release(int i) {
+    if (i >= 0)
+        __atomic_store_n(&g_wakers[i].busy, 0, __ATOMIC_SEQ_CST);
+}
+
 void vbs_streams_changed(void) {
-    __atomic_add_fetch(&g_vbs_stream_gen, 1, __ATOMIC_ACQ_REL);
+    __atomic_add_fetch(&g_vbs_stream_gen, 1, __ATOMIC_SEQ_CST);
     vbs_wake(&g_vbs_stream_gen, /*all=*/true);
+    for (int i = 0; i < MAX_WAKERS; i++) {
+        if (!__atomic_load_n(&g_wakers[i].busy, __ATOMIC_SEQ_CST))
+            continue;
+        int64_t id = __atomic_load_n(&g_wakers[i].id, __ATOMIC_SEQ_CST);
+        if (id > 0)
+            vbs_hostcall(PAL_VBS_HOST_WAKE, id - 1, 0, 0, 0, NULL, 0, NULL, 0, NULL);
+    }
 }
 
 static pal_wait_flags_t ready(PAL_HANDLE h) {
@@ -70,6 +115,8 @@ int _PalStreamsWaitEvents(size_t count, PAL_HANDLE* handle_array, pal_wait_flags
     }
 
     int ret;
+    int waker = (nsock && local) ? waker_acquire() : -1;
+    int64_t waker_id = waker >= 0 ? __atomic_load_n(&g_wakers[waker].id, __ATOMIC_SEQ_CST) : 0;
     uint64_t start = vbs_time_ns();
     while (1) {
         uint32_t gen = __atomic_load_n(&g_vbs_stream_gen, __ATOMIC_ACQUIRE);
@@ -101,11 +148,11 @@ int _PalStreamsWaitEvents(size_t count, PAL_HANDLE* handle_array, pal_wait_flags
 
         if (nsock) {
             int64_t ms = any ? 0 : (left_ns == UINT64_MAX ? 1000 : (int64_t)(left_ns / 1000000));
-            if (local && ms > MIXED_SLICE_MS)
+            if (local && waker < 0 && ms > MIXED_SLICE_MS)
                 ms = MIXED_SLICE_MS;
             size_t n = 0;
-            int64_t r = vbs_hostcall(PAL_VBS_HOST_POLL, nsock, ms, 0, 0, pf, nsock * sizeof(*pf),
-                                     pf, nsock * sizeof(*pf), &n);
+            int64_t r = vbs_hostcall(PAL_VBS_HOST_POLL, nsock, ms, waker_id, 0, pf,
+                                     nsock * sizeof(*pf), pf, nsock * sizeof(*pf), &n);
             if (r < 0) {
                 ret = unix_to_pal_error((int)r);
                 goto out;
@@ -142,6 +189,7 @@ int _PalStreamsWaitEvents(size_t count, PAL_HANDLE* handle_array, pal_wait_flags
             vbs_wait(&g_vbs_stream_gen, gen, left_ns); /* shorter waits poll (pal_events.c) */
     }
 out:
+    waker_release(waker);
     free(pf);
     free(pf_idx);
     return ret;

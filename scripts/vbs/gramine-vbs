@@ -25,6 +25,9 @@ Commands:
                                             missing, then ninja (scripts/vbs/build-runtime.sh)
   gramine-vbs net <wait|req|redis|bench> ...   a Winsock client on Windows (scripts/vbs/win/
                                             vbs-net.c, compiled there once with MSVC)
+  gramine-vbs tls-client PORT --verifier DIR.vbs ...   a TLS client on Windows that verifies the
+                                            server's attestation first (scripts/vbs/win/
+                                            vbs-tls-client.c; CI-Examples/vbs/tls-echo)
   gramine-vbs win <program> [args]          run a program on the Windows side (e.g. curl.exe)
   gramine-vbs setup-headers                 copy the Windows SDK and MSVC headers from Windows
 
@@ -546,10 +549,15 @@ def cmd_run(args):
 
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
+    # settings of the host process that are passed on from this environment (measurement)
+    envs = '; '.join(f'$env:{k} = {psq(os.environ[k])}'
+                     for k in ('GRAMINE_VBS_HOSTCALL_STATS', 'GRAMINE_VBS_TIMER_RES')
+                     if os.environ.get(k))
     rc, _ = ps(host, f'''
 Write-Output "[gramine-vbs-pid] $PID"
 Set-Location {psq(windir)}
 {mkdirs}
+{envs}
 & .\\pal_vbs_host.exe {psq(b.name + '.dll')} {int(args.threads)} boot {psq(root)} {app_args} 2>&1 |
     Where-Object {{ {'$true' if args.verbose else "$_ -notmatch '^\\[(vbs-w|host)\\]'"} }} |
     ForEach-Object {{ "$_" }}
@@ -734,6 +742,21 @@ def cmd_net(args):
     sys.exit(run_windows(host, exe, args.args))
 
 
+def cmd_tls_client(args):
+    """vbs-tls-client (scripts/vbs/win/vbs-tls-client.c) on Windows; `--verifier DIR.vbs` names a
+    build folder here and becomes the signed image in its Windows folder"""
+    host, exe = win_tool(args, 'vbs-tls-client')
+    argv = list(args.args)
+    for i, a in enumerate(argv[:-1]):
+        if a == '--verifier' and os.path.isdir(argv[i + 1]):
+            b = Build(argv[i + 1])
+            st = b.load()
+            if not st or not st.get('windows_dir'):
+                die(f'{argv[i + 1]} is not signed on Windows yet')
+            argv[i + 1] = st['windows_dir'] + '\\' + b.name + '.dll'
+    sys.exit(run_windows(host, exe, argv))
+
+
 def cmd_win(args):
     sys.exit(run_windows(windows_host(args), args.program, args.args))
 
@@ -854,6 +877,10 @@ def main():
     p = sub.add_parser('net')
     p.add_argument('args', nargs=argparse.REMAINDER, help='wait|req|redis|bench ...')
     common(p)
+    p = sub.add_parser('tls-client')
+    p.add_argument('args', nargs=argparse.REMAINDER,
+                   help='PORT --verifier DIR.vbs [checks] [action] (vbs-tls-client.c)')
+    common(p)
     p = sub.add_parser('win')
     p.add_argument('program')
     p.add_argument('args', nargs=argparse.REMAINDER)
@@ -868,7 +895,8 @@ def main():
     args = ap.parse_args(argv)
     {'build': cmd_build, 'sign': lambda a: cmd_sign(a), 'run': cmd_run, 'verify': cmd_verify,
      'setup-headers': cmd_setup_headers, 'stop': cmd_stop, 'manifest': cmd_manifest,
-     'runtime': cmd_runtime, 'net': cmd_net, 'win': cmd_win}[args.cmd](args)
+     'runtime': cmd_runtime, 'net': cmd_net, 'tls-client': cmd_tls_client,
+     'win': cmd_win}[args.cmd](args)
 
 
 if __name__ == '__main__':

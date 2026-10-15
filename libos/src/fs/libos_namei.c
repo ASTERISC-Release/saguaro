@@ -537,6 +537,12 @@ int open_namei(struct libos_handle* hdl, struct libos_dentry* start, const char*
         }
     }
 
+    if (dent->inode && dent->inode->type == S_IFSOCK) {
+        /* a named UNIX socket's node cannot be opened (Linux: ENXIO; EEXIST for O_CREAT|O_EXCL) */
+        ret = (flags & O_CREAT) && (flags & O_EXCL) ? -EEXIST : -ENXIO;
+        goto out;
+    }
+
     if (dent->inode && dent->inode->type == S_IFLNK) {
         /*
          * Can happen if user specified O_NOFOLLOW, or O_TRUNC | O_EXCL. Posix requires us to fail

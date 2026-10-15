@@ -77,3 +77,4 @@ built-debug
 /.game/
 # the vbs PAL build trees (Documentation/vbs.rst)
 /build-vbs*/
+.proton-vm/

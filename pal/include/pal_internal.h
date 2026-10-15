@@ -48,6 +48,13 @@ struct handle_ops {
     int64_t (*read)(PAL_HANDLE handle, uint64_t offset, uint64_t count, void* buffer);
     int64_t (*write)(PAL_HANDLE handle, uint64_t offset, uint64_t count, const void* buffer);
 
+    /* 'writehandles' and 'readhandles' are used by PalStreamWriteWithHandles and
+     * PalStreamReadWithHandles (pipes only; NULL where not supported). */
+    int64_t (*writehandles)(PAL_HANDLE handle, const void* buffer, size_t count, PAL_HANDLE* cargo,
+                            size_t cargo_count, const void* meta, size_t meta_size);
+    int64_t (*readhandles)(PAL_HANDLE handle, void* buffer, size_t count, PAL_HANDLE* out_cargo,
+                           size_t* cargo_count, void* meta, size_t* meta_size, bool* out_truncated);
+
     /* 'delete' is used by PalStreamDelete: for files and dirs it corresponds to unlinking, for
      * sockets it corresponds to shutting down a socket connection. */
     int (*delete)(PAL_HANDLE handle, enum pal_delete_mode delete_mode);
@@ -273,6 +280,11 @@ uint64_t _PalGetBogomips(void);
 #else
 double _PalGetBogomips(void);
 #endif
+#ifdef __aarch64__
+/* AT_HWCAP / AT_HWCAP2 words of the CPU as this host PAL sees it, before the allowlist of
+ * pal_hwcap.h is applied (pal/src/arch/aarch64/pal_cpuid.c); every aarch64 host PAL defines it */
+void _PalGetHwcaps(uint64_t* out_hwcap, uint64_t* out_hwcap2);
+#endif
 int _PalSegmentBaseGet(enum pal_segment_reg reg, uintptr_t* addr);
 int _PalSegmentBaseSet(enum pal_segment_reg reg, uintptr_t addr);
 int _PalCpuIdRetrieve(uint32_t leaf, uint32_t subleaf, uint32_t values[4]);
@@ -343,6 +355,9 @@ int pal_enable_shared_frame_slab_allocator(void);
 /* Records the PAL allocations of a starting child process, to free them when it exits. */
 void pal_startup_allocs_record(bool on);
 void pal_startup_allocs_free(void);
+/* Excludes an allocation from that list: one that joins state shared by all processes and so must
+ * outlive the child. */
+void pal_startup_allocs_forget(void* ptr);
 /* Drops one reference of a handle shared with another process; true if others still hold it. */
 bool vm_handle_release_share(PAL_HANDLE handle);
 /* Per-process record of the handles given to the LibOS, destroyed when the process exits. */

@@ -1,0 +1,3 @@
+#define ELF_START 0x120
+#define ELF_START_MS 0x130
+#define ELF_DATA_ADDR 0x10000

@@ -6,6 +6,7 @@
 #include "api.h"
 #include "pal.h"
 #include "pal_error.h"
+#include "pal_hwcap.h"
 #include "pal_internal.h"
 #include "pal_linux_error.h"
 #include "pal_vbs.h"
@@ -127,4 +128,42 @@ int _PalGetSpecialKey(const char* name, void* key, size_t* key_size) {
 
 double _PalGetBogomips(void) {
     return 0.0;
+}
+
+/* PF_ARM_* numbers of winnt.h (Windows SDK 10.0.26100) and the AT_HWCAP/AT_HWCAP2 bits each one
+ * stands for; the SVE/SME numbers are not mapped (masked anyway, pal_hwcap.h) */
+static const struct {
+    uint32_t pf;
+    uint64_t hwcap, hwcap2;
+} g_pf_to_hwcap[] = {
+    { 19 /* NEON */,         PAL_HWCAP_FP | PAL_HWCAP_ASIMD, 0 },
+    { 30 /* V8_CRYPTO */,    PAL_HWCAP_AES | PAL_HWCAP_PMULL | PAL_HWCAP_SHA1 | PAL_HWCAP_SHA2, 0 },
+    { 31 /* V8_CRC32 */,     PAL_HWCAP_CRC32, 0 },
+    { 34 /* V81_ATOMIC */,   PAL_HWCAP_ATOMICS, 0 },
+    { 43 /* V82_DP */,       PAL_HWCAP_ASIMDDP, 0 },
+    { 44 /* V83_JSCVT */,    PAL_HWCAP_JSCVT, 0 },
+    { 45 /* V83_LRCPC */,    PAL_HWCAP_LRCPC, 0 },
+    { 62 /* LSE2 */,         PAL_HWCAP_USCAT, 0 },
+    { 64 /* SHA3 */,         PAL_HWCAP_SHA3, 0 },
+    { 65 /* SHA512 */,       PAL_HWCAP_SHA512, 0 },
+    { 66 /* V82_I8MM */,     0, PAL_HWCAP2_I8MM },
+    { 67 /* V82_FP16 */,     PAL_HWCAP_FPHP | PAL_HWCAP_ASIMDHP, 0 },
+    { 68 /* V86_BF16 */,     0, PAL_HWCAP2_BF16 },
+};
+
+/* AT_HWCAP/AT_HWCAP2 from IsProcessorFeaturePresent() as W saw it inside the enclave (ID
+ * registers cannot be read here: phase 0 (d)); Documentation/devel/aarch64/hwcap/PLAN.md */
+void _PalGetHwcaps(uint64_t* out_hwcap, uint64_t* out_hwcap2) {
+    uint64_t hwcap = 0, hwcap2 = 0;
+    for (size_t i = 0; i < ARRAY_SIZE(g_pf_to_hwcap); i++) {
+        uint32_t pf = g_pf_to_hwcap[i].pf;
+        if (g_vbs->arm_pf[pf / 64] & (1ull << (pf % 64))) {
+            hwcap |= g_pf_to_hwcap[i].hwcap;
+            hwcap2 |= g_pf_to_hwcap[i].hwcap2;
+        }
+    }
+    log_debug("IsProcessorFeaturePresent in the enclave: 0x%lx 0x%lx", g_vbs->arm_pf[0],
+              g_vbs->arm_pf[1]);
+    *out_hwcap  = hwcap;
+    *out_hwcap2 = hwcap2;
 }

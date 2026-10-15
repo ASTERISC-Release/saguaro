@@ -16,6 +16,8 @@ PalStreamsWaitEvents
 PalStreamOpen
 PalStreamRead
 PalStreamWrite
+PalStreamWriteWithHandles
+PalStreamReadWithHandles
 PalStreamMap
 PalStreamSetLength
 PalStreamFlush

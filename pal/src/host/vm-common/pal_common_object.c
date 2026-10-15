@@ -65,36 +65,36 @@ static int check_pipe_handle(struct pal_handle* handle, pal_wait_flags_t events,
     pal_wait_flags_t revents = 0;
 
     spinlock_lock(&pipe_buf->lock);
+    /* this end reads one ring and writes the other (see pal_common_pipes.c) */
+    const struct pal_pipe_ring* rr = &pipe_buf->ring[handle->hdr.type == PAL_TYPE_PIPE ? 1 : 0];
+    const struct pal_pipe_ring* wr = &pipe_buf->ring[handle->hdr.type == PAL_TYPE_PIPE ? 0 : 1];
+    bool pending = rr->read_pos != rr->write_pos;
 
-#if defined(__x86_64__) || defined(__aarch64__)
-    /* With processes, the last message of an exiting peer (the LibOS sends its exit notice just
-     * before its pipes close) must not be hidden behind the hang-up: report the remaining data
-     * first, as Linux reports POLLIN before POLLHUP; reads return it after the close. */
-    if (memory_frame_pool_active() && !pipe_buf->readable && !pipe_buf->writable &&
-            (events & PAL_WAIT_READ) && pipe_buf->read_pos != pipe_buf->write_pos) {
-        revents = PAL_WAIT_READ;
-        goto out;
-    }
-#endif
-    if (!pipe_buf->readable && !pipe_buf->writable) {
-        /* pipe was shutdown */
+    if (!rr->open_write && !wr->open_read) {
+        /* the other end is gone (or both sides were shut down): as Linux reports POLLIN before
+         * POLLHUP, what is left to read comes first (with processes, the last message of an
+         * exiting peer, sent just before its pipes close, must not be hidden) */
+        if ((events & PAL_WAIT_READ) && pending && rr->open_read) {
+            revents = PAL_WAIT_READ;
+            goto out;
+        }
         handle->flags |= PAL_HANDLE_FD_ERROR; /* TODO: maybe PAL_HANDLE_FD_HANG_UP? */
         revents = PAL_WAIT_ERROR;             /* TODO: maybe PAL_WAIT_HANG_UP? */
         goto out;
     }
 
-    if ((events & PAL_WAIT_READ) && pipe_buf->readable) {
-        /* read event requested, and pipe is opened for read... */
-        if (pipe_buf->read_pos != pipe_buf->write_pos) {
-            /* ...and there is something to read */
+    if ((events & PAL_WAIT_READ) && rr->open_read) {
+        /* read event requested, and this end is open for read: something to read, or the other
+         * end closed its writing side (reads return end-of-stream at once) */
+        if (pending || !rr->open_write) {
             revents |= PAL_WAIT_READ;
         }
     }
 
-    if ((events & PAL_WAIT_WRITE) && pipe_buf->writable) {
-        /* write event requested, and pipe is opened for write... */
-        if (pipe_buf->write_pos - pipe_buf->read_pos < PIPE_BUF_SIZE) {
-            /* ...and there is room to write */
+    if ((events & PAL_WAIT_WRITE) && wr->open_write) {
+        /* write event requested, and this end is open for write: room to write, or the other
+         * end closed its reading side (writes fail at once) */
+        if (wr->write_pos - wr->read_pos < PIPE_BUF_SIZE || !wr->open_read) {
             revents |= PAL_WAIT_WRITE;
         }
     }

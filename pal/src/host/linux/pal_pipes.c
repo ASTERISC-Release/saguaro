@@ -8,9 +8,13 @@
 #include <asm/fcntl.h>
 #include <asm/ioctls.h>
 #include <asm/poll.h>
+#include <asm/stat.h>
 #include <linux/time.h>
 #include <linux/types.h>
 #include <linux/un.h>
+
+#include <limits.h>
+#include <stdalign.h>
 
 #include "api.h"
 #include "linux_socket.h"
@@ -255,6 +259,258 @@ static int64_t pipe_write(PAL_HANDLE handle, uint64_t offset, size_t len, const 
     return bytes;
 }
 
+/*
+ * Handles attached to data (PalStreamWriteWithHandles): the pipe is a host Unix stream socket, so
+ * the host carries the fds with the bytes (`SCM_RIGHTS`) and keeps the message boundaries. The
+ * serialised PAL handles and the caller's blob travel in a memfd sent as the first fd, so that the
+ * data stream itself stays untouched; a cargo handle without a host fd (a closed end) is sent as
+ * its serialised form alone.
+ */
+#define PIPE_HANDLES_MAGIC 0x53444846u /* "FHDS" */
+#ifndef MFD_CLOEXEC
+#define MFD_CLOEXEC 0x0001U
+#endif
+#ifndef MSG_CTRUNC
+#define MSG_CTRUNC 0x08
+#endif
+#ifndef MSG_CMSG_CLOEXEC
+#define MSG_CMSG_CLOEXEC 0x40000000
+#endif
+
+struct pipe_handles_hdr {
+    uint32_t magic;
+    uint32_t cargo_count;
+    uint32_t meta_size;
+    uint32_t reserved;
+};
+
+struct pipe_cargo_hdr {
+    uint32_t has_fd;
+    uint32_t data_size;
+};
+
+static int64_t pipe_writehandles(PAL_HANDLE handle, const void* buffer, size_t count,
+                                 PAL_HANDLE* cargo, size_t cargo_count, const void* meta,
+                                 size_t meta_size) {
+    if (handle->hdr.type != PAL_TYPE_PIPECLI && handle->hdr.type != PAL_TYPE_PIPE)
+        return -PAL_ERROR_NOTCONNECTION;
+    if (cargo_count == 0)
+        return pipe_write(handle, 0, count, buffer);
+    if (cargo_count > PAL_STREAM_MAX_HANDLES || meta_size > UINT32_MAX)
+        return -PAL_ERROR_INVAL;
+
+    int ret;
+    void* datas[PAL_STREAM_MAX_HANDLES];
+    int sizes[PAL_STREAM_MAX_HANDLES];
+    size_t blob_size = sizeof(struct pipe_handles_hdr) + meta_size;
+    size_t serialized = 0;
+    int fds[1 + PAL_STREAM_MAX_HANDLES];
+    size_t fds_count = 1;
+    for (; serialized < cargo_count; serialized++) {
+        if (cargo[serialized]->hdr.type == PAL_TYPE_PROCESS) {
+            ret = -PAL_ERROR_NOTIMPLEMENTED;
+            goto out_free;
+        }
+        ret = handle_serialize(cargo[serialized], &datas[serialized]);
+        if (ret < 0)
+            goto out_free;
+        sizes[serialized] = ret;
+        blob_size += sizeof(struct pipe_cargo_hdr) + ret;
+        if (cargo[serialized]->flags & (PAL_HANDLE_FD_READABLE | PAL_HANDLE_FD_WRITABLE))
+            fds[fds_count++] = cargo[serialized]->generic.fd;
+    }
+
+    char* blob = malloc(blob_size);
+    if (!blob) {
+        ret = -PAL_ERROR_NOMEM;
+        goto out_free;
+    }
+    struct pipe_handles_hdr* hdr = (struct pipe_handles_hdr*)blob;
+    hdr->magic = PIPE_HANDLES_MAGIC;
+    hdr->cargo_count = cargo_count;
+    hdr->meta_size = meta_size;
+    hdr->reserved = 0;
+    char* cur = blob + sizeof(*hdr);
+    for (size_t i = 0; i < cargo_count; i++) {
+        struct pipe_cargo_hdr ch = {
+            .has_fd = !!(cargo[i]->flags & (PAL_HANDLE_FD_READABLE | PAL_HANDLE_FD_WRITABLE)),
+            .data_size = sizes[i],
+        };
+        memcpy(cur, &ch, sizeof(ch));
+        cur += sizeof(ch);
+        memcpy(cur, datas[i], sizes[i]);
+        cur += sizes[i];
+    }
+    if (meta_size)
+        memcpy(cur, meta, meta_size);
+
+    int memfd = DO_SYSCALL(memfd_create, "gramine-pipe-handles", MFD_CLOEXEC);
+    if (memfd < 0) {
+        ret = unix_to_pal_error(memfd);
+        goto out_blob;
+    }
+    for (size_t off = 0; off < blob_size;) {
+        ssize_t w = DO_SYSCALL(write, memfd, blob + off, blob_size - off);
+        if (w < 0) {
+            ret = unix_to_pal_error(w);
+            goto out_memfd;
+        }
+        off += w;
+    }
+    fds[0] = memfd;
+
+    struct iovec iov = {.iov_base = (void*)buffer, .iov_len = count};
+    alignas(struct cmsghdr) char control[CMSG_SPACE(sizeof(int) * (1 + PAL_STREAM_MAX_HANDLES))];
+    struct msghdr msg = {
+        .msg_iov = &iov,
+        .msg_iovlen = 1,
+        .msg_control = control,
+        .msg_controllen = CMSG_SPACE(sizeof(int) * fds_count),
+    };
+    struct cmsghdr* cmsg = CMSG_FIRSTHDR(&msg);
+    cmsg->cmsg_level = SOL_SOCKET;
+    cmsg->cmsg_type = SCM_RIGHTS;
+    cmsg->cmsg_len = CMSG_LEN(sizeof(int) * fds_count);
+    memcpy(CMSG_DATA(cmsg), fds, sizeof(int) * fds_count);
+
+    ssize_t bytes = DO_SYSCALL(sendmsg, handle->pipe.fd, &msg, MSG_NOSIGNAL);
+    ret = bytes < 0 ? unix_to_pal_error(bytes) : (int)bytes;
+    if (bytes >= 0 && bytes > INT_MAX)
+        ret = INT_MAX;
+out_memfd:
+    DO_SYSCALL(close, memfd);
+out_blob:
+    free(blob);
+out_free:
+    for (size_t i = 0; i < serialized; i++)
+        free(datas[i]);
+    return ret;
+}
+
+static void close_fds(const int* fds, size_t from, size_t count) {
+    for (size_t i = from; i < count; i++)
+        DO_SYSCALL(close, fds[i]);
+}
+
+static int64_t pipe_readhandles(PAL_HANDLE handle, void* buffer, size_t count,
+                                PAL_HANDLE* out_cargo, size_t* cargo_count, void* meta,
+                                size_t* meta_size, bool* out_truncated) {
+    if (handle->hdr.type != PAL_TYPE_PIPECLI && handle->hdr.type != PAL_TYPE_PIPE)
+        return -PAL_ERROR_NOTCONNECTION;
+
+    size_t cargo_cap = *cargo_count;
+    size_t meta_cap = *meta_size;
+    *cargo_count = 0;
+    *meta_size = 0;
+    *out_truncated = false;
+
+    struct iovec iov = {.iov_base = buffer, .iov_len = count};
+    alignas(struct cmsghdr) char control[CMSG_SPACE(sizeof(int) * (1 + PAL_STREAM_MAX_HANDLES))];
+    struct msghdr msg = {
+        .msg_iov = &iov,
+        .msg_iovlen = 1,
+        .msg_control = control,
+        .msg_controllen = sizeof(control),
+    };
+    ssize_t bytes = DO_SYSCALL(recvmsg, handle->pipe.fd, &msg, MSG_CMSG_CLOEXEC);
+    if (bytes < 0)
+        return unix_to_pal_error(bytes);
+
+    int fds[1 + PAL_STREAM_MAX_HANDLES];
+    size_t fds_count = 0;
+    /* the sender attaches one SCM_RIGHTS control message (the kernel merges none) */
+    struct cmsghdr* cmsg = CMSG_FIRSTHDR(&msg);
+    if (cmsg && cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_RIGHTS) {
+        size_t n = (cmsg->cmsg_len - CMSG_LEN(0)) / sizeof(int);
+        for (size_t i = 0; i < n && fds_count < 1 + PAL_STREAM_MAX_HANDLES; i++)
+            memcpy(&fds[fds_count++], CMSG_DATA(cmsg) + i * sizeof(int), sizeof(int));
+    }
+    if (fds_count == 0)
+        return bytes;
+    if (msg.msg_flags & MSG_CTRUNC) {
+        close_fds(fds, 0, fds_count);
+        *out_truncated = true;
+        return bytes;
+    }
+
+    /* the first fd is the memfd with the serialised handles and the blob */
+    int memfd = fds[0];
+    struct stat st;
+    char* blob = NULL;
+    int ret = DO_SYSCALL(fstat, memfd, &st);
+    if (ret < 0 || st.st_size < (int64_t)sizeof(struct pipe_handles_hdr))
+        goto drop_all;
+    blob = malloc(st.st_size);
+    if (!blob)
+        goto drop_all;
+    for (int64_t off = 0; off < (int64_t)st.st_size;) {
+        ssize_t r = DO_SYSCALL(pread64, memfd, blob + off, st.st_size - off, off);
+        if (r <= 0)
+            goto drop_all;
+        off += r;
+    }
+    struct pipe_handles_hdr* hdr = (struct pipe_handles_hdr*)blob;
+    if (hdr->magic != PIPE_HANDLES_MAGIC || hdr->cargo_count > PAL_STREAM_MAX_HANDLES)
+        goto drop_all;
+
+    const char* cur = blob + sizeof(*hdr);
+    const char* end = blob + st.st_size;
+    size_t next_fd = 1;
+    for (size_t i = 0; i < hdr->cargo_count; i++) {
+        struct pipe_cargo_hdr ch;
+        if (cur + sizeof(ch) > end)
+            goto drop_all;
+        memcpy(&ch, cur, sizeof(ch));
+        cur += sizeof(ch);
+        if (cur + ch.data_size > end || (ch.has_fd && next_fd >= fds_count))
+            goto drop_all;
+        PAL_HANDLE hdl = NULL;
+        ret = handle_deserialize(&hdl, cur, ch.data_size);
+        cur += ch.data_size;
+        int fd = ch.has_fd ? fds[next_fd++] : -1;
+        if (ret < 0) {
+            if (fd >= 0)
+                DO_SYSCALL(close, fd);
+            *out_truncated = true;
+            continue;
+        }
+        if (fd >= 0) {
+            hdl->generic.fd = fd;
+        } else {
+            hdl->flags &= ~(PAL_HANDLE_FD_READABLE | PAL_HANDLE_FD_WRITABLE);
+            hdl->generic.fd = -1;
+        }
+        if (*cargo_count < cargo_cap) {
+            out_cargo[(*cargo_count)++] = hdl;
+        } else {
+            _PalObjectDestroy(hdl);
+            *out_truncated = true;
+        }
+    }
+    if (hdr->meta_size) {
+        if ((size_t)(end - cur) < hdr->meta_size)
+            goto drop_rest;
+        size_t copy = MIN((size_t)hdr->meta_size, meta_cap);
+        if (copy)
+            memcpy(meta, cur, copy);
+        *meta_size = copy;
+        if (copy < hdr->meta_size)
+            *out_truncated = true;
+    }
+drop_rest:
+    close_fds(fds, next_fd, fds_count);
+    DO_SYSCALL(close, memfd);
+    free(blob);
+    return bytes;
+
+drop_all:
+    /* not a Gramine sender, or a damaged blob: the fds are dropped, as Linux drops unread ones */
+    close_fds(fds, 0, fds_count);
+    free(blob);
+    *out_truncated = true;
+    return bytes;
+}
+
 /*!
  * \brief Destroy pipe (close host FD and free all objects).
  *
@@ -358,6 +614,8 @@ struct handle_ops g_pipe_ops = {
     .waitforclient  = &pipe_waitforclient,
     .read           = &pipe_read,
     .write          = &pipe_write,
+    .writehandles   = &pipe_writehandles,
+    .readhandles    = &pipe_readhandles,
     .destroy        = &pipe_destroy,
     .delete         = &pipe_delete,
     .attrquerybyhdl = &pipe_attrquerybyhdl,

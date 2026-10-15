@@ -49,6 +49,7 @@ tests = {
     'fopen_cornercases': {},
     'fork_and_access_file': {},
     'fork_and_exec': {},
+    'fork_reservation': {},
     'fork_pacret': {},
     'fp_multithread': {
         'c_args': '-fno-builtin',  # see comment in the test's source
@@ -192,6 +193,7 @@ tests = {
     'udp': {},
     'uid_gid': {},
     'unix': {},
+    'unix_fdpass': {},
     'vfork_and_exec': {},
     'xattr_misc': {},
 }
@@ -208,6 +210,12 @@ if host_machine.cpu_family() == 'x86_64'
         'in_out_instruction' : {},
         'rdtsc': {},
         'sighandler_divbyzero': {},
+    }
+endif
+
+if host_machine.cpu_family() == 'aarch64'
+    tests += {
+        'hwcap_aarch64': {},
     }
 endif
 

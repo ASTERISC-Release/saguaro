@@ -371,10 +371,60 @@ What applications have to give up in a VBS enclave, and how the examples do it:
   firewall rule); clients run on Windows (``gramine-vbs net``), since WSL2 in NAT mode cannot
   reach Windows' loopback.
 
-Measured on the test machine with eight connections, event-loop servers serve 11,000-12,500
-small requests per second in the enclave (about 60-80 % of the same binary natively in WSL reached
-from Windows), memcached with its four threads 36,000; pipelined Redis 164,000 per second; large
-responses about 230 MB/s per thread. The servers listen 0.2-0.7 s after the host process starts.
+Measured on the test machine with eight connections (``Documentation/devel/vbs-enclave/TESTING.md``,
+networking section): Redis serves 21,000 GETs per second in the enclave, NGINX 11,700 and
+lighttpd 18,800 small responses, memcached with its four threads 53,000; pipelined Redis 275,000
+per second; NGINX sends a 1 MiB file at about 1 GB/s on one connection (1,100 responses per second
+with four). The servers listen 0.2-0.7 s after the host process starts.
+
+**Counting host calls.** With ``GRAMINE_VBS_HOSTCALL_STATS=1`` the host process prints, when it
+ends, a table of every kind of host call (count, time on the host, time in the enclave before the
+call, bytes); with ``GRAMINE_VBS_HOSTCALL_STATS=<Windows file>`` it also rewrites that file every
+100 ms, so that a script can take differences around a load. ``gramine-vbs`` passes the variable
+on to the host process. It is off by default.
+
+TLS with attestation (optional, per application)
+------------------------------------------------
+
+VBS does not encrypt network traffic: the enclave's sockets are the Windows host's, and Windows
+sees what the application sends, as the untrusted host of SGX does. There is no TLS in the
+``vbs`` PAL, the LibOS or the socket path, and no manifest key turns it on: an application that
+needs confidentiality on the network adds TLS itself, with its own TLS support or with the helper
+below, and the other examples behave as before.
+
+``CI-Examples/vbs/tls-echo`` shows how to bind such TLS to the attestation report (RA-TLS style):
+
+- in the enclave, the optional helper ``CI-Examples/vbs/common/vbs-ratls.c`` (compiled only by an
+  application that includes it, with mbedtls built for the enclave by the example's ``Makefile``)
+  generates an ECDSA P-256 key pair inside the enclave, writes SHA-256 of the public key's DER
+  SubjectPublicKeyInfo (then 32 zero bytes) to ``/dev/attestation/user_report_data``, reads the
+  report and puts it into a self-signed certificate for the key (an X.509 extension with the OID
+  ``2.25.51004656318469523056256505321196161405``, an OCTET STRING with the report package);
+- on Windows, ``gramine-vbs tls-client`` (``scripts/vbs/win/vbs-tls-client.c``, SChannel) connects,
+  and before it sends anything checks that the report's user data is the hash of the certificate's
+  key and has ``pal_vbs_host.exe <image> 1 verify`` check the platform signature, the image (unique
+  ID and author ID), the pinned family and image IDs (``--family-id``, ``--image-id``), the minimum
+  SVN and the debug flag (``--allow-debug``)::
+
+    cd CI-Examples/vbs/tls-echo
+    make && make check          # the genuine server and seven refused cases
+    ../../../scripts/vbs/gramine-vbs tls-echo --port 4433 &
+    ../../../scripts/vbs/gramine-vbs tls-client 4433 --verifier tls-echo.vbs \
+        --family-id 6772616d696e652d7662732d746c7300 \
+        --image-id 746c732d6563686f0000000000000001 --min-svn 1 --message hello
+
+What the client establishes is what `Attestation`_ describes for a local check, plus that the TLS
+key was generated in that enclave: the session ends inside it. A client on another machine cannot
+verify the report yet (Microsoft Azure Attestation is not implemented). The costs: 0.3 ms for the
+key and 4 ms for the report at start, a first connection of about 115 ms (handshake 7.5 ms, the
+verifying enclave 107 ms), later handshakes 3.2 ms, and echo throughput of 114-135 MB/s against
+349-754 MB/s without TLS.
+
+Which applications could use their own TLS: Redis (``TLS=yes``), NGINX (``ssl``), memcached
+(``--enable-tls``) and Python's ``ssl`` module need OpenSSL built for the vbs sysroot, which is not
+available yet (a possible later step); lighttpd's ``mod_mbedtls`` would only need mbedtls, which
+builds for the enclave as the example shows. Binding their certificates to the report needs the
+helper's step (or an equivalent) in addition.
 
 ``gramine-vbs``
 ---------------
@@ -385,6 +435,8 @@ responses about 230 MB/s per thread. The servers listen 0.2-0.7 s after the host
     gramine-vbs sign   <manifest|DIR>
     gramine-vbs run    <manifest|DIR> [--threads N] [--root WINDIR] [--rebuild] [-v] [-- ARGS]
     gramine-vbs verify <manifest|DIR> <report on Windows> [verifier options]
+    gramine-vbs net    wait|req|redis|bench|serve ...
+    gramine-vbs tls-client PORT --verifier DIR [checks] [--message T | --bench N SIZE]
     gramine-vbs setup-headers
 
 - ``build`` packs the runtime, the manifest and ``vbs.packed_files`` and
@@ -468,8 +520,8 @@ report is about 1.2 KB.
 #. what is asked: ``--user-data HEX`` or ``--user-data-file F`` (the user data,
    zero-padded to 64 bytes), ``--same-image`` (unique ID and author ID equal
    to those of the verifying image), ``--unique-id HEX`` and ``--author-id
-   HEX`` (pinned values), ``--min-svn N``, and ``--allow-debug`` (a debug
-   enclave is refused otherwise).
+   HEX`` (pinned values), ``--family-id HEX`` and ``--image-id HEX`` (16 bytes each),
+   ``--min-svn N``, and ``--allow-debug`` (a debug enclave is refused otherwise).
 
 It prints the report's fields and exits with 0 when every check passed. The
 example ``CI-Examples/vbs/attestation`` gets a report with user data from the

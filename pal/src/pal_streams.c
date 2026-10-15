@@ -177,6 +177,41 @@ int PalStreamRead(PAL_HANDLE handle, uint64_t offset, size_t* count, void* buffe
     return 0;
 }
 
+int PalStreamWriteWithHandles(PAL_HANDLE handle, const void* buffer, size_t* count,
+                              PAL_HANDLE* cargo, size_t cargo_count, const void* meta,
+                              size_t meta_size) {
+    if (!handle || !count || (cargo_count && !cargo) || cargo_count > PAL_STREAM_MAX_HANDLES)
+        return -PAL_ERROR_INVAL;
+    const struct handle_ops* ops = HANDLE_OPS(handle);
+    if (!ops)
+        return -PAL_ERROR_BADHANDLE;
+    if (!ops->writehandles)
+        return -PAL_ERROR_NOTIMPLEMENTED;
+    int64_t ret = ops->writehandles(handle, buffer, *count, cargo, cargo_count, meta, meta_size);
+    if (ret < 0)
+        return ret;
+    *count = ret;
+    return 0;
+}
+
+int PalStreamReadWithHandles(PAL_HANDLE handle, void* buffer, size_t* count, PAL_HANDLE* out_cargo,
+                             size_t* cargo_count, void* meta, size_t* meta_size,
+                             bool* out_truncated) {
+    if (!handle || !count || !cargo_count || !meta_size || !out_truncated)
+        return -PAL_ERROR_INVAL;
+    const struct handle_ops* ops = HANDLE_OPS(handle);
+    if (!ops)
+        return -PAL_ERROR_BADHANDLE;
+    if (!ops->readhandles)
+        return -PAL_ERROR_NOTIMPLEMENTED;
+    int64_t ret = ops->readhandles(handle, buffer, *count, out_cargo, cargo_count, meta, meta_size,
+                                   out_truncated);
+    if (ret < 0)
+        return ret;
+    *count = ret;
+    return 0;
+}
+
 int64_t _PalStreamWrite(PAL_HANDLE handle, uint64_t offset, uint64_t count, const void* buf) {
     const struct handle_ops* ops = HANDLE_OPS(handle);
 

@@ -325,15 +325,22 @@ static int attrsetbyhdl_udp(PAL_HANDLE handle, PAL_STREAM_ATTR* attr) {
     return attrsetbyhdl_common(handle, attr);
 }
 
+/* Sends and receives go between the application's buffers and the thread's host buffer in one copy
+ * (vbs_hostcall_v, scatter/gather), without a staging buffer in the enclave. */
 static int send(PAL_HANDLE handle, struct iovec* iov, size_t iov_len, size_t* out_size,
                 struct pal_socket_addr* addr, bool force_nonblocking) {
-    struct sockaddr_storage ss;
+    /* the prefix of the request: [sockaddr length u32][sockaddr] */
+    struct {
+        uint32_t alen;
+        struct sockaddr_storage ss;
+    } __attribute__((packed)) pre;
     size_t alen = 0;
     if (addr) {
         if (addr->domain != handle->sock.domain)
             return -PAL_ERROR_INVAL;
-        pal_to_linux_sockaddr(addr, &ss, &alen);
+        pal_to_linux_sockaddr(addr, &pre.ss, &alen);
     }
+    pre.alen = (uint32_t)alen;
     size_t total = 0;
     for (size_t i = 0; i < iov_len; i++)
         total += iov[i].iov_len;
@@ -341,24 +348,11 @@ static int send(PAL_HANDLE handle, struct iovec* iov, size_t iov_len, size_t* ou
     if (total > max) {
         if (handle->sock.type == PAL_SOCKET_UDP)
             return -PAL_ERROR_TOOLONG;
-        total = max; /* a stream socket may send less */
+        total = max; /* a stream socket may send less (the host request takes what fits) */
     }
-    uint8_t* buf = malloc(4 + alen + total);
-    if (!buf)
-        return -PAL_ERROR_NOMEM;
-    uint32_t al = (uint32_t)alen;
-    memcpy(buf, &al, 4);
-    if (alen)
-        memcpy(buf + 4, &ss, alen);
-    size_t pos = 4 + alen;
-    for (size_t i = 0; i < iov_len && pos < 4 + alen + total; i++) {
-        size_t n = MIN(iov[i].iov_len, 4 + alen + total - pos);
-        memcpy(buf + pos, iov[i].iov_base, n);
-        pos += n;
-    }
-    int64_t r = host(PAL_VBS_HOST_SEND, handle->sock.host_id, force_nonblocking,
-                     handle->sock.is_nonblocking, 0, buf, pos, NULL, 0, NULL);
-    free(buf);
+    int64_t r = vbs_hostcall_v(PAL_VBS_HOST_SEND, handle->sock.host_id, force_nonblocking,
+                               handle->sock.is_nonblocking, 0, &pre, 4 + alen, iov, iov_len, NULL,
+                               0, NULL, 0, NULL);
     if (r < 0)
         return unix_to_pal_error((int)r);
     if ((uint64_t)r > total)
@@ -373,34 +367,23 @@ static int recv(PAL_HANDLE handle, struct iovec* iov, size_t iov_len, size_t* ou
     for (size_t i = 0; i < iov_len; i++)
         total += iov[i].iov_len;
     total = MIN(total, (size_t)(PAL_VBS_HOST_DATA_MAX - PAL_VBS_HOST_SOCKADDR_MAX));
-    uint8_t* buf = malloc(PAL_VBS_HOST_SOCKADDR_MAX + total);
-    if (!buf)
-        return -PAL_ERROR_NOMEM;
+    /* the host's output: [sockaddr, PAL_VBS_HOST_SOCKADDR_MAX bytes][bytes] */
+    struct sockaddr_storage ss;
+    _Static_assert(sizeof(ss) == PAL_VBS_HOST_SOCKADDR_MAX, "sockaddr prefix");
+    memset(&ss, 0, sizeof(ss));
     size_t got = 0;
-    int64_t r = host(PAL_VBS_HOST_RECV, handle->sock.host_id, total, force_nonblocking,
-                     handle->sock.is_nonblocking, NULL, 0, buf, PAL_VBS_HOST_SOCKADDR_MAX + total,
-                     &got);
-    if (r < 0) {
-        free(buf);
+    int64_t r = vbs_hostcall_v(PAL_VBS_HOST_RECV, handle->sock.host_id, total, force_nonblocking,
+                               handle->sock.is_nonblocking, NULL, 0, NULL, 0, &ss,
+                               PAL_VBS_HOST_SOCKADDR_MAX, iov, iov_len, &got);
+    if (r < 0)
         return unix_to_pal_error((int)r);
-    }
     size_t n = got > PAL_VBS_HOST_SOCKADDR_MAX ? got - PAL_VBS_HOST_SOCKADDR_MAX : 0;
-    if ((uint64_t)r < n)
-        n = (size_t)r;
-    size_t pos = 0;
-    for (size_t i = 0; i < iov_len && pos < n; i++) {
-        size_t c = MIN(iov[i].iov_len, n - pos);
-        memcpy(iov[i].iov_base, buf + PAL_VBS_HOST_SOCKADDR_MAX + pos, c);
-        pos += c;
-    }
+    if (n > total || (handle->sock.type != PAL_SOCKET_UDP && (uint64_t)r != n))
+        return -PAL_ERROR_DENIED; /* the host stored more than asked, or lied about the count */
     if (addr) {
-        struct sockaddr_storage ss;
-        memset(&ss, 0, sizeof(ss));
-        memcpy(&ss, buf, MIN(sizeof(ss), (size_t)PAL_VBS_HOST_SOCKADDR_MAX));
         if (host_sockaddr(&ss, sizeof(ss), handle->sock.domain, addr) < 0)
             memset(addr, 0, sizeof(*addr));
     }
-    free(buf);
     /* UDP reports the full datagram length (PalSocketRecv); the host gave what fit */
     *out_total_size = handle->sock.type == PAL_SOCKET_UDP ? (size_t)r : n;
     return 0;
