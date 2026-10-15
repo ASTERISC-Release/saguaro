@@ -245,6 +245,11 @@ class TC_01_Bootstrap(RegressionTestCase):
         self.assertIn('child exited with status: 0', stdout)
         self.assertIn('test completed successfully', stdout)
 
+    def test_2025_fork_reservation(self):
+        # fork with a large PROT_NONE reservation: never-writable anonymous memory is not copied
+        stdout, _ = self.run_binary(['fork_reservation'], timeout=120)
+        self.assertIn('TEST OK', stdout)
+
     def test_203_fork_disallowed(self):
         try:
             self.run_binary(['fork_disallowed'])

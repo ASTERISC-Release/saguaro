@@ -135,6 +135,10 @@ static void client(int pipefd) {
 }
 
 int main(void) {
+    /* nodes of an earlier, interrupted run would make bind fail with EADDRINUSE, as on Linux */
+    unlink(SRV_ADDR_DUMMY);
+    unlink(SRV_ADDR);
+
     check_nonexisting_socket();
     create_dummy_socket();
 

@@ -49,6 +49,7 @@ tests = {
     'fopen_cornercases': {},
     'fork_and_access_file': {},
     'fork_and_exec': {},
+    'fork_reservation': {},
     'fork_pacret': {},
     'fp_multithread': {
         'c_args': '-fno-builtin',  # see comment in the test's source

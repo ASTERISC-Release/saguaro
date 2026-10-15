@@ -53,6 +53,7 @@ manifests = [
   "fopen_cornercases",
   "fork_and_access_file",
   "fork_and_exec",
+  "fork_reservation",
   "fork_disallowed",
   "fork_pacret",
   "fp_multithread",
