@@ -50,6 +50,7 @@ T hostread  @('hostread')
 T rpm       @('rpm') 120000
 T rpm-nodebug @('rpm', 'nodebug') 120000
 T exccost   @('exccost', '10000')
+T fsexc     @('fsexc')
 T loaddata  @('loaddata')
 T nodebug   @('nodebug')
 if (-not $Only.Count -or ($Only -contains 'contention')) {

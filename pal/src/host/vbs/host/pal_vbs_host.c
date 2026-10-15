@@ -283,8 +283,16 @@ static LONG CALLBACK host_exception_report(EXCEPTION_POINTERS* ep) {
     fprintf(stderr, "[host] exception 0x%08lx at %p (%s) thread %lu, pc %p sp %p lr %p",
             ep->ExceptionRecord->ExceptionCode, ep->ExceptionRecord->ExceptionAddress,
             (pc >= g_enclave_lo && pc < g_enclave_hi) ? "in the enclave" : "host",
-            GetCurrentThreadId(), (void*)(uintptr_t)ep->ContextRecord->Pc,
-            (void*)(uintptr_t)ep->ContextRecord->Sp, (void*)(uintptr_t)ep->ContextRecord->Lr);
+            GetCurrentThreadId(),
+#if defined(_M_X64)
+            /* no link register on x64 (the return address would be enclave memory) */
+            (void*)(uintptr_t)ep->ContextRecord->Rip, (void*)(uintptr_t)ep->ContextRecord->Rsp,
+            (void*)0
+#else
+            (void*)(uintptr_t)ep->ContextRecord->Pc,
+            (void*)(uintptr_t)ep->ContextRecord->Sp, (void*)(uintptr_t)ep->ContextRecord->Lr
+#endif
+            );
     if (ep->ExceptionRecord->NumberParameters >= 2)
         fprintf(stderr, " access %llu addr %p", (unsigned long long)ep->ExceptionRecord->ExceptionInformation[0],
                 (void*)(uintptr_t)ep->ExceptionRecord->ExceptionInformation[1]);

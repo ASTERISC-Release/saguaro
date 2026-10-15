@@ -237,6 +237,12 @@ int main(int argc, char** argv)
         g_io.args[0] = !strcmp(t, "stack") ? 9 : !strcmp(t, "cfg") ? 10 : 11;
         call("E_Exec", &g_io);
         finish();
+    } else if (!strcmp(t, "fsexc")) {
+        if (!create(1)) return 3;
+        memset(&g_io, 0, sizeof(g_io));
+        g_io.args[0] = 14;
+        call("E_Exec", &g_io);
+        finish();
     } else if (!strcmp(t, "exccost")) {      // exccost [n]
         if (!create(1)) return 3;
         memset(&g_io, 0, sizeof(g_io));

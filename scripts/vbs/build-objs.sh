@@ -16,7 +16,10 @@
 # pal_vbs_packed_blob.S, pal_vbs_packed_table.h); the in-enclave loader and the blob are then built
 # too. Without PACK the image carries no packed objects and no loader (the phase-1 build).
 #
-# Usage: HDR=<scratch> [OUT=<dir>] [PACK=<pack.py output>] scripts/vbs/build-objs.sh
+# VBS_ARCH selects the target: aarch64 (the default: ARM64 Windows) or x86_64 (x64 Windows,
+# Documentation/devel/vbs-enclave/PLAN-x64.md).
+#
+# Usage: HDR=<scratch> [OUT=<dir>] [PACK=<pack.py output>] [VBS_ARCH=x86_64] scripts/vbs/build-objs.sh
 set -e
 
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -25,6 +28,11 @@ VBS="$ROOT/pal/src/host/vbs"
 OUT=${OUT:-"$ROOT/build-vbs/obj"}
 : "${HDR:?set HDR to the folder holding the copied SDK (sdk/) and MSVC (vc/) headers}"
 mkdir -p "$OUT"
+case "${VBS_ARCH:-aarch64}" in
+    aarch64|arm64) TARGET=aarch64-pc-windows-msvc; BOUNDARY=pal_vbs_boundary.S ;;
+    x86_64|x64|amd64) TARGET=x86_64-pc-windows-msvc; BOUNDARY=pal_vbs_boundary_x86_64.S ;;
+    *) echo "VBS_ARCH must be aarch64 or x86_64"; exit 2 ;;
+esac
 
 # The compiler command lines below are built as strings: folders with spaces in their names are
 # reached through links without spaces.
@@ -42,7 +50,7 @@ else
     DEFS="-DPAL_VBS_NO_PACKED"
 fi
 # /Brepro and -mno-incremental-linker-compatible: no time stamp in the COFF header (reproducible objects)
-CL="clang --driver-mode=cl --target=aarch64-pc-windows-msvc -fms-compatibility-version=19.50 /Brepro \
+CL="clang --driver-mode=cl --target=$TARGET -fms-compatibility-version=19.50 /Brepro \
     /imsvc $HDR/vc/include /imsvc $HDR/sdk/ucrt /imsvc $HDR/sdk/um /imsvc $HDR/sdk/shared \
     -Wno-everything $INC"
 
@@ -81,12 +89,12 @@ if [ -n "$PACK" ]; then
     echo "=== enclave: pal_vbs_packed.c (loader of the packed objects)"
     $CL /c /O1 /guard:cf /MT -DUNICODE /W4 /Fo"$OUT/pal_vbs_packed.obj" "$VBS/enclave/pal_vbs_packed.c"
     echo "=== enclave: packed blob ($PACK/packed.bin)"
-    (cd "$PACK" && clang --target=aarch64-pc-windows-msvc -mno-incremental-linker-compatible -c pal_vbs_packed_blob.S \
+    (cd "$PACK" && clang --target=$TARGET -mno-incremental-linker-compatible -c pal_vbs_packed_blob.S \
         -o "$OUT/pal_vbs_packed_blob.obj")
 fi
 
-echo "=== enclave: pal_vbs_boundary.S (clang integrated assembler)"
-clang --target=aarch64-pc-windows-msvc -mno-incremental-linker-compatible -c "$VBS/enclave/pal_vbs_boundary.S" -o "$OUT/pal_vbs_boundary.obj"
+echo "=== enclave: $BOUNDARY (clang integrated assembler)"
+clang --target=$TARGET -mno-incremental-linker-compatible -c "$VBS/enclave/$BOUNDARY" -o "$OUT/pal_vbs_boundary.obj"
 
 echo "=== host: pal_vbs_host.c"
 $CL /c /O2 /MT -DUNICODE -I"$VBS/common" /Fo"$OUT/pal_vbs_host.obj" "$VBS/host/pal_vbs_host.c"

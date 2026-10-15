@@ -390,6 +390,7 @@ void* CALLBACK E_Rwx(void* param)
 
 // ---------------------------------------------------------------- (d) execution environment
 
+static unsigned long long g_fs_after, g_fs_filter_value;
 static CONTEXT g_ctx;
 static unsigned long long g_filter_sp;
 static int g_resume;
@@ -401,6 +402,7 @@ static int filt_ctx(EXCEPTION_POINTERS* ep)
     g_ctx = *ep->ContextRecord;
     g_filter_sp = probe_read_rsp();
     if (g_resume) {
+        if (g_fs_filter_value) probe_wrfsbase(g_fs_filter_value);
         ep->ContextRecord->Rip += g_skip;   // skip the faulting instruction
         ep->ContextRecord->Rax = 0x1234;
         return EXCEPTION_CONTINUE_EXECUTION;
@@ -449,6 +451,8 @@ static char g_buf[] = "hello from syscall\n";
 static long long t_sys_write(void) { return probe_syscall(1 /* Linux write */, 1, (long long)g_buf, sizeof(g_buf) - 1); }
 static long long t_sys_getpid(void) { return probe_syscall(39 /* Linux getpid */, 0, 0, 0); }
 static long long t_int80(void) { return probe_int80(20 /* i386 getpid */); }
+
+static long long t_ud2_fs(void) { long long r = probe_ud2(); g_fs_after = probe_rdfsbase(); return r; }
 
 // language-specific handler named by probe_fault_offstack's unwind data (as pack.py's static .pdata would)
 static volatile LONG g_lh_calls;
@@ -505,7 +509,7 @@ static __declspec(noinline) long long recurse_kib(int n)
 
 // args[0]: group. 1 = safe probes, 2 = syscall, 3 = trap+resume, 4 = FS base kept across exit/entry,
 // 5 = red zone, 6 = FS base and registers across OCALLs, 7 = FS base and registers under preemption,
-// 8 = exceptions with rsp outside the thread stack, 9 = stack, 10 = CFG, 11 = TEB layout, 12 = stack growth, 13 = exception cost.
+// 8 = exceptions with rsp outside the thread stack, 9 = stack, 10 = CFG, 11 = TEB layout, 12 = stack growth, 13 = exception cost, 14 = FS base across an exception.
 void* CALLBACK E_Exec(void* param)
 {
     PROBE_IO* io = (PROBE_IO*)param;
@@ -744,6 +748,23 @@ void* CALLBACK E_Exec(void* param)
         double ns = (double)(b.QuadPart - a.QuadPart) * 1e9 / (double)f.QuadPart / (double)n;
         logf("exccost: %llu exceptions (ud2, unwind-data handler, resume) in the enclave: %.0f ns each; handler calls %ld\n", n, ns, g_lh_calls);
         io->out[0] = (unsigned long long)ns;
+        break;
+    }
+    case 14: {
+        // FS base across an exception round trip: (a) set before the fault, untouched by the filter;
+        // (b) changed by the filter (wrfsbase inside the filter) before EXCEPTION_CONTINUE_EXECUTION
+        unsigned long long a1 = 0, b1 = 0;
+        probe_wrfsbase(0x00007ee500000010ull);
+        g_fs_filter_value = 0;
+        trap("ud2 resume, FS set before", t_ud2_fs, 1, 2);
+        a1 = g_fs_after;
+        g_fs_filter_value = 0x00007ee600000020ull;
+        trap("ud2 resume, FS written by the filter", t_ud2_fs, 1, 2);
+        b1 = g_fs_after;
+        g_fs_filter_value = 0;
+        probe_wrfsbase(0);
+        logf("fsexc: FS set to 0x7ee500000010 before the fault -> after resume 0x%llx; filter wrote 0x7ee600000020 -> after resume 0x%llx\n", a1, b1);
+        io->out[0] = a1; io->out[1] = b1;
         break;
     }
     case 11: {

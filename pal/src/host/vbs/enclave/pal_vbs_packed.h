@@ -70,5 +70,9 @@ const struct pal_vbs_packed_obj* pal_vbs_packed_table(uint64_t* count, uint64_t*
 
 /* Look up a defined dynamic symbol of a prepared object (NULL if absent). */
 void* pal_vbs_packed_sym(const struct pal_vbs_loaded* obj, const char* sym);
+#if defined(_M_X64)
+/* nonzero if `rip` is a `syscall` of the packed code rewritten into `ud2` by pack.py */
+int pal_vbs_is_syscall_site(uint64_t rip);
+#endif
 
 #endif /* PAL_VBS_PACKED_H */

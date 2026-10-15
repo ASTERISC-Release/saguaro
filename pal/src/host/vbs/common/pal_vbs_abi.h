@@ -326,6 +326,27 @@ enum pal_vbs_fault_kind {
     PAL_VBS_FAULT_ARITHMETIC = 3, /* floating-point/integer arithmetic exception */
 };
 
+#if defined(__x86_64__) || defined(_M_X64)
+/* x86_64 (PLAN-x64.md): the general registers in the order of the x86 register encoding (as the
+ * Windows CONTEXT keeps them), and the 512-byte FXSAVE area (x87, MXCSR, xmm0-xmm15) */
+enum pal_vbs_fault_reg {
+    PAL_VBS_RAX, PAL_VBS_RCX, PAL_VBS_RDX, PAL_VBS_RBX, PAL_VBS_RSP, PAL_VBS_RBP, PAL_VBS_RSI,
+    PAL_VBS_RDI, PAL_VBS_R8, PAL_VBS_R9, PAL_VBS_R10, PAL_VBS_R11, PAL_VBS_R12, PAL_VBS_R13,
+    PAL_VBS_R14, PAL_VBS_R15,
+};
+
+struct pal_vbs_fault {
+    uint64_t kind;        /* enum pal_vbs_fault_kind */
+    uint64_t code;        /* the Windows exception code */
+    uint64_t addr;        /* faulting data address (memory faults), else the instruction pointer */
+    uint64_t access;      /* memory faults: 0 read, 1 write, 8 execute */
+    uint64_t regs[16];    /* enum pal_vbs_fault_reg */
+    uint64_t rip, rflags;
+    uint64_t fsbase;      /* the thread's FS base (the Linux thread pointer) */
+    uint64_t reserved;
+    uint8_t  fxsave[512]; /* FXSAVE layout (Windows XMM_SAVE_AREA32) */
+};
+#else
 struct pal_vbs_fault {
     uint64_t kind;        /* enum pal_vbs_fault_kind */
     uint64_t code;        /* the Windows exception code */
@@ -336,6 +357,7 @@ struct pal_vbs_fault {
     uint32_t fpcr, fpsr;
     uint8_t  vregs[32][16];
 };
+#endif
 
 /* PAL protection bits as passed to `protect` (the values of pal_prot_flags_t) */
 #define PAL_VBS_PROT_READ  0x1u
