@@ -569,8 +569,6 @@ static void* g_aslr_addr_top = NULL;
 struct libos_rwlock g_vma_change_lock;
 
 int init_vma(void) {
-    if (!rwlock_create(&g_vma_change_lock))
-        return -ENOMEM;
     PalSetMemoryBookkeepingUpcalls(pal_mem_bkeep_alloc, pal_mem_bkeep_free);
 
     size_t initial_ranges_count = 0;
@@ -708,6 +706,16 @@ int init_vma(void) {
             free_vma(vmas_to_migrate_to[i]);
         }
     }
+
+    /* Only now, when the VMA manager and its lock exist: the PAL handles of the lock come from the
+     * PAL's heap, and when that heap needs a new page, the PAL asks the LibOS to bookkeep it
+     * (pal_mem_bkeep_alloc() -> alloc_vma() -> lock(&vma_mgr_lock)). Created at the top of this
+     * function, these handles used up the PAL heap's free slots before the bookkeeping existed, so
+     * that create_lock(&vma_mgr_lock) above could need a new page and take vma_mgr_lock before it
+     * was created (a NULL event: "Unexpected memory fault occurred inside PAL" at startup, depending
+     * on how much the PAL had allocated, e.g. the length of the install path). */
+    if (!rwlock_create(&g_vma_change_lock))
+        return -ENOMEM;
 
     return 0;
 }
