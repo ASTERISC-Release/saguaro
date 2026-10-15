@@ -142,6 +142,42 @@ int main(void) {
     check("segment files removed after the last detach", files_after == files_before - 2 ||
           files_after == 0);
 
+    /* load: 4 children each send 500 messages and post a semaphore per message; the parent
+     * receives all 2,000 and takes the semaphore 2,000 times */
+    int lq = msgget(IPC_PRIVATE, 0600), ls = semget(IPC_PRIVATE, 1, 0600);
+    for (int k = 0; k < 4; k++) {
+        if (fork() == 0) {
+            struct msg lm = {1 + k, ""};
+            struct sembuf up1 = {0, 1, 0};
+            for (int i = 0; i < 500; i++) {
+                snprintf(lm.text, sizeof(lm.text), "%d:%d", k, i);
+                if (msgsnd(lq, &lm, sizeof(lm.text), 0) < 0 || semop(ls, &up1, 1) < 0)
+                    _exit(1);
+            }
+            _exit(0);
+        }
+    }
+    int received = 0, last[4] = {-1, -1, -1, -1}, in_order = 1;
+    struct sembuf down1 = {0, -1, 0};
+    for (int i = 0; i < 2000; i++) {
+        struct msg lr;
+        if (semop(ls, &down1, 1) < 0 || msgrcv(lq, &lr, sizeof(lr.text), 0, 0) < 0)
+            break;
+        int k = 0, n = 0;
+        sscanf(lr.text, "%d:%d", &k, &n);
+        in_order &= k >= 0 && k < 4 && n == last[k] + 1;
+        if (k >= 0 && k < 4)
+            last[k] = n;
+        received++;
+    }
+    int bad = 0;
+    for (int k = 0; k < 4; k++)
+        bad += wait(NULL) < 0;
+    check("2,000 messages and semaphore posts from 4 children, in order per sender",
+          received == 2000 && in_order && !bad);
+    msgctl(lq, IPC_RMID, NULL);
+    semctl(ls, 0, IPC_RMID);
+
     printf("sysv-fork: %d/%d passed\n", g_passed, g_checks);
     return g_passed == g_checks ? 0 : 1;
 }
