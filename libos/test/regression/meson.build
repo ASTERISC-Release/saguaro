@@ -80,6 +80,7 @@ tests = {
     'mkfifo': {},
     'mmap_file': {},
     'memfd_seals': {},
+    'memfd_shared': {},
     'mmap_file_backed': {},
     'mmap_file_emulated': {},
     'mprotect_file_fork': {},

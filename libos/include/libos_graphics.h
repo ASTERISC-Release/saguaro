@@ -42,6 +42,9 @@ extern struct libos_lock graphics_comm_lock;
  * first, so an unmapped window faults at COMM_ADDR + 0x18 on the first write. */
 bool graphics_redirect_enabled(void);
 
+/* Drops a stale TYPE_HOST handle at the guest slot of a host fd the host just returned (libos_open.c). */
+int graphics_drop_stale_host_handle(int fd);
+
 /* Set once the application has mapped the comm window at COMM_ADDR (libos_syscall_mmap()). */
 extern bool g_graphics_comm_mapped;
 

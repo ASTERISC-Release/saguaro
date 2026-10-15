@@ -61,6 +61,11 @@ long libos_syscall_dup(unsigned int fd) {
         }
         uint64_t comm_ret = comm_sync_notify(c);
         libos_syscall_relinquish_libos_lock(_offset);
+        if ((int64_t)comm_ret < 0) {
+            /* the host's dup() failed: the listener returns -errno */
+            put_handle(hdl);
+            return (long)comm_ret;
+        }
 
         /* Create a new handle and mark it the same as the old handle */
         struct libos_handle* hdl_dup = get_new_handle();

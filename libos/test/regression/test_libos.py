@@ -1031,6 +1031,10 @@ class TC_30_Syscall(RegressionTestCase):
         stdout, _ = self.run_binary(['memfd_seals'])
         self.assertIn('TEST OK', stdout)
 
+    def test_075_memfd_shared(self):
+        stdout, _ = self.run_binary(['memfd_shared'])
+        self.assertIn('TEST OK', stdout)
+
     def test_076_timerfd(self):
         stdout, _ = self.run_binary(['timerfd'])
         self.assertIn('TEST OK', stdout)

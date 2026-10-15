@@ -4,6 +4,9 @@
 #include "libos_process.h"
 #include "libos_table.h"
 #include "linux_abi/errors.h"
+#ifdef ENABLE_GRAPHICS
+#include "libos_graphics.h"
+#endif
 
 #define MFD_CLOEXEC       0x0001U
 #define MFD_ALLOW_SEALING 0x0002U
@@ -31,6 +34,33 @@ long libos_syscall_memfd_create(const char* name, unsigned int flags) {
     static uint64_t next_memfd_id;
     char path[96];
     int fd = -1;
+
+#ifdef ENABLE_GRAPHICS
+    /* With the graphics redirection active (gramine-vm with the host listener), every open under
+     * /dev goes to the host, including the backing file below, which the guest then could not
+     * unlink. Ask the host for an anonymous file in its /dev/shm instead (O_TMPFILE: nothing to
+     * unlink). Its mappings are host mappings, so MAP_SHARED is real, and a large sparse size costs
+     * nothing (Mesa's Vulkan drivers size such files at 1 GiB). Fall back to the generic path if
+     * the host refuses. */
+    if (graphics_redirect_enabled()) {
+        fd = (int)libos_openat_internal(AT_FDCWD, "/dev/shm", O_RDWR | O_TMPFILE |
+                                        ((flags & MFD_CLOEXEC) ? O_CLOEXEC : 0), 0600);
+        if (fd >= 0) {
+            struct libos_handle* hdl = get_fd_handle(fd, NULL, NULL);
+            if (!hdl) {
+                libos_syscall_close(fd);
+                return -EBADF;
+            }
+            lock(&hdl->lock);
+            hdl->is_memfd = true;
+            hdl->memfd_seals = (flags & MFD_ALLOW_SEALING) ? 0 : F_SEAL_SEAL;
+            unlock(&hdl->lock);
+            put_handle(hdl);
+            return fd;
+        }
+        fd = -1;
+    }
+#endif
     static const char* const backing_dirs[] = {"/dev/shm", "/tmp"};
     for (unsigned int attempt = 0; attempt < 32; attempt++) {
         uint64_t id = __atomic_add_fetch(&next_memfd_id, 1, __ATOMIC_RELAXED);
