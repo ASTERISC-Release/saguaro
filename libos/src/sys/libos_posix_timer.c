@@ -201,7 +201,7 @@ static int posix_timer_start_worker_locked(void) {
     return 0;
 }
 
-long libos_syscall_timer_create(int clockid, struct sigevent* evp, void** out_timerid) {
+long libos_syscall_timer_create(int clockid, struct sigevent* evp, int* out_timerid) {
     /* the kernel's posix clock registry: only these clocks can own a timer */
     switch (clockid) {
         case CLOCK_REALTIME:
@@ -272,7 +272,9 @@ long libos_syscall_timer_create(int clockid, struct sigevent* evp, void** out_ti
         t->notify = notify;
         t->sigev_signo = signo;
         t->sigev_value = value;
-        *out_timerid = (void*)(intptr_t)(id + 1);
+        /* the kernel's timer id is a 32-bit `__kernel_timer_t`: writing a pointer-sized value
+         * smashed the caller's stack (LTP timer_delete01) */
+        *out_timerid = id + 1;
         ret = 0;
     }
     spinlock_unlock(&g_posix_timers_lock);
@@ -280,7 +282,8 @@ long libos_syscall_timer_create(int clockid, struct sigevent* evp, void** out_ti
 }
 
 static struct posix_timer* posix_timer_get(void* timerid) {
-    intptr_t id = (intptr_t)timerid - 1;
+    /* the id arrives as a 32-bit `__kernel_timer_t` in a 64-bit register */
+    int id = (int)(intptr_t)timerid - 1;
     if (id < 0 || id >= POSIX_TIMERS_MAX || !g_posix_timers[id].in_use)
         return NULL;
     return &g_posix_timers[id];

@@ -507,6 +507,137 @@ int virtio_fs_fuse_rename(uint64_t old_dir_nodeid, const char* old_filename,
     return 0;
 }
 
+int virtio_fs_fuse_rename2(uint64_t old_dir_nodeid, const char* old_filename,
+                           uint64_t new_dir_nodeid, const char* new_filename, uint32_t flags) {
+    struct fuse_in_header  hdr_in    = { .opcode = FUSE_RENAME2, .nodeid = old_dir_nodeid };
+    struct fuse_rename2_in rename_in = { .newdir = new_dir_nodeid, .flags = flags };
+    struct fuse_out_header hdr_out   = {0};
+
+    struct virtio_fs_desc descs[] = {
+        { .addr = &hdr_in,             .size = sizeof(hdr_in),           .in = true },
+        { .addr = &rename_in,          .size = sizeof(rename_in),        .in = true },
+        { .addr = (void*)old_filename, .size = strlen(old_filename) + 1, .in = true },
+        { .addr = (void*)new_filename, .size = strlen(new_filename) + 1, .in = true },
+        { .addr = &hdr_out,            .size = sizeof(hdr_out),          .in = false },
+    };
+
+    int ret = virtio_fs_exec_request(ARRAY_SIZE(descs), descs);
+    if (ret < 0)
+        return ret;
+    return hdr_out.error < 0 ? unix_to_pal_error(hdr_out.error) : 0;
+}
+
+/* The xattr errors the LibOS must tell apart (as in the Linux PAL's `pal_xattr_error()`). */
+static int fuse_xattr_error(int32_t error) {
+    switch (-error) {
+        case ENODATA:
+            return -PAL_ERROR_STREAMNOTEXIST;
+        case EOPNOTSUPP:
+        case ENOSYS: /* the host's virtiofsd runs without xattr support */
+            return -PAL_ERROR_NOTSUPPORT;
+        case ERANGE:
+        case E2BIG:
+            return -PAL_ERROR_TOOLONG;
+        default:
+            return unix_to_pal_error(error);
+    }
+}
+
+/* FUSE_GETXATTR (`name` != NULL) or FUSE_LISTXATTR: with `*inout_size` 0 only the size is asked */
+int virtio_fs_fuse_getxattr(uint64_t nodeid, const char* name, void* value, uint64_t* inout_size) {
+    int ret;
+    uint64_t size = *inout_size;
+    struct fuse_in_header   hdr_in  = { .opcode = name ? FUSE_GETXATTR : FUSE_LISTXATTR,
+                                        .nodeid = nodeid };
+    struct fuse_getxattr_in get_in  = { .size = (uint32_t)size };
+    struct fuse_out_header  hdr_out = {0};
+    struct fuse_getxattr_out get_out = {0};
+
+    char* bounce = NULL;
+    if (size) {
+        bounce = malloc(size);
+        if (!bounce)
+            return -PAL_ERROR_NOMEM;
+    }
+
+    struct virtio_fs_desc descs[5];
+    size_t n = 0;
+    descs[n++] = (struct virtio_fs_desc){ .addr = &hdr_in, .size = sizeof(hdr_in), .in = true };
+    descs[n++] = (struct virtio_fs_desc){ .addr = &get_in, .size = sizeof(get_in), .in = true };
+    if (name)
+        descs[n++] = (struct virtio_fs_desc){ .addr = (void*)name, .size = strlen(name) + 1,
+                                              .in = true };
+    descs[n++] = (struct virtio_fs_desc){ .addr = &hdr_out, .size = sizeof(hdr_out), .in = false };
+    if (size)
+        descs[n++] = (struct virtio_fs_desc){ .addr = bounce, .size = size, .in = false };
+    else
+        descs[n++] = (struct virtio_fs_desc){ .addr = &get_out, .size = sizeof(get_out),
+                                              .in = false };
+
+    ret = virtio_fs_exec_request(n, descs);
+    if (ret < 0)
+        goto out;
+    if (hdr_out.error < 0) {
+        ret = fuse_xattr_error(hdr_out.error);
+        goto out;
+    }
+    if (size) {
+        /* verify the possibly-malicious reply length */
+        if (hdr_out.len < sizeof(hdr_out) || hdr_out.len > sizeof(hdr_out) + size) {
+            ret = -PAL_ERROR_DENIED;
+            goto out;
+        }
+        *inout_size = hdr_out.len - sizeof(hdr_out);
+        memcpy(value, bounce, *inout_size);
+    } else {
+        *inout_size = get_out.size;
+    }
+    ret = 0;
+out:
+    free(bounce);
+    return ret;
+}
+
+int virtio_fs_fuse_setxattr(uint64_t nodeid, const char* name, const void* value, uint64_t size,
+                            uint32_t flags) {
+    struct fuse_in_header   hdr_in  = { .opcode = FUSE_SETXATTR, .nodeid = nodeid };
+    struct fuse_setxattr_in set_in  = { .size = (uint32_t)size, .flags = flags };
+    struct fuse_out_header  hdr_out = {0};
+
+    struct virtio_fs_desc descs[] = {
+        { .addr = &hdr_in,      .size = sizeof(hdr_in),   .in = true },
+        { .addr = &set_in,      .size = sizeof(set_in),   .in = true },
+        { .addr = (void*)name,  .size = strlen(name) + 1, .in = true },
+        { .addr = (void*)value, .size = size,             .in = true },
+        { .addr = &hdr_out,     .size = sizeof(hdr_out),  .in = false },
+    };
+    /* a zero-length value has no descriptor of its own */
+    size_t n = size ? ARRAY_SIZE(descs) : ARRAY_SIZE(descs) - 1;
+    if (!size)
+        descs[3] = descs[4];
+
+    int ret = virtio_fs_exec_request(n, descs);
+    if (ret < 0)
+        return ret;
+    return hdr_out.error < 0 ? fuse_xattr_error(hdr_out.error) : 0;
+}
+
+int virtio_fs_fuse_removexattr(uint64_t nodeid, const char* name) {
+    struct fuse_in_header  hdr_in  = { .opcode = FUSE_REMOVEXATTR, .nodeid = nodeid };
+    struct fuse_out_header hdr_out = {0};
+
+    struct virtio_fs_desc descs[] = {
+        { .addr = &hdr_in,     .size = sizeof(hdr_in),   .in = true },
+        { .addr = (void*)name, .size = strlen(name) + 1, .in = true },
+        { .addr = &hdr_out,    .size = sizeof(hdr_out),  .in = false },
+    };
+
+    int ret = virtio_fs_exec_request(ARRAY_SIZE(descs), descs);
+    if (ret < 0)
+        return ret;
+    return hdr_out.error < 0 ? fuse_xattr_error(hdr_out.error) : 0;
+}
+
 int virtio_fs_fuse_read(uint64_t nodeid, uint64_t fh, uint64_t size, uint64_t offset,
                         char* out_buf, uint64_t* out_size) {
     int ret;

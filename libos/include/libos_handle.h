@@ -66,6 +66,7 @@ enum libos_handle_type {
 struct libos_pipe_handle {
     bool ready_for_ops; /* true for pipes, false for FIFOs that were mknod'ed but not open'ed */
     int peer_fd; /* other end's descriptor for anonymous pipes; -1 for named FIFOs */
+    uint32_t size; /* F_SETPIPE_SZ capacity in bytes (0: the default 65536); kept on both ends */
     char name[PIPE_URI_SIZE];
 };
 
@@ -292,6 +293,13 @@ struct libos_handle {
     int acc_mode;
     bool is_memfd;
     unsigned int memfd_seals;
+    bool memfd_noexec; /* created with MFD_NOEXEC_SEAL: no execute permission */
+    /* fcntl() state of the open file description: a lease (F_SETLEASE; `lease_type` is F_RDLCK
+     * or F_WRLCK while `has_lease`), the F_SETSIG signal (0: SIGIO) and the F_SETOWN owner */
+    bool has_lease;
+    int lease_type;
+    int fown_signal;
+    int fown_pid;
     struct libos_lock lock;
 
     /* Lock for handle position (`pos`). Intended for operations that change the position (e.g.
@@ -354,6 +362,9 @@ int set_new_fd_handle_by_fd(uint32_t fd, struct libos_handle* hdl, int fd_flags,
                             struct libos_handle_map* map);
 int set_new_fd_handle_above_fd(uint32_t fd, struct libos_handle* hdl, int fd_flags,
                                struct libos_handle_map* map);
+/* write-path helpers (libos_open.c): the O_APPEND start position, and RLIMIT_FSIZE */
+int handle_append_position(struct libos_handle* hdl, file_off_t* pos);
+int handle_fsize_limit(struct libos_handle* hdl, file_off_t pos, size_t* count);
 int get_fd_acc_mode(uint32_t fd, struct libos_handle_map* map);
 int set_fd_acc_mode(uint32_t fd, int acc_mode, struct libos_handle_map* map);
 struct libos_handle* detach_fd_handle(uint32_t fd, int* flags, struct libos_handle_map* map);

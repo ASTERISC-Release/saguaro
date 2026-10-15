@@ -1,9 +1,17 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
 /* Copyright (C) 2026 The ASTERISC Research Lab */
-#include <endian.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <string.h>
+
+/*
+ * mremap(): shrink a mapping in place, grow it in place when the pages behind it are free, or
+ * move it (MREMAP_MAYMOVE, to any address or to MREMAP_FIXED's), keeping the old range with
+ * MREMAP_DONTUNMAP. Built on the LibOS's own mmap/munmap/mprotect, so the VMA bookkeeping stays
+ * consistent. A moved file mapping is mapped again from the file at the matching offset (a
+ * private one also gets its modified contents copied); a moved anonymous mapping is copied. The
+ * one difference from Linux: a moved MAP_SHARED|MAP_ANONYMOUS mapping becomes a copy, no longer
+ * shared with a forked child (the PAL cannot map the same anonymous pages twice). The checks
+ * follow the kernel's order (LTP mremap01-05). Device mappings (render nodes, host fds) can only
+ * shrink.
+ */
 
 #include "libos_flags_conv.h"
 #include "libos_fs.h"
@@ -14,456 +22,217 @@
 #include "stat.h"
 #include "linux_abi/errors.h"
 #include "linux_abi/memory.h"
-#include "pal.h"
-#include "pal_error.h"
 
-#ifdef MAP_32BIT /* x86_64-specific */
-#define MAP_32BIT_IF_SUPPORTED MAP_32BIT
-#else
-#define MAP_32BIT_IF_SUPPORTED 0
+#ifndef MREMAP_MAYMOVE
+#define MREMAP_MAYMOVE 1
+#endif
+#ifndef MREMAP_FIXED
+#define MREMAP_FIXED 2
+#endif
+#ifndef MREMAP_DONTUNMAP
+#define MREMAP_DONTUNMAP 4
 #endif
 
-#ifndef LEGACY_MAP_MASK
-#define LEGACY_MAP_MASK                                                                      \
-    (MAP_SHARED | MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS | MAP_DENYWRITE | MAP_EXECUTABLE | \
-     MAP_UNINITIALIZED | MAP_GROWSDOWN | MAP_LOCKED | MAP_NORESERVE | MAP_POPULATE |         \
-     MAP_NONBLOCK | MAP_STACK | MAP_HUGETLB | MAP_32BIT_IF_SUPPORTED | MAP_HUGE_2MB |        \
-     MAP_HUGE_1GB)
-#endif
+/* the MAP_* flags a mapping is recreated with */
+#define REMAP_KEEP_FLAGS (MAP_SHARED | MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE | MAP_GROWSDOWN)
 
-static int my_check_prot(int prot) {
-    if (prot & ~(PROT_NONE | PROT_READ | PROT_WRITE | PROT_EXEC | PROT_GROWSDOWN | PROT_GROWSUP |
-                 PROT_SEM)) {
-        return -EINVAL;
-    }
-
-    if ((prot & (PROT_GROWSDOWN | PROT_GROWSUP)) == (PROT_GROWSDOWN | PROT_GROWSUP)) {
-        return -EINVAL;
-    }
-
-    /* We do not support these flags (at least yet). */
-    if (prot & (PROT_GROWSUP | PROT_SEM)) {
-        return -EOPNOTSUPP;
-    }
-
-    return 0;
+static bool is_error(void* ptr) {
+    return (long)ptr < 0 && (long)ptr >= -4095;
 }
 
-static void* my_mmap(void* addr, size_t length, int prot, int flags, int fd, unsigned long offset) {
-    struct libos_handle* hdl = NULL;
-    long ret                 = 0;
+/* Map `len` bytes at `addr` like the VMA `vma`, continuing (or replacing) its part at byte
+ * `src_offset` from its start. */
+static void* map_like(const struct libos_vma_info* vma, size_t src_offset, void* addr, size_t len,
+                      int prot, int extra_flags) {
+    int flags = (vma->flags & REMAP_KEEP_FLAGS) | extra_flags;
+    if (!vma->file || (vma->flags & MAP_ANONYMOUS))
+        return (void*)libos_syscall_mmap(addr, len, prot, flags | MAP_ANONYMOUS, -1, 0);
 
-    ret = my_check_prot(prot);
-    if (ret < 0)
-        return (void*)ret;
-
-    if (!(flags & MAP_FIXED) && addr)
-        addr = ALLOC_ALIGN_DOWN_PTR(addr);
-
-    /*
-     * According to the manpage, both addr and offset have to be page-aligned,
-     * but not the length. mmap() will automatically round up the length.
-     */
-    if (addr && !IS_ALLOC_ALIGNED_PTR(addr))
-        return (void*)-EINVAL;
-
-    if (fd >= 0 && !IS_ALLOC_ALIGNED(offset))
-        return (void*)-EINVAL;
-
-    if (!IS_ALLOC_ALIGNED(length))
-        length = ALLOC_ALIGN_UP(length);
-
-    if (!length || !access_ok(addr, length))
-        return (void*)-EINVAL;
-
-    /* This check is Gramine specific. */
-    if (flags & (VMA_UNMAPPED | VMA_TAINTED | VMA_INTERNAL)) {
-        return (void*)-EINVAL;
-    }
-
-    if (flags & MAP_ANONYMOUS) {
-        switch (flags & MAP_TYPE) {
-            case MAP_SHARED:
-            case MAP_PRIVATE:
-                break;
-            default:
-                return (void*)-EINVAL;
-        }
-    } else {
-        /* MAP_FILE is the opposite of MAP_ANONYMOUS and is implicit */
-        switch (flags & MAP_TYPE) {
-            case MAP_SHARED:
-                flags &= LEGACY_MAP_MASK;
-                /* fall through */
-            case MAP_SHARED_VALIDATE:
-                /* Currently we do not support additional flags like MAP_SYNC */
-                if (flags & ~LEGACY_MAP_MASK) {
-                    return (void*)-EOPNOTSUPP;
-                }
-                /* fall through */
-            case MAP_PRIVATE:
-                if (fd < 0) {
-                    return (void*)-EINVAL;
-                }
-
-                hdl = get_fd_handle(fd, NULL, NULL);
-                if (!hdl) {
-                    return (void*)-EBADF;
-                }
-
-                if (!hdl->fs || !hdl->fs->fs_ops || !hdl->fs->fs_ops->mmap) {
-                    ret = -ENODEV;
-                    goto out_handle;
-                }
-
-                if (hdl->flags & O_WRONLY) {
-                    ret = -EACCES;
-                    goto out_handle;
-                }
-
-                if ((flags & MAP_SHARED) && (prot & PROT_WRITE) && !(hdl->flags & O_RDWR)) {
-                    ret = -EACCES;
-                    goto out_handle;
-                }
-
-                break;
-            default:
-                return (void*)-EINVAL;
-        }
-    }
-
-#ifdef MAP_32BIT
-    /* ignore MAP_32BIT when MAP_FIXED is set */
-    if ((flags & (MAP_32BIT | MAP_FIXED)) == (MAP_32BIT | MAP_FIXED))
-        flags &= ~MAP_32BIT;
-#endif
-
-    void* memory_range_start = NULL;
-    void* memory_range_end   = NULL;
-
-    /* Shared mappings of files of "untrusted_shm" type use a different memory range.
-     * See "libos/src/fs/shm/fs.c" for more details. */
-    if ((flags & MAP_SHARED) && hdl && hdl->fs && !strcmp(hdl->fs->name, "untrusted_shm")) {
-        memory_range_start = g_pal_public_state->shared_address_start;
-        memory_range_end   = g_pal_public_state->shared_address_end;
-    } else {
-        memory_range_start = g_pal_public_state->memory_address_start;
-        memory_range_end   = g_pal_public_state->memory_address_end;
-    }
-    if (flags & (MAP_FIXED | MAP_FIXED_NOREPLACE)) {
-        /* We know that `addr + length` does not overflow (`access_ok` above). */
-        if (addr < memory_range_start || (uintptr_t)memory_range_end < (uintptr_t)addr + length) {
-            ret = -EINVAL;
-            goto out_handle;
-        }
-        if (!(flags & MAP_FIXED_NOREPLACE)) {
-            /* Flush any file mappings we're about to replace */
-            ret = msync_range((uintptr_t)addr, (uintptr_t)addr + length);
-            if (ret < 0) {
-                goto out_handle;
-            }
-
-            struct libos_vma_info* vmas;
-            size_t vmas_length;
-            ret = dump_vmas_in_range((uintptr_t)addr, (uintptr_t)addr + length,
-                                     /*include_unmapped=*/false, &vmas, &vmas_length);
-            if (ret < 0) {
-                goto out_handle;
-            }
-
-            void* tmp_vma = NULL;
-            ret           = bkeep_munmap(addr, length, /*is_internal=*/false, &tmp_vma);
-            if (ret < 0) {
-                free_vma_info_array(vmas, vmas_length);
-                goto out_handle;
-            }
-
-            for (struct libos_vma_info* vma = vmas; vma < vmas + vmas_length; vma++) {
-                uintptr_t begin = MAX((uintptr_t)addr, (uintptr_t)vma->addr);
-                uintptr_t end   = MIN((uintptr_t)vma->addr + vma->length, (uintptr_t)addr + length);
-                /* `vma` contains at least one byte from `[addr; addr + length)` range, so: */
-                assert(begin < end);
-
-                if (PalVirtualMemoryFree((void*)begin, end - begin) < 0) {
-                    BUG();
-                }
-            }
-
-            free_vma_info_array(vmas, vmas_length);
-
-            bkeep_convert_tmp_vma_to_user(tmp_vma);
-
-            ret = bkeep_mmap_fixed(addr, length, prot, flags, hdl, offset, NULL);
-            if (ret < 0) {
-                BUG();
-            }
-        } else {
-            ret = bkeep_mmap_fixed(addr, length, prot, flags, hdl, offset, NULL);
-            if (ret < 0) {
-                goto out_handle;
-            }
-        }
-    } else {
-        /* We know that `addr + length` does not overflow (`access_ok` above). */
-        if (addr && (uintptr_t)memory_range_start <= (uintptr_t)addr &&
-            (uintptr_t)addr + length <= (uintptr_t)memory_range_end) {
-            ret = bkeep_mmap_any_in_range(memory_range_start, (char*)addr + length, length, prot,
-                                          flags, hdl, offset, NULL, &addr);
-        } else {
-            /* Hacky way to mark we had no hit and need to search below. */
-            ret = -1;
-        }
-        if (ret < 0) {
-            /* We either had no hinted address or could not allocate memory at it. */
-            if (memory_range_start == g_pal_public_state->memory_address_start) {
-                ret = bkeep_mmap_any_aslr(length, prot, flags, hdl, offset, NULL, &addr);
-            } else {
-                /* Shared memory range does not have ASLR. */
-                ret = bkeep_mmap_any_in_range(memory_range_start, memory_range_end, length, prot,
-                                              flags, hdl, offset, NULL, &addr);
-            }
-        }
-        if (ret < 0) {
-            ret = -ENOMEM;
-            goto out_handle;
-        }
-    }
-
-    /* From now on `addr` contains the actual address we want to map (and already bookkeeped). */
-
-    if (!hdl) {
-        ret = PalVirtualMemoryAlloc(addr, length, LINUX_PROT_TO_PAL(prot, flags));
-        if (ret < 0) {
-            if (ret == -PAL_ERROR_DENIED) {
-                ret = -EPERM;
-            } else {
-                ret = pal_to_unix_errno(ret);
-            }
-        }
-    } else {
-        ret = hdl->fs->fs_ops->mmap(hdl, addr, length, prot, flags, offset);
-    }
-
-    if (ret < 0) {
-        void* tmp_vma = NULL;
-        if (bkeep_munmap(addr, length, /*is_internal=*/false, &tmp_vma) < 0) {
-            log_error(
-                "[my_mmap] Failed to remove bookkeeped memory that was not allocated at %p-%p!",
-                addr, (char*)addr + length);
-            BUG();
-        }
-        bkeep_remove_tmp_vma(tmp_vma);
-    }
-
-out_handle:
-    if (hdl) {
-        put_handle(hdl);
-    }
-
-    if (ret < 0) {
-        return (void*)ret;
-    }
-    return addr;
+    /* the file is mapped through a temporary descriptor of the VMA's own handle */
+    int fd = set_new_fd_handle(vma->file, /*fd_flags=*/0, NULL);
+    if (fd < 0)
+        return (void*)(long)fd;
+    void* ret = (void*)libos_syscall_mmap(addr, len, prot, flags, fd,
+                                          vma->file_offset + src_offset);
+    struct libos_handle* tmp = detach_fd_handle(fd, NULL, NULL);
+    if (tmp)
+        put_handle(tmp);
+    return ret;
 }
 
-static long my_munmap(void* _addr, size_t length) {
-    uintptr_t addr = (uintptr_t)_addr;
-    /*
-     * According to the manpage, addr has to be page-aligned, but not the
-     * length. munmap() will automatically round up the length.
-     */
-    if (!addr || !IS_ALLOC_ALIGNED(addr))
-        return -EINVAL;
-
-    if (!length || !access_ok(_addr, length))
-        return -EINVAL;
-
-    if (!IS_ALLOC_ALIGNED(length))
-        length = ALLOC_ALIGN_UP(length);
-
-    int ret;
-
-    /* Flush any file mappings we're about to remove */
-    ret = msync_range(addr, addr + length);
-    if (ret < 0) {
-        return ret;
+/*
+ * Linux requires the old range to lie in one VMA (`vma_to_resize()`: EFAULT otherwise). The LibOS
+ * does not merge adjacent VMAs, so a range may span several; it is accepted only if they are what
+ * Linux would have merged: contiguous user VMAs with the same protection, flags and file, the file
+ * offsets continuing. A range reaching into a different mapping (e.g. LTP's one-page PROT_NONE
+ * "bad address" with libc above it) is EFAULT; treating it as one mapping changed the protection
+ * of the neighbours and crashed the process.
+ */
+static bool is_one_mapping(uintptr_t start, size_t size, const struct libos_vma_info* first) {
+    uintptr_t end = start + size;
+    uintptr_t cur = (uintptr_t)first->addr + first->length;
+    while (cur < end) {
+        struct libos_vma_info next = {0};
+        if (lookup_vma((void*)cur, &next) < 0)
+            return false;
+        bool same = (uintptr_t)next.addr == cur && next.prot == first->prot &&
+                    next.flags == first->flags && next.file == first->file &&
+                    (!first->file || next.file_offset == first->file_offset +
+                                                         (cur - (uintptr_t)first->addr));
+        cur = (uintptr_t)next.addr + next.length;
+        if (next.file)
+            put_handle(next.file);
+        if (!same)
+            return false;
     }
-
-    struct libos_vma_info* vmas;
-    size_t vmas_length;
-    ret = dump_vmas_in_range(addr, addr + length, /*include_unmapped=*/false, &vmas, &vmas_length);
-    if (ret < 0) {
-        return ret;
-    }
-
-    for (struct libos_vma_info* vma = vmas; vma < vmas + vmas_length; vma++) {
-        uintptr_t begin = MAX(addr, (uintptr_t)vma->addr);
-        uintptr_t end   = MIN((uintptr_t)vma->addr + vma->length, addr + length);
-        /* `vma` contains at least one byte from `[addr; addr + length)` range, so: */
-        assert(begin < end);
-
-        void* tmp_vma = NULL;
-        ret           = bkeep_munmap((void*)begin, end - begin, /*is_internal=*/false, &tmp_vma);
-        if (ret < 0) {
-            BUG();
-        }
-
-        if (PalVirtualMemoryFree((void*)begin, end - begin) < 0) {
-            BUG();
-        }
-
-        bkeep_remove_tmp_vma(tmp_vma);
-    }
-
-    free_vma_info_array(vmas, vmas_length);
-    return 0;
+    return true;
 }
 
 long libos_syscall_mremap(void* old_address, size_t old_size, size_t new_size, int flags,
                           void* new_address) {
-    __UNUSED(new_address);
-
-    if (flags != 0 && flags != MREMAP_MAYMOVE) {
-        log_error("Only MREMAP_MAYMOVE flag is supported\n");
+    if (flags & ~(MREMAP_MAYMOVE | MREMAP_FIXED | MREMAP_DONTUNMAP))
         return -EINVAL;
-    }
-
-    if (!old_address || !IS_ALLOC_ALIGNED_PTR(old_address)) {
+    if ((flags & MREMAP_FIXED) && !(flags & MREMAP_MAYMOVE))
         return -EINVAL;
-    }
-
-    if (!IS_ALLOC_ALIGNED(old_size))
-        old_size = ALLOC_ALIGN_UP(old_size);
-    if (!IS_ALLOC_ALIGNED(new_size))
-        new_size = ALLOC_ALIGN_UP(new_size);
-
-    if (new_size == 0) {
+    if ((flags & MREMAP_DONTUNMAP) && (!(flags & MREMAP_MAYMOVE) || old_size != new_size))
         return -EINVAL;
-    }
-
-    if (old_size == new_size) {
-        return (long)old_address;
-    }
-
-    if (!access_ok(old_address, old_size)) {
+    if (!IS_ALLOC_ALIGNED_PTR(old_address))
         return -EINVAL;
-    }
 
-    // Get VMA attributes at old_address
+    old_size = ALLOC_ALIGN_UP(old_size);
+    new_size = ALLOC_ALIGN_UP(new_size);
+    if (!new_size)
+        return -EINVAL;
+    /* old_size 0 duplicates a shared mapping on Linux; the PAL cannot map pages twice */
+    if (!old_size)
+        return -EINVAL;
+
+    uintptr_t old = (uintptr_t)old_address;
+    uintptr_t target = 0;
+    if (flags & MREMAP_FIXED) {
+        target = (uintptr_t)new_address;
+        if (!IS_ALLOC_ALIGNED(target))
+            return -EINVAL;
+        /* the new range must not overlap the old one */
+        if (target < old + old_size && old < target + new_size)
+            return -EINVAL;
+    }
+    if (!access_ok(old_address, old_size) ||
+            ((flags & MREMAP_FIXED) && !access_ok((void*)target, new_size)))
+        return -EINVAL;
+
+    /* the old range must be mapped without holes and be one mapping (`is_one_mapping()`); the
+     * first VMA gives the attributes of a move */
+    if (!is_in_adjacent_user_vmas(old_address, old_size, /*prot=*/0))
+        return -EFAULT;
     struct libos_vma_info vma = {0};
-    if (lookup_vma(old_address, &vma) < 0) {
-        return -EINVAL;
+    if (lookup_vma(old_address, &vma) < 0)
+        return -EFAULT;
+    long ret;
+    size_t src_offset = old - (uintptr_t)vma.addr;
+    if (!is_one_mapping(old, old_size, &vma)) {
+        ret = -EFAULT;
+        goto out;
     }
 
-    /* A device mapping (for example a GPU buffer mapped through a render node): the emulation
-     * below copies the data into anonymous memory, which would detach the mapping from the
-     * device. Shrinking only drops the tail; growing or moving is not supported. */
+    /* A device mapping (for example a GPU buffer mapped through a render node): the copy below
+     * would detach the mapping from the device. Shrinking only drops the tail; growing or moving
+     * is not supported. */
     if (vma.file && ((vma.file->type == TYPE_CHROOT && vma.file->inode &&
                       vma.file->inode->type == S_IFCHR) || vma.file->type == TYPE_HOSTFD)) {
-        long ret;
         if (new_size < old_size) {
-            ret = my_munmap((char*)old_address + new_size, old_size - new_size);
+            ret = libos_syscall_munmap((void*)(old + new_size), old_size - new_size);
             if (ret == 0)
-                ret = (long)old_address;
+                ret = (long)old;
         } else {
             log_warning("mremap: growing or moving a device mapping is not supported");
             ret = -ENOMEM;
         }
-        put_handle(vma.file);
-        return ret;
+        goto out;
     }
 
-    // In-place remapping
-    if (!(flags & MREMAP_MAYMOVE)) {
-        /* Like Linux: growing in place needs the pages after the mapping to be free; otherwise
-         * ENOMEM (allocators such as LuaJIT's try this and fall back). The emulation below maps
-         * with MAP_FIXED and would silently replace whatever is mapped there. */
-        if (new_size > old_size) {
-            uintptr_t ext_start = (uintptr_t)old_address + old_size;
-            uintptr_t ext_end   = (uintptr_t)old_address + new_size;
-            struct libos_vma_info* busy;
-            size_t busy_cnt;
-            if (ext_end < ext_start || !access_ok((void*)ext_start, new_size - old_size)
-                    || dump_vmas_in_range(ext_start, ext_end, /*include_unmapped=*/false, &busy,
-                                          &busy_cnt) < 0) {
-                if (vma.file)
-                    put_handle(vma.file);
-                return -ENOMEM;
+    /* A shared file mapping is written back first: filesystems with emulated mappings (tmpfs)
+     * hand a new mapping (an extension or the moved range) the file's contents, not the old
+     * mapping's pages. */
+    if (vma.file && (vma.flags & MAP_SHARED))
+        (void)libos_syscall_msync((unsigned long)old_address, old_size, MS_SYNC);
+
+    if (!(flags & (MREMAP_FIXED | MREMAP_DONTUNMAP))) {
+        if (new_size <= old_size) {
+            /* shrinking (or the same size) stays in place */
+            if (new_size < old_size) {
+                ret = libos_syscall_munmap((void*)(old + new_size), old_size - new_size);
+                if (ret < 0)
+                    goto out;
             }
-            free_vma_info_array(busy, busy_cnt);
-            if (busy_cnt) {
-                if (vma.file)
-                    put_handle(vma.file);
-                return -ENOMEM;
+            ret = (long)old;
+            goto out;
+        }
+
+        /* growing in place, if the pages behind the mapping are free (the extension continues
+         * the VMA holding the last page; a range ending inside a VMA has a neighbour there) */
+        struct libos_vma_info last = {0};
+        if (lookup_vma((void*)(old + old_size - 1), &last) == 0) {
+            uintptr_t last_end = (uintptr_t)last.addr + last.length;
+            if (old + old_size == last_end) {
+                void* ext = map_like(&last, last.length, (void*)last_end, new_size - old_size,
+                                     last.prot, MAP_FIXED_NOREPLACE);
+                if (last.file)
+                    put_handle(last.file);
+                if (!is_error(ext) && ext != (void*)last_end) {
+                    /* the LibOS placed it elsewhere (the pages behind are taken) */
+                    (void)libos_syscall_munmap(ext, new_size - old_size);
+                    ext = (void*)-EEXIST;
+                }
+                if (!is_error(ext)) {
+                    ret = (long)old;
+                    goto out;
+                }
+            } else if (last.file) {
+                put_handle(last.file);
             }
         }
-
-        // Save old data
-        size_t copy_size = old_size < new_size ? old_size : new_size;
-        void* temp_buf   = malloc(copy_size);
-        if (!temp_buf) {
-            if (vma.file)
-                put_handle(vma.file);
-            return -ENOMEM;
+        if (!(flags & MREMAP_MAYMOVE)) {
+            ret = -ENOMEM;
+            goto out;
         }
-        memcpy(temp_buf, old_address, copy_size);
-
-        // If shrinking, unmap the tail
-        if (new_size < old_size) {
-            my_munmap((char*)old_address + new_size, old_size - new_size);
-        }
-
-        // Remap in place
-        int mmap_flags = vma.flags | MAP_FIXED;
-        void* result   = my_mmap(old_address, new_size, vma.prot, mmap_flags, -1, 0);
-        if ((long)result < 0) {
-            free(temp_buf);
-            if (vma.file)
-                put_handle(vma.file);
-            return (long)result;
-        }
-
-        // Restore data
-        memcpy(old_address, temp_buf, copy_size);
-        free(temp_buf);
-
-        // Zero expanded region if growing
-        if (new_size > old_size) {
-            memset((char*)old_address + old_size, 0, new_size - old_size);
-        }
-
-        if (vma.file)
-            put_handle(vma.file);
-
-        return (long)old_address;
     }
 
-    // MREMAP_MAYMOVE
-    void* new_addr = my_mmap(NULL, new_size, vma.prot, vma.flags, -1, 0);
-    if ((long)new_addr < 0) {
-        if (vma.file)
-            put_handle(vma.file);
-        return (long)new_addr;
+    /* move: map the new range (writable for the copy), copy, then drop the old range */
+    int map_prot = vma.prot | PROT_WRITE;
+    void* moved = map_like(&vma, src_offset, (void*)target, new_size, map_prot,
+                           (flags & MREMAP_FIXED) ? MAP_FIXED : 0);
+    if (is_error(moved)) {
+        ret = (long)moved;
+        goto out;
     }
 
-    // Copy data
-    size_t copy_size = old_size < new_size ? old_size : new_size;
-    memcpy(new_addr, old_address, copy_size);
-
-    // Zero expanded region if growing
-    if (new_size > old_size) {
-        memset((char*)new_addr + old_size, 0, new_size - old_size);
+    bool copy = !vma.file || (vma.flags & (MAP_ANONYMOUS | MAP_PRIVATE));
+    if (copy) {
+        size_t copy_size = MIN(old_size, new_size);
+        bool readable = vma.prot & PROT_READ;
+        if (!readable)
+            (void)libos_syscall_mprotect(old_address, old_size, vma.prot | PROT_READ);
+        memcpy(moved, old_address, copy_size);
+        if (!readable)
+            (void)libos_syscall_mprotect(old_address, old_size, vma.prot);
     }
+    if (map_prot != vma.prot)
+        (void)libos_syscall_mprotect(moved, new_size, vma.prot);
 
-    // Free old region
-    long ret = my_munmap(old_address, old_size);
-    if (ret < 0) {
-        log_error("mremap: failed to unmap old region after allocating new one");
-        // Continue anyway, new mapping is valid
+    if (flags & MREMAP_DONTUNMAP) {
+        /* the old range stays mapped, emptied (anonymous mappings read as zeros again) */
+        if (vma.flags & MAP_ANONYMOUS)
+            (void)map_like(&vma, src_offset, old_address, old_size, vma.prot, MAP_FIXED);
+    } else {
+        ret = libos_syscall_munmap(old_address, old_size);
+        if (ret < 0)
+            log_warning("mremap: unmapping the old range failed: %ld", ret);
     }
+    ret = (long)moved;
 
+out:
     if (vma.file)
         put_handle(vma.file);
-
-    return (long)new_addr;
+    return ret;
 }

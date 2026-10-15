@@ -71,6 +71,10 @@ int pal_common_file_symlink(const char* target, const char* uri);
 int pal_common_file_link(const char* old_uri, const char* new_uri);
 int pal_common_file_unlink_path(const char* uri);
 int pal_common_file_rename_path(const char* old_uri, const char* new_uri);
+int pal_common_file_exchange_path(const char* uri_a, const char* uri_b);
+int pal_common_file_readlink_path(const char* uri, char* buf, size_t* inout_size);
+int pal_common_file_xattr(const char* uri, enum pal_xattr_op op, const char* name, void* value,
+                          size_t* inout_size, int flags);
 
 int pal_common_dir_open(struct pal_handle** handle, const char* type, const char* uri,
                         enum pal_access access, pal_share_flags_t share,

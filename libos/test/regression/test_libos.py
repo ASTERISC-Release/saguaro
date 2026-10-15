@@ -1035,6 +1035,10 @@ class TC_30_Syscall(RegressionTestCase):
         stdout, _ = self.run_binary(['memfd_seals'])
         self.assertIn('TEST OK', stdout)
 
+    def test_075a_memfd_exec(self):
+        stdout, _ = self.run_binary(['memfd_exec'])
+        self.assertIn('TEST OK', stdout)
+
     def test_076_timerfd(self):
         stdout, _ = self.run_binary(['timerfd'])
         self.assertIn('TEST OK', stdout)
@@ -1093,6 +1097,38 @@ class TC_30_Syscall(RegressionTestCase):
 
     def test_097_sysv_msg(self):
         stdout, _ = self.run_binary(['sysv_msg'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_09a_fd_limits(self):
+        stdout, _ = self.run_binary(['fd_limits'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_09b_socket_errnos(self):
+        stdout, _ = self.run_binary(['socket_errnos'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_09c_prctl_misc(self):
+        stdout, _ = self.run_binary(['prctl_misc'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_09d_sched_errnos(self):
+        stdout, _ = self.run_binary(['sched_errnos'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_09e_ioctl_misc(self):
+        stdout, _ = self.run_binary(['ioctl_misc'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_09f_cputime(self):
+        stdout, _ = self.run_binary(['cputime'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_099_sysv_sem(self):
+        stdout, _ = self.run_binary(['sysv_sem'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_098_recvmmsg_timeout(self):
+        stdout, _ = self.run_binary(['recvmmsg_timeout'])
         self.assertIn('TEST OK', stdout)
 
     def test_100_get_set_groups(self):
@@ -1445,6 +1481,78 @@ class TC_40_FileSystem(RegressionTestCase):
             os.remove('/dev/shm/shm_test')
         stdout, _ = self.run_binary(['shm'])
         self.assertIn("TEST OK", stdout)
+
+    def test_072a_fcntl_misc_chroot(self):
+        stdout, _ = self.run_binary(['fcntl_misc', 'tmp'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_072b_fcntl_misc_tmpfs(self):
+        stdout, _ = self.run_binary(['fcntl_misc', '/mnt/tmpfs'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_073a_setid_rules_chroot(self):
+        stdout, _ = self.run_binary(['setid_rules', 'tmp'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_073b_setid_rules_tmpfs(self):
+        stdout, _ = self.run_binary(['setid_rules', '/mnt/tmpfs'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_074a_perm_checks_chroot(self):
+        stdout, _ = self.run_binary(['perm_checks', 'tmp'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_074b_perm_checks_tmpfs(self):
+        stdout, _ = self.run_binary(['perm_checks', '/mnt/tmpfs'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_075a_append_fsize_chroot(self):
+        stdout, _ = self.run_binary(['append_fsize', 'tmp'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_075b_append_fsize_tmpfs(self):
+        stdout, _ = self.run_binary(['append_fsize', '/mnt/tmpfs'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_076a_mremap_misc_chroot(self):
+        stdout, _ = self.run_binary(['mremap_misc', 'tmp'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_076b_mremap_misc_tmpfs(self):
+        stdout, _ = self.run_binary(['mremap_misc', '/mnt/tmpfs'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_077c_symlink_created_on_host(self):
+        os.makedirs('tmp', exist_ok=True)
+        target = 'tmp/symlink_host_target'
+        live = 'tmp/symlink_host_live'
+        dangling = 'tmp/symlink_host_dangling'
+        for path in (live, dangling):
+            if os.path.lexists(path):
+                os.unlink(path)
+        with open(target, 'w') as f:
+            f.write('x')
+        os.symlink('symlink_host_target', live)
+        os.symlink('symlink_host_missing', dangling)
+        try:
+            stdout, _ = self.run_binary(['symlink_host', live, 'symlink_host_target', dangling])
+            self.assertIn('TEST OK', stdout)
+        finally:
+            for path in (live, dangling, target):
+                if os.path.lexists(path):
+                    os.unlink(path)
+
+    def test_077a_xattr_misc_chroot(self):
+        stdout, _ = self.run_binary(['xattr_misc', 'tmp'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_077b_xattr_misc_tmpfs(self):
+        stdout, _ = self.run_binary(['xattr_misc', '/mnt/tmpfs'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_071_memfd_on_shm_mount(self):
+        stdout, _ = self.run_binary(['memfd_rw'])
+        self.assertIn('TEST OK', stdout)
 
     def test_080_close_range(self):
         stdout, _ = self.run_binary(['close_range'])

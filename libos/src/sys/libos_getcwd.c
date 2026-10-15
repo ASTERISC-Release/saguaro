@@ -62,9 +62,14 @@ long libos_syscall_chdir(const char* filename) {
 
     lock(&g_dcache_lock);
     ret = path_lookupat(/*start=*/NULL, filename, LOOKUP_FOLLOW | LOOKUP_DIRECTORY, &dent);
+    if (ret == 0 && dent)
+        ret = check_permissions(dent, MAY_EXEC); /* the new cwd must be searchable */
     unlock(&g_dcache_lock);
-    if (ret < 0)
+    if (ret < 0) {
+        if (dent)
+            put_dentry(dent);
         return ret;
+    }
 
     if (!dent)
         return -ENOENT;
@@ -86,6 +91,7 @@ long libos_syscall_fchdir(int fd) {
 
     if (!dent) {
         log_debug("FD=%d has no path in the filesystem", fd);
+        put_handle(hdl);
         return -ENOTDIR;
     }
     if (!dent->inode || dent->inode->type != S_IFDIR) {
@@ -95,6 +101,14 @@ long libos_syscall_fchdir(int fd) {
         free(path);
         put_handle(hdl);
         return -ENOTDIR;
+    }
+
+    lock(&g_dcache_lock);
+    int ret = check_permissions(dent, MAY_EXEC); /* LTP fchdir03 */
+    unlock(&g_dcache_lock);
+    if (ret < 0) {
+        put_handle(hdl);
+        return ret;
     }
 
     lock(&g_process.fs_lock);

@@ -12,6 +12,10 @@ int PalSystemTimeQuery(uint64_t* time) {
     return _PalSystemTimeQuery(time);
 }
 
+int PalGetCpuTime(bool thread, uint64_t* out_user_us, uint64_t* out_sys_us) {
+    return _PalGetCpuTime(thread, out_user_us, out_sys_us);
+}
+
 int PalRandomBitsRead(void* buffer, size_t size) {
     return _PalRandomBitsRead(buffer, size);
 }

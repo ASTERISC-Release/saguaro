@@ -32,7 +32,12 @@ static void signal_io(IDTYPE caller, void* arg) {
     }
 }
 
-long libos_syscall_ioctl(unsigned int fd, unsigned int cmd, unsigned long arg) {
+/* `cmd` arrives as the full register: glibc passes the request as an unsigned long (zero-extended),
+ * while the RISC-V calling convention lets the compiler assume a 32-bit argument is sign-extended,
+ * so a request with bit 31 set (`_IOR`, e.g. RNDGETENTCNT) would compare unequal to its own
+ * constant. Narrowing it explicitly makes the value well-defined on every architecture. */
+long libos_syscall_ioctl(unsigned int fd, unsigned long cmd_reg, unsigned long arg) {
+    unsigned int cmd = (unsigned int)cmd_reg;
     struct libos_handle_map* handle_map = get_thread_handle_map(NULL);
     assert(handle_map);
 

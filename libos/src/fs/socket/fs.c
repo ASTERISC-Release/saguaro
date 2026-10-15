@@ -163,8 +163,22 @@ static int get_socket_pending_size(struct libos_handle* handle, size_t* out_size
     return 0;
 }
 
+#ifndef SIOCATMARK
+#define SIOCATMARK 0x8905
+#endif
+
 static int ioctl(struct libos_handle* handle, unsigned int cmd, unsigned long arg) {
     switch (cmd) {
+        case SIOCATMARK:
+            /* only stream sockets have an out-of-band mark (ENOTTY elsewhere, as the kernel since
+             * 2.6.39); no urgent data is ever pending here (LTP sockioctl01) */
+            if (handle->info.sock.type != SOCK_STREAM)
+                return -ENOTTY;
+            if (!is_user_memory_writable((void*)arg, sizeof(int)))
+                return -EFAULT;
+            *(int*)arg = 0;
+            return 0;
+
         case FIONREAD:;
             size_t size = 0;
             int ret = get_socket_pending_size(handle, &size);

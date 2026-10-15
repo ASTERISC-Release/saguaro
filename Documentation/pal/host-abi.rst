@@ -214,6 +214,30 @@ applications.
    :project: pal
 
 
+Path operations on host files
+"""""""""""""""""""""""""""""
+
+These calls take a ``file:`` URI and work on the host path itself, without a
+handle (declared in ``pal/include/pal/pal.h``, where the arguments are
+described):
+
+- ``PalFileExchange(a, b)`` swaps two paths atomically (``renameat2`` with
+  ``RENAME_EXCHANGE``).
+- ``PalFileReadLink(uri, buf, &size)`` reads a symbolic link without following
+  it; ``-PAL_ERROR_INVAL`` if the path is not a link.
+- ``PalFileXattr(uri, op, name, value, &size, flags)`` gets, sets, lists or
+  removes an extended attribute (``PAL_XATTR_GET``/``SET``/``LIST``/``REMOVE``;
+  flags ``PAL_XATTR_CREATE``, ``PAL_XATTR_REPLACE``, ``PAL_XATTR_NOFOLLOW``). A
+  missing attribute is ``-PAL_ERROR_STREAMNOTEXIST``, a filesystem without
+  attributes ``-PAL_ERROR_NOTSUPPORT``, a too-small buffer or too-large value
+  ``-PAL_ERROR_TOOLONG``.
+
+The Linux PAL implements them with the host system calls, the VM and TDX PALs
+with virtio-fs requests (``FUSE_RENAME2``, ``FUSE_READLINK``,
+``FUSE_*XATTR``; ``gramine-vm`` starts virtiofsd with ``--xattr``). Other PALs
+return ``-PAL_ERROR_NOTSUPPORT``, which the LibOS treats like a host
+filesystem without these features.
+
 Flags used for stream manipulation
 """"""""""""""""""""""""""""""""""
 
@@ -348,6 +372,12 @@ random bits, to obtain an attestation report and quote, etc.
 
 .. doxygenfunction:: PalSystemTimeQuery
    :project: pal
+
+``PalGetCpuTime(thread, &user_us, &sys_us)`` returns the CPU time used by the
+whole process or by the calling thread, in microseconds. Only the Linux PAL
+implements it (host ``getrusage``); the others return
+``-PAL_ERROR_NOTIMPLEMENTED``, and the LibOS then reports zero CPU time in
+``getrusage``/``times`` and uses the real-time clock for the CPU-time clocks.
 
 .. doxygenfunction:: PalRandomBitsRead
    :project: pal

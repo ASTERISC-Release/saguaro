@@ -38,6 +38,7 @@ long libos_syscall_lseek(int fd, off_t offset, int origin);
 void* libos_syscall_mmap(void* addr, size_t length, int prot, int flags, int fd,
                          unsigned long offset);
 long libos_syscall_getrusage(int who, struct __kernel_rusage* usage);
+long libos_syscall_times(struct __kernel_tms* buf);
 long libos_syscall_mprotect(void* addr, size_t len, int prot);
 long libos_syscall_munmap(void* addr, size_t len);
 void* libos_syscall_brk(void* brk);
@@ -46,7 +47,7 @@ long libos_syscall_rt_sigaction(int signum, const struct __kernel_sigaction* act
 long libos_syscall_rt_sigprocmask(int how, const __sigset_t* set, __sigset_t* oldset,
                                   size_t sigsetsize);
 long libos_syscall_rt_sigreturn(void);
-long libos_syscall_ioctl(unsigned int fd, unsigned int cmd, unsigned long arg);
+long libos_syscall_ioctl(unsigned int fd, unsigned long cmd_reg, unsigned long arg);
 long libos_syscall_pread64(int fd, char* buf, size_t count, loff_t pos);
 long libos_syscall_pwrite64(int fd, char* buf, size_t count, loff_t pos);
 long libos_syscall_readv(unsigned long fd, struct iovec* vec, unsigned long vlen);
@@ -246,6 +247,7 @@ long libos_syscall_link(const char* oldpath, const char* newpath);
 long libos_syscall_linkat(int olddirfd, const char* oldpath, int newdirfd, const char* newpath,
                           int flags);
 long libos_syscall_fchmodat(int dfd, const char* filename, mode_t mode);
+long libos_syscall_lchown(const char* path, uid_t uid, gid_t gid);
 long libos_syscall_fchownat(int dfd, const char* filename, uid_t user, gid_t group, int flags);
 long libos_syscall_faccessat(int dfd, const char* filename, mode_t mode);
 long libos_syscall_faccessat2(int dfd, const char* filename, mode_t mode, int flags);
@@ -278,7 +280,7 @@ long libos_syscall_timerfd_settime(int fd, int flags,
 long libos_syscall_timerfd_gettime(int fd, struct __kernel_itimerspec* curr);
 long libos_syscall_signalfd(int fd, const __sigset_t* mask, size_t sizemask);
 long libos_syscall_signalfd4(int fd, const __sigset_t* mask, size_t sizemask, int flags);
-long libos_syscall_timer_create(int clockid, struct sigevent* evp, void** out_timerid);
+long libos_syscall_timer_create(int clockid, struct sigevent* evp, int* out_timerid);
 long libos_syscall_timer_settime(void* timerid, int flags,
                                  const struct __kernel_itimerspec* new_val,
                                  struct __kernel_itimerspec* old_val);

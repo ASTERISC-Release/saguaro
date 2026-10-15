@@ -60,6 +60,7 @@ struct libos_dev_ops {
     int64_t (*seek)(struct libos_handle* hdl, int64_t offset, int whence);
     int (*truncate)(struct libos_handle* hdl, uint64_t len);
     int (*poll)(struct libos_handle* hdl, int in_events, int* out_events);
+    int (*ioctl)(struct libos_handle* hdl, unsigned int cmd, unsigned long arg);
 };
 
 #define PSEUDO_PERM_DIR     PERM_r_xr_xr_x  /* default for directories */
@@ -218,6 +219,7 @@ int proc_thread_follow_link(struct libos_dentry* dent, char** out_target);
 int proc_thread_maps_load(struct libos_dentry* dent, char** out_data, size_t* out_size);
 int proc_thread_cmdline_load(struct libos_dentry* dent, char** out_data, size_t* out_size);
 int proc_thread_status_load(struct libos_dentry* dent, char** out_data, size_t* out_size);
+int proc_thread_comm_load(struct libos_dentry* dent, char** out_data, size_t* out_size);
 int proc_thread_statm_load(struct libos_dentry* dent, char** out_data, size_t* out_size);
 int proc_thread_stat_load(struct libos_dentry* dent, char** out_data, size_t* out_size);
 bool proc_thread_fd_name_exists(struct libos_dentry* parent, const char* name);
