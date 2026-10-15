@@ -70,8 +70,8 @@ static int check_prot(int prot) {
 }
 
 bool unmapped_data = false;
-void* libos_syscall_mmap(void* addr, size_t length, int prot, int flags, int fd,
-                         unsigned long offset) {
+static void* do_mmap(void* addr, size_t length, int prot, int flags, int fd,
+                     unsigned long offset) {
 
     static bool isMappedComms = false;
 
@@ -369,7 +369,7 @@ out_handle:
     return addr;
 }
 
-long libos_syscall_mprotect(void* addr, size_t length, int prot) {
+static long do_mprotect(void* addr, size_t length, int prot) {
     int ret = check_prot(prot);
     if (ret < 0)
         return ret;
@@ -444,7 +444,7 @@ long libos_syscall_mprotect(void* addr, size_t length, int prot) {
     return 0;
 }
 
-long libos_syscall_munmap(void* _addr, size_t length) {
+static long do_munmap(void* _addr, size_t length) {
     uintptr_t addr = (uintptr_t)_addr;
     /*
      * According to the manpage, addr has to be page-aligned, but not the
@@ -700,4 +700,28 @@ long libos_syscall_msync(unsigned long start, size_t len_orig, int flags) {
         /* `MS_ASYNC` is a no-op on Linux. */
         return 0;
     }
+}
+
+/* The address-space-changing calls run under g_vma_change_lock (shared), so that fork does not
+ * copy memory that is being unmapped or remapped (see libos_vma.c). */
+void* libos_syscall_mmap(void* addr, size_t length, int prot, int flags, int fd,
+                         unsigned long offset) {
+    rwlock_read_lock(&g_vma_change_lock);
+    void* ret = do_mmap(addr, length, prot, flags, fd, offset);
+    rwlock_read_unlock(&g_vma_change_lock);
+    return ret;
+}
+
+long libos_syscall_mprotect(void* addr, size_t length, int prot) {
+    rwlock_read_lock(&g_vma_change_lock);
+    long ret = do_mprotect(addr, length, prot);
+    rwlock_read_unlock(&g_vma_change_lock);
+    return ret;
+}
+
+long libos_syscall_munmap(void* addr, size_t length) {
+    rwlock_read_lock(&g_vma_change_lock);
+    long ret = do_munmap(addr, length);
+    rwlock_read_unlock(&g_vma_change_lock);
+    return ret;
 }

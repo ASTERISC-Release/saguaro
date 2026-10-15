@@ -524,6 +524,7 @@ int create_process_and_send_checkpoint(migrate_func_t migrate_func,
 
     int ret = 0;
     PAL_HANDLE pal_process = NULL;
+    bool vma_change_locked = false;
 
     /* allocate a space for dumping the checkpoint data */
     struct libos_cp_store cpstore = {
@@ -553,6 +554,10 @@ int create_process_and_send_checkpoint(migrate_func_t migrate_func,
         .parent_vmid = g_process_ipc_ids.self_vmid,
         .leader_vmid = g_process_ipc_ids.leader_vmid ?: g_process_ipc_ids.self_vmid,
     };
+    /* no other thread changes the address space until the child has the memory */
+    rwlock_write_lock(&g_vma_change_lock);
+    vma_change_locked = true;
+
     va_list ap;
     va_start(ap, thread_description);
     ret = (*migrate_func)(&cpstore, process_description, thread_description, &process_ipc_ids, ap);
@@ -588,6 +593,12 @@ int create_process_and_send_checkpoint(migrate_func_t migrate_func,
         goto out;
     }
 
+    ret = populate_shared_anonymous_mappings();
+    if (ret < 0) {
+        free(reserved_mem_ranges);
+        goto out;
+    }
+
     ret = PalProcessCreate(/*args=*/NULL, reserved_mem_ranges, reserved_mem_ranges_len,
                            &pal_process);
     free(reserved_mem_ranges);
@@ -604,6 +615,8 @@ int create_process_and_send_checkpoint(migrate_func_t migrate_func,
     }
 
     ret = send_checkpoint_on_stream(pal_process, &cpstore);
+    rwlock_write_unlock(&g_vma_change_lock);
+    vma_change_locked = false;
     if (ret < 0) {
         log_error("failed sending checkpoint: %s", unix_strerror(ret));
         goto out;
@@ -644,6 +657,8 @@ int create_process_and_send_checkpoint(migrate_func_t migrate_func,
     ret = 0;
 
 out:
+    if (vma_change_locked)
+        rwlock_write_unlock(&g_vma_change_lock);
     if (cpstore.base) {
         void* tmp_vma = NULL;
         int tmp_ret = bkeep_munmap((void*)cpstore.base, cpstore.bound, /*is_internal=*/true,

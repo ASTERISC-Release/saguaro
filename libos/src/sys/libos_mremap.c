@@ -318,8 +318,8 @@ static long my_munmap(void* _addr, size_t length) {
     return 0;
 }
 
-long libos_syscall_mremap(void* old_address, size_t old_size, size_t new_size, int flags,
-                          void* new_address) {
+static long do_mremap(void* old_address, size_t old_size, size_t new_size, int flags,
+                      void* new_address) {
     __UNUSED(new_address);
 
     if (flags != 0 && flags != MREMAP_MAYMOVE) {
@@ -424,4 +424,12 @@ long libos_syscall_mremap(void* old_address, size_t old_size, size_t new_size, i
         put_handle(vma.file);
 
     return (long)new_addr;
+}
+
+long libos_syscall_mremap(void* old_address, size_t old_size, size_t new_size, int flags,
+                          void* new_address) {
+    rwlock_read_lock(&g_vma_change_lock); /* see libos_syscall_mmap() */
+    long ret = do_mremap(old_address, old_size, new_size, flags, new_address);
+    rwlock_read_unlock(&g_vma_change_lock);
+    return ret;
 }
