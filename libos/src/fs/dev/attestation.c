@@ -394,6 +394,29 @@ static int init_tdx_attestation(struct pseudo_node* attestation) {
     return 0;
 }
 
+#ifdef PAL_HOST_VBS
+/* Windows VBS enclaves: `report` and `quote` are the platform-signed VBS attestation report package
+ * (the same bytes), with `user_report_data` as its 64 bytes of enclave data; no target info. */
+static int init_vbs_attestation(struct pseudo_node* attestation) {
+    if (strcmp(g_pal_public_state->host_type, "VBS"))
+        return 0;
+
+    if (!g_pal_public_state->attestation_type) {
+        log_error("Cannot determine remote attestation type during init of /dev/attestation/");
+        return -EINVAL;
+    }
+
+    pseudo_add_str(attestation, "attestation_type", attestation_type_load);
+    pseudo_add_str(attestation, "report", &report_load);
+    pseudo_add_str(attestation, "quote", &quote_load);
+
+    struct pseudo_node* user_report_data = pseudo_add_str(attestation, "user_report_data", NULL);
+    user_report_data->perm = PSEUDO_PERM_FILE_RW;
+    user_report_data->str.save = &user_report_data_save;
+    return 0;
+}
+
+#endif
 int init_attestation(struct pseudo_node* dev) {
     struct pseudo_node* attestation = pseudo_add_dir(dev, "attestation");
 
@@ -411,6 +434,11 @@ int init_attestation(struct pseudo_node* dev) {
     ret = init_tdx_attestation(attestation);
     if (ret < 0)
         return ret;
+#ifdef PAL_HOST_VBS
+    ret = init_vbs_attestation(attestation);
+    if (ret < 0)
+        return ret;
+#endif
 
     return 0;
 }

@@ -80,6 +80,7 @@ clang --target=aarch64-pc-windows-msvc -c "$VBS/enclave/pal_vbs_boundary.S" -o "
 echo "=== host: pal_vbs_host.c"
 $CL /c /O2 /MT -DUNICODE -I"$VBS/common" /Fo:"$OUT/pal_vbs_host.obj" "$VBS/host/pal_vbs_host.c"
 $CL /c /O2 /MT -DUNICODE -I"$VBS/common" /Fo:"$OUT/pal_vbs_host_io.obj" "$VBS/host/pal_vbs_host_io.c"
+$CL /c /O2 /MT -DUNICODE -I"$VBS/common" /Fo:"$OUT/pal_vbs_verify.obj" "$VBS/host/pal_vbs_verify.c"
 
 echo "objects in $OUT:"
 ls -l "$OUT"

@@ -36,11 +36,12 @@ echo === veiid
 "%WindowsSdkVerBinPath%arm64\veiid.exe" pal_vbs_enclave.dll || exit /b 4
 
 echo === signtool (test cert)
-"%WindowsSdkVerBinPath%arm64\signtool.exe" sign /ph /fd SHA256 /n "TheDefaultTestEnclaveCertName" pal_vbs_enclave.dll > signtool.log 2>&1
+if "%VBS_CERT_NAME%"=="" set VBS_CERT_NAME=TheDefaultTestEnclaveCertName
+"%WindowsSdkVerBinPath%arm64\signtool.exe" sign /ph /fd SHA256 /n "%VBS_CERT_NAME%" pal_vbs_enclave.dll > signtool.log 2>&1
 set SIGNRC=%ERRORLEVEL%
 echo signtool exit code: %SIGNRC% (2 = signed with a warning)
 if %SIGNRC% NEQ 0 if %SIGNRC% NEQ 2 (type signtool.log & exit /b 5)
 
 echo === link (host exe)
-link /nologo /DEBUG /OUT:pal_vbs_host.exe pal_vbs_host.obj pal_vbs_host_io.obj onecore.lib ws2_32.lib libcmt.lib || exit /b 6
+link /nologo /DEBUG /OUT:pal_vbs_host.exe pal_vbs_host.obj pal_vbs_host_io.obj pal_vbs_verify.obj onecore.lib ws2_32.lib libcmt.lib || exit /b 6
 echo === build done

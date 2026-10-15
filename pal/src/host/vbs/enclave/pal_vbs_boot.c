@@ -346,6 +346,48 @@ static void svc_wake(uint32_t* addr, uint64_t all) {
         WakeByAddressSingle(addr);
 }
 
+/* ---- attestation ---- */
+
+static int64_t svc_attest(const uint8_t* user_data, void* out, uint64_t out_cap) {
+    UINT8 data[ENCLAVE_REPORT_DATA_LENGTH];
+    memcpy(data, user_data, sizeof(data));
+    UINT32 size = 0;
+    HRESULT hr = EnclaveGetAttestationReport(data, NULL, 0, &size);
+    if (FAILED(hr))
+        return -(int64_t)(hr & 0x7fffffff);
+    if (!out || out_cap < size)
+        return size;
+    hr = EnclaveGetAttestationReport(data, out, (UINT32)out_cap, &size);
+    if (FAILED(hr))
+        return -(int64_t)(hr & 0x7fffffff);
+    return size;
+}
+
+/*
+ * E_VerifyReport: verifies a report package with the platform (the signature chain to the Secure
+ * Kernel) and returns the verifying enclave's identity. Needs no PAL: the host calls it in a fresh
+ * enclave (`pal_vbs_host.exe <image> 1 verify ...`).
+ */
+void* CALLBACK E_VerifyReport(void* param) {
+    struct pal_vbs_verify v;
+    EnclaveCopyIntoEnclave(&v, param, sizeof(v));
+    static UINT8 report[PAL_VBS_REPORT_MAX];
+    if (!v.report_size || v.report_size > sizeof(report))
+        return (void*)(intptr_t)-1;
+    if (FAILED(EnclaveCopyIntoEnclave(report, (const void*)(uintptr_t)v.report,
+                                      (SIZE_T)v.report_size)))
+        return (void*)(intptr_t)-2;
+    v.hresult = EnclaveVerifyAttestationReport(ENCLAVE_TYPE_VBS, report, (UINT32)v.report_size);
+    ENCLAVE_INFORMATION info;
+    memset(&info, 0, sizeof(info));
+    v.info_hresult = EnclaveGetEnclaveInformation(sizeof(info), &info);
+    _Static_assert(sizeof(info.Identity) <= sizeof(v.own_identity), "identity size");
+    memset(v.own_identity, 0, sizeof(v.own_identity));
+    memcpy(v.own_identity, &info.Identity, sizeof(info.Identity));
+    EnclaveCopyOutOfEnclave(param, &v, sizeof(v));
+    return 0;
+}
+
 /*
  * E_ThreadStart: the ECALL a host thread makes for PAL_VBS_OCALL_THREAD_CREATE. The parameter is
  * the thread's block in host memory. Returns when the thread exits.
@@ -462,6 +504,7 @@ int64_t pal_vbs_boot(const struct pal_vbs_shared* shared) {
     g_svc.wait          = (void*)svc_wait;
     g_svc.wake          = (void*)svc_wake;
     g_svc.host_call     = (void*)svc_host_call;
+    g_svc.attest        = (void*)svc_attest;
     /* host arguments: already copied into the enclave with the shared block (E_PalMain); bounded
      * and NUL-terminated here */
     static char args[PAL_VBS_ARGS_SIZE + 1];

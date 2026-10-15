@@ -38,16 +38,25 @@
 #ifndef PAL_VBS_THREADS
 #define PAL_VBS_THREADS 4
 #endif
+#ifndef PAL_VBS_FAMILY_ID
+#define PAL_VBS_FAMILY_ID { 0xFE, 0xFE }
+#endif
+#ifndef PAL_VBS_IMAGE_ID
+#define PAL_VBS_IMAGE_ID { 0x01, 0x04 }
+#endif
+#ifndef PAL_VBS_SVN
+#define PAL_VBS_SVN 0
+#endif
 
 const IMAGE_ENCLAVE_CONFIG __enclave_config = {
     sizeof(IMAGE_ENCLAVE_CONFIG),
     IMAGE_ENCLAVE_MINIMUM_CONFIG_SIZE,
     PAL_VBS_POLICY,
     0, 0, 0,
-    { 0xFE, 0xFE },    /* family id */
-    { 0x01, 0x04 },    /* image id (0x04: the PAL skeleton with packed objects, phase 2) */
+    PAL_VBS_FAMILY_ID, /* family id (vbs.family_id; without a manifest: the self-test's) */
+    PAL_VBS_IMAGE_ID,  /* image id (vbs.image_id) */
     0,                 /* version */
-    0,                 /* SVN */
+    PAL_VBS_SVN,       /* SVN (vbs.isv_svn) */
     PAL_VBS_SIZE,
     PAL_VBS_THREADS,
     IMAGE_ENCLAVE_FLAG_PRIMARY_IMAGE

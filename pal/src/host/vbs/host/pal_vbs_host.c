@@ -157,7 +157,8 @@ static uint64_t rva_to_off(const IMAGE_NT_HEADERS64* nt, uint64_t rva) {
 
 /* The enclave size and thread count the signed image declares (its IMAGE_ENCLAVE_CONFIG, which
  * pack.py filled from vbs.enclave_size / vbs.max_threads); the enclave must be created with them. */
-static int read_enclave_config(const wchar_t* image, uint64_t* size, uint32_t* threads) {
+static int read_enclave_config(const wchar_t* image, uint64_t* size, uint32_t* threads,
+                               uint32_t* policy) {
     int ret = -1;
     HANDLE f = CreateFileW(image, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
     if (f == INVALID_HANDLE_VALUE)
@@ -179,6 +180,7 @@ static int read_enclave_config(const wchar_t* image, uint64_t* size, uint32_t* t
                 const IMAGE_ENCLAVE_CONFIG64* ec = (const IMAGE_ENCLAVE_CONFIG64*)(b + eco);
                 *size = ec->EnclaveSize;
                 *threads = ec->NumberOfThreads;
+                *policy = ec->PolicyFlags;
                 ret = 0;
             }
         }
@@ -193,6 +195,8 @@ static int read_enclave_config(const wchar_t* image, uint64_t* size, uint32_t* t
 /* a 1 ms timer resolution for this process (Windows 11 applies timeBeginPeriod per process; it ends
  * with the process): the enclave's timed waits (WaitOnAddress) are otherwise rounded up to the
  * default 15.6 ms tick. GRAMINE_VBS_TIMER_RES=0 keeps the default. */
+int pal_vbs_verify_main(void* enclave, int argc, char** argv);
+
 static void raise_timer_resolution(void) {
     const char* env = getenv("GRAMINE_VBS_TIMER_RES");
     if (env && !strcmp(env, "0"))
@@ -217,14 +221,18 @@ int main(int argc, char** argv) {
     }
     uint64_t cfg_size = 0x10000000;
     uint32_t cfg_threads = 1;
-    if (read_enclave_config(image, &cfg_size, &cfg_threads) < 0)
+    uint32_t cfg_policy = IMAGE_ENCLAVE_POLICY_DEBUGGABLE;
+    if (read_enclave_config(image, &cfg_size, &cfg_threads, &cfg_policy) < 0)
         fprintf(stderr, "[host] could not read the image's enclave configuration; assuming 256 MiB\n");
     /* thread count: the argument, or 0 = the number the image was signed with */
     DWORD threads = argc > 2 ? (DWORD)atoi(argv[2]) : 0;
     if (!threads)
         threads = cfg_threads;
 
-    ENCLAVE_CREATE_INFO_VBS ci = { ENCLAVE_VBS_FLAG_DEBUG,
+    /* a debuggable image (vbs.debug) is created as a debug enclave; the owner ID is the host's
+     * choice and appears in attestation reports (untrusted) */
+    ENCLAVE_CREATE_INFO_VBS ci = { (cfg_policy & IMAGE_ENCLAVE_POLICY_DEBUGGABLE)
+                                       ? ENCLAVE_VBS_FLAG_DEBUG : 0,
                                    { 0x10, 0x20, 0x30, 0x40, 0x41, 0x31, 0x21, 0x11 } };
     DWORD err = 0;
     SIZE_T size = (SIZE_T)cfg_size; /* the image's configured size (vbs.enclave_size) */
@@ -247,6 +255,14 @@ int main(int argc, char** argv) {
     AddVectoredExceptionHandler(1, host_exception_report);
     printf("[host] enclave base=%p size=0x%zx ThreadCount requested=%lu returned=%lu\n",
            enclave, size, threads, ii.ThreadCount);
+
+    if (argc > 3 && !strcmp(argv[3], "verify")) {
+        /* check an attestation report (pal_vbs_verify.c); no PAL is started */
+        int rc = pal_vbs_verify_main(enclave, argc, argv);
+        TerminateEnclave(enclave, TRUE);
+        DeleteEnclave(enclave);
+        return rc;
+    }
 
     memset(&g_shared, 0, sizeof(g_shared));
     g_shared.abi_version  = PAL_VBS_ABI_VERSION;

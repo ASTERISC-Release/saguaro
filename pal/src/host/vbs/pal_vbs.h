@@ -48,6 +48,12 @@ static inline void vbs_wake(uint32_t* addr, bool all) {
     pal_vbs_wcall(g_vbs->wake, (uint64_t)addr, all, 0);
 }
 
+/* the attestation report package for 64 bytes of user data (W service, version 5): its size, or
+ * a negative value (W's -HRESULT) */
+static inline int64_t vbs_attest(const void* user_data, void* out, size_t out_cap) {
+    return (int64_t)pal_vbs_wcall(g_vbs->attest, (uint64_t)user_data, (uint64_t)out, out_cap);
+}
+
 /* A host request (files, sockets): `in` (in_len bytes) goes to the host after the header; the
  * host's output (at most out_cap bytes) lands in `out`, its length in *out_len. Returns the host's
  * result (negative Linux errno on failure) or a negative Linux errno of the PAL itself. */

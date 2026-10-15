@@ -56,32 +56,73 @@ int _PalCpuIdRetrieve(uint32_t leaf, uint32_t subleaf, uint32_t values[4]) {
     return -PAL_ERROR_NOTIMPLEMENTED;
 }
 
+/*
+ * Attestation (PLAN.md, phase 4): the VBS attestation report package of EnclaveGetAttestationReport,
+ * signed by the platform, with the 64 bytes of user report data as its EnclaveData. The report is
+ * already what a verifier checks, so the quote is the same package (D4.1); VBS has no target info,
+ * so like TDX the PAL reports a dummy one.
+ */
+#define VBS_USER_REPORT_DATA_SIZE 64
+static const char g_vbs_target_info_dummy[] = "vbs: no target info";
+
+static int64_t vbs_report_size(void) {
+    static int64_t size;
+    if (!size) {
+        uint8_t zero[VBS_USER_REPORT_DATA_SIZE] = {0};
+        size = vbs_attest(zero, NULL, 0);
+    }
+    return size;
+}
+
 int _PalAttestationReport(const void* user_report_data, size_t* user_report_data_size,
                           void* target_info, size_t* target_info_size, void* report,
                           size_t* report_size) {
-    __UNUSED(user_report_data);
-    __UNUSED(user_report_data_size);
-    __UNUSED(target_info);
-    __UNUSED(target_info_size);
-    __UNUSED(report);
-    __UNUSED(report_size);
-    return -PAL_ERROR_NOTIMPLEMENTED; /* phase 4 */
+    if (!user_report_data_size || !target_info_size || !report_size)
+        return -PAL_ERROR_INVAL;
+    int64_t size = vbs_report_size();
+    if (size <= 0 || size > PAL_VBS_REPORT_MAX)
+        return -PAL_ERROR_DENIED;
+
+    if (*user_report_data_size == VBS_USER_REPORT_DATA_SIZE &&
+            *target_info_size == sizeof(g_vbs_target_info_dummy) &&
+            *report_size == (size_t)size && user_report_data) {
+        if (report) {
+            int64_t got = vbs_attest(user_report_data, report, (size_t)size);
+            if (got != size)
+                return -PAL_ERROR_DENIED;
+        }
+        if (target_info)
+            memcpy(target_info, g_vbs_target_info_dummy, sizeof(g_vbs_target_info_dummy));
+    }
+    *user_report_data_size = VBS_USER_REPORT_DATA_SIZE;
+    *target_info_size = sizeof(g_vbs_target_info_dummy);
+    *report_size = (size_t)size;
+    return 0;
 }
 
 int _PalAttestationQuote(const void* user_report_data, size_t user_report_data_size, void* quote,
                          size_t* quote_size) {
-    __UNUSED(user_report_data);
-    __UNUSED(user_report_data_size);
-    __UNUSED(quote);
-    __UNUSED(quote_size);
-    return -PAL_ERROR_NOTIMPLEMENTED; /* phase 4 */
+    if (user_report_data_size != VBS_USER_REPORT_DATA_SIZE || !quote_size)
+        return -PAL_ERROR_INVAL;
+    int64_t size = vbs_report_size();
+    if (size <= 0 || size > PAL_VBS_REPORT_MAX)
+        return -PAL_ERROR_DENIED;
+    if (*quote_size < (size_t)size) {
+        *quote_size = (size_t)size;
+        return -PAL_ERROR_NOMEM;
+    }
+    int64_t got = vbs_attest(user_report_data, quote, (size_t)size);
+    if (got != size)
+        return -PAL_ERROR_DENIED;
+    *quote_size = (size_t)size;
+    return 0;
 }
 
 int _PalGetSpecialKey(const char* name, void* key, size_t* key_size) {
     __UNUSED(name);
     __UNUSED(key);
     __UNUSED(key_size);
-    return -PAL_ERROR_NOTIMPLEMENTED; /* phase 4 (sealing) */
+    return -PAL_ERROR_NOTIMPLEMENTED; /* sealing: a future item (TODO.md) */
 }
 
 double _PalGetBogomips(void) {

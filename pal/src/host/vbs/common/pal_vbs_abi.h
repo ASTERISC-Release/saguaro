@@ -215,7 +215,7 @@ struct pal_vbs_packed_obj {
  * code: P calls them only through its x18-restoring thunk (pal_vbs_wcall.S), because Linux code
  * may have clobbered x18 (the enclave TEB). All values are fixed-width (PLAN.md D4).
  */
-#define PAL_VBS_SERVICES_VERSION 4u
+#define PAL_VBS_SERVICES_VERSION 5u
 
 struct pal_vbs_services {
     uint64_t version;
@@ -253,6 +253,27 @@ struct pal_vbs_services {
     void* host_call;     /* int64_t (struct pal_vbs_hostreq* req, void* out, uint64_t out_cap):
                           * req (header + in_len input bytes) goes to the host; the result is
                           * returned, req->out_len set, min(out_len, out_cap) bytes copied to out */
+
+    /* attestation (version 5) */
+    void* attest;        /* int64_t (const uint8_t user_data[64], void* out, uint64_t out_cap): the
+                          * VBS attestation report package (EnclaveGetAttestationReport) with
+                          * user_data as its EnclaveData; returns its size (out NULL or too small:
+                          * only the size) or -(HRESULT & 0x7fffffff) */
+};
+
+/*
+ * E_VerifyReport: the ECALL of the host's `verify` mode. The enclave copies the report package in,
+ * verifies it with EnclaveVerifyAttestationReport and returns its own identity, so the host can
+ * compare the report's identity with the verifying image. Fixed-width fields only (D4).
+ */
+#define PAL_VBS_REPORT_MAX 16384u
+
+struct pal_vbs_verify {
+    uint64_t report;            /* host address of the package */
+    uint64_t report_size;
+    int64_t hresult;            /* out: EnclaveVerifyAttestationReport's result */
+    int64_t info_hresult;       /* out: EnclaveGetEnclaveInformation's result */
+    uint8_t own_identity[160];  /* out: the verifier's ENCLAVE_IDENTITY (156 bytes used) */
 };
 
 /*

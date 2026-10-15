@@ -154,6 +154,8 @@ noreturn void pal_vbs_start(const struct pal_vbs_services* svc) {
     g_pal_public_state.alloc_align = g_page_size;
     /* host file mappings are copies (pal_files.c): the LibOS writes shared ones back */
     g_pal_public_state.file_maps_write_back = true;
+    /* /dev/attestation: VBS attestation reports (pal_misc.c) */
+    g_pal_public_state.attestation_type = "vbs";
     ret = vbs_init_memory();
     if (ret < 0)
         INIT_FAIL("vbs_init_memory failed: %s", pal_strerror(ret));
