@@ -264,7 +264,10 @@ static int fifo_open(struct libos_handle* hdl, struct libos_dentry* dent, int fl
 }
 
 static int fifo_stat(struct libos_dentry* dent, struct stat* stat) {
-    __UNUSED(dent);
+    /* a named FIFO has an inode with its own mode and owner (inherited group of a set-group-ID
+     * directory included: LTP mknod02-05) */
+    if (dent->inode)
+        return generic_inode_stat(dent, stat);
     fill_pipe_stat(stat);
     return 0;
 }

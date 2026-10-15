@@ -290,6 +290,7 @@ long libos_syscall_mknodat(int dirfd, const char* pathname, mode_t mode, dev_t d
     ret = fifo_setup_dentry(dent, mode & ~S_IFMT, vfd1, vfd2);
     if (ret < 0)
         goto out;
+    inode_init_owner(dent);
 
     ret = 0;
 out:

@@ -47,6 +47,42 @@ int check_permissions(struct libos_dentry* dent, mode_t mask) {
     return (granted & mask) == mask ? 0 : -EACCES;
 }
 
+bool libos_in_group(gid_t gid) {
+    struct libos_thread* current = get_cur_thread();
+    if (current->fsgid == gid)
+        return true;
+    for (size_t i = 0; i < current->groups_info.count; i++)
+        if (current->groups_info.groups[i] == gid)
+            return true;
+    return false;
+}
+
+/* The kernel's `inode_init_owner()` plus `mode_strip_sgid()` for an object just created in
+ * `dent->parent`: the owner is the caller's fsuid; in a set-group-ID directory the object takes the
+ * directory's group (and a new directory the S_ISGID bit), otherwise the caller's fsgid; a
+ * non-directory created with S_ISGID and group-execute in a group the caller is not in, without
+ * CAP_FSETID, loses S_ISGID (LTP creat08, open10, mknod02-05). */
+void inode_init_owner(struct libos_dentry* dent) {
+    struct libos_inode* inode = dent->inode;
+    if (!inode)
+        return;
+    struct libos_thread* current = get_cur_thread();
+    struct libos_inode* dir = dent->parent ? dent->parent->inode : NULL;
+    lock(&inode->lock);
+    inode->uid = current->fsuid;
+    if (dir && (dir->perm & S_ISGID)) {
+        inode->gid = dir->gid;
+        if (inode->type == S_IFDIR)
+            inode->perm |= S_ISGID;
+    } else {
+        inode->gid = current->fsgid;
+    }
+    if (inode->type != S_IFDIR && (inode->perm & (S_ISGID | S_IXGRP)) == (S_ISGID | S_IXGRP) &&
+            !libos_in_group(inode->gid) && !libos_capable(LIBOS_CAP_FSETID))
+        inode->perm &= ~S_ISGID;
+    unlock(&inode->lock);
+}
+
 /* This function works like `lookup_dcache`, but if the dentry is not in cache, it creates a new,
  * negative one. */
 static struct libos_dentry* lookup_dcache_or_create(struct libos_dentry* parent, const char* name,
@@ -541,6 +577,9 @@ int open_namei(struct libos_handle* hdl, struct libos_dentry* start, const char*
         if (ret < 0)
             goto out;
     }
+
+    if (!existed && dent->inode)
+        inode_init_owner(dent);
 
     /* inotify: `IN_CREATE` on the parent directory's watches, only when the object was really
      * created just now (`IN_ISDIR` for `mkdir`), before any `IN_OPEN` of the new file */

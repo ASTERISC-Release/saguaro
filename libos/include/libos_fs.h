@@ -622,6 +622,14 @@ void dump_dcache(struct libos_dentry* dent);
  * `dentry` can be negative (in which case the function will return -ENOENT).
  */
 int check_permissions(struct libos_dentry* dent, mode_t mask);
+/* the caller's fsgid or a supplementary group is `gid` */
+bool libos_in_group(gid_t gid);
+/* owner, group and set-group-ID handling of a just-created object (`inode_init_owner()`) */
+void inode_init_owner(struct libos_dentry* dent);
+/* capability numbers used by the filesystem permission rules */
+#define LIBOS_CAP_CHOWN  0
+#define LIBOS_CAP_FOWNER 3
+#define LIBOS_CAP_FSETID 4
 
 /*
  * Flags for `path_lookupat`.

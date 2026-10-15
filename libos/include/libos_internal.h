@@ -160,6 +160,15 @@ int init_sysv_shm(void);
 int init_sysv_msg(void);
 /* the calling thread has capability `cap` (CAP_* number) in its effective set */
 bool libos_capable(int cap);
+/* every capability up to CAP_LAST_CAP (40) and the filesystem ones (CAP_FS_MASK) */
+#define LIBOS_CAP_FULL    ((1ULL << 41) - 1)
+#define LIBOS_CAP_FS_MASK ((1ULL << 0) | (1ULL << 1) | (1ULL << 2) | (1ULL << 3) | (1ULL << 4) | \
+                           (1ULL << 9) | (1ULL << 27) | (1ULL << 32))
+#define LIBOS_CAP_SETGID 6
+#define LIBOS_CAP_SETUID 7
+struct libos_thread;
+void cred_fix_caps_setuid(struct libos_thread* t, uid_t old_ruid, uid_t old_euid, uid_t old_suid);
+void cred_fix_caps_setfsuid(struct libos_thread* t, uid_t old_fsuid);
 /* System V message queue limits (0: MSGMNI, 1: MSGMAX, 2: MSGMNB) and `/proc/sysvipc/msg` */
 unsigned int sysv_msg_limit(int which);
 int sysv_msg_proc_load(char** out_data, size_t* out_size);

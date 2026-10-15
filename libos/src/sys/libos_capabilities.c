@@ -103,3 +103,27 @@ bool libos_capable(int cap) {
     struct libos_thread* t = get_cur_thread();
     return t && (t->cap_effective & (1ULL << cap));
 }
+
+/* The kernel's `cap_emulate_setxuid()`: losing every uid 0 drops the permitted and effective sets,
+ * leaving euid 0 clears the effective set and returning to it restores it from the permitted set.
+ * Called with `t->lock` held after a set*uid() changed the ids. */
+void cred_fix_caps_setuid(struct libos_thread* t, uid_t old_ruid, uid_t old_euid, uid_t old_suid) {
+    if ((old_ruid == 0 || old_euid == 0 || old_suid == 0) &&
+            (t->uid != 0 && t->euid != 0 && t->suid != 0)) {
+        t->cap_permitted = 0;
+        t->cap_effective = 0;
+    }
+    if (old_euid == 0 && t->euid != 0)
+        t->cap_effective = 0;
+    if (old_euid != 0 && t->euid == 0)
+        t->cap_effective = t->cap_permitted;
+}
+
+/* The kernel's `cap_task_fix_setuid()` for setfsuid(): leaving fsuid 0 drops the filesystem
+ * capabilities from the effective set, returning to it raises them again where permitted. */
+void cred_fix_caps_setfsuid(struct libos_thread* t, uid_t old_fsuid) {
+    if (old_fsuid == 0 && t->fsuid != 0)
+        t->cap_effective &= ~LIBOS_CAP_FS_MASK;
+    if (old_fsuid != 0 && t->fsuid == 0)
+        t->cap_effective |= t->cap_permitted & LIBOS_CAP_FS_MASK;
+}

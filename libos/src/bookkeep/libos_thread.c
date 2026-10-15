@@ -192,10 +192,10 @@ static int init_main_thread(void) {
     cur_thread->sgid = gid_int64;
     cur_thread->fsuid = uid_int64;
     cur_thread->fsgid = gid_int64;
-    /* Keep a small software capability set for ABI compatibility. These bits do not grant PAL
-     * privileges; operations still enforce Gramine's host-backed policy. */
-    cur_thread->cap_effective = cur_thread->cap_permitted =
-        (1ULL << 0) | (1ULL << 5) | (1ULL << 8) | (1ULL << 13);
+    /* The software capability sets: root starts with all capabilities and other users with none,
+     * as a process after exec on Linux. They grant no PAL privileges; they only select the LibOS's
+     * emulated permission rules (`libos_capable()`), and follow uid changes (`cred_fix_caps()`). */
+    cur_thread->cap_effective = cur_thread->cap_permitted = uid_int64 == 0 ? LIBOS_CAP_FULL : 0;
 
     cur_thread->signal_dispositions = alloc_default_signal_dispositions();
     if (!cur_thread->signal_dispositions) {

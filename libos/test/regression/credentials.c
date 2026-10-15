@@ -105,19 +105,23 @@ int main(int argc, const char** argv) {
         errx(1, "root should start with capabilities");
     uint32_t full0 = data[0].permitted, full1 = data[1].permitted;
 
-    /* reduce to the lowest permitted capability only (the initial set is software bookkeeping,
-     * so pick bits from what capget actually reports rather than assuming a concrete set) */
-    uint32_t low = data[0].permitted & (uint32_t)(-(int32_t)data[0].permitted);
-    uint32_t rest = data[0].permitted & ~low;
-    uint32_t other = rest & (uint32_t)(-(int32_t)rest);
+    /* drop one permitted capability that the rest of the test does not need (it later needs
+     * CAP_CHOWN, CAP_FOWNER, CAP_SETUID and CAP_SETGID, as natively) */
+    uint32_t keep = (1u << 0) | (1u << 1) | (1u << 2) | (1u << 3) | (1u << 4) | (1u << 6) |
+                    (1u << 7);
+    uint32_t spare_bits = data[0].permitted & ~keep;
+    if (!spare_bits)
+        errx(1, "root's capability set has no spare capability");
+    uint32_t spare = spare_bits & (uint32_t)(-(int32_t)spare_bits); /* the lowest of them */
+    uint32_t reduced0 = data[0].permitted & ~spare;
     struct __user_cap_data_struct reduced[2] = {
-        {.effective = low, .permitted = low, .inheritable = 0},
-        {0, 0, 0},
+        {.effective = reduced0, .permitted = reduced0, .inheritable = 0},
+        {full1, full1, 0},
     };
     check("capset reduce", syscall(SYS_capset, &hdr, reduced), 0);
     check("capget after reduce", syscall(SYS_capget, &hdr, data), 0);
-    check("reduced effective", data[0].effective, low);
-    check("reduced permitted", data[0].permitted, low);
+    check("reduced effective", data[0].effective, reduced0);
+    check("reduced permitted", data[0].permitted, reduced0);
 
     /* expanding beyond the current permitted set is EPERM */
     struct __user_cap_data_struct back[2] = {
@@ -128,12 +132,10 @@ int main(int argc, const char** argv) {
     if (r == 0 || errno != EPERM)
         errx(1, "capset expansion: want EPERM, got %ld/%d", r, errno);
 
-    /* effect mask must stay a subset of the permitted mask */
-    if (!other)
-        errx(1, "initial capability set has fewer than two bits");
+    /* the effective set must stay a subset of the permitted set */
     struct __user_cap_data_struct bad[2] = {
-        {.effective = other, .permitted = low, .inheritable = 0},
-        {0, 0, 0},
+        {.effective = reduced0 | spare, .permitted = reduced0, .inheritable = 0},
+        {full1, full1, 0},
     };
     r = syscall(SYS_capset, &hdr, bad);
     if (r == 0 || errno != EPERM)
@@ -156,11 +158,12 @@ int main(int argc, const char** argv) {
     if (fd < 0)
         err(1, "create %s", fworld);
     close(fd);
-    /* hand the directory to the unprivileged user so that it can clean the files up */
-    if (chown(dir, UID_A, UID_A))
-        err(1, "chown %s", dir);
+    /* hand the directory to the unprivileged user so that it can clean the files up (mode first:
+     * after the chown only the new owner may change it) */
     if (chmod(dir, 0700))
         err(1, "chmod %s", dir);
+    if (chown(dir, UID_A, UID_A))
+        err(1, "chown %s", dir);
 
     check("setresgid drop", syscall(SYS_setresgid, UID_A, UID_A, UID_A), 0);
     check("setresuid drop", syscall(SYS_setresuid, UID_A, UID_A, UID_A), 0);

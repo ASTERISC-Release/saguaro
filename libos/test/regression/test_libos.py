@@ -1452,6 +1452,14 @@ class TC_40_FileSystem(RegressionTestCase):
         stdout, _ = self.run_binary(['fcntl_misc', '/mnt/tmpfs'])
         self.assertIn('TEST OK', stdout)
 
+    def test_073a_setid_rules_chroot(self):
+        stdout, _ = self.run_binary(['setid_rules', 'tmp'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_073b_setid_rules_tmpfs(self):
+        stdout, _ = self.run_binary(['setid_rules', '/mnt/tmpfs'])
+        self.assertIn('TEST OK', stdout)
+
     def test_071_memfd_on_shm_mount(self):
         stdout, _ = self.run_binary(['memfd_rw'])
         self.assertIn('TEST OK', stdout)

@@ -165,6 +165,7 @@ tests = {
     'syscall_restart': {},
     'sysfs_common': {},
     'recvmmsg_timeout': {},
+    'setid_rules': {},
     'sysv_msg': {},
     'sysv_sem': {},
     'sysv_shm': {},

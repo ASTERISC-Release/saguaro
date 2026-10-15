@@ -255,6 +255,51 @@ long libos_syscall_umask(mode_t mask) {
     return old;
 }
 
+/* The kernel's rules for a mode change: only the owner (or CAP_FOWNER) may change it, and S_ISGID
+ * is dropped unless the caller is in the file's group or has CAP_FSETID (LTP chmod05, fchmod05). */
+static int chmod_check(struct libos_inode* inode, mode_t* perm) {
+    struct libos_thread* current = get_cur_thread();
+    lock(&inode->lock);
+    uid_t owner = inode->uid;
+    gid_t group = inode->gid;
+    unlock(&inode->lock);
+    if (current->fsuid != owner && !libos_capable(LIBOS_CAP_FOWNER))
+        return -EPERM;
+    if ((*perm & S_ISGID) && !libos_in_group(group) && !libos_capable(LIBOS_CAP_FSETID))
+        *perm &= ~S_ISGID;
+    return 0;
+}
+
+/* The kernel's rules for an ownership change (`chown_ok()`, `chgrp_ok()`, `chown_common()`):
+ * changing the owner needs CAP_CHOWN (setting it to itself is allowed to the owner); changing the
+ * group needs CAP_CHOWN unless the owner picks one of its own groups; a non-directory then loses
+ * S_ISUID, and S_ISGID if group-execute is set (LTP chown02/03, fchown02/03). */
+static int chown_inode(struct libos_inode* inode, uid_t uid, gid_t gid) {
+    struct libos_thread* current = get_cur_thread();
+    lock(&inode->lock);
+    bool owner = current->fsuid == inode->uid;
+    if (uid != (uid_t)-1 && !(owner && uid == inode->uid) && !libos_capable(LIBOS_CAP_CHOWN)) {
+        unlock(&inode->lock);
+        return -EPERM;
+    }
+    if (gid != (gid_t)-1 && !(owner && (gid == inode->gid || libos_in_group(gid))) &&
+            !libos_capable(LIBOS_CAP_CHOWN)) {
+        unlock(&inode->lock);
+        return -EPERM;
+    }
+    if (uid != (uid_t)-1)
+        inode->uid = uid;
+    if (gid != (gid_t)-1)
+        inode->gid = gid;
+    if (inode->type != S_IFDIR) {
+        inode->perm &= ~S_ISUID;
+        if (inode->perm & S_IXGRP)
+            inode->perm &= ~S_ISGID;
+    }
+    unlock(&inode->lock);
+    return 0;
+}
+
 long libos_syscall_chmod(const char* path, mode_t mode) {
     return libos_syscall_fchmodat(AT_FDCWD, path, mode);
 }
@@ -277,6 +322,10 @@ long libos_syscall_fchmodat(int dfd, const char* filename, mode_t mode) {
     ret = path_lookupat(dir, filename, LOOKUP_FOLLOW, &dent);
     if (ret < 0)
         goto out;
+
+    ret = chmod_check(dent->inode, &perm);
+    if (ret < 0)
+        goto out_dent;
 
     struct libos_fs* fs = dent->inode->fs;
     if (fs && fs->d_ops && fs->d_ops->chmod) {
@@ -315,6 +364,10 @@ long libos_syscall_fchmod(int fd, mode_t mode) {
         goto out;
     }
 
+    ret = chmod_check(hdl->inode, &perm);
+    if (ret < 0)
+        goto out;
+
     struct libos_fs* fs = hdl->inode->fs;
     if (fs && fs->fs_ops && fs->fs_ops->fchmod) {
         ret = fs->fs_ops->fchmod(hdl, perm);
@@ -339,11 +392,19 @@ long libos_syscall_chown(const char* path, uid_t uid, gid_t gid) {
     return libos_syscall_fchownat(AT_FDCWD, path, uid, gid, 0);
 }
 
+long libos_syscall_lchown(const char* path, uid_t uid, gid_t gid) {
+    return libos_syscall_fchownat(AT_FDCWD, path, uid, gid, AT_SYMLINK_NOFOLLOW);
+}
+
 long libos_syscall_fchownat(int dfd, const char* filename, uid_t uid, gid_t gid, int flags) {
-    __UNUSED(flags);
+    if (flags & ~(AT_SYMLINK_NOFOLLOW | AT_EMPTY_PATH))
+        return -EINVAL;
 
     if (!is_user_string_readable(filename))
         return -EFAULT;
+
+    if (!*filename && (flags & AT_EMPTY_PATH))
+        return libos_syscall_fchown(dfd, uid, gid);
 
     struct libos_dentry* dir = NULL;
     struct libos_dentry* dent = NULL;
@@ -353,14 +414,14 @@ long libos_syscall_fchownat(int dfd, const char* filename, uid_t uid, gid_t gid,
         return ret;
 
     lock(&g_dcache_lock);
-    ret = path_lookupat(dir, filename, LOOKUP_FOLLOW, &dent);
+    ret = path_lookupat(dir, filename,
+                        (flags & AT_SYMLINK_NOFOLLOW) ? LOOKUP_NO_FOLLOW : LOOKUP_FOLLOW, &dent);
     if (ret < 0)
         goto out;
 
-    lock(&dent->inode->lock);
-    dent->inode->uid = (uid == (uid_t)-1) ? dent->inode->uid : uid;
-    dent->inode->gid = (gid == (gid_t)-1) ? dent->inode->gid : gid;
-    unlock(&dent->inode->lock);
+    ret = chown_inode(dent->inode, uid, gid);
+    if (ret == 0)
+        libos_inotify_file_event(dent, IN_ATTRIB);
 
     put_dentry(dent);
 out:
@@ -381,12 +442,7 @@ long libos_syscall_fchown(int fd, uid_t uid, gid_t gid) {
         goto out;
     }
 
-    lock(&hdl->inode->lock);
-    hdl->inode->uid = (uid == (uid_t)-1) ? hdl->inode->uid : uid;
-    hdl->inode->gid = (gid == (gid_t)-1) ? hdl->inode->gid : gid;
-    unlock(&hdl->inode->lock);
-
-    ret = 0;
+    ret = chown_inode(hdl->inode, uid, gid);
 out:
     put_handle(hdl);
     return ret;
