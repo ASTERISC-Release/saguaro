@@ -271,7 +271,7 @@ struct libos_inode {
     /* Number of directory entries referring to this inode. */
     uint32_t nlink;
 
-    /* Stable inode number shared by all hard links to this inode. */
+    /* Inode number shared by all hard links to this inode; 0 until dentry_ino() sets it. */
     ino_t ino;
 
     /* credentials */
