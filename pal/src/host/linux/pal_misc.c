@@ -44,6 +44,22 @@ int _PalSystemTimeQuery(uint64_t* out_usec) {
     return 0;
 }
 
+/* the host's getrusage(): the Gramine process (RUSAGE_SELF) or the calling host thread
+ * (RUSAGE_THREAD); the layout is the kernel's struct rusage */
+int _PalGetCpuTime(bool thread, uint64_t* out_user_us, uint64_t* out_sys_us) {
+    struct {
+        long utime_sec, utime_usec;
+        long stime_sec, stime_usec;
+        long rest[14];
+    } ru;
+    int ret = DO_SYSCALL(getrusage, thread ? /*RUSAGE_THREAD=*/1 : /*RUSAGE_SELF=*/0, &ru);
+    if (ret < 0)
+        return unix_to_pal_error(ret);
+    *out_user_us = (uint64_t)ru.utime_sec * 1000000 + (uint64_t)ru.utime_usec;
+    *out_sys_us = (uint64_t)ru.stime_sec * 1000000 + (uint64_t)ru.stime_usec;
+    return 0;
+}
+
 int _PalRandomBitsRead(void* buffer, size_t size) {
     assert(g_rand_fd != -1);
     int ret = read_all(g_rand_fd, buffer, size);
