@@ -899,6 +899,23 @@ restore it can be allowed by the file name of their object. The functions of
 the vbs glibc that need it (``_dl_tlsdesc_dynamic``, ``getcontext``,
 ``swapcontext``) and of the LibOS are allowed by default.
 
+Build recipe
+^^^^^^^^^^^^
+
+::
+
+    vbs.build = "[SHELL COMMAND]"
+
+A command that ``gramine-vbs build`` runs with ``sh -c`` in the manifest's
+folder before packing, to build the application's files for the enclave (on
+Windows it runs inside the WSL distribution). Its environment has
+``SYSROOT`` (the vbs glibc), ``VBS_CC_STATIC`` and ``VBS_CC_DYNAMIC`` (link a
+static or a dynamically linked PIE against it, ``scripts/vbs/cc-*-pie.sh``),
+``VBS_GCC`` (a ``gcc`` for configure scripts, ``scripts/vbs/vbs-gcc``) and
+``GRAMINE_REPO``. For example::
+
+    vbs.build = "$VBS_CC_STATIC -o helloworld helloworld.c"
+
 .. _sgx-syntax:
 
 SGX syntax

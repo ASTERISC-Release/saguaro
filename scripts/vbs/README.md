@@ -52,6 +52,8 @@ hand (the commands used for the phase-2 hello world):
 
 **On one Windows machine** (no second Linux machine; `Documentation/devel/vbs-enclave/PLAN-windows-build.md`):
 steps 1 and 2 run inside a WSL2 Ubuntu 24.04 aarch64 distribution (`wsl-setup.sh` checks and installs
-its tools, with apt or, without sudo, into a user prefix), and `build-enclave.ps1` does steps 3 to 5
-from Windows PowerShell: it compiles the objects with clang inside WSL (`wsl-objs.sh`, against this
-machine's SDK and MSVC headers), then links, signs and runs them on Windows.
+its tools, with apt or, without sudo, into a user prefix). `gramine-vbs.cmd` (`gramine-vbs.ps1`) is
+`gramine-vbs` for that machine: it copies the checkout into WSL, runs the Linux side there
+(`wsl-build.sh manifest`) and links, signs and runs on Windows. `build-enclave.ps1` does steps 3 to
+5 for a pack made by hand in WSL (`wsl-build.sh objs`: the objects with clang inside WSL, against
+this machine's SDK and MSVC headers).

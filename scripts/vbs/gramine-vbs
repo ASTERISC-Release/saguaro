@@ -235,6 +235,29 @@ def packed_entries(manifest, m):
     return out
 
 
+def run_recipe(b, recipe):
+    """vbs.build: a shell command that builds the application's files, run in the manifest's
+    folder before packing, with the compilers for the enclave in the environment"""
+    if not isinstance(recipe, str):
+        die('vbs.build must be a string (a shell command)')
+    sysroot = os.environ.get('GRAMINE_VBS_SYSROOT', os.path.join(ROOT, 'build-vbs-glibc'))
+    if not os.path.isfile(os.path.join(sysroot, 'usr', 'lib', 'libc.so.6')):
+        die(f'vbs.build needs the vbs glibc in {sysroot} (scripts/vbs/build-glibc.sh, or set '
+            f'GRAMINE_VBS_SYSROOT)')
+    env = dict(os.environ, SYSROOT=sysroot, GRAMINE_REPO=ROOT,
+               VBS_CC_STATIC=os.path.join(HERE, 'cc-static-pie.sh'),
+               VBS_CC_DYNAMIC=os.path.join(HERE, 'cc-dynamic-pie.sh'),
+               VBS_GCC=os.path.join(HERE, 'vbs-gcc'))
+    log(f'vbs.build: {recipe}')
+    os.makedirs(b.dir, exist_ok=True)
+    with open(os.path.join(b.dir, 'recipe.log'), 'w') as lf:
+        r = subprocess.run(['sh', '-c', recipe], cwd=os.path.dirname(b.manifest), env=env,
+                           stdout=lf, stderr=subprocess.STDOUT)
+    if r.returncode:
+        sys.stdout.write(open(os.path.join(b.dir, 'recipe.log')).read()[-3000:])
+        die(f'vbs.build failed (exit {r.returncode}, recipe.log)')
+
+
 def cmd_build(args):
     b = Build(args.target, args.output)
     if not os.path.isfile(b.manifest):
@@ -251,6 +274,10 @@ def cmd_build(args):
     entry = m.get('libos', {}).get('entrypoint')
     if not entry:
         die('the manifest has no libos.entrypoint')
+
+    recipe = m.get('vbs', {}).get('build')
+    if recipe:
+        run_recipe(b, recipe)
 
     rt = find_runtime(setting(args, 'runtime', 'GRAMINE_VBS_RUNTIME'))
     hdr = setting(args, 'headers', 'GRAMINE_VBS_HEADERS',
@@ -322,7 +349,7 @@ def cmd_build(args):
 
     if not args.no_sign and setting(args, 'windows', 'GRAMINE_VBS_WINDOWS'):
         cmd_sign(args, b)
-    else:
+    elif not os.environ.get('GV_OUT'):    # (not when gramine-vbs.ps1 drives the build from WSL)
         log(f'built {b.dir}; `gramine-vbs sign` links and signs it on Windows')
 
 

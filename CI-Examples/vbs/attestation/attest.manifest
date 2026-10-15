@@ -1,9 +1,7 @@
 # Attestation in a Windows VBS enclave (Documentation/vbs.rst): the program writes user data to
 # /dev/attestation/user_report_data and saves the report to the host; `gramine-vbs verify` checks
-# it. Build the program on an aarch64 Linux machine:
-#   SYSROOT=<repo>/build-vbs-glibc <repo>/scripts/vbs/cc-static-pie.sh -o attest \
-#       <repo>/pal/src/host/vbs/test/attest/attest.c
-# then: gramine-vbs run attest.manifest -- <user data hex>
+# it. vbs.build compiles the program (pal/src/host/vbs/test/attest/attest.c) for the enclave.
+#   gramine-vbs run attest.manifest -- <user data hex>
 loader.entrypoint = "file:/libsysdb.so"
 libos.entrypoint = "/attest"
 loader.insecure__use_cmdline_argv = true  # the user data comes from the command line
@@ -15,6 +13,7 @@ vbs.debug = false
 vbs.family_id = "6772616d696e652d7662732d74657374"  # "gramine-vbs-test"
 vbs.image_id = "61747465737400000000000000000002"
 vbs.isv_svn = 1
+vbs.build = "$VBS_CC_STATIC -o attest $GRAMINE_REPO/pal/src/host/vbs/test/attest/attest.c"
 vbs.packed_files = [
   { path = "/attest", uri = "file:attest" },
 ]

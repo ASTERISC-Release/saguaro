@@ -3,7 +3,7 @@
 #
 # build-enclave.ps1: on one ARM64 Windows machine, from the pack.py output (made in WSL) and the
 # sources to a signed enclave image, and optionally run it. The Windows enclave runtime and host are
-# compiled with clang inside the WSL distribution (wsl-objs.sh, build-objs.sh) against this
+# compiled with clang inside the WSL distribution (wsl-build.sh objs, build-objs.sh) against this
 # machine's Windows SDK and MSVC headers; link /ENCLAVE, veiid and signtool run here
 # (link-sign.cmd). Documentation/devel/vbs-enclave/PLAN-windows-build.md, phase W1.
 #
@@ -57,7 +57,7 @@ $env:GV_HDRID = "$($sdk.Name)-$($vc.Name)"
 $env:GV_HDRTAR = ''
 $env:WSLENV = 'GV_PACK:GV_OUT/p:GV_HDRID:GV_HDRTAR/p'
 $t0 = Get-Date
-& wsl.exe -d $Distro --cd $Repo -e sh scripts/vbs/wsl-objs.sh
+& wsl.exe -d $Distro --cd $Repo -e sh scripts/vbs/wsl-build.sh objs
 $rc = $LASTEXITCODE
 if ($rc -eq 10) {
     # the headers of this SDK and MSVC are not in the distribution yet: hand them over as one tar
@@ -66,7 +66,7 @@ if ($rc -eq 10) {
     if ($LASTEXITCODE -eq 0) { & tar.exe -rf $tar -C $vc.FullName include }
     if ($LASTEXITCODE -ne 0) { Fail 'tar.exe of the SDK and MSVC headers failed' }
     $env:GV_HDRTAR = $tar
-    & wsl.exe -d $Distro --cd $Repo -e sh scripts/vbs/wsl-objs.sh
+    & wsl.exe -d $Distro --cd $Repo -e sh scripts/vbs/wsl-build.sh objs
     $rc = $LASTEXITCODE
     Remove-Item -Force $tar
 }
@@ -74,7 +74,7 @@ if ($rc -ne 0) { Fail "compiling the objects in WSL ($Distro) failed (exit $rc)"
 $t1 = Get-Date
 Write-Host ("objects: {0:N1} s" -f ($t1 - $t0).TotalSeconds)
 
-# 2. link, veiid, sign (link-sign.cmd, copied next to the objects by wsl-objs.sh)
+# 2. link, veiid, sign (link-sign.cmd, copied next to the objects by wsl-build.sh)
 Push-Location $Out
 try {
     $env:VBS_CERT_NAME = $CertName

@@ -26,10 +26,17 @@ OUT=${OUT:-"$ROOT/build-vbs/obj"}
 : "${HDR:?set HDR to the folder holding the copied SDK (sdk/) and MSVC (vc/) headers}"
 mkdir -p "$OUT"
 
+# The compiler command lines below are built as strings: folders with spaces in their names are
+# reached through links without spaces.
+LINKS=$(mktemp -d "${TMPDIR:-/tmp}/build-objs.XXXXXX")
+trap 'rm -rf "$LINKS"' EXIT
+case "$VBS" in *" "*) ln -s "$VBS" "$LINKS/vbs"; VBS=$LINKS/vbs ;; esac
+case "$HDR" in *" "*) ln -s "$(cd "$HDR" && pwd)" "$LINKS/hdr"; HDR=$LINKS/hdr ;; esac
 INC="-I$VBS/common -I$VBS/enclave"
 DEFS=""
 if [ -n "$PACK" ]; then
     PACK=$(cd "$PACK" && pwd)
+    case "$PACK" in *" "*) ln -s "$PACK" "$LINKS/pack"; PACK=$LINKS/pack ;; esac
     INC="$INC -I$PACK"
 else
     DEFS="-DPAL_VBS_NO_PACKED"

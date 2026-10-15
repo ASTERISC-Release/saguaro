@@ -90,6 +90,10 @@ ENV
 env)
     echo "$TOOLS/env.sh"
     ;;
+missing)
+    # the missing packages, into /tmp/gramine-vbs-missing (read by gramine-vbs.ps1 setup -Apt)
+    missing | tee /tmp/gramine-vbs-missing; echo
+    ;;
 *)
     sed -n '5,19p' "$0"; exit 2 ;;
 esac
