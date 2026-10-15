@@ -15,7 +15,7 @@ loader.insecure__use_cmdline_argv = true
 loader.uid = 1000
 loader.gid = 1000
 
-loader.env.LD_LIBRARY_PATH = "/lib:/usr/lib:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu"
+loader.env.LD_LIBRARY_PATH = "/lib:/usr/lib:/usr{{ arch_libdir }}:{{ arch_libdir }}"
 {% if preload|string != "0" %}
 # The preload library in its native ("process") mode: EGL on GBM, presentation with DRI3.
 loader.env.LD_PRELOAD = "/libgraphics.so"
@@ -27,6 +27,8 @@ loader.env.HOME = "/root"
 loader.env.USER = "root_user"
 loader.env.DISPLAY = ":{{ display }}"
 loader.env.vblank_mode = "0"
+# the same for the NVIDIA driver
+loader.env.__GL_SYNC_TO_VBLANK = "0"
 loader.env.ALSOFT_DRIVERS = "null"
 loader.env.SDL_AUDIODRIVER = "dummy"
 loader.env.PULSE_SERVER = "none"
@@ -49,6 +51,13 @@ fs.mounts = [
   { path = "/usr", type = "chroot", uri = "file:/usr" },
   { path = "/etc/ld.so.cache", uri = "file:/etc/ld.so.cache" },
   { path = "/dev/dri", type = "chroot", uri = "file:/dev/dri" },
+{% if nvidia|string == "1" %}
+  # the NVIDIA proprietary driver (Documentation/devel/graphics-aarch64/)
+  { path = "/dev/nvidiactl", uri = "dev:/dev/nvidiactl" },
+  { path = "/dev/nvidia0", uri = "dev:/dev/nvidia0" },
+  { path = "/dev/nvidia-modeset", uri = "dev:/dev/nvidia-modeset" },
+  { path = "/proc/driver/nvidia", type = "chroot", uri = "file:/proc/driver/nvidia" },
+{% endif %}
   # libxshmfence's fences when there is no memfd_create
   { path = "/dev/shm", type = "chroot", uri = "file:/dev/shm" },
   { path = "/sys", type = "chroot", uri = "file:/sys", host_symlinks = true },

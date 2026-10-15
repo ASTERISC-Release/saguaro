@@ -17,6 +17,8 @@
 #
 # Environment: CONTAINER_NAME / IMAGE_NAME override the default names (container gramine-vm-<arch>,
 # image gramine-vm-<arch>:cf-<Containerfile hash>; see the image section below).
+# GRAMINE_CONTAINER_NVIDIA=1 (when the container is created) also passes the NVIDIA proprietary
+# driver's devices and the host's NVIDIA userspace libraries (off by default).
 #
 # Workspaces (see AGENTS.md): when the checkout sits in a folder named gramine-<name> (for example
 # .../gramine-<name>/gramine-multiarch), the container is named after that folder
@@ -148,6 +150,25 @@ if ! podman container exists "$CONTAINER"; then
     fi
     QEMU_TIRITH=${QEMU_TIRITH_DIR:-$(dirname "$REPO_ROOT")/qemu-tirith}
     [ -d "$QEMU_TIRITH" ] && GRAPHICS+=(-v "$QEMU_TIRITH:/root/qemu-tirith:rw")
+    # Opt-in (GRAMINE_CONTAINER_NVIDIA=1, see Documentation/devel/graphics-aarch64/): the NVIDIA
+    # proprietary driver's device nodes and the host's matching userspace (GLX/EGL vendor libraries,
+    # libnvidia-*, GBM backend, vendor configuration files), read-only. The libraries must match the
+    # host's kernel module, so they are taken from the host instead of being installed in the image.
+    if [ "${GRAMINE_CONTAINER_NVIDIA:-0}" = 1 ]; then
+        for d in /dev/nvidia[0-9]* /dev/nvidiactl /dev/nvidia-modeset /dev/nvidia-uvm \
+                 /dev/nvidia-uvm-tools /dev/dri/card*; do
+            [ -e "$d" ] && DEVICES+=(--device "$d:$d")
+        done
+        LIBDIR=/usr/lib/$(uname -m)-linux-gnu
+        for f in "$LIBDIR"/lib{GLX,EGL,GLESv1_CM,GLESv2}_nvidia.so* "$LIBDIR"/libnvidia-*.so* \
+                 "$LIBDIR"/libcuda.so* "$LIBDIR"/gbm/nvidia-drm_gbm.so \
+                 /usr/share/glvnd/egl_vendor.d/*nvidia*.json \
+                 /usr/share/egl/egl_external_platform.d/*nvidia*.json \
+                 /usr/share/vulkan/icd.d/nvidia_icd.json /usr/share/nvidia; do
+            case $f in *libnvidia-container*) continue ;; esac
+            [ -e "$f" ] && GRAPHICS+=(-v "$f:$f:ro")
+        done
+    fi
     echo ">>> creating container $CONTAINER"
     # --init: a minimal init as PID 1 reaps orphaned helper processes (e.g. of gramine-vm) when the
     # host has one (catatonit); without it they stay around as zombies until the container stops.

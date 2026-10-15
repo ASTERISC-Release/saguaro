@@ -150,6 +150,9 @@ struct pal_public_state {
      * Memory layout
      */
     bool disable_aslr;                      /*!< disable ASLR */
+    bool file_maps_write_back;              /*!< writable shared file mappings are copies kept by
+                                                 the PAL: the LibOS writes them back on msync()
+                                                 and munmap() (VM PAL, multiprocess support) */
     void* memory_address_start;             /*!< usable memory start address */
     void* memory_address_end;               /*!< usable memory end address */
     uintptr_t early_libos_mem_range_start;  /*!< start of memory usable before checkpoint restore */
@@ -178,6 +181,19 @@ struct pal_public_state {
      * LibOS tells "returning from a syscall" (context->pc is one of the two trampolines) from "a
      * synchronous fault frame" (context->pc is the real EL0 pc, resumed by the PAL itself). */
     uintptr_t vm_syscall_return_trampoline;
+
+#ifdef PAL_HOST_VBS
+    /*
+     * VBS-enclave PAL only (the field exists only in -Dvbs=enabled builds): no memory can become
+     * executable at run time, so objects are packed into the signed image at build time. For a
+     * packed object (the application, the vDSO) this returns where its load image lies (base,
+     * extent of its PT_LOADs) and the address of its syscall-entry slot (0 if none), which the
+     * LibOS fills with `libos_syscall_entry`. Negative PAL error if `uri` is not a packed object.
+     * `uri` == NULL names the LibOS itself.
+     */
+    int (*vbs_packed_lookup)(const char* uri, uintptr_t* out_base, size_t* out_size,
+                             uintptr_t* out_syscall_slot);
+#endif
 
     /*
      * Host information
@@ -307,6 +323,49 @@ int PalProcessCreate(const char** args, uintptr_t (*reserved_mem_ranges)[2],
  * \param exit_code  The exit value returned to the host.
  */
 noreturn void PalProcessExit(int exit_code);
+
+/*
+ * FUTEXES SHARED BETWEEN PROCESSES
+ *
+ * A wait queue for futex words in memory that several processes map (`MAP_SHARED`), keyed by the
+ * memory under the word rather than by its address, so that a wake in one process reaches a waiter
+ * in another. Only the x86_64 VM PAL with multiprocess support provides it; the other PALs return
+ * -PAL_ERROR_NOTIMPLEMENTED and the LibOS then keeps every futex process-local.
+ */
+
+/*!
+ * \brief Register the calling thread as a waiter on a shared futex word.
+ *
+ * \param      addr        Futex word (4-byte aligned, readable).
+ * \param      val         Expected value of the word.
+ * \param      bitset      Wake bitset of the waiter (FUTEX_WAIT_BITSET).
+ * \param      event       Event that a wake sets; the caller clears it before and waits on it after
+ *                         this call.
+ * \param[out] out_waiter  On success, the waiter to pass to PalFutexSharedRemove().
+ *
+ * Returns -PAL_ERROR_TRYAGAIN if the word does not hold \p val; the check and the registration
+ * are atomic with respect to PalFutexSharedWake().
+ */
+int PalFutexSharedAdd(uint32_t* addr, uint32_t val, uint32_t bitset, PAL_HANDLE event,
+                      void** out_waiter);
+
+/*!
+ * \brief Unregister a waiter returned by PalFutexSharedAdd() and free it.
+ *
+ * \param      waiter     The waiter.
+ * \param[out] out_woken  Whether a PalFutexSharedWake() woke this waiter.
+ */
+int PalFutexSharedRemove(void* waiter, bool* out_woken);
+
+/*!
+ * \brief Wake waiters on a shared futex word, in any process.
+ *
+ * \param      addr       Futex word.
+ * \param      bitset     Wakes only waiters whose bitset intersects this one.
+ * \param      count      Maximum number of waiters to wake.
+ * \param[out] out_woken  Number of waiters woken.
+ */
+int PalFutexSharedWake(uint32_t* addr, uint32_t bitset, int count, int* out_woken);
 
 /*
  * STREAMS
@@ -558,6 +617,40 @@ int PalFileCreateSymlink(const char* target, const char* typed_uri);
 int PalFileCreateLink(const char* old_typed_uri, const char* new_typed_uri);
 int PalFileUnlink(const char* typed_uri);
 int PalFileRename(const char* old_typed_uri, const char* new_typed_uri);
+
+/* Exchange two host-backed files atomically (the host's `renameat2(RENAME_EXCHANGE)`). */
+int PalFileExchange(const char* typed_uri_a, const char* typed_uri_b);
+
+/*
+ * Read the target of a host-backed symbolic link without following it. `*inout_size` is the size
+ * of `buf` on entry and the target's length on return (no terminating NUL is written). Fails with
+ * -PAL_ERROR_INVAL if the path names no symbolic link.
+ */
+int PalFileReadLink(const char* typed_uri, char* buf, size_t* inout_size);
+
+/* Extended attributes of a host-backed file (`getxattr`, `setxattr`, `listxattr`,
+ * `removexattr`). */
+enum pal_xattr_op {
+    PAL_XATTR_GET,
+    PAL_XATTR_SET,
+    PAL_XATTR_LIST,
+    PAL_XATTR_REMOVE,
+};
+#define PAL_XATTR_CREATE   0x1 /* PAL_XATTR_SET: fail if the attribute exists */
+#define PAL_XATTR_REPLACE  0x2 /* PAL_XATTR_SET: fail if it does not */
+#define PAL_XATTR_NOFOLLOW 0x4 /* operate on a symbolic link itself */
+/*
+ * `name` is the attribute's name (unused for PAL_XATTR_LIST). For GET and LIST, `*inout_size` is
+ * the size of `value` on entry (0 asks only for the size) and the value's (or list's) size on
+ * return; for SET it is the size of the value to store; REMOVE ignores both. Errors follow the
+ * host: -PAL_ERROR_NOTSUPPORT where the filesystem has no attributes, -PAL_ERROR_STREAMNOTEXIST
+ * for a missing attribute (the LibOS turns these into ENOTSUP/ENODATA).
+ */
+int PalFileXattr(const char* typed_uri, enum pal_xattr_op op, const char* name, void* value,
+                 size_t* inout_size, int flags);
+
+/* CPU time consumed, in microseconds, by the whole process or (`thread`) the calling thread. */
+int PalGetCpuTime(bool thread, uint64_t* out_user_us, uint64_t* out_sys_us);
 
 struct pal_socket_addr {
     enum pal_socket_domain domain;

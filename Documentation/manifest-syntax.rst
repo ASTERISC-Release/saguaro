@@ -727,7 +727,10 @@ without ``sys.ioctl_structs`` and ``sys.allowed_ioctls`` being consulted. This
 works because under ``gramine-direct`` the application and the host kernel
 share one address space; it is what GPU drivers need, whose IOCTLs carry nested
 pointers that cannot practically be described in the manifest. Gramine logs a
-warning on the first such IOCTL. Other PALs ignore the key.
+warning on the first such IOCTL. Other PALs ignore the key. File descriptors
+inside the arguments of known IOCTLs are translated between Gramine fds and
+host fds: DRM PRIME and syncobj, dma-buf sync files, and the NVIDIA driver's
+IOCTLs on its character devices (major 195) that carry an fd.
 
 .. warning::
    This option is insecure and must not be used in production. ``gramine-direct``
@@ -752,8 +755,10 @@ socket to one of these paths (exactly as written, for example the X server's
 ``"/tmp/.X11-unix/X0"``) connects to the host socket itself, through the Linux
 PAL. File descriptors passed with ``SCM_RIGHTS`` on such a socket are
 translated: an fd the application sends becomes the host fd behind it (files,
-devices, sockets, and fds returned by device IOCTLs), and an fd received from
-the host becomes a new Gramine fd. ``SCM_CREDENTIALS`` is not supported. With
+devices, sockets, ends of a ``socketpair()``, and fds returned by device
+IOCTLs), and an fd received from the host becomes a new Gramine fd. A
+``socketpair()`` end whose peer end was sent to the host also receives fds that
+the host process sends back through it. ``SCM_CREDENTIALS`` is not supported. With
 other PALs the paths are ignored (the connection fails).
 
 This is what an X11 client with GPU rendering needs: Mesa's DRI3 and the
@@ -780,6 +785,119 @@ This syntax enables the ``flock`` system call in Gramine.
    This syscall is still under development and may contain security
    vulnerabilities. This is temporary; the syscall will be enabled by default in
    the future after thorough validation and this syntax will be removed then.
+
+.. _vbs-syntax:
+
+VBS syntax (Windows VBS enclaves)
+---------------------------------
+
+These keys configure the ``vbs`` PAL, which runs Linux applications inside
+Windows VBS enclaves on ARM64 Windows 11 (see :doc:`vbs`). Other PALs ignore
+them. The image, its configuration and every packed file are fixed when the
+enclave image is built and signed (``gramine-vbs build``); nothing executable
+can be added at run time. A VBS manifest also needs::
+
+    loader.entrypoint = "file:/libsysdb.so"
+    sys.rewrite_syscalls = false
+
+Packed files
+^^^^^^^^^^^^
+
+::
+
+    vbs.packed_files = [
+      "file:[PATH]",
+      { path = "[ENCLAVE PATH]", uri = "file:[PATH]" },
+      { path = "[ENCLAVE PATH]", uri = "file:[DIRECTORY]", exclude = [ "[PATTERN]", ... ] },
+    ]
+
+The files packed into the signed enclave image: the application, its shared
+libraries (for example the ``ld.so``, ``libc`` and ``libm`` of the vbs glibc)
+and its data. ``uri`` names a file or directory on the build machine, relative
+to the manifest; ``path`` is where the enclave sees it (default: ``/`` and the
+file name). A directory is packed with everything below it except the names
+or relative paths that match an ``exclude`` pattern (shell patterns; a pattern
+ending in ``/`` matches directories). AArch64 ELF shared objects and position-
+independent executables are packed as loadable objects at a fixed place in the
+image (their ``svc`` instructions are rewritten at build time); every other file
+is packed as read-only data. ``libos.entrypoint`` must be one of the packed
+paths. Packed files are measured as part of the image (the report's unique ID).
+
+Programs and libraries for the enclave must be built with
+``scripts/vbs/vbs-gcc`` (``-ffixed-x18``, 4 KiB pages, the vbs glibc sysroot).
+
+Trusted and allowed host files
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+::
+
+    vbs.trusted_files = [
+      { path = "[ENCLAVE PATH]", sha256 = "[64 HEX DIGITS]" },
+    ]
+    vbs.allowed_files = [ "[ENCLAVE PATH]", "[ENCLAVE DIRECTORY]/" ]
+
+Host files are read and written through the untrusted host process, below its
+host root folder (``gramine-vbs run --root``). A trusted file is read in full
+when it is opened and refused unless its SHA-256 matches; it is read-only. An
+allowed file or directory (an entry ending in ``/`` covers everything below
+it) is passed through without any protection, as ``sgx.allowed_files``.
+``gramine-vbs run`` creates the allowed directories below the host root.
+
+Debug/production enclave
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+::
+
+    vbs.debug = [true|false]
+    (Default: false)
+
+Whether the image allows debugging (``IMAGE_ENCLAVE_POLICY_DEBUGGABLE``). A
+debug enclave is marked in its attestation reports (identity flag
+``ENCLAVE_FLAG_FULL_DEBUG_ENABLED``), and the verifier refuses it unless asked
+to allow it.
+
+Enclave size and threads
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+::
+
+    vbs.enclave_size = "[SIZE]"
+    (Default: "256M")
+
+    vbs.max_threads = [NUM]
+    (Default: 4)
+
+The enclave's address range (a power of two from 64M to 64G) and the number of
+threads that may be inside the enclave at once (1 to 1024). Both are written
+into the image's enclave configuration and so are part of what is signed; the
+host takes them from the image.
+
+Enclave identity
+^^^^^^^^^^^^^^^^
+
+::
+
+    vbs.family_id = "[HEX, AT MOST 16 BYTES]"
+    vbs.image_id  = "[HEX, AT MOST 16 BYTES]"
+    vbs.isv_svn   = [NUM]
+    (Default: zeros, zeros, 0)
+
+The family ID, image ID and security version number of the enclave image. They
+appear in the identity of every attestation report, so a verifier can check
+them (``--min-svn``).
+
+Registers
+^^^^^^^^^
+
+::
+
+    vbs.x18_allow = { "[FILE NAME]" = [ "[FUNCTION]", ... ] }
+
+The build refuses packed code that uses register x18, which holds the
+enclave's thread environment block. Functions that are known to save and
+restore it can be allowed by the file name of their object. The functions of
+the vbs glibc that need it (``_dl_tlsdesc_dynamic``, ``getcontext``,
+``swapcontext``) and of the LibOS are allowed by default.
 
 .. _sgx-syntax:
 

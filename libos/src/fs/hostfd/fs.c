@@ -31,7 +31,127 @@
 #include "stat.h"
 #include "toml_utils.h"
 
+/* the DRM, dma-buf and sync_file table, shared with the VM graphics path (sys/libos_ioctl.c) */
 #include "libos_device_ioctl.h"
+
+/* The NVIDIA proprietary driver's ioctls on /dev/nvidiactl and /dev/nvidia<N> (character major 195)
+ * that carry an fd of the caller in their argument, from nv-ioctl-numbers.h, nv-ioctl.h and the
+ * driver's "with fd" wrappers of NVOS33/NVOS02 (offsets checked against a native run of driver
+ * 580.178.04). The kernel looks the fd up with fget() in the calling process, so it must be the
+ * host fd. */
+#define NV_MAJOR_DEVICE_NUMBER    195
+#define NV_IOCTL_MAGIC            'F'
+#define NV_ESC_RM_ALLOC_MEMORY    _IOC(_IOC_READ | _IOC_WRITE, NV_IOCTL_MAGIC, 0x27, 0x38)
+#define NV_ESC_RM_MAP_MEMORY      _IOC(_IOC_READ | _IOC_WRITE, NV_IOCTL_MAGIC, 0x4e, 0x38)
+#define NV_ESC_REGISTER_FD        _IOC(_IOC_READ | _IOC_WRITE, NV_IOCTL_MAGIC, 0xc9, 4)
+#define NV_ESC_ALLOC_OS_EVENT     _IOC(_IOC_READ | _IOC_WRITE, NV_IOCTL_MAGIC, 0xce, 16)
+#define NV_ESC_FREE_OS_EVENT      _IOC(_IOC_READ | _IOC_WRITE, NV_IOCTL_MAGIC, 0xcf, 16)
+
+
+/* Only for handles of NVIDIA devices (character major 195): the numbers are not unique. */
+static const struct translated_ioctl g_translated_nvidia_ioctls[] = {
+    /* struct { NVOS02_PARAMETERS params; int fd; } (fd may be -1) */
+    { NV_ESC_RM_ALLOC_MEMORY, {{0x30, FD_IN}}, 1, -1 },
+    /* struct { NVOS33_PARAMETERS params; int fd; }: the fd that is mmap()ed afterwards */
+    { NV_ESC_RM_MAP_MEMORY,   {{0x30, FD_IN}}, 1, -1 },
+    /* struct nv_ioctl_register_fd { int ctl_fd; } */
+    { NV_ESC_REGISTER_FD,     {{0, FD_IN}},    1, -1 },
+    /* struct nv_ioctl_alloc_os_event / free_os_event { NvHandle hClient, hDevice; NvU32 fd; ... } */
+    { NV_ESC_ALLOC_OS_EVENT,  {{8, FD_IN}},    1, -1 },
+    { NV_ESC_FREE_OS_EVENT,   {{8, FD_IN}},    1, -1 },
+};
+
+/*
+ * Fds nested one level deeper, inside a parameter block that the ioctl argument points to (layouts
+ * from NVIDIA's open kernel modules, tag 580.178.04: ctrl0000unix.h, cl0005.h, nvkms-api.h).
+ */
+#define NV_ESC_RM_CONTROL    _IOC(_IOC_READ | _IOC_WRITE, NV_IOCTL_MAGIC, 0x2a, 0x20)
+#define NV_ESC_RM_ALLOC      _IOC(_IOC_READ | _IOC_WRITE, NV_IOCTL_MAGIC, 0x2b, 0x30)
+#define NV01_EVENT_OS_EVENT  0x79
+/* nvidia-modeset (same character major): struct NvKmsIoctlParams { NvU32 cmd, size; NvU64 address; } */
+#define NVKMS_IOCTL_IOWR     _IOC(_IOC_READ | _IOC_WRITE, 'm', 0, 16)
+#define NVKMS_IOCTL_REGISTER_SURFACE 17
+#define NVKMS_IOCTL_GRANT_SURFACE    19
+#define NVKMS_IOCTL_ACQUIRE_SURFACE  20
+#define NVKMS_MAX_PLANES_PER_SURFACE 3
+
+#define MAX_NESTED_FDS 3
+struct nested_fds {
+    size_t cnt;
+    struct {
+        void* ptr;
+        bool is_64bit;
+        int64_t saved;
+    } f[MAX_NESTED_FDS];
+};
+
+/* Adds the fd field at `params + offset` if [params, params + size) is user memory. */
+static void add_nested_fd(struct nested_fds* n, uint64_t params, uint64_t size, uint64_t offset,
+                          bool is_64bit) {
+    size_t width = is_64bit ? sizeof(int64_t) : sizeof(int32_t);
+    if (n->cnt == MAX_NESTED_FDS || !params || offset + width > size
+            || !is_user_memory_writable((void*)(uintptr_t)params, size))
+        return;
+    n->f[n->cnt].ptr = (void*)(uintptr_t)(params + offset);
+    n->f[n->cnt].is_64bit = is_64bit;
+    n->cnt++;
+}
+
+static void find_nvidia_nested_fds(unsigned int cmd, unsigned long arg, struct nested_fds* n) {
+    if (cmd == NV_ESC_RM_CONTROL && is_user_memory_readable((void*)arg, 0x20)) {
+        /* NVOS54_PARAMETERS { NvHandle hClient, hObject; NvU32 cmd, flags; NvP64 params;
+         * NvU32 paramsSize; NvU32 status; }; the NV0000 OS_UNIX controls with an fd: */
+        uint32_t rm_cmd = *(uint32_t*)(arg + 8);
+        uint64_t params = *(uint64_t*)(arg + 16);
+        uint32_t size = *(uint32_t*)(arg + 24);
+        if (rm_cmd == 0x3d05) /* EXPORT_OBJECT_TO_FD { EXPORT_OBJECT object (16 B); NvS32 fd; } */
+            add_nested_fd(n, params, size, 16, false);
+        else if (rm_cmd == 0x3d06 || rm_cmd == 0x3d08 || rm_cmd == 0x3d0b || rm_cmd == 0x3d0c)
+            /* IMPORT_OBJECT_FROM_FD, GET_EXPORT_OBJECT_INFO, EXPORT_OBJECTS_TO_FD,
+             * IMPORT_OBJECTS_FROM_FD: { NvS32 fd; ... } */
+            add_nested_fd(n, params, size, 0, false);
+    } else if (cmd == NV_ESC_RM_ALLOC && is_user_memory_readable((void*)arg, 0x30)) {
+        /* NVOS64_PARAMETERS { NvHandle hRoot, hObjectParent, hObjectNew; NvV32 hClass;
+         * NvP64 pAllocParms; ... }; for NV01_EVENT_OS_EVENT the parameters are
+         * NV0005_ALLOC_PARAMETERS { NvHandle hParentClient, hSrcResource; NvV32 hClass,
+         * notifyIndex; NvP64 data; } and `data` is the fd registered with NV_ESC_ALLOC_OS_EVENT. */
+        if (*(uint32_t*)(arg + 12) == NV01_EVENT_OS_EVENT)
+            add_nested_fd(n, *(uint64_t*)(arg + 16), 24, 16, true);
+    } else if (cmd == NVKMS_IOCTL_IOWR && is_user_memory_readable((void*)arg, 16)) {
+        uint32_t kms_cmd = *(uint32_t*)arg;
+        uint32_t size = *(uint32_t*)(arg + 4);
+        uint64_t params = *(uint64_t*)(arg + 8);
+        if (kms_cmd == NVKMS_IOCTL_REGISTER_SURFACE) {
+            /* NvKmsRegisterSurfaceRequest { NvKmsDeviceHandle deviceHandle; NvBool useFd;
+             * NvU32 rmClient; struct { union { NvU32 rmObject; NvS32 fd; } u; NvU64 offset;
+             * NvU32 pitch; NvU64 rmObjectSizeInBytes; } planes[3]; ... }: planes at 16, 32 B
+             * each; a plane is used when its size is not 0 */
+            if (!params || size < 16 + 32 * NVKMS_MAX_PLANES_PER_SURFACE
+                    || !is_user_memory_readable((void*)(uintptr_t)params, size)
+                    || !*(uint8_t*)(uintptr_t)(params + 4))
+                return;
+            for (size_t i = 0; i < NVKMS_MAX_PLANES_PER_SURFACE; i++)
+                if (*(uint64_t*)(uintptr_t)(params + 16 + 32 * i + 24))
+                    add_nested_fd(n, params, size, 16 + 32 * i, false);
+        } else if (kms_cmd == NVKMS_IOCTL_GRANT_SURFACE) {
+            /* NvKmsGrantSurfaceRequest { deviceHandle; surfaceHandle; int fd; } */
+            add_nested_fd(n, params, size, 8, false);
+        } else if (kms_cmd == NVKMS_IOCTL_ACQUIRE_SURFACE) {
+            /* NvKmsAcquireSurfaceRequest { int fd; } */
+            add_nested_fd(n, params, size, 0, false);
+        }
+    }
+}
+
+static bool is_nvidia_device(struct libos_handle* hdl) {
+    if (hdl->type != TYPE_CHROOT || !hdl->dentry)
+        return false;
+    lock(&g_dcache_lock);
+    bool ret = hdl->dentry->inode && hdl->dentry->inode->type == S_IFCHR
+               && hdl->dentry->inode->rdev_major == NV_MAJOR_DEVICE_NUMBER;
+    unlock(&g_dcache_lock);
+    return ret;
+}
 
 static bool raw_device_ioctl_enabled(void) {
     static int enabled = -1;
@@ -101,12 +221,34 @@ static int64_t host_deadline(int64_t deadline) {
 
 int raw_device_ioctl(struct libos_handle* hdl, unsigned int cmd, unsigned long arg) {
     const struct translated_ioctl* ti = NULL;
+    struct nested_fds nested = { .cnt = 0 };
     if (raw_device_ioctl_enabled()) {
         for (size_t i = 0; i < ARRAY_SIZE(g_translated_ioctls); i++) {
             if (g_translated_ioctls[i].cmd == cmd) {
                 ti = &g_translated_ioctls[i];
                 break;
             }
+        }
+        if (!ti && (_IOC_TYPE(cmd) == NV_IOCTL_MAGIC || cmd == NVKMS_IOCTL_IOWR)
+                && is_nvidia_device(hdl)) {
+            for (size_t i = 0; i < ARRAY_SIZE(g_translated_nvidia_ioctls); i++) {
+                if (g_translated_nvidia_ioctls[i].cmd == cmd) {
+                    ti = &g_translated_nvidia_ioctls[i];
+                    break;
+                }
+            }
+            find_nvidia_nested_fds(cmd, arg, &nested);
+        }
+    }
+
+    /* replaced by the host fds for the call, restored afterwards */
+    for (size_t i = 0; i < nested.cnt; i++) {
+        if (nested.f[i].is_64bit) {
+            nested.f[i].saved = *(int64_t*)nested.f[i].ptr;
+            *(int64_t*)nested.f[i].ptr = host_fd_of((int32_t)nested.f[i].saved);
+        } else {
+            nested.f[i].saved = *(int32_t*)nested.f[i].ptr;
+            *(int32_t*)nested.f[i].ptr = host_fd_of((int32_t)nested.f[i].saved);
         }
     }
 
@@ -137,6 +279,13 @@ int raw_device_ioctl(struct libos_handle* hdl, unsigned int cmd, unsigned long a
         ret = pal_to_unix_errno(ret);
     else
         ret = cmd_ret;
+
+    for (size_t i = 0; i < nested.cnt; i++) {
+        if (nested.f[i].is_64bit)
+            *(int64_t*)nested.f[i].ptr = nested.f[i].saved;
+        else
+            *(int32_t*)nested.f[i].ptr = (int32_t)nested.f[i].saved;
+    }
 
     if (ti) {
         for (size_t i = 0; i < ti->fields_cnt; i++) {

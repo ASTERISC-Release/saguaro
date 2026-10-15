@@ -146,8 +146,9 @@ static int tmpfs_lookup(struct libos_dentry* dent) {
     assert(!dent->inode);
 
     if (!dent->parent) {
-        /* This is the root dentry, initialize it. */
-        return tmpfs_setup_dentry(dent, S_IFDIR, PERM_rwx______);
+        /* This is the root dentry, initialize it: mode 1777 like a Linux tmpfs mounted without a
+         * `mode=` option (with 0700 an unprivileged user could not even search it) */
+        return tmpfs_setup_dentry(dent, S_IFDIR, PERM_rwxrwxrwx | S_ISVTX);
     }
     /* Looking up for other dentries should fail: if a dentry has not been already created by
      * `creat` or `mkdir`, the corresponding file does not exist. */
@@ -289,6 +290,12 @@ static int tmpfs_exchange(struct libos_dentry* old, struct libos_dentry* new) {
     new->inode->ctime_nsec = now_nsec;
     unlock(&new->inode->lock);
     return 0;
+}
+
+/* attributes live in the inode (`libos_xattr_store_op()`) */
+static int tmpfs_xattr(struct libos_dentry* dent, int op, const char* name, void* value,
+                       size_t* size, int flags) {
+    return libos_xattr_store_op(dent->inode, op, name, value, size, flags);
 }
 
 static int tmpfs_chmod(struct libos_dentry* dent, mode_t perm) {
@@ -444,6 +451,7 @@ struct libos_d_ops tmp_d_ops = {
     .unlink      = &tmpfs_unlink,
     .rename      = &tmpfs_rename,
     .exchange    = &tmpfs_exchange,
+    .xattr       = &tmpfs_xattr,
     .chmod       = &tmpfs_chmod,
     .set_times   = &tmpfs_set_times,
     .symlink     = &tmpfs_symlink,

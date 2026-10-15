@@ -15,6 +15,7 @@
 #include "api.h"
 #include "libos_defs.h"
 #include "libos_handle.h"
+#include "libos_rwlock.h"
 #include "libos_types.h"
 #include "linux_abi/memory.h"
 #include "pal.h"
@@ -102,6 +103,11 @@ int bkeep_mmap_any_aslr(size_t length, int prot, int flags, struct libos_handle*
 /* Looking up VMA that contains `addr`. If one is found, returns its description in `vma_info`.
  * This function increases ref-count of `vma_info->file` by one (if it is not NULL). */
 int lookup_vma(void* addr, struct libos_vma_info* vma_info);
+
+/* Shared by the address-space-changing system calls, exclusive during fork's checkpoint. */
+extern struct libos_rwlock g_vma_change_lock;
+/* Before creating a VM child: give every page of MAP_SHARED anonymous memory its frame. */
+int populate_shared_anonymous_mappings(void);
 
 /* Returns true if the whole range [`addr`, `addr` + `length`) is mapped as user memory and allows
  * for `prot` type of access. */

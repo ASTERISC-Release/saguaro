@@ -75,3 +75,5 @@ built-debug
 .mp-probes/
 /.syscall-profiles/
 /.game/
+# the vbs PAL build trees (Documentation/vbs.rst)
+/build-vbs*/

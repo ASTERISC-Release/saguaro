@@ -96,3 +96,8 @@ socket, host symbolic links under `/sys`): `gramine-direct` is not a sandbox, se
 `Documentation/devel/graphics-direct/running.md`. Use an install made with `scripts/install.sh`
 (direct PAL, bundled glibc). `direct-tests/` has test programs (`make check`).
 
+
+On AArch64 with the NVIDIA proprietary driver (`Documentation/devel/graphics-aarch64/`), the same
+`-direct` targets of `glxgears`, `quake2`, `minetest` and `supertuxkart` run on the GPU; the manifests
+then also mount the NVIDIA device nodes (automatic when `/dev/nvidiactl` exists). The games are built
+from source in the container. `bastion` and `tf2` are x86_64 binaries and do not apply there.

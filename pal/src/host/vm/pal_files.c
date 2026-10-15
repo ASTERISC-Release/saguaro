@@ -22,6 +22,9 @@ struct handle_ops g_file_ops = {
     .link           = &pal_common_file_link,
     .unlink_path    = &pal_common_file_unlink_path,
     .rename_path    = &pal_common_file_rename_path,
+    .exchange_path  = &pal_common_file_exchange_path,
+    .readlink_path  = &pal_common_file_readlink_path,
+    .xattr          = &pal_common_file_xattr,
 };
 
 struct handle_ops g_dir_ops = {

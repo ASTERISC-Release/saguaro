@@ -243,6 +243,68 @@ static int file_unlink_path(const char* uri) {
     return ret < 0 ? unix_to_pal_error(ret) : 0;
 }
 
+static int file_exchange_path(const char* uri_a, const char* uri_b) {
+    int ret = DO_SYSCALL(renameat2, AT_FDCWD, uri_a, AT_FDCWD, uri_b, /*RENAME_EXCHANGE=*/2);
+    return ret < 0 ? unix_to_pal_error(ret) : 0;
+}
+
+static int file_readlink_path(const char* uri, char* buf, size_t* inout_size) {
+    int ret = DO_SYSCALL(readlinkat, AT_FDCWD, uri, buf, *inout_size);
+    if (ret < 0)
+        return unix_to_pal_error(ret);
+    *inout_size = (size_t)ret;
+    return 0;
+}
+
+/* The host errors of the xattr calls that the LibOS must tell apart (the generic mapping turns
+ * them all into PAL_ERROR_DENIED): see the PalFileXattr() comment in pal.h. */
+static int pal_xattr_error(int unix_ret) {
+    switch (-unix_ret) {
+        case ENODATA:
+            return -PAL_ERROR_STREAMNOTEXIST;
+        case EOPNOTSUPP:
+            return -PAL_ERROR_NOTSUPPORT;
+        case ERANGE:
+        case E2BIG:
+            return -PAL_ERROR_TOOLONG;
+        default:
+            return unix_to_pal_error(unix_ret);
+    }
+}
+
+static int file_xattr(const char* uri, enum pal_xattr_op op, const char* name, void* value,
+                      size_t* inout_size, int flags) {
+    bool nofollow = flags & PAL_XATTR_NOFOLLOW;
+    long ret;
+    switch (op) {
+        case PAL_XATTR_GET:
+            ret = nofollow ? DO_SYSCALL(lgetxattr, uri, name, value, *inout_size)
+                           : DO_SYSCALL(getxattr, uri, name, value, *inout_size);
+            break;
+        case PAL_XATTR_SET: {
+            int set_flags = flags & (PAL_XATTR_CREATE | PAL_XATTR_REPLACE); /* = XATTR_* */
+            ret = nofollow ? DO_SYSCALL(lsetxattr, uri, name, value, *inout_size, set_flags)
+                           : DO_SYSCALL(setxattr, uri, name, value, *inout_size, set_flags);
+            break;
+        }
+        case PAL_XATTR_LIST:
+            ret = nofollow ? DO_SYSCALL(llistxattr, uri, value, *inout_size)
+                           : DO_SYSCALL(listxattr, uri, value, *inout_size);
+            break;
+        case PAL_XATTR_REMOVE:
+            ret = nofollow ? DO_SYSCALL(lremovexattr, uri, name)
+                           : DO_SYSCALL(removexattr, uri, name);
+            break;
+        default:
+            return -PAL_ERROR_INVAL;
+    }
+    if (ret < 0)
+        return pal_xattr_error((int)ret);
+    if (op == PAL_XATTR_GET || op == PAL_XATTR_LIST)
+        *inout_size = (size_t)ret;
+    return 0;
+}
+
 static int file_rename_path(const char* old_uri, const char* new_uri) {
 #ifdef __NR_renameat
     int ret = DO_SYSCALL(renameat, AT_FDCWD, old_uri, AT_FDCWD, new_uri);
@@ -449,6 +511,9 @@ struct handle_ops g_file_ops = {
     .link           = &file_link,
     .unlink_path    = &file_unlink_path,
     .rename_path    = &file_rename_path,
+    .exchange_path  = &file_exchange_path,
+    .readlink_path  = &file_readlink_path,
+    .xattr          = &file_xattr,
 };
 
 struct handle_ops g_dir_ops = {

@@ -18,7 +18,9 @@ There are two types of attestation: :term:`Local Attestation` and
 same physical machine and remote attestation is used when a user attests a TEE
 running on a remote physical machine. In the following, even though Gramine
 attestation flows are designed to be TEE-agnostic, we discuss only :term:`SGX`
-attestation flows (the SGX flows are currently the only ones implemented).
+attestation flows (the SGX flows are the ones described here; for Windows VBS
+enclaves, ``/dev/attestation`` returns VBS attestation reports, see the
+Attestation section of :doc:`vbs`).
 
 By itself, remote attestation only provides the assurance to the user that the
 remotely executing TEE is trusted, that the correct code is executed and that

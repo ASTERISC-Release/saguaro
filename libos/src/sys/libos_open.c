@@ -18,7 +18,10 @@
 #include "libos_internal.h"
 #include "libos_lock.h"
 #include "libos_process.h"
+#include "libos_signal.h"
 #include "libos_table.h"
+#include "libos_thread.h"
+#include "linux_abi/limits.h"
 #include "linux_abi/errors.h"
 #include "linux_abi/fs.h"
 #include "linux_abi/memory.h"
@@ -95,6 +98,45 @@ long libos_syscall_read(int fd, void* buf, size_t count) {
     return ret;
 }
 
+/* O_APPEND: every write of a regular file starts at its end (also pwrite(), as on Linux). The PAL
+ * has no append mode, so the LibOS moves the position to the current size first; another
+ * process appending to the same host file at the same moment is not serialised with this. */
+int handle_append_position(struct libos_handle* hdl, file_off_t* pos) {
+    if (!(hdl->flags & O_APPEND) || !hdl->inode || hdl->inode->type != S_IFREG)
+        return 0;
+    struct libos_fs* fs = hdl->fs;
+    if (fs && fs->fs_ops && fs->fs_ops->hstat) {
+        struct stat st;
+        int ret = fs->fs_ops->hstat(hdl, &st);
+        if (ret < 0)
+            return ret;
+        *pos = st.st_size;
+        return 0;
+    }
+    lock(&hdl->inode->lock);
+    *pos = hdl->inode->size;
+    unlock(&hdl->inode->lock);
+    return 0;
+}
+
+/* RLIMIT_FSIZE for a write of `*count` bytes at `pos` of a regular file: beyond the limit the
+ * write is EFBIG and SIGXFSZ is sent, across it the write is shortened (LTP llseek01). */
+int handle_fsize_limit(struct libos_handle* hdl, file_off_t pos, size_t* count) {
+    if (!*count || !hdl->inode || hdl->inode->type != S_IFREG)
+        return 0;
+    uint64_t limit = get_rlimit_cur(RLIMIT_FSIZE);
+    if (limit == RLIM_INFINITY)
+        return 0;
+    if ((uint64_t)pos >= limit) {
+        siginfo_t info = {.si_signo = SIGXFSZ, .si_code = SI_KERNEL};
+        (void)append_signal(get_cur_thread(), &info);
+        return -EFBIG;
+    }
+    if ((uint64_t)pos + *count > limit)
+        *count = limit - (uint64_t)pos;
+    return 0;
+}
+
 ssize_t do_handle_write(struct libos_handle* hdl, const void* buf, size_t count) {
     int seal_ret = libos_memfd_check_write(hdl, hdl->pos, count);
     if (seal_ret < 0)
@@ -112,7 +154,11 @@ ssize_t do_handle_write(struct libos_handle* hdl, const void* buf, size_t count)
         return -EISDIR;
 
     maybe_lock_pos_handle(hdl);
-    ssize_t ret = fs->fs_ops->write(hdl, buf, count, &hdl->pos);
+    ssize_t ret = handle_append_position(hdl, &hdl->pos);
+    if (ret == 0)
+        ret = handle_fsize_limit(hdl, hdl->pos, &count);
+    if (ret == 0)
+        ret = fs->fs_ops->write(hdl, buf, count, &hdl->pos);
     maybe_unlock_pos_handle(hdl);
     return ret;
 }
@@ -408,8 +454,9 @@ graphics_cont:
     } else {
         ret = set_new_fd_handle(hdl, flags & O_CLOEXEC ? FD_CLOEXEC : 0, NULL);
 
-        /* Graphics logic to avoid overflow into fd range. */
-        if (ret > GRAPHICS_HOST_FD_OFFSET) {
+        /* Graphics logic to avoid overflow into fd range (only for a descriptor: an error such
+         * as -EMFILE must not compare as a huge unsigned number) */
+        if (ret >= 0 && (uint64_t)ret > GRAPHICS_HOST_FD_OFFSET) {
             log_always("error: openat(..) overflowed into host fd range. (ret: %d)\n", ret);
             assert(false);
         }
@@ -665,7 +712,11 @@ long libos_syscall_pwrite64(int fd, char* buf, size_t count, loff_t offset) {
     }
 
     file_off_t pos = offset;
-    ret = fs->fs_ops->write(hdl, buf, count, &pos);
+    ret = handle_append_position(hdl, &pos);
+    if (ret == 0)
+        ret = handle_fsize_limit(hdl, pos, &count);
+    if (ret == 0)
+        ret = fs->fs_ops->write(hdl, buf, count, &pos);
 out:
     put_handle(hdl);
     return ret;
@@ -940,6 +991,11 @@ long libos_syscall_truncate(const char* path, loff_t length) {
         goto out;
     }
 
+    /* growing past RLIMIT_FSIZE: EFBIG and SIGXFSZ (LTP truncate03) */
+    size_t over = 1;
+    if (length > 0 && (ret = handle_fsize_limit(hdl, length - 1, &over)) < 0)
+        goto out;
+
     ret = fs->fs_ops->truncate(hdl, length);
 out:
     put_handle(hdl);
@@ -988,6 +1044,10 @@ long libos_syscall_ftruncate(int fd, loff_t length) {
         ret = -EINVAL;
         goto out;
     }
+
+    size_t over = 1;
+    if (length > 0 && (ret = handle_fsize_limit(hdl, length - 1, &over)) < 0)
+        goto out;
     if (hdl->is_memfd && hdl->inode) {
         if ((length < hdl->inode->size && (hdl->memfd_seals & LIBOS_F_SEAL_SHRINK)) ||
             (length > hdl->inode->size && (hdl->memfd_seals & LIBOS_F_SEAL_GROW))) {

@@ -70,8 +70,8 @@ static int check_prot(int prot) {
 }
 
 bool unmapped_data = false;
-void* libos_syscall_mmap(void* addr, size_t length, int prot, int flags, int fd,
-                         unsigned long offset) {
+static void* do_mmap(void* addr, size_t length, int prot, int flags, int fd,
+                     unsigned long offset) {
 
     static bool isMappedComms = false;
 
@@ -249,6 +249,26 @@ void* libos_syscall_mmap(void* addr, size_t length, int prot, int flags, int fd,
         memory_range_end = g_pal_public_state->memory_address_end;
     }
 
+#ifdef PAL_HOST_VBS
+    extern void libos_syscall_entry(void); /* libos_entry.h */
+    /* VBS-enclave PAL (-Dvbs=enabled builds only): code cannot be mapped at run time; a packed
+     * shared object (packed into the signed enclave image at build time) is used where it lies. A
+     * dynamic loader's first, executable mapping of such a file (offset 0, no fixed address) is
+     * therefore placed at the object's packed address, and the object's syscall-entry slot is
+     * filled; its later MAP_FIXED mappings then match the packed segments. */
+    if (hdl && (prot & PROT_EXEC) && !(flags & (MAP_FIXED | MAP_FIXED_NOREPLACE)) && offset == 0
+            && g_pal_public_state->vbs_packed_lookup) {
+        uintptr_t packed_base, packed_slot;
+        size_t packed_size;
+        if (g_pal_public_state->vbs_packed_lookup(hdl->uri, &packed_base, &packed_size,
+                                                  &packed_slot) == 0 && length <= packed_size) {
+            if (packed_slot)
+                *(uintptr_t*)packed_slot = (uintptr_t)&libos_syscall_entry;
+            addr = (void*)packed_base;
+            flags |= MAP_FIXED;
+        }
+    }
+#endif
     if (flags & (MAP_FIXED | MAP_FIXED_NOREPLACE)) {
         /* We know that `addr + length` does not overflow (`access_ok` above). */
         if (addr < memory_range_start || (uintptr_t)memory_range_end < (uintptr_t)addr + length) {
@@ -374,7 +394,7 @@ out_handle:
     return addr;
 }
 
-long libos_syscall_mprotect(void* addr, size_t length, int prot) {
+static long do_mprotect(void* addr, size_t length, int prot) {
     int ret = check_prot(prot);
     if (ret < 0)
         return ret;
@@ -383,7 +403,7 @@ long libos_syscall_mprotect(void* addr, size_t length, int prot) {
      * According to the manpage, addr has to be page-aligned, but not the
      * length. mprotect() will automatically round up the length.
      */
-    if (!addr || !IS_ALLOC_ALIGNED_PTR(addr))
+    if (!IS_ALLOC_ALIGNED_PTR(addr))
         return -EINVAL;
 
     if (length == 0) {
@@ -393,8 +413,9 @@ long libos_syscall_mprotect(void* addr, size_t length, int prot) {
     if (!IS_ALLOC_ALIGNED(length))
         length = ALLOC_ALIGN_UP(length);
 
-    if (!access_ok(addr, length)) {
-        return -EINVAL;
+    /* a range that is not entirely mapped is ENOMEM, as in the kernel (LTP mprotect01) */
+    if (!addr || !access_ok(addr, length) || !is_in_adjacent_user_vmas(addr, length, /*prot=*/0)) {
+        return -ENOMEM;
     }
 
     if (prot & (PROT_WRITE | PROT_EXEC)) {
@@ -402,8 +423,14 @@ long libos_syscall_mprotect(void* addr, size_t length, int prot) {
         if (lookup_vma(addr, &vma_info) >= 0) {
             bool memfd_vma = vma_info.file && vma_info.file->is_memfd;
             unsigned int seals = memfd_vma ? vma_info.file->memfd_seals : 0;
+            /* a shared file mapping of a descriptor opened without write access cannot be made
+             * writable (EACCES) */
+            bool no_write = vma_info.file && (vma_info.flags & MAP_SHARED) &&
+                            !(vma_info.file->acc_mode & MAY_WRITE) && !memfd_vma;
             if (vma_info.file)
                 put_handle(vma_info.file);
+            if (no_write && (prot & PROT_WRITE) && !(vma_info.prot & PROT_WRITE))
+                return -EACCES;
             if (memfd_vma && (prot & PROT_EXEC) && (seals & LIBOS_F_SEAL_EXEC))
                 return -EPERM;
             /* making a shared mapping writable counts as new writable access unless it was
@@ -449,7 +476,7 @@ long libos_syscall_mprotect(void* addr, size_t length, int prot) {
     return 0;
 }
 
-long libos_syscall_munmap(void* _addr, size_t length) {
+static long do_munmap(void* _addr, size_t length) {
     uintptr_t addr = (uintptr_t)_addr;
     /*
      * According to the manpage, addr has to be page-aligned, but not the
@@ -703,7 +730,10 @@ long libos_syscall_msync(unsigned long start, size_t len_orig, int flags) {
         flags |= MS_ASYNC;
     }
 
-    if (!is_user_memory_readable((void*)start, len)) {
+    /* ENOMEM only for a range that is not mapped (the kernel's answer): a readability probe would
+     * also refuse mapped pages that fault, e.g. a file mapping past the end of its file, or
+     * PROT_NONE ones (LTP mremap01, qmm01) */
+    if (len && !is_in_adjacent_user_vmas((void*)start, len, /*prot=*/0)) {
         return -ENOMEM;
     }
 
@@ -718,4 +748,28 @@ long libos_syscall_msync(unsigned long start, size_t len_orig, int flags) {
         /* `MS_ASYNC` is a no-op on Linux. */
         return 0;
     }
+}
+
+/* The address-space-changing calls run under g_vma_change_lock (shared), so that fork does not
+ * copy memory that is being unmapped or remapped (see libos_vma.c). */
+void* libos_syscall_mmap(void* addr, size_t length, int prot, int flags, int fd,
+                         unsigned long offset) {
+    rwlock_read_lock(&g_vma_change_lock);
+    void* ret = do_mmap(addr, length, prot, flags, fd, offset);
+    rwlock_read_unlock(&g_vma_change_lock);
+    return ret;
+}
+
+long libos_syscall_mprotect(void* addr, size_t length, int prot) {
+    rwlock_read_lock(&g_vma_change_lock);
+    long ret = do_mprotect(addr, length, prot);
+    rwlock_read_unlock(&g_vma_change_lock);
+    return ret;
+}
+
+long libos_syscall_munmap(void* addr, size_t length) {
+    rwlock_read_lock(&g_vma_change_lock);
+    long ret = do_munmap(addr, length);
+    rwlock_read_unlock(&g_vma_change_lock);
+    return ret;
 }

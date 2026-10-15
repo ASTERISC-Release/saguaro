@@ -95,6 +95,10 @@ struct handle_ops {
     int (*link)(const char* old_uri, const char* new_uri);
     int (*unlink_path)(const char* uri);
     int (*rename_path)(const char* old_uri, const char* new_uri);
+    int (*exchange_path)(const char* uri_a, const char* uri_b);
+    int (*readlink_path)(const char* uri, char* buf, size_t* inout_size);
+    int (*xattr)(const char* uri, enum pal_xattr_op op, const char* name, void* value,
+                 size_t* inout_size, int flags);
 };
 
 extern const struct handle_ops* g_pal_handle_ops[];
@@ -227,6 +231,12 @@ int _PalProcessCreate(const char** args, uintptr_t (*reserved_mem_ranges)[2],
 noreturn void _PalProcessExit(int exit_code);
 int _PalThreadSetCpuAffinity(PAL_HANDLE thread, unsigned long* cpu_mask, size_t cpu_mask_len);
 int _PalThreadGetCpuAffinity(PAL_HANDLE thread, unsigned long* cpu_mask, size_t cpu_mask_len);
+#if defined(PAL_HOST_VM) && defined(__x86_64__)
+int _PalFutexSharedAdd(uint32_t* addr, uint32_t val, uint32_t bitset, PAL_HANDLE event,
+                       void** out_waiter);
+int _PalFutexSharedRemove(void* waiter, bool* out_woken);
+int _PalFutexSharedWake(uint32_t* addr, uint32_t bitset, int count, int* out_woken);
+#endif
 
 /* PalEvent calls */
 int _PalEventCreate(PAL_HANDLE* handle_ptr, bool init_signaled, bool auto_clear);
@@ -254,6 +264,7 @@ int _PalSystemTimeQuery(uint64_t* out_usec);
  * 0 on success, negative on failure.
  */
 int _PalRandomBitsRead(void* buffer, size_t size);
+int _PalGetCpuTime(bool thread, uint64_t* out_user_us, uint64_t* out_sys_us);
 
 #if defined(__aarch64__) && defined(PAL_HOST_VM)
 /* the vm kernel is built -mgeneral-regs-only: this returns the IEEE-754 bit pattern of the
@@ -329,11 +340,29 @@ void pal_disable_early_memory_bookkeeping(void);
 void init_slab_mgr(void);
 #if defined(PAL_HOST_VM) && defined(__x86_64__)
 int pal_enable_shared_frame_slab_allocator(void);
+/* Records the PAL allocations of a starting child process, to free them when it exits. */
+void pal_startup_allocs_record(bool on);
+void pal_startup_allocs_free(void);
 /* Drops one reference of a handle shared with another process; true if others still hold it. */
 bool vm_handle_release_share(PAL_HANDLE handle);
 /* Per-process record of the handles given to the LibOS, destroyed when the process exits. */
 void vm_track_handle(PAL_HANDLE handle);
 void vm_untrack_handle(PAL_HANDLE handle);
+/* The guest /dev/shm store (pal_shm.c), used with the multiprocess support. */
+bool vm_shm_store_active(void);
+bool vm_shm_is_object_uri(const char* uri);
+bool vm_shm_is_handle(PAL_HANDLE handle);
+int vm_shm_open(PAL_HANDLE* out_handle, const char* uri, enum pal_access access,
+                pal_share_flags_t share, enum pal_create_mode create);
+void vm_shm_destroy(PAL_HANDLE handle);
+int vm_shm_delete(PAL_HANDLE handle);
+int vm_shm_setlength(PAL_HANDLE handle, uint64_t length);
+int vm_shm_attrquery(const char* uri, PAL_STREAM_ATTR* attr);
+int vm_shm_attrquerybyhdl(PAL_HANDLE handle, PAL_STREAM_ATTR* attr);
+int vm_shm_map(PAL_HANDLE handle, void* addr, pal_prot_flags_t prot, uint64_t offset,
+               uint64_t size);
+int64_t vm_shm_read(PAL_HANDLE handle, uint64_t offset, uint64_t count, void* buffer);
+int64_t vm_shm_write(PAL_HANDLE handle, uint64_t offset, uint64_t count, const void* buffer);
 #define PAL_TRACK_HANDLE(ret, handle)              \
     do {                                           \
         if ((ret) >= 0 && (handle))                \

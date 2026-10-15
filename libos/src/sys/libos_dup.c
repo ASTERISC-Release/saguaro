@@ -92,7 +92,7 @@ long libos_syscall_dup(unsigned int fd) {
 
 #ifdef ENABLE_GRAPHICS
     /* Graphics logic to avoid overflow into fd range. */
-    if (vfd > GRAPHICS_HOST_FD_OFFSET) {
+    if (vfd >= 0 && (uint64_t)vfd > GRAPHICS_HOST_FD_OFFSET) { /* not for an error */
         log_always("error: dup(..) overflowed into host fd range. (ret: %d)\n", vfd);
         assert(false);
     }
@@ -102,15 +102,16 @@ long libos_syscall_dup(unsigned int fd) {
 }
 
 long libos_syscall_dup2(unsigned int oldfd, unsigned int newfd) {
-    if (newfd >= get_rlimit_cur(RLIMIT_NOFILE))
-        return -EBADF;
-
     struct libos_handle_map* handle_map = get_thread_handle_map(NULL);
     assert(handle_map);
 
     struct libos_handle* hdl = get_fd_handle(oldfd, NULL, handle_map);
     if (!hdl)
         return -EBADF;
+    if (newfd >= fd_table_limit(hdl)) {
+        put_handle(hdl);
+        return -EBADF;
+    }
 
     if (oldfd == newfd) {
         put_handle(hdl);
@@ -132,15 +133,16 @@ long libos_syscall_dup3(unsigned int oldfd, unsigned int newfd, int flags) {
     if ((flags & ~O_CLOEXEC) || oldfd == newfd)
         return -EINVAL;
 
-    if (newfd >= get_rlimit_cur(RLIMIT_NOFILE))
-        return -EBADF;
-
     struct libos_handle_map* handle_map = get_thread_handle_map(NULL);
     assert(handle_map);
 
     struct libos_handle* hdl = get_fd_handle(oldfd, NULL, handle_map);
     if (!hdl)
         return -EBADF;
+    if (newfd >= fd_table_limit(hdl)) {
+        put_handle(hdl);
+        return -EBADF;
+    }
 
     struct libos_handle* new_hdl = detach_fd_handle(newfd, NULL, handle_map);
 

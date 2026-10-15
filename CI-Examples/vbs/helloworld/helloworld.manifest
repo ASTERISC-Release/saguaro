@@ -1,0 +1,15 @@
+# Hello world in a Windows VBS enclave (Documentation/vbs.rst). Build the program for the enclave
+# on an aarch64 Linux machine:
+#   SYSROOT=<repo>/build-vbs-glibc <repo>/scripts/vbs/cc-static-pie.sh -o helloworld helloworld.c
+# then: gramine-vbs run helloworld.manifest
+loader.entrypoint = "file:/libsysdb.so"
+libos.entrypoint = "/helloworld"
+loader.log_level = "error"
+fs.root.uri = "file:/"
+sys.rewrite_syscalls = false
+
+vbs.debug = false
+vbs.max_threads = 4
+vbs.packed_files = [
+  { path = "/helloworld", uri = "file:helloworld" },
+]

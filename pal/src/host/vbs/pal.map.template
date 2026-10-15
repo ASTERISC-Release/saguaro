@@ -1,0 +1,4 @@
+PAL {
+    global: @PAL_SYMBOLS@ pal_vbs_start; pal_vbs_exception;
+    local: *;
+};

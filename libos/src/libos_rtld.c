@@ -35,6 +35,30 @@
 #include "linux_abi/errors.h"
 #include "linux_abi/memory.h"
 
+#ifdef PAL_HOST_VBS
+#include "libos_entry.h"
+
+/*
+ * VBS-enclave PAL (-Dvbs=enabled builds only): no memory can become executable at run time, so the
+ * application and the vDSO were packed into the signed enclave image at build time and are used
+ * where they lie. Returns true and the load base if `uri` names such a packed object, and points
+ * its syscall-entry slot (the stubs that replaced its `svc #0` at pack time) at
+ * libos_syscall_entry.
+ */
+static bool vbs_take_packed_object(const char* uri, uintptr_t* out_base, size_t* out_size) {
+    uintptr_t base, slot;
+    size_t size;
+    if (!g_pal_public_state->vbs_packed_lookup ||
+            g_pal_public_state->vbs_packed_lookup(uri, &base, &size, &slot) < 0)
+        return false;
+    if (slot)
+        *(uintptr_t*)slot = (uintptr_t)&libos_syscall_entry;
+    *out_base = base;
+    *out_size = size;
+    return true;
+}
+#endif
+
 #define INTERP_PATH_SIZE 256 /* Default shebang size */
 
 /*
@@ -272,7 +296,13 @@ static int execute_loadcmd(const struct loadcmd* c, elf_addr_t base_diff,
 
     /* Zero out the extra data at the end of mapped area. If necessary, temporarily remap the last
      * page as writable. */
+#ifdef PAL_HOST_VBS
+    /* a packed object's code cannot be made writable (never executable again afterwards); the
+     * packer left the tail of its last page zero already */
+    if (c->data_end < c->map_end && (c->prot & PROT_WRITE)) {
+#else
     if (c->data_end < c->map_end) {
+#endif
         void* zero_start = (void*)(c->data_end + base_diff);
         size_t zero_size = c->map_end - c->data_end;
         void* last_page_start = ALLOC_ALIGN_DOWN_PTR(zero_start);
@@ -392,6 +422,18 @@ static struct link_map* map_elf_object(struct libos_handle* file, elf_ehdr_t* eh
          */
         void* addr;
 
+#ifdef PAL_HOST_VBS
+        uintptr_t packed_base;
+        size_t packed_size;
+        if (vbs_take_packed_object(file->uri, &packed_base, &packed_size)) {
+            if (packed_size < load_end) {
+                errstring = "packed object smaller than its segments";
+                ret = -EINVAL;
+                goto err;
+            }
+            addr = (void*)packed_base;
+        } else
+#endif
         if ((ret = reserve_dyn(load_end, &addr)) < 0) {
             errstring = "failed to allocate memory for shared object";
             goto err;
@@ -721,6 +763,43 @@ err:
 
 /* Note that `**out_new_argv` is allocated as a single object -- a concatenation of all argv
  * strings; caller of this function should do a single free(**out_new_argv). */
+/* `execve("/proc/self/fd/N")` of a memfd: a memfd has no pathname to open again, so the
+ * executable is the memfd's own handle. Returns 1 and a new reference in `*out_file` if `path`
+ * names a memfd, 0 if it does not, or a negative errno (`EACCES` for a memfd created with
+ * `MFD_NOEXEC_SEAL`, which has no execute permission). */
+static int open_memfd_executable(const char* path, struct libos_handle** out_file) {
+    static const char prefix[] = "/proc/self/fd/";
+    if (strncmp(path, prefix, sizeof(prefix) - 1))
+        return 0;
+    const char* p = path + sizeof(prefix) - 1;
+    if (*p < '0' || *p > '9')
+        return 0;
+    unsigned long fd = 0;
+    for (; *p >= '0' && *p <= '9'; p++) {
+        fd = fd * 10 + (unsigned long)(*p - '0');
+        if (fd > INT_MAX)
+            return 0;
+    }
+    if (*p)
+        return 0;
+    struct libos_handle* target = get_fd_handle((int)fd, NULL, NULL);
+    if (!target)
+        return 0;
+    if (!target->is_memfd) {
+        put_handle(target);
+        return 0;
+    }
+    lock(&target->lock);
+    bool noexec = target->memfd_noexec;
+    unlock(&target->lock);
+    if (noexec) {
+        put_handle(target);
+        return -EACCES;
+    }
+    *out_file = target;
+    return 1;
+}
+
 int load_and_check_exec(const char* path, const char* const* argv, struct libos_handle** out_exec,
                         char*** out_new_argv) {
     int ret;
@@ -769,15 +848,20 @@ int load_and_check_exec(const char* path, const char* const* argv, struct libos_
             goto err;
         }
 
-        file = get_new_handle();
-        if (!file) {
-            ret = -ENOMEM;
+        ret = open_memfd_executable(depth > 1 ? curr_argv[0] : path, &file);
+        if (ret < 0)
             goto err;
-        }
+        if (ret == 0) {
+            file = get_new_handle();
+            if (!file) {
+                ret = -ENOMEM;
+                goto err;
+            }
 
-        ret = open_executable(file, depth > 1 ? curr_argv[0] : path);
-        if (ret < 0) {
-            goto err;
+            ret = open_executable(file, depth > 1 ? curr_argv[0] : path);
+            if (ret < 0) {
+                goto err;
+            }
         }
 
         ret = check_elf_object(file);
@@ -968,6 +1052,29 @@ void remove_loaded_elf_objects(void) {
 static void* g_vdso_addr __attribute_migratable = NULL;
 
 static int vdso_map_init(void) {
+#ifdef PAL_HOST_VBS
+    /* The LibOS's own svc stubs (its rt_sigreturn trampoline) enter libos_syscall_entry too. */
+    uintptr_t vdso_base;
+    size_t vdso_size;
+    if (!vbs_take_packed_object(/*uri=*/NULL, &vdso_base, &vdso_size))
+        log_debug("vbs: the LibOS is not a packed object with svc stubs");
+
+    /* The vDSO cannot be copied into fresh memory and made executable here: use the packed copy,
+     * or run without a vDSO (glibc then makes the system calls itself). */
+    if (!vbs_take_packed_object("file:/gramine/vdso.so", &vdso_base, &vdso_size)) {
+        log_debug("vbs: no packed vDSO, running without one");
+        g_vdso_addr = NULL;
+        return 0;
+    }
+    int vret = bkeep_mmap_fixed((void*)vdso_base, ALLOC_ALIGN_UP(vdso_size), PROT_READ | PROT_EXEC,
+                                MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, /*file=*/NULL,
+                                /*offset=*/0, LINUX_VDSO_FILENAME);
+    if (vret < 0)
+        return vret;
+    append_r_debug("file:[vdso_libos]", (void*)vdso_base);
+    g_vdso_addr = (void*)vdso_base;
+    return 0;
+#endif
     /*
      * Allocate vdso page as user program allocated it.
      * Using directly vdso code in LibOS causes trouble when emulating fork.

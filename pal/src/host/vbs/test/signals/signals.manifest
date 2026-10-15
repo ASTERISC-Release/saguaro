@@ -1,0 +1,8 @@
+# Phase-3b signals test of the VBS-enclave PAL (packed as the file "manifest").
+loader.entrypoint = "file:/libsysdb.so"
+libos.entrypoint = "/signals"
+loader.argv = ["/signals"]
+loader.log_level = "warning"
+fs.root.uri = "file:/"
+sys.rewrite_syscalls = false
+

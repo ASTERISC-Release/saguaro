@@ -50,6 +50,7 @@ sgx = get_option('sgx') == 'enabled'
 vm = get_option('vm') == 'enabled'
 tdx = get_option('tdx') == 'enabled'
 skeleton = get_option('skeleton') == 'enabled'
+vbs = get_option('vbs') == 'enabled'
 
 dcap = get_option('dcap') == 'enabled'
 ubsan = get_option('ubsan') == 'enabled'
@@ -291,7 +292,10 @@ tomlc99_src = tomlc99_proj.get_variable('tomlc99_src')
 
 uthash_dep = subproject('uthash-2.1.0').get_variable('uthash_dep')
 
-mbedtls_proj = subproject('mbedtls-3.6.0')
+# VBS-enclave PAL: every object packed into the enclave image must leave x18 (the enclave TEB)
+# alone, including mbedtls (Documentation/devel/vbs-enclave/FINDINGS.md)
+mbedtls_proj = subproject('mbedtls-3.6.0',
+                          default_options: vbs ? ['extra_cflags=-ffixed-x18'] : [])
 mbedtls_static_dep = mbedtls_proj.get_variable('mbedtls_static_dep')
 mbedtls_pal_dep = mbedtls_proj.get_variable('mbedtls_pal_dep')
 

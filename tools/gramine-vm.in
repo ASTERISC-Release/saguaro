@@ -296,9 +296,12 @@ fi
 # The console is stdio, with a log copy so the guest's exit code can be recovered afterwards: the
 # guest ends with a triple fault, so QEMU's own exit status says nothing about the application.
 CONSOLE_LOG=$(mktemp /tmp/gramine-vm-console.XXXXXX)
+# The serial port (COM1) gets what the guest logs before its console is up (boot stamps, early
+# errors); it is shown only when the guest ends without reporting an exit code.
+SERIAL_LOG=$(mktemp /tmp/gramine-vm-serial.XXXXXX)
 XPROXY_LOG=
 cleanup() {
-    rm -f "$CONSOLE_LOG" ${XPROXY_LOG:+"$XPROXY_LOG"}
+    rm -f "$CONSOLE_LOG" "$SERIAL_LOG" ${XPROXY_LOG:+"$XPROXY_LOG"}
     [ -n "${VIRTIOFSD_PID:-}" ] && kill "$VIRTIOFSD_PID" 2>/dev/null
     # the X proxy forks one child per connection; stop those along with the listener
     if [ -n "${XPROXY_PID:-}" ]; then
@@ -313,7 +316,7 @@ trap cleanup EXIT
 trap 'exit 130' INT TERM
 QEMU_VIRTIO_CONSOLE="-device virtio-serial,iommu_platform=off,romfile= \
 -chardev stdio,id=virtioconsole0,logfile=$CONSOLE_LOG \
--device virtconsole,chardev=virtioconsole0"
+-device virtconsole,chardev=virtioconsole0 -serial file:$SERIAL_LOG"
 QEMU_VIRTIO_FS="-chardev socket,path=/tmp/gramine_vhostfs_"$GRAMINE_VM_ID",id=vhostfs \
 -device vhost-user-fs-pci,iommu_platform=off,queue-size=1024,chardev=vhostfs,tag=graminefs"
 QEMU_VIRTIO_VSOCK="-device vhost-vsock-pci,iommu_platform=off,guest-cid="$GRAMINE_VM_ID",id=vsockdev"
@@ -454,8 +457,10 @@ if [ -z "$VIRTIOFSD" ] || [ ! -x "$VIRTIOFSD" ]; then
     echo "Error: virtiofsd not found in PATH, /usr/lib/qemu or /usr/libexec (set VIRTIOFSD to its path)." >&2
     exit 2
 fi
+# --xattr: extended attributes of host files reach the guest (the PAL's FUSE_*XATTR requests);
+# without it virtiofsd answers ENOSYS and the xattr calls report EOPNOTSUPP.
 "$VIRTIOFSD" --socket-path /tmp/gramine_vhostfs_"$GRAMINE_VM_ID" --shared-dir / --log-level error \
---sandbox none --no-announce-submounts &
+--sandbox none --no-announce-submounts --xattr &
 VIRTIOFSD_PID=$!
 # bounded, so a virtiofsd that died at startup is an error here and not a hang until the test timeout
 for _ in $(seq 100); do [ -e /tmp/gramine_vhostfs_"$GRAMINE_VM_ID" ] && break; sleep 0.1; done
@@ -479,4 +484,17 @@ if [ -n "$GUEST_RC" ]; then
 elif grep -q "Panic" "$CONSOLE_LOG" 2>/dev/null; then
     exit 134            # kernel panic before the guest could report an exit code
 fi
-exit "$QEMU_RC"
+# No exit code and no panic: the guest died (a triple fault, which QEMU reports as a clean exit) or
+# QEMU failed. Not a success, whatever QEMU's status: say so, with the end of the serial output.
+{
+    echo "Error: the guest ended without reporting an exit code (QEMU exit status $QEMU_RC)."
+    if [ -s "$SERIAL_LOG" ]; then
+        echo "Last guest serial output:"
+        tail -n 20 "$SERIAL_LOG"
+        echo
+    else
+        echo "The guest wrote nothing to its serial port."
+    fi
+} >&2
+[ "$QEMU_RC" -ne 0 ] && exit "$QEMU_RC"
+exit 125

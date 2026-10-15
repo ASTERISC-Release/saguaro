@@ -93,6 +93,42 @@ static inline void system_mem_free(void* addr, size_t size) {
 
 static SLAB_MGR g_slab_mgr = NULL;
 
+#if defined(PAL_HOST_VM) && defined(__x86_64__)
+/* Allocations a child process's PAL makes while it starts (its environment and arguments, CPU
+ * information): nothing outside the process refers to them, but they are in the PAL heap that all
+ * processes share, so they are freed when the process exits (pal_startup_allocs_free()). */
+#define STARTUP_ALLOCS_MAX 128
+static void* g_startup_allocs[STARTUP_ALLOCS_MAX] PAL_PROCESS_DATA;
+static size_t g_startup_allocs_cnt PAL_PROCESS_DATA;
+static bool g_startup_allocs_recording PAL_PROCESS_DATA;
+
+static void startup_alloc_note(void* ptr) {
+    if (ptr && g_startup_allocs_recording && g_startup_allocs_cnt < STARTUP_ALLOCS_MAX)
+        g_startup_allocs[g_startup_allocs_cnt++] = ptr;
+}
+
+static void startup_alloc_forget(void* ptr) {
+    for (size_t i = g_startup_allocs_cnt; i > 0; i--) {
+        if (g_startup_allocs[i - 1] == ptr) {
+            g_startup_allocs[i - 1] = g_startup_allocs[--g_startup_allocs_cnt];
+            return;
+        }
+    }
+}
+
+void pal_startup_allocs_record(bool on) {
+    if (on)
+        g_startup_allocs_cnt = 0; /* the copied process data holds the parent's list */
+    g_startup_allocs_recording = on;
+}
+
+void pal_startup_allocs_free(void) {
+    g_startup_allocs_recording = false;
+    while (g_startup_allocs_cnt)
+        free(g_startup_allocs[g_startup_allocs_cnt - 1]); /* free() removes it from the list */
+}
+#endif
+
 void init_slab_mgr(void) {
     assert(!g_slab_mgr);
 
@@ -129,6 +165,9 @@ void* malloc(size_t size) {
         memset(ptr, 0xa5, size);
 #endif
 
+#if defined(PAL_HOST_VM) && defined(__x86_64__)
+    startup_alloc_note(ptr);
+#endif
     return ptr;
 }
 
@@ -147,6 +186,8 @@ void free(void* ptr) {
     if (!ptr)
         return;
 #if defined(PAL_HOST_VM) && defined(__x86_64__)
+    if (g_startup_allocs_cnt)
+        startup_alloc_forget(ptr);
     if (g_slab_mgr_legacy && slab_mgr_owns(g_slab_mgr_legacy, ptr)) {
         slab_free(g_slab_mgr_legacy, ptr);
         return;

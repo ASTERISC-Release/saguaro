@@ -1,0 +1,25 @@
+# LibOS regression subset inside a VBS enclave (phase 3): the packed regression programs live in
+# /tests; the host's arguments name the one to run (pal_vbs_host.exe ... boot <root> <test> args).
+# The environment mirrors libos/test/regression/manifest.template: the programs' directory is the
+# current directory, with a writable tmp/ (here: an allowed host directory, root\tests\tmp on the
+# host), a tmpfs at /mnt/tmpfs, an encrypted mount, flock, and the insecure keys of keys.c.
+loader.entrypoint = "file:/libsysdb.so"
+libos.entrypoint = "/runner"
+loader.insecure__use_cmdline_argv = true
+loader.log_level = "warning"
+loader.env.LD_LIBRARY_PATH = "/usr/lib"
+fs.root.uri = "file:/"
+fs.start_dir = "/tests"
+fs.mounts = [
+  { type = "tmpfs", path = "/tmp" },
+  { type = "tmpfs", path = "/mnt/tmpfs" },
+  { type = "encrypted", path = "/tmp_enc", uri = "file:/tests/tmp_enc", key_name = "my_custom_key" },
+]
+sys.rewrite_syscalls = false
+sys.experimental__enable_flock = true
+fs.insecure__keys.default = "ffeeddccbbaa99887766554433221100"
+fs.insecure__keys.my_custom_key = "00112233445566778899aabbccddeeff"
+vbs.max_threads = 16
+vbs.enclave_size = "512M"
+# the current directory is writable, as in the suite (the packed programs take precedence)
+vbs.allowed_files = [ "/tests/" ]

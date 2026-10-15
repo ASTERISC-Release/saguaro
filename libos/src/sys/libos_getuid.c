@@ -47,9 +47,11 @@ long libos_syscall_setuid(uid_t uid) {
     int ret;
     struct libos_thread* current = get_cur_thread();
 
+    bool privileged = libos_capable(LIBOS_CAP_SETUID);
     lock(&current->lock);
-    if (current->uid == 0) {
-        /* if the user is root, the real UID and saved set-user-ID are also set */
+    uid_t old_ruid = current->uid, old_euid = current->euid, old_suid = current->suid;
+    if (privileged) {
+        /* with CAP_SETUID, the real UID and saved set-user-ID are also set */
         current->uid  = uid;
         current->suid = uid;
     } else if (uid != current->uid && uid != current->suid) {
@@ -58,6 +60,7 @@ long libos_syscall_setuid(uid_t uid) {
     }
     current->euid = uid;
     current->fsuid = uid;
+    cred_fix_caps_setuid(current, old_ruid, old_euid, old_suid);
     ret = 0;
 out:
     unlock(&current->lock);
@@ -68,9 +71,10 @@ long libos_syscall_setgid(gid_t gid) {
     int ret;
     struct libos_thread* current = get_cur_thread();
 
+    bool privileged = libos_capable(LIBOS_CAP_SETGID);
     lock(&current->lock);
-    if (current->uid == 0) {
-        /* if the user is root, the real GID and saved set-group-ID are also set */
+    if (privileged) {
+        /* with CAP_SETGID, the real GID and saved set-group-ID are also set */
         current->gid  = gid;
         current->sgid = gid;
     } else if (gid != current->gid && gid != current->sgid) {
@@ -90,6 +94,8 @@ out:
 long libos_syscall_setgroups(int gidsetsize, gid_t* grouplist) {
     if (gidsetsize < 0 || (unsigned int)gidsetsize > NGROUPS_MAX)
         return -EINVAL;
+    if (!libos_capable(LIBOS_CAP_SETGID))
+        return -EPERM;
 
     struct libos_thread* current = get_cur_thread();
     if (gidsetsize == 0) {

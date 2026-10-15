@@ -13,6 +13,9 @@ mbedtls_env = []
 if meson.is_cross_build()
     mbedtls_env = ['CC=' + ' '.join(meson.get_compiler('c').cmd_array())]
 endif
+if get_option('extra_cflags') != ''
+    mbedtls_env += ['MBEDTLS_EXTRA_CFLAGS=' + get_option('extra_cflags')]
+endif
 
 pkgconfig = import('pkgconfig')
 

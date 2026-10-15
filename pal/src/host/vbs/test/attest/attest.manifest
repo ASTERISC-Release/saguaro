@@ -1,0 +1,17 @@
+# Phase-4 attestation test of the VBS-enclave PAL (packed as the file "manifest").
+loader.entrypoint = "file:/libsysdb.so"
+libos.entrypoint = "/attest"
+loader.insecure__use_cmdline_argv = true
+loader.log_level = "warning"
+fs.root.uri = "file:/"
+sys.rewrite_syscalls = false
+
+# a production-like image: not debuggable, with its own identity in the report
+vbs.debug = false
+vbs.family_id = "6772616d696e652d7662732d74657374"  # "gramine-vbs-test"
+vbs.image_id = "61747465737400000000000000000001"
+vbs.isv_svn = 3
+vbs.max_threads = 4
+
+# the report goes to the host (below the host root, the 4th argument of pal_vbs_host.exe)
+vbs.allowed_files = [ "/data/out/" ]

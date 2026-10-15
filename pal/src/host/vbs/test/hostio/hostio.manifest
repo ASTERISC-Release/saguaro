@@ -1,0 +1,15 @@
+# Phase-3e host files and sockets test of the VBS-enclave PAL (packed as the file "manifest").
+loader.entrypoint = "file:/libsysdb.so"
+libos.entrypoint = "/hostio"
+loader.argv = ["/hostio"]
+loader.log_level = "warning"
+fs.root.uri = "file:/"
+sys.rewrite_syscalls = false
+vbs.max_threads = 8
+
+# host files (below the host root directory, the 4th argument of pal_vbs_host.exe)
+vbs.trusted_files = [
+  { path = "/data/in.txt", sha256 = "011ac0bc14518f8e15e098e6bcb6a8c1724b1914d4789accd9c0478020057ee2" },
+  { path = "/data/bad.txt", sha256 = "25718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218" },
+]
+vbs.allowed_files = [ "/data/out/" ]

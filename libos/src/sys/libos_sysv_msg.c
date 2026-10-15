@@ -18,6 +18,7 @@
  */
 
 #include "libos_internal.h"
+#include "libos_sysv_shared.h"
 #include "libos_lock.h"
 #include "libos_process.h"
 #include "libos_table.h"
@@ -173,6 +174,10 @@ static void msq_free(size_t index) {
 }
 
 long libos_syscall_msgget(int key, int msgflg) {
+    /* --- guest-wide System V IPC (VM, sys.experimental__multiprocess): libos_sysv_shared.c --- */
+    if (sysv_shared_enabled())
+        return sysv_shared_msgget(key, msgflg);
+    /* --- end of guest-wide System V IPC --- */
     lock(&g_sysv_msg_lock);
     if (key != LINUX_IPC_PRIVATE) {
         for (size_t i = 0; i < SYSV_MSGMNI; i++) {
@@ -234,6 +239,10 @@ long libos_syscall_msgget(int key, int msgflg) {
 }
 
 long libos_syscall_msgsnd(int msqid, const void* msgp, size_t msgsz, int msgflg) {
+    /* --- guest-wide System V IPC (VM, sys.experimental__multiprocess): libos_sysv_shared.c --- */
+    if (sysv_shared_enabled())
+        return sysv_shared_msgsnd(msqid, msgp, msgsz, msgflg);
+    /* --- end of guest-wide System V IPC --- */
     if (!is_user_memory_readable(msgp, sizeof(long)))
         return -EFAULT;
     long mtype = *(const long*)msgp;
@@ -346,6 +355,10 @@ static struct sysv_msg* msq_find(struct sysv_msq* q, long type, enum msg_search 
 }
 
 long libos_syscall_msgrcv(int msqid, void* msgp, size_t msgsz, long msgtyp, int msgflg) {
+    /* --- guest-wide System V IPC (VM, sys.experimental__multiprocess): libos_sysv_shared.c --- */
+    if (sysv_shared_enabled())
+        return sysv_shared_msgrcv(msqid, msgp, msgsz, msgtyp, msgflg);
+    /* --- end of guest-wide System V IPC --- */
     if (msqid < 0 || (long)msgsz < 0)
         return -EINVAL;
     if (msgflg & LINUX_MSG_COPY) {
@@ -478,6 +491,10 @@ static void msq_fill_ds(const struct sysv_msq* q, struct linux_msqid_ds* ds) {
 }
 
 long libos_syscall_msgctl(int msqid, int cmd, void* buf) {
+    /* --- guest-wide System V IPC (VM, sys.experimental__multiprocess): libos_sysv_shared.c --- */
+    if (sysv_shared_enabled())
+        return sysv_shared_msgctl(msqid, cmd, buf);
+    /* --- end of guest-wide System V IPC --- */
     if (msqid < 0 || cmd < 0)
         return -EINVAL;
 
@@ -594,6 +611,10 @@ long libos_syscall_msgctl(int msqid, int cmd, void* buf) {
 /* Content of `/proc/sysvipc/msg`, in the kernel's format (`sysvipc_msg_proc_show()`); LTP's IPC
  * library counts its lines to learn how many queues exist. */
 int sysv_msg_proc_load(char** out_data, size_t* out_size) {
+    /* --- guest-wide System V IPC (VM, sys.experimental__multiprocess): libos_sysv_shared.c --- */
+    if (sysv_shared_enabled())
+        return sysv_shared_msg_proc_load(out_data, out_size);
+    /* --- end of guest-wide System V IPC --- */
     static const char header[] =
         "       key      msqid perms      cbytes       qnum lspid lrpid   uid   gid  cuid  cgid"
         "      stime      rtime      ctime\n";

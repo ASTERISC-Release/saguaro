@@ -199,6 +199,15 @@ jobs:
             test/vm-multiproc/check-probes.sh misc 2>&1 | tee vm-mp-misc.log
           exit "${PIPESTATUS[0]}"
 
+      - name: Multi-process - System V IPC between processes (shm, queues, semaphores)
+        if: ${{ !cancelled() && inputs.multiprocess && steps.build.outcome == 'success' }}
+        run: |
+          . "$GRAMINE_PREFIX/env.sh"
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "GRAMINE_PREFIX=$GRAMINE_PREFIX" \
+            "GRAMINE_CPU_NUM=$GRAMINE_CPU_NUM" "LOGDIR=$GITHUB_WORKSPACE/vm-mp-logs" TIMEOUT_SCALE=2 \
+            test/vm-multiproc/check-probes.sh sysv 2>&1 | tee vm-mp-sysv.log
+          exit "${PIPESTATUS[0]}"
+
       - name: Multi-process - LibOS regressions fork_and_exec and vfork_and_exec
         if: ${{ !cancelled() && inputs.multiprocess && steps.build.outcome == 'success' }}
         run: |

@@ -563,7 +563,14 @@ static int pal_mem_bkeep_free(uintptr_t addr, size_t size);
  * be atomic. */
 static void* g_aslr_addr_top = NULL;
 
+/* Taken shared by the system calls that change the address space (mmap, munmap, mprotect, mremap,
+ * brk) and exclusively by fork while it checkpoints and sends the process's memory, so that a
+ * region is not unmapped or remapped under the copy (on Linux, fork holds the mm's lock). */
+struct libos_rwlock g_vma_change_lock;
+
 int init_vma(void) {
+    if (!rwlock_create(&g_vma_change_lock))
+        return -ENOMEM;
     PalSetMemoryBookkeepingUpcalls(pal_mem_bkeep_alloc, pal_mem_bkeep_free);
 
     size_t initial_ranges_count = 0;
@@ -1444,6 +1451,11 @@ static bool vma_filter_needs_reload(struct libos_vma* vma, void* arg) {
     if (!vma->file->inode || vma->file->inode != hdl->inode)
         return false;
 
+    /* a writable shared mapping that the PAL keeps coherent with the file (its own page cache):
+     * reading the file into it would overwrite stores not yet written back */
+    if (g_pal_public_state->file_maps_write_back && (vma->prot & PROT_WRITE))
+        return false;
+
     if (!vma->file->fs || !vma->file->fs->fs_ops || !vma->file->fs->fs_ops->read)
         return false;
 
@@ -1586,6 +1598,31 @@ int msync_handle(struct libos_handle* hdl) {
  * start a child with an empty address space. */
 static bool child_inherits_shared_mappings(void) {
     return !strcmp(g_pal_public_state->host_type, "VM");
+}
+
+static bool vma_filter_shared_anonymous(struct libos_vma* vma, void* arg) {
+    __UNUSED(arg);
+    return !(vma->flags & (VMA_UNMAPPED | VMA_INTERNAL)) && (vma->flags & MAP_SHARED) && !vma->file
+           && (vma->prot & PROT_READ);
+}
+
+/* A child inherits MAP_SHARED anonymous memory in place (see above), but a page never touched is
+ * a demand-zero entry that each process would fill with its own frame: touch every such page
+ * before the child's address space is created, so that both map the same frame. */
+int populate_shared_anonymous_mappings(void) {
+    if (!child_inherits_shared_mappings())
+        return 0;
+    struct libos_vma_info* vma_infos;
+    size_t count;
+    int ret = dump_vmas(&vma_infos, &count, /*begin=*/0, /*end=*/UINTPTR_MAX,
+                        vma_filter_shared_anonymous, /*arg=*/NULL);
+    if (ret < 0)
+        return ret;
+    for (size_t i = 0; i < count; i++)
+        for (size_t off = 0; off < vma_infos[i].length; off += PAGE_SIZE)
+            (void)*(volatile char*)((char*)vma_infos[i].addr + off);
+    free_vma_info_array(vma_infos, count);
+    return 0;
 }
 
 /* Memory in a PAL range reserved for MAP_FIXED users (the VM graphics arenas and comm page) is

@@ -65,6 +65,8 @@ int main(void) {
     errno = 0;
     CHECK(shmget(key, 4096, IPC_CREAT | IPC_EXCL | 0600) == -1 && errno == EEXIST);
     CHECK(shmget(key, 0, 0) == id_key);              /* lookup, size 0 allowed */
+    CHECK(shmget(key, 0, 0600) == id_key);           /* lookup with permitted mode bits */
+    CHECK(shmget(key, 4096, IPC_CREAT | 0400) == id_key);
     errno = 0;
     CHECK(shmget(key, 1 << 20, 0) == -1 && errno == EINVAL); /* larger than existing */
     errno = 0;
@@ -121,6 +123,7 @@ int main(void) {
     CHECK(shmat(id_key, NULL, 0) == (void*)-1 && errno == EACCES);
     errno = 0;
     CHECK(shmget(key, 4096, IPC_CREAT | 0600) == -1 && errno == EACCES);
+    CHECK(shmget(key, 0, 0) == id_key); /* no access requested: found */
     errno = 0;
     CHECK(shmctl(id_key, IPC_SET, &ds) == -1 && errno == EPERM);
     errno = 0;

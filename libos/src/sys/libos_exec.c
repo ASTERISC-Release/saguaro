@@ -6,6 +6,7 @@
  */
 
 #include "libos_internal.h"
+#include "libos_sysv_shared.h"
 #include "libos_lock.h"
 #include "libos_process.h"
 #include "libos_table.h"
@@ -30,6 +31,9 @@ noreturn static void __libos_syscall_execve_rtld(void* new_argp, elf_auxv_t* new
     clean_link_map_list();
 
     reset_brk();
+
+    /* System V attachments go with the old image (guest-wide tables only) */
+    sysv_shared_exec();
 
     size_t count;
     struct libos_vma_info* vmas;

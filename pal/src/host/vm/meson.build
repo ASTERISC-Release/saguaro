@@ -51,6 +51,8 @@ pal_vm_sources = files(
 
 if host_machine.cpu_family() == 'x86_64'
     pal_vm_sources += files(
+        'pal_futex.c',
+        'pal_shm.c',
         'pal_main.c',
         'pal_process.c',
         'vm_bootloader.S',

@@ -10,13 +10,13 @@ libos.entrypoint = "{{ entrypoint if host_binary else '/' + entrypoint }}"
 
 loader.log_level = "{{ log_level }}"
 loader.insecure__use_cmdline_argv = true
-loader.env.LD_LIBRARY_PATH = "/lib:/usr/lib/x86_64-linux-gnu"
+loader.env.LD_LIBRARY_PATH = "/lib:/usr{{ arch_libdir }}"
 
 # The application may submit any ioctl to the GPU and talk to the X server (see
 # Documentation/manifest-syntax.rst).
 sys.insecure__allow_raw_device_ioctl = true
-sys.insecure__host_unix_sockets = ["/tmp/.X11-unix/X0"]
-loader.env.DISPLAY = ":0"
+sys.insecure__host_unix_sockets = ["/tmp/.X11-unix/X{{ display }}"]
+loader.env.DISPLAY = ":{{ display }}"
 
 fs.mounts = [
 {% if not host_binary %}
@@ -26,6 +26,13 @@ fs.mounts = [
   { path = "/usr", type = "chroot", uri = "file:/usr" },
   { path = "/etc/ld.so.cache", uri = "file:/etc/ld.so.cache" },
   { path = "/dev/dri", type = "chroot", uri = "file:/dev/dri" },
+{% if nvidia|string == "1" %}
+  # the NVIDIA proprietary driver (Documentation/devel/graphics-aarch64/)
+  { path = "/dev/nvidiactl", uri = "dev:/dev/nvidiactl" },
+  { path = "/dev/nvidia0", uri = "dev:/dev/nvidia0" },
+  { path = "/dev/nvidia-modeset", uri = "dev:/dev/nvidia-modeset" },
+  { path = "/proc/driver/nvidia", type = "chroot", uri = "file:/proc/driver/nvidia" },
+{% endif %}
   # libdrm finds the device's bus through the /sys/dev/char/<major>:<minor> links
   { path = "/sys", type = "chroot", uri = "file:/sys", host_symlinks = true },
 ]

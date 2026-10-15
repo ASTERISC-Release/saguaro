@@ -35,6 +35,9 @@ PalStreamAttributesQueryByHandle
 PalStreamAttributesQuery
 PalProcessCreate
 PalProcessExit
+PalFutexSharedAdd
+PalFutexSharedRemove
+PalFutexSharedWake
 PalSystemTimeQuery
 PalRandomBitsRead
 PalCpuIdRetrieve
@@ -44,6 +47,10 @@ PalSegmentBaseGet
 PalSegmentBaseSet
 PalStreamChangeName
 PalFileCreateSymlink
+PalFileExchange
+PalFileReadLink
+PalFileXattr
+PalGetCpuTime
 PalFileCreateLink
 PalFileUnlink
 PalFileRename

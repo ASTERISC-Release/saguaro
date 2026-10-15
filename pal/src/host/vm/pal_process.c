@@ -428,7 +428,9 @@ static void vm_process_exit_cleanup(void* arg) {
 }
 
 static void vm_root_process_exit_cleanup(void* arg) {
-    __UNUSED(arg);
+    struct memory_address_space* space = arg;
+    if (space && space != memory_address_space_boot())
+        vm_process_reap_threads(space);
     vm_process_manager_exit();
 }
 
@@ -607,14 +609,28 @@ noreturn void _PalProcessExit(int exitcode) {
         __atomic_store_n(&space->exiting, 1, __ATOMIC_RELEASE);
         while (sched_thread_space_has_other_running(space, &tcb->kernel_thread))
             _PalThreadYieldExecution();
+        vm_futex_shared_purge(space);
         vm_destroy_tracked_handles(space, /*keep_threads=*/true);
+        pal_startup_allocs_free();
         log_always("[ VM child exited with code %d ]", exitcode);
         sched_thread_set_exit_cleanup(vm_process_exit_cleanup, (void*)owner_frame);
         pal_common_thread_exit(NULL);
     }
     if (atomic_load_explicit(&g_process_manager_initialized, memory_order_acquire)) {
         atomic_store_explicit(&g_root_exit_code, exitcode, memory_order_release);
-        sched_thread_set_exit_cleanup(vm_root_process_exit_cleanup, NULL);
+        struct memory_address_space* space = tcb ? tcb->kernel_thread.address_space : NULL;
+        if (space && space != memory_address_space_boot()) {
+            /* the first process may exit before its children: close what it holds as for a
+             * child (its IPC pipes in particular, so that the children see it gone); its address
+             * space stays until the VM exits */
+            space->exit_thread = &tcb->kernel_thread;
+            __atomic_store_n(&space->exiting, 1, __ATOMIC_RELEASE);
+            while (sched_thread_space_has_other_running(space, &tcb->kernel_thread))
+                _PalThreadYieldExecution();
+            vm_futex_shared_purge(space);
+            vm_destroy_tracked_handles(space, /*keep_threads=*/true);
+        }
+        sched_thread_set_exit_cleanup(vm_root_process_exit_cleanup, space);
         pal_common_thread_exit(NULL);
     }
     log_always("[ VM exited with code %d ]", exitcode);

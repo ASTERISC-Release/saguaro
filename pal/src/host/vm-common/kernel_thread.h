@@ -156,6 +156,9 @@ struct thread {
     /* set by _PalThreadResume(): deliver PAL_EVENT_INTERRUPTED when the thread next runs in user
      * mode (see pal_common_deliver_pending_interrupt()) */
     bool resume_pending;
+    /* set when the timer found the thread in kernel mode (multiprocess support only): its next
+     * return to user mode takes the tick instead, see sysret_asm in kernel_events.S */
+    bool preempt_pending;
 #endif
 
     /* CPU affinity of a thread */

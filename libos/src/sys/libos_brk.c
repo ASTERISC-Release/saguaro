@@ -59,6 +59,11 @@ int init_brk_region(void* brk_start, size_t data_segment_size) {
         return -EINVAL;
     }
 
+#ifdef PAL_HOST_VBS
+    /* The executable lies in the enclave's packed area, which holds the other packed objects right
+     * after it (and which execve leaves unbooked): the heap goes anywhere outside that area. */
+    brk_start = NULL;
+#endif
     if (brk_start && brk_start <= g_pal_public_state->memory_address_end
             && brk_max_size <= (uintptr_t)g_pal_public_state->memory_address_end
             && (uintptr_t)brk_start < (uintptr_t)g_pal_public_state->memory_address_end - brk_max_size) {
@@ -139,7 +144,7 @@ void reset_brk(void) {
     destroy_lock(&brk_lock);
 }
 
-void* libos_syscall_brk(void* _brk) {
+static void* do_brk(void* _brk) {
     char* brk = _brk;
     size_t size = 0;
     char* brk_aligned = ALLOC_ALIGN_UP_PTR(brk);
@@ -223,3 +228,10 @@ BEGIN_RS_FUNC(brk) {
     brk_region.data_segment_size = GET_CP_ENTRY(SIZE);
 }
 END_RS_FUNC(brk)
+
+void* libos_syscall_brk(void* brk) {
+    rwlock_read_lock(&g_vma_change_lock); /* see libos_syscall_mmap() */
+    void* ret = do_brk(brk);
+    rwlock_read_unlock(&g_vma_change_lock);
+    return ret;
+}

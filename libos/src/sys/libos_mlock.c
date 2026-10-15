@@ -13,21 +13,30 @@
 
 #include "api.h"
 #include "libos_table.h"
+#include "libos_vma.h"
 #include "linux_abi/errors.h"
 #include "linux_abi/memory.h"
 
-long libos_syscall_mlock(unsigned long start, size_t len) {
-    if (!access_ok((void*)start, len)) {
+/* The range a lock call names must be mapped: ENOMEM otherwise (LTP munlock02), as in the kernel;
+ * the length is rounded out to whole pages from the page holding `start`. */
+static long check_lock_range(unsigned long start, size_t len) {
+    if (!access_ok((void*)start, len))
         return -EINVAL;
-    }
+    if (!len)
+        return 0;
+    uintptr_t begin = ALLOC_ALIGN_DOWN(start);
+    uintptr_t end = ALLOC_ALIGN_UP(start + len);
+    if (!is_in_adjacent_user_vmas((void*)begin, end - begin, /*prot=*/0))
+        return -ENOMEM;
     return 0;
 }
 
+long libos_syscall_mlock(unsigned long start, size_t len) {
+    return check_lock_range(start, len);
+}
+
 long libos_syscall_munlock(unsigned long start, size_t len) {
-    if (!access_ok((void*)start, len)) {
-        return -EINVAL;
-    }
-    return 0;
+    return check_lock_range(start, len);
 }
 
 long libos_syscall_mlockall(int flags) {
@@ -51,9 +60,5 @@ long libos_syscall_mlock2(unsigned long start, size_t len, int flags) {
         return -EINVAL;
     }
 
-    if (!access_ok((void*)start, len)) {
-        return -EINVAL;
-    }
-
-    return 0;
+    return check_lock_range(start, len);
 }
