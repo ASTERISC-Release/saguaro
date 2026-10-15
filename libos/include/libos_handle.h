@@ -288,6 +288,7 @@ struct libos_handle {
     int acc_mode;
     bool is_memfd;
     unsigned int memfd_seals;
+    bool memfd_noexec; /* created with MFD_NOEXEC_SEAL: no execute permission */
     struct libos_lock lock;
 
     /* Lock for handle position (`pos`). Intended for operations that change the position (e.g.

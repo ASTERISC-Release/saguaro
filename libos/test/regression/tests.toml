@@ -79,6 +79,7 @@ manifests = [
   "links",
   "madvise",
   "mkfifo",
+  "memfd_exec",
   "memfd_seals",
   "mmap_file",
   "mmap_file_backed",
