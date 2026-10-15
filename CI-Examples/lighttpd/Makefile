@@ -64,8 +64,8 @@ $(LIGHTTPD_SRC).tar.gz:
 
 ifeq ($(VBS),1)
 # gcc 15 defaults to C23, in which lighttpd's build helper lemon.c (old-style definitions) does not
-# compile: the C17 dialect of earlier gcc versions for it
-VBS_LIGHTTPD_CFLAGS := $(shell [ "$$(gcc -dumpversion | cut -d. -f1)" -ge 15 ] 2>/dev/null && echo 'CFLAGS=-g -O2 -std=gnu17')
+# compile: the C17 dialect of earlier gcc versions for it (it runs on the build machine)
+VBS_LIGHTTPD_CFLAGS := $(shell [ "$$(gcc -dumpversion | cut -d. -f1)" -ge 15 ] 2>/dev/null && echo 'CFLAGS_FOR_BUILD=-O2 -std=gnu17')
 $(VBS_ROOT)/sbin/lighttpd: $(LIGHTTPD_SRC).tar.gz | $(VBS_RUNTIME_STAMP)
 	rm -rf vbs-build/src && mkdir -p vbs-build/src
 	tar -C vbs-build/src --strip-components=1 -xzf $<
