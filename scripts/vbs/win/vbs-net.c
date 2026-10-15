@@ -71,6 +71,49 @@ static SOCKET connect_to(int port, int quiet) {
     return s;
 }
 
+/* one non-blocking connection attempt to HOST:port that waits at most `ms` (a connection to a
+ * closed loopback port on Windows takes about 0.5 s to fail, which would blur startup times) */
+static SOCKET try_connect(int port, int ms) {
+    struct addrinfo hints = {0}, *res = NULL;
+    char ps[16];
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    snprintf(ps, sizeof(ps), "%d", port);
+    if (getaddrinfo(g_host, ps, &hints, &res) != 0)
+        return INVALID_SOCKET;
+    SOCKET s = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+    if (s == INVALID_SOCKET) {
+        freeaddrinfo(res);
+        return s;
+    }
+    u_long nb = 1;
+    ioctlsocket(s, FIONBIO, &nb);
+    int ok = 0;
+    if (connect(s, res->ai_addr, (int)res->ai_addrlen) == 0) {
+        ok = 1;
+    } else if (WSAGetLastError() == WSAEWOULDBLOCK) {
+        fd_set w, e;
+        FD_ZERO(&w);
+        FD_ZERO(&e);
+        FD_SET(s, &w);
+        FD_SET(s, &e);
+        struct timeval tv = { 0, ms * 1000 };
+        if (select(0, NULL, &w, &e, &tv) == 1 && FD_ISSET(s, &w)) {
+            int err = 0, len = sizeof(err);
+            getsockopt(s, SOL_SOCKET, SO_ERROR, (char*)&err, &len);
+            ok = err == 0;
+        }
+    }
+    freeaddrinfo(res);
+    if (!ok) {
+        closesocket(s);
+        return INVALID_SOCKET;
+    }
+    nb = 0;
+    ioctlsocket(s, FIONBIO, &nb);
+    return s;
+}
+
 static int send_all(SOCKET s, const char* p, size_t n) {
     while (n) {
         int k = send(s, p, (int)(n > 1 << 20 ? 1 << 20 : n), 0);
@@ -550,7 +593,7 @@ int main(int argc, char** argv) {
         double limit = argc > 3 ? atof(argv[3]) : 60;
         double t0 = now_us();
         for (;;) {
-            SOCKET s = connect_to(port, 1);
+            SOCKET s = try_connect(port, 20);
             if (s != INVALID_SOCKET) {
                 closesocket(s);
                 printf("port %d open after %.2f s\n", port, (now_us() - t0) / 1e6);
@@ -560,7 +603,7 @@ int main(int argc, char** argv) {
                 fprintf(stderr, "vbs-net: port %d not open after %.0f s\n", port, limit);
                 return 1;
             }
-            Sleep(100);
+            Sleep(10);
         }
     }
     if (!strcmp(cmd, "req")) {
