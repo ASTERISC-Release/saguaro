@@ -15,13 +15,14 @@
 #   container/run.sh down             # stop and remove the container (the image is kept)
 #   container/run.sh --target riscv64 [...]   # the RISC-V cross-development container instead
 #
-# Environment: CONTAINER_NAME / IMAGE_NAME override the default gramine-vm-<arch> names.
+# Environment: CONTAINER_NAME / IMAGE_NAME override the default names (container gramine-vm-<arch>,
+# image gramine-vm-<arch>:cf-<Containerfile hash>; see the image section below).
 #
 # Workspaces (see AGENTS.md): when the checkout sits in a folder named gramine-<name> (for example
 # .../gramine-<name>/gramine-multiarch), the container is named after that folder
 # (gramine-<name>-vm-x86_64, gramine-<name>-riscv64-cross), and gets its own base for the guest CIDs
 # (GRAMINE_VM_ID_BASE), so several checkouts can run side by side. GRAMINE_WORKSPACE sets the
-# name by hand. The image is shared by all workspaces. A container whose mount of /root/gramine-multiarch
+# name by hand. Workspaces with the same Containerfile share the image. A container whose mount of /root/gramine-multiarch
 # is a different checkout than this one is refused instead of being silently reused.
 #
 # Needs a native host of the same architecture (no emulation) with /dev/kvm for gramine-vm. The
@@ -80,18 +81,38 @@ if [ "${1:-}" = "--rebuild" ]; then REBUILD=1; shift; fi
 if [ "${1:-}" = "down" ]; then
     podman stop "$CONTAINER" >/dev/null 2>&1 || true
     podman rm "$CONTAINER" >/dev/null 2>&1 || true
-    echo "container $CONTAINER removed (image $IMAGE kept)"
+    echo "container $CONTAINER removed (images kept)"
     exit 0
 fi
 
 [ -e /dev/kvm ] || echo "warning: no /dev/kvm on this host; the container works but gramine-vm cannot run." >&2
 
-# --- image: rebuild when missing, forced, or the Containerfile changed since the last build -------
+# --- image: one per Containerfile version ------------------------------------------------------------
+# The image is tagged <name>:cf-<first 12 hex digits of the Containerfile's sha256>, so checkouts with
+# different Containerfiles (branches) get different images and never rebuild or retag each other's: a
+# container is recreated only when its own checkout's Containerfile changes. An image built earlier
+# with the same Containerfile (it carries the sha in the label gramine.containerfile-sha, also when it
+# was built under the old single tag <name>) is reused by tagging it, without a build. IMAGE_NAME
+# keeps the old behaviour: that one tag, rebuilt when the Containerfile differs from its label.
 WANT=$(sha256sum "$CONTAINERFILE" | cut -d' ' -f1)
-HAVE=$(podman image inspect "$IMAGE" --format '{{index .Labels "gramine.containerfile-sha"}}' 2>/dev/null || true)
-if [ "$REBUILD" = 1 ] || [ "$HAVE" != "$WANT" ]; then
-    echo ">>> building image $IMAGE ($ARCH)"
-    podman build -f "$CONTAINERFILE" --label "gramine.containerfile-sha=$WANT" -t "$IMAGE" "$HERE" >&2
+if [ -n "${IMAGE_NAME:-}" ]; then
+    HAVE=$(podman image inspect "$IMAGE" --format '{{index .Labels "gramine.containerfile-sha"}}' 2>/dev/null || true)
+    if [ "$REBUILD" = 1 ] || [ "$HAVE" != "$WANT" ]; then
+        echo ">>> building image $IMAGE ($ARCH)"
+        podman build -f "$CONTAINERFILE" --label "gramine.containerfile-sha=$WANT" -t "$IMAGE" "$HERE" >&2
+    fi
+else
+    IMAGE=$NAME:cf-${WANT:0:12}
+    if [ "$REBUILD" = 1 ] || ! podman image exists "$IMAGE"; then
+        EXISTING=
+        [ "$REBUILD" = 1 ] || EXISTING=$(podman images -q --filter "label=gramine.containerfile-sha=$WANT" | head -n 1)
+        if [ -n "$EXISTING" ]; then
+            podman tag "$EXISTING" "$IMAGE"
+        else
+            echo ">>> building image $IMAGE ($ARCH)"
+            podman build -f "$CONTAINERFILE" --label "gramine.containerfile-sha=$WANT" -t "$IMAGE" "$HERE" >&2
+        fi
+    fi
 fi
 IMAGE_ID=$(podman image inspect "$IMAGE" --format '{{.Id}}')
 
@@ -108,7 +129,8 @@ if podman container exists "$CONTAINER"; then
     fi
     CUR_ID=$(podman container inspect "$CONTAINER" --format '{{.Image}}')
     if [ "$CUR_ID" != "$IMAGE_ID" ]; then
-        echo ">>> container $CONTAINER is from an older image; recreating it"
+        echo ">>> container $CONTAINER is from another image than this checkout's Containerfile ($IMAGE); recreating it" >&2
+        echo "    (files kept in the container outside the repository, such as an install prefix, are discarded)" >&2
         podman stop "$CONTAINER" >/dev/null 2>&1 || true
         podman rm "$CONTAINER" >/dev/null
     fi
