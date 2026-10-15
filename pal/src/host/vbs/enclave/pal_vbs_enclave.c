@@ -111,8 +111,15 @@ static int64_t pal_try_brk_resume(void) {
     } __except (seh_resume_filter(GetExceptionInformation(), &code)) {
         /* not reached: the filter resumes execution */
     }
-    /* STATUS_BREAKPOINT is 0x80000003; return 0 if we caught and resumed from it */
-    return (code == (int64_t)0x80000003) ? 0 : (code ? code : -1);
+    /*
+     * We caught an in-enclave synchronous fault and resumed past it (returning here at all proves
+     * the resume worked). The fault code is STATUS_BREAKPOINT (0x80000003) when a debugger is
+     * attached, but on this machine with no debugger `brk #0` surfaces as STATUS_ILLEGAL_INSTRUCTION
+     * (0xC000001D) -- see Documentation/devel/vbs-enclave/FINDINGS.md. Accept either trap.
+     */
+    if (code == (int64_t)0x80000003 || code == (int64_t)0xC000001D)
+        return 0;
+    return code ? code : -1;
 }
 
 static const pal_vbs_env_t g_env = {
