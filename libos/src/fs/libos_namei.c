@@ -29,12 +29,17 @@ int check_permissions(struct libos_dentry* dent, mode_t mask) {
 
     struct libos_thread* current = get_cur_thread();
     mode_t granted;
-    if (current->fsuid == 0) {
-        /* Root bypasses read/write checks, but execution still needs an execute bit. */
-        if ((mask & MAY_EXEC) && !(dent->inode->perm & (S_IXUSR | S_IXGRP | S_IXOTH)))
+    if (libos_capable(LIBOS_CAP_DAC_OVERRIDE)) {
+        /* CAP_DAC_OVERRIDE (root) bypasses read/write checks and searching a directory, but
+         * executing a file still needs an execute bit. */
+        if ((mask & MAY_EXEC) && dent->inode->type != S_IFDIR &&
+                !(dent->inode->perm & (S_IXUSR | S_IXGRP | S_IXOTH)))
             return -EACCES;
         return 0;
     }
+    if (libos_capable(LIBOS_CAP_DAC_READ_SEARCH) && !(mask & MAY_WRITE) &&
+            (dent->inode->type == S_IFDIR || !(mask & MAY_EXEC)))
+        return 0; /* CAP_DAC_READ_SEARCH: reading files, reading and searching directories */
 
     if (current->fsuid == dent->inode->uid) {
         granted = (dent->inode->perm >> 6) & 7;
@@ -276,6 +281,14 @@ static int lookup_enter_dentry(struct lookup* lookup) {
 static int lookup_advance(struct lookup* lookup) {
     const char* name = lookup->name;
     assert(*name != '/' && *name != '\0');
+
+    /* the kernel's `may_lookup()`: walking through a directory needs search (execute) permission
+     * on it (LTP stat03, lstat02, readlink03, fchdir03, chroot04 and others check EACCES) */
+    if (lookup->dent->inode && lookup->dent->inode->type == S_IFDIR) {
+        int ret = check_permissions(lookup->dent, MAY_EXEC);
+        if (ret < 0)
+            return ret;
+    }
 
     const char* name_end = name;
     while (*name_end != '\0' && *name_end != '/')
@@ -576,6 +589,13 @@ int open_namei(struct libos_handle* hdl, struct libos_dentry* start, const char*
         ret = check_permissions(dent, acc_mode);
         if (ret < 0)
             goto out;
+
+        /* O_NOATIME only for the owner or with CAP_FOWNER (LTP open02) */
+        if ((flags & O_NOATIME) && get_cur_thread()->fsuid != dent->inode->uid &&
+                !libos_capable(LIBOS_CAP_FOWNER)) {
+            ret = -EPERM;
+            goto out;
+        }
     }
 
     if (!existed && dent->inode)

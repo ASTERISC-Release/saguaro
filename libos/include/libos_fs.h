@@ -628,8 +628,11 @@ bool libos_in_group(gid_t gid);
 void inode_init_owner(struct libos_dentry* dent);
 /* capability numbers used by the filesystem permission rules */
 #define LIBOS_CAP_CHOWN  0
+#define LIBOS_CAP_DAC_OVERRIDE    1
+#define LIBOS_CAP_DAC_READ_SEARCH 2
 #define LIBOS_CAP_FOWNER 3
 #define LIBOS_CAP_FSETID 4
+#define LIBOS_CAP_SYS_CHROOT 18
 
 /*
  * Flags for `path_lookupat`.

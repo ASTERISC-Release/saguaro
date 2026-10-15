@@ -146,8 +146,9 @@ static int tmpfs_lookup(struct libos_dentry* dent) {
     assert(!dent->inode);
 
     if (!dent->parent) {
-        /* This is the root dentry, initialize it. */
-        return tmpfs_setup_dentry(dent, S_IFDIR, PERM_rwx______);
+        /* This is the root dentry, initialize it: mode 1777 like a Linux tmpfs mounted without a
+         * `mode=` option (with 0700 an unprivileged user could not even search it) */
+        return tmpfs_setup_dentry(dent, S_IFDIR, PERM_rwxrwxrwx | S_ISVTX);
     }
     /* Looking up for other dentries should fail: if a dentry has not been already created by
      * `creat` or `mkdir`, the corresponding file does not exist. */

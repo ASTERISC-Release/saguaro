@@ -144,7 +144,15 @@ int main(int argc, const char** argv) {
     /* 6. prepare files for the permission checks, then drop privileges for good. The group ids
      * must be dropped before the user ids: after the uid drop the process is unprivileged and
      * cannot change its gids any more (same rule as Linux). */
-    snprintf(dir, sizeof(dir), "%s/creds", base);
+    /* the unprivileged user removes its directory at the end, which needs a writable parent: a
+     * world-writable "credsroot" (kept between runs) rather than the base directory itself */
+    char root[560];
+    snprintf(root, sizeof(root), "%s/credsroot", base);
+    if (mkdir(root, 0777) && errno != EEXIST)
+        err(1, "mkdir %s", root);
+    if (chmod(root, 0777))
+        err(1, "chmod %s", root);
+    snprintf(dir, sizeof(dir), "%s/creds", root);
     snprintf(froot, sizeof(froot), "%s/root_only", dir);
     snprintf(fworld, sizeof(fworld), "%s/world", dir);
     rmdir(dir); /* leftovers */

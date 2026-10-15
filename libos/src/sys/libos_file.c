@@ -48,6 +48,26 @@ static int rmdir_check_empty_callback(const char* name, void* arg) {
     return 0;
 }
 
+/* The kernel's `may_delete()`: removing an entry needs write and search permission on its
+ * directory, and in a sticky directory (S_ISVTX) the caller must own the directory or the entry,
+ * or have CAP_FOWNER (LTP rmdir03, unlink and rename permission cases). */
+static int may_delete(struct libos_dentry* dent) {
+    assert(locked(&g_dcache_lock));
+    struct libos_dentry* parent = dent->parent;
+    if (!parent || !parent->inode || !dent->inode)
+        return 0;
+    int ret = check_permissions(parent, MAY_WRITE | MAY_EXEC);
+    if (ret < 0)
+        return ret;
+    if (parent->inode->perm & S_ISVTX) {
+        uid_t fsuid = get_cur_thread()->fsuid;
+        if (fsuid != parent->inode->uid && fsuid != dent->inode->uid &&
+                !libos_capable(LIBOS_CAP_FOWNER))
+            return -EPERM;
+    }
+    return 0;
+}
+
 /* `ENOTEMPTY` for a directory with entries, checked before the filesystem's unlink: the PAL delete
  * reports "directory not empty" only as a generic error. Shared by rmdir() and
  * unlinkat(AT_REMOVEDIR) (aarch64's glibc implements rmdir() with the latter, which once returned
@@ -86,6 +106,9 @@ static long do_unlinkat(int dfd, const char* pathname, int flag, bool user_point
         ret = -EACCES;
         goto out;
     }
+
+    if (user_pointer && (ret = may_delete(dent)) < 0)
+        goto out;
 
     if (flag & AT_REMOVEDIR) {
         if (dent->inode->type != S_IFDIR) {
@@ -215,6 +238,10 @@ long libos_syscall_rmdir(const char* pathname) {
         ret = -ENOTDIR;
         goto out;
     }
+
+    ret = may_delete(dent);
+    if (ret < 0)
+        goto out;
 
     struct libos_fs* fs = dent->inode->fs;
     if (!fs || !fs->d_ops || !fs->d_ops->unlink) {
@@ -1182,9 +1209,18 @@ long libos_syscall_chroot(const char* filename) {
     struct libos_dentry* dent = NULL;
     lock(&g_dcache_lock);
     ret = path_lookupat(/*start=*/NULL, filename, LOOKUP_FOLLOW | LOOKUP_DIRECTORY, &dent);
+    /* the kernel's order: search permission on the new root (EACCES, LTP chroot04), then
+     * CAP_SYS_CHROOT (EPERM, chroot01) */
+    if (ret == 0 && dent)
+        ret = check_permissions(dent, MAY_EXEC);
+    if (ret == 0 && !libos_capable(LIBOS_CAP_SYS_CHROOT))
+        ret = -EPERM;
     unlock(&g_dcache_lock);
-    if (ret < 0)
+    if (ret < 0) {
+        if (dent)
+            put_dentry(dent);
         goto out;
+    }
 
     if (!dent) {
         ret = -ENOENT;
