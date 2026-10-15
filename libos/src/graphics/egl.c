@@ -309,6 +309,13 @@ void setup_egl(void) {
             assert(false);
         }
 
+        /* The LibOS installs a dma-buf fd returned by a forwarded ioctl as a guest handle at host
+         * fd + 500; this library and the host listener use the raw host fd (registered below and
+         * passed to the listener for the X pixmap), so go back to it. An older LibOS returns the
+         * raw host fd (below 500) itself. */
+        if (in_gramine_vm && bufs[i].bo_fd >= 500)
+            bufs[i].bo_fd -= 500;
+
         /* Register the bo_fd with Gramine (only needed once, since it remains the same) */
         if (in_gramine_vm) {
             long ret = syscall(syscall_register_host_identity_fd, bufs[i].bo_fd);

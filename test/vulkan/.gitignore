@@ -1,0 +1,8 @@
+/vk-headless
+/vk-session-shim.so
+/*.manifest
+/*.manifest.sgx
+/clock-probe
+/vk-mt
+/xwin-dump
+/xsend-key

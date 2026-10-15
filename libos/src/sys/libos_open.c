@@ -254,6 +254,27 @@ static bool is_graphics_host_path(const char* path) {
 }
 #endif
 
+#ifdef ENABLE_GRAPHICS
+/* Before a host fd that the host has just returned is installed at its guest slot (host fd +
+ * GRAPHICS_HOST_FD_OFFSET): the kernel does not hand out a number that is still open, so a
+ * TYPE_HOST handle still sitting there is stale, its host fd having been closed behind the LibOS's
+ * back (the listener's XCB closes the dma-buf fds it sends to the X server). Drop that handle
+ * without closing anything on the host. Any other handle there is a conflict (-EBADF). */
+int graphics_drop_stale_host_handle(int fd) {
+    struct libos_handle* old = get_fd_handle(fd, NULL, NULL);
+    if (!old)
+        return 0;
+    bool stale = old->type == TYPE_HOST;
+    put_handle(old);
+    if (!stale)
+        return -EBADF;
+    old = detach_fd_handle(fd, NULL, NULL);
+    if (old)
+        put_handle(old);
+    return 0;
+}
+#endif
+
 /* New system call added for the graphics implementation */
 long libos_syscall_register_host_identity_fd(int fd) {
     struct libos_handle* hdl;
@@ -337,6 +358,11 @@ static long do_openat(int dfd, const char* filename, int flags, int mode, bool u
         }
     }
 
+    /* Declared before the graphics redirect below, which jumps past the generic open path to
+     * `graphics_cont`: the exit path puts `dir` and must not see an uninitialised pointer (it did:
+     * a stale stack value dropped a dentry's reference count below 0, seen with memfd_create). */
+    struct libos_dentry* dir = NULL;
+
     /* Graphics handle to redirect open() system call */
 #ifdef ENABLE_GRAPHICS
     long retval = 0;
@@ -398,8 +424,6 @@ static long do_openat(int dfd, const char* filename, int flags, int mode, bool u
         mode &= ~umask;
     }
 
-    struct libos_dentry* dir = NULL;
-
     if (*filename != '/' && (ret = get_dirfd_dentry(dfd, &dir)) < 0)
         return ret;
 
@@ -424,7 +448,9 @@ static long do_openat(int dfd, const char* filename, int flags, int mode, bool u
 graphics_cont:
     if (use_graphics_host) {
         hdl->type = TYPE_HOST;
-        ret = set_new_fd_handle_by_fd(retval, hdl, flags & O_CLOEXEC ? FD_CLOEXEC : 0, NULL);
+        ret = graphics_drop_stale_host_handle(retval);
+        if (ret == 0)
+            ret = set_new_fd_handle_by_fd(retval, hdl, flags & O_CLOEXEC ? FD_CLOEXEC : 0, NULL);
     } else {
         ret = set_new_fd_handle(hdl, flags & O_CLOEXEC ? FD_CLOEXEC : 0, NULL);
 
@@ -477,6 +503,20 @@ long libos_syscall_close(int fd) {
         #endif
         return -EBADF;
     }
+#ifdef ENABLE_GRAPHICS
+    /* A forwarded open (TYPE_HOST) is a host fd installed at host fd + GRAPHICS_HOST_FD_OFFSET:
+     * close the host fd too, or every forwarded open leaks one in the host listener's process.
+     * Only for fds in that range (a handle duplicated elsewhere with dup2() keeps its host fd). */
+    if (handle->type == TYPE_HOST && fd > (int)GRAPHICS_HOST_FD_OFFSET
+            && graphics_redirect_enabled()) {
+        long _offset = libos_syscall_acquire_libos_lock();
+        comm_page_t* c = comm_page(_offset);
+        c->p1 = (uint64_t)fd;
+        c->req_bit = CLOSE;
+        (void)comm_sync_notify(c);
+        libos_syscall_relinquish_libos_lock(_offset);
+    }
+#endif
     put_handle(handle);
     return 0;
 }

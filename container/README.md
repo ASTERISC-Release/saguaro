@@ -24,9 +24,13 @@ container/run.sh 'test/test-vm.sh'             # ... and run the vm battery
 (`Containerfile.riscv64-cross`, x86_64 hosts only): the riscv64 cross toolchain and
 `qemu-system-riscv64` for the test guest of the RISC-V direct-PAL port (see `INSTALL.rst`).
 
-`CONTAINER_NAME` / `IMAGE_NAME` override the names. A changed Containerfile triggers a rebuild, and a
-container built from an older image is recreated (its `/tmp` is discarded; files in the repository
-survive).
+`CONTAINER_NAME` / `IMAGE_NAME` override the names. Images are tagged per Containerfile version
+(`<name>:cf-<first 12 digits of the Containerfile's sha256>`), so checkouts with different Containerfiles
+do not rebuild or retag each other's images, and an image built earlier from the same Containerfile is
+reused without a build. A container is recreated only when its own checkout's Containerfile changes
+(what it keeps outside the repository, such as `/tmp` and install prefixes, is discarded). With
+`IMAGE_NAME` set, that single tag is rebuilt when the Containerfile differs from its label (the older
+behaviour).
 
 Each needs a **native** host of the same architecture (no emulation) with working KVM (`/dev/kvm`) for
 `gramine-vm`; the direct PAL needs no devices. The container runs with `--cap-add ALL` (virtiofsd serves

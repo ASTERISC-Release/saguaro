@@ -87,6 +87,7 @@ tests = {
     'memfd_exec': {},
     'memfd_rw': {},
     'memfd_seals': {},
+    'memfd_shared': {},
     'mremap_misc': {},
     'perm_checks': {},
     'prctl_misc': {},

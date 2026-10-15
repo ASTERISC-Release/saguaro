@@ -11,6 +11,7 @@
 #include <SDL2/SDL_syswm.h>
 #include <assert.h>
 #include <dlfcn.h>
+#include <link.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
@@ -1297,6 +1298,32 @@ pid_t fork(void) {
     return real ? real() : -1;
 }
 
+/* dlsym(RTLD_NEXT, symbol) on behalf of the object containing `caller`. glibc resolves RTLD_NEXT
+ * relative to the object that calls dlsym, which is this library once dlsym is interposed below,
+ * so passing RTLD_NEXT through would search after libgraphics.so instead of after the caller (a
+ * library preloaded after this one then finds its own function: endless recursion). Walk the
+ * link maps after the caller's instead and return the first definition that belongs to one of
+ * them. */
+static void *dlsym_next_after(void *caller, const char *symbol) {
+    Dl_info info;
+    struct link_map *caller_map = NULL;
+    if (!dladdr1(caller, &info, (void **)&caller_map, RTLD_DL_LINKMAP) || !caller_map)
+        return real_dlsym(RTLD_NEXT, symbol);
+    for (struct link_map *m = caller_map->l_next; m; m = m->l_next) {
+        if (!m->l_name || !m->l_name[0])
+            continue;
+        void *h = dlopen(m->l_name, RTLD_LAZY | RTLD_NOLOAD);
+        if (!h)
+            continue;
+        void *sym = real_dlsym(h, symbol);
+        dlclose(h);
+        struct link_map *sym_map = NULL;
+        if (sym && dladdr1(sym, &info, (void **)&sym_map, RTLD_DL_LINKMAP) && sym_map == m)
+            return sym;
+    }
+    return NULL;
+}
+
 void *dlsym(void *handle, const char *symbol) {
     if (!real_dlsym) {
         real_dlsym = dlvsym(RTLD_NEXT, "dlsym", "GLIBC_2.2.5");
@@ -1307,7 +1334,8 @@ void *dlsym(void *handle, const char *symbol) {
         }
     }
 
-    void *sym = real_dlsym(handle, symbol);
+    void *sym = handle == RTLD_NEXT ? dlsym_next_after(__builtin_return_address(0), symbol)
+                                    : real_dlsym(handle, symbol);
     if (dlsym_logging_enabled)
         fprintf(stderr, "[dlsym] %s -> %p\n", symbol, sym);
     if (strcmp(symbol, "glXSwapBuffers") == 0)

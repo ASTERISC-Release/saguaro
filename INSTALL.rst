@@ -130,13 +130,19 @@ or as a one-shot command from the host: ``container/run.sh 'scripts/install.sh -
 
 Notes:
 
-- The images are ``gramine-vm-aarch64`` and ``gramine-vm-x86_64`` (``container/Containerfile.vm-*``);
+- The images are ``gramine-vm-aarch64`` and ``gramine-vm-x86_64`` (``container/Containerfile.vm-*``, tags below);
   set ``CONTAINER_NAME`` / ``IMAGE_NAME`` for other names. A checkout in a folder named
   ``gramine-<name>`` gets its own container and guest CID range (see ``AGENTS.md``).
 - The container runs with ``--cap-add ALL`` (virtiofsd serves the container's ``/`` as the guest's ``/``)
   and ``seccomp=unconfined`` (the direct PAL calls ``personality()``, which the default profile blocks).
-- A changed Containerfile triggers a rebuild and the container is recreated, which discards its
-  ``/tmp`` (files in the repository survive).
+- Images are tagged per Containerfile version (``gramine-vm-x86_64:cf-<first 12 digits of the
+  Containerfile's sha256>``): checkouts whose Containerfiles differ (branches) get their own images and
+  never rebuild or retag each other's, and an existing image built from the same Containerfile is reused
+  by tagging it, without a build. A checkout's container is recreated only when its own Containerfile
+  changes; that discards what the container keeps outside the repository (its ``/tmp``, an install
+  prefix under ``~/.local``). ``IMAGE_NAME`` selects the older behaviour (one tag, rebuilt when the
+  Containerfile differs from its label). Images of old versions stay until removed (``podman image
+  prune`` or ``podman rmi``).
 
 RISC-V (cross-build and test guest)
 -----------------------------------

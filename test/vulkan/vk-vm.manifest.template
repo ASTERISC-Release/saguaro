@@ -1,0 +1,64 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# A Vulkan program under gramine-vm with the graphics redirection (Documentation/devel/vulkan/,
+# phase 0: measures how far the existing OpenGL redirection carries Vulkan). Based on
+# CI-Examples/graphics/glxgears/glxgears.manifest.template. The program is chosen with -Dentrypoint
+# and -Dbinary. libgraphics.so starts the graphics session at vkCreateInstance; -Deager=1 sets
+# EGL_EAGER_SESSION for programs that load the Vulkan loader with dlopen (vkcube, vulkaninfo);
+# -Dshim=1 adds the phase-0 test shim (test/vulkan/vk-session-shim.c) in front.
+
+libos.entrypoint = "{{ entrypoint }}"
+
+sys.stack.size = "32M"
+loader.insecure__use_host_env = true
+loader.insecure__use_cmdline_argv = true
+loader.log_level = "{{ log_level }}"
+
+loader.env.LD_LIBRARY_PATH = "/lib:/usr/lib:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu"
+{% if shim|string == "1" %}
+loader.env.LD_PRELOAD = "/vk-session-shim.so:./libgraphics.so"
+{% else %}
+loader.env.LD_PRELOAD = "./libgraphics.so"
+{% endif %}
+loader.env.EGL_EAGER_SESSION = "{{ eager }}"
+{% if present|string == "1" %}
+# presentation through the layer in libgraphics.so (VK_LAYER_GRAMINE_present), found as an implicit
+# layer under $XDG_DATA_HOME/vulkan/implicit_layer.d
+loader.env.EGL_VULKAN_PRESENT = "1"
+# Mesa's device-select layer asks the X server for its GPU with DRI3, which hangs over the guest's X
+# connection (no fd passing); the GPU is chosen with VK_ICD_FILENAMES or by the application
+loader.env.NODEVICE_SELECT = "1"
+loader.env.XDG_DATA_HOME = "/gramine-xdg"
+{% endif %}
+loader.env.DISPLAY = "2:0"
+vm.net.direct_vsock_ports = [6000]
+loader.env.IVSHMEM_GRAMINE_VM = "1"
+loader.env.GLIBC_TUNABLES = "glibc.pthread.rseq=0"
+loader.env.GBM_BACKEND = "dri"
+loader.env.EGL_GRAMINE = "1"
+loader.env.EGL_SHARED_INPUT = "0"
+loader.env.EGL_DISCRETE = "{{ egl_discrete }}"
+loader.env.EGL_SYSCALL_LOG = "0"
+loader.env.EGL_IOCTL_LOG = "0"
+
+fs.mounts = [
+  { path = "{{ entrypoint }}", uri = "file:{{ binary }}" },
+  { path = "/libgraphics.so", uri = "file:{{ gramine.libgraphics }}" },
+{% if present|string == "1" %}
+  { path = "/gramine-xdg/vulkan", uri = "file:{{ layer_dir }}" },
+{% endif %}
+{% if shim|string == "1" %}
+  { path = "/vk-session-shim.so", uri = "file:vk-session-shim.so" },
+{% endif %}
+  { path = "/usr", type = "chroot", uri = "file:/usr" },
+  { path = "/etc/ld.so.cache", uri = "file:/etc/ld.so.cache" },
+{% if etc_vulkan|string != "0" %}
+  { path = "/etc/vulkan", type = "chroot", uri = "file:/etc/vulkan" },
+{% endif %}
+  { path = "/sys", type = "chroot", uri = "file:/sys" },
+  { path = "/sys/dev", type = "chroot", uri = "file:/sys/dev" },
+  { path = "/sys/devices", type = "chroot", uri = "file:/sys/devices" },
+  { path = "/sys/bus/pci", type = "chroot", uri = "file:/sys/bus/pci" },
+  { path = "/root/.cache", type = "chroot", uri = "file:/root/.cache" },
+  # output files of the tests (vulkaninfo --json -o /tmp/...)
+  { path = "/tmp", type = "chroot", uri = "file:/tmp/vkshim" },
+]

@@ -1,0 +1,28 @@
+{
+    "file_format_version": "1.1.2",
+    "layer": {
+        "name": "VK_LAYER_GRAMINE_present",
+        "type": "GLOBAL",
+        "library_path": "/libgraphics.so",
+        "api_version": "1.3.275",
+        "implementation_version": "1",
+        "description": "Vulkan presentation under gramine-vm through the host listener (Documentation/devel/vulkan/)",
+        "functions": {
+            "vkNegotiateLoaderLayerInterfaceVersion": "gramine_vk_negotiate"
+        },
+        "instance_extensions": [
+            { "name": "VK_KHR_surface", "spec_version": "25" },
+            { "name": "VK_KHR_xcb_surface", "spec_version": "6" },
+            { "name": "VK_KHR_xlib_surface", "spec_version": "6" },
+            { "name": "VK_KHR_get_surface_capabilities2", "spec_version": "1" }
+        ],
+        "device_extensions": [
+            { "name": "VK_KHR_swapchain", "spec_version": "70", "entrypoints": [
+                "vkCreateSwapchainKHR", "vkDestroySwapchainKHR", "vkGetSwapchainImagesKHR",
+                "vkAcquireNextImageKHR", "vkQueuePresentKHR", "vkAcquireNextImage2KHR",
+                "vkGetDeviceGroupSurfacePresentModesKHR" ] }
+        ],
+        "enable_environment": { "EGL_VULKAN_PRESENT": "1" },
+        "disable_environment": { "EGL_VULKAN_PRESENT_DISABLE": "1" }
+    }
+}

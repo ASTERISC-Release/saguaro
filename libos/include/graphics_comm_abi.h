@@ -27,7 +27,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define NUM_COMM_PAGES 1
+/* Request slots: comm_page_t entries at COMM_ADDR + i * sizeof(comm_page_t), each served by its
+ * own listener thread, so a guest thread blocked in a long host call (a GPU wait) holds only its
+ * slot. They must end before the input ring (SG_INPUT_RING_OFFSET, 512: at most 8 slots). */
+#define NUM_COMM_PAGES 4
 
 #define COMM_ADDR  0xf00000ULL
 #define COMM_MAGIC 0x1234567812345678ULL
@@ -79,7 +82,14 @@ typedef enum graphics_request {
     HOST_FLOCK = 37,
     HOST_FTRUNCATE = 38,
     UPDATE_INPUT_MASK = 39,
+    GEM_FREE = 40, /* p1 = address, p2 = length: the guest unmapped this part of a GEM arena */
 } graphics_request_t;
+
+/* IOCTL requests: when p5 holds this value, p4 is (offset + 1) of an int64_t field of the argument
+ * that the guest made relative to its own clock (an absolute CLOCK_MONOTONIC deadline minus the
+ * guest's "now"); the listener adds its CLOCK_MONOTONIC before the call. Otherwise p4 and p5 are
+ * not used by IOCTL (older guests leave other requests' values there, hence the magic). */
+#define GRAPHICS_IOCTL_TIME_REL_MAGIC 0x54494d4552454c31ULL /* "TIMEREL1" */
 
 /* The offset between a guest fd and the forwarded host fd of the same object:
  * the guest installs host fds at (host fd + GRAPHICS_FS_OFFSET) and the host

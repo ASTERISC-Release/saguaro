@@ -6,6 +6,7 @@
 #include "libos_table.h"
 #include "libos_thread.h"
 #include "linux_abi/errors.h"
+#include "cpu.h"
 
 #ifdef ENABLE_GRAPHICS
 
@@ -117,31 +118,52 @@ static int get_slot_for_tid(unsigned int tid) {
 }
 #endif /* MULTI_SLOT */
 
+/*
+ * Request slots (NUM_COMM_PAGES of them, each with its own listener thread). A thread takes the
+ * first free slot (an atomic flag; slot 0 first, so a single-threaded program always uses slot 0)
+ * and holds it for one request. When all slots are busy, it queues on the lock of slot
+ * (tid % NUM_COMM_PAGES) and takes that slot as soon as its holder lets it go. A thread blocked in
+ * a long host call (a GPU wait) therefore stalls only the threads queued behind its slot, and only
+ * when all slots are in use.
+ */
+static int g_slot_busy[NUM_COMM_PAGES];
+static bool g_slot_queued_holder[NUM_COMM_PAGES];
+
 long libos_syscall_acquire_libos_lock(void) {
 #if TRACK_ACQUIRE_THREADS
     track_thread_tid();
 #endif
+    _Static_assert(NUM_COMM_PAGES * sizeof(comm_page_t) <= 512,
+                   "the request slots must end before the input ring");
 
-#if MULTI_SLOT
-    unsigned int tid = get_cur_tid();
-    int index        = get_slot_for_tid(tid);
+    for (int i = 0; i < NUM_COMM_PAGES; i++) {
+        if (!__atomic_load_n(&g_slot_busy[i], __ATOMIC_RELAXED) &&
+                !__atomic_exchange_n(&g_slot_busy[i], 1, __ATOMIC_ACQUIRE))
+            return i * sizeof(comm_page_t);
+    }
 
-    if (index < 0)
-        return -1;
-#else
-    int index = 0;
-#endif
-
-    /* Ensure the lock is initialized, then acquire it */
+    int index = get_cur_tid() % NUM_COMM_PAGES;
     ensure_lock_ready(&comm_locks[index]);
     lock(&comm_locks[index]);
-
+    /* The VM PAL schedules cooperatively: yield, or the slot's holder may never run again on
+     * this vCPU (seen with four Mesa shader-cache threads and one vCPU). */
+    while (__atomic_exchange_n(&g_slot_busy[index], 1, __ATOMIC_ACQUIRE)) {
+        CPU_RELAX();
+        PalThreadYieldExecution();
+    }
+    g_slot_queued_holder[index] = true;
     return index * sizeof(comm_page_t);
 }
 
 long libos_syscall_relinquish_libos_lock(long offset) {
     int index = offset / sizeof(comm_page_t);
-    unlock(&comm_locks[index]);
+    if (index < 0 || index >= NUM_COMM_PAGES)
+        return -EINVAL;
+    bool queued = g_slot_queued_holder[index];
+    g_slot_queued_holder[index] = false;
+    __atomic_store_n(&g_slot_busy[index], 0, __ATOMIC_RELEASE);
+    if (queued)
+        unlock(&comm_locks[index]);
     return 0;
 }
 
