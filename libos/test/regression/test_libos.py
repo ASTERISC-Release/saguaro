@@ -247,6 +247,11 @@ class TC_01_Bootstrap(RegressionTestCase):
         self.assertIn('child exited with status: 0', stdout)
         self.assertIn('test completed successfully', stdout)
 
+    def test_2025_fork_reservation(self):
+        # fork with a large PROT_NONE reservation: never-writable anonymous memory is not copied
+        stdout, _ = self.run_binary(['fork_reservation'], timeout=120)
+        self.assertIn('TEST OK', stdout)
+
     def test_203_fork_disallowed(self):
         try:
             self.run_binary(['fork_disallowed'])
@@ -1852,6 +1857,13 @@ class TC_80_Socket(RegressionTestCase):
                 os.remove('tmp/fifo')
         self.assertIn('read on FIFO: Hello from write end of FIFO!', stdout)
         self.assertIn('[parent] TEST OK', stdout)
+
+    def test_101_socket_unix_fdpass(self):
+        # SCM_RIGHTS between two Gramine processes over a socketpair and a named socket
+        stdout, _ = self.run_binary(['unix_fdpass'], timeout=60)
+        self.assertIn('socketpair OK', stdout)
+        self.assertIn('named socket OK', stdout)
+        self.assertIn('TEST OK', stdout)
 
     def test_100_socket_unix(self):
         stdout, _ = self.run_binary(['unix'])

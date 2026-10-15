@@ -823,7 +823,7 @@ int bkeep_mmap_fixed(void* addr, size_t length, int prot, int flags, struct libo
     new_vma->begin = (uintptr_t)addr;
     new_vma->end   = new_vma->begin + length;
     new_vma->prot  = prot;
-    new_vma->flags = filter_saved_flags(flags) | ((file && (prot & PROT_WRITE)) ? VMA_TAINTED : 0);
+    new_vma->flags = filter_saved_flags(flags) | ((prot & PROT_WRITE) ? VMA_TAINTED : 0);
     new_vma->file  = file;
     if (new_vma->file) {
         get_handle(new_vma->file);
@@ -863,9 +863,11 @@ int bkeep_mmap_fixed(void* addr, size_t length, int prot, int flags, struct libo
     return ret;
 }
 
+/* VMA_TAINTED: the memory was writable at some point (file-backed: it may differ from the file;
+ * anonymous: it may hold data, else it is zero and a child need not receive it) */
 static void vma_update_prot(struct libos_vma* vma, int prot) {
     vma->prot = prot & (PROT_NONE | PROT_READ | PROT_WRITE | PROT_EXEC);
-    if (vma->file && (prot & PROT_WRITE)) {
+    if (prot & PROT_WRITE) {
         vma->flags |= VMA_TAINTED;
     }
 }
@@ -934,7 +936,6 @@ static int _vma_bkeep_change(uintptr_t begin, uintptr_t end, int prot, bool is_i
         *new_vma_ptr1 = NULL;
 
         split_vma(vma, new_vma1, begin);
-        vma_update_prot(new_vma1, prot);
 
         struct libos_vma* next = _get_next_vma(vma);
 
@@ -944,13 +945,17 @@ static int _vma_bkeep_change(uintptr_t begin, uintptr_t end, int prot, bool is_i
             struct libos_vma* new_vma2 = *new_vma_ptr2;
             *new_vma_ptr2 = NULL;
 
+            /* the tail keeps the old protection and flags: split it off before the middle piece
+             * is updated (else it inherits VMA_TAINTED from the update) */
             split_vma(new_vma1, new_vma2, end);
-            vma_update_prot(new_vma2, vma->prot);
+            vma_update_prot(new_vma1, prot);
 
             avl_tree_insert(&vma_tree, &new_vma2->tree_node);
 
             return 0;
         }
+
+        vma_update_prot(new_vma1, prot);
 
         /* Error checking at the begining ensures we always have the next node. */
         assert(next);
@@ -1074,7 +1079,7 @@ int bkeep_mmap_any_in_range(void* _bottom_addr, void* _top_addr, size_t length, 
         return -ENOMEM;
     }
     new_vma->prot  = prot;
-    new_vma->flags = filter_saved_flags(flags) | ((file && (prot & PROT_WRITE)) ? VMA_TAINTED : 0);
+    new_vma->flags = filter_saved_flags(flags) | ((prot & PROT_WRITE) ? VMA_TAINTED : 0);
     new_vma->file  = file;
     if (new_vma->file) {
         get_handle(new_vma->file);
@@ -1685,10 +1690,16 @@ BEGIN_CP_FUNC(vma) {
             remap_from_file = false;
 
             if (!vma->file) {
-                /* Send anonymous memory region. */
+                /* Send anonymous memory region. A PROT_NONE one that was never writable (a
+                 * reservation, as Wine's low 1.6 GiB and its top-down area) holds zeros and is
+                 * only described: the child maps it demand-zero (`receive_memory_on_stream`).
+                 * Copying it exhausted the VM PAL's frame pool and cost seconds elsewhere. Only
+                 * PROT_NONE qualifies: the LibOS fills some read-only mappings through the PAL
+                 * (the vDSO), which the bookkeeping never saw writable. */
                 struct libos_mem_entry* mem;
                 DO_CP_SIZE(memory, vma->addr, vma->length, &mem);
                 mem->prot = LINUX_PROT_TO_PAL(vma->prot, /*map_flags=*/0);
+                mem->zero = vma->prot == PROT_NONE && !(vma->flags & (VMA_TAINTED | VMA_INTERNAL));
             } else {
                 /* Send file-backed memory region. */
                 uint64_t file_size = 0;

@@ -130,6 +130,7 @@ BEGIN_CP_FUNC(memory) {
     entry->prot = PAL_PROT_READ | PAL_PROT_WRITE;
     entry->next = store->first_mem_entry;
     entry->dummy = false;
+    entry->zero = false;
 
     store->first_mem_entry = entry;
     store->mem_entries_cnt++;
@@ -219,7 +220,7 @@ static int send_memory_on_stream(PAL_HANDLE stream, struct libos_cp_store* store
         void*            mem_addr = entry->addr;
         pal_prot_flags_t mem_prot = entry->prot;
 
-        if (entry->dummy) {
+        if (entry->dummy || entry->zero) {
             entry = entry->next;
             continue;
         }
@@ -324,6 +325,17 @@ static int receive_memory_on_stream(PAL_HANDLE handle, struct checkpoint_hdr* hd
                     log_error("failed to bookkeep temporary VMA for memory at %p-%p", addr,
                               (char*)addr + size);
                     return ret;
+                }
+                continue;
+            }
+
+            if (entry->zero) {
+                /* never-writable anonymous memory: the parent sent no content; map it fresh
+                 * (demand-zero: no page is touched, so a reservation of many GiB costs nothing) */
+                ret = PalVirtualMemoryAlloc(addr, size, prot);
+                if (ret < 0) {
+                    log_error("failed allocating %p-%p", addr, addr + size);
+                    return pal_to_unix_errno(ret);
                 }
                 continue;
             }

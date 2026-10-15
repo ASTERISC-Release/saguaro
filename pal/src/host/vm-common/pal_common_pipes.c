@@ -4,9 +4,12 @@
 /*
  * This file contains APIs to handle pipes.
  *
- * Two pipes (two ends of the same pipe) share a single buffer object. The connecting end creates it
- * (so that, as with a Unix socket, it can write before the server accepts), the accepting end takes
- * it over, and it is destroyed when the last of the two pipes is closed.
+ * Two pipes (two ends of the same connection) share a single buffer object with one ring per
+ * direction (see `struct pal_handle_inner_pipe_buf`). The connecting end creates it (so that, as
+ * with a Unix socket, it can write before the server accepts), the accepting end takes it over, and
+ * it is destroyed when the last of the two pipes is closed. Each end writes its own ring and reads
+ * the other one's, so both ends may write at the same time, as on a Unix socket; formerly there
+ * was one ring and an end that wrote and then read got its own bytes back.
  */
 
 #include "api.h"
@@ -64,36 +67,97 @@ out:
 }
 
 static struct pal_handle_inner_pipe_buf* pipe_buf_alloc(void) {
-    struct pal_handle_inner_pipe_buf* pipe_buf = calloc(1, sizeof(*pipe_buf) + PIPE_BUF_SIZE);
+    struct pal_handle_inner_pipe_buf* pipe_buf = calloc(1, sizeof(*pipe_buf));
     if (!pipe_buf)
         return NULL;
-    pipe_buf->writable = pipe_buf->readable = true;
-    pipe_buf->write_pos = pipe_buf->read_pos = 0;
+    for (int i = 0; i < 2; i++) {
+        pipe_buf->ring[i].open_write = pipe_buf->ring[i].open_read = true;
+        pipe_buf->ring[i].write_pos = pipe_buf->ring[i].read_pos = 0;
+    }
     spinlock_init(&pipe_buf->lock);
     /* one reference for the connecting end, one held for the end that will accept it */
     pipe_buf->refcount = 2;
     return pipe_buf;
 }
 
-/* Drops one reference of a pipe buffer; the other end, if any, sees the pipe closed. The count
- * changes under the buffer's lock: the two ends may be closed at the same time (by two processes),
- * and the last one must free the buffer only after the other one has released the lock. */
-static void pipe_buf_put(struct pal_handle_inner_pipe_buf* pipe_buf) {
+/* the ring an end writes: the connecting end (PAL_TYPE_PIPE) ring 0, the accepted end ring 1 */
+static struct pal_pipe_ring* write_ring_of(struct pal_handle_inner_pipe_buf* pipe_buf,
+                                           int type) {
+    return &pipe_buf->ring[type == PAL_TYPE_PIPE ? 0 : 1];
+}
+
+static struct pal_pipe_ring* read_ring_of(struct pal_handle_inner_pipe_buf* pipe_buf,
+                                          int type) {
+    return &pipe_buf->ring[type == PAL_TYPE_PIPE ? 1 : 0];
+}
+
+static void ring_wake_all(struct pal_pipe_ring* ring) {
+    sched_thread_wakeup(&ring->reader_futex);
+    sched_thread_wakeup(&ring->writer_futex);
+}
+
+/* Handles ride through a pipe to another process only where handle objects are shared between
+ * processes: the x86_64 VM PAL (share_refs, vm_handle_release_share in pal_process.c; the same
+ * guard as pal/src/pal_object.c). The TDX PAL and the AArch64 VM PAL have no processes. */
+#if defined(PAL_HOST_VM) && defined(__x86_64__)
+#define PIPE_HANDLES_SHARED 1
+#endif
+
+/* drops the handles of a queue entry nobody will receive (or beyond a reader's capacity) */
+static void ring_handles_drop(struct pal_pipe_ring_handles* e, size_t from) {
+    for (size_t i = from; i < e->count; i++) {
+        /* the reference the sender took for the receiver (see pal_common_pipe_writehandles) */
+#ifdef PIPE_HANDLES_SHARED
+        if (!vm_handle_release_share(e->cargo[i]))
+#endif
+            _PalObjectDestroy(e->cargo[i]);
+    }
+}
+
+static void ring_handles_free(struct pal_pipe_ring_handles* e) {
+    free(e->cargo);
+    free(e->meta);
+    e->cargo = NULL;
+    e->meta = NULL;
+    e->count = 0;
+}
+
+static void ring_handles_drop_all(struct pal_pipe_ring* ring) {
+    while (ring->hq_head != ring->hq_tail) {
+        struct pal_pipe_ring_handles* e = &ring->hq[ring->hq_head++ % PIPE_RING_HANDLE_SLOTS];
+        ring_handles_drop(e, 0);
+        ring_handles_free(e);
+    }
+}
+
+/* closes the end of type `type`: its peer reads what is left and then end-of-stream, and its
+ * peer's writes fail; must hold pipe_buf->lock */
+static void pipe_buf_close_end(struct pal_handle_inner_pipe_buf* pipe_buf,
+                               int type) {
+    write_ring_of(pipe_buf, type)->open_write = false;
+    read_ring_of(pipe_buf, type)->open_read = false;
+    ring_wake_all(&pipe_buf->ring[0]);
+    ring_wake_all(&pipe_buf->ring[1]);
+    if (pipe_buf->poll_waiting)
+        sched_thread_wakeup(&g_streams_waiting_events_futex);
+}
+
+/* Drops the reference of the end of type `type`; the other end, if any, sees the pipe closed. The
+ * count changes under the buffer's lock: the two ends may be closed at the same time (by two
+ * processes), and the last one must free the buffer only after the other one has released the
+ * lock. */
+static void pipe_buf_put(struct pal_handle_inner_pipe_buf* pipe_buf, int type) {
     spinlock_lock(&pipe_buf->lock);
     int new_count = --pipe_buf->refcount;
     if (new_count < 0) {
         log_error("Reference count dropped below 0 at %s:%d", __FILE_NAME__, __LINE__);
         BUG();
     } else if (new_count > 0) {
-        pipe_buf->readable = pipe_buf->writable = false; /* close both pipe ends */
-        sched_thread_wakeup(&pipe_buf->reader_futex);
-        sched_thread_wakeup(&pipe_buf->writer_futex);
-        if (pipe_buf->poll_waiting) {
-            /* should be impossible: poll waits on a pipe that is freed?! just in case */
-            sched_thread_wakeup(&g_streams_waiting_events_futex);
-        }
+        pipe_buf_close_end(pipe_buf, type);
         spinlock_unlock(&pipe_buf->lock);
     } else {
+        ring_handles_drop_all(&pipe_buf->ring[0]);
+        ring_handles_drop_all(&pipe_buf->ring[1]);
         spinlock_unlock(&pipe_buf->lock);
         free(pipe_buf);
     }
@@ -234,14 +298,107 @@ out:
     return ret;
 }
 
-int64_t pal_common_pipe_read(struct pal_handle* handle, uint64_t offset, uint64_t len,
-                             void* buffer) {
+/* Reads from `ring` under pipe_buf->lock. Handles queued at the read position are delivered into
+ * out_cargo (capacity *cargo_count; the rest are dropped and *out_truncated set) with their blob;
+ * a read never runs past the position of queued handles. */
+static ssize_t ring_read_locked(struct pal_handle* handle, struct pal_handle_inner_pipe_buf* pipe_buf,
+                                struct pal_pipe_ring* ring, char* buf, size_t len,
+                                struct pal_handle** out_cargo, size_t* cargo_count, void* meta,
+                                size_t* meta_size, bool* out_truncated) {
     ssize_t bytes;
-    char* buf = buffer;
+    size_t cargo_cap = cargo_count ? *cargo_count : 0;
+    size_t meta_cap = meta_size ? *meta_size : 0;
+    if (cargo_count)
+        *cargo_count = 0;
+    if (meta_size)
+        *meta_size = 0;
+    if (out_truncated)
+        *out_truncated = false;
 
-    if (offset)
-        return -PAL_ERROR_INVAL;
+    while (ring->read_pos == ring->write_pos) {
+        if (!ring->open_write) {
+            /* the other end closed its writing side, no sense in waiting -- always return 0 */
+            bytes = 0;
+            goto out;
+        }
 
+        if (handle->pipe.nonblocking) {
+            bytes = -PAL_ERROR_TRYAGAIN;
+            goto out;
+        }
+
+        sched_thread_wait(&ring->reader_futex, &pipe_buf->lock);
+    }
+
+    assert(ring->read_pos != ring->write_pos);
+    assert(ring->write_pos - ring->read_pos <= PIPE_BUF_SIZE);
+
+    /* handles attached at this position come with this read; a later attachment bounds it */
+    while (ring->hq_head != ring->hq_tail) {
+        struct pal_pipe_ring_handles* e = &ring->hq[ring->hq_head % PIPE_RING_HANDLE_SLOTS];
+        if (e->pos > ring->read_pos) {
+            len = MIN(len, (size_t)(e->pos - ring->read_pos));
+            break;
+        }
+        if (e->pos < ring->read_pos) {
+            /* cannot happen (reads stop at attachments); drop a stale entry rather than deliver
+             * it with unrelated bytes */
+            ring_handles_drop(e, 0);
+            ring_handles_free(e);
+            ring->hq_head++;
+            continue;
+        }
+        if (cargo_count && *cargo_count) {
+            /* a second attachment at the same position: it comes with the next read */
+            break;
+        }
+        size_t i = 0;
+        for (; i < e->count && i < cargo_cap; i++)
+            out_cargo[i] = e->cargo[i];
+        if (cargo_count)
+            *cargo_count = i;
+        if (i < e->count) {
+            ring_handles_drop(e, i);
+            if (out_truncated)
+                *out_truncated = true;
+        }
+        if (e->meta_size) {
+            size_t copy = MIN(e->meta_size, meta_cap);
+            if (copy)
+                memcpy(meta, e->meta, copy);
+            if (meta_size)
+                *meta_size = copy;
+            if (copy < e->meta_size && out_truncated)
+                *out_truncated = true;
+        }
+        ring_handles_free(e);
+        ring->hq_head++;
+        sched_thread_wakeup(&ring->writer_futex);
+    }
+
+    bytes = 0;
+    while (bytes < (ssize_t)len && ring->read_pos != ring->write_pos) {
+        /* limited by three factors: how much is requested by caller, how much is available in the
+         * ring, and how much left until wrap around in the ring */
+        size_t x = MIN(MIN(len - bytes, ring->write_pos - ring->read_pos),
+                       ALIGN_UP(ring->read_pos + 1, PIPE_BUF_SIZE) - ring->read_pos);
+
+        memcpy(&buf[bytes], &ring->buf[ring->read_pos % PIPE_BUF_SIZE], x);
+
+        ring->read_pos += x;
+        bytes += x;
+    }
+
+out:
+    if (pipe_buf->poll_waiting)
+        sched_thread_wakeup(&g_streams_waiting_events_futex);
+    sched_thread_wakeup(&ring->writer_futex);
+    return bytes;
+}
+
+static int64_t pipe_read_common(struct pal_handle* handle, uint64_t len, void* buffer,
+                                struct pal_handle** out_cargo, size_t* cargo_count, void* meta,
+                                size_t* meta_size, bool* out_truncated) {
     if (handle->hdr.type != PAL_TYPE_PIPECLI && handle->hdr.type != PAL_TYPE_PIPE)
         return -PAL_ERROR_NOTCONNECTION;
 
@@ -256,51 +413,82 @@ int64_t pal_common_pipe_read(struct pal_handle* handle, uint64_t offset, uint64_
         return -PAL_ERROR_NOTCONNECTION;
 
     spinlock_lock(&pipe_buf->lock);
+    struct pal_pipe_ring* ring = read_ring_of(pipe_buf, handle->hdr.type);
+    ssize_t bytes = ring_read_locked(handle, pipe_buf, ring, buffer, len, out_cargo, cargo_count,
+                                     meta, meta_size, out_truncated);
+    spinlock_unlock(&pipe_buf->lock);
+    return bytes;
+}
 
-    while (pipe_buf->read_pos == pipe_buf->write_pos) {
-        if (!pipe_buf->writable) {
-            /* pipe was closed for write, no sense in waiting -- always return 0 */
-            bytes = 0;
+int64_t pal_common_pipe_read(struct pal_handle* handle, uint64_t offset, uint64_t len,
+                             void* buffer) {
+    if (offset)
+        return -PAL_ERROR_INVAL;
+    /* a plain read drops handles attached to the bytes it takes, as Linux does without a control
+     * buffer */
+    size_t none = 0;
+    return pipe_read_common(handle, len, buffer, NULL, &none, NULL, NULL, NULL);
+}
+
+int64_t pal_common_pipe_readhandles(struct pal_handle* handle, void* buffer, size_t len,
+                                    struct pal_handle** out_cargo, size_t* cargo_count,
+                                    void* meta, size_t* meta_size, bool* out_truncated) {
+    return pipe_read_common(handle, len, buffer, out_cargo, cargo_count, meta, meta_size,
+                            out_truncated);
+}
+
+/* Writes to `ring` under pipe_buf->lock (which it drops while waiting for room). */
+static ssize_t ring_write_locked(struct pal_handle* handle, struct pal_handle_inner_pipe_buf* pipe_buf,
+                                 struct pal_pipe_ring* ring, const char* buf, size_t len) {
+    ssize_t bytes = 0;
+    /* must guarantee that PIPE_BUF_SIZE bytes are written atomically (for a blocking pipe) */
+    while (bytes < (ssize_t)len) {
+        if (!ring->open_read) {
+            /* the other end closed its reading side, this write must fail */
+            if (!bytes)
+                bytes = -PAL_ERROR_CONNFAILED_PIPE;
             goto out;
         }
 
-        if (handle->pipe.nonblocking) {
-            bytes = -PAL_ERROR_TRYAGAIN;
-            goto out;
+        while (ring->write_pos - ring->read_pos == PIPE_BUF_SIZE) {
+            if (!ring->open_read) {
+                if (!bytes)
+                    bytes = -PAL_ERROR_CONNFAILED_PIPE;
+                goto out;
+            }
+
+            if (handle->pipe.nonblocking) {
+                if (!bytes)
+                    bytes = -PAL_ERROR_TRYAGAIN;
+                goto out;
+            }
+
+            if (pipe_buf->poll_waiting)
+                sched_thread_wakeup(&g_streams_waiting_events_futex);
+            sched_thread_wakeup(&ring->reader_futex);
+            sched_thread_wait(&ring->writer_futex, &pipe_buf->lock);
         }
 
-        sched_thread_wait(&pipe_buf->reader_futex, &pipe_buf->lock);
-    }
+        /* limited by three factors: how much is requested by caller, how much left for writing in
+         * the ring, and how much left until wrap around in the ring */
+        size_t x = MIN(MIN(len - bytes, PIPE_BUF_SIZE - (ring->write_pos - ring->read_pos)),
+                       ALIGN_UP(ring->write_pos + 1, PIPE_BUF_SIZE) - ring->write_pos);
 
-    assert(pipe_buf->read_pos != pipe_buf->write_pos);
-    assert(pipe_buf->write_pos - pipe_buf->read_pos <= PIPE_BUF_SIZE);
+        memcpy(&ring->buf[ring->write_pos % PIPE_BUF_SIZE], &buf[bytes], x);
 
-    bytes = 0;
-    while (bytes < (ssize_t)len && pipe_buf->read_pos != pipe_buf->write_pos) {
-        /* limited by three factors: how much is requested by caller, how much is available in the
-         * pipe buf, and how much left until wrap around in the pipe buf */
-        size_t x = MIN(MIN(len - bytes, pipe_buf->write_pos - pipe_buf->read_pos),
-                       ALIGN_UP(pipe_buf->read_pos + 1, PIPE_BUF_SIZE) - pipe_buf->read_pos);
-
-        memcpy(&buf[bytes], &pipe_buf->buf[pipe_buf->read_pos % PIPE_BUF_SIZE], x);
-
-        pipe_buf->read_pos += x;
+        ring->write_pos += x;
         bytes += x;
     }
 
 out:
     if (pipe_buf->poll_waiting)
         sched_thread_wakeup(&g_streams_waiting_events_futex);
-    sched_thread_wakeup(&pipe_buf->writer_futex);
-    spinlock_unlock(&pipe_buf->lock);
+    sched_thread_wakeup(&ring->reader_futex);
     return bytes;
 }
 
-int64_t pal_common_pipe_write(struct pal_handle* handle, uint64_t offset, uint64_t len,
-                              const void* buffer) {
-    ssize_t bytes;
-    const char* buf = buffer;
-
+static int pipe_write_prepare(struct pal_handle* handle, uint64_t offset,
+                              struct pal_handle_inner_pipe_buf** out_pipe_buf) {
     if (offset)
         return -PAL_ERROR_INVAL;
 
@@ -316,48 +504,101 @@ int64_t pal_common_pipe_write(struct pal_handle* handle, uint64_t offset, uint64
 
     if (!pipe_buf)
         return -PAL_ERROR_NOTCONNECTION;
+    *out_pipe_buf = pipe_buf;
+    return 0;
+}
+
+int64_t pal_common_pipe_write(struct pal_handle* handle, uint64_t offset, uint64_t len,
+                              const void* buffer) {
+    struct pal_handle_inner_pipe_buf* pipe_buf;
+    int ret = pipe_write_prepare(handle, offset, &pipe_buf);
+    if (ret < 0)
+        return ret;
 
     spinlock_lock(&pipe_buf->lock);
-
-    /* must guarantee that PIPE_BUF_SIZE bytes are written atomically (for a blocking pipe) */
-    bytes = 0;
-    while (bytes < (ssize_t)len) {
-        while (pipe_buf->write_pos - pipe_buf->read_pos == PIPE_BUF_SIZE) {
-            if (!pipe_buf->readable) {
-                /* pipe was closed for read, this write must fail */
-                bytes = -PAL_ERROR_CONNFAILED_PIPE;
-                goto out;
-            }
-
-            if (handle->pipe.nonblocking) {
-                if (!bytes)
-                    bytes = -PAL_ERROR_TRYAGAIN;
-                goto out;
-            }
-
-            if (pipe_buf->poll_waiting)
-                sched_thread_wakeup(&g_streams_waiting_events_futex);
-            sched_thread_wakeup(&pipe_buf->reader_futex);
-            sched_thread_wait(&pipe_buf->writer_futex, &pipe_buf->lock);
-        }
-
-        /* limited by three factors: how much is requested by caller, how much left for writing in
-         * the pipe buf, and how much left until wrap around in the pipe buf */
-        size_t x = MIN(MIN(len - bytes, PIPE_BUF_SIZE - (pipe_buf->write_pos - pipe_buf->read_pos)),
-                       ALIGN_UP(pipe_buf->write_pos + 1, PIPE_BUF_SIZE) - pipe_buf->write_pos);
-
-        memcpy(&pipe_buf->buf[pipe_buf->write_pos % PIPE_BUF_SIZE], &buf[bytes], x);
-
-        pipe_buf->write_pos += x;
-        bytes += x;
-    }
-
-out:
-    if (pipe_buf->poll_waiting)
-        sched_thread_wakeup(&g_streams_waiting_events_futex);
-    sched_thread_wakeup(&pipe_buf->reader_futex);
+    struct pal_pipe_ring* ring = write_ring_of(pipe_buf, handle->hdr.type);
+    ssize_t bytes = ring_write_locked(handle, pipe_buf, ring, buffer, len);
     spinlock_unlock(&pipe_buf->lock);
     return bytes;
+}
+
+int64_t pal_common_pipe_writehandles(struct pal_handle* handle, const void* buffer, size_t len,
+                                     struct pal_handle** cargo, size_t cargo_count,
+                                     const void* meta, size_t meta_size) {
+    if (cargo_count == 0)
+        return pal_common_pipe_write(handle, 0, len, buffer);
+    if (cargo_count > PAL_STREAM_MAX_HANDLES)
+        return -PAL_ERROR_INVAL;
+#ifndef PIPE_HANDLES_SHARED
+    __UNUSED(meta);
+    __UNUSED(meta_size);
+    return -PAL_ERROR_NOTIMPLEMENTED;
+#else
+    for (size_t i = 0; i < cargo_count; i++) {
+        /* process endpoints, threads and events are per process (see vm_process_send_handle) */
+        if (cargo[i]->hdr.type == PAL_TYPE_PROCESS || cargo[i]->hdr.type == PAL_TYPE_THREAD
+                || cargo[i]->hdr.type == PAL_TYPE_EVENT)
+            return -PAL_ERROR_NOTIMPLEMENTED;
+    }
+
+    struct pal_handle_inner_pipe_buf* pipe_buf;
+    int ret = pipe_write_prepare(handle, 0, &pipe_buf);
+    if (ret < 0)
+        return ret;
+
+    struct pal_handle** cargo_copy = malloc(cargo_count * sizeof(*cargo_copy));
+    void* meta_copy = meta_size ? malloc(meta_size) : NULL;
+    if (!cargo_copy || (meta_size && !meta_copy)) {
+        free(cargo_copy);
+        free(meta_copy);
+        return -PAL_ERROR_NOMEM;
+    }
+    memcpy(cargo_copy, cargo, cargo_count * sizeof(*cargo_copy));
+    if (meta_size)
+        memcpy(meta_copy, meta, meta_size);
+
+    spinlock_lock(&pipe_buf->lock);
+    struct pal_pipe_ring* ring = write_ring_of(pipe_buf, handle->hdr.type);
+    ssize_t bytes;
+    while (ring->hq_tail - ring->hq_head == PIPE_RING_HANDLE_SLOTS) {
+        if (!ring->open_read) {
+            bytes = -PAL_ERROR_CONNFAILED_PIPE;
+            goto out_err;
+        }
+        if (handle->pipe.nonblocking) {
+            bytes = -PAL_ERROR_TRYAGAIN;
+            goto out_err;
+        }
+        sched_thread_wait(&ring->writer_futex, &pipe_buf->lock);
+    }
+    /* the receiver shares the handle objects: one reference each, as PalSendHandle gives */
+    for (size_t i = 0; i < cargo_count; i++)
+        __atomic_add_fetch(&cargo_copy[i]->share_refs, 1, __ATOMIC_ACQ_REL);
+    struct pal_pipe_ring_handles* e = &ring->hq[ring->hq_tail % PIPE_RING_HANDLE_SLOTS];
+    e->pos = ring->write_pos;
+    e->cargo = cargo_copy;
+    e->count = cargo_count;
+    e->meta = meta_copy;
+    e->meta_size = meta_size;
+    ring->hq_tail++;
+
+    bytes = ring_write_locked(handle, pipe_buf, ring, buffer, len);
+    if (bytes <= 0 && ring->hq_tail - ring->hq_head > 0
+            && &ring->hq[(ring->hq_tail - 1) % PIPE_RING_HANDLE_SLOTS] == e && e->cargo == cargo_copy) {
+        /* nothing was written: take the attachment back */
+        ring->hq_tail--;
+        ring_handles_drop(e, 0);
+        ring_handles_free(e);
+    }
+    spinlock_unlock(&pipe_buf->lock);
+    return bytes;
+
+out_err:
+    spinlock_unlock(&pipe_buf->lock);
+    free(cargo_copy);
+    free(meta_copy);
+    return bytes;
+#endif
 }
 
 void pal_common_pipe_destroy(struct pal_handle* handle) {
@@ -410,7 +651,7 @@ void pal_common_pipe_destroy(struct pal_handle* handle) {
         handle->pipe.closed_pending = true;
         pipe_buf = handle->pipe.pipe_buf;
         spinlock_unlock(&g_connecting_pipes_lock);
-        pipe_buf_put(pipe_buf); /* the client's reference; the server's stays */
+        pipe_buf_put(pipe_buf, PAL_TYPE_PIPE); /* the client's reference; the server's stays */
         return;
     }
 
@@ -424,13 +665,13 @@ void pal_common_pipe_destroy(struct pal_handle* handle) {
     LISTP_FOR_EACH_ENTRY_SAFE(orphan, tmp, &orphans, list) {
         LISTP_DEL(orphan, &orphans, list);
         /* drop the reference held for the accepting end: a live client sees the pipe closed */
-        pipe_buf_put(orphan->pipe.pipe_buf);
+        pipe_buf_put(orphan->pipe.pipe_buf, PAL_TYPE_PIPECLI);
         if (orphan->pipe.closed_pending)
             free(orphan);
     }
 
     if (pipe_buf)
-        pipe_buf_put(pipe_buf);
+        pipe_buf_put(pipe_buf, handle->hdr.type);
 
     free(handle);
 }
@@ -462,9 +703,11 @@ int pal_common_pipe_delete(struct pal_handle* handle, enum pal_delete_mode delet
     if (pipe_buf) {
         spinlock_lock(&pipe_buf->lock);
         if (delete_mode == PAL_DELETE_ALL || delete_mode == PAL_DELETE_READ)
-            pipe_buf->readable = false;
+            read_ring_of(pipe_buf, handle->hdr.type)->open_read = false;
         if (delete_mode == PAL_DELETE_ALL || delete_mode == PAL_DELETE_WRITE)
-            pipe_buf->writable = false;
+            write_ring_of(pipe_buf, handle->hdr.type)->open_write = false;
+        ring_wake_all(&pipe_buf->ring[0]);
+        ring_wake_all(&pipe_buf->ring[1]);
         if (pipe_buf->poll_waiting)
             sched_thread_wakeup(&g_streams_waiting_events_futex);
         spinlock_unlock(&pipe_buf->lock);
@@ -485,7 +728,8 @@ int pal_common_pipe_attrquerybyhdl(struct pal_handle* handle, PAL_STREAM_ATTR* a
 
     if (pipe_buf) {
         spinlock_lock(&pipe_buf->lock);
-        attr->pending_size = pipe_buf->write_pos - pipe_buf->read_pos;
+        struct pal_pipe_ring* ring = read_ring_of(pipe_buf, handle->hdr.type);
+        attr->pending_size = ring->write_pos - ring->read_pos;
         assert(attr->pending_size <= PIPE_BUF_SIZE);
         spinlock_unlock(&pipe_buf->lock);
     }

@@ -89,9 +89,18 @@ static int chroot_lookup(struct libos_dentry* dent) {
     char link_buf[PATH_MAX];
     size_t link_len = sizeof(link_buf) - 1;
     bool detect = dent->parent && !(dent->mount && dent->mount->host_symlinks);
-    ret = detect ? PalFileReadLink(uri, link_buf, &link_len) : -PAL_ERROR_INVAL;
+    /* the link is read on every mount with a parent: a named UNIX socket's node is a link with a
+     * marker target (UNIX_SOCKET_NODE_MARKER) and is reported as a socket wherever it is */
+    ret = dent->parent ? PalFileReadLink(uri, link_buf, &link_len) : -PAL_ERROR_INVAL;
     if (ret == 0) {
         link_buf[link_len] = '\0';
+        mode_t sock_perm;
+        if (unix_socket_node_perm(link_buf, &sock_perm)) {
+            ret = chroot_setup_dentry(dent, S_IFSOCK, sock_perm, /*size=*/0);
+            goto out;
+        }
+    }
+    if (ret == 0 && detect) {
         bool same_dir = link_buf[0] != '/' && strcmp(link_buf, "..") != 0 &&
                         strncmp(link_buf, "../", 3) != 0 && !strstr(link_buf, "/../") &&
                         !(link_len >= 3 && !strcmp(link_buf + link_len - 3, "/.."));
@@ -422,7 +431,8 @@ static int chroot_unlink(struct libos_dentry* dent) {
 
     int ret;
 
-    if (dent->inode->type == S_IFLNK) {
+    if (dent->inode->type == S_IFLNK || dent->inode->type == S_IFSOCK) {
+        /* a link, or a named UNIX socket's node (a marker link on the host): removed by path */
         char* uri = NULL;
         ret = dentry_uri(dent, S_IFREG, &uri);
         if (ret < 0)

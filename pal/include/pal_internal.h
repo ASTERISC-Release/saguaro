@@ -48,6 +48,13 @@ struct handle_ops {
     int64_t (*read)(PAL_HANDLE handle, uint64_t offset, uint64_t count, void* buffer);
     int64_t (*write)(PAL_HANDLE handle, uint64_t offset, uint64_t count, const void* buffer);
 
+    /* 'writehandles' and 'readhandles' are used by PalStreamWriteWithHandles and
+     * PalStreamReadWithHandles (pipes only; NULL where not supported). */
+    int64_t (*writehandles)(PAL_HANDLE handle, const void* buffer, size_t count, PAL_HANDLE* cargo,
+                            size_t cargo_count, const void* meta, size_t meta_size);
+    int64_t (*readhandles)(PAL_HANDLE handle, void* buffer, size_t count, PAL_HANDLE* out_cargo,
+                           size_t* cargo_count, void* meta, size_t* meta_size, bool* out_truncated);
+
     /* 'delete' is used by PalStreamDelete: for files and dirs it corresponds to unlinking, for
      * sockets it corresponds to shutting down a socket connection. */
     int (*delete)(PAL_HANDLE handle, enum pal_delete_mode delete_mode);

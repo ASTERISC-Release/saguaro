@@ -116,7 +116,7 @@ struct libos_sock_ops {
      */
     int (*recv)(struct libos_handle* handle, struct iovec* iov, size_t iov_len, void* msg_control,
                 size_t* msg_controllen_ptr, size_t* out_total_size, void* addr, size_t* addrlen_ptr,
-                bool force_nonblocking);
+                bool force_nonblocking, bool cmsg_cloexec);
     
     int (*register_shmem)(struct libos_handle* handle, void *region);
 };

@@ -71,6 +71,9 @@ struct libos_mem_entry {
     /* Dummy memory entry, used just for bookkeeping (i.e. no actual memory follows such entry).
      * See `BEGIN_CP_FUNC(vma)` in `libos_vma.c` for more details. */
     bool dummy;
+    /* Anonymous memory that was never writable (a reservation): no content follows, the child
+     * allocates the range demand-zero with `prot`. See `BEGIN_CP_FUNC(vma)`. */
+    bool zero;
 };
 
 struct libos_palhdl_entry {

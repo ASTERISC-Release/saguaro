@@ -755,7 +755,8 @@ static int send(struct libos_handle* handle, struct iovec* iov, size_t iov_len, 
 
 static int recv(struct libos_handle* handle, struct iovec* iov, size_t iov_len, void* msg_control,
                 size_t* msg_controllen_ptr, size_t* out_total_size, void* addr, size_t* addrlen_ptr,
-                bool force_nonblocking) {
+                bool force_nonblocking, bool cmsg_cloexec) {
+    __UNUSED(cmsg_cloexec); /* no fds come over IP sockets */
     assert(handle->type == TYPE_SOCK);
 
     switch (handle->info.sock.type) {

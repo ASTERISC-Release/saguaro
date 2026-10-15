@@ -654,6 +654,16 @@ void dump_dcache(struct libos_dentry* dent);
  */
 int check_permissions(struct libos_dentry* dent, mode_t mask);
 
+/*
+ * A named UNIX socket leaves a node at its path (`bind` creates it, `unlink` removes it, `connect`
+ * and `stat` find it from any process of the session). Gramine cannot create a real socket node on
+ * a host mount, so the node is a symbolic link whose target is this marker followed by the
+ * permission bits in octal (`gramine-unix-socket:0755`); the file systems report such a link as
+ * `S_IFSOCK`. See `libos/src/net/unix.c`.
+ */
+#define UNIX_SOCKET_NODE_MARKER "gramine-unix-socket:"
+bool unix_socket_node_perm(const char* link_target, mode_t* out_perm);
+
 /* An extended-attribute store kept in a LibOS inode (for tmpfs), same contract as the `xattr`
  * hook; the store is freed with the inode. */
 struct libos_xattr_entry;

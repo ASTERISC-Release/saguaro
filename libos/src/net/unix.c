@@ -9,18 +9,26 @@
  */
 
 /*
- * TODO: Currently pathname UNIX domain sockets are not visible on the Gramine filesystem (they
- * do not have a corresponding dentry). This shouldn't be hard to implement, but leaving this as
- * a todo for now - nothing seemed to require it, at least so far.
+ * Pathname UNIX domain sockets are visible on the Gramine filesystem: `bind` creates a node at the
+ * path (a marker link that the file systems report as `S_IFSOCK`, see UNIX_SOCKET_NODE_MARKER in
+ * `libos_fs.h`), `connect` and `stat` find it from any process of the session on a shared mount,
+ * `unlink` removes it. The PAL pipe behind a named socket is named after the canonical absolute
+ * path of the node, so relative names, the current directory and ".." resolve as on Linux.
+ * Abstract sockets (a leading NUL byte) have no node and are named after their bytes. (Formerly
+ * pathname sockets had no dentry and were named after the bytes of the path as given.)
  */
 
 #include "crypto.h"
 #include "hex.h"
 #include "libos_fs.h"
+#include "libos_handle.h"
 #include "libos_internal.h"
+#include "libos_process.h"
 #include "libos_socket.h"
 #include "linux_socket.h"
 #include "pal.h"
+#include "perm.h"
+#include "stat.h"
 #include "toml_utils.h"
 
 /*
@@ -210,7 +218,135 @@ static int host_unix_connect(struct libos_handle* handle, const char* path, size
  *                                terminated string.
  * \param         sock_name_size  Size of \p sock_name.
  */
-static int unaddr_to_sockname(void* addr, size_t* addrlen_ptr, char* sock_name,
+bool unix_socket_node_perm(const char* link_target, mode_t* out_perm) {
+    if (!strstartswith(link_target, UNIX_SOCKET_NODE_MARKER))
+        return false;
+    const char* digits = link_target + static_strlen(UNIX_SOCKET_NODE_MARKER);
+    mode_t perm = 0;
+    for (; *digits; digits++) {
+        if (*digits < '0' || *digits > '7')
+            return false;
+        perm = perm * 8 + (*digits - '0');
+    }
+    *out_perm = perm & 07777;
+    return true;
+}
+
+/* "<instance id>/<SHA-256 of name>": the name of the PAL pipe behind a UNIX socket */
+static int sockname_from_bytes(const char* bytes, size_t len, char* sock_name,
+                               size_t sock_name_size) {
+    uint8_t hash[32];
+    LIB_SHA256_CONTEXT hash_context;
+    int ret = lib_SHA256Init(&hash_context);
+    if (ret < 0) {
+        return -ENOMEM;
+    }
+    ret = lib_SHA256Update(&hash_context, (const uint8_t*)bytes, len);
+    if (ret < 0) {
+        return -ENOMEM;
+    }
+    ret = lib_SHA256Final(&hash_context, hash);
+    if (ret < 0) {
+        return -ENOMEM;
+    }
+
+    char hash_str[64 + 1] = {0};
+    bytes2hex(hash, sizeof(hash), hash_str, sizeof(hash_str));
+
+    size_t out_len = snprintf(sock_name, sock_name_size, "%lu/%s", g_pal_public_state->instance_id,
+                              hash_str);
+    if (out_len >= sock_name_size)
+        return -ERANGE;
+    return 0;
+}
+
+/*
+ * The node of a named UNIX socket. With `create` (bind): the path must not exist (EADDRINUSE), its
+ * parent must be writable, and the node is created; without (connect): the path must exist and be
+ * a socket node (ENOENT, ECONNREFUSED as on Linux). On success `sock_name` names the PAL pipe
+ * after the canonical absolute path.
+ */
+static int named_socket_node(const char* path, bool create, char* sock_name,
+                             size_t sock_name_size) {
+    struct libos_dentry* dent = NULL;
+    char* abs_path = NULL;
+    size_t abs_size = 0;
+    int ret;
+
+    lock(&g_dcache_lock);
+    ret = path_lookupat(/*start=*/NULL, path, LOOKUP_NO_FOLLOW | (create ? LOOKUP_CREATE : 0),
+                        &dent);
+    if (ret < 0)
+        goto out;
+    if (create) {
+        if (dent->inode || !dent->parent) {
+            ret = -EADDRINUSE;
+            goto out;
+        }
+        ret = check_permissions(dent->parent, MAY_WRITE | MAY_EXEC);
+        if (ret < 0)
+            goto out;
+        struct libos_d_ops* d_ops = dent->mount->fs->d_ops;
+        if (!d_ops || !d_ops->symlink) {
+            ret = -EOPNOTSUPP;
+            goto out;
+        }
+        mode_t perm = PERM_rwxrwxrwx & ~g_process.umask;
+        char target[static_strlen(UNIX_SOCKET_NODE_MARKER) + 8];
+        snprintf(target, sizeof(target), UNIX_SOCKET_NODE_MARKER "%04o", perm);
+        ret = d_ops->symlink(target, dent);
+        if (ret < 0) {
+            if (ret == -EEXIST)
+                ret = -EADDRINUSE;
+            goto out;
+        }
+        /* from now on the node is a socket; the link target is only its on-host encoding */
+        struct libos_inode* inode = dent->inode;
+        lock(&inode->lock);
+        inode->type = S_IFSOCK;
+        inode->perm = perm;
+        inode->size = 0;
+        free(inode->data);
+        inode->data = NULL;
+        unlock(&inode->lock);
+    } else {
+        assert(dent->inode);
+        if (dent->inode->type != S_IFSOCK) {
+            ret = -ECONNREFUSED;
+            goto out;
+        }
+    }
+    ret = dentry_abs_path(dent, &abs_path, &abs_size);
+    if (ret < 0)
+        goto out;
+    ret = sockname_from_bytes(abs_path, strlen(abs_path), sock_name, sock_name_size);
+out:
+    unlock(&g_dcache_lock);
+    if (dent)
+        put_dentry(dent);
+    free(abs_path);
+    return ret;
+}
+
+/* removes the node that `named_socket_node(..., create=true, ...)` made (bind failed after it) */
+static void named_socket_node_remove(const char* path) {
+    struct libos_dentry* dent = NULL;
+    lock(&g_dcache_lock);
+    int ret = path_lookupat(/*start=*/NULL, path, LOOKUP_NO_FOLLOW, &dent);
+    if (ret == 0 && dent->inode && dent->inode->type == S_IFSOCK && dent->mount->fs->d_ops &&
+            dent->mount->fs->d_ops->unlink) {
+        ret = dent->mount->fs->d_ops->unlink(dent);
+        if (ret == 0) {
+            put_inode(dent->inode);
+            dent->inode = NULL;
+        }
+    }
+    unlock(&g_dcache_lock);
+    if (dent)
+        put_dentry(dent);
+}
+
+static int unaddr_to_sockname(void* addr, size_t* addrlen_ptr, bool create, char* sock_name,
                               size_t sock_name_size) {
     if (*addrlen_ptr > sizeof(struct sockaddr_un)) {
         /* Cap the address at the maximal possible size - rest of the input buffer (if any) is
@@ -231,34 +367,28 @@ static int unaddr_to_sockname(void* addr, size_t* addrlen_ptr, char* sock_name,
     const char* path = (char*)addr + offsetof(struct sockaddr_un, sun_path);
     size_t pathlen = *addrlen_ptr - offsetof(struct sockaddr_un, sun_path);
     assert(pathlen >= 1);
-    if (path[0]) {
-        /* Named UNIX socket. */
-        pathlen = strnlen(path, pathlen);
+    if (!path[0]) {
+        /* Abstract UNIX socket: named after its bytes, no node. */
+        return sockname_from_bytes(path, pathlen, sock_name, sock_name_size);
     }
 
-    uint8_t hash[32];
-    LIB_SHA256_CONTEXT hash_context;
-    int ret = lib_SHA256Init(&hash_context);
-    if (ret < 0) {
+    /* Named UNIX socket: named after the canonical path of its node. */
+    pathlen = strnlen(path, pathlen);
+    char* path_copy = alloc_substr(path, pathlen);
+    if (!path_copy)
         return -ENOMEM;
-    }
-    ret = lib_SHA256Update(&hash_context, (const uint8_t*)path, pathlen);
-    if (ret < 0) {
-        return -ENOMEM;
-    }
-    ret = lib_SHA256Final(&hash_context, hash);
-    if (ret < 0) {
-        return -ENOMEM;
-    }
+    int ret = named_socket_node(path_copy, create, sock_name, sock_name_size);
+    free(path_copy);
+    return ret;
+}
 
-    char hash_str[64 + 1] = {0};
-    bytes2hex(hash, sizeof(hash), hash_str, sizeof(hash_str));
-
-    size_t len = snprintf(sock_name, sock_name_size, "%lu/%s", g_pal_public_state->instance_id,
-                          hash_str);
-    if (len >= sock_name_size)
-        return -ERANGE;
-    return 0;
+/* the node's path of a named socket address, NUL-terminated, or NULL for an abstract one */
+static char* unaddr_node_path(void* addr, size_t addrlen) {
+    const char* path = (char*)addr + offsetof(struct sockaddr_un, sun_path);
+    size_t pathlen = addrlen - offsetof(struct sockaddr_un, sun_path);
+    if (!path[0])
+        return NULL;
+    return alloc_substr(path, strnlen(path, pathlen));
 }
 
 static void fixup_sockaddr_un_path(struct sockaddr_storage* ss_addr, size_t* addrlen_ptr) {
@@ -310,7 +440,7 @@ static int bind(struct libos_handle* handle, void* addr, size_t addrlen) {
     assert(locked(&sock->lock));
 
     char pipe_name[static_strlen(URI_PREFIX_PIPE_SRV) + 96 + 1] = URI_PREFIX_PIPE_SRV;
-    int ret = unaddr_to_sockname(addr, &addrlen,
+    int ret = unaddr_to_sockname(addr, &addrlen, /*create=*/true,
                                  pipe_name + static_strlen(URI_PREFIX_PIPE_SRV),
                                  sizeof(pipe_name) - static_strlen(URI_PREFIX_PIPE_SRV));
     if (ret < 0) {
@@ -327,6 +457,11 @@ static int bind(struct libos_handle* handle, void* addr, size_t addrlen) {
     ret = PalStreamOpen(pipe_name, PAL_ACCESS_RDWR, /*share_flags=*/0, PAL_CREATE_IGNORED, options,
                         &pal_handle);
     if (ret < 0) {
+        char* node_path = unaddr_node_path(addr, addrlen);
+        if (node_path) {
+            named_socket_node_remove(node_path);
+            free(node_path);
+        }
         return (ret == -PAL_ERROR_STREAMEXIST) ? -EADDRINUSE : pal_to_unix_errno(ret);
     }
 
@@ -406,32 +541,43 @@ static int connect(struct libos_handle* handle, void* addr, size_t addrlen, bool
         return -EINVAL;
     }
 
-    char pipe_name[static_strlen(URI_PREFIX_PIPE) + 96 + 1] = URI_PREFIX_PIPE;
-    int ret = unaddr_to_sockname(addr, &addrlen,
-                                 pipe_name + static_strlen(URI_PREFIX_PIPE),
-                                 sizeof(pipe_name) - static_strlen(URI_PREFIX_PIPE));
-    if (ret < 0) {
-        return ret;
-    }
-
     lock(&handle->lock);
     /* `setflags` in "fs/socket/fs.c" is the only way to change this flag and it takes `sock->lock`,
      * so using `options` after releasing the lock below is race-free. */
     pal_stream_options_t options = handle->flags & O_NONBLOCK ? PAL_OPTION_NONBLOCK : 0;
     unlock(&handle->lock);
 
+    int ret;
     PAL_HANDLE pal_handle = NULL;
+    if (addrlen > sizeof(struct sockaddr_un))
+        addrlen = sizeof(struct sockaddr_un);
+    if (addrlen < offsetof(struct sockaddr_un, sun_path) + 1)
+        return -EINVAL;
+    unsigned short family;
+    memcpy(&family, (char*)addr + offsetof(struct sockaddr_un, sun_family), sizeof(family));
+    if (family != AF_UNIX)
+        return -EAFNOSUPPORT;
     const char* path = (char*)addr + offsetof(struct sockaddr_un, sun_path);
     size_t pathlen = addrlen - offsetof(struct sockaddr_un, sun_path);
     if (path[0] && is_host_unix_socket(path, strnlen(path, pathlen))) {
+        /* a host socket (manifest list): no node of ours, the host resolves the path */
         ret = host_unix_connect(handle, path, strnlen(path, pathlen), options, &pal_handle);
         if (ret < 0)
             return ret;
+        addrlen = offsetof(struct sockaddr_un, sun_path) + strnlen(path, pathlen) + 1;
     } else {
+        char pipe_name[static_strlen(URI_PREFIX_PIPE) + 96 + 1] = URI_PREFIX_PIPE;
+        ret = unaddr_to_sockname(addr, &addrlen, /*create=*/false,
+                                 pipe_name + static_strlen(URI_PREFIX_PIPE),
+                                 sizeof(pipe_name) - static_strlen(URI_PREFIX_PIPE));
+        if (ret < 0) {
+            return ret;
+        }
         ret = PalStreamOpen(pipe_name, PAL_ACCESS_RDWR, /*share_flags=*/0, PAL_CREATE_IGNORED,
                             options, &pal_handle);
         if (ret < 0) {
-            return (ret == -PAL_ERROR_CONNFAILED) ? -ENOENT : pal_to_unix_errno(ret);
+            /* the node exists but nobody listens behind it (or an abstract name is unbound) */
+            return (ret == -PAL_ERROR_CONNFAILED) ? -ECONNREFUSED : pal_to_unix_errno(ret);
         }
     }
 
@@ -594,6 +740,436 @@ again:
     return ret;
 }
 
+/*
+ * SCM_RIGHTS between Gramine processes. The PAL handle travels with the data
+ * (PalStreamWriteWithHandles); the LibOS side of the handle goes as the blob next to it: the kind,
+ * the open flags and position, and what the kind needs to rebuild a `struct libos_handle` in the
+ * receiver (the path of a file, the address state of a socket, the eventfd flags). The receiver
+ * gets a copy of the open file description (Gramine does not share offsets between processes, as
+ * after fork). Supported: files, directories and devices of chroot mounts, pipes, sockets with a
+ * PAL handle, host eventfds, host fds; others give EOPNOTSUPP.
+ */
+#define FDPASS_MAGIC 0x53444650u /* "PFDS" */
+
+enum fdpass_kind { FDPASS_FILE = 1, FDPASS_PIPE, FDPASS_SOCK, FDPASS_EVENTFD, FDPASS_HOSTFD };
+
+struct fdpass_hdr {
+    uint32_t magic;
+    uint32_t count;
+};
+
+struct fdpass_entry {
+    uint32_t kind;
+    int flags;
+    int acc_mode;
+    uint64_t pos;
+    /* FDPASS_SOCK */
+    int domain, type, protocol;
+    int state;
+    bool can_be_read, can_be_written;
+    struct sockaddr_storage local_addr, remote_addr;
+    size_t local_addrlen, remote_addrlen;
+    /* FDPASS_EVENTFD */
+    bool is_semaphore;
+    /* FDPASS_PIPE */
+    struct libos_pipe_handle pipe;
+    /* FDPASS_FILE: the absolute path follows, NUL-terminated */
+    uint32_t path_len;
+};
+
+/* describes `hdl` into `*cur` (advancing it, bounded by `end`); returns its PAL handle */
+static int fdpass_describe(struct libos_handle* hdl, char** cur, char* end, PAL_HANDLE* out_pal) {
+    struct fdpass_entry e = {0};
+    PAL_HANDLE pal = NULL;
+    char* path = NULL;
+    size_t path_size = 0;
+    int ret;
+
+    lock(&hdl->lock);
+    e.flags = hdl->flags;
+    e.acc_mode = hdl->acc_mode;
+    unlock(&hdl->lock);
+    lock(&hdl->pos_lock);
+    e.pos = hdl->pos;
+    unlock(&hdl->pos_lock);
+
+    switch (hdl->type) {
+        case TYPE_CHROOT:
+        case TYPE_DEV:
+            /* a file of a chroot mount, or a device node (/dev/null, the console): by path */
+            if (!hdl->dentry || !hdl->pal_handle)
+                return -EOPNOTSUPP;
+            lock(&g_dcache_lock);
+            ret = dentry_abs_path(hdl->dentry, &path, &path_size);
+            unlock(&g_dcache_lock);
+            if (ret < 0)
+                return ret;
+            e.kind = FDPASS_FILE;
+            e.path_len = strlen(path) + 1;
+            pal = hdl->pal_handle;
+            break;
+        case TYPE_PIPE:
+            if (!hdl->pal_handle)
+                return -EOPNOTSUPP;
+            e.kind = FDPASS_PIPE;
+            e.pipe = hdl->info.pipe;
+            pal = hdl->pal_handle;
+            break;
+        case TYPE_SOCK: {
+            struct libos_sock_handle* sock = &hdl->info.sock;
+            pal = __atomic_load_n(&sock->pal_handle, __ATOMIC_ACQUIRE);
+            if (!pal || sock->host_unix)
+                return -EOPNOTSUPP;
+            e.kind = FDPASS_SOCK;
+            lock(&sock->lock);
+            e.domain = sock->domain;
+            e.type = sock->type;
+            e.protocol = sock->protocol;
+            e.state = sock->state;
+            e.can_be_read = sock->can_be_read;
+            e.can_be_written = sock->can_be_written;
+            e.local_addr = sock->local_addr;
+            e.local_addrlen = sock->local_addrlen;
+            e.remote_addr = sock->remote_addr;
+            e.remote_addrlen = sock->remote_addrlen;
+            unlock(&sock->lock);
+            break;
+        }
+        case TYPE_EVENTFD:
+            /* only the host eventfd (sys.insecure__allow_eventfd) lives in its PAL handle; the
+             * secure one keeps its count in the LibOS of one process */
+            if (!hdl->pal_handle || !g_eventfd_passthrough_mode)
+                return -EOPNOTSUPP;
+            e.kind = FDPASS_EVENTFD;
+            e.is_semaphore = hdl->info.eventfd.is_semaphore;
+            pal = hdl->pal_handle;
+            break;
+        case TYPE_HOSTFD:
+            if (!hdl->pal_handle)
+                return -EOPNOTSUPP;
+            e.kind = FDPASS_HOSTFD;
+            pal = hdl->pal_handle;
+            break;
+        default:
+            log_warning("sendmsg: an fd of a handle of type %d cannot be passed to another process",
+                        hdl->type);
+            return -EOPNOTSUPP;
+    }
+    if ((size_t)(end - *cur) < sizeof(e) + e.path_len) {
+        free(path);
+        return -EMSGSIZE;
+    }
+    memcpy(*cur, &e, sizeof(e));
+    *cur += sizeof(e);
+    if (e.path_len) {
+        memcpy(*cur, path, e.path_len);
+        *cur += e.path_len;
+    }
+    free(path);
+    *out_pal = pal;
+    return 0;
+}
+
+/* a chroot file handle for a file that has no path in the receiver (unlinked, or anonymous):
+ * a dentry outside the tree named after the last path component, on the mount of the nearest
+ * directory that still exists, with an inode from the PAL handle's attributes */
+static int fdpass_rebuild_orphan_file(struct libos_handle* hdl, const char* path, PAL_HANDLE pal) {
+    PAL_STREAM_ATTR attr;
+    int ret = PalStreamAttributesQueryByHandle(pal, &attr);
+    if (ret < 0)
+        return pal_to_unix_errno(ret);
+    mode_t type;
+    switch (attr.handle_type) {
+        case PAL_TYPE_FILE: type = S_IFREG; break;
+        case PAL_TYPE_DEV:  type = S_IFCHR; break;
+        default: return -EOPNOTSUPP;
+    }
+
+    const char* base = path;
+    for (const char* c = path; *c; c++)
+        if (*c == '/')
+            base = c + 1;
+    char* dir_path = alloc_substr(path, base - path);
+    if (!dir_path)
+        return -ENOMEM;
+
+    lock(&g_dcache_lock);
+    struct libos_dentry* dir = NULL;
+    struct libos_mount* mount = g_dentry_root->mount;
+    char* probe = dir_path;
+    while (*probe) {
+        if (path_lookupat(/*start=*/NULL, probe, LOOKUP_DIRECTORY, &dir) == 0) {
+            mount = dir->mount;
+            put_dentry(dir);
+            break;
+        }
+        char* slash = NULL;
+        for (char* c = probe; *c; c++)
+            if (*c == '/')
+                slash = c;
+        if (!slash || slash == probe)
+            break;
+        *slash = '\0';
+    }
+    struct libos_dentry* dent = get_new_dentry(mount, /*parent=*/NULL, base, strlen(base));
+    struct libos_inode* inode = dent ? get_new_inode(mount, type, attr.share_flags) : NULL;
+    if (!dent || !inode) {
+        if (dent)
+            put_dentry(dent);
+        unlock(&g_dcache_lock);
+        free(dir_path);
+        return -ENOMEM;
+    }
+    inode->size = attr.pending_size;
+    dent->inode = inode;
+    get_inode(inode);
+    hdl->dentry = dent; /* the new dentry's reference */
+    hdl->inode = inode;
+    hdl->fs = inode->fs;
+    unlock(&g_dcache_lock);
+    free(dir_path);
+
+    hdl->type = TYPE_CHROOT;
+    hdl->seekable = true;
+    hdl->pal_handle = pal;
+    return 0;
+}
+
+/* rebuilds the handle of a description; takes over `pal` (destroyed on failure) */
+static int fdpass_rebuild(const struct fdpass_entry* e, const char* path, PAL_HANDLE pal,
+                          struct libos_handle** out_hdl) {
+    struct libos_handle* hdl = NULL;
+    int ret;
+    switch (e->kind) {
+        case FDPASS_FILE: {
+            hdl = get_new_handle();
+            if (!hdl) {
+                ret = -ENOMEM;
+                goto fail;
+            }
+            /* the receiver's own dentry and inode for the path; the PAL handle is the sender's
+             * (the same host file) */
+            ret = open_namei(hdl, /*start=*/NULL, path,
+                             e->flags & ~(O_CREAT | O_EXCL | O_TRUNC | O_NOFOLLOW), /*mode=*/0,
+                             /*found=*/NULL);
+            if (ret == -ENOENT || ret == -ENXIO) {
+                /* no such path any more (an unlinked temporary file, a memfd: what wineserver
+                 * passes for its mappings): a dentry of its own, outside the tree, over the
+                 * sender's handle */
+                ret = fdpass_rebuild_orphan_file(hdl, path, pal);
+                if (ret < 0)
+                    goto fail;
+                pal = NULL;
+                break;
+            }
+            if (ret < 0)
+                goto fail;
+            if (hdl->pal_handle && hdl->pal_handle != pal)
+                PalObjectDestroy(hdl->pal_handle);
+            hdl->pal_handle = pal;
+            pal = NULL;
+            break;
+        }
+        case FDPASS_PIPE:
+            hdl = get_new_handle();
+            if (!hdl) {
+                ret = -ENOMEM;
+                goto fail;
+            }
+            hdl->type = TYPE_PIPE;
+            hdl->fs = &pipe_builtin_fs;
+            hdl->info.pipe = e->pipe;
+            hdl->info.pipe.peer_fd = -1;
+            hdl->pal_handle = pal;
+            pal = NULL;
+            break;
+        case FDPASS_SOCK: {
+            hdl = get_new_socket_handle(e->domain, e->type, e->protocol,
+                                        /*is_nonblocking=*/!!(e->flags & O_NONBLOCK));
+            if (!hdl) {
+                ret = -ENOMEM;
+                goto fail;
+            }
+            struct libos_sock_handle* sock = &hdl->info.sock;
+            lock(&sock->lock);
+            sock->state = e->state;
+            sock->can_be_read = e->can_be_read;
+            sock->can_be_written = e->can_be_written;
+            sock->local_addr = e->local_addr;
+            sock->local_addrlen = e->local_addrlen;
+            sock->remote_addr = e->remote_addr;
+            sock->remote_addrlen = e->remote_addrlen;
+            __atomic_store_n(&sock->pal_handle, pal, __ATOMIC_RELEASE);
+            unlock(&sock->lock);
+            pal = NULL;
+            break;
+        }
+        case FDPASS_EVENTFD:
+            hdl = get_new_handle();
+            if (!hdl) {
+                ret = -ENOMEM;
+                goto fail;
+            }
+            if (!g_eventfd_passthrough_mode) {
+                ret = -EOPNOTSUPP;
+                goto fail;
+            }
+            hdl->type = TYPE_EVENTFD;
+            hdl->fs = &eventfd_builtin_fs;
+            hdl->info.eventfd.is_semaphore = e->is_semaphore;
+            hdl->info.eventfd.broken_in_child = false;
+            spinlock_init(&hdl->info.eventfd.lock);
+            hdl->pal_handle = pal;
+            pal = NULL;
+            break;
+        case FDPASS_HOSTFD:
+            hdl = get_new_handle();
+            if (!hdl) {
+                ret = -ENOMEM;
+                goto fail;
+            }
+            hdl->type = TYPE_HOSTFD;
+            hdl->fs = &hostfd_builtin_fs;
+            hdl->pal_handle = pal;
+            pal = NULL;
+            break;
+        default:
+            ret = -EOPNOTSUPP;
+            goto fail;
+    }
+    lock(&hdl->lock);
+    hdl->flags = e->flags;
+    hdl->acc_mode = e->acc_mode;
+    unlock(&hdl->lock);
+    lock(&hdl->pos_lock);
+    hdl->pos = e->pos;
+    unlock(&hdl->pos_lock);
+    *out_hdl = hdl;
+    return 0;
+fail:
+    if (hdl)
+        put_handle(hdl);
+    if (pal)
+        PalObjectDestroy(pal);
+    return ret;
+}
+
+/* installs the received handles as fds and fills the user's SCM_RIGHTS control message */
+static void fdpass_deliver(PAL_HANDLE* cargo, size_t cargo_count, const char* meta,
+                           size_t meta_size, void* msg_control, size_t* msg_controllen_ptr,
+                           bool cmsg_cloexec) {
+    size_t space = (msg_control && msg_controllen_ptr) ? *msg_controllen_ptr : 0;
+    size_t max_fds = space >= CMSG_LEN(sizeof(int)) ? (space - CMSG_LEN(0)) / sizeof(int) : 0;
+    int fds[PAL_STREAM_MAX_HANDLES];
+    size_t installed = 0;
+    size_t used = 0;
+
+    const char* cur = meta;
+    const char* end = meta + meta_size;
+    struct fdpass_hdr hdr = {0};
+    if (meta_size >= sizeof(hdr))
+        memcpy(&hdr, cur, sizeof(hdr));
+    cur += sizeof(hdr);
+    if (hdr.magic != FDPASS_MAGIC || hdr.count != cargo_count) {
+        log_warning("recvmsg: %zu handle(s) came without a usable description; dropped",
+                    cargo_count);
+        hdr.count = 0;
+    }
+    for (size_t i = 0; i < hdr.count && (size_t)(end - cur) >= sizeof(struct fdpass_entry); i++) {
+        struct fdpass_entry e;
+        memcpy(&e, cur, sizeof(e));
+        cur += sizeof(e);
+        const char* path = NULL;
+        if (e.path_len) {
+            if ((size_t)(end - cur) < e.path_len)
+                break;
+            path = cur;
+            cur += e.path_len;
+        }
+        used = i + 1;
+        if (installed >= max_fds) {
+            /* no room in the control message: Linux sets MSG_CTRUNC and closes the surplus */
+            PalObjectDestroy(cargo[i]);
+            continue;
+        }
+        struct libos_handle* hdl = NULL;
+        int ret = fdpass_rebuild(&e, path, cargo[i], &hdl);
+        if (ret < 0) {
+            log_warning("recvmsg: cannot rebuild a passed handle of kind %u: %s", e.kind,
+                        unix_strerror(ret));
+            continue;
+        }
+        int fd = set_new_fd_handle(hdl, cmsg_cloexec ? FD_CLOEXEC : 0, NULL);
+        put_handle(hdl);
+        if (fd < 0)
+            continue;
+        fds[installed++] = fd;
+    }
+    for (size_t i = used; i < cargo_count; i++)
+        PalObjectDestroy(cargo[i]);
+
+    if (msg_control && msg_controllen_ptr) {
+        if (installed) {
+            struct cmsghdr* cmsg = (struct cmsghdr*)msg_control;
+            cmsg->cmsg_len = CMSG_LEN(installed * sizeof(int));
+            cmsg->cmsg_level = SOL_SOCKET;
+            cmsg->cmsg_type = SCM_RIGHTS;
+            memcpy(CMSG_DATA(cmsg), fds, installed * sizeof(int));
+            *msg_controllen_ptr = MIN(CMSG_SPACE(installed * sizeof(int)), space);
+        } else {
+            *msg_controllen_ptr = 0;
+        }
+    }
+}
+
+/* the data plus the described handles through the PAL; honours the nonblocking state like
+ * maybe_force_nonblocking_wrapper() (one attempt, EAGAIN surfaces as on Linux) */
+static int send_with_handles(bool force_nonblocking, struct libos_handle* handle,
+                             PAL_HANDLE pal_handle, void* buf, size_t* size,
+                             struct libos_handle** hdls, size_t count) {
+    size_t meta_cap = sizeof(struct fdpass_hdr) + count * (sizeof(struct fdpass_entry) + PATH_MAX);
+    char* meta = malloc(meta_cap);
+    if (!meta)
+        return -ENOMEM;
+    PAL_HANDLE cargo[PAL_STREAM_MAX_HANDLES];
+    char* cur = meta + sizeof(struct fdpass_hdr);
+    int ret;
+    for (size_t i = 0; i < count; i++) {
+        ret = fdpass_describe(hdls[i], &cur, meta + meta_cap, &cargo[i]);
+        if (ret < 0)
+            goto out;
+    }
+    struct fdpass_hdr hdr = {.magic = FDPASS_MAGIC, .count = count};
+    memcpy(meta, &hdr, sizeof(hdr));
+
+    bool nonblocking = force_nonblocking;
+    if (!nonblocking) {
+        lock(&handle->lock);
+        nonblocking = !!(handle->flags & O_NONBLOCK);
+        unlock(&handle->lock);
+    }
+    PAL_STREAM_ATTR attr;
+    bool toggled = false;
+    if (nonblocking) {
+        /* the PAL handle may be blocking while a forced-nonblocking send is asked for */
+        ret = PalStreamAttributesQueryByHandle(pal_handle, &attr);
+        if (ret == 0 && !attr.nonblocking) {
+            attr.nonblocking = true;
+            toggled = PalStreamAttributesSetByHandle(pal_handle, &attr) == 0;
+        }
+    }
+    ret = PalStreamWriteWithHandles(pal_handle, buf, size, cargo, count, meta, cur - meta);
+    if (toggled) {
+        attr.nonblocking = false;
+        (void)PalStreamAttributesSetByHandle(pal_handle, &attr);
+    }
+    if (ret < 0)
+        ret = ret == -PAL_ERROR_NOTIMPLEMENTED ? -ENOSYS : pal_to_unix_errno(ret);
+out:
+    free(meta);
+    return ret;
+}
+
 static int send(struct libos_handle* handle, struct iovec* iov, size_t iov_len, void* msg_control,
                 size_t msg_controllen, size_t* out_size, void* addr, size_t addrlen,
                 bool force_nonblocking) {
@@ -610,35 +1186,49 @@ static int send(struct libos_handle* handle, struct iovec* iov, size_t iov_len, 
                               out_size, force_nonblocking);
     }
 
+    /* the fds of SCM_RIGHTS control messages go with the data (fdpass_describe) */
+    struct libos_handle* pass_hdls[PAL_STREAM_MAX_HANDLES];
+    size_t pass_cnt = 0;
+    int ret = 0;
     struct cmsghdr* cmsg = (struct cmsghdr*)msg_control;
     size_t rest_msg_controllen = msg_controllen;
     while (cmsg && rest_msg_controllen >= sizeof(struct cmsghdr)) {
-        if (cmsg->cmsg_len < sizeof(struct cmsghdr) ||
-                CMSG_ALIGN(cmsg->cmsg_len) > rest_msg_controllen) {
-            return -EINVAL;
+        /* the last header may end without padding, which Linux accepts */
+        if (cmsg->cmsg_len < sizeof(struct cmsghdr) || cmsg->cmsg_len > rest_msg_controllen) {
+            ret = -EINVAL;
+            goto out_pass;
         }
-
-        if (cmsg->cmsg_level != SOL_SOCKET) {
-            /* Linux ignores non-SOL-SOCKET cmsgs instead of erroring out, let's do the same */
-            continue;
+        if (cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_RIGHTS) {
+            size_t n = (cmsg->cmsg_len - CMSG_LEN(0)) / sizeof(int);
+            for (size_t i = 0; i < n; i++) {
+                if (pass_cnt == PAL_STREAM_MAX_HANDLES) {
+                    ret = -ETOOMANYREFS;
+                    goto out_pass;
+                }
+                int fd;
+                memcpy(&fd, CMSG_DATA(cmsg) + i * sizeof(int), sizeof(int));
+                struct libos_handle* hdl = get_fd_handle(fd, NULL, NULL);
+                if (!hdl) {
+                    ret = -EBADF;
+                    goto out_pass;
+                }
+                pass_hdls[pass_cnt++] = hdl;
+            }
+        } else if (cmsg->cmsg_level == SOL_SOCKET) {
+            ret = -EINVAL; /* SCM_CREDENTIALS and the rest: not supported */
+            goto out_pass;
         }
-
-        switch (cmsg->cmsg_type) {
-            /* TODO: implement SCM_RIGHTS and SCM_CREDENTIALS */
-            case SCM_RIGHTS:
-            case SCM_CREDENTIALS:
-                return -ENOSYS;
-            default:
-                return -EINVAL;
-        }
-
+        /* Linux ignores non-SOL-SOCKET cmsgs instead of erroring out, let's do the same */
+        if (CMSG_ALIGN(cmsg->cmsg_len) >= rest_msg_controllen)
+            break;
         rest_msg_controllen -= CMSG_ALIGN(cmsg->cmsg_len);
         cmsg = (struct cmsghdr*)((char*)cmsg + CMSG_ALIGN(cmsg->cmsg_len));
     }
 
     PAL_HANDLE pal_handle = __atomic_load_n(&handle->info.sock.pal_handle, __ATOMIC_ACQUIRE);
     if (!pal_handle) {
-        return -ENOTCONN;
+        ret = -ENOTCONN;
+        goto out_pass;
     }
 
     void* buf;
@@ -655,7 +1245,8 @@ static int send(struct libos_handle* handle, struct iovec* iov, size_t iov_len, 
         }
         backing_buf = malloc(size);
         if (!backing_buf) {
-            return -ENOMEM;
+            ret = -ENOMEM;
+            goto out_pass;
         }
         size = 0;
         for (size_t i = 0; i < iov_len; i++) {
@@ -666,19 +1257,25 @@ static int send(struct libos_handle* handle, struct iovec* iov, size_t iov_len, 
         /* `size` is already correct. */
     }
 
-    int ret = maybe_force_nonblocking_wrapper(force_nonblocking, handle, pal_handle, PalStreamWrite,
+    if (pass_cnt == 0) {
+        ret = maybe_force_nonblocking_wrapper(force_nonblocking, handle, pal_handle, PalStreamWrite,
                                               buf, &size);
-    free(backing_buf);
-    if (ret < 0) {
-        return ret;
+    } else {
+        ret = send_with_handles(force_nonblocking, handle, pal_handle, buf, &size, pass_hdls,
+                                pass_cnt);
     }
-    *out_size = size;
-    return 0;
+    free(backing_buf);
+    if (ret == 0)
+        *out_size = size;
+out_pass:
+    for (size_t i = 0; i < pass_cnt; i++)
+        put_handle(pass_hdls[i]);
+    return ret;
 }
 
 static int recv(struct libos_handle* handle, struct iovec* iov, size_t iov_len, void* msg_control,
                 size_t* msg_controllen_ptr, size_t* out_size, void* addr, size_t* addrlen_ptr,
-                bool force_nonblocking) {
+                bool force_nonblocking, bool cmsg_cloexec) {
     __UNUSED(addr);
     __UNUSED(addrlen_ptr);
 
@@ -725,8 +1322,64 @@ static int recv(struct libos_handle* handle, struct iovec* iov, size_t iov_len, 
         /* `size` is already correct. */
     }
 
-    int ret = maybe_force_nonblocking_wrapper(force_nonblocking, handle, pal_handle, PalStreamRead,
+    int ret;
+    /* room for at least one fd in the control buffer (CMSG_LEN, as Linux: CMSG_SPACE of one fd
+     * would already hold two on x86_64) */
+    bool want_handles = msg_control && msg_controllen_ptr
+                        && *msg_controllen_ptr >= CMSG_LEN(sizeof(int));
+    if (!want_handles) {
+        /* a plain read drops handles that came with these bytes, as Linux without a control
+         * buffer */
+        ret = maybe_force_nonblocking_wrapper(force_nonblocking, handle, pal_handle, PalStreamRead,
                                               buf, &size);
+    } else {
+        PAL_HANDLE cargo[PAL_STREAM_MAX_HANDLES];
+        size_t cargo_count = PAL_STREAM_MAX_HANDLES;
+        size_t meta_size = sizeof(struct fdpass_hdr)
+                           + PAL_STREAM_MAX_HANDLES * (sizeof(struct fdpass_entry) + PATH_MAX);
+        char* meta = malloc(meta_size);
+        if (!meta) {
+            free(backing_buf);
+            return -ENOMEM;
+        }
+        bool truncated = false;
+        bool nonblocking = force_nonblocking;
+        if (!nonblocking) {
+            lock(&handle->lock);
+            nonblocking = !!(handle->flags & O_NONBLOCK);
+            unlock(&handle->lock);
+        }
+        PAL_STREAM_ATTR attr;
+        bool toggled = false;
+        if (nonblocking) {
+            ret = PalStreamAttributesQueryByHandle(pal_handle, &attr);
+            if (ret == 0 && !attr.nonblocking) {
+                attr.nonblocking = true;
+                toggled = PalStreamAttributesSetByHandle(pal_handle, &attr) == 0;
+            }
+        }
+        ret = PalStreamReadWithHandles(pal_handle, buf, &size, cargo, &cargo_count, meta,
+                                       &meta_size, &truncated);
+        if (toggled) {
+            attr.nonblocking = false;
+            (void)PalStreamAttributesSetByHandle(pal_handle, &attr);
+        }
+        if (ret == -PAL_ERROR_NOTIMPLEMENTED) {
+            /* a PAL without the feature: the plain read, no handles */
+            ret = maybe_force_nonblocking_wrapper(force_nonblocking, handle, pal_handle,
+                                                  PalStreamRead, buf, &size);
+            cargo_count = 0;
+            *msg_controllen_ptr = 0;
+        } else if (ret < 0) {
+            ret = pal_to_unix_errno(ret);
+        } else if (cargo_count) {
+            fdpass_deliver(cargo, cargo_count, meta, meta_size, msg_control, msg_controllen_ptr,
+                           cmsg_cloexec);
+        } else {
+            *msg_controllen_ptr = 0;
+        }
+        free(meta);
+    }
     if (ret == 0) {
         if (backing_buf) {
             /* Need to copy back to user buffers. */
@@ -742,8 +1395,7 @@ static int recv(struct libos_handle* handle, struct iovec* iov, size_t iov_len, 
     }
     free(backing_buf);
 
-    if (msg_control && msg_controllen_ptr) {
-        /* TODO: implement SCM_RIGHTS and SCM_CREDENTIALS (if sent by app) */
+    if (!want_handles && msg_control && msg_controllen_ptr) {
         *msg_controllen_ptr = 0;
     }
 
