@@ -1588,6 +1588,18 @@ static bool child_inherits_shared_mappings(void) {
     return !strcmp(g_pal_public_state->host_type, "VM");
 }
 
+/* Memory in a PAL range reserved for MAP_FIXED users (the VM graphics arenas and comm page) is
+ * device memory shared with the host; on the VM a child keeps the parent's mapping of it. */
+static bool is_within_user_reserved_range(const struct libos_vma_info* vma) {
+    for (size_t i = 0; i < g_pal_public_state->initial_mem_ranges_len; i++) {
+        const struct pal_initial_mem_range* range = &g_pal_public_state->initial_mem_ranges[i];
+        if (range->is_user_reserved && !range->is_free && range->start <= (uintptr_t)vma->addr
+                && (uintptr_t)vma->addr + vma->length <= range->end)
+            return true;
+    }
+    return false;
+}
+
 BEGIN_CP_FUNC(vma) {
     __UNUSED(size);
     assert(size == sizeof(struct libos_vma_info));
@@ -1609,7 +1621,8 @@ BEGIN_CP_FUNC(vma) {
 
         /* by default, file-backed memory (if shared and/or untainted) is re-mapped in child */
         bool remap_from_file = !(vma->flags & VMA_UNMAPPED) && vma->file;
-        bool inherited = !(vma->flags & VMA_UNMAPPED) && (vma->flags & MAP_SHARED)
+        bool inherited = !(vma->flags & VMA_UNMAPPED)
+                         && ((vma->flags & MAP_SHARED) || is_within_user_reserved_range(vma))
                          && child_inherits_shared_mappings();
         if (inherited)
             remap_from_file = false;

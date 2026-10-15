@@ -122,6 +122,8 @@ GramineManifestSchema = Schema({
         'experimental__enable_host_sysv_semaphores': bool,
         'experimental__enable_flock': bool,
         'experimental__shared_input_ring': bool,
+        # x86_64 VM PAL: processes in separate address spaces (Documentation/devel/vm-multiproc/)
+        'experimental__multiprocess': bool,
         'insecure__allow_eventfd': bool,
         'rewrite_syscalls': bool,
 

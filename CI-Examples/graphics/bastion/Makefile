@@ -17,6 +17,8 @@ DATA_DIR ?= $(HOME)/.local/share/gramine-bastion
 SHARED_INPUT ?= 1
 # 1: the host's SDL2 replaces the game's bundled one; 0: use the bundled SDL2.
 SYSTEM_SDL ?= 1
+# 1: sys.experimental__multiprocess = true (x86_64 VM PAL), so that FMOD's `sh -c` probe can run.
+MULTIPROC ?= 0
 # Game options; -windowed is also in the manifest (-noborder removes the window frame).
 BASTION_ARGS ?= -windowed
 
@@ -32,7 +34,8 @@ MANIFEST_ARGS = \
 	-Ddata_dir=$(DATA_DIR) \
 	-Dhome=$(HOME) \
 	-Dshared_input=$(SHARED_INPUT) \
-	-Dsystem_sdl=$(SYSTEM_SDL)
+	-Dsystem_sdl=$(SYSTEM_SDL) \
+	-Dmultiproc=$(MULTIPROC)
 
 .PHONY: all
 all: bastion.manifest

@@ -36,6 +36,9 @@
 #include "kernel_vmm_inputs.h"
 #include "kernel_xsave.h"
 
+/* the VMM supplied a graphics-arena layout (graphics redirection configured) */
+static bool g_graphics_configured;
+
 uint64_t g_tsc_mhz;
 
 static struct pal_handle* g_first_thread_handle = NULL;
@@ -622,12 +625,14 @@ noreturn void pal_start_c(void) {
      * through fw_cfg instead. */
     uint64_t graphics_data_size = 0;
     uint64_t graphics_huge_addr = 0;
+    g_graphics_configured = false;
     if (graphics_data_size_init(&graphics_data_size) == 0 && graphics_data_size) {
         uint64_t graphics_data_addr = 0;
         graphics_data_addr_init(&graphics_data_addr);  /* optional; 0 = the compiled 4G anchor */
         graphics_huge_addr_init(&graphics_huge_addr); /* optional; 0 = follow the data arena */
         graphics_arenas_set_geometry((uintptr_t)graphics_data_addr, (size_t)graphics_data_size,
                                      (uintptr_t)graphics_huge_addr);
+        g_graphics_configured = true;
         boot_stamp("graphics arenas reserved");
     }
 
@@ -831,6 +836,10 @@ noreturn int pal_start_continue(void* cmdline_) {
         ret = memory_address_space_clone(g_pml4_table_base, &g_initial_process_address_space);
         if (ret < 0)
             INIT_FAIL("Failed to create the initial process address space: %s", pal_strerror(ret));
+        /* The graphics redirection passes guest pointers to the host as guest-physical addresses
+         * (comm page requests, buffers), so the first process, the graphics application, keeps
+         * the identity-mapped memory of the single-process VM; its children get private frames. */
+        g_initial_process_address_space.identity_memory = g_graphics_configured;
         struct pal_tcb_vm* current_tcb = (struct pal_tcb_vm*)pal_get_tcb();
         if (!current_tcb)
             INIT_FAIL("Cannot find the initial thread control block");
