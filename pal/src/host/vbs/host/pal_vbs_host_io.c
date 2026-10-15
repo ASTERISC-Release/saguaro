@@ -589,12 +589,56 @@ static int64_t do_setsockopt(SOCKET s, int64_t level, int64_t name, int64_t valu
            ? 0 : wsa_err(WSAGetLastError());
 }
 
-static int64_t do_poll(struct pal_vbs_host_pollfd* pf, int64_t n, int64_t timeout_ms) {
-    WSAPOLLFD w[256];
+/* A waker: a UDP socket on loopback that sends a datagram to itself. A POLL with a waker also waits
+ * for it to become readable and drains it after the wait (not before: a wake that comes between the
+ * enclave's look at its own streams and this wait must end the wait). */
+static int64_t do_waker_create(void) {
+    SOCKET u = socket(AF_INET, SOCK_DGRAM, 0);
+    if (u == INVALID_SOCKET)
+        return wsa_err(WSAGetLastError());
+    struct sockaddr_in a = {0};
+    a.sin_family = AF_INET;
+    a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    if (bind(u, (struct sockaddr*)&a, sizeof(a)) != 0 || set_nonblock(u, 1) < 0) {
+        int64_t e = wsa_err(WSAGetLastError());
+        closesocket(u);
+        return e;
+    }
+    int64_t id = new_id(T_SOCK, NULL, u);
+    if (id < 0)
+        closesocket(u);
+    return id;
+}
+
+static int64_t do_wake(SOCKET u) {
+    struct sockaddr_storage ss;
+    int sl = sizeof(ss);
+    if (getsockname(u, (struct sockaddr*)&ss, &sl) != 0)
+        return wsa_err(WSAGetLastError());
+    char b = 1;
+    if (sendto(u, &b, 1, 0, (struct sockaddr*)&ss, sl) < 0) {
+        int e = WSAGetLastError();
+        return e == WSAEWOULDBLOCK ? 0 : wsa_err(e); /* full: a wake is pending anyway */
+    }
+    return 0;
+}
+
+static void waker_drain(SOCKET u) {
+    char b[64];
+    while (recv(u, b, sizeof(b), 0) > 0)
+        ;
+}
+
+static int64_t do_poll(struct pal_vbs_host_pollfd* pf, int64_t n, int64_t timeout_ms,
+                       int64_t waker) {
+    WSAPOLLFD w[257];
     if (n < 0 || n > 256)
         return -L_EINVAL;
     int nsock = 0, ready = 0;
-    int map[256];
+    int map[257];
+    SOCKET wk = INVALID_SOCKET;
+    if (waker > 0 && get_id(waker - 1, T_SOCK, NULL, &wk) < 0)
+        wk = INVALID_SOCKET;
     for (int64_t i = 0; i < n; i++) {
         pf[i].revents = 0;
         SOCKET s;
@@ -613,11 +657,20 @@ static int64_t do_poll(struct pal_vbs_host_pollfd* pf, int64_t n, int64_t timeou
             ready++;
         }
     }
+    int nreal = nsock;
+    if (wk != INVALID_SOCKET) {
+        w[nsock].fd = wk;
+        w[nsock].events = POLLRDNORM;
+        w[nsock].revents = 0;
+        map[nsock++] = -1;
+    }
     if (nsock) {
         int r = WSAPoll(w, nsock, ready ? 0 : (int)timeout_ms);
         if (r < 0)
             return wsa_err(WSAGetLastError());
-        for (int k = 0; k < nsock; k++) {
+        if (wk != INVALID_SOCKET)
+            waker_drain(wk);
+        for (int k = 0; k < nreal; k++) {
             uint32_t re = 0;
             if (w[k].revents & (POLLRDNORM | POLLRDBAND))
                 re |= L_POLLIN;
@@ -1010,10 +1063,18 @@ void pal_vbs_host_request(uint8_t* buf) {
                 res = -L_EINVAL;
                 break;
             }
-            res = do_poll((struct pal_vbs_host_pollfd*)data, n, a[1]);
+            res = do_poll((struct pal_vbs_host_pollfd*)data, n, a[1], a[2]);
             out_len = (uint64_t)n * sizeof(struct pal_vbs_host_pollfd);
             break;
         }
+        case PAL_VBS_HOST_WAKER:
+            res = do_waker_create();
+            break;
+        case PAL_VBS_HOST_WAKE:
+            if ((res = get_id(a[0], T_SOCK, NULL, &s)) < 0)
+                break;
+            res = do_wake(s);
+            break;
         default:
             res = -L_EINVAL;
             break;

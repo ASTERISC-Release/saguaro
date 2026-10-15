@@ -1,0 +1,30 @@
+# Copyright (C) 2026 The ASTERISC Research Lab
+# SPDX-License-Identifier: BSD-3-Clause
+
+# TLS echo server in a Windows VBS enclave (README.md): the key pair is generated inside the
+# enclave, and its certificate carries the attestation report bound to the key.
+loader.entrypoint = "file:/libsysdb.so"
+libos.entrypoint = "/tls-echo"
+loader.log_level = "{{ log_level }}"
+# the ports and the test options of the client's negative tests come from the command line
+# (untrusted: the client's checks do not depend on them)
+loader.insecure__use_cmdline_argv = true
+loader.env.LD_LIBRARY_PATH = "{{ arch_libdir }}"
+
+fs.root.uri = "file:/"
+sys.rewrite_syscalls = false
+
+# the identity a client pins (vbs-tls-client --family-id/--image-id/--min-svn)
+vbs.debug = {{ debug }}
+vbs.family_id = "6772616d696e652d7662732d746c7300"  # "gramine-vbs-tls"
+vbs.image_id = "746c732d6563686f0000000000000001"   # "tls-echo", 1
+vbs.isv_svn = 1
+vbs.max_threads = 4
+vbs.enclave_size = "256M"
+
+vbs.packed_files = [
+  { path = "/tls-echo", uri = "file:vbs-build/tls-echo" },
+{% for lib in ["ld-linux-aarch64.so.1", "libc.so.6"] %}
+  { path = "{{ arch_libdir }}/{{ lib }}", uri = "file:{{ vbs.sysroot }}/usr/lib/{{ lib }}" },
+{% endfor %}
+]

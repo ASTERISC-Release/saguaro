@@ -64,7 +64,154 @@ static DWORD WINAPI host_thread_proc(void* param) {
     return 0;
 }
 
+/*
+ * Host-call statistics (measurement only; off unless GRAMINE_VBS_HOSTCALL_STATS is set):
+ *   GRAMINE_VBS_HOSTCALL_STATS=1      print a table to stderr when the host process ends (normal
+ *                                     end, an enclave thread ending the process, Ctrl-C/Ctrl-Break)
+ *   GRAMINE_VBS_HOSTCALL_STATS=<file> also rewrite <file> every 100 ms with the cumulative counters
+ *                                     ("kind count host_ns enclave_ns bytes" per line), so that a script
+ *                                     can take the difference over a benchmark even when the host
+ *                                     process is killed
+ * Per kind of call (an OCALL, or for PAL_VBS_OCALL_HOST the request's op): the number of calls,
+ * the time spent on the host serving them (Winsock, Win32), and the time the calling thread spent
+ * inside the enclave since its previous call returned (which includes the two crossings), and for
+ * send and recv the bytes passed. When off,
+ * the cost is one load and one branch per OCALL.
+ */
+#define STATS_KINDS 128 /* OCALL numbers 0..15; host ops at 16 + op */
+static int g_stats_on;
+static char g_stats_file[MAX_PATH];
+static volatile LONG64 g_st_count[STATS_KINDS], g_st_host[STATS_KINDS], g_st_encl[STATS_KINDS];
+static volatile LONG64 g_st_bytes[STATS_KINDS]; /* send: bytes given; recv: bytes received */
+static double g_qpc_ns;
+static __declspec(thread) LONGLONG t_last_return;
+
+static const char* stats_kind_name(int k) {
+    static const char* ocalls[] = { "console", "time", "exit", "thread_create", "exit_process",
+                                    "host?" };
+    static const char* ops[] = {
+        [PAL_VBS_HOST_OPEN] = "open", [PAL_VBS_HOST_PREAD] = "pread",
+        [PAL_VBS_HOST_PWRITE] = "pwrite", [PAL_VBS_HOST_FSTAT] = "fstat",
+        [PAL_VBS_HOST_STAT] = "stat", [PAL_VBS_HOST_CLOSE] = "close",
+        [PAL_VBS_HOST_FTRUNCATE] = "ftruncate", [PAL_VBS_HOST_UNLINK] = "unlink",
+        [PAL_VBS_HOST_RENAME] = "rename", [PAL_VBS_HOST_MKDIR] = "mkdir",
+        [PAL_VBS_HOST_LISTDIR] = "listdir", [PAL_VBS_HOST_SETTIMES] = "settimes",
+        [PAL_VBS_HOST_SYMLINK] = "symlink", [PAL_VBS_HOST_READLINK] = "readlink",
+        [PAL_VBS_HOST_LINK] = "link", [PAL_VBS_HOST_CPUTIME] = "cputime",
+        [PAL_VBS_HOST_SOCKET] = "socket", [PAL_VBS_HOST_BIND] = "bind",
+        [PAL_VBS_HOST_LISTEN] = "listen", [PAL_VBS_HOST_ACCEPT] = "accept",
+        [PAL_VBS_HOST_CONNECT] = "connect", [PAL_VBS_HOST_SEND] = "send",
+        [PAL_VBS_HOST_RECV] = "recv", [PAL_VBS_HOST_SHUTDOWN] = "shutdown",
+        [PAL_VBS_HOST_SETNONBLOCK] = "setnonblock", [PAL_VBS_HOST_SETSOCKOPT] = "setsockopt",
+        [PAL_VBS_HOST_GETSOCKNAME] = "getsockname", [PAL_VBS_HOST_FIONREAD] = "fionread",
+        [PAL_VBS_HOST_POLL] = "poll", [PAL_VBS_HOST_WAKER] = "waker",
+        [PAL_VBS_HOST_WAKE] = "wake",
+    };
+    if (k < 16)
+        return k < (int)(sizeof(ocalls) / sizeof(ocalls[0])) ? ocalls[k] : "ocall?";
+    k -= 16;
+    return k < (int)(sizeof(ops) / sizeof(ops[0])) && ops[k] ? ops[k] : "op?";
+}
+
+static void stats_write(FILE* f, int pretty) {
+    if (pretty)
+        fprintf(f, "[hoststats] %-14s %12s %14s %12s %14s %12s %12s\n", "kind", "count", "host ms",
+                "host us/call", "enclave ms", "encl us/call", "bytes/call");
+    for (int k = 0; k < STATS_KINDS; k++) {
+        LONG64 c = g_st_count[k];
+        if (!c)
+            continue;
+        double h = (double)g_st_host[k] * g_qpc_ns, e = (double)g_st_encl[k] * g_qpc_ns;
+        if (pretty)
+            fprintf(f, "[hoststats] %-14s %12lld %14.1f %12.2f %14.1f %12.2f %12.0f\n",
+                    stats_kind_name(k), (long long)c, h / 1e6, h / 1e3 / (double)c, e / 1e6,
+                    e / 1e3 / (double)c, (double)g_st_bytes[k] / (double)c);
+        else
+            fprintf(f, "%s %lld %.0f %.0f %lld\n", stats_kind_name(k), (long long)c, h, e,
+                    (long long)g_st_bytes[k]);
+    }
+    fflush(f);
+}
+
+static void stats_report(void) {
+    if (g_stats_on)
+        stats_write(stderr, 1);
+}
+
+static DWORD WINAPI stats_file_thread(void* unused) {
+    (void)unused;
+    char tmp[MAX_PATH + 8];
+    snprintf(tmp, sizeof(tmp), "%s.tmp", g_stats_file);
+    for (;;) {
+        Sleep(100);
+        FILE* f = fopen(tmp, "w");
+        if (!f)
+            continue;
+        stats_write(f, 0);
+        fclose(f);
+        MoveFileExA(tmp, g_stats_file, MOVEFILE_REPLACE_EXISTING);
+    }
+    return 0;
+}
+
+static BOOL WINAPI stats_ctrl_handler(DWORD type) {
+    (void)type;
+    stats_report();
+    return FALSE; /* the default handler ends the process */
+}
+
+static void stats_init(void) {
+    const char* env = getenv("GRAMINE_VBS_HOSTCALL_STATS");
+    if (!env || !env[0] || !strcmp(env, "0"))
+        return;
+    LARGE_INTEGER f;
+    QueryPerformanceFrequency(&f);
+    g_qpc_ns = 1e9 / (double)f.QuadPart;
+    g_stats_on = 1;
+    if (strcmp(env, "1")) {
+        snprintf(g_stats_file, sizeof(g_stats_file), "%s", env);
+        HANDLE th = CreateThread(NULL, 0, stats_file_thread, NULL, 0, NULL);
+        if (th)
+            CloseHandle(th);
+    }
+    SetConsoleCtrlHandler(stats_ctrl_handler, TRUE);
+}
+
+static void* CALLBACK pal_vbs_ocall_serve(void* param);
+
 static void* CALLBACK pal_vbs_ocall(void* param) {
+    if (!g_stats_on)
+        return pal_vbs_ocall_serve(param);
+    pal_vbs_ocall_args_t* a = (pal_vbs_ocall_args_t*)param;
+    int k = a->ocall_no < 16 ? (int)a->ocall_no : 15;
+    if (a->ocall_no == PAL_VBS_OCALL_HOST && a->a0) {
+        uint64_t op = ((struct pal_vbs_hostreq*)(uintptr_t)a->a0)->op;
+        k = op < STATS_KINDS - 16 ? 16 + (int)op : STATS_KINDS - 1;
+    }
+    LARGE_INTEGER t0, t1;
+    QueryPerformanceCounter(&t0);
+    if (t_last_return)
+        InterlockedAdd64(&g_st_encl[k], t0.QuadPart - t_last_return);
+    if (a->ocall_no == PAL_VBS_OCALL_EXIT_PROCESS) {
+        InterlockedIncrement64(&g_st_count[k]);
+        stats_report(); /* the process ends inside */
+    }
+    struct pal_vbs_hostreq* hr = a->ocall_no == PAL_VBS_OCALL_HOST && a->a0
+                                 ? (struct pal_vbs_hostreq*)(uintptr_t)a->a0 : NULL;
+    uint64_t sent = hr && hr->op == PAL_VBS_HOST_SEND ? hr->in_len : 0;
+    void* ret = pal_vbs_ocall_serve(param);
+    QueryPerformanceCounter(&t1);
+    if (sent)
+        InterlockedAdd64(&g_st_bytes[k], (LONG64)sent);
+    else if (hr && hr->op == PAL_VBS_HOST_RECV && hr->result > 0)
+        InterlockedAdd64(&g_st_bytes[k], hr->result);
+    InterlockedIncrement64(&g_st_count[k]);
+    InterlockedAdd64(&g_st_host[k], t1.QuadPart - t0.QuadPart);
+    t_last_return = t1.QuadPart;
+    return ret;
+}
+
+static void* CALLBACK pal_vbs_ocall_serve(void* param) {
     pal_vbs_ocall_args_t* a = (pal_vbs_ocall_args_t*)param;
     switch (a->ocall_no) {
         case PAL_VBS_OCALL_CONSOLE_WRITE: {
@@ -213,6 +360,7 @@ static void raise_timer_resolution(void) {
 int main(int argc, char** argv) {
     setvbuf(stdout, NULL, _IONBF, 0);
     raise_timer_resolution();
+    stats_init();
     const wchar_t* image = L"pal_vbs_enclave.dll";
     wchar_t imagebuf[MAX_PATH];
     if (argc > 1) {
@@ -314,9 +462,11 @@ int main(int argc, char** argv) {
         fprintf(stderr, "[host] enclave threads started: %ld, failed to start: %ld\n",
                 g_threads_started, g_threads_failed);
         fflush(stdout);
+        stats_report();
         fflush(stderr);
         TerminateProcess(GetCurrentProcess(), (UINT)g_shared.result);
     }
+    stats_report();
     TerminateEnclave(enclave, TRUE);
     DeleteEnclave(enclave);
     return (int)g_shared.result;

@@ -23,6 +23,12 @@
  *       -w N    warm-up requests per connection (not counted), default 100
  *     prints one line: requests, errors, seconds, requests/s, latency (ms) avg p50 p99 max of
  *     each round trip (one round trip carries P requests).
+ *   vbs-net serve PORT SIZE [CHUNK] [SECONDS]  a native Windows HTTP server for comparisons:
+ *                                              answers every request with SIZE bytes, sent with
+ *                                              send() calls of at most CHUNK bytes (default 65536),
+ *                                              a thread per connection; ends after SECONDS
+ *                                              (default 60). It shows what Winsock alone gives on
+ *                                              loopback with the same client (`bench http`).
  *   Options for all: -h HOST (default 127.0.0.1).
  */
 
@@ -539,6 +545,97 @@ static int bench_main(int argc, char** argv) {
     return failed || b.errors ? 1 : 0;
 }
 
+/* ---- serve: a native comparison server ---- */
+
+static size_t g_serve_size, g_serve_chunk;
+static char* g_serve_body;
+
+static DWORD WINAPI serve_conn(void* arg) {
+    SOCKET c = (SOCKET)(uintptr_t)arg;
+    char req[8192];
+    size_t have = 0;
+    char hdr[128];
+    int hl = snprintf(hdr, sizeof(hdr), "HTTP/1.1 200 OK\r\nContent-Length: %zu\r\n\r\n",
+                      g_serve_size);
+    for (;;) {
+        int k = recv(c, req + have, (int)(sizeof(req) - 1 - have), 0);
+        if (k <= 0)
+            break;
+        have += (size_t)k;
+        req[have] = 0;
+        char* end;
+        while ((end = strstr(req, "\r\n\r\n")) != NULL) {
+            size_t used = (size_t)(end + 4 - req);
+            memmove(req, req + used, have - used + 1);
+            have -= used;
+            if (send_all(c, hdr, (size_t)hl) < 0)
+                goto out;
+            for (size_t off = 0; off < g_serve_size;) {
+                size_t n = g_serve_size - off < g_serve_chunk ? g_serve_size - off : g_serve_chunk;
+                int w = send(c, g_serve_body + off, (int)n, 0);
+                if (w <= 0)
+                    goto out;
+                off += (size_t)w;
+            }
+        }
+        if (have >= sizeof(req) - 1)
+            break;
+    }
+out:
+    closesocket(c);
+    return 0;
+}
+
+static int serve_main(int argc, char** argv) {
+    if (argc < 4)
+        return 2;
+    int port = atoi(argv[2]);
+    g_serve_size = (size_t)atol(argv[3]);
+    g_serve_chunk = argc > 4 ? (size_t)atol(argv[4]) : 65536;
+    double secs = argc > 5 ? atof(argv[5]) : 60;
+    if (!g_serve_chunk)
+        return 2;
+    /* the same 1 ms timer resolution as pal_vbs_host.exe (raise_timer_resolution), for a fair
+     * comparison of small requests */
+    HMODULE winmm = LoadLibraryW(L"winmm.dll");
+    if (winmm) {
+        typedef UINT(WINAPI * tbp_fn)(UINT);
+        tbp_fn tbp = (tbp_fn)(void*)GetProcAddress(winmm, "timeBeginPeriod");
+        if (tbp)
+            tbp(1);
+    }
+    g_serve_body = malloc(g_serve_size + 1);
+    memset(g_serve_body, 'x', g_serve_size);
+    SOCKET l = socket(AF_INET, SOCK_STREAM, 0);
+    struct sockaddr_in a = {0};
+    a.sin_family = AF_INET;
+    a.sin_port = htons((u_short)port);
+    a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    if (bind(l, (struct sockaddr*)&a, sizeof(a)) || listen(l, 64)) {
+        fprintf(stderr, "vbs-net: cannot listen on 127.0.0.1:%d (WSA %d)\n", port,
+                WSAGetLastError());
+        return 1;
+    }
+    double t0 = now_us();
+    while ((now_us() - t0) / 1e6 < secs) {
+        fd_set r;
+        FD_ZERO(&r);
+        FD_SET(l, &r);
+        struct timeval tv = { 0, 200000 };
+        if (select(0, &r, NULL, NULL, &tv) != 1)
+            continue;
+        SOCKET c = accept(l, NULL, NULL);
+        if (c == INVALID_SOCKET)
+            continue;
+        BOOL one = TRUE;
+        setsockopt(c, IPPROTO_TCP, TCP_NODELAY, (const char*)&one, sizeof(one));
+        HANDLE th = CreateThread(NULL, 0, serve_conn, (void*)(uintptr_t)c, 0, NULL);
+        if (th)
+            CloseHandle(th);
+    }
+    return 0;
+}
+
 /* ---- the other commands ---- */
 
 static size_t unescape(const char* in, char* out) {
@@ -581,7 +678,7 @@ int main(int argc, char** argv) {
         }
     }
     if (argc < 3) {
-        fprintf(stderr, "usage: vbs-net wait|req|redis|bench ... (see the source)\n");
+        fprintf(stderr, "usage: vbs-net wait|req|redis|bench|serve ... (see the source)\n");
         return 2;
     }
     if (WSAStartup(MAKEWORD(2, 2), &wsa))
@@ -653,6 +750,8 @@ int main(int argc, char** argv) {
     }
     if (!strcmp(cmd, "bench"))
         return bench_main(argc, argv);
+    if (!strcmp(cmd, "serve"))
+        return serve_main(argc, argv);
     fprintf(stderr, "vbs-net: unknown command %s\n", cmd);
     return 2;
 }
