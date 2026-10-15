@@ -318,3 +318,15 @@ void sched_thread_set_cpu_affinity(struct thread* thread, unsigned long* cpu_mas
     }
     spinlock_unlock_enable_irq(&g_thread_list_lock);
 }
+
+/* The x86_64 scheduler's interruptible wait (kernel_sched.h); _PalThreadResume() is not
+ * implemented on this architecture (pal_threading.c), so the wait is a plain one and nothing
+ * interrupts it. */
+int sched_thread_wait_interruptible(int* futex_word, spinlock_t* lock) {
+    sched_thread_wait(futex_word, lock);
+    return 0;
+}
+
+void sched_thread_interrupt(struct thread* thread) {
+    __UNUSED(thread);
+}
