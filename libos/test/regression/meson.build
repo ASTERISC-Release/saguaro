@@ -77,6 +77,7 @@ tests = {
     'madvise': {},
     'mkfifo': {},
     'mmap_file': {},
+    'append_fsize': {},
     'fcntl_misc': {},
     'fd_limits': {},
     'memfd_exec': {},

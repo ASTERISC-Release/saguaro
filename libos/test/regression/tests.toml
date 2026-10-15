@@ -79,6 +79,7 @@ manifests = [
   "links",
   "madvise",
   "mkfifo",
+  "append_fsize",
   "fcntl_misc",
   "fd_limits",
   "memfd_exec",
