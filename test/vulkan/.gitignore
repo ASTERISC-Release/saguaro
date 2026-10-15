@@ -3,3 +3,4 @@
 /*.manifest
 /*.manifest.sgx
 /clock-probe
+/vk-mt

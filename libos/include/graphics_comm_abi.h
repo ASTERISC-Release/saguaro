@@ -27,7 +27,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define NUM_COMM_PAGES 1
+/* Request slots: comm_page_t entries at COMM_ADDR + i * sizeof(comm_page_t), each served by its
+ * own listener thread, so a guest thread blocked in a long host call (a GPU wait) holds only its
+ * slot. They must end before the input ring (SG_INPUT_RING_OFFSET, 512: at most 8 slots). */
+#define NUM_COMM_PAGES 4
 
 #define COMM_ADDR  0xf00000ULL
 #define COMM_MAGIC 0x1234567812345678ULL

@@ -7,7 +7,10 @@ LDLIBS = -lvulkan
 GLSLANG ?= glslangValidator
 
 .PHONY: all
-all: vk-headless vk-session-shim.so clock-probe
+all: vk-headless vk-mt vk-session-shim.so clock-probe
+
+vk-mt: vk-mt.c
+	$(CC) $(CFLAGS) $< -o $@ $(LDLIBS) -lpthread
 
 vk-session-shim.so: vk-session-shim.c
 	$(CC) $(CFLAGS) -shared -fPIC $< -o $@ -ldl
@@ -29,7 +32,7 @@ EAGER ?= 0
 SHIM ?= 0
 X_DISPLAY_NUM = $(patsubst :%,%,$(firstword $(subst ., ,$(DISPLAY))))
 ETC_VULKAN = $(if $(wildcard /etc/vulkan),1,0)
-prog_binary = $(if $(filter vk-headless clock-probe,$(1)),$(1),/usr/bin/$(1))
+prog_binary = $(if $(filter vk-headless vk-mt clock-probe,$(1)),$(1),/usr/bin/$(1))
 
 .PHONY: FORCE
 direct-%.manifest: vk-direct.manifest.template FORCE
@@ -48,4 +51,4 @@ vm-%.manifest: vk-vm.manifest.template vk-session-shim.so FORCE
 
 .PHONY: clean
 clean:
-	$(RM) vk-headless vk-session-shim.so clock-probe *.manifest *.manifest.sgx *.sig
+	$(RM) vk-headless vk-mt vk-session-shim.so clock-probe *.manifest *.manifest.sgx *.sig
