@@ -125,7 +125,7 @@ bash_load() {
     cp "$HERE"/manifest.template .
     gramine-manifest -Darch_libdir=/lib/x86_64-linux-gnu -Dentry=/usr/bin/bash -Dprobedir="$work" \
         manifest.template bash.manifest 2>/dev/null
-    # a script file: the gramine-vm command line does not keep quoting inside one argument
+    # a script file, so that the pipeline needs no quoting through the gramine-vm command line
     mkdir -p tmp
     cat > pipeline.sh <<'SH'
 [ -d /probe/tmp ] && export TMPDIR=/probe/tmp   # in the guest: the probe manifest has no /tmp
