@@ -24,8 +24,9 @@
 #include "pal_vbs_packed.h"
 
 #ifndef PAL_VBS_POOL_SIZE
-#define PAL_VBS_POOL_SIZE 0x8000000ull /* 128 MiB of the enclave committed for the PAL */
+#define PAL_VBS_POOL_SIZE 0x8000000ull /* at least 128 MiB of the enclave committed for the PAL */
 #endif
+#define PAL_VBS_W_RESERVE 0x4000000ull /* 64 MiB of the enclave left to W */
 
 extern IMAGE_DOS_HEADER __ImageBase;
 
@@ -412,14 +413,17 @@ int64_t pal_vbs_boot(const struct pal_vbs_shared* shared) {
         return -3;
     }
 
-    void* pool = VirtualAlloc(NULL, (SIZE_T)PAL_VBS_POOL_SIZE, MEM_COMMIT | MEM_RESERVE,
-                              PAGE_READWRITE);
+    /* the pool: the enclave minus the image and a reserve for W (thread stacks, CRT heap) */
+    uint64_t pool_size = PAL_VBS_POOL_SIZE;
+    if (g_svc.enclave_size > g_svc.image_size + PAL_VBS_W_RESERVE + PAL_VBS_POOL_SIZE)
+        pool_size = (g_svc.enclave_size - g_svc.image_size - PAL_VBS_W_RESERVE) & ~0xffffull;
+    void* pool = VirtualAlloc(NULL, (SIZE_T)pool_size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
     if (!pool) {
         log_kv("pool VirtualAlloc failed, error", GetLastError());
         return -4;
     }
     g_svc.pool_base = (uint64_t)(uintptr_t)pool;
-    g_svc.pool_size = PAL_VBS_POOL_SIZE;
+    g_svc.pool_size = pool_size;
 
     log_kv("enclave", g_svc.enclave_base);
     log_kv("image  ", g_svc.image_base);

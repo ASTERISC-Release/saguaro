@@ -145,6 +145,50 @@ static LONG CALLBACK host_exception_report(EXCEPTION_POINTERS* ep) {
     return EXCEPTION_CONTINUE_SEARCH;
 }
 
+/* Rva -> file offset of a mapped PE file (0 if outside every section). */
+static uint64_t rva_to_off(const IMAGE_NT_HEADERS64* nt, uint64_t rva) {
+    const IMAGE_SECTION_HEADER* sec = IMAGE_FIRST_SECTION(nt);
+    for (WORD i = 0; i < nt->FileHeader.NumberOfSections; i++)
+        if (rva >= sec[i].VirtualAddress && rva < sec[i].VirtualAddress + sec[i].SizeOfRawData)
+            return rva - sec[i].VirtualAddress + sec[i].PointerToRawData;
+    return 0;
+}
+
+/* The enclave size and thread count the signed image declares (its IMAGE_ENCLAVE_CONFIG, which
+ * pack.py filled from vbs.enclave_size / vbs.max_threads); the enclave must be created with them. */
+static int read_enclave_config(const wchar_t* image, uint64_t* size, uint32_t* threads) {
+    int ret = -1;
+    HANDLE f = CreateFileW(image, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+    if (f == INVALID_HANDLE_VALUE)
+        return -1;
+    HANDLE m = CreateFileMappingW(f, NULL, PAGE_READONLY, 0, 0, NULL);
+    const uint8_t* b = m ? MapViewOfFile(m, FILE_MAP_READ, 0, 0, 0) : NULL;
+    if (b) {
+        const IMAGE_DOS_HEADER* dos = (const IMAGE_DOS_HEADER*)b;
+        const IMAGE_NT_HEADERS64* nt = (const IMAGE_NT_HEADERS64*)(b + dos->e_lfanew);
+        const IMAGE_DATA_DIRECTORY* lc =
+            &nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG];
+        uint64_t lco = lc->VirtualAddress ? rva_to_off(nt, lc->VirtualAddress) : 0;
+        if (lco) {
+            const IMAGE_LOAD_CONFIG_DIRECTORY64* cfg = (const IMAGE_LOAD_CONFIG_DIRECTORY64*)(b + lco);
+            uint64_t eco = cfg->EnclaveConfigurationPointer
+                           ? rva_to_off(nt, cfg->EnclaveConfigurationPointer
+                                            - nt->OptionalHeader.ImageBase) : 0;
+            if (eco) {
+                const IMAGE_ENCLAVE_CONFIG64* ec = (const IMAGE_ENCLAVE_CONFIG64*)(b + eco);
+                *size = ec->EnclaveSize;
+                *threads = ec->NumberOfThreads;
+                ret = 0;
+            }
+        }
+        UnmapViewOfFile(b);
+    }
+    if (m)
+        CloseHandle(m);
+    CloseHandle(f);
+    return ret;
+}
+
 int main(int argc, char** argv) {
     setvbuf(stdout, NULL, _IONBF, 0);
     const wchar_t* image = L"pal_vbs_enclave.dll";
@@ -153,12 +197,19 @@ int main(int argc, char** argv) {
         MultiByteToWideChar(CP_UTF8, 0, argv[1], -1, imagebuf, MAX_PATH);
         image = imagebuf;
     }
-    DWORD threads = argc > 2 ? (DWORD)atoi(argv[2]) : 1;
+    uint64_t cfg_size = 0x10000000;
+    uint32_t cfg_threads = 1;
+    if (read_enclave_config(image, &cfg_size, &cfg_threads) < 0)
+        fprintf(stderr, "[host] could not read the image's enclave configuration; assuming 256 MiB\n");
+    /* thread count: the argument, or 0 = the number the image was signed with */
+    DWORD threads = argc > 2 ? (DWORD)atoi(argv[2]) : 0;
+    if (!threads)
+        threads = cfg_threads;
 
     ENCLAVE_CREATE_INFO_VBS ci = { ENCLAVE_VBS_FLAG_DEBUG,
                                    { 0x10, 0x20, 0x30, 0x40, 0x41, 0x31, 0x21, 0x11 } };
     DWORD err = 0;
-    SIZE_T size = 0x10000000; /* must match the image's configured size */
+    SIZE_T size = (SIZE_T)cfg_size; /* the image's configured size (vbs.enclave_size) */
     PVOID enclave = CreateEnclave(GetCurrentProcess(), NULL, size, 0, ENCLAVE_TYPE_VBS, &ci,
                                   sizeof(ci), &err);
     if (!enclave) { fail("CreateEnclave"); fprintf(stderr, "  EnclaveError=0x%08lx\n", err); return 3; }
