@@ -303,6 +303,7 @@ struct libos_thread* get_new_thread(void) {
 
     lock(&cur_thread->lock);
 
+    thread->syscall_user_dispatch = cur_thread->syscall_user_dispatch;
     thread->uid       = cur_thread->uid;
     thread->gid       = cur_thread->gid;
     thread->euid      = cur_thread->euid;
