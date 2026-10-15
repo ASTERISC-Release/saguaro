@@ -100,6 +100,7 @@ manifests = [
   "poll_closed_fd",
   "poll_many_types",
   "ppoll",
+  "preadv2_pwritev2",
   "proc_common",
   "proc_cpuinfo",
   "proc_path",
