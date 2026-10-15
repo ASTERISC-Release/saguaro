@@ -22,6 +22,15 @@
 #define BRK(imm) (0xd4200000u | ((uint32_t)(imm) << 5))
 #define BRK_UNFILLED_SLOT 0x5653
 
+/* `mrs Xt, ctr_el0`: the cache type register is not readable at EL0 in a VBS enclave (it traps as
+ * an illegal instruction), but glibc reads it, e.g. sysconf(_SC_LEVEL1_DCACHE_LINESIZE), which
+ * NGINX calls at start. It is emulated with a fixed value: 64-byte minimum instruction and data
+ * cache lines, PIPT instruction cache, 64-byte (16-word) exclusives and write-back granules, and
+ * neither IDC nor DIC (so software that maintains caches does all of it). */
+#define MRS_CTR_EL0_MASK 0xffffffe0u
+#define MRS_CTR_EL0      0xd53b0020u
+#define VBS_CTR_EL0      0x8444c004ul
+
 extern char __text_start[] __attribute__((visibility("hidden")));
 extern char __text_end[] __attribute__((visibility("hidden")));
 
@@ -107,6 +116,13 @@ int64_t pal_vbs_exception(struct pal_vbs_fault* f) {
             PAL_CONTEXT* saved = (PAL_CONTEXT*)(uintptr_t)f->regs[0];
             saved->pstate &= ~PAL_PSTATE_EXACT_CONTEXT;
             context_to_fault(saved, f);
+            return 0;
+        }
+        if ((insn & MRS_CTR_EL0_MASK) == MRS_CTR_EL0) {
+            uint32_t rt = insn & 0x1f;
+            if (rt < ARRAY_SIZE(f->regs))
+                f->regs[rt] = VBS_CTR_EL0; /* (rt 31 is xzr: nothing to write) */
+            f->pc += 4;
             return 0;
         }
         if (insn == BRK(BRK_UNFILLED_SLOT))
