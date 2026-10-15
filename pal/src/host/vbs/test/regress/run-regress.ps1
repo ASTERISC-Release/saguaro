@@ -20,8 +20,9 @@ foreach ($line in Get-Content (Join-Path $Dir "cases.txt")) {
     Remove-Item -Recurse -Force "$root\tests\tmp\*" -ErrorAction SilentlyContinue
     if ($test -eq "symlink_host") {
         Set-Content -NoNewline -Path "$root\tests\tmp\symlink_host_target" -Value "x"
-        New-Item -ItemType SymbolicLink -Path "$root\tests\tmp\symlink_host_live" -Target "symlink_host_target" | Out-Null
-        New-Item -ItemType SymbolicLink -Path "$root\tests\tmp\symlink_host_dangling" -Target "symlink_host_missing" | Out-Null
+        # relative links (New-Item resolves the target against the current folder instead)
+        cmd /c mklink "$root\tests\tmp\symlink_host_live" "symlink_host_target" | Out-Null
+        cmd /c mklink "$root\tests\tmp\symlink_host_dangling" "symlink_host_missing" | Out-Null
     }
     $argl = @("$Name.dll", "0", "boot", $root) + ($parts | ForEach-Object { if ($_ -eq "") { '""' } else { $_ } })
     $t0 = Get-Date
