@@ -587,7 +587,9 @@ static void probe_unixsock(void) {
         struct sockaddr_un a = {.sun_family = AF_UNIX};
         strcpy(a.sun_path, "socket");
         int rb = bind(s, (struct sockaddr*)&a, offsetof(struct sockaddr_un, sun_path) + 7);
+        int eb = errno;
         int rl = listen(s, 5);
+        if (rb != 0) P("unixsock", "FAIL server: bind: %s", strerror(eb));
         struct stat st;
         int rs = lstat("socket", &st);
         P("unixsock", "%s server: bind %d listen %d, own lstat(\"socket\") %d%s", rb == 0 && rl == 0 ? "PASS" : "FAIL", rb, rl, rs,
@@ -632,8 +634,57 @@ static void probe_unixsock(void) {
     P("unixsock", "%s client: connect %s, echo %s", rc == 0 && k == 'k' ? "PASS" : "FAIL", rc == 0 ? "ok" : strerror(e1), k == 'k' ? "ok" : "none");
     close(s);
     waitpid(pid, NULL, 0);
+    if (unlink(path) != 0) P("unixsock", "FAIL unlink of the node: %s", E());
+    if (rmdir(dir) != 0) P("unixsock", "FAIL rmdir: %s", E());
+}
+
+/* unixsock2: the data path of a by-name connection between two processes, step by step with
+ * timings: the server accept()s blocking (no poll), reads one byte, writes one back */
+static void probe_unixsock2(void) {
+    char path[64];
+    snprintf(path, sizeof(path), "/tmp/probe-sock2-%d", getpid());
     unlink(path);
-    rmdir(dir);
+    int ready[2];
+    pipe2(ready, O_CLOEXEC);
+    double t0 = now_s();
+    pid_t pid = fork();
+    if (pid == 0) {
+        int s = socket(AF_UNIX, SOCK_STREAM, 0);
+        struct sockaddr_un a = {.sun_family = AF_UNIX};
+        strcpy(a.sun_path, path);
+        if (bind(s, (struct sockaddr*)&a, sizeof(a)) != 0) { P("unixsock2", "FAIL server bind: %s", E()); _exit(1); }
+        if (listen(s, 5) != 0) { P("unixsock2", "FAIL server listen: %s", E()); _exit(1); }
+        write(ready[1], "r", 1);
+        int c = accept(s, NULL, NULL);
+        P("unixsock2", "%s server: accept returned %d at %.3f s%s%s", c >= 0 ? "PASS" : "FAIL", c, now_s() - t0, c < 0 ? ": " : "", c < 0 ? E() : "");
+        if (c < 0) _exit(1);
+        char b = 0;
+        long r = read(c, &b, 1);
+        P("unixsock2", "%s server: read %ld '%c' at %.3f s", r == 1 ? "PASS" : "FAIL", r, b ? b : '?', now_s() - t0);
+        long w = write(c, "k", 1);
+        P("unixsock2", "%s server: write %ld at %.3f s", w == 1 ? "PASS" : "FAIL", w, now_s() - t0);
+        usleep(200000);
+        close(c);
+        _exit(0);
+    }
+    char rr;
+    read(ready[0], &rr, 1);
+    int s = socket(AF_UNIX, SOCK_STREAM, 0);
+    struct sockaddr_un a = {.sun_family = AF_UNIX};
+    strcpy(a.sun_path, path);
+    int rc = connect(s, (struct sockaddr*)&a, sizeof(a));
+    P("unixsock2", "%s client: connect %d at %.3f s%s%s", rc == 0 ? "PASS" : "FAIL", rc, now_s() - t0, rc ? ": " : "", rc ? E() : "");
+    long w = write(s, "p", 1);
+    P("unixsock2", "%s client: write %ld at %.3f s", w == 1 ? "PASS" : "FAIL", w, now_s() - t0);
+    struct pollfd pfd = {s, POLLIN, 0};
+    int pr = poll(&pfd, 1, 3000);
+    char k = 0;
+    long r = pr == 1 ? read(s, &k, 1) : -1;
+    P("unixsock2", "%s client: poll %d (revents %#x), read %ld '%c' at %.3f s", k == 'k' ? "PASS" : "FAIL", pr, pfd.revents, r, k ? k : '?', now_s() - t0);
+    close(s);
+    int st = 0;
+    waitpid(pid, &st, 0);
+    unlink(path);
 }
 
 /* ------------------------------------------------------------------------------------------- */
@@ -1023,7 +1074,7 @@ struct probe { const char* name; void (*fn)(void); };
 static const struct probe probes[] = {
     /* the ones that may take the guest down come last */
     {"fixed", probe_fixed},   {"huge", probe_huge},     {"noreplace", probe_noreplace}, {"futexv", probe_futexv},
-    {"eventfd", probe_eventfd}, {"scm", probe_scm},     {"unixsock", probe_unixsock}, {"sud", probe_sud},       {"signals", probe_signals},
+    {"eventfd", probe_eventfd}, {"scm", probe_scm},     {"unixsock", probe_unixsock}, {"unixsock2", probe_unixsock2}, {"sud", probe_sud},       {"signals", probe_signals},
     {"sig_chld", probe_sig_chld}, {"sig_spin", probe_sig_spin}, {"sig_block", probe_sig_block}, {"sig_proc", probe_sig_proc},
     {"threads", probe_threads}, {"procs", probe_procs}, {"proc", probe_proc},       {"misc", probe_misc},
     {"gs", probe_gs},         {"fs32", probe_fs32},     {"cs32", probe_cs32},       {"traps", probe_traps},

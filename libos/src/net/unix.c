@@ -9,18 +9,25 @@
  */
 
 /*
- * TODO: Currently pathname UNIX domain sockets are not visible on the Gramine filesystem (they
- * do not have a corresponding dentry). This shouldn't be hard to implement, but leaving this as
- * a todo for now - nothing seemed to require it, at least so far.
+ * Pathname UNIX domain sockets are visible on the Gramine filesystem: `bind` creates a node at the
+ * path (a marker link that the file systems report as `S_IFSOCK`, see UNIX_SOCKET_NODE_MARKER in
+ * `libos_fs.h`), `connect` and `stat` find it from any process of the session on a shared mount,
+ * `unlink` removes it. The PAL pipe behind a named socket is named after the canonical absolute
+ * path of the node, so relative names, the current directory and ".." resolve as on Linux.
+ * Abstract sockets (a leading NUL byte) have no node and are named after their bytes. (Formerly
+ * pathname sockets had no dentry and were named after the bytes of the path as given.)
  */
 
 #include "crypto.h"
 #include "hex.h"
 #include "libos_fs.h"
 #include "libos_internal.h"
+#include "libos_process.h"
 #include "libos_socket.h"
 #include "linux_socket.h"
 #include "pal.h"
+#include "perm.h"
+#include "stat.h"
 #include "toml_utils.h"
 
 /*
@@ -210,7 +217,135 @@ static int host_unix_connect(struct libos_handle* handle, const char* path, size
  *                                terminated string.
  * \param         sock_name_size  Size of \p sock_name.
  */
-static int unaddr_to_sockname(void* addr, size_t* addrlen_ptr, char* sock_name,
+bool unix_socket_node_perm(const char* link_target, mode_t* out_perm) {
+    if (!strstartswith(link_target, UNIX_SOCKET_NODE_MARKER))
+        return false;
+    const char* digits = link_target + static_strlen(UNIX_SOCKET_NODE_MARKER);
+    mode_t perm = 0;
+    for (; *digits; digits++) {
+        if (*digits < '0' || *digits > '7')
+            return false;
+        perm = perm * 8 + (*digits - '0');
+    }
+    *out_perm = perm & 07777;
+    return true;
+}
+
+/* "<instance id>/<SHA-256 of name>": the name of the PAL pipe behind a UNIX socket */
+static int sockname_from_bytes(const char* bytes, size_t len, char* sock_name,
+                               size_t sock_name_size) {
+    uint8_t hash[32];
+    LIB_SHA256_CONTEXT hash_context;
+    int ret = lib_SHA256Init(&hash_context);
+    if (ret < 0) {
+        return -ENOMEM;
+    }
+    ret = lib_SHA256Update(&hash_context, (const uint8_t*)bytes, len);
+    if (ret < 0) {
+        return -ENOMEM;
+    }
+    ret = lib_SHA256Final(&hash_context, hash);
+    if (ret < 0) {
+        return -ENOMEM;
+    }
+
+    char hash_str[64 + 1] = {0};
+    bytes2hex(hash, sizeof(hash), hash_str, sizeof(hash_str));
+
+    size_t out_len = snprintf(sock_name, sock_name_size, "%lu/%s", g_pal_public_state->instance_id,
+                              hash_str);
+    if (out_len >= sock_name_size)
+        return -ERANGE;
+    return 0;
+}
+
+/*
+ * The node of a named UNIX socket. With `create` (bind): the path must not exist (EADDRINUSE), its
+ * parent must be writable, and the node is created; without (connect): the path must exist and be
+ * a socket node (ENOENT, ECONNREFUSED as on Linux). On success `sock_name` names the PAL pipe
+ * after the canonical absolute path.
+ */
+static int named_socket_node(const char* path, bool create, char* sock_name,
+                             size_t sock_name_size) {
+    struct libos_dentry* dent = NULL;
+    char* abs_path = NULL;
+    size_t abs_size = 0;
+    int ret;
+
+    lock(&g_dcache_lock);
+    ret = path_lookupat(/*start=*/NULL, path, LOOKUP_NO_FOLLOW | (create ? LOOKUP_CREATE : 0),
+                        &dent);
+    if (ret < 0)
+        goto out;
+    if (create) {
+        if (dent->inode || !dent->parent) {
+            ret = -EADDRINUSE;
+            goto out;
+        }
+        ret = check_permissions(dent->parent, MAY_WRITE | MAY_EXEC);
+        if (ret < 0)
+            goto out;
+        struct libos_d_ops* d_ops = dent->mount->fs->d_ops;
+        if (!d_ops || !d_ops->symlink) {
+            ret = -EOPNOTSUPP;
+            goto out;
+        }
+        mode_t perm = PERM_rwxrwxrwx & ~g_process.umask;
+        char target[static_strlen(UNIX_SOCKET_NODE_MARKER) + 8];
+        snprintf(target, sizeof(target), UNIX_SOCKET_NODE_MARKER "%04o", perm);
+        ret = d_ops->symlink(target, dent);
+        if (ret < 0) {
+            if (ret == -EEXIST)
+                ret = -EADDRINUSE;
+            goto out;
+        }
+        /* from now on the node is a socket; the link target is only its on-host encoding */
+        struct libos_inode* inode = dent->inode;
+        lock(&inode->lock);
+        inode->type = S_IFSOCK;
+        inode->perm = perm;
+        inode->size = 0;
+        free(inode->data);
+        inode->data = NULL;
+        unlock(&inode->lock);
+    } else {
+        assert(dent->inode);
+        if (dent->inode->type != S_IFSOCK) {
+            ret = -ECONNREFUSED;
+            goto out;
+        }
+    }
+    ret = dentry_abs_path(dent, &abs_path, &abs_size);
+    if (ret < 0)
+        goto out;
+    ret = sockname_from_bytes(abs_path, strlen(abs_path), sock_name, sock_name_size);
+out:
+    unlock(&g_dcache_lock);
+    if (dent)
+        put_dentry(dent);
+    free(abs_path);
+    return ret;
+}
+
+/* removes the node that `named_socket_node(..., create=true, ...)` made (bind failed after it) */
+static void named_socket_node_remove(const char* path) {
+    struct libos_dentry* dent = NULL;
+    lock(&g_dcache_lock);
+    int ret = path_lookupat(/*start=*/NULL, path, LOOKUP_NO_FOLLOW, &dent);
+    if (ret == 0 && dent->inode && dent->inode->type == S_IFSOCK && dent->mount->fs->d_ops &&
+            dent->mount->fs->d_ops->unlink) {
+        ret = dent->mount->fs->d_ops->unlink(dent);
+        if (ret == 0) {
+            put_inode(dent->inode);
+            dent->inode = NULL;
+        }
+    }
+    unlock(&g_dcache_lock);
+    if (dent)
+        put_dentry(dent);
+}
+
+static int unaddr_to_sockname(void* addr, size_t* addrlen_ptr, bool create, char* sock_name,
                               size_t sock_name_size) {
     if (*addrlen_ptr > sizeof(struct sockaddr_un)) {
         /* Cap the address at the maximal possible size - rest of the input buffer (if any) is
@@ -231,34 +366,28 @@ static int unaddr_to_sockname(void* addr, size_t* addrlen_ptr, char* sock_name,
     const char* path = (char*)addr + offsetof(struct sockaddr_un, sun_path);
     size_t pathlen = *addrlen_ptr - offsetof(struct sockaddr_un, sun_path);
     assert(pathlen >= 1);
-    if (path[0]) {
-        /* Named UNIX socket. */
-        pathlen = strnlen(path, pathlen);
+    if (!path[0]) {
+        /* Abstract UNIX socket: named after its bytes, no node. */
+        return sockname_from_bytes(path, pathlen, sock_name, sock_name_size);
     }
 
-    uint8_t hash[32];
-    LIB_SHA256_CONTEXT hash_context;
-    int ret = lib_SHA256Init(&hash_context);
-    if (ret < 0) {
+    /* Named UNIX socket: named after the canonical path of its node. */
+    pathlen = strnlen(path, pathlen);
+    char* path_copy = alloc_substr(path, pathlen);
+    if (!path_copy)
         return -ENOMEM;
-    }
-    ret = lib_SHA256Update(&hash_context, (const uint8_t*)path, pathlen);
-    if (ret < 0) {
-        return -ENOMEM;
-    }
-    ret = lib_SHA256Final(&hash_context, hash);
-    if (ret < 0) {
-        return -ENOMEM;
-    }
+    int ret = named_socket_node(path_copy, create, sock_name, sock_name_size);
+    free(path_copy);
+    return ret;
+}
 
-    char hash_str[64 + 1] = {0};
-    bytes2hex(hash, sizeof(hash), hash_str, sizeof(hash_str));
-
-    size_t len = snprintf(sock_name, sock_name_size, "%lu/%s", g_pal_public_state->instance_id,
-                          hash_str);
-    if (len >= sock_name_size)
-        return -ERANGE;
-    return 0;
+/* the node's path of a named socket address, NUL-terminated, or NULL for an abstract one */
+static char* unaddr_node_path(void* addr, size_t addrlen) {
+    const char* path = (char*)addr + offsetof(struct sockaddr_un, sun_path);
+    size_t pathlen = addrlen - offsetof(struct sockaddr_un, sun_path);
+    if (!path[0])
+        return NULL;
+    return alloc_substr(path, strnlen(path, pathlen));
 }
 
 static void fixup_sockaddr_un_path(struct sockaddr_storage* ss_addr, size_t* addrlen_ptr) {
@@ -310,7 +439,7 @@ static int bind(struct libos_handle* handle, void* addr, size_t addrlen) {
     assert(locked(&sock->lock));
 
     char pipe_name[static_strlen(URI_PREFIX_PIPE_SRV) + 96 + 1] = URI_PREFIX_PIPE_SRV;
-    int ret = unaddr_to_sockname(addr, &addrlen,
+    int ret = unaddr_to_sockname(addr, &addrlen, /*create=*/true,
                                  pipe_name + static_strlen(URI_PREFIX_PIPE_SRV),
                                  sizeof(pipe_name) - static_strlen(URI_PREFIX_PIPE_SRV));
     if (ret < 0) {
@@ -327,6 +456,11 @@ static int bind(struct libos_handle* handle, void* addr, size_t addrlen) {
     ret = PalStreamOpen(pipe_name, PAL_ACCESS_RDWR, /*share_flags=*/0, PAL_CREATE_IGNORED, options,
                         &pal_handle);
     if (ret < 0) {
+        char* node_path = unaddr_node_path(addr, addrlen);
+        if (node_path) {
+            named_socket_node_remove(node_path);
+            free(node_path);
+        }
         return (ret == -PAL_ERROR_STREAMEXIST) ? -EADDRINUSE : pal_to_unix_errno(ret);
     }
 
@@ -406,32 +540,43 @@ static int connect(struct libos_handle* handle, void* addr, size_t addrlen, bool
         return -EINVAL;
     }
 
-    char pipe_name[static_strlen(URI_PREFIX_PIPE) + 96 + 1] = URI_PREFIX_PIPE;
-    int ret = unaddr_to_sockname(addr, &addrlen,
-                                 pipe_name + static_strlen(URI_PREFIX_PIPE),
-                                 sizeof(pipe_name) - static_strlen(URI_PREFIX_PIPE));
-    if (ret < 0) {
-        return ret;
-    }
-
     lock(&handle->lock);
     /* `setflags` in "fs/socket/fs.c" is the only way to change this flag and it takes `sock->lock`,
      * so using `options` after releasing the lock below is race-free. */
     pal_stream_options_t options = handle->flags & O_NONBLOCK ? PAL_OPTION_NONBLOCK : 0;
     unlock(&handle->lock);
 
+    int ret;
     PAL_HANDLE pal_handle = NULL;
+    if (addrlen > sizeof(struct sockaddr_un))
+        addrlen = sizeof(struct sockaddr_un);
+    if (addrlen < offsetof(struct sockaddr_un, sun_path) + 1)
+        return -EINVAL;
+    unsigned short family;
+    memcpy(&family, (char*)addr + offsetof(struct sockaddr_un, sun_family), sizeof(family));
+    if (family != AF_UNIX)
+        return -EAFNOSUPPORT;
     const char* path = (char*)addr + offsetof(struct sockaddr_un, sun_path);
     size_t pathlen = addrlen - offsetof(struct sockaddr_un, sun_path);
     if (path[0] && is_host_unix_socket(path, strnlen(path, pathlen))) {
+        /* a host socket (manifest list): no node of ours, the host resolves the path */
         ret = host_unix_connect(handle, path, strnlen(path, pathlen), options, &pal_handle);
         if (ret < 0)
             return ret;
+        addrlen = offsetof(struct sockaddr_un, sun_path) + strnlen(path, pathlen) + 1;
     } else {
+        char pipe_name[static_strlen(URI_PREFIX_PIPE) + 96 + 1] = URI_PREFIX_PIPE;
+        ret = unaddr_to_sockname(addr, &addrlen, /*create=*/false,
+                                 pipe_name + static_strlen(URI_PREFIX_PIPE),
+                                 sizeof(pipe_name) - static_strlen(URI_PREFIX_PIPE));
+        if (ret < 0) {
+            return ret;
+        }
         ret = PalStreamOpen(pipe_name, PAL_ACCESS_RDWR, /*share_flags=*/0, PAL_CREATE_IGNORED,
                             options, &pal_handle);
         if (ret < 0) {
-            return (ret == -PAL_ERROR_CONNFAILED) ? -ENOENT : pal_to_unix_errno(ret);
+            /* the node exists but nobody listens behind it (or an abstract name is unbound) */
+            return (ret == -PAL_ERROR_CONNFAILED) ? -ECONNREFUSED : pal_to_unix_errno(ret);
         }
     }
 

@@ -10,6 +10,10 @@
 libos.entrypoint = "{{ proton }}/files/lib/wine/x86_64-unix/wine"
 loader.log_level = "{{ log_level }}"
 loader.insecure__use_cmdline_argv = true
+# Wine lays out the low 2 GiB itself (fixed areas at 0x10000, 0x110000, 0x7f000000, the user
+# shared data at 0x7ffe0000); with ASLR the LibOS puts the stack and the libraries a random
+# distance below the top of guest RAM, sometimes inside that range, and ntdll exits at once
+loader.insecure__disable_aslr = true
 loader.env.LD_LIBRARY_PATH = "{{ proton }}/files/lib:{{ proton }}/files/lib64:/lib:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu"
 loader.env.PATH = "{{ proton }}/files/bin:/usr/bin:/bin"
 loader.env.HOME = "/home/user"
