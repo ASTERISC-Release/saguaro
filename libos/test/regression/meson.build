@@ -165,6 +165,7 @@ tests = {
     'sysfs_common': {},
     'recvmmsg_timeout': {},
     'sysv_msg': {},
+    'sysv_sem': {},
     'sysv_shm': {},
     'tcp_ancillary': {},
     'tcp_einprogress': {},

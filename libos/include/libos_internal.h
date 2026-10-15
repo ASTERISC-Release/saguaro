@@ -163,6 +163,8 @@ bool libos_capable(int cap);
 /* System V message queue limits (0: MSGMNI, 1: MSGMAX, 2: MSGMNB) and `/proc/sysvipc/msg` */
 unsigned int sysv_msg_limit(int which);
 int sysv_msg_proc_load(char** out_data, size_t* out_size);
+/* /proc/sys/kernel/sem: the System V semaphore limits */
+int sysv_sem_limits_load(char** out_data, size_t* out_size);
 
 void warn_unsupported_syscall(unsigned long sysno);
 void debug_print_syscall_before(unsigned long sysno, ...);

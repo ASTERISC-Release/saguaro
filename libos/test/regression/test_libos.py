@@ -1094,6 +1094,10 @@ class TC_30_Syscall(RegressionTestCase):
         stdout, _ = self.run_binary(['sysv_msg'])
         self.assertIn('TEST OK', stdout)
 
+    def test_099_sysv_sem(self):
+        stdout, _ = self.run_binary(['sysv_sem'])
+        self.assertIn('TEST OK', stdout)
+
     def test_098_recvmmsg_timeout(self):
         stdout, _ = self.run_binary(['recvmmsg_timeout'])
         self.assertIn('TEST OK', stdout)
