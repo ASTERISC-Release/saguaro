@@ -309,7 +309,9 @@ static int vm_vsock_write_exact(struct pal_handle* handle, const void* buf, size
         if (written == -PAL_ERROR_TRYAGAIN) {
             if (force_nonblocking || handle->sock.is_nonblocking)
                 return -PAL_ERROR_TRYAGAIN;
-            sched_thread_wait(&g_sockets_writer_futex, &handle->sock.lock);
+            int wret = sched_thread_wait_interruptible(&g_sockets_writer_futex, &handle->sock.lock);
+            if (wret < 0)
+                return wret;
             continue;
         }
         if (written < 0)
@@ -341,7 +343,9 @@ static int vm_vsock_read_exact(struct pal_handle* handle, void* buf, size_t size
                 spinlock_lock(&handle->sock.lock);
                 continue;
             }
-            sched_thread_wait(&g_sockets_reader_futex, &handle->sock.lock);
+            int wret = sched_thread_wait_interruptible(&g_sockets_reader_futex, &handle->sock.lock);
+            if (wret < 0)
+                return wret;
             continue;
         }
         if (received < 0)
@@ -726,7 +730,12 @@ static int pal_common_tcp_accept(struct pal_handle* handle, pal_stream_options_t
         client_fd = virtio_vsock_accept(handle->sock.fd, &client_addr_vm, &client_addr_vm_size);
         if (client_fd < 0) {
             if (client_fd == -PAL_ERROR_TRYAGAIN && !handle->sock.is_nonblocking) {
-                sched_thread_wait(&g_sockets_reader_futex, &handle->sock.lock);
+                int wret = sched_thread_wait_interruptible(&g_sockets_reader_futex,
+                                                           &handle->sock.lock);
+                if (wret < 0) {
+                    spinlock_unlock(&handle->sock.lock);
+                    return wret;
+                }
                 continue;
             }
             spinlock_unlock(&handle->sock.lock);
@@ -960,7 +969,12 @@ static int pal_common_tcp_send(struct pal_handle* handle, struct iovec* iov, siz
             }
             if (!handle->sock.is_nonblocking && !force_nonblocking) {
                 /* blocking socket that didn't send anything must wait */
-                sched_thread_wait(&g_sockets_writer_futex, &handle->sock.lock);
+                int wret = sched_thread_wait_interruptible(&g_sockets_writer_futex,
+                                                           &handle->sock.lock);
+                if (wret < 0) {
+                    spinlock_unlock(&handle->sock.lock);
+                    return wret;
+                }
                 continue;
             }
             /* non-blocking socket that didn't send anything must error out with TRYAGAIN */
@@ -1147,10 +1161,8 @@ static int pal_common_udp_send(struct pal_handle *handle,
  * recv() on an idle socket never returned. */
 static int vm_sock_recv_wait(struct pal_handle* handle, int* futex, uint64_t* deadline_us) {
     uint64_t timeout_us = handle->sock.recvtimeout_us;
-    if (!timeout_us) {
-        sched_thread_wait(futex, &handle->sock.lock);
-        return 0;
-    }
+    if (!timeout_us)
+        return sched_thread_wait_interruptible(futex, &handle->sock.lock);
 
     uint64_t now_us;
     int ret = get_time_in_us(&now_us);
@@ -1165,9 +1177,9 @@ static int vm_sock_recv_wait(struct pal_handle* handle, int* futex, uint64_t* de
     ret = register_timeout(*deadline_us, futex, &timeout);
     if (ret < 0)
         return ret;
-    sched_thread_wait(futex, &handle->sock.lock);
+    ret = sched_thread_wait_interruptible(futex, &handle->sock.lock);
     deregister_timeout(timeout);
-    return 0;
+    return ret;
 }
 
 static int pal_common_tcp_recv(struct pal_handle* handle, struct iovec* iov, size_t iov_len,

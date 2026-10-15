@@ -331,6 +331,74 @@ void sched_thread_wait(int* futex_word, spinlock_t* lock) {
     spinlock_lock(lock);
 }
 
+int sched_thread_wait_interruptible(int* futex_word, spinlock_t* lock) {
+    assert(spinlock_is_locked(lock));
+    assert(lock != &g_thread_list_lock);
+
+    spinlock_lock_disable_irq(&g_thread_list_lock); /* unlocked during save_context, or below */
+
+    uint64_t curr_gs_base      = rdmsr(MSR_IA32_GS_BASE);
+    struct thread* curr_thread = get_thread_ptr(curr_gs_base);
+
+    /* an interruption that arrived before this wait (the thread was in user mode or on its way
+     * here): do not sleep, as a system call with a signal pending does not */
+    if (__atomic_exchange_n(&curr_thread->resume_pending, false, __ATOMIC_ACQ_REL)) {
+        spinlock_unlock_enable_irq(&g_thread_list_lock);
+        return -PAL_ERROR_INTERRUPTED;
+    }
+
+    spinlock_unlock(lock);
+
+    curr_thread->state              = THREAD_BLOCKED;
+    curr_thread->blocked_on         = futex_word;
+    curr_thread->wait_interruptible = true;
+
+    struct thread* next_thread = find_next_thread(curr_thread);
+    next_thread->state         = THREAD_RUNNING;
+
+    assert(next_thread != curr_thread);
+
+    wrmsr(MSR_IA32_FS_BASE, next_thread->context.user_fsbase);
+
+    uint64_t next_gs_base = (uint64_t)get_gs_base(next_thread);
+    save_context_and_restore_next(curr_gs_base, next_gs_base, /*lock_to_unlock=*/NULL,
+                                  /*clear_child_tid=*/NULL, &g_thread_list_lock.lock,
+                                  get_per_cpu_data()->scheduling_stack, /*post_switch=*/NULL,
+                                  /*post_switch_arg=*/NULL);
+
+    /* scheduled back: woken by the futex word or by sched_thread_interrupt() (an interruption
+     * that arrives from now on waits for the next interruptible wait or user-mode tick) */
+    spinlock_lock_disable_irq(&g_thread_list_lock);
+    curr_thread->wait_interruptible = false;
+    bool interrupted = curr_thread->woken_by_interrupt;
+    curr_thread->woken_by_interrupt = false;
+    spinlock_unlock_enable_irq(&g_thread_list_lock);
+
+    spinlock_lock(lock);
+    return interrupted ? -PAL_ERROR_INTERRUPTED : 0;
+}
+
+void sched_thread_interrupt(struct thread* thread) {
+    spinlock_lock_disable_irq(&g_thread_list_lock);
+    if (thread->state == THREAD_BLOCKED && thread->wait_interruptible) {
+        /* the wait's -PAL_ERROR_INTERRUPTED return is the delivery; nothing stays pending */
+        thread->state              = THREAD_RUNNABLE;
+        thread->blocked_on         = NULL;
+        thread->woken_by_interrupt = true;
+        __atomic_store_n(&thread->resume_pending, false, __ATOMIC_RELEASE);
+#ifdef __x86_64__
+        if (memory_frame_pool_active() && !thread->is_helper) {
+            LISTP_DEL(thread, &g_thread_list, list);
+            LISTP_ADD(thread, &g_thread_list, list);
+        }
+#endif
+        __atomic_store_n(&g_kick_sched_thread, true, __ATOMIC_RELEASE);
+    } else {
+        __atomic_store_n(&thread->resume_pending, true, __ATOMIC_RELEASE);
+    }
+    spinlock_unlock_enable_irq(&g_thread_list_lock);
+}
+
 static void sched_thread_wakeup_common(int* futex_word) {
     assert(spinlock_is_locked(&g_thread_list_lock));
 

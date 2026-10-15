@@ -37,13 +37,24 @@ void _PalThreadYieldExecution(void) {
 }
 
 int _PalThreadResume(struct pal_handle* thread) {
+#ifdef __x86_64__
+    /* Interrupt the thread's blocking PAL call, if it is in one (an interruptible wait returns
+     * -PAL_ERROR_INTERRUPTED and the LibOS handles the thread's pending signals), otherwise mark it
+     * so that its next such wait does not sleep and its next user-mode timer tick delivers
+     * PAL_EVENT_INTERRUPTED (pal_common_deliver_pending_interrupt()). History: the tick delivery
+     * alone, without interruptible waits, was tried with the experimental multiprocess support and
+     * stalled Mono (Bastion) after its first GC suspension (Documentation/devel/vm-multiproc/
+     * FINDINGS.md); Documentation/devel/proton-vm/FINDINGS.md has this version's tests. */
+    if (!thread->thread.kernel_thread)
+        return 0;
+    sched_thread_interrupt(thread->thread.kernel_thread);
+    return 0;
+#else
     /* Not implemented: the LibOS wakes a thread blocked in its own waits, and a thread notices a
-     * new signal at its next system call. Delivering the signal at the thread's next user-mode
-     * timer tick (resume_pending, pal_common_deliver_pending_interrupt()) was tried with the
-     * experimental multiprocess support and stalled Mono (Bastion) after its first GC
-     * suspension; see Documentation/devel/vm-multiproc/FINDINGS.md. */
+     * new signal at its next system call. */
     __UNUSED(thread);
     return -PAL_ERROR_NOTIMPLEMENTED;
+#endif
 }
 
 int _PalThreadSetCpuAffinity(struct pal_handle* thread, unsigned long* cpu_mask,

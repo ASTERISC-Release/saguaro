@@ -207,6 +207,13 @@ struct thread {
      * return (iretq) loads the base back and clears it */
     uint64_t gs_swapped_by_isr;
 #endif
+
+    /* An interruptible wait (sched_thread_wait_interruptible(): a blocking PAL call made for the
+     * application) is in progress; _PalThreadResume() of another thread then wakes this one with
+     * `woken_by_interrupt` set and the wait returns -PAL_ERROR_INTERRUPTED, as a host signal
+     * interrupts a system call on the Linux PAL. Both under g_thread_list_lock. */
+    bool wait_interruptible;
+    bool woken_by_interrupt;
 };
 DEFINE_LISTP(thread);
 

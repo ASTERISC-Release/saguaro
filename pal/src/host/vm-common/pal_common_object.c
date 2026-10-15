@@ -224,7 +224,10 @@ int pal_common_streams_wait_events(size_t count, struct pal_handle** handle_arra
         /* no events found, need to sleep for any new events */
         if (virtio_vsock_rearm_notifications())
             continue;
-        sched_thread_wait(&g_streams_waiting_events_futex, &g_streams_waiting_events_lock);
+        ret = sched_thread_wait_interruptible(&g_streams_waiting_events_futex,
+                                              &g_streams_waiting_events_lock);
+        if (ret < 0)
+            goto out;
     }
 
     ret = 0;

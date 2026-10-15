@@ -172,8 +172,12 @@ static bool is_user_mode(struct isr_regs* regs) {
 }
 #endif
 
-int pal_common_perform_memfault_handling(uint64_t faulted_addr, struct isr_regs* regs) {
-    pal_event_handler_t upcall = _PalGetExceptionHandler(PAL_EVENT_MEMFAULT);
+/* A CPU exception of the application becomes a LibOS event: a memory fault (#PF, #GP), an illegal
+ * instruction (#UD) or an arithmetic error (#DE, #MF, #XM). `addr` is the faulting address for a
+ * memory fault and the instruction's address otherwise, as the Linux PAL reports si_addr. Returns
+ * -PAL_ERROR_DENIED when the LibOS cannot take it (no handler yet, or the fault is the PAL's own). */
+int pal_common_perform_event_handling(enum pal_event event, uint64_t addr, struct isr_regs* regs) {
+    pal_event_handler_t upcall = _PalGetExceptionHandler(event);
     if (!upcall)
         return -PAL_ERROR_DENIED;
 
@@ -195,18 +199,22 @@ int pal_common_perform_memfault_handling(uint64_t faulted_addr, struct isr_regs*
 #ifdef __x86_64__
     /* with the experimental multiprocess support (demand-zero pages may fault in the upcall) */
     if (is_user_mode(regs) && curr_tcb->thread_handle && memory_frame_pool_active())
-        defer_user_upcall(PAL_EVENT_MEMFAULT, faulted_addr, regs);
+        defer_user_upcall(event, addr, regs);
 #endif
 
     /* RIP in the isr_regs is the actual user RIP */
     curr_tcb->kernel_thread.context.user_rip = regs->rip;
 
     PAL_CONTEXT context;
-    isr_regs_to_pal_context(&context, regs, faulted_addr);
-    (*upcall)(/*is_in_pal=*/false, faulted_addr, &context);
+    isr_regs_to_pal_context(&context, regs, addr);
+    (*upcall)(/*is_in_pal=*/false, addr, &context);
     pal_context_to_isr_regs(regs, &context);
 
     return 0;
+}
+
+int pal_common_perform_memfault_handling(uint64_t faulted_addr, struct isr_regs* regs) {
+    return pal_common_perform_event_handling(PAL_EVENT_MEMFAULT, faulted_addr, regs);
 }
 
 #ifdef __x86_64__

@@ -143,3 +143,7 @@ double pal_common_get_bogomips(void);
 int pal_common_get_topo_info(struct pal_topo_info* topo_info);
 int pal_common_segment_base_get(enum pal_segment_reg reg, uintptr_t* addr);
 int pal_common_segment_base_set(enum pal_segment_reg reg, uintptr_t addr);
+
+/* kernel_interrupts.c: a CPU exception of the application as a LibOS event (pal_common_exception.c) */
+struct isr_regs;
+int pal_common_perform_event_handling(enum pal_event event, uint64_t addr, struct isr_regs* regs);

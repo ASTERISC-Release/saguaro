@@ -74,7 +74,12 @@ int64_t pal_common_console_read(struct pal_handle* handle, uint64_t offset, uint
         bytes = virtio_console_read(buffer, size);
         if (bytes < 0) {
             if (bytes == -PAL_ERROR_TRYAGAIN) {
-                sched_thread_wait(&g_console_reader_futex, &handle->console.lock);
+                int wret = sched_thread_wait_interruptible(&g_console_reader_futex,
+                                                           &handle->console.lock);
+                if (wret < 0) {
+                    bytes = wret;
+                    break;
+                }
                 continue;
             }
         }

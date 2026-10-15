@@ -60,7 +60,12 @@ int64_t pal_common_eventfd_read(struct pal_handle* handle, uint64_t offset, uint
             return -PAL_ERROR_TRYAGAIN;
         }
 
-        sched_thread_wait(&handle->eventfd.reader_futex, &handle->eventfd.lock);
+        int wret = sched_thread_wait_interruptible(&handle->eventfd.reader_futex,
+                                                   &handle->eventfd.lock);
+        if (wret < 0) {
+            spinlock_unlock(&handle->eventfd.lock);
+            return wret;
+        }
     }
 
     if (!handle->eventfd.semaphore) {
@@ -104,7 +109,12 @@ int64_t pal_common_eventfd_write(struct pal_handle* handle, uint64_t offset, uin
             return -PAL_ERROR_TRYAGAIN;
         }
 
-        sched_thread_wait(&handle->eventfd.writer_futex, &handle->eventfd.lock);
+        int wret = sched_thread_wait_interruptible(&handle->eventfd.writer_futex,
+                                                   &handle->eventfd.lock);
+        if (wret < 0) {
+            spinlock_unlock(&handle->eventfd.lock);
+            return wret;
+        }
     }
 
     handle->eventfd.val = val;

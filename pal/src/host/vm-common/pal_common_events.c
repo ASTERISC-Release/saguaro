@@ -106,7 +106,9 @@ int pal_common_event_wait(struct pal_handle* handle, uint64_t* timeout_us) {
         }
 
         /* event wasn't yet signalled, need to sleep waiting on this event */
-        sched_thread_wait(&handle->event.signaled, &handle->event.lock);
+        ret = sched_thread_wait_interruptible(&handle->event.signaled, &handle->event.lock);
+        if (ret < 0)
+            goto out;
     }
 
     ret = 0;
