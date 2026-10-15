@@ -463,3 +463,39 @@ int PalFileRename(const char* old_typed_uri, const char* new_typed_uri) {
 int PalDebugLog(const void* buffer, size_t size) {
     return _PalDebugLog(buffer, size);
 }
+
+/* the file handle ops for a typed URI, or NULL if the URI is not a file URI */
+static struct handle_ops* file_ops_of(const char* typed_uri, const char** out_uri) {
+    char type[URI_PREFIX_MAX_LEN + 1];
+    struct handle_ops* ops;
+    if (split_uri_and_find_ops(typed_uri, type, out_uri, &ops) < 0 || ops != &g_file_ops)
+        return NULL;
+    return ops;
+}
+
+int PalFileExchange(const char* typed_uri_a, const char* typed_uri_b) {
+    const char* uri_a;
+    const char* uri_b;
+    struct handle_ops* ops_a = file_ops_of(typed_uri_a, &uri_a);
+    struct handle_ops* ops_b = file_ops_of(typed_uri_b, &uri_b);
+    if (!ops_a || ops_a != ops_b || !ops_a->exchange_path)
+        return -PAL_ERROR_NOTSUPPORT;
+    return ops_a->exchange_path(uri_a, uri_b);
+}
+
+int PalFileReadLink(const char* typed_uri, char* buf, size_t* inout_size) {
+    const char* uri;
+    struct handle_ops* ops = file_ops_of(typed_uri, &uri);
+    if (!ops || !ops->readlink_path)
+        return -PAL_ERROR_NOTSUPPORT;
+    return ops->readlink_path(uri, buf, inout_size);
+}
+
+int PalFileXattr(const char* typed_uri, enum pal_xattr_op op, const char* name, void* value,
+                 size_t* inout_size, int flags) {
+    const char* uri;
+    struct handle_ops* ops = file_ops_of(typed_uri, &uri);
+    if (!ops || !ops->xattr)
+        return -PAL_ERROR_NOTSUPPORT;
+    return ops->xattr(uri, op, name, value, inout_size, flags);
+}

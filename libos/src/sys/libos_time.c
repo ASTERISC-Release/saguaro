@@ -64,9 +64,18 @@ long libos_syscall_clock_gettime(clockid_t which_clock, struct timespec* tp) {
         return -EFAULT;
 
     if (which_clock == CLOCK_PROCESS_CPUTIME_ID || which_clock == CLOCK_THREAD_CPUTIME_ID) {
+        /* the PAL's CPU accounting (`PalGetCpuTime()`, microsecond resolution); a PAL without it
+         * (the VM PAL) falls back to the real-time clock as before */
+        uint64_t user_us, sys_us;
+        if (PalGetCpuTime(which_clock == CLOCK_THREAD_CPUTIME_ID, &user_us, &sys_us) == 0) {
+            uint64_t cpu_us = user_us + sys_us;
+            tp->tv_sec = cpu_us / 1000000;
+            tp->tv_nsec = (cpu_us % 1000000) * 1000;
+            return 0;
+        }
         if (FIRST_TIME()) {
-            log_warning("Per-process and per-thread CPU-time clocks are not supported in "
-                        "clock_gettime(); they are replaced with system-wide real-time clock.");
+            log_warning("Per-process and per-thread CPU-time clocks are not supported by this PAL "
+                        "in clock_gettime(); they are replaced with system-wide real-time clock.");
         }
     }
 

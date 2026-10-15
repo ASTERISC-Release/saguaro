@@ -83,6 +83,11 @@ void libos_inotify_transfer_watches(struct libos_dentry* from, struct libos_dent
 /* `renameat2(RENAME_EXCHANGE)`: the watches of `a` move to `b` and those of `b` to `a` */
 void libos_inotify_swap_watches(struct libos_dentry* a, struct libos_dentry* b);
 
+/* dnotify: `fcntl(fd, F_NOTIFY, arg)` on a directory descriptor, and the cleanup when that
+ * descriptor is closed (called from `detach_fd_handle()`) */
+int libos_dnotify_set(struct libos_handle* hdl, int fd, unsigned long arg);
+void libos_dnotify_fd_closed(int fd, struct libos_handle* hdl);
+
 /* drop all watches and queued events of a closing instance */
 void libos_inotify_destroy_watches(struct libos_handle* group);
 

@@ -22,6 +22,14 @@
  * assumptions, we always pass dummy target_info string and size */
 #define TDX_TARGET_INFO_DUMMY "target_info_dummy"
 
+/* No CPU accounting in this PAL (the VM PAL's scheduler would have to keep it). */
+int _PalGetCpuTime(bool thread, uint64_t* out_user_us, uint64_t* out_sys_us) {
+    __UNUSED(thread);
+    __UNUSED(out_user_us);
+    __UNUSED(out_sys_us);
+    return -PAL_ERROR_NOTIMPLEMENTED;
+}
+
 int _PalRandomBitsRead(void* buffer, size_t size) {
     return pal_common_random_bits_read(buffer, size);
 }

@@ -67,6 +67,7 @@ reason = "The VM PAL has no device streams (dev: URIs), so opening /dev/* host d
 tests = [
   "TC_40_FileSystem::test_001_devfs",
   "TC_40_FileSystem::test_002_device_passthrough",
+  "TC_40_FileSystem::test_071_memfd_on_shm_mount",
   "TC_40_FileSystem::test_006_device_drm",
   "TC_40_FileSystem::test_007_device_drm_denied",
   "TC_80_Socket::test_005_host_unix_socket",
@@ -114,6 +115,14 @@ category = "slow-timer"
 reason = "Timed waits are serviced only by CPU0's 100 ms tick (~0.5 s per iteration here), so the test exceeds any sensible timeout. A finer timer would fix it."
 tests = [
   "TC_00_Unittests::test_001_rwlock",
+]
+
+[[group]]
+kind = "skip"
+category = "no-shared-host-file-mappings"
+reason = "The VM PAL cannot map a host (virtio-fs) file MAP_SHARED and writable; it does so only on its own tmpfs, where the tmpfs variant of the test runs."
+tests = [
+  "TC_40_FileSystem::test_076a_mremap_misc_chroot",
 ]
 
 [[group]]
@@ -189,4 +198,12 @@ category = "investigate"
 reason = "Fails with 'Internal memory fault with VMA at 0x17ce00' in LibOS (passes on aarch64); cause not yet understood."
 tests = [
   "TC_00_Unittests::test_010_gramine_run_test",
+]
+
+[[group]]
+kind = "skip"
+category = "no-cpu-accounting"
+reason = "The VM PAL has no CPU-time accounting (PalGetCpuTime is not implemented there): getrusage and times() report zero and the CPU-time clocks fall back to the real-time clock."
+tests = [
+  "TC_30_Syscall::test_09f_cputime",
 ]

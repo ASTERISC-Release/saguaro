@@ -75,7 +75,44 @@ static int chroot_lookup(struct libos_dentry* dent) {
     if (ret < 0)
         goto out;
 
+    /*
+     * A host symbolic link (one made by an earlier process of this session, or before it) is
+     * shown as a link when resolving it inside Gramine is the same as on the host: a relative
+     * target without ".." stays in the same directory of the same mount. A dangling link is a
+     * link too (it used to be reported missing). Other links (absolute targets, ones climbing out
+     * with "..", e.g. into the host's /etc/alternatives) are followed on the host as before, since
+     * manifests rely on that; so is a mount's root (no parent), whose host path is often itself a
+     * link (/bin -> usr/bin). Mounts with `host_symlinks` keep host resolution for every link
+     * (readlink asks the host there, see `chroot_host_readlink()`).
+     */
     PAL_STREAM_ATTR pal_attr;
+    char link_buf[PATH_MAX];
+    size_t link_len = sizeof(link_buf) - 1;
+    bool detect = dent->parent && !(dent->mount && dent->mount->host_symlinks);
+    ret = detect ? PalFileReadLink(uri, link_buf, &link_len) : -PAL_ERROR_INVAL;
+    if (ret == 0) {
+        link_buf[link_len] = '\0';
+        bool same_dir = link_buf[0] != '/' && strcmp(link_buf, "..") != 0 &&
+                        strncmp(link_buf, "../", 3) != 0 && !strstr(link_buf, "/../") &&
+                        !(link_len >= 3 && !strcmp(link_buf + link_len - 3, "/.."));
+        bool as_link = same_dir ||
+                       PalStreamAttributesQuery(uri, &pal_attr) == -PAL_ERROR_STREAMNOTEXIST;
+        if (as_link) {
+            char* target = strdup(link_buf);
+            if (!target) {
+                ret = -ENOMEM;
+                goto out;
+            }
+            ret = chroot_setup_dentry(dent, S_IFLNK, PERM_rwxrwxrwx, link_len);
+            if (ret < 0) {
+                free(target);
+                goto out;
+            }
+            dent->inode->data = target;
+            goto out;
+        }
+    }
+
     memset(&pal_attr, 0, sizeof(pal_attr));
     ret = PalStreamAttributesQuery(uri, &pal_attr);
     if (ret < 0) {
@@ -474,6 +511,113 @@ static int chroot_follow_link(struct libos_dentry* dent, char** out_target) {
     return *out_target ? 0 : -ENOMEM;
 }
 
+/* RENAME_EXCHANGE on the host (atomic there); the caller swaps the inodes */
+static int chroot_exchange(struct libos_dentry* a, struct libos_dentry* b) {
+    assert(locked(&g_dcache_lock));
+    char* uri_a = NULL;
+    char* uri_b = NULL;
+    /* path operations take "file:" URIs whatever the object (as for symlinks above) */
+    int ret = dentry_uri(a, S_IFREG, &uri_a);
+    if (ret == 0)
+        ret = dentry_uri(b, S_IFREG, &uri_b);
+    if (ret == 0) {
+        ret = PalFileExchange(uri_a, uri_b);
+        if (ret == -PAL_ERROR_NOTSUPPORT)
+            ret = -EOPNOTSUPP;
+        else if (ret < 0)
+            ret = pal_to_unix_errno(ret);
+    }
+    free(uri_a);
+    free(uri_b);
+    return ret;
+}
+
+/* one host attribute operation through `PalFileXattr`, with the PAL's errors mapped to the ones
+ * the xattr calls need */
+static int chroot_host_xattr(struct libos_dentry* dent, int op, const char* name, void* value,
+                             size_t* size, int flags) {
+    char* uri = NULL;
+    int ret = dentry_uri(dent, S_IFREG, &uri);
+    if (ret < 0)
+        return ret;
+    /* the LibOS has resolved the path already: `dent` is the object itself */
+    ret = PalFileXattr(uri, (enum pal_xattr_op)op, name, value, size, flags | PAL_XATTR_NOFOLLOW);
+    free(uri);
+    switch (ret) {
+        case 0:
+            return 0;
+        case -PAL_ERROR_STREAMNOTEXIST:
+            return -ENODATA;
+        case -PAL_ERROR_NOTSUPPORT:
+            return -EOPNOTSUPP;
+        case -PAL_ERROR_TOOLONG:
+            return op == PAL_XATTR_SET ? -E2BIG : -ERANGE;
+        case -PAL_ERROR_STREAMEXIST:
+            return -EEXIST;
+        default:
+            return pal_to_unix_errno(ret);
+    }
+}
+
+static bool is_privileged_xattr(const char* name) {
+    return !strncmp(name, "security.", 9) || !strncmp(name, "trusted.", 8);
+}
+
+/*
+ * Extended attributes are the host file's. The privileged namespaces (`security.`, `trusted.`)
+ * are the exception when the host refuses them (Gramine usually runs unprivileged on the host,
+ * while the LibOS's root may set them): those are kept in the LibOS inode instead, for as long as
+ * the inode lives in this process (they are not written to the host nor seen by other processes).
+ * Get and remove look there first, list shows both.
+ */
+static int chroot_xattr(struct libos_dentry* dent, int op, const char* name, void* value,
+                        size_t* size, int flags) {
+    assert(locked(&g_dcache_lock));
+    struct libos_inode* inode = dent->inode;
+    int ret;
+
+    if (op == PAL_XATTR_LIST) {
+        size_t host_size = *size;
+        ret = chroot_host_xattr(dent, op, name, value, &host_size, flags);
+        bool host_none = ret == -EOPNOTSUPP;
+        if (host_none)
+            host_size = 0;
+        else if (ret < 0)
+            return ret;
+        size_t local_size = *size ? *size - host_size : 0;
+        if (*size && local_size == 0) {
+            /* the buffer is full: only fits if nothing is stored locally */
+            size_t need = 0;
+            ret = libos_xattr_store_op(inode, op, NULL, NULL, &need, 0);
+            if (ret < 0)
+                return ret;
+            if (need)
+                return -ERANGE;
+        } else {
+            ret = libos_xattr_store_op(inode, op, NULL, *size ? (char*)value + host_size : NULL,
+                                       &local_size, 0);
+            if (ret < 0)
+                return ret;
+        }
+        if (host_none && local_size == 0)
+            return -EOPNOTSUPP;
+        *size = host_size + local_size;
+        return 0;
+    }
+
+    if (!is_privileged_xattr(name))
+        return chroot_host_xattr(dent, op, name, value, size, flags);
+
+    size_t probe = 0;
+    bool local = libos_xattr_store_op(inode, PAL_XATTR_GET, name, NULL, &probe, 0) == 0;
+    if (local)
+        return libos_xattr_store_op(inode, op, name, value, size, flags);
+    ret = chroot_host_xattr(dent, op, name, value, size, flags);
+    if (op == PAL_XATTR_SET && (ret == -EACCES || ret == -EPERM || ret == -EOPNOTSUPP))
+        ret = libos_xattr_store_op(inode, op, name, value, size, flags);
+    return ret;
+}
+
 static void chroot_idrop(struct libos_inode* inode) {
     if (inode->type == S_IFLNK)
         free(inode->data);
@@ -641,6 +785,8 @@ struct libos_d_ops chroot_d_ops = {
     .symlink = &chroot_symlink,
     .link = &chroot_link,
     .follow_link = &chroot_follow_link,
+    .exchange = &chroot_exchange,
+    .xattr = &chroot_xattr,
     .idrop = &chroot_idrop,
 };
 

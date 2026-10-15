@@ -95,6 +95,10 @@ struct handle_ops {
     int (*link)(const char* old_uri, const char* new_uri);
     int (*unlink_path)(const char* uri);
     int (*rename_path)(const char* old_uri, const char* new_uri);
+    int (*exchange_path)(const char* uri_a, const char* uri_b);
+    int (*readlink_path)(const char* uri, char* buf, size_t* inout_size);
+    int (*xattr)(const char* uri, enum pal_xattr_op op, const char* name, void* value,
+                 size_t* inout_size, int flags);
 };
 
 extern const struct handle_ops* g_pal_handle_ops[];
@@ -260,6 +264,7 @@ int _PalSystemTimeQuery(uint64_t* out_usec);
  * 0 on success, negative on failure.
  */
 int _PalRandomBitsRead(void* buffer, size_t size);
+int _PalGetCpuTime(bool thread, uint64_t* out_user_us, uint64_t* out_sys_us);
 
 #if defined(__aarch64__) && defined(PAL_HOST_VM)
 /* the vm kernel is built -mgeneral-regs-only: this returns the IEEE-754 bit pattern of the

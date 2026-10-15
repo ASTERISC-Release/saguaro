@@ -54,6 +54,8 @@ int set_hostname(const char* name, size_t len) {
 }
 
 long libos_syscall_sethostname(char* name, int len) {
+    if (!libos_capable(21 /* CAP_SYS_ADMIN */))
+        return -EPERM; /* checked first, as in the kernel (LTP sethostname03) */
     if (len < 0 || (size_t)len >= sizeof(g_current_uname.nodename))
         return -EINVAL;
 
@@ -64,6 +66,8 @@ long libos_syscall_sethostname(char* name, int len) {
 }
 
 long libos_syscall_setdomainname(char* name, int len) {
+    if (!libos_capable(21 /* CAP_SYS_ADMIN */))
+        return -EPERM; /* LTP setdomainname03 */
     if (len < 0 || (size_t)len >= sizeof(g_current_uname.domainname))
         return -EINVAL;
 

@@ -316,7 +316,7 @@ static int extract_dir_and_base(const char* orig_path, char** out_modified_path,
     return -PAL_ERROR_INVAL;
 }
 
-static int file_or_dir_rename(const char* old, const char* new) {
+static int file_or_dir_rename(const char* old, const char* new, uint32_t flags) {
     int ret;
     char* old_realpath_with_slash = NULL;
     char* old_resolved_path = NULL;
@@ -353,7 +353,10 @@ static int file_or_dir_rename(const char* old, const char* new) {
     if (ret < 0)
         goto out;
 
-    ret = virtio_fs_fuse_rename(old_dir_nodeid, old_base_path, new_dir_nodeid, new_base_path);
+    ret = flags ? virtio_fs_fuse_rename2(old_dir_nodeid, old_base_path, new_dir_nodeid,
+                                         new_base_path, flags)
+                : virtio_fs_fuse_rename(old_dir_nodeid, old_base_path, new_dir_nodeid,
+                                        new_base_path);
     if (ret < 0)
         goto out;
 
@@ -390,7 +393,88 @@ out:
 }
 
 int pal_common_file_rename_path(const char* old_uri, const char* new_uri) {
-    return file_or_dir_rename(old_uri, new_uri);
+    return file_or_dir_rename(old_uri, new_uri, /*flags=*/0);
+}
+
+int pal_common_file_exchange_path(const char* uri_a, const char* uri_b) {
+    return file_or_dir_rename(uri_a, uri_b, /*RENAME_EXCHANGE=*/2);
+}
+
+/* The node of `uri` itself (its last component is not followed): the directory part is resolved,
+ * then the full path is looked up. */
+static int lookup_nofollow(const char* uri, uint64_t* out_nodeid, struct fuse_attr* out_attr) {
+    char* modified = NULL;
+    char* dir = NULL;
+    char* base = NULL;
+    char* resolved_dir = NULL;
+    char* full = NULL;
+    int ret = extract_dir_and_base(uri, &modified, &dir, &base);
+    if (ret < 0)
+        goto out;
+    ret = realpath(dir, /*got_path=*/NULL, &resolved_dir);
+    if (ret < 0)
+        goto out;
+    full = alloc_concat3(resolved_dir, -1, "/", 1, base, -1);
+    if (!full) {
+        ret = -PAL_ERROR_NOMEM;
+        goto out;
+    }
+    ret = virtio_fs_fuse_lookup(full, out_nodeid, out_attr);
+out:
+    free(modified);
+    free(resolved_dir);
+    free(full);
+    return ret;
+}
+
+int pal_common_file_readlink_path(const char* uri, char* buf, size_t* inout_size) {
+    uint64_t nodeid;
+    struct fuse_attr attr = {0};
+    int ret = lookup_nofollow(uri, &nodeid, &attr);
+    if (ret < 0)
+        return ret;
+    if ((attr.mode & S_IFMT) != S_IFLNK)
+        return -PAL_ERROR_INVAL;
+    uint64_t size = 0;
+    ret = virtio_fs_fuse_readlink(nodeid, *inout_size, buf, &size);
+    if (ret < 0)
+        return ret;
+    *inout_size = size;
+    return 0;
+}
+
+int pal_common_file_xattr(const char* uri, enum pal_xattr_op op, const char* name, void* value,
+                          size_t* inout_size, int flags) {
+    uint64_t nodeid;
+    int ret;
+    if (flags & PAL_XATTR_NOFOLLOW) {
+        ret = lookup_nofollow(uri, &nodeid, /*out_attr=*/NULL);
+    } else {
+        char* resolved = NULL;
+        ret = realpath(uri, /*got_path=*/NULL, &resolved);
+        if (ret == 0)
+            ret = virtio_fs_fuse_lookup(resolved, &nodeid, /*out_attr=*/NULL);
+        free(resolved);
+    }
+    if (ret < 0)
+        return ret;
+
+    uint64_t size = *inout_size;
+    switch (op) {
+        case PAL_XATTR_GET:
+        case PAL_XATTR_LIST:
+            ret = virtio_fs_fuse_getxattr(nodeid, op == PAL_XATTR_GET ? name : NULL, value, &size);
+            if (ret == 0)
+                *inout_size = size;
+            return ret;
+        case PAL_XATTR_SET:
+            return virtio_fs_fuse_setxattr(nodeid, name, value, size,
+                                           flags & (PAL_XATTR_CREATE | PAL_XATTR_REPLACE));
+        case PAL_XATTR_REMOVE:
+            return virtio_fs_fuse_removexattr(nodeid, name);
+        default:
+            return -PAL_ERROR_INVAL;
+    }
 }
 
 int pal_common_file_symlink(const char* target, const char* uri) {
@@ -957,7 +1041,7 @@ int pal_common_file_rename(struct pal_handle* handle, const char* type, const ch
     if (!tmp)
         return -PAL_ERROR_NOMEM;
 
-    int ret = file_or_dir_rename(handle->file.realpath, uri);
+    int ret = file_or_dir_rename(handle->file.realpath, uri, /*flags=*/0);
     if (ret < 0) {
         free(tmp);
         return ret;
@@ -1231,7 +1315,7 @@ int pal_common_dir_rename(struct pal_handle* handle, const char* type, const cha
     if (!tmp)
         return -PAL_ERROR_NOMEM;
 
-    int ret = file_or_dir_rename(handle->dir.realpath, uri);
+    int ret = file_or_dir_rename(handle->dir.realpath, uri, /*flags=*/0);
     if (ret < 0) {
         free(tmp);
         return ret;
