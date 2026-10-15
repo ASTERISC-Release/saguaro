@@ -13,7 +13,7 @@ FNA on SDL2 and OpenGL, FMOD for audio), under `gramine-vm` with the graphics ho
 |---|---|
 | 2 vCPUs, `MULTIPROC=0` (default) | Starts, OpenGL through the redirection, reaches the title screen ("Press Any Key") in about 90 s. FMOD's `sh -c` probe fails (`process creation failed`) and the game continues without sound. Same as `main`. |
 | 2 vCPUs, `MULTIPROC=1` | Reaches the title screen and plays (2026-10-14, after the libgraphics session change): FMOD's `sh` child inherits `LD_PRELOAD=/libgraphics.so`, but the library now starts its graphics session (the comm-page handshake with the host) only at the first graphics call, so the child never touches the comm page and exits 127 (`pulseaudio` is not installed); the game goes on without sound. Before that change the child's constructor ran the handshake, hung, and disturbed the parent (black window). |
-| 1 vCPU, either setting | No window within 120 s: the game's GL goes to the host Mesa directly (`XDG_RUNTIME_DIR` error, the AMD GPU's name) instead of the redirected EGL path. `main` does the same, so it is not caused by the multi-process work; not diagnosed (graphics redirection). |
+| 1 vCPU, either setting | Reaches the title screen (2026-10-14, after the vsock port fix; key on: in about 75 s, the `sh` child exits 127). Before: no window when the game had no profile yet. SDL's failed `SDL_Init` (no udev) closed its X connection, and reopening it right away got the same guest vsock port, which the host refused; SDL then fell back to its KMSDRM driver on the host's other GPU (the `XDG_RUNTIME_DIR` error, the AMD name). The VM PAL's vsock driver now never reuses a just-released port. |
 
 **Played (maintainer-reported, 2026-10-14):** in a run with 2 vCPUs, `MULTIPROC=0`, the merge of
 `main` at 8451eec3 (before the libgraphics change), shared input ring on, the maintainer played the
@@ -22,7 +22,12 @@ game and started a new game: keyboard and mouse input reach the game through the
 1920x1080 window, so only the top-left quarter of the picture was visible (see below).
 
 `MULTIPROC=1` adds `sys.experimental__multiprocess = true` and a `/bin` mount (FMOD runs `/bin/sh`).
-Sound, saving and the resolution setting (the 1920x1080 crop) were not tested yet.
+Without a profile the game draws at the desktop size (3840x2160 on a 4K screen), and a
+1920x1080 window shows only the top-left quarter in the menus. The game's own setting fixes it:
+Help & Options, Resolution, 1920x1080 (this was done on the screen in one run). It is stored in the
+profile, `$(DATA_DIR)/share/Bastion/Profile1.profile` (bytes 4 to 11: width and height as 32-bit
+little-endian integers), so it holds for later runs. Saving works in that sense: the profile and the
+active-profile file are written to `DATA_DIR`. Sound is off (no audio device in the guest).
 
 ## The game is not included
 
