@@ -95,8 +95,13 @@ enum pal_vbs_host_op {
     PAL_VBS_HOST_SETSOCKOPT,    /* a: id, level, name, value (Linux constants) */
     PAL_VBS_HOST_GETSOCKNAME,   /* a: id -> out: sockaddr */
     PAL_VBS_HOST_FIONREAD,      /* a: id -> bytes pending */
-    PAL_VBS_HOST_POLL,          /* in: struct pal_vbs_host_pollfd[n]; a: n, timeout_ms ->
+    PAL_VBS_HOST_POLL,          /* in: struct pal_vbs_host_pollfd[n]; a: n, timeout_ms, waker id
+                                   + 1 (0: none; the wait also ends when the waker is woken) ->
                                    out: the same array with revents; result: ready count */
+    PAL_VBS_HOST_WAKER,         /* -> id of a new waker (a host object that ends a POLL of the
+                                   thread that passes it), for one enclave thread at a time */
+    PAL_VBS_HOST_WAKE,          /* a: waker id: ends the POLL that waits with it now, or the next
+                                   one */
 };
 
 #define PAL_VBS_HOST_SOCKADDR_MAX 128u

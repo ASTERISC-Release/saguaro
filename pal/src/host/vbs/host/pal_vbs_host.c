@@ -104,7 +104,8 @@ static const char* stats_kind_name(int k) {
         [PAL_VBS_HOST_RECV] = "recv", [PAL_VBS_HOST_SHUTDOWN] = "shutdown",
         [PAL_VBS_HOST_SETNONBLOCK] = "setnonblock", [PAL_VBS_HOST_SETSOCKOPT] = "setsockopt",
         [PAL_VBS_HOST_GETSOCKNAME] = "getsockname", [PAL_VBS_HOST_FIONREAD] = "fionread",
-        [PAL_VBS_HOST_POLL] = "poll",
+        [PAL_VBS_HOST_POLL] = "poll", [PAL_VBS_HOST_WAKER] = "waker",
+        [PAL_VBS_HOST_WAKE] = "wake",
     };
     if (k < 16)
         return k < (int)(sizeof(ocalls) / sizeof(ocalls[0])) ? ocalls[k] : "ocall?";
