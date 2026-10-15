@@ -58,6 +58,34 @@ static void* map_like(const struct libos_vma_info* vma, size_t src_offset, void*
     return ret;
 }
 
+/*
+ * Linux requires the old range to lie in one VMA (`vma_to_resize()`: EFAULT otherwise). The LibOS
+ * does not merge adjacent VMAs, so a range may span several; it is accepted only if they are what
+ * Linux would have merged: contiguous user VMAs with the same protection, flags and file, the file
+ * offsets continuing. A range reaching into a different mapping (e.g. LTP's one-page PROT_NONE
+ * "bad address" with libc above it) is EFAULT; treating it as one mapping changed the protection
+ * of the neighbours and crashed the process.
+ */
+static bool is_one_mapping(uintptr_t start, size_t size, const struct libos_vma_info* first) {
+    uintptr_t end = start + size;
+    uintptr_t cur = (uintptr_t)first->addr + first->length;
+    while (cur < end) {
+        struct libos_vma_info next = {0};
+        if (lookup_vma((void*)cur, &next) < 0)
+            return false;
+        bool same = (uintptr_t)next.addr == cur && next.prot == first->prot &&
+                    next.flags == first->flags && next.file == first->file &&
+                    (!first->file || next.file_offset == first->file_offset +
+                                                         (cur - (uintptr_t)first->addr));
+        cur = (uintptr_t)next.addr + next.length;
+        if (next.file)
+            put_handle(next.file);
+        if (!same)
+            return false;
+    }
+    return true;
+}
+
 long libos_syscall_mremap(void* old_address, size_t old_size, size_t new_size, int flags,
                           void* new_address) {
     if (flags & ~(MREMAP_MAYMOVE | MREMAP_FIXED | MREMAP_DONTUNMAP))
@@ -91,8 +119,8 @@ long libos_syscall_mremap(void* old_address, size_t old_size, size_t new_size, i
             ((flags & MREMAP_FIXED) && !access_ok((void*)target, new_size)))
         return -EINVAL;
 
-    /* the old range must be mapped without holes (the LibOS does not merge adjacent VMAs, so it
-     * may span several); the first VMA gives the attributes of a move */
+    /* the old range must be mapped without holes and be one mapping (`is_one_mapping()`); the
+     * first VMA gives the attributes of a move */
     if (!is_in_adjacent_user_vmas(old_address, old_size, /*prot=*/0))
         return -EFAULT;
     struct libos_vma_info vma = {0};
@@ -100,6 +128,10 @@ long libos_syscall_mremap(void* old_address, size_t old_size, size_t new_size, i
         return -EFAULT;
     long ret;
     size_t src_offset = old - (uintptr_t)vma.addr;
+    if (!is_one_mapping(old, old_size, &vma)) {
+        ret = -EFAULT;
+        goto out;
+    }
 
     /* A shared file mapping is written back first: filesystems with emulated mappings (tmpfs)
      * hand a new mapping (an extension or the moved range) the file's contents, not the old

@@ -84,6 +84,16 @@ int main(int argc, char** argv) {
     CHECK(munmap(hole, PG) == 0);
     CHECK(mremap(hole, PG, 2 * PG, MREMAP_MAYMOVE) == MAP_FAILED && errno == EFAULT);
 
+    /* a range reaching from one mapping into its neighbour is not one mapping: EFAULT, and the
+     * neighbour keeps its contents and protection (LTP mremap03's PROT_NONE "bad address") */
+    char* pair = map(2 * PG);
+    pair[PG] = 'n';
+    CHECK(mprotect(pair, PG, PROT_NONE) == 0);
+    CHECK(mremap(pair, 2 * PG, 4 * PG, MREMAP_MAYMOVE) == MAP_FAILED && errno == EFAULT);
+    CHECK(pair[PG] == 'n');
+    pair[PG] = 'm'; /* still writable */
+    CHECK(munmap(pair, 2 * PG) == 0);
+
     /* MREMAP_DONTUNMAP keeps the old range, emptied */
     char* src = map(PG);
     src[0] = 'z';
