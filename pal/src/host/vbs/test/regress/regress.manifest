@@ -1,0 +1,15 @@
+# LibOS regression subset inside a VBS enclave (phase 3): the packed regression programs live in
+# /tests; the host's arguments name the one to run (pal_vbs_host.exe ... boot <root> <test> args).
+loader.entrypoint = "file:/libsysdb.so"
+libos.entrypoint = "/runner"
+loader.insecure__use_cmdline_argv = true
+loader.log_level = "warning"
+loader.env.LD_LIBRARY_PATH = "/usr/lib"
+fs.root.uri = "file:/"
+fs.start_dir = "/tmp"
+fs.mounts = [
+  { type = "tmpfs", path = "/tmp" },
+]
+sys.rewrite_syscalls = false
+vbs.max_threads = 16
+vbs.enclave_size = "512M"

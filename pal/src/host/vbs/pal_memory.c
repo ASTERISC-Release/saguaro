@@ -264,16 +264,40 @@ int vbs_init_memory(void) {
     if (!IS_ALLOC_ALIGNED(win_lo) || !IS_ALLOC_ALIGNED(win_hi) || !vbs_in_pool(g_vbs->pool_base, 1))
         return -PAL_ERROR_INVAL;
 
-    /* the free areas, sorted by address: the pool and the user objects' extents */
-    struct free_area areas[64];
+    /* the free areas, sorted by address: the pool and the user objects' extents -- one area over
+     * all user objects when no PAL-side object lies between them (the PAL's table of initial
+     * ranges is small), else one per user object */
+    static struct free_area areas[256];
     size_t n = 0;
     areas[n++] = (struct free_area){ g_vbs->pool_base, g_vbs->pool_base + g_vbs->pool_size, false };
-    for (uint64_t i = 0; i < g_vbs->nobjs && n < ARRAY_SIZE(areas); i++) {
+    uintptr_t ulo = UINTPTR_MAX, uhi = 0;
+    for (uint64_t i = 0; i < g_vbs->nobjs; i++) {
         const struct pal_vbs_packed_obj* o = &g_vbs->objs[i];
         if (o->kind != PAL_VBS_KIND_USER)
             continue;
         uintptr_t b = (uintptr_t)vbs_image_base(o);
-        areas[n++] = (struct free_area){ b, b + ALLOC_ALIGN_UP(o->map_size), true };
+        ulo = MIN(ulo, b);
+        uhi = MAX(uhi, b + ALLOC_ALIGN_UP(o->image_size));
+    }
+    bool merged = ulo < uhi;
+    for (uint64_t i = 0; merged && i < g_vbs->nobjs; i++) {
+        const struct pal_vbs_packed_obj* o = &g_vbs->objs[i];
+        uintptr_t b = (uintptr_t)vbs_image_base(o);
+        if (o->kind == PAL_VBS_KIND_PAL && o->image_size && b < uhi && ulo < b + o->image_size)
+            merged = false;
+    }
+    if (merged) {
+        areas[n++] = (struct free_area){ ulo, uhi, true };
+    } else {
+        for (uint64_t i = 0; i < g_vbs->nobjs; i++) {
+            const struct pal_vbs_packed_obj* o = &g_vbs->objs[i];
+            if (o->kind != PAL_VBS_KIND_USER)
+                continue;
+            if (n == ARRAY_SIZE(areas))
+                return -PAL_ERROR_NOMEM;
+            uintptr_t b = (uintptr_t)vbs_image_base(o);
+            areas[n++] = (struct free_area){ b, b + ALLOC_ALIGN_UP(o->map_size), true };
+        }
     }
     for (size_t i = 1; i < n; i++)
         for (size_t j = i; j > 0 && areas[j].start < areas[j - 1].start; j--) {
@@ -298,7 +322,7 @@ int vbs_init_memory(void) {
             if (areas[i].user) {
                 int ret = pal_add_initial_range(areas[i].start, areas[i].end - areas[i].start,
                                                 PAL_PROT_READ | PAL_PROT_EXEC,
-                                                /*is_user_reserved=*/true, "vbs: packed object");
+                                                /*is_user_reserved=*/true, "vbs: packed objects");
                 if (ret < 0)
                     return ret;
             }

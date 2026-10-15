@@ -45,6 +45,7 @@ enum pal_vbs_ocall {
 
 #define PAL_VBS_CONBUF_SIZE 4096u /* host-owned bounce buffer for console OCALLs */
 #define PAL_VBS_IOBUF_SIZE  (64u * 1024u) /* host-owned buffer of host requests, per thread */
+#define PAL_VBS_ARGS_SIZE   4096u          /* host command-line arguments for the application */
 
 /*
  * Host requests (PAL_VBS_OCALL_HOST): host files and host sockets, served by the untrusted host
@@ -143,6 +144,9 @@ typedef struct pal_vbs_shared {
 
     /* what E_PalMain should do (PAL_VBS_MODE_*) and the arguments of the application (boot) */
     uint64_t mode;
+    uint64_t args_len;             /* bytes of args: NUL-terminated strings, one after another */
+    char     args[PAL_VBS_ARGS_SIZE]; /* host command-line arguments for the application (used
+                                     * only with loader.insecure__use_cmdline_argv, untrusted) */
 
     /* results written back by the enclave before returning from E_PalMain */
     int64_t  result;               /* 0 = all self-tests passed, else first failing step */
@@ -165,7 +169,7 @@ typedef struct pal_vbs_thread_block {
     uint8_t  iobuf[PAL_VBS_IOBUF_SIZE];
 } pal_vbs_thread_block_t;
 
-#define PAL_VBS_ABI_VERSION 4u
+#define PAL_VBS_ABI_VERSION 5u
 
 #define PAL_VBS_MODE_SELFTEST 0u /* run the PAL-level self-test (phases 1 and 2) */
 #define PAL_VBS_MODE_BOOT     1u /* boot the packed vbs PAL, the LibOS and the application */
@@ -204,7 +208,7 @@ struct pal_vbs_packed_obj {
  * code: P calls them only through its x18-restoring thunk (pal_vbs_wcall.S), because Linux code
  * may have clobbered x18 (the enclave TEB). All values are fixed-width (PLAN.md D4).
  */
-#define PAL_VBS_SERVICES_VERSION 3u
+#define PAL_VBS_SERVICES_VERSION 4u
 
 struct pal_vbs_services {
     uint64_t version;
@@ -237,6 +241,8 @@ struct pal_vbs_services {
     void* wake;          /* void (uint32_t* addr, uint64_t all) */
 
     /* host requests (version 3) */
+    const char* args;    /* host command-line arguments (copied into the enclave), untrusted */
+    uint64_t args_len;
     void* host_call;     /* int64_t (struct pal_vbs_hostreq* req, void* out, uint64_t out_cap):
                           * req (header + in_len input bytes) goes to the host; the result is
                           * returned, req->out_len set, min(out_len, out_cap) bytes copied to out */

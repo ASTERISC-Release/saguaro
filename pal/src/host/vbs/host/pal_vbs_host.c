@@ -9,6 +9,7 @@
  * load/initialize sequence.
  *
  * Usage: pal_vbs_host.exe [image.dll] [thread_count] [selftest|boot] [host root directory]
+ *                         [application arguments...]
  *   selftest (default): the PAL-level self-test; boot: the packed PAL, LibOS and application.
  */
 
@@ -237,6 +238,15 @@ int main(int argc, char** argv) {
     g_shared.enclave_size = size;
     g_shared.ocall        = (void*)pal_vbs_ocall;
     g_shared.result       = -1;
+    /* arguments after the host root directory go to the application (with
+     * loader.insecure__use_cmdline_argv in its manifest) */
+    for (int i = 5; i < argc; i++) {
+        size_t n = strlen(argv[i]) + 1;
+        if (g_shared.args_len + n > PAL_VBS_ARGS_SIZE)
+            break;
+        memcpy(g_shared.args + g_shared.args_len, argv[i], n);
+        g_shared.args_len += n;
+    }
     g_shared.mode = (argc > 3 && !strcmp(argv[3], "boot")) ? PAL_VBS_MODE_BOOT
                     : (argc > 3 && !strcmp(argv[3], "tpidr")) ? PAL_VBS_MODE_TPIDR
                     : (argc > 3 && !strcmp(argv[3], "tebslot")) ? PAL_VBS_MODE_TEBSLOT

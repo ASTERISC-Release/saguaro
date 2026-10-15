@@ -361,9 +361,14 @@ static int file_map(PAL_HANDLE handle, void* addr, pal_prot_flags_t prot, uint64
                 return -PAL_ERROR_DENIED;
             }
             if (seg->p_flags & PF_W) {
-                /* data: the image already holds the file bytes; make the pages read-write */
+                /* data: make the pages read-write and give them the file's bytes, as a private
+                 * file mapping does -- the object may have run before (execve of the same
+                 * program, ld.so again after an execve, dlopen after dlclose) and changed them */
                 if (vbs_protect(a, size, PAL_PROT_READ | PAL_PROT_WRITE) < 0)
                     return -PAL_ERROR_DENIED;
+                uint64_t n = offset < obj->file_size ? MIN(size, obj->file_size - offset) : 0;
+                memcpy(addr, vbs_file_data(obj) + offset, n);
+                memset((uint8_t*)addr + n, 0, size - n);
             }
             /* read-only data (no PF_W) stays as it is (execute-read image pages, never written) */
             return 0;

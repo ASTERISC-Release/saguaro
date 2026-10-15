@@ -462,6 +462,14 @@ int64_t pal_vbs_boot(const struct pal_vbs_shared* shared) {
     g_svc.wait          = (void*)svc_wait;
     g_svc.wake          = (void*)svc_wake;
     g_svc.host_call     = (void*)svc_host_call;
+    /* host arguments: already copied into the enclave with the shared block (E_PalMain); bounded
+     * and NUL-terminated here */
+    static char args[PAL_VBS_ARGS_SIZE + 1];
+    uint64_t alen = shared->args_len > PAL_VBS_ARGS_SIZE ? PAL_VBS_ARGS_SIZE : shared->args_len;
+    memcpy(args, shared->args, (size_t)alen);
+    args[alen] = '\0';
+    g_svc.args = args;
+    g_svc.args_len = alen;
     g_first_teb         = (uint64_t)(uintptr_t)NtCurrentTeb();
 
     g_pal_exception_entry = pal_vbs_packed_sym(&pal, "pal_vbs_exception");

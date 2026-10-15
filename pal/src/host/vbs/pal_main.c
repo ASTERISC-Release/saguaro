@@ -106,8 +106,19 @@ static char* read_manifest(void) {
 noreturn void pal_vbs_run_on_stack(void (*fn)(void*), void* arg, void* stack_top);
 
 static noreturn void call_pal_main(void* first_thread) {
-    /* No host command line: pal_main() takes loader.argv from the manifest, or the entrypoint. */
-    static const char* argv[] = { NULL };
+    /* The host's arguments, if any: pal_main() uses them only with
+     * loader.insecure__use_cmdline_argv (argv[0] is replaced by the entrypoint); otherwise it takes
+     * loader.argv from the manifest, or the entrypoint. */
+    static const char* argv[64];
+    size_t argc = 0;
+    if (g_vbs->args_len) {
+        argv[argc++] = "host"; /* argv[0], replaced by pal_main() */
+        for (uint64_t pos = 0; pos < g_vbs->args_len && argc < ARRAY_SIZE(argv) - 1;) {
+            argv[argc++] = g_vbs->args + pos;
+            pos += strlen(g_vbs->args + pos) + 1;
+        }
+    }
+    argv[argc] = NULL;
     static const char* envp[] = { NULL };
     pal_main(/*instance_id=*/0, /*parent_process=*/NULL, first_thread, argv, envp,
              /*post_callback=*/NULL);
