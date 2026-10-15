@@ -1,0 +1,33 @@
+# Copyright (C) 2026 The ASTERISC Research Lab
+# SPDX-License-Identifier: BSD-3-Clause
+
+# iperf3 manifest for a Windows VBS enclave (`make VBS=1`, Documentation/vbs.rst): the counterpart of
+# iperf3.manifest.template. iperf3 (built with the vbs gcc against the vbs glibc, in vbs-build/) is
+# the server; it runs in one process (no -D: the enclave cannot fork) and listens on the loopback.
+
+loader.entrypoint = "file:/libsysdb.so"
+libos.entrypoint = "/iperf3"
+loader.log_level = "{{ log_level }}"
+
+loader.argv = ["iperf3", "-s", "-p", "{{ env.get('IPERF_PORT', '5201') }}", "-B", "127.0.0.1"]
+loader.env.LD_LIBRARY_PATH = "{{ arch_libdir }}"
+
+fs.root.uri = "file:/"
+fs.mounts = [
+  # iperf3 keeps its send buffer in an unlinked file under /tmp
+  { type = "tmpfs", path = "/tmp" },
+]
+# no run-time code generation in a VBS enclave
+sys.rewrite_syscalls = false
+
+vbs.debug = false
+vbs.enclave_size = "256M"
+# the main thread, one thread per data stream (-P) and the runtime's helpers
+vbs.max_threads = 8
+
+vbs.packed_files = [
+  { path = "/iperf3", uri = "file:vbs-build/iperf3" },
+{% for lib in [vbs.ldso, "libc.so.6", "libm.so.6"] %}
+  { path = "{{ arch_libdir }}/{{ lib }}", uri = "file:{{ vbs.sysroot }}/usr/lib/{{ lib }}" },
+{% endfor %}
+]

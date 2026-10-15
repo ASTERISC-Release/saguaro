@@ -15,9 +15,19 @@ GRAMINE_LOG_LEVEL = error
 endif
 
 .PHONY: all
+ifeq ($(VBS),1)
+# Windows VBS enclave (scripts/vbs/Makefile.vbs, Documentation/vbs.rst): the iperf3 server built
+# with the vbs gcc (against the vbs glibc) in vbs-build/, packed by vbs.manifest.template
+VBS_APP = iperf3
+VBS_DEPS = vbs-build/iperf3
+VBS_CLEAN = vbs-build OUTPUT
+include ../../scripts/vbs/Makefile.vbs
+all: vbs-all
+else
 all: install/iperf3 install/libiperf.so.0 iperf3.manifest
 ifeq ($(SGX),1)
 all: iperf3.manifest.sgx iperf3.sig
+endif
 endif
 
 $(IPERF_DIR)/configure:
@@ -64,6 +74,28 @@ install/iperf3: $(IPERF_DIR)/src/.libs/iperf3
 install/libiperf.so.0: $(IPERF_DIR)/src/.libs/libiperf.so.0
 	mkdir -p install
 	cp $< $@
+
+ifeq ($(VBS),1)
+################################ VBS (Windows enclave) ########################
+
+$(IPERF_SRC):
+	../common_tools/download --output $@ --sha256 $(IPERF_SHA256) \
+		$(foreach mirror,$(IPERF_MIRRORS),--url $(mirror)/$(IPERF_SRC))
+
+# the vbs gcc (a dynamic PIE against the vbs glibc); no OpenSSL in the vbs sysroot, so the
+# authentication feature is left out
+vbs-build/iperf3: $(IPERF_SRC) | $(VBS_RUNTIME_STAMP)
+	rm -rf vbs-build/src && mkdir -p vbs-build/src
+	tar -C vbs-build/src --strip-components=1 -xf $(IPERF_SRC)
+	cd vbs-build/src && CC=$(VBS_GCC) ./configure --disable-shared --without-openssl
+	$(MAKE) -C vbs-build/src
+	cp vbs-build/src/src/iperf3 $@
+
+.PHONY: check
+check: all
+	GRAMINE="$(GRAMINE)" ./vbs-check.sh
+
+endif
 
 ################################## CLEANUP ####################################
 

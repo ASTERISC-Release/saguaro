@@ -1,3 +1,7 @@
 /install/
 /iperf/
 *.tar.gz
+/vbs-build/
+/iperf3.vbs/
+/iperf3.manifest.vbs
+/OUTPUT
