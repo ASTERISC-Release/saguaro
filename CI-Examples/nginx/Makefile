@@ -26,7 +26,8 @@ endif
 .PHONY: all
 ifeq ($(VBS),1)
 # Windows VBS enclave (scripts/vbs/Makefile.vbs, Documentation/vbs.rst): NGINX built with the vbs
-# gcc (HTTP only: no OpenSSL, zlib or PCRE in the vbs sysroot) and installed with its
+# gcc (HTTP only, no basic authentication: no OpenSSL, zlib, PCRE or libcrypt in the vbs sysroot)
+# and installed with its
 # configuration and test files into vbs-build/root/nginx, all packed by vbs.manifest.template
 VBS_APP = nginx
 VBS_ROOT = vbs-build/root/nginx
@@ -78,7 +79,8 @@ $(VBS_ROOT)/sbin/nginx: $(NGINX_SRC).tar.gz | $(VBS_RUNTIME_STAMP)
 		--http-client-body-temp-path=/tmp/client_body_temp --http-proxy-temp-path=/tmp/proxy_temp \
 		--http-fastcgi-temp-path=/tmp/fastcgi_temp --http-uwsgi-temp-path=/tmp/uwsgi_temp \
 		--http-scgi-temp-path=/tmp/scgi_temp \
-		--without-http_rewrite_module --without-http_gzip_module > ../configure.log
+		--without-http_rewrite_module --without-http_gzip_module \
+		--without-http_auth_basic_module > ../configure.log
 	sed -e "s|#define NGX_HAVE_EVENTFD[[:space:]]\+1|#define NGX_HAVE_EVENTFD 0|g" \
 		-e "s|#define NGX_HAVE_SYS_EVENTFD_H[[:space:]]\+1|#define NGX_HAVE_SYS_EVENTFD_H 0|g" \
 		-e "s|#define NGX_HAVE_PR_SET_DUMPABLE[[:space:]]\+1|#define NGX_HAVE_PR_SET_DUMPABLE 0|g" \
