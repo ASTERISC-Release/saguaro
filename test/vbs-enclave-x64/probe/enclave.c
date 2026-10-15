@@ -72,6 +72,7 @@ unsigned long long probe_rdrand(int* ok);
 unsigned long long probe_rdseed(int* ok);
 long long probe_redzone_ud2(void);
 long long probe_redzone_spin(unsigned long long iters);
+long long probe_redzone_fault(long long kind);
 long long probe_fs_spin(unsigned long long value, unsigned long long iters, unsigned long long out[3]);
 long long probe_regs_spin(unsigned long long iters);
 long long probe_callout_regs(void* host_fn);
@@ -447,6 +448,10 @@ static long long t_rdtscp(void) { unsigned a; return (long long)probe_rdtscp(&a)
 static long long t_rdrand(void) { int ok = 0; unsigned long long v = probe_rdrand(&ok); return ok ? (long long)v : -2; }
 static long long t_rdseed(void) { int ok = 0; unsigned long long v = probe_rdseed(&ok); return ok ? (long long)v : -2; }
 static long long t_redzone(void) { return probe_redzone_ud2(); }
+static long long t_rz_int3(void) { return probe_redzone_fault(1); }
+static long long t_rz_ud2(void) { return probe_redzone_fault(0); }
+static long long t_rz_div(void) { return probe_redzone_fault(2); }
+static long long t_rz_load(void) { return probe_redzone_fault(3); }
 static char g_buf[] = "hello from syscall\n";
 static long long t_sys_write(void) { return probe_syscall(1 /* Linux write */, 1, (long long)g_buf, sizeof(g_buf) - 1); }
 static long long t_sys_getpid(void) { return probe_syscall(39 /* Linux getpid */, 0, 0, 0); }
@@ -609,6 +614,11 @@ void* CALLBACK E_Exec(void* param)
         // red zone: does the exception dispatch write into the 128 bytes below the faulting rsp?
         trap("red zone pattern, ud2, resume at rip+2", t_redzone, 1, 2);
         logf("red zone: (the value returned above is a bit mask of the 16 qwords below rsp that changed: bit 16 = rsp-8, bit 1 = rsp-128)\n");
+        trap("red zone pattern, int3, resume at rip+1", t_rz_int3, 1, 1);
+        trap("red zone pattern, divide by zero, resume at rip+2", t_rz_div, 1, 2);
+        trap("red zone pattern, load from 0 (mov r11,[r11]: 3 bytes), resume at rip+3", t_rz_load, 1, 3);
+        trap("red zone pattern, ud2 (second function), resume at rip+2", t_rz_ud2, 1, 2);
+        trap("red zone pattern, ud2 (first function, again), resume at rip+2", t_redzone, 1, 2);
         unsigned long long iters = io->args[1] ? io->args[1] : 2000000000ull;
         LARGE_INTEGER f, a, b;
         QueryPerformanceFrequency(&f);

@@ -131,6 +131,7 @@ probe_redzone_ud2 PROC
     cmp     ecx, 17
     jne     @B
     ud2
+    mov     rax, 5A5A5A5A00000000h  ; the filter changed rax when it resumed
     xor     r8d, r8d
     mov     ecx, 1
 @@: lea     rdx, [rax+rcx]
@@ -143,6 +144,55 @@ probe_redzone_ud2 PROC
     mov     rax, r8
     ret
 probe_redzone_ud2 ENDP
+
+; long long probe_redzone_fault(long long kind): the red-zone pattern, then a fault of the given
+; kind (0 ud2, 1 int3, 2 divide by zero, 3 load from address 0, 4 ud2 with rsp in the middle of the
+; pattern area not aligned to 16); the filter resumes after it; returns the mask of changed qwords.
+probe_redzone_fault PROC
+    mov     r10, rcx
+    mov     rax, 5A5A5A5A00000000h
+    mov     ecx, 1
+@@: lea     rdx, [rax+rcx]
+    mov     [rsp+rcx*8-136], rdx
+    inc     ecx
+    cmp     ecx, 17
+    jne     @B
+    cmp     r10, 1
+    je      rz_int3
+    cmp     r10, 2
+    je      rz_div
+    cmp     r10, 3
+    je      rz_load
+    ud2
+    jmp     rz_check
+rz_int3:
+    int     3
+    jmp     rz_check
+rz_div:
+    xor     edx, edx
+    mov     r11, rax
+    xor     ecx, ecx
+    mov     eax, 1
+    div     ecx
+    mov     rax, r11
+    jmp     rz_check
+rz_load:
+    xor     r11d, r11d
+    mov     r11, [r11]
+rz_check:
+    mov     rax, 5A5A5A5A00000000h
+    xor     r8d, r8d
+    mov     ecx, 1
+@@: lea     rdx, [rax+rcx]
+    cmp     [rsp+rcx*8-136], rdx
+    je      @F
+    bts     r8, rcx
+@@: inc     ecx
+    cmp     ecx, 17
+    jne     @B
+    mov     rax, r8
+    ret
+probe_redzone_fault ENDP
 
 ; long long probe_redzone_spin(unsigned long long iters): the same pattern, then a loop of iters
 ; iterations that calls nothing; returns the bit mask of changed qwords.

@@ -30,8 +30,7 @@ cflags_vbs = [
     '-DHOST_TYPE=VBS',
     '-DPAL_HOST_VBS=1',
     # AArch64: x18 is the enclave TEB of the Windows runtime (PLAN.md D4): no Linux code of ours
-    # uses it. x86_64: exception delivery in the enclave overwrites the qword at rsp-128, so no
-    # packed code may keep data in the red zone (PLAN-x64.md, X5).
+    # uses it (x86_64: nothing; PLAN-x64.md)
     cflags_vbs_arch,
 ]
 

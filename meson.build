@@ -295,9 +295,9 @@ tomlc99_src = tomlc99_proj.get_variable('tomlc99_src')
 uthash_dep = subproject('uthash-2.1.0').get_variable('uthash_dep')
 
 # VBS-enclave PAL: every object packed into the enclave image must leave x18 (the enclave TEB)
-# alone, including mbedtls (Documentation/devel/vbs-enclave/FINDINGS.md); on x86_64 no packed code
-# may use the red zone (PLAN-x64.md, X5)
-cflags_vbs_arch = host_machine.cpu_family() == 'x86_64' ? ['-mno-red-zone'] : ['-ffixed-x18']
+# alone, including mbedtls (Documentation/devel/vbs-enclave/FINDINGS.md); x86_64 needs no such flag
+# (PLAN-x64.md)
+cflags_vbs_arch = host_machine.cpu_family() == 'x86_64' ? [] : ['-ffixed-x18']
 mbedtls_proj = subproject('mbedtls-3.6.0',
                           default_options: vbs ? ['extra_cflags=' + ' '.join(cflags_vbs_arch)] : [])
 mbedtls_static_dep = mbedtls_proj.get_variable('mbedtls_static_dep')

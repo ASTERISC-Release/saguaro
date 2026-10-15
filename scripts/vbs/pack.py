@@ -50,10 +50,10 @@ A `syscall` returns an error in a VBS enclave instead of trapping (FINDINGS-x64.
 nothing moves -- and its offset in the blob goes into a sorted table (g_pal_vbs_syscall_sites in
 pal_vbs_packed_table.h); W's exception handler sends a `ud2` at a listed site into the LibOS's
 syscall entry, with rcx and r11 as `syscall` leaves them. Objects listed with --no-svc must contain
-no `syscall`. Exception delivery in the enclave overwrites the qword at rsp-128, so packed code must
-not use the red zone: the pack fails on any instruction that addresses memory below %rsp (outside
-functions listed with --red-zone-allow; build with -mno-red-zone). The x18 and TPIDR_EL0 handling is
-AArch64 only. The unwind data are x64 RUNTIME_FUNCTIONs, one per executable range, whose UNWIND_INFO
+no `syscall`. Exception delivery leaves the red zone below %rsp intact (FINDINGS-x64.md), so packed
+code may use it; --red-zone-check lists (and refuses) instructions that address memory below %rsp,
+outside functions listed with --red-zone-allow, should that ever be needed. The x18 and TPIDR_EL0
+handling is AArch64 only. The unwind data are x64 RUNTIME_FUNCTIONs, one per executable range, whose UNWIND_INFO
 (no unwind codes) names the same handler.
 
 Usage:
@@ -418,7 +418,8 @@ def main():
     ap.add_argument('--skip-x18-check', action='store_true')
     ap.add_argument('--red-zone-allow', action='append', default=[], metavar='NAME:FUNC[,FUNC...]',
                     help='x86_64: functions of object NAME allowed to address the red zone')
-    ap.add_argument('--skip-red-zone-check', action='store_true')
+    ap.add_argument('--red-zone-check', action='store_true',
+                    help='x86_64: refuse code that addresses memory below %%rsp')
     ap.add_argument('--entry', default='pal_vbs_start packed_entry',
                     help='entry symbol names tried in order (else e_entry)')
     ap.add_argument('objs', nargs='*', metavar='NAME=PATH',
@@ -465,13 +466,12 @@ def main():
             map_size = len(img)
             sites, redzone = x86_scan(src)
             bad = [h for h in redzone if h[0] not in rz_allow.get(name, set())]
-            if bad and not a.skip_red_zone_check:
+            if bad and a.red_zone_check:
                 funcs = sorted({h[0] for h in bad})
                 sys.exit(f'{src}: {len(bad)} instructions use the red zone (below %rsp) in '
                          f'{len(funcs)} functions: {", ".join(funcs[:12])}'
                          f'{" ..." if len(funcs) > 12 else ""} (first: {bad[0][2]} at '
-                         f'{bad[0][1]:#x}); exception delivery in a VBS enclave overwrites it: build '
-                         f'with -mno-red-zone')
+                         f'{bad[0][1]:#x}) (--red-zone-check)')
             if name in a.no_svc and sites:
                 sys.exit(f'{src}: {len(sites)} syscall (first at {sites[0]:#x}) in an object that '
                          f'must have none (--no-svc {name})')
@@ -493,8 +493,8 @@ def main():
                              isize=len(img), map_size=map_size, entry=entry,
                              dynamic=e.dynamic_vaddr(), slot=0, nsvc=len(sites)))
             print(f'{name}: {spec[0]} x86_64 image {len(img):#x} at pack+{off:#x} entry={entry:#x} '
-                  f'dynamic={e.dynamic_vaddr():#x} syscall->ud2={len(sites)} red-zone-allowed='
-                  f'{len(redzone) - len(bad)}' + (f' path={path}' if path else ''))
+                  f'dynamic={e.dynamic_vaddr():#x} syscall->ud2={len(sites)} red-zone-insns='
+                  f'{len(redzone)}' + (f' path={path}' if path else ''))
             continue
         if not a.skip_x18_check:
             bad = [h for h in x18_uses(src) if h[0] not in x18_allow.get(name, set())]
