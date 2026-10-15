@@ -845,7 +845,10 @@ static void probe_traps(void) {
     sigaction(SIGTRAP, &sa, NULL);
     sigaction(SIGFPE, &sa, NULL);
     const char* names[] = {"SIGSEGV (write to 0)", "SIGILL (ud2)", "SIGTRAP (int3)", "SIGFPE (div 0)"};
+    /* PROBES_TRAP=1|2|3 runs one of them (each may take the VM guest down) */
+    int only = getenv("PROBES_TRAP") ? atoi(getenv("PROBES_TRAP")) : 0;
     for (int k = 1; k < 4; k++) {
+        if (only && k != only) continue;
         g_sig_count = 0;
         g_on_altstack = 0;
         do_fault(k);
