@@ -243,6 +243,9 @@ static int memcached_reply(struct rd* r, int is_get, int* is_err) {
     }
 }
 
+/* the server announced that it closes the connection after this reply (keepalive_requests) */
+static __declspec(thread) int t_http_close;
+
 static int http_reply(struct rd* r, int* is_err) {
     char line[1024];
     long clen = -1;
@@ -258,6 +261,8 @@ static int http_reply(struct rd* r, int* is_err) {
             break;
         if (!_strnicmp(line, "Content-Length:", 15))
             clen = atol(line + 15);
+        if (!_strnicmp(line, "Connection: close", 17))
+            t_http_close = 1;
     }
     if (clen < 0)
         return -1; /* the load generator needs a length (no chunked replies) */
@@ -284,6 +289,7 @@ struct worker {
     double* lat;     /* microseconds per round trip */
     long nlat;
     int failed;
+    long reconnects;
     unsigned seed;
 };
 
@@ -363,6 +369,19 @@ static int read_round(struct worker* w, struct rd* r) {
     return 0;
 }
 
+static int reconnect(struct worker* w, struct rd* r) {
+    t_http_close = 0;
+    closesocket(r->s);
+    r->pos = r->len = 0;
+    r->s = connect_to(w->b->port, 0);
+    if (r->s == INVALID_SOCKET) {
+        w->failed = 1;
+        return -1;
+    }
+    w->reconnects++;
+    return 0;
+}
+
 static DWORD WINAPI worker_main(void* arg) {
     struct worker* w = arg;
     struct bench* b = w->b;
@@ -382,6 +401,8 @@ static DWORD WINAPI worker_main(void* arg) {
             w->failed = 1;
             return 0;
         }
+        if (t_http_close && reconnect(w, r) < 0)
+            return 0;
     }
     w->lat = malloc(sizeof(double) * (size_t)(w->count + 1));
     for (long i = 0; i < w->count; i++) {
@@ -393,6 +414,9 @@ static DWORD WINAPI worker_main(void* arg) {
             break;
         }
         w->lat[w->nlat++] = now_us() - t0;
+        /* a new connection when the server closes this one (not counted in the latency) */
+        if (t_http_close && reconnect(w, r) < 0)
+            break;
     }
     closesocket(r->s);
     return 0;
@@ -442,12 +466,13 @@ static int bench_main(int argc, char** argv) {
     double t0 = now_us();
     for (int i = 0; i < b.conns; i++)
         w[i].thread = CreateThread(NULL, 0, worker_main, &w[i], 0, NULL);
-    long nlat = 0;
+    long nlat = 0, reconnects = 0;
     int failed = 0;
     for (int i = 0; i < b.conns; i++) {
         WaitForSingleObject(w[i].thread, INFINITE);
         nlat += w[i].nlat;
         failed |= w[i].failed;
+        reconnects += w[i].reconnects;
     }
     double secs = (now_us() - t0) / 1e6;
     double* all = malloc(sizeof(double) * (size_t)(nlat + 1));
@@ -466,6 +491,8 @@ static int bench_main(int argc, char** argv) {
            secs > 0 ? reqs / secs : 0.0, nlat ? sum / nlat / 1000 : 0.0,
            nlat ? all[nlat / 2] / 1000 : 0.0, nlat ? all[(long)(nlat * 0.99)] / 1000 : 0.0,
            nlat ? all[nlat - 1] / 1000 : 0.0);
+    if (reconnects)
+        printf("  (%ld new connections after the server closed one)\n", reconnects);
     return failed || b.errors ? 1 : 0;
 }
 
