@@ -76,7 +76,7 @@ vCPU count with every number.
 | `supertuxkart` | SuperTuxKart | `make run-startup PROFILE_TIME=<seconds>`, `make run-native-startup` |
 | `quake2` | Yamagi Quake II with the demo's game data | no |
 | `minetest` | Minetest 5.6.1 | no (prints a report every minute) |
-| `bastion` | Bastion (the GOG.com Linux build; you buy the game) | not yet run under `gramine-vm`; see its `README.md` |
+| `bastion` | Bastion (the GOG.com Linux build; you buy the game) | no; runs under `gramine-direct`, not yet run under `gramine-vm`; see its `README.md` |
 | `tf2` | Team Fortress 2 | ported, not yet run; see its `README.md` |
 
 ## Adding an application
@@ -87,7 +87,7 @@ preload library at `/libgraphics.so` (`{{ gramine.libgraphics }}`) and preload i
 
 ## Under gramine-direct
 
-`glxgears`, `quake2`, `minetest` and `supertuxkart` also have a `<name>-direct.manifest.template` and a
+`glxgears`, `quake2`, `minetest`, `supertuxkart` and `bastion` also have a `<name>-direct.manifest.template` and a
 `make run-direct` target (Quake II: `make run-direct-timedemo`; SuperTuxKart:
 `make run-direct-startup`). The application then runs as a Linux process on the host's GPU and X
 server, with the host's Mesa (DRI3), no QEMU and no preload library; `PRELOAD=1` uses the preload

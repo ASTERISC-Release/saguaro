@@ -2,11 +2,12 @@
 
 Supergiant Games' Bastion, the Linux build sold on GOG.com (MonoKickstart: a bundled Mono runtime,
 FNA on SDL2 and OpenGL, FMOD for audio), under `gramine-vm` with the graphics host redirection
-(x86_64). General setup, host requirements and caveats: `../README.md` and
-`Documentation/devel/graphics/`.
+(x86_64), and under `gramine-direct` on the host GPU. General setup, host requirements and caveats:
+`../README.md`, `Documentation/devel/graphics/` and `Documentation/devel/graphics-direct/`.
 
-**Status: not yet run under `gramine-vm`.** The manifest renders and passes `gramine-manifest-check`;
-the game was only traced natively (see below).
+**Status:** runs under `gramine-direct` (2026-10-14, see "Under gramine-direct" below). Not yet run
+under `gramine-vm`: that manifest renders and passes `gramine-manifest-check`, and the game was only
+traced natively (see below).
 
 ## The game is not included
 
@@ -26,12 +27,14 @@ zip archive appended to it, into `./bastion_game` (about 1.3 GB, no root).
 ```sh
 make run-native      # without Gramine, with the preload library (opens a window)
 make run             # gramine-vm bastion
+make run-direct      # gramine-direct bastion-direct, on the host GPU with the host's Mesa
 ```
 
 Variables: `SHARED_INPUT=0` (input over the X connection), `SYSTEM_SDL=0` (use the game's bundled SDL2
 instead of the host's, which is the default so that the graphics preload library interposes the system
 library), `DATA_DIR` (host directory for save games and settings, default
-`~/.local/share/gramine-bastion`), `DEBUG=1`.
+`~/.local/share/gramine-bastion`), `DEBUG=1`. For `run-direct` also `BASTION_ARGS` (the game's
+options, default `-windowed`) and `PRELOAD=1` (the preload library instead of stock Mesa).
 
 ## What is known
 
@@ -59,3 +62,23 @@ the fix there was the game's own windowed resolution. For Bastion that is Option
 (1920x1080, fullscreen off); the setting is saved in the game's data folder (`DATA_DIR`). That was not
 done yet: the game closed before the option was reached, so it is not known whether the setting
 removes the cropping. `EGL_SDL_LOG=1` prints the window sizes the game requests.
+
+## Under gramine-direct, 2026-10-14 (`make run-direct`, Hyprland, 3840x2160 desktop)
+
+`bastion-direct.manifest.template` follows the other `-direct` manifests (raw GPU ioctls, the X
+server's Unix socket, `/dev/dri`, `/dev/shm`, `/sys` with `host_symlinks`; see
+`Documentation/devel/graphics-direct/running.md` for what these allow) and adds the game's `lib64`
+to the library path, `/bin` (FMOD runs `sh -c "pulseaudio --check"`) and the save directories of `DATA_DIR`. Build with `scripts/install.sh`
+(direct PAL, bundled glibc).
+
+With the direct build of `c93cb62a` and the host's SDL2 (`SYSTEM_SDL=1`), the game started, FNA
+opened OpenGL 4.6 on the AMD Radeon RX 6600 XT (radeonsi, Mesa 25.2.8), the main menu rendered
+(checked with a screenshot), the user reported that the game works, and it exited normally (exit
+code 0), having written its profile (`share/Bastion/Profile1.profile` in `DATA_DIR`). No sound: FMOD
+finds no PulseAudio and no ALSA device (many `ALSA lib ...` lines on stderr), and the game runs on
+without it. The bundled SDL2 (`SYSTEM_SDL=0`) was not tried.
+
+The window opens at the desktop's size (3840x2160 here). Shrinking it to 1920x1080 (a floating
+window set with `hyprctl`) **crops the picture to one corner**, as in the native run above: the game keeps
+its 3840x2160 drawable. Set the game's own resolution (Help & Options) instead; it is saved in
+`DATA_DIR`.
