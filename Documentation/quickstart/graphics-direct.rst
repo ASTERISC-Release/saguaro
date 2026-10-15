@@ -1,0 +1,140 @@
+Quickstart: graphics under ``gramine-direct`` (x86_64 and AArch64)
+===================================================================
+
+Under ``gramine-direct`` an OpenGL (and, on x86_64, Vulkan) application uses the host's GPU
+directly: its render node or the NVIDIA driver's device nodes, the host's X server, and the
+host's Mesa or NVIDIA libraries. No QEMU and no preload library are involved. Details:
+`Documentation/devel/graphics-direct/running.md <../devel/graphics-direct/running.md>`__ and
+`Documentation/devel/graphics-aarch64/ <../devel/graphics-aarch64/>`__.
+
+Status (as in `README.rst <../../README.rst>`__): Intel x86_64 ⚠️, AMD64 ⚠️, AArch64 ⚠️
+(experimental); RISC-V ❌.
+
+Security: read this first
+-------------------------
+
+``gramine-direct`` is **not a sandbox**, and graphics widen what the application can reach. The
+example manifests turn on three opt-in keys, each off by default and documented in
+`manifest-syntax.rst <../manifest-syntax.rst>`__:
+
+- ``sys.insecure__allow_raw_device_ioctl = true``: any ioctl on the devices it opens, so it can
+  submit work to the GPU (with NVIDIA: any request to the kernel driver);
+- ``sys.insecure__host_unix_sockets = ["/tmp/.X11-unix/X0"]``: it talks to the host's X server
+  directly, so it can see and control other windows and read the keyboard;
+- ``host_symlinks = true`` on the ``/sys`` mount: it reads the host's symbolic links under
+  ``/sys``.
+
+Use them for running games and tests on your own desktop, never for untrusted code or in
+production.
+
+Requirements
+------------
+
+- **x86_64**: an Intel or AMD GPU with Mesa, a render node (``/dev/dri/renderD128``) your user can
+  open, and an X server (Xwayland counts) with ``DISPLAY`` set.
+- **AArch64**: an NVIDIA GPU with the proprietary driver (``/dev/nvidiactl``), and an X server on
+  that driver, for example the display of the desktop session (``:1`` on a GDM login). The
+  session may be locked; frames are still drawn.
+
+1. Build (in the container)
+---------------------------
+
+Create the container in a shell where ``DISPLAY`` is set: the container then gets the X socket and
+the render nodes. On AArch64 with NVIDIA also set ``GRAMINE_CONTAINER_NVIDIA=1``, which passes the
+NVIDIA device nodes and mounts the host's NVIDIA libraries (they must match the kernel module)::
+
+    container/run.sh                                     # x86_64
+    DISPLAY=:1 GRAMINE_CONTAINER_NVIDIA=1 container/run.sh   # AArch64 with NVIDIA
+
+These variables only take effect when the container is created; an existing container of the
+checkout has to be removed first (``container/run.sh down``, which discards the install inside
+it). Then, inside::
+
+    scripts/install.sh                 # the direct PAL
+    . ~/.local/gramine/env.sh
+    mkdir -p ~/.cache                  # the -direct manifests mount it
+
+On AArch64 the container image lacks the games' build dependencies; inside the container (as its
+root user) install at least::
+
+    apt-get update && apt-get install -y libsdl2-dev libopenal-dev libcurl4-openssl-dev
+
+2. glxgears
+-----------
+
+::
+
+    cd CI-Examples/graphics/glxgears
+    make glxgears
+    make run-direct GLXGEARS_ARGS="300 300 -stats-interval 5"
+
+A 300x300 window with the gears opens and the program prints frame-rate statistics every 5
+seconds. Stop it with Ctrl-C, or run it as ``timeout -s TERM 20 make run-direct ...`` (the
+manifests let ``SIGTERM`` through, so the program exits cleanly). On a machine with
+``/dev/nvidiactl`` the Makefile sets ``NVIDIA=1`` by itself, which adds the NVIDIA device nodes and
+``/proc/driver/nvidia`` to the manifest; ``NVIDIA=0`` or ``NVIDIA=1`` overrides it.
+
+3. Quake II
+-----------
+
+::
+
+    cd CI-Examples/graphics/quake2
+    ./setup-quake.sh                   # once: builds Yamagi Quake II, fetches the demo's data
+    make run-direct-timedemo           # plays the demo as fast as it can, then waits at the console
+    make run-direct                    # the game
+
+The timedemo prints ``633 frames, N seconds: N fps`` and then stays at the game's console; stop
+it with ``timeout -s TERM``, as above, or the game's ``quit`` command. A fresh configuration
+starts in full screen at 640x480.
+
+4. Vulkan (x86_64)
+------------------
+
+Vulkan programs run as they are, on the host's Vulkan drivers::
+
+    cd test/vulkan
+    make direct-vulkaninfo.manifest direct-vkcube.manifest
+    gramine-direct direct-vulkaninfo --summary     # lists the GPUs
+    gramine-direct direct-vkcube                   # the spinning cube, until stopped
+
+Per-architecture notes
+----------------------
+
+- **Which GPU (x86_64)**: Mesa renders on the X server's GPU. ``DRI_PRIME=pci-0000_03_00_0`` (the
+  name from ``ls /dev/dri/by-path``) selects another one; the manifests pass the host
+  environment.
+- **NVIDIA (AArch64)**: the driver passes file descriptors inside its ioctls; Gramine translates
+  the ones of the driver's known ioctls (and those the X server sends back) to the application's
+  own files, but does not check the requests themselves. The driver ignores ``vblank_mode``; the
+  manifests set ``__GL_SYNC_TO_VBLANK=0``.
+- **Software rendering** as a fallback (no usable GPU, or to compare): on AArch64 with NVIDIA,
+  ``__GLX_VENDOR_LIBRARY_NAME=mesa LIBGL_ALWAYS_SOFTWARE=1 make run-direct ...`` uses Mesa's
+  ``llvmpipe``; on x86_64 ``LIBGL_ALWAYS_SOFTWARE=1``.
+- **The X display**: the manifests are rendered for the display of ``$DISPLAY`` in the shell that
+  runs ``make`` and name its socket ``/tmp/.X11-unix/X<N>``. ``Mounting "file:/root/.cache" ...
+  failed`` means the ``mkdir -p ~/.cache`` step was skipped.
+
+More games (SuperTuxKart, Minetest) and their targets: `CI-Examples/graphics/README.md
+<../../CI-Examples/graphics/README.md>`__.
+
+Verified
+--------
+
+2026-10-15, ``main`` at ``9e28ea81``, in the container, windows closed after a few seconds:
+
+- x86_64 host with an Intel UHD 770 and an AMD Radeon RX 9070, Xwayland: glxgears (about 35,000
+  FPS at 300x300, X server's GPU and ``DRI_PRIME`` to the AMD GPU); ``make
+  run-direct-timedemo``: ``633 frames, 0.3 seconds: 2068.6 fps`` on the AMD GPU; ``vulkaninfo
+  --summary`` lists the AMD, Intel and llvmpipe devices; ``vkcube`` selected the AMD GPU and ran
+  until stopped; ``make run-direct`` of Quake II opened its window; ``LIBGL_ALWAYS_SOFTWARE=1``
+  glxgears: about 200 FPS. Without ``~/.cache`` the run fails with the mount error above. Every
+  program was stopped with ``timeout -s TERM``.
+- AArch64 Ubuntu 24.04 host with an NVIDIA GB10 (driver 580), display ``:1`` of a locked session:
+  glxgears with ``NVIDIA=1`` (about 14,000 FPS at 300x300); software rendering (about 660 FPS);
+  ``./setup-quake.sh`` (18 s) and ``make run-direct-timedemo`` with ``GL_RENDERER: NVIDIA
+  GB10/PCIe``: ``633 frames, 8.4 seconds: 75.0 fps`` (full screen, synchronised to the display; the
+  measurements in ``graphics-aarch64/TESTING.md`` use a window and ``r_vsync 0``).
+
+Not verified: stopping with Ctrl-C or the game's ``quit``; ``make run-direct`` of Quake II on
+AArch64 (only its timedemo); Vulkan on AArch64 (not part of this quickstart).

@@ -17,6 +17,7 @@ vm-memory/
 
 # installed or generated names, untracked artifacts, build output
 ^vm-relay\.sh$
+^env\.sh$
 ^test/benchmarks/results/$
 ^libos/test/regression/root/$
 ^build-
