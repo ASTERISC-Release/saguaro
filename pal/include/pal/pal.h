@@ -150,6 +150,9 @@ struct pal_public_state {
      * Memory layout
      */
     bool disable_aslr;                      /*!< disable ASLR */
+    bool file_maps_write_back;              /*!< writable shared file mappings are copies kept by
+                                                 the PAL: the LibOS writes them back on msync()
+                                                 and munmap() (VM PAL, multiprocess support) */
     void* memory_address_start;             /*!< usable memory start address */
     void* memory_address_end;               /*!< usable memory end address */
     uintptr_t early_libos_mem_range_start;  /*!< start of memory usable before checkpoint restore */

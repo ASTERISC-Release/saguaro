@@ -39,6 +39,7 @@ struct pal_handle_inner_file {
     uint64_t nodeid;
     uint64_t fh;
     char* realpath;
+    bool writable; /* opened for writing */
 
     /* below fields are used only for trusted files */
     size_t size;

@@ -285,6 +285,16 @@ static int chroot_mmap(struct libos_handle* hdl, void* addr, size_t size, int pr
     return 0;
 }
 
+/* Writable shared mappings are ordinary host mappings on most PALs; where the PAL keeps them as its
+ * own copies (the VM PAL with multiprocess support), write them back as for encrypted files. */
+static int chroot_msync(struct libos_handle* hdl, void* addr, size_t size, int prot, int flags,
+                        uint64_t offset) {
+    /* a read-only mapping is a copy taken at mmap() time, never newer than the file */
+    if (!g_pal_public_state->file_maps_write_back || !(prot & PROT_WRITE))
+        return 0;
+    return generic_emulated_msync(hdl, addr, size, prot, flags, offset);
+}
+
 int chroot_readdir(struct libos_dentry* dent, readdir_callback_t callback, void* arg) {
     int ret;
     PAL_HANDLE palhdl;
@@ -583,6 +593,7 @@ struct libos_fs_ops chroot_fs_ops = {
     .read       = &chroot_read,
     .write      = &chroot_write,
     .mmap       = &chroot_mmap,
+    .msync      = &chroot_msync,
     /* TODO: this function emulates lseek() completely inside the LibOS, but some device files may
      * report size == 0 during fstat() and may provide device-specific lseek() logic; this emulation
      * breaks for such device-specific cases */

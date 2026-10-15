@@ -30,6 +30,256 @@ static struct memory_address_space* current_address_space(void) {
     struct pal_tcb_vm* tcb = (struct pal_tcb_vm*)pal_get_tcb();
     return tcb ? tcb->kernel_thread.address_space : NULL;
 }
+
+/*
+ * Writable MAP_SHARED file mappings of processes with their own address spaces (experimental
+ * multiprocess support). Every process mapping the same host file (same FUSE node) maps the same
+ * frames, so stores are visible to all of them, as with Linux's page cache. The record of a node
+ * also counts the PAL handles open on it. Rules:
+ *   - read() and write() of a node with cached pages go through those pages (writes also go to the
+ *     host file), so the file and its mappings agree inside the guest;
+ *   - the LibOS writes a mapping back on msync() and munmap() (g_pal_public_state.
+ *     file_maps_write_back), and a writable handle writes all cached pages back when it closes;
+ *   - when the node's last handle closes, the cache drops its frames (frames still mapped stay
+ *     with their mappings, as page-cache pages do).
+ */
+struct shared_file_cache {
+    struct shared_file_cache* next;
+    uint64_t nodeid;
+    uint32_t handles;
+    size_t frames_count;
+    uintptr_t* frames; /* 0 = page not loaded yet */
+};
+
+static struct shared_file_cache* g_shared_file_caches;
+static spinlock_t g_shared_file_caches_lock = INIT_SPINLOCK_UNLOCKED;
+
+static struct shared_file_cache* shared_file_cache_find(uint64_t nodeid, bool create) {
+    assert(spinlock_is_locked(&g_shared_file_caches_lock));
+    struct shared_file_cache* cache = g_shared_file_caches;
+    while (cache && cache->nodeid != nodeid)
+        cache = cache->next;
+    if (!cache && create) {
+        cache = calloc(1, sizeof(*cache));
+        if (!cache)
+            return NULL;
+        cache->nodeid = nodeid;
+        cache->next = g_shared_file_caches;
+        g_shared_file_caches = cache;
+    }
+    return cache;
+}
+
+static void shared_file_note_open(uint64_t nodeid) {
+    if (!memory_frame_pool_active())
+        return;
+    spinlock_lock(&g_shared_file_caches_lock);
+    struct shared_file_cache* cache = shared_file_cache_find(nodeid, /*create=*/true);
+    if (cache)
+        cache->handles++;
+    spinlock_unlock(&g_shared_file_caches_lock);
+}
+
+/* Takes a reference on every cached frame of the node (or, with `detach`, takes the cache's own
+ * references and removes the node's record); the caller drops them with memory_frame_unref(). */
+static uintptr_t* shared_file_collect(struct shared_file_cache* cache, bool detach,
+                                      size_t* out_count) {
+    assert(spinlock_is_locked(&g_shared_file_caches_lock));
+    uintptr_t* frames = NULL;
+    *out_count = 0;
+    if (detach) {
+        struct shared_file_cache** link = &g_shared_file_caches;
+        while (*link != cache)
+            link = &(*link)->next;
+        *link = cache->next;
+        frames = cache->frames;
+        *out_count = cache->frames_count;
+        free(cache);
+        return frames;
+    }
+    if (!cache->frames_count)
+        return NULL;
+    frames = malloc(cache->frames_count * sizeof(*frames));
+    if (!frames)
+        return NULL;
+    for (size_t i = 0; i < cache->frames_count; i++) {
+        frames[i] = cache->frames[i];
+        if (frames[i])
+            memory_frame_ref(frames[i]);
+    }
+    *out_count = cache->frames_count;
+    return frames;
+}
+
+/* Writes the cached pages that lie inside the file back to the host file. */
+static void shared_file_write_back(struct pal_handle* handle, uintptr_t* frames, size_t count) {
+    struct fuse_attr attr;
+    if (virtio_fs_fuse_getattr(handle->file.nodeid, handle->file.fh, FUSE_GETATTR_FH, UINT64_MAX,
+                               &attr) < 0)
+        return;
+    for (size_t i = 0; i < count && i * PAGE_SIZE < attr.size; i++) {
+        if (!frames[i])
+            continue;
+        uint64_t len = MIN(PAGE_SIZE, attr.size - i * PAGE_SIZE);
+        uint64_t written;
+        int ret = virtio_fs_fuse_write(handle->file.nodeid, handle->file.fh,
+                                       memory_frame_pointer(frames[i]), len, i * PAGE_SIZE,
+                                       &written);
+        if (ret < 0)
+            log_warning("write-back of a shared mapping of '%s' failed: %s",
+                        handle->file.realpath, pal_strerror(ret));
+    }
+}
+
+static void shared_file_note_close(struct pal_handle* handle) {
+    if (!memory_frame_pool_active())
+        return;
+    spinlock_lock(&g_shared_file_caches_lock);
+    struct shared_file_cache* cache = shared_file_cache_find(handle->file.nodeid,
+                                                             /*create=*/false);
+    if (!cache) {
+        spinlock_unlock(&g_shared_file_caches_lock);
+        return;
+    }
+    if (cache->handles)
+        cache->handles--;
+    bool last = cache->handles == 0;
+    size_t count = 0;
+    uintptr_t* frames = NULL;
+    if (last || handle->file.writable)
+        frames = shared_file_collect(cache, /*detach=*/last, &count);
+    spinlock_unlock(&g_shared_file_caches_lock);
+
+    if (handle->file.writable && frames)
+        shared_file_write_back(handle, frames, count);
+    size_t cached = 0;
+    for (size_t i = 0; i < count; i++) {
+        if (frames[i]) {
+            memory_frame_unref(frames[i]);
+            cached++;
+        }
+    }
+    free(frames);
+    if (last && cached)
+        log_debug("shared file cache of '%s' dropped (%zu pages); %zu frame-pool frames in use",
+                  handle->file.realpath, cached, memory_frame_allocated_count());
+}
+
+/* Copies between `buffer` (file range [offset, offset + count)) and the node's cached pages: into
+ * the buffer after a read, into the pages after a write. */
+static void shared_file_sync_buffer(struct pal_handle* handle, uint64_t offset, uint64_t count,
+                                    void* buffer, bool to_cache) {
+    if (!count || !memory_frame_pool_active())
+        return;
+    for (uint64_t pos = offset; pos < offset + count;) {
+        uint64_t page = pos / PAGE_SIZE;
+        size_t in_page = pos % PAGE_SIZE;
+        size_t chunk = MIN(PAGE_SIZE - in_page, offset + count - pos);
+        uintptr_t frame = 0;
+        spinlock_lock(&g_shared_file_caches_lock);
+        struct shared_file_cache* cache = shared_file_cache_find(handle->file.nodeid,
+                                                                 /*create=*/false);
+        if (!cache || !cache->frames_count) {
+            spinlock_unlock(&g_shared_file_caches_lock);
+            return;
+        }
+        if (page < cache->frames_count && cache->frames[page]) {
+            frame = cache->frames[page];
+            memory_frame_ref(frame);
+        }
+        spinlock_unlock(&g_shared_file_caches_lock);
+        if (frame) {
+            char* cached = (char*)memory_frame_pointer(frame) + in_page;
+            char* buf = (char*)buffer + (pos - offset);
+            if (to_cache)
+                memcpy(cached, buf, chunk);
+            else
+                memcpy(buf, cached, chunk);
+            memory_frame_unref(frame);
+        }
+        pos += chunk;
+    }
+}
+
+/* Returns the frame of page `page` of the file with a reference for the caller, loading it on
+ * first use. */
+static int shared_file_page(struct pal_handle* handle, uint64_t page, uintptr_t* out_frame) {
+    uintptr_t frame = 0;
+    spinlock_lock(&g_shared_file_caches_lock);
+    struct shared_file_cache* cache = shared_file_cache_find(handle->file.nodeid,
+                                                             /*create=*/true);
+    if (!cache) {
+        spinlock_unlock(&g_shared_file_caches_lock);
+        return -PAL_ERROR_NOMEM;
+    }
+    if (page >= cache->frames_count) {
+        size_t new_count = MAX(page + 1, cache->frames_count * 2);
+        uintptr_t* frames = calloc(new_count, sizeof(*frames));
+        if (!frames) {
+            spinlock_unlock(&g_shared_file_caches_lock);
+            return -PAL_ERROR_NOMEM;
+        }
+        if (cache->frames_count)
+            memcpy(frames, cache->frames, cache->frames_count * sizeof(*frames));
+        free(cache->frames);
+        cache->frames = frames;
+        cache->frames_count = new_count;
+    }
+    frame = cache->frames[page];
+    if (frame)
+        memory_frame_ref(frame);
+    spinlock_unlock(&g_shared_file_caches_lock);
+    if (frame) {
+        *out_frame = frame;
+        return 0;
+    }
+
+    /* load outside the lock (the FUSE request may sleep); another process may win the race */
+    int ret = memory_frame_alloc(&frame);
+    if (ret < 0)
+        return ret;
+    ret = emulate_file_map_via_read(handle->file.nodeid, handle->file.fh,
+                                    memory_frame_pointer(frame), page * PAGE_SIZE, PAGE_SIZE);
+    if (ret < 0) {
+        memory_frame_free(frame);
+        return ret;
+    }
+    spinlock_lock(&g_shared_file_caches_lock);
+    cache = shared_file_cache_find(handle->file.nodeid, /*create=*/false);
+    if (cache && page < cache->frames_count && cache->frames[page]) {
+        memory_frame_free(frame);
+        frame = cache->frames[page];
+        memory_frame_ref(frame);
+    } else if (cache && page < cache->frames_count) {
+        cache->frames[page] = frame; /* the cache's reference */
+        memory_frame_ref(frame);     /* the caller's */
+    } else {
+        /* the record went away meanwhile (its last handle closed): the caller's frame only */
+    }
+    spinlock_unlock(&g_shared_file_caches_lock);
+    *out_frame = frame;
+    return 0;
+}
+
+static int shared_file_map(struct pal_handle* handle, struct memory_address_space* space,
+                           void* addr, pal_prot_flags_t prot, uint64_t offset, uint64_t size) {
+    bool execute = !!(prot & PAL_PROT_EXEC);
+    for (uint64_t done = 0; done < size; done += PAGE_SIZE) {
+        uintptr_t frame;
+        int ret = shared_file_page(handle, (offset + done) / PAGE_SIZE, &frame);
+        if (ret == 0) {
+            ret = memory_address_space_map_shared_frame(space, (uintptr_t)addr + done, frame,
+                                                        /*write=*/true, execute);
+            memory_frame_unref(frame);
+        }
+        if (ret < 0) {
+            if (done)
+                (void)memory_address_space_free(space, addr, done);
+            return ret;
+        }
+    }
+    return memory_address_space_flush_range((uintptr_t)addr, size);
+}
 #endif
 
 bool g_use_trusted_files = false; /* only TDX PAL will set this */
@@ -333,6 +583,7 @@ int pal_common_file_open(struct pal_handle** handle, const char* type, const cha
     hdl->file.nodeid   = nodeid;
     hdl->file.fh       = fh;
     hdl->file.realpath = norm_path;
+    hdl->file.writable = access != PAL_ACCESS_RDONLY;
 
     struct trusted_file* tf = NULL;
     if (g_use_trusted_files && !(options & PAL_OPTION_PASSTHROUGH)) {
@@ -375,6 +626,9 @@ int pal_common_file_open(struct pal_handle** handle, const char* type, const cha
         hdl->file.size = tf->size;
     }
 
+#ifdef __x86_64__
+    shared_file_note_open(hdl->file.nodeid);
+#endif
     *handle = hdl;
     ret = 0;
 out:
@@ -421,6 +675,9 @@ int64_t pal_common_file_read(struct pal_handle* handle, uint64_t offset, uint64_
             total_read_size += read_size;
         }
 
+#ifdef __x86_64__
+        shared_file_sync_buffer(handle, offset, total_read_size, buffer, /*to_cache=*/false);
+#endif
         return (int64_t)total_read_size;
     }
 
@@ -467,12 +724,18 @@ int64_t pal_common_file_write(struct pal_handle* handle, uint64_t offset, uint64
         total_written_size += written_size;
     }
 
+#ifdef __x86_64__
+    shared_file_sync_buffer(handle, offset, total_written_size, (void*)buffer, /*to_cache=*/true);
+#endif
     return (int64_t)total_written_size;
 }
 
 void pal_common_file_destroy(struct pal_handle* handle) {
     assert(handle->hdr.type == PAL_TYPE_FILE);
 
+#ifdef __x86_64__
+    shared_file_note_close(handle);
+#endif
     int ret = virtio_fs_fuse_release(handle->file.nodeid, handle->file.fh);
     if (ret < 0) {
         log_error("closing file host fd %lu failed: %s", handle->file.nodeid, pal_strerror(ret));
@@ -482,102 +745,6 @@ void pal_common_file_destroy(struct pal_handle* handle) {
     free(handle->file.realpath);
     free(handle);
 }
-
-#ifdef __x86_64__
-/*
- * Writable MAP_SHARED file mappings of processes with their own address spaces (experimental
- * multiprocess support). Every process mapping the same host file (same FUSE node) maps the same
- * frames, so stores are visible to all of them, as with Linux's page cache. The cache keeps its
- * frames until the VM exits, and the frames are not written back to the host file: the data is
- * shared between guest processes only. This is what POSIX shared memory (`/dev/shm`) needs.
- */
-struct shared_file_cache {
-    struct shared_file_cache* next;
-    uint64_t nodeid;
-    size_t frames_count;
-    uintptr_t* frames; /* 0 = page not loaded yet */
-};
-
-static struct shared_file_cache* g_shared_file_caches;
-static spinlock_t g_shared_file_caches_lock = INIT_SPINLOCK_UNLOCKED;
-
-/* Returns the frame of page `page` of the file, loading it on first use. */
-static int shared_file_page(struct pal_handle* handle, uint64_t page, uintptr_t* out_frame) {
-    uintptr_t frame = 0;
-    spinlock_lock(&g_shared_file_caches_lock);
-    struct shared_file_cache* cache = g_shared_file_caches;
-    while (cache && cache->nodeid != handle->file.nodeid)
-        cache = cache->next;
-    if (!cache) {
-        cache = calloc(1, sizeof(*cache));
-        if (!cache) {
-            spinlock_unlock(&g_shared_file_caches_lock);
-            return -PAL_ERROR_NOMEM;
-        }
-        cache->nodeid = handle->file.nodeid;
-        cache->next = g_shared_file_caches;
-        g_shared_file_caches = cache;
-    }
-    if (page >= cache->frames_count) {
-        size_t new_count = MAX(page + 1, cache->frames_count * 2);
-        uintptr_t* frames = calloc(new_count, sizeof(*frames));
-        if (!frames) {
-            spinlock_unlock(&g_shared_file_caches_lock);
-            return -PAL_ERROR_NOMEM;
-        }
-        if (cache->frames_count)
-            memcpy(frames, cache->frames, cache->frames_count * sizeof(*frames));
-        free(cache->frames);
-        cache->frames = frames;
-        cache->frames_count = new_count;
-    }
-    frame = cache->frames[page];
-    spinlock_unlock(&g_shared_file_caches_lock);
-    if (frame) {
-        *out_frame = frame;
-        return 0;
-    }
-
-    /* load outside the lock (the FUSE request may sleep); another process may win the race */
-    int ret = memory_frame_alloc(&frame);
-    if (ret < 0)
-        return ret;
-    ret = emulate_file_map_via_read(handle->file.nodeid, handle->file.fh,
-                                    memory_frame_pointer(frame), page * PAGE_SIZE, PAGE_SIZE);
-    if (ret < 0) {
-        memory_frame_free(frame);
-        return ret;
-    }
-    spinlock_lock(&g_shared_file_caches_lock);
-    if (cache->frames[page]) {
-        memory_frame_free(frame);
-        frame = cache->frames[page];
-    } else {
-        cache->frames[page] = frame;
-    }
-    spinlock_unlock(&g_shared_file_caches_lock);
-    *out_frame = frame;
-    return 0;
-}
-
-static int shared_file_map(struct pal_handle* handle, struct memory_address_space* space,
-                           void* addr, pal_prot_flags_t prot, uint64_t offset, uint64_t size) {
-    bool execute = !!(prot & PAL_PROT_EXEC);
-    for (uint64_t done = 0; done < size; done += PAGE_SIZE) {
-        uintptr_t frame;
-        int ret = shared_file_page(handle, (offset + done) / PAGE_SIZE, &frame);
-        if (ret == 0)
-            ret = memory_address_space_map_shared_frame(space, (uintptr_t)addr + done, frame,
-                                                        /*write=*/true, execute);
-        if (ret < 0) {
-            if (done)
-                (void)memory_address_space_free(space, addr, done);
-            return ret;
-        }
-    }
-    return memory_address_space_flush_range((uintptr_t)addr, size);
-}
-#endif
 
 int pal_common_file_map(struct pal_handle* handle, void* addr, pal_prot_flags_t prot,
                         uint64_t offset, uint64_t size) {

@@ -1444,6 +1444,11 @@ static bool vma_filter_needs_reload(struct libos_vma* vma, void* arg) {
     if (!vma->file->inode || vma->file->inode != hdl->inode)
         return false;
 
+    /* a writable shared mapping that the PAL keeps coherent with the file (its own page cache):
+     * reading the file into it would overwrite stores not yet written back */
+    if (g_pal_public_state->file_maps_write_back && (vma->prot & PROT_WRITE))
+        return false;
+
     if (!vma->file->fs || !vma->file->fs->fs_ops || !vma->file->fs->fs_ops->read)
         return false;
 

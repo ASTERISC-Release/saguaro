@@ -798,6 +798,8 @@ noreturn int pal_start_continue(void* cmdline_) {
         ret = init_multiprocess_frame_pool();
         if (ret < 0)
             INIT_FAIL("Cannot initialize the multiprocess frame pool: %s", pal_strerror(ret));
+        /* writable shared file mappings come from the PAL's per-file cache (pal_common_files.c) */
+        g_pal_public_state.file_maps_write_back = true;
     }
 #endif
 
