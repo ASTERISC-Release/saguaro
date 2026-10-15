@@ -115,6 +115,18 @@ static inline PAL_VBS_TCB* vbs_arch_place_tcb(PAL_VBS_TCB* tcb) {
     t->common.self = &t->common;
     return t;
 }
+/* the first thread's TCB (pal_main.c): its copy in the TEB */
+extern PAL_VBS_TCB* g_vbs_first_tcb;
+#define FIRST_TCB (*g_vbs_first_tcb)
+#define VBS_FIRST_TCB_INIT(tcb) (g_vbs_first_tcb = vbs_arch_place_tcb(&(tcb)))
+#define VBS_SET_TCB_SINGLETON(tcb) ((void)(tcb))
+#define VBS_PLACE_TCB(tcb) ((tcb) = vbs_arch_place_tcb(tcb))
+#else
+/* AArch64: the TCB stays where it was allocated; pal_get_tcb() finds it (pal_arch.h) */
+#define FIRST_TCB g_first_tcb
+#define VBS_FIRST_TCB_INIT(tcb) tcb.common.self = &tcb.common
+#define VBS_SET_TCB_SINGLETON(tcb) g_pal_tcb_singleton = tcb
+#define VBS_PLACE_TCB(tcb) tcb
 #endif
 
 /* any stream became ready (pipes): waiters of _PalStreamsWaitEvents and blocking reads wait on it */

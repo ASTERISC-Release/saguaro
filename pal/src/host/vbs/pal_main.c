@@ -24,13 +24,6 @@ const struct pal_vbs_services* g_vbs;
 const size_t g_page_size = PRESET_PAGESIZE;
 
 static PAL_VBS_TCB g_first_tcb;
-#if defined(__x86_64__)
-/* x86_64: the first thread's TCB is the copy in its TEB (pal_vbs.h, vbs_arch_place_tcb) */
-static PAL_VBS_TCB* g_first_tcb_p = &g_first_tcb;
-#define FIRST_TCB (*g_first_tcb_p)
-#else
-#define FIRST_TCB g_first_tcb
-#endif
 
 noreturn void vbs_exit(int64_t code) {
     pal_vbs_wcall(g_vbs->exit, (uint64_t)code, 0, 0);
@@ -144,15 +137,10 @@ noreturn void pal_vbs_start(const struct pal_vbs_services* svc) {
     }
 
     /* A TCB with a default canary before anything that may use the stack protector. */
-#if defined(__x86_64__)
-    g_first_tcb_p = vbs_arch_place_tcb(&g_first_tcb);
-#endif
-    FIRST_TCB.common.self = &FIRST_TCB.common;
+    VBS_FIRST_TCB_INIT(g_first_tcb); /* x86_64: in the TEB (pal_vbs.h) */
     pal_tcb_arch_set_stack_canary(&FIRST_TCB.common, STACK_PROTECTOR_CANARY_DEFAULT);
     pal_set_tcb(&FIRST_TCB.common);
-#if !defined(__x86_64__)
-    g_pal_tcb_singleton = &FIRST_TCB.common;
-#endif
+    VBS_SET_TCB_SINGLETON(&FIRST_TCB.common);
 
     /* W relocated this object already (pal_vbs_packed.c); only record its symbols. */
     ret = setup_pal_binary(/*apply_relocations=*/false);

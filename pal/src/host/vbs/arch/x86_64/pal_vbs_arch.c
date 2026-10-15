@@ -60,3 +60,6 @@ int _PalCpuIdRetrieve(uint32_t leaf, uint32_t subleaf, uint32_t values[4]) {
                      : "a"(leaf), "c"(subleaf));
     return 0;
 }
+
+/* the first thread's TCB in its TEB (pal_main.c, pal_vbs.h) */
+PAL_VBS_TCB* g_vbs_first_tcb;
