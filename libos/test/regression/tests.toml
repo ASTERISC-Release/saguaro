@@ -88,6 +88,7 @@ manifests = [
   "mmap_file_emulated",
   "mprotect_file_fork",
   "mprotect_prot_growsdown",
+  "mremap_inplace",
   "multi_pthread",
   "multi_pthread_exitless",
   "munmap",

@@ -84,6 +84,7 @@ tests = {
     'mmap_file_emulated': {},
     'mprotect_file_fork': {},
     'mprotect_prot_growsdown': {},
+    'mremap_inplace': {},
     'multi_pthread': {},
     'munmap': {},
     'open_file': {},

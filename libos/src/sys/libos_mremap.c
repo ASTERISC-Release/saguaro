@@ -375,6 +375,29 @@ long libos_syscall_mremap(void* old_address, size_t old_size, size_t new_size, i
 
     // In-place remapping
     if (!(flags & MREMAP_MAYMOVE)) {
+        /* Like Linux: growing in place needs the pages after the mapping to be free; otherwise
+         * ENOMEM (allocators such as LuaJIT's try this and fall back). The emulation below maps
+         * with MAP_FIXED and would silently replace whatever is mapped there. */
+        if (new_size > old_size) {
+            uintptr_t ext_start = (uintptr_t)old_address + old_size;
+            uintptr_t ext_end   = (uintptr_t)old_address + new_size;
+            struct libos_vma_info* busy;
+            size_t busy_cnt;
+            if (ext_end < ext_start || !access_ok((void*)ext_start, new_size - old_size)
+                    || dump_vmas_in_range(ext_start, ext_end, /*include_unmapped=*/false, &busy,
+                                          &busy_cnt) < 0) {
+                if (vma.file)
+                    put_handle(vma.file);
+                return -ENOMEM;
+            }
+            free_vma_info_array(busy, busy_cnt);
+            if (busy_cnt) {
+                if (vma.file)
+                    put_handle(vma.file);
+                return -ENOMEM;
+            }
+        }
+
         // Save old data
         size_t copy_size = old_size < new_size ? old_size : new_size;
         void* temp_buf   = malloc(copy_size);
