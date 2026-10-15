@@ -496,7 +496,7 @@ static void stack_info(const char* when)
 
 // args[0]: group. 1 = safe probes, 2 = syscall, 3 = trap+resume, 4 = FS base kept across exit/entry,
 // 5 = red zone, 6 = FS base and registers across OCALLs, 7 = FS base and registers under preemption,
-// 8 = exceptions with rsp outside the thread stack, 9 = stack, 10 = CFG.
+// 8 = exceptions with rsp outside the thread stack, 9 = stack, 10 = CFG, 11 = TEB layout.
 void* CALLBACK E_Exec(void* param)
 {
     PROBE_IO* io = (PROBE_IO*)param;
@@ -505,6 +505,19 @@ void* CALLBACK E_Exec(void* param)
     case 1: {
         stack_info("exec");
         logf("exec: NtCurrentTeb()=%p gs:[0x30]=0x%llx\n", (void*)NtCurrentTeb(), __readgsqword(0x30));
+        // TEB fields that Gramine could borrow on x64 (see PLAN-x64.md): NT_TIB.ExceptionList (0x0),
+        // SubSystemTib (0x18, where the patched glibc's `jmp *%gs:24` would look), FiberData (0x20),
+        // ArbitraryUserPointer (0x28), ThreadLocalStoragePointer (0x58), TlsSlots (0x1480)
+        logf("exec: TEB fields: [0x0]=0x%llx [0x18]=0x%llx [0x20]=0x%llx [0x28]=0x%llx [0x58]=0x%llx\n",
+             __readgsqword(0x0), __readgsqword(0x18), __readgsqword(0x20), __readgsqword(0x28), __readgsqword(0x58));
+        {
+            DWORD idx[4];
+            for (int k = 0; k < 4; k++) idx[k] = TlsAlloc();
+            TlsSetValue(idx[0], (void*)0x1234);
+            logf("exec: TlsAlloc x4 -> %lu %lu %lu %lu; after TlsSetValue(first, 0x1234): gs:[0x1480+8*first]=0x%llx\n",
+                 idx[0], idx[1], idx[2], idx[3], idx[0] < 64 ? __readgsqword(0x1480 + 8 * idx[0]) : 0ull);
+            for (int k = 0; k < 4; k++) TlsFree(idx[k]);
+        }
         trap("rdfsbase on entry", t_rdfs, 0, 0);
         trap("rdgsbase on entry", t_rdgs, 0, 0);
         trap("xgetbv(0) (XCR0)", t_xgetbv0, 0, 0);
@@ -601,6 +614,7 @@ void* CALLBACK E_Exec(void* param)
         unsigned long long fs_bad = 0, gs_bad = 0, aup_bad = 0, first_fs = 0, calls_bad = 0;
         NT_TIB* tib = (NT_TIB*)NtCurrentTeb();
         void* aup0 = tib->ArbitraryUserPointer;
+        void* sst0 = tib->SubSystemTib;
         unsigned long long gs0 = 0;
         int have_fsgs = 1;
         __try { gs0 = probe_rdgsbase(); } __except (filt(GetExceptionCode())) { have_fsgs = 0; }
@@ -611,6 +625,7 @@ void* CALLBACK E_Exec(void* param)
             unsigned long long v = 0x00007ee200000000ull + (i << 4);
             if (have_fsgs) probe_wrfsbase(v);
             tib->ArbitraryUserPointer = (void*)(v + 8);
+            tib->SubSystemTib = (void*)(v + 16);
             void* ret = NULL;
             if (!CallEnclave(fn, (void*)i, TRUE, &ret) || ret != (void*)(i + 1)) calls_bad++;
             if (have_fsgs) {
@@ -618,13 +633,14 @@ void* CALLBACK E_Exec(void* param)
                 if (g != v) { if (!fs_bad) first_fs = g; fs_bad++; }
                 if (probe_rdgsbase() != gs0) gs_bad++;
             }
-            if (tib->ArbitraryUserPointer != (void*)(v + 8)) aup_bad++;
+            if (tib->ArbitraryUserPointer != (void*)(v + 8) || tib->SubSystemTib != (void*)(v + 16)) aup_bad++;
         }
         QueryPerformanceCounter(&b);
         if (have_fsgs) probe_wrfsbase(0);
         tib->ArbitraryUserPointer = aup0;
+        tib->SubSystemTib = sst0;
         logf("ocall: %llu OCALLs (%llu failed) in %lld ms; FS base changed %llu times (first value 0x%llx); GS base changed %llu times; "
-             "TEB ArbitraryUserPointer changed %llu times%s\n", n, calls_bad, (b.QuadPart - a.QuadPart) * 1000 / f.QuadPart,
+             "TEB ArbitraryUserPointer or SubSystemTib changed %llu times%s\n", n, calls_bad, (b.QuadPart - a.QuadPart) * 1000 / f.QuadPart,
              fs_bad, first_fs, gs_bad, aup_bad, have_fsgs ? "" : " (rd/wrfsbase unavailable: FS not tested)");
         long long m = probe_callout_regs((void*)fn);
         logf("ocall: callee-saved registers changed across CallEnclave to the host: mask 0x%llx (0 = rbx rsi rdi rbp r12-r15 xmm6-15 kept)\n", m);
@@ -685,6 +701,25 @@ void* CALLBACK E_Exec(void* param)
         query("StackLimit-64K", (char*)tib->StackLimit - 65536);
         query("StackBase-4K", (char*)tib->StackBase - 4096);
         io->out[0] = (unsigned long long)((char*)tib->StackBase - (char*)tib->StackLimit);
+        break;
+    }
+    case 11: {
+        // the enclave thread's TEB: how large is it, and which of its qwords are in use (non-zero)?
+        // (Gramine's own TCB could live in an unused part of it, see PLAN-x64.md, X2)
+        unsigned char* teb = (unsigned char*)NtCurrentTeb();
+        query("TEB", teb);
+        MEMORY_BASIC_INFORMATION mbi;
+        SIZE_T avail = 0;
+        if (VirtualQuery(teb, &mbi, sizeof(mbi))) avail = (SIZE_T)((unsigned char*)mbi.BaseAddress + mbi.RegionSize - teb);
+        if (avail > 0x2000) avail = 0x2000;
+        logf("teb: %p, %zu bytes readable from it in its region; non-zero qwords (offset=value):\n", teb, avail);
+        int n = 0;
+        for (SIZE_T off = 0; off + 8 <= avail; off += 8) {
+            unsigned long long v = *(unsigned long long*)(teb + off);
+            if (v) { logf(" %03zx=%llx", off, v); if (++n % 6 == 0) logf("\n"); }
+        }
+        logf("\nteb: %d non-zero qwords\n", n);
+        io->out[0] = avail; io->out[1] = n;
         break;
     }
     case 10: {

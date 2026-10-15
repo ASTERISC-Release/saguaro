@@ -231,10 +231,10 @@ int main(int argc, char** argv)
         bool ok = call("E_Exec", &g_io);
         printf("E_Exec returned to the host: %d\n", ok);
         finish();
-    } else if (!strcmp(t, "stack") || !strcmp(t, "cfg")) {
+    } else if (!strcmp(t, "stack") || !strcmp(t, "cfg") || !strcmp(t, "teb")) {
         if (!create(1)) return 3;
         memset(&g_io, 0, sizeof(g_io));
-        g_io.args[0] = !strcmp(t, "stack") ? 9 : 10;
+        g_io.args[0] = !strcmp(t, "stack") ? 9 : !strcmp(t, "cfg") ? 10 : 11;
         call("E_Exec", &g_io);
         finish();
     } else if (!strcmp(t, "hostcpu")) {       // host-only survey (no enclave): the same probes in a normal process
