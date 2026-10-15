@@ -1,0 +1,17 @@
+# A TCP server in a Windows VBS enclave (Documentation/vbs.rst): it listens on 127.0.0.1:18080
+# through the host's sockets, answers three clients and exits. The program is the vbs PAL's test
+# pal/src/host/vbs/test/tcpserver/tcpserver.c. Run it with
+#   gramine-vbs run tcpserver.manifest
+# and connect from another PowerShell window, three times: .\client.ps1
+loader.entrypoint = "file:/libsysdb.so"
+libos.entrypoint = "/tcpserver"
+loader.log_level = "error"
+fs.root.uri = "file:/"
+sys.rewrite_syscalls = false
+
+vbs.debug = false
+vbs.max_threads = 8
+vbs.build = "$VBS_CC_STATIC -o tcpserver $GRAMINE_REPO/pal/src/host/vbs/test/tcpserver/tcpserver.c"
+vbs.packed_files = [
+  { path = "/tcpserver", uri = "file:tcpserver" },
+]

@@ -191,9 +191,32 @@ program with the dynamic loader, ``libc.so.6`` and ``libm.so.6``::
 
     scripts\vbs\gramine-vbs.cmd run CI-Examples\vbs\dynhello\dynhello.manifest
 
-A manifest outside the checkout works too; its folder is copied into the
-distribution (``~/.cache/gramine-vbs/apps``), so its ``vbs.packed_files`` must
-stay inside that folder.
+Python (``CI-Examples\vbs\python``): the manifest's ``vbs.build`` builds
+CPython 3.12.7 for the enclave in the distribution the first time
+(``scripts/vbs/build-python.sh --if-needed``: downloaded from python.org and
+checked against its SHA-256, built against the vbs glibc in 78 s, kept in
+``build-vbs-python`` of the WSL copy and reused afterwards)::
+
+    scripts\vbs\gramine-vbs.cmd run CI-Examples\vbs\python\python.manifest
+
+The first run took 100 s, a rebuild with the cached CPython 21 s, a run of the
+signed image 1.9 s.
+
+A TCP server (``CI-Examples\vbs\tcpserver``) listens on 127.0.0.1:18080
+through the host's Winsock sockets and answers three clients::
+
+    scripts\vbs\gramine-vbs.cmd run CI-Examples\vbs\tcpserver\tcpserver.manifest
+    # in a second window:
+    CI-Examples\vbs\tcpserver\client.ps1 -Count 3
+
+**Adding an application** takes a manifest with ``vbs.packed_files`` (what goes
+into the image) and ``vbs.build`` (how its files are built in the
+distribution, with the enclave compilers ``$VBS_CC_STATIC``,
+``$VBS_CC_DYNAMIC`` and ``$VBS_GCC`` against the vbs glibc), as in the
+examples; see :ref:`vbs-syntax`. A manifest outside the checkout works too;
+its folder is copied into the distribution (``~/.cache/gramine-vbs/apps``), so
+its ``vbs.packed_files`` must stay inside that folder or point into the
+checkout's build folders through ``vbs.build``.
 
 Quick start on Linux
 --------------------
@@ -217,9 +240,9 @@ measured), later runs start the signed image (0.9 s). The output::
 
     Hello, world from a VBS enclave (pid 1, 0 arguments)
 
-Python (``CI-Examples/vbs/python``): build CPython 3.12 for the enclave on the
-aarch64 machine with ``scripts/vbs/build-python.sh`` (into
-``build-vbs-python``), then::
+Python (``CI-Examples/vbs/python``; its ``vbs.build`` builds CPython 3.12.7
+once with ``scripts/vbs/build-python.sh --if-needed`` into
+``build-vbs-python``, which needs the aarch64 machine)::
 
     cd CI-Examples/vbs/python
     ../../../scripts/vbs/gramine-vbs run python.manifest
@@ -269,9 +292,10 @@ with ``-Distro NAME`` and ``-CertName SUBJECT`` for all of them. The build
 folder ``<name>.vbs`` is next to the manifest and holds the objects, the
 signed ``<name>.dll``, ``pal_vbs_host.exe``, ``objs-info.txt`` (the clang,
 gcc and header versions and the object hashes; the objects are
-reproducible), and ``root`` (the default host root). ``run`` rebuilds when
-the manifest is newer than the image (or with ``-Rebuild``; a change to the
-application's sources alone needs ``-Rebuild``). Inputs reach WSL in
+reproducible), and ``root`` (the default host root). ``run`` rebuilds when a
+file of the checkout (or of the manifest's folder outside it) changed since the
+image was built, by name, size and modification time, or with ``-Rebuild``;
+files deleted on Windows are deleted from the WSL copy too. Inputs reach WSL in
 environment variables, so folders with spaces or non-ASCII names work.
 
 Objects that ``gramine-vbs build --no-sign`` prepared on Linux (copy

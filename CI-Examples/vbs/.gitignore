@@ -5,3 +5,4 @@
 # these manifests are written by hand (no .manifest.template)
 !*.manifest
 /dynhello/dynhello
+/tcpserver/tcpserver
