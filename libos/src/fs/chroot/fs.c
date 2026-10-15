@@ -497,11 +497,10 @@ static int chroot_exchange(struct libos_dentry* a, struct libos_dentry* b) {
     return ret;
 }
 
-/* extended attributes are the host file's (`PalFileXattr`), with the PAL's errors mapped to the
- * ones the xattr calls need */
-static int chroot_xattr(struct libos_dentry* dent, int op, const char* name, void* value,
-                        size_t* size, int flags) {
-    assert(locked(&g_dcache_lock));
+/* one host attribute operation through `PalFileXattr`, with the PAL's errors mapped to the ones
+ * the xattr calls need */
+static int chroot_host_xattr(struct libos_dentry* dent, int op, const char* name, void* value,
+                             size_t* size, int flags) {
     char* uri = NULL;
     int ret = dentry_uri(dent, S_IFREG, &uri);
     if (ret < 0)
@@ -523,6 +522,65 @@ static int chroot_xattr(struct libos_dentry* dent, int op, const char* name, voi
         default:
             return pal_to_unix_errno(ret);
     }
+}
+
+static bool is_privileged_xattr(const char* name) {
+    return !strncmp(name, "security.", 9) || !strncmp(name, "trusted.", 8);
+}
+
+/*
+ * Extended attributes are the host file's. The privileged namespaces (`security.`, `trusted.`)
+ * are the exception when the host refuses them (Gramine usually runs unprivileged on the host,
+ * while the LibOS's root may set them): those are kept in the LibOS inode instead, for as long as
+ * the inode lives in this process (they are not written to the host nor seen by other processes).
+ * Get and remove look there first, list shows both.
+ */
+static int chroot_xattr(struct libos_dentry* dent, int op, const char* name, void* value,
+                        size_t* size, int flags) {
+    assert(locked(&g_dcache_lock));
+    struct libos_inode* inode = dent->inode;
+    int ret;
+
+    if (op == PAL_XATTR_LIST) {
+        size_t host_size = *size;
+        ret = chroot_host_xattr(dent, op, name, value, &host_size, flags);
+        bool host_none = ret == -EOPNOTSUPP;
+        if (host_none)
+            host_size = 0;
+        else if (ret < 0)
+            return ret;
+        size_t local_size = *size ? *size - host_size : 0;
+        if (*size && local_size == 0) {
+            /* the buffer is full: only fits if nothing is stored locally */
+            size_t need = 0;
+            ret = libos_xattr_store_op(inode, op, NULL, NULL, &need, 0);
+            if (ret < 0)
+                return ret;
+            if (need)
+                return -ERANGE;
+        } else {
+            ret = libos_xattr_store_op(inode, op, NULL, *size ? (char*)value + host_size : NULL,
+                                       &local_size, 0);
+            if (ret < 0)
+                return ret;
+        }
+        if (host_none && local_size == 0)
+            return -EOPNOTSUPP;
+        *size = host_size + local_size;
+        return 0;
+    }
+
+    if (!is_privileged_xattr(name))
+        return chroot_host_xattr(dent, op, name, value, size, flags);
+
+    size_t probe = 0;
+    bool local = libos_xattr_store_op(inode, PAL_XATTR_GET, name, NULL, &probe, 0) == 0;
+    if (local)
+        return libos_xattr_store_op(inode, op, name, value, size, flags);
+    ret = chroot_host_xattr(dent, op, name, value, size, flags);
+    if (op == PAL_XATTR_SET && (ret == -EACCES || ret == -EPERM || ret == -EOPNOTSUPP))
+        ret = libos_xattr_store_op(inode, op, name, value, size, flags);
+    return ret;
 }
 
 static void chroot_idrop(struct libos_inode* inode) {

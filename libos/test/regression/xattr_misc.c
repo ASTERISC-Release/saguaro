@@ -5,7 +5,8 @@
  * Extended attributes (LTP getxattr01/03, removexattr01/02, fgetxattr03, setxattr*, listxattr*):
  * set/get/list/remove in the user namespace with the size query, ERANGE, XATTR_CREATE/REPLACE,
  * ENODATA, the descriptor variants, the namespace rules (unknown prefix EOPNOTSUPP, user.* not on
- * symlinks, EACCES without write permission) and the argument checks. On tmpfs the LibOS stores
+ * symlinks, EACCES without write permission, trusted.* only with CAP_SYS_ADMIN, security.* and
+ * trusted.* for root even where the host refuses them) and the argument checks. On tmpfs the LibOS stores
  * the attributes itself; on a host-backed directory the host's filesystem does, and if it has no
  * user attributes the test checks that the answer is EOPNOTSUPP and stops there.
  *
@@ -84,6 +85,30 @@ int main(int argc, char** argv) {
     CHECK(getxattr(f, "user.a", buf, sizeof(buf)) == -1 && errno == ENODATA);
     CHECK(removexattr(f, "user.a") == -1 && errno == ENODATA);
     CHECK(fremovexattr(fd, "user.b") == 0);
+
+    /* root may use the privileged namespaces (kept by the LibOS if the host refuses them) */
+    CHECK(setxattr(f, "security.t", "sec", 3, 0) == 0);
+    CHECK(setxattr(f, "trusted.t", "tr", 2, XATTR_CREATE) == 0);
+    CHECK(getxattr(f, "security.t", buf, sizeof(buf)) == 3 && memcmp(buf, "sec", 3) == 0);
+    CHECK(getxattr(f, "trusted.t", buf, sizeof(buf)) == 2);
+    n = listxattr(f, list, sizeof(list));
+    int seen_s = 0, seen_t = 0;
+    for (char* p = list; p < list + n; p += strlen(p) + 1) {
+        seen_s |= !strcmp(p, "security.t");
+        seen_t |= !strcmp(p, "trusted.t");
+    }
+    CHECK(seen_s && seen_t);
+    CHECK(listxattr(f, NULL, 0) == n);
+    CHECK(removexattr(f, "trusted.t") == 0);
+    CHECK(getxattr(f, "trusted.t", buf, sizeof(buf)) == -1 && errno == ENODATA);
+    /* without CAP_SYS_ADMIN trusted.* cannot be written and reads as absent */
+    CHECK(setxattr(f, "trusted.t", "tr", 2, 0) == 0);
+    CHECK(seteuid(65534) == 0);
+    CHECK(setxattr(f, "trusted.u", "1", 1, 0) == -1 && errno == EPERM);
+    CHECK(getxattr(f, "trusted.t", buf, sizeof(buf)) == -1 && errno == ENODATA);
+    CHECK(seteuid(0) == 0);
+    CHECK(removexattr(f, "trusted.t") == 0);
+    CHECK(removexattr(f, "security.t") == 0);
 
     /* user attributes are not allowed on symbolic links */
     CHECK(symlink("xattr_misc_file", l) == 0);
