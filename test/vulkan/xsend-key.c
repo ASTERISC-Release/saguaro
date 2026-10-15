@@ -6,6 +6,7 @@
  * check for vkcube, which quits on Escape).
  *
  * Usage: xsend-key NAME KEYSYM_NAME   (for example: xsend-key "XCB Demo Window" Escape)
+ *        xsend-key NAME resize WxH     (asks the window manager to resize that window instead)
  */
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
@@ -35,8 +36,8 @@ static Window find(Display* d, Window w, const char* name, int depth) {
 }
 
 int main(int argc, char** argv) {
-    if (argc != 3) {
-        fprintf(stderr, "usage: %s NAME KEYSYM\n", argv[0]);
+    if (argc != 3 && argc != 4) {
+        fprintf(stderr, "usage: %s NAME KEYSYM | NAME resize WxH\n", argv[0]);
         return 2;
     }
     Display* d = XOpenDisplay(NULL);
@@ -56,6 +57,14 @@ int main(int argc, char** argv) {
         /* not reparented into the application's window yet: send nothing */
         fprintf(stderr, "window *%s* is still a top-level window\n", argv[1]);
         return 1;
+    }
+    unsigned int w, h;
+    if (!strcmp(argv[2], "resize") && argc == 4 && sscanf(argv[3], "%ux%u", &w, &h) == 2) {
+        XResizeWindow(d, parent, w, h);
+        XFlush(d);
+        printf("asked to resize window 0x%lx to %ux%u\n", parent, w, h);
+        XCloseDisplay(d);
+        return 0;
     }
     KeyCode kc = XKeysymToKeycode(d, XStringToKeysym(argv[2]));
     XKeyEvent e = {.type = KeyPress, .display = d, .window = parent, .root = root,
