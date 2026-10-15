@@ -54,6 +54,10 @@ runtime/glibc$
 # LTP's own paths (the LTP sources are not in this repository)
 ^runtest/syscalls$
 ^src/$
-^\.ltp-results/$
+
+# untracked run logs and probe work directories (gitignored; the documents name the logs of a run,
+# which exist only in the checkout that ran it)
+^\.ltp-results/
+^\.mp-probes/
 
 ^gramine-libos-
