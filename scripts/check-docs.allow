@@ -65,8 +65,3 @@ runtime/glibc$
 ^libos/test/ltp/install$
 # the direct-PAL LTP manifests of an aarch64 run (scripts/build-ltp-manifests.sh, LTP_HARNESS_DIR)
 ^\.ltp-harness-direct/
-
-# Planned by syscall-compat/PLAN.md (AArch64 run); remove each line when the file exists
-^MATRIX-aarch64\.md$
-^matrix-aarch64\.csv$
-^syscalls-aarch64\.csv$

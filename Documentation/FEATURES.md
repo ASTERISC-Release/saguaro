@@ -34,8 +34,9 @@ production use.
   glibc. The VM build in CI went from 5m45s to 1m19s. `runtime-libc/`
 - **More LibOS system calls** (done). `mremap`, SysV semaphores, `faccessat2`, `getresuid`/`getresgid`, more
   `prctl` options, and `statx` on RISC-V. `graphics/tirith-delta.md`
-- **VM syscall compatibility matrix** (measured on x86_64). LTP results for native, direct and VM loaders,
-  with per-test reasons and rerun instructions. `devel/syscall-compat/MATRIX.md`
+- **VM syscall compatibility matrix** (measured on x86_64 and AArch64). LTP results for native, direct and VM
+  loaders, with per-test reasons and rerun instructions; the AArch64 runs are sharded over parallel runners
+  (`scripts/ltp-sharded.py`). `devel/syscall-compat/MATRIX.md`, `devel/syscall-compat/MATRIX-aarch64.md`
 - **Application syscall profile** (experimental). `scripts/syscall-profile.py` traces an application with
   `strace` and reports which of its syscalls the direct and vm loaders support, with a likely/may run/unlikely
   verdict; calibrated on ten applications. `devel/syscall-profile/`
