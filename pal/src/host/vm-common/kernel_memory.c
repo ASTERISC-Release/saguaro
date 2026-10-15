@@ -349,6 +349,18 @@ static void memory_frame_put(uintptr_t frame) {
         BUG();
 }
 
+void memory_frame_ref(uintptr_t frame) {
+    memory_frame_get(frame);
+}
+
+void memory_frame_unref(uintptr_t frame) {
+    memory_frame_put(frame);
+}
+
+size_t memory_frame_pool_capacity(void) {
+    return g_frame_pool_bitmap ? g_frame_pool_size / PAGE_SIZE : 0;
+}
+
 bool memory_frame_pool_active(void) {
     return !!g_frame_pool_bitmap;
 }

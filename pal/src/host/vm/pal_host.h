@@ -58,6 +58,12 @@ typedef struct pal_handle {
         struct pal_handle_inner_eventfd eventfd;
 
         struct {
+            /* a guest /dev/shm object (pal_shm.c); a PAL_TYPE_DEV handle */
+            void* object;
+            bool writable;
+        } shm;
+
+        struct {
             uintptr_t shared_stream_frame;
             uint32_t side;
             bool nonblocking;

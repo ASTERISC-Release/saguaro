@@ -333,6 +333,21 @@ bool vm_handle_release_share(PAL_HANDLE handle);
 /* Per-process record of the handles given to the LibOS, destroyed when the process exits. */
 void vm_track_handle(PAL_HANDLE handle);
 void vm_untrack_handle(PAL_HANDLE handle);
+/* The guest /dev/shm store (pal_shm.c), used with the multiprocess support. */
+bool vm_shm_store_active(void);
+bool vm_shm_is_object_uri(const char* uri);
+bool vm_shm_is_handle(PAL_HANDLE handle);
+int vm_shm_open(PAL_HANDLE* out_handle, const char* uri, enum pal_access access,
+                pal_share_flags_t share, enum pal_create_mode create);
+void vm_shm_destroy(PAL_HANDLE handle);
+int vm_shm_delete(PAL_HANDLE handle);
+int vm_shm_setlength(PAL_HANDLE handle, uint64_t length);
+int vm_shm_attrquery(const char* uri, PAL_STREAM_ATTR* attr);
+int vm_shm_attrquerybyhdl(PAL_HANDLE handle, PAL_STREAM_ATTR* attr);
+int vm_shm_map(PAL_HANDLE handle, void* addr, pal_prot_flags_t prot, uint64_t offset,
+               uint64_t size);
+int64_t vm_shm_read(PAL_HANDLE handle, uint64_t offset, uint64_t count, void* buffer);
+int64_t vm_shm_write(PAL_HANDLE handle, uint64_t offset, uint64_t count, const void* buffer);
 #define PAL_TRACK_HANDLE(ret, handle)              \
     do {                                           \
         if ((ret) >= 0 && (handle))                \

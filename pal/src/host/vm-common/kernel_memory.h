@@ -59,6 +59,12 @@ bool memory_frame_is_alias_pointer(const void* pointer);
 size_t memory_frame_allocated_count(void);
 /* True once the experimental multiprocess support has set up the frame pool. */
 bool memory_frame_pool_active(void);
+/* Take or drop a reference on a pool frame (a mapping leaf holds one, a cache or store another);
+ * the last drop frees it. The dropping caller must have flushed stale translations. */
+void memory_frame_ref(uintptr_t frame);
+void memory_frame_unref(uintptr_t frame);
+/* Number of frames in the pool (0 without it). */
+size_t memory_frame_pool_capacity(void);
 /* Return the stable supervisor alias for a physical frame address. */
 void* memory_frame_pointer(uintptr_t frame);
 
