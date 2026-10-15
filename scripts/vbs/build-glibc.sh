@@ -10,8 +10,12 @@
 #
 # Usage (aarch64 build container): scripts/vbs/build-glibc.sh [SYSROOT]   (default build-vbs-glibc)
 # Then link a static PIE with scripts/vbs/cc-static-pie.sh.
+#   scripts/vbs/build-glibc.sh --softfp [SYSROOT]   only (re)build SYSROOT/usr/lib/libsoftfp-x18.a
+#                                                    (for a sysroot made before it existed)
 set -e
 
+SOFTFP_ONLY=
+[ "$1" = --softfp ] && { SOFTFP_ONLY=1; shift; }
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 SYSROOT=$(realpath -m "${1:-$ROOT/build-vbs-glibc}")
 TARBALL="$ROOT/subprojects/packagecache/glibc-2.39.tar.gz"
@@ -19,6 +23,31 @@ WORK="$SYSROOT.build"
 
 [ -f "$TARBALL" ] || { echo "missing $TARBALL (run a meson setup with -Dlibc=glibc once, or" \
                        "download it as subprojects/glibc-2.39-1.wrap says)"; exit 1; }
+
+# The soft-float routines glibc takes from the compiler's libgcc.a were not built with -ffixed-x18
+# (__divtf3 and __multf3 keep temporaries in x18; pack.py refuses them). They are built from glibc's
+# own soft-fp sources with -ffixed-x18 (hidden, so every library and program keeps its private
+# copy) into libsoftfp-x18.a, which is forced into the glibc links through a compiler wrapper and
+# installed into the sysroot, where scripts/vbs/vbs-gcc and cc-*-pie.sh link it ahead of libgcc.
+build_softfp() {  # source tree, output folder
+    mkdir -p "$2"
+    for f in divtf3 multf3; do
+        gcc -O2 -ffixed-x18 -fPIC -fvisibility=hidden -include endian.h \
+            -I "$1/soft-fp" -I "$1/sysdeps/aarch64" -I "$1/stdlib" -c "$1/soft-fp/$f.c" -o "$2/$f.o"
+    done
+    rm -f "$2/libsoftfp-x18.a"
+    ar rcs "$2/libsoftfp-x18.a" "$2/divtf3.o" "$2/multf3.o"
+}
+if [ -n "$SOFTFP_ONLY" ]; then
+    [ -f "$SYSROOT/usr/lib/libc.so.6" ] || { echo "no vbs glibc in $SYSROOT"; exit 1; }
+    T=$(mktemp -d "${TMPDIR:-/tmp}/vbs-softfp.XXXXXX")
+    tar -C "$T" -xzf "$TARBALL" glibc-2.39/soft-fp glibc-2.39/sysdeps/aarch64 glibc-2.39/stdlib
+    build_softfp "$T/glibc-2.39" "$T/out"
+    cp "$T/out/libsoftfp-x18.a" "$SYSROOT/usr/lib/"
+    rm -rf "$T"
+    echo "installed $SYSROOT/usr/lib/libsoftfp-x18.a"
+    exit 0
+fi
 rm -rf "$WORK" "$SYSROOT"
 mkdir -p "$WORK/build"
 tar -C "$WORK" -xzf "$TARBALL"
@@ -31,18 +60,9 @@ sed -i 's/^\tldp\tx18, x19, \[x0, oX0 + 18 \* SZREG\]$/\tldr\tx19, [x0, oX0 + 19
 grep -q 'ldr	x19, \[x0, oX0 + 19 \* SZREG\]' \
     "$WORK/glibc-2.39/sysdeps/unix/sysv/linux/aarch64/setcontext.S" \
     || { echo "setcontext.S: the x18 load was not found (glibc version?)"; exit 1; }
-# The soft-float routines glibc takes from the compiler's libgcc.a were not built with -ffixed-x18
-# (__divtf3 and __multf3 keep temporaries in x18; pack.py refuses them). Build them from glibc's own
-# soft-fp sources with -ffixed-x18 (hidden, so every library keeps its private copy) and force them
-# into every link ahead of libgcc through a compiler wrapper.
+# the x18-free soft-float routines (see build_softfp above), forced into every glibc link
 SOFTFP="$WORK/softfp-x18"
-mkdir -p "$SOFTFP"
-for f in divtf3 multf3; do
-    gcc -O2 -ffixed-x18 -fPIC -fvisibility=hidden -include endian.h \
-        -I "$WORK/glibc-2.39/soft-fp" -I "$WORK/glibc-2.39/sysdeps/aarch64" \
-        -I "$WORK/glibc-2.39/stdlib" -c "$WORK/glibc-2.39/soft-fp/$f.c" -o "$SOFTFP/$f.o"
-done
-ar rcs "$SOFTFP/libsoftfp-x18.a" "$SOFTFP/divtf3.o" "$SOFTFP/multf3.o"
+build_softfp "$WORK/glibc-2.39" "$SOFTFP"
 cat > "$SOFTFP/cc" <<WRAP
 #!/bin/sh
 # compiler for the vbs glibc: link commands get the x18-free soft-float routines first
@@ -69,4 +89,5 @@ printf 'slibdir=/usr/lib\nrtlddir=/usr/lib\n' > configparms
     CFLAGS="-O2 -ffixed-x18 -Wno-unused-value" >"$WORK/configure.log" 2>&1
 make -j"$(nproc)" >"$WORK/make.log" 2>&1 || { tail -30 "$WORK/make.log"; exit 1; }
 make install DESTDIR="$SYSROOT" >"$WORK/install.log" 2>&1 || { tail -30 "$WORK/install.log"; exit 1; }
+cp "$SOFTFP/libsoftfp-x18.a" "$SYSROOT/usr/lib/"
 echo "glibc with -ffixed-x18 installed in $SYSROOT/usr"

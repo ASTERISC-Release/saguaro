@@ -9,9 +9,16 @@
 # Kernel UAPI headers (linux/, asm/) and headers of optional libraries come from the build system.
 #
 # Usage: SYSROOT=<repo>/build-vbs-glibc scripts/vbs/vbs-gcc ...
+# Links take the x18-free soft-float routines of the sysroot (libsoftfp-x18.a, build-glibc.sh) ahead
+# of libgcc's (__multf3 and __divtf3 of libgcc use x18: long double arithmetic).
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 SYSROOT=${SYSROOT:-$ROOT/build-vbs-glibc}
+SOFTFP=
+[ -f "$SYSROOT/usr/lib/libsoftfp-x18.a" ] && SOFTFP=$SYSROOT/usr/lib/libsoftfp-x18.a
+for a in "$@"; do
+    case "$a" in -c|-S|-E|-M|-MM|-r|-dump*|-print-*|--version|--help|-###) SOFTFP= ;; esac
+done
 exec gcc --sysroot="$SYSROOT" -ffixed-x18 \
     -idirafter /usr/include/aarch64-linux-gnu -idirafter /usr/include \
     -Wl,-z,max-page-size=0x1000 -Wl,-z,common-page-size=0x1000 \
-    -Wl,--dynamic-linker=/usr/lib/ld-linux-aarch64.so.1 "$@"
+    -Wl,--dynamic-linker=/usr/lib/ld-linux-aarch64.so.1 "$@" $SOFTFP

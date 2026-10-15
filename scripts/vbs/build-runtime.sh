@@ -33,6 +33,10 @@ if [ ! -f build-vbs-glibc/usr/lib/libc.so.6 ]; then
     timed glibc sh scripts/vbs/build-glibc.sh
     rm -rf build-vbs-glibc.build
 fi
+if [ ! -f build-vbs-glibc/usr/lib/libsoftfp-x18.a ]; then
+    # a sysroot from before build-glibc.sh installed the x18-free soft-float routines
+    timed softfp sh scripts/vbs/build-glibc.sh --softfp
+fi
 if [ ! -f build-vbs/build.ninja ]; then
     log "first build: meson setup of the vbs PAL and LibOS"
     timed meson-setup meson setup build-vbs -Ddirect=disabled -Dvbs=enabled -Dlibc=none \
