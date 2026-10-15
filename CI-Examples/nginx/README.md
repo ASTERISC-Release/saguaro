@@ -52,3 +52,23 @@ make start-native-server
 make start-gramine-server
 make SGX=1 start-gramine-server
 ```
+
+# NGINX in a Windows VBS enclave
+
+In WSL on an ARM64 Windows machine with VBS (`Documentation/vbs.rst`, "Makefile flow"):
+
+```sh
+make VBS=1          # NGINX built with the vbs gcc, installed into vbs-build/root, packed, signed
+make VBS=1 check    # start it in an enclave; fetch pages with Windows' curl.exe (vbs-check.sh)
+../../scripts/vbs/gramine-vbs nginx &
+../../scripts/vbs/gramine-vbs win curl.exe -s http://127.0.0.1:8002/random/10K.1.html | wc -c
+../../scripts/vbs/gramine-vbs net bench http 8002 -c 8 -n 40000 -p /random/2K.1.html
+kill %%
+```
+
+The configuration (`nginx-vbs.conf.template`) runs one process: `master_process off` (the
+master would fork the workers), `worker_processes 1`, `daemon off`; HTTP only on 127.0.0.1:8002
+(the vbs sysroot has no OpenSSL, zlib or PCRE: no SSL, gzip, rewrite or basic authentication
+modules). NGINX's prefix is `/nginx` in the enclave, everything below it (binary, configuration,
+`html/` with the test files) is packed into the signed image and read-only; the pid file and
+temporary files go to `/tmp`, an in-enclave tmpfs, and the error log to stderr.
