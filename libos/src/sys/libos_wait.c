@@ -42,7 +42,11 @@ static bool child_matches(struct libos_child_process* child, int which, IDTYPE i
             }
             break;
         case P_PGID:
-            /* TODO: this makes no sense, until we implement IPC pgid change. */
+            /* the group the child had at its creation: a later setpgid() in the child is not
+             * reported to the parent */
+            if (child->pgid == id) {
+                ret = true;
+            }
             break;
         case P_ALL:
             ret = true;
@@ -123,6 +127,13 @@ static long do_waitid(int which, pid_t id, siginfo_t* infop, int options) {
 
     if (!(which == P_PGID || which == P_ALL || which == P_PID))
         return -EINVAL;
+
+    if (which == P_PGID && id == 0) {
+        /* the caller's process group (wait4() with pid 0, waitid() since Linux 5.4) */
+        rwlock_read_lock(&g_process_id_lock);
+        id = g_process.pgid;
+        rwlock_read_unlock(&g_process_id_lock);
+    }
 
     long ret = 0;
 

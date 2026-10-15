@@ -11,7 +11,9 @@
 #include "pal.h"
 #include "pal_internal.h"
 
-static pal_event_handler_t g_handlers[PAL_EVENT_NUM_BOUND] = {0};
+/* per process: in the VM PAL, the processes share the PAL's memory, but each has its own LibOS (at
+ * its own address) */
+static pal_event_handler_t g_handlers[PAL_EVENT_NUM_BOUND] PAL_PROCESS_DATA = {0};
 
 pal_event_handler_t _PalGetExceptionHandler(enum pal_event event) {
     return __atomic_load_n(&g_handlers[event], __ATOMIC_ACQUIRE);

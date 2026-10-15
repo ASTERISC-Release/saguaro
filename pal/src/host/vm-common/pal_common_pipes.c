@@ -75,14 +75,16 @@ static struct pal_handle_inner_pipe_buf* pipe_buf_alloc(void) {
     return pipe_buf;
 }
 
-/* Drops one reference of a pipe buffer; the other end, if any, sees the pipe closed. */
+/* Drops one reference of a pipe buffer; the other end, if any, sees the pipe closed. The count
+ * changes under the buffer's lock: the two ends may be closed at the same time (by two processes),
+ * and the last one must free the buffer only after the other one has released the lock. */
 static void pipe_buf_put(struct pal_handle_inner_pipe_buf* pipe_buf) {
-    int new_count = __atomic_sub_fetch(&pipe_buf->refcount, 1, __ATOMIC_ACQ_REL);
+    spinlock_lock(&pipe_buf->lock);
+    int new_count = --pipe_buf->refcount;
     if (new_count < 0) {
         log_error("Reference count dropped below 0 at %s:%d", __FILE_NAME__, __LINE__);
         BUG();
     } else if (new_count > 0) {
-        spinlock_lock(&pipe_buf->lock);
         pipe_buf->readable = pipe_buf->writable = false; /* close both pipe ends */
         sched_thread_wakeup(&pipe_buf->reader_futex);
         sched_thread_wakeup(&pipe_buf->writer_futex);
@@ -92,6 +94,7 @@ static void pipe_buf_put(struct pal_handle_inner_pipe_buf* pipe_buf) {
         }
         spinlock_unlock(&pipe_buf->lock);
     } else {
+        spinlock_unlock(&pipe_buf->lock);
         free(pipe_buf);
     }
 }

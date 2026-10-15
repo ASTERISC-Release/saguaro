@@ -150,6 +150,9 @@ struct pal_public_state {
      * Memory layout
      */
     bool disable_aslr;                      /*!< disable ASLR */
+    bool file_maps_write_back;              /*!< writable shared file mappings are copies kept by
+                                                 the PAL: the LibOS writes them back on msync()
+                                                 and munmap() (VM PAL, multiprocess support) */
     void* memory_address_start;             /*!< usable memory start address */
     void* memory_address_end;               /*!< usable memory end address */
     uintptr_t early_libos_mem_range_start;  /*!< start of memory usable before checkpoint restore */
@@ -307,6 +310,49 @@ int PalProcessCreate(const char** args, uintptr_t (*reserved_mem_ranges)[2],
  * \param exit_code  The exit value returned to the host.
  */
 noreturn void PalProcessExit(int exit_code);
+
+/*
+ * FUTEXES SHARED BETWEEN PROCESSES
+ *
+ * A wait queue for futex words in memory that several processes map (`MAP_SHARED`), keyed by the
+ * memory under the word rather than by its address, so that a wake in one process reaches a waiter
+ * in another. Only the x86_64 VM PAL with multiprocess support provides it; the other PALs return
+ * -PAL_ERROR_NOTIMPLEMENTED and the LibOS then keeps every futex process-local.
+ */
+
+/*!
+ * \brief Register the calling thread as a waiter on a shared futex word.
+ *
+ * \param      addr        Futex word (4-byte aligned, readable).
+ * \param      val         Expected value of the word.
+ * \param      bitset      Wake bitset of the waiter (FUTEX_WAIT_BITSET).
+ * \param      event       Event that a wake sets; the caller clears it before and waits on it after
+ *                         this call.
+ * \param[out] out_waiter  On success, the waiter to pass to PalFutexSharedRemove().
+ *
+ * Returns -PAL_ERROR_TRYAGAIN if the word does not hold \p val; the check and the registration
+ * are atomic with respect to PalFutexSharedWake().
+ */
+int PalFutexSharedAdd(uint32_t* addr, uint32_t val, uint32_t bitset, PAL_HANDLE event,
+                      void** out_waiter);
+
+/*!
+ * \brief Unregister a waiter returned by PalFutexSharedAdd() and free it.
+ *
+ * \param      waiter     The waiter.
+ * \param[out] out_woken  Whether a PalFutexSharedWake() woke this waiter.
+ */
+int PalFutexSharedRemove(void* waiter, bool* out_woken);
+
+/*!
+ * \brief Wake waiters on a shared futex word, in any process.
+ *
+ * \param      addr       Futex word.
+ * \param      bitset     Wakes only waiters whose bitset intersects this one.
+ * \param      count      Maximum number of waiters to wake.
+ * \param[out] out_woken  Number of waiters woken.
+ */
+int PalFutexSharedWake(uint32_t* addr, uint32_t bitset, int count, int* out_woken);
 
 /*
  * STREAMS

@@ -29,6 +29,7 @@
 void lapic_enable(void);
 int lapic_timer_init(void);
 void lapic_timer_rearm(void);
+void lapic_timer_fire_now(void);
 void lapic_signal_interrupt_complete(void);
 
 int apic_init(void);

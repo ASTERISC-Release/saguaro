@@ -11,6 +11,9 @@
 #include "pal_common.h"
 #include "pal_error.h"
 #include "pal_internal.h"
+#ifdef __x86_64__
+#include "kernel_memory.h"
+#endif
 #include "spinlock.h"
 
 #include "kernel_sched.h"
@@ -63,6 +66,16 @@ static int check_pipe_handle(struct pal_handle* handle, pal_wait_flags_t events,
 
     spinlock_lock(&pipe_buf->lock);
 
+#ifdef __x86_64__
+    /* With processes, the last message of an exiting peer (the LibOS sends its exit notice just
+     * before its pipes close) must not be hidden behind the hang-up: report the remaining data
+     * first, as Linux reports POLLIN before POLLHUP; reads return it after the close. */
+    if (memory_frame_pool_active() && !pipe_buf->readable && !pipe_buf->writable &&
+            (events & PAL_WAIT_READ) && pipe_buf->read_pos != pipe_buf->write_pos) {
+        revents = PAL_WAIT_READ;
+        goto out;
+    }
+#endif
     if (!pipe_buf->readable && !pipe_buf->writable) {
         /* pipe was shutdown */
         handle->flags |= PAL_HANDLE_FD_ERROR; /* TODO: maybe PAL_HANDLE_FD_HANG_UP? */

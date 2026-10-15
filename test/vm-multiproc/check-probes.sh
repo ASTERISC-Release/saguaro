@@ -9,13 +9,15 @@
 #   signals   sig.sh under bash: a self signal, a signal to a child, exit statuses 5 and 143
 #   forks     1000 sequential forks and 64 forks in batches of 8, every child reaped (forks.c)
 #   misc      SysV IPC, memfd, file calls, timers and inotify used from a forked child (misc-fork.c)
+#   sysv      System V shared memory, queues and semaphores between a parent and forked children,
+#             IPC_RMID, SEM_UNDO, and a load of 2,000 messages from 4 children (sysv-fork.c)
 #   libos     the LibOS regressions fork_and_exec and vfork_and_exec, manifests rendered with
 #             GRAMINE_VM_MULTIPROCESS=1 (libos/test/regression/manifest.template)
 #   examples  helloworld, thread-tls, python helloworld.py and the bash example's 7 checks, with the
 #             key added to their generated manifests (restored afterwards)
 #   redis     redis BGSAVE (a forked child writes dump.rdb); needs CI-Examples/redis built
 #
-# Usage: test/vm-multiproc/check-probes.sh [check...]   (default: spawn signals forks misc)
+# Usage: test/vm-multiproc/check-probes.sh [check...]   (default: spawn signals forks misc sysv)
 # Environment: GRAMINE_PREFIX (install prefix, default ~/.local/gramine-vm), GRAMINE_CPU_NUM
 # (default 2), WORK (scratch dir, default <repo>/.mp-probes), LOGDIR (default $WORK/logs),
 # TIMEOUT_SCALE (multiplies every timeout, default 1), RERUN (default 1: rerun a failed check once),
@@ -80,14 +82,18 @@ probes_built=0
 build_probes() {
     [ "$probes_built" = 1 ] && return 0
     ( cd "$WORK" && cp "$HERE"/spawn.c "$HERE"/forks.c "$HERE"/misc-fork.c "$HERE"/sig.sh \
-          "$HERE"/manifest.template "$HERE"/misc-fork.manifest.template . \
-      && gcc -O2 -o spawn spawn.c && gcc -O2 -o forks forks.c && gcc -O2 -o misc-fork misc-fork.c ) \
+          "$HERE"/manifest.template "$HERE"/misc-fork.manifest.template "$HERE"/sysv-fork.c \
+          "$HERE"/sysv-fork.manifest.template . \
+      && gcc -O2 -o spawn spawn.c && gcc -O2 -o forks forks.c && gcc -O2 -o misc-fork misc-fork.c \
+      && gcc -O2 -o sysv-fork sysv-fork.c ) \
         || { echo "probe build failed" >&2; exit 2; }
     local entry name e template
-    for entry in /usr/bin/sh /usr/bin/bash "$WORK/spawn" "$WORK/forks" "$WORK/misc-fork"; do
+    for entry in /usr/bin/sh /usr/bin/bash "$WORK/spawn" "$WORK/forks" "$WORK/misc-fork" \
+                 "$WORK/sysv-fork"; do
         name=$(basename "$entry")
         case $entry in "$WORK"/*) e=/probe/$name ;; *) e=$entry ;; esac
         template=manifest.template; [ "$name" = misc-fork ] && template=misc-fork.manifest.template
+        [ "$name" = sysv-fork ] && template=sysv-fork.manifest.template
         ( cd "$WORK" && gramine-manifest -Darch_libdir="$ARCH_LIBDIR" -Dentry="$e" -Dprobedir="$WORK" \
               "$template" "$name.manifest" ) 2>> "$LOGDIR/manifests.log" || { echo "manifest $name failed" >&2; exit 2; }
         [ "$MP" = 1 ] || sed -i '/^experimental__multiprocess = /d' "$WORK/$name.manifest"
@@ -150,6 +156,15 @@ check_misc() {
         expect "$log" "$l: ok" || rc=1
     done
     if grep -q ': rc=' "$log"; then echo "  failed sub-checks:"; grep ': rc=' "$log" | sed 's/^/    /'; rc=1; fi
+    return $rc
+}
+
+check_sysv() {
+    local log=$1 rc=0
+    build_probes
+    ( cd "$WORK" && vm "$log" 240 gramine-vm sysv-fork )
+    expect "$log" "sysv-fork: 18/18 passed" || rc=1
+    if grep -q '^FAIL \|^child step' "$log"; then grep '^FAIL \|^child step' "$log" | sed 's/^/  /'; rc=1; fi
     return $rc
 }
 
@@ -268,10 +283,10 @@ PY
     return $rc
 }
 
-[ $# -gt 0 ] || set -- spawn signals forks misc
+[ $# -gt 0 ] || set -- spawn signals forks misc sysv
 for c in "$@"; do
     case $c in
-        spawn|signals|forks|misc|libos|examples|redis) check "$c" ;;
+        spawn|signals|forks|misc|sysv|libos|examples|redis) check "$c" ;;
         *) echo "unknown check: $c" >&2; exit 2 ;;
     esac
 done

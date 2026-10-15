@@ -150,9 +150,41 @@ syscall_asm:
 
 // FIXME: ideally must add swapgs right-before sysretq, but GS is not used by ring-3 anyway
 sysret_asm:
+    cmpb    $0, %gs:PAL_TCB_VM_PREEMPT_PENDING
+    jne     .Lsysret_preempt
+.Lsysret_now:
     mov     %gs:PAL_TCB_VM_USER_RIP, %rcx
     or      $0x200, %r11                    // userland RFLAGS will contain IF
     sysretq
+
+    // a timer tick found this thread in kernel mode: with interrupts off, make the timer fire
+    // now; it is taken right after sysretq, in user mode, where it preempts the thread
+.Lsysret_preempt:
+    cli
+    movb    $0, %gs:PAL_TCB_VM_PREEMPT_PENDING
+    push    %rax
+    push    %rdx
+    push    %rsi
+    push    %rdi
+    push    %r8
+    push    %r9
+    push    %r10
+    push    %r11
+    push    %rbp
+    mov     %rsp, %rbp
+    and     $~0xF, %rsp
+    call    lapic_timer_fire_now
+    mov     %rbp, %rsp
+    pop     %rbp
+    pop     %r11
+    pop     %r10
+    pop     %r9
+    pop     %r8
+    pop     %rdi
+    pop     %rsi
+    pop     %rdx
+    pop     %rax
+    jmp     .Lsysret_now
 
 // FIXME: ideally must add swapgs right-before sysretq, but GS is not used by ring-3 anyway
 sigreturn_asm:

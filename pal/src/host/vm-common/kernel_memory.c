@@ -349,6 +349,18 @@ static void memory_frame_put(uintptr_t frame) {
         BUG();
 }
 
+void memory_frame_ref(uintptr_t frame) {
+    memory_frame_get(frame);
+}
+
+void memory_frame_unref(uintptr_t frame) {
+    memory_frame_put(frame);
+}
+
+size_t memory_frame_pool_capacity(void) {
+    return g_frame_pool_bitmap ? g_frame_pool_size / PAGE_SIZE : 0;
+}
+
 bool memory_frame_pool_active(void) {
     return !!g_frame_pool_bitmap;
 }
@@ -1900,6 +1912,28 @@ bool memory_address_space_handle_fault(uintptr_t addr, uint64_t error_code) {
         memory_frame_free(frame); /* lost a race; the winner's mapping (or change) stands */
     }
     return true;
+}
+
+int memory_address_space_translate(uintptr_t addr, uintptr_t* out_phys) {
+    const uint64_t addr_mask = 0x00000ffffffff000UL;
+    if (!g_frame_pool_bitmap || addr >= 512UL * 1024 * 1024 * 1024)
+        return -PAL_ERROR_INVAL;
+
+    uint64_t root;
+    __asm__ volatile("mov %%cr3, %0" : "=r"(root));
+    uint64_t* table = memory_frame_pointer(root & addr_mask);
+    for (unsigned int shift = 39; shift >= 12; shift -= 9) {
+        uint64_t entry = __atomic_load_n(&table[(addr >> shift) & 0x1ff], __ATOMIC_ACQUIRE);
+        if (!(entry & PTE_PRESENT))
+            return -PAL_ERROR_INVAL;
+        if (shift == 12 || ((entry & PTE_HUGE) && shift <= 30)) {
+            uintptr_t page_mask = (1UL << shift) - 1;
+            *out_phys = (entry & addr_mask & ~page_mask) | (addr & page_mask);
+            return 0;
+        }
+        table = memory_frame_pointer(entry & addr_mask);
+    }
+    return -PAL_ERROR_INVAL;
 }
 
 __attribute_no_sanitize_address

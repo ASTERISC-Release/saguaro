@@ -102,6 +102,11 @@ void lapic_timer_rearm(void) {
     lapic_signal_interrupt_complete();
 }
 
+/* Makes the timer interrupt fire as soon as interrupts are enabled (a deadline in the past). */
+void lapic_timer_fire_now(void) {
+    vm_shared_wrmsr(MSR_INSECURE_IA32_TSC_DEADLINE, get_tsc());
+}
+
 void lapic_signal_interrupt_complete(void) {
     /* write End-Of-Interrupt reg of LAPIC (according to x2APIC spec, 0 is the only valid value) */
     wrmsr(MSR_IA32_LAPIC_EOI, 0);

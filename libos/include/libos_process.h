@@ -21,6 +21,9 @@ DEFINE_LISTP(libos_child_process);
 struct libos_child_process {
     IDTYPE pid;
     IDTYPE vmid;
+    /* Process group the child had when it was created (the parent does not learn later changes
+     * the child makes itself). */
+    IDTYPE pgid;
 
     /* Signal sent to the parent process (us) on this child termination. */
     int child_termination_signal;

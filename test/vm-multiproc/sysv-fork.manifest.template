@@ -1,0 +1,17 @@
+# sysv-fork probe: the misc-fork manifest plus the untrusted_shm /dev/shm, which the VM serves from
+# guest RAM (the guest-wide System V tables keep their segments there; /tmp is the fallback).
+libos.entrypoint = "{{ entry }}"
+loader.log_level = "error"
+loader.env.LD_LIBRARY_PATH = "/lib:{{ arch_libdir }}:/usr{{ arch_libdir }}"
+loader.env.PATH = "/usr/bin:/bin"
+loader.insecure__use_cmdline_argv = true
+sys.experimental__multiprocess = true
+fs.mounts = [
+  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "{{ arch_libdir }}", uri = "file:{{ arch_libdir }}" },
+  { path = "/usr", uri = "file:/usr" },
+  { path = "/bin", uri = "file:/bin" },
+  { path = "/probe", uri = "file:{{ probedir }}" },
+  { path = "/tmp", uri = "file:{{ probedir }}/tmp" },
+  { type = "untrusted_shm", path = "/dev/shm", uri = "dev:/dev/shm" },
+]

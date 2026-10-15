@@ -58,6 +58,12 @@ typedef struct pal_handle {
         struct pal_handle_inner_eventfd eventfd;
 
         struct {
+            /* a guest /dev/shm object (pal_shm.c); a PAL_TYPE_DEV handle */
+            void* object;
+            bool writable;
+        } shm;
+
+        struct {
             uintptr_t shared_stream_frame;
             uint32_t side;
             bool nonblocking;
@@ -78,6 +84,11 @@ int vm_process_stream_selfcheck(void);
 int vm_process_runtime_copy_selfcheck(void);
 int vm_process_send_handle(PAL_HANDLE target_process, PAL_HANDLE cargo);
 int vm_process_receive_handle(PAL_HANDLE source_process, PAL_HANDLE* out_cargo);
+#ifdef __x86_64__
+struct memory_address_space;
+/* Drops the shared-futex waiters of an exiting process (pal_futex.c). */
+void vm_futex_shared_purge(struct memory_address_space* space);
+#endif
 
 #ifdef __x86_64__
 noreturn void pal_start_c(void);

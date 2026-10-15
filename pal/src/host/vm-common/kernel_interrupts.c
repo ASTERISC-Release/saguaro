@@ -146,10 +146,24 @@ void isr_c(struct isr_regs* regs) {
                  * don't enable/disable interrupts via RFLAGS' IF because it will happen
                  * automatically during save_context / restore_context */
 #ifdef __x86_64__
+                struct thread* curr_user = get_thread_ptr(rdmsr(MSR_IA32_GS_BASE));
+                if (curr_user)
+                    curr_user->preempt_pending = false;
                 pal_common_deliver_pending_interrupt(regs);
 #endif
                 sched_thread_uninterruptable(regs);
             }
+#ifdef __x86_64__
+            else if (memory_frame_pool_active()) {
+                /* kernel scheduling is cooperative, so a thread that spends its time in system
+                 * calls is hardly ever preempted and starves the others (a parent polling
+                 * waitpid(WNOHANG) for a child that cannot run); its next return to user mode
+                 * takes this tick instead */
+                struct thread* curr = get_thread_ptr(rdmsr(MSR_IA32_GS_BASE));
+                if (curr && !curr->is_helper)
+                    curr->preempt_pending = true;
+            }
+#endif
             break;
         case 33: ;
             /* "invalidate TLB" IPI -- may be spurious/extra, check for this */

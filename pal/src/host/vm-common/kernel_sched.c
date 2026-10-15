@@ -329,13 +329,23 @@ static void sched_thread_wakeup_common(int* futex_word) {
 
     bool found = false;
     struct thread* thread;
-    LISTP_FOR_EACH_ENTRY(thread, &g_thread_list, list) {
+    struct thread* tmp;
+    LISTP_FOR_EACH_ENTRY_SAFE(thread, tmp, &g_thread_list, list) {
         if (thread->state == THREAD_BLOCKED) {
             /* TODO: add loop of iterating through epoll/select futexes as perf optimization */
             if (thread->blocked_on == futex_word) {
                 thread->state      = THREAD_RUNNABLE;
                 thread->blocked_on = NULL;
                 found              = true;
+#ifdef __x86_64__
+                /* with processes, a woken thread runs before threads that used their time
+                 * slice (a parent and child handing a stream back and forth must not wait a
+                 * whole 100-ms slice of a busy thread on every handoff) */
+                if (memory_frame_pool_active() && !thread->is_helper) {
+                    LISTP_DEL(thread, &g_thread_list, list);
+                    LISTP_ADD(thread, &g_thread_list, list);
+                }
+#endif
             }
         }
     }

@@ -139,7 +139,7 @@ void reset_brk(void) {
     destroy_lock(&brk_lock);
 }
 
-void* libos_syscall_brk(void* _brk) {
+static void* do_brk(void* _brk) {
     char* brk = _brk;
     size_t size = 0;
     char* brk_aligned = ALLOC_ALIGN_UP_PTR(brk);
@@ -223,3 +223,10 @@ BEGIN_RS_FUNC(brk) {
     brk_region.data_segment_size = GET_CP_ENTRY(SIZE);
 }
 END_RS_FUNC(brk)
+
+void* libos_syscall_brk(void* brk) {
+    rwlock_read_lock(&g_vma_change_lock); /* see libos_syscall_mmap() */
+    void* ret = do_brk(brk);
+    rwlock_read_unlock(&g_vma_change_lock);
+    return ret;
+}
