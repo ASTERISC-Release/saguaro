@@ -6,7 +6,8 @@
 # Usage: test/vm-multiproc/sig-loop.sh [N]   (default 100)
 # Environment: GRAMINE_CPU_NUM (default 2), LOAD=<k> runs k busy loops on the host meanwhile,
 # RUN_TIMEOUT (seconds per run, default 60), ON_HANG (a shell command run when a guest is still
-# running at the timeout, before it is killed; its output goes to $OUT/hang-<i>.txt), WORK (default <repo>/.mp-probes, shared with
+# running at the timeout, after vm-hang-report.py and before the guest is stopped; the output of
+# both goes to $OUT/hang-<i>.txt), WORK (default <repo>/.mp-probes, shared with
 # check-probes.sh), OUT (default $WORK/sig-loop/<date-time>), GRAMINE_PREFIX. Each failing run's
 # output goes to $OUT/fail-<i>.log.
 # Exit status 0 only if every run passed.
@@ -31,17 +32,20 @@ fails=0 hangs=0
 start=$(date +%s)
 cd "$WORK"
 for i in $(seq 1 "$N"); do
-    # the guest in the background, so that ON_HANG can look at it before it is killed
-    ( exec gramine-vm bash /probe/sig.sh > "$OUT/cur.log" 2>&1 ) & pid=$!
+    # the guest in the background with its QEMU monitor on a socket: a hung one is looked at
+    # (vm-hang-report.py, then ON_HANG) and stopped through the monitor, so the launcher reports
+    rm -f "$OUT/mon.sock"
+    GRAMINE_VM_MONITOR=$OUT/mon.sock setsid gramine-vm bash /probe/sig.sh > "$OUT/cur.log" 2>&1 < /dev/null &
+    pid=$!
     for _ in $(seq 1 $(( ${RUN_TIMEOUT:-60} * 10 ))); do kill -0 $pid 2>/dev/null || break; sleep 0.1; done
     hung=0
     if kill -0 $pid 2>/dev/null; then
         hung=1
-        [ -n "${ON_HANG:-}" ] && ( eval "$ON_HANG" ) > "$OUT/hang-$i.txt" 2>&1
-        # stop QEMU (this container runs one guest) so that the launcher cleans up and reports
-        pkill -TERM -f "guest-cid=" 2>/dev/null
-        for _ in $(seq 1 50); do kill -0 $pid 2>/dev/null || break; sleep 0.1; done
-        kill -KILL $pid 2>/dev/null
+        { "$HERE/vm-hang-report.py" "$OUT/mon.sock"
+          [ -z "${ON_HANG:-}" ] || ( eval "$ON_HANG" )
+          "$HERE/vm-hang-report.py" "$OUT/mon.sock" --samples 0 --quit; } > "$OUT/hang-$i.txt" 2>&1
+        for _ in $(seq 1 100); do kill -0 $pid 2>/dev/null || break; sleep 0.1; done
+        kill -KILL -- -$pid 2>/dev/null
     fi
     wait $pid; rc=$?
     out=$(tr -d '\r' < "$OUT/cur.log"; echo "+ exit status $rc"; [ $hung = 0 ] || echo "+ hung")
