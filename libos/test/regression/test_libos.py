@@ -975,6 +975,10 @@ class TC_30_Syscall(RegressionTestCase):
 
         self.assertIn('TEST OK', stdout)
 
+    def test_058a_mremap_inplace(self):
+        stdout, _ = self.run_binary(['mremap_inplace'])
+        self.assertIn('TEST OK', stdout)
+
     def test_059_madvise(self):
         stdout, _ = self.run_binary(['madvise'])
         self.assertIn('TEST OK', stdout)

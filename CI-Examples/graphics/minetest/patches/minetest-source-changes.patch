@@ -11,15 +11,23 @@
  #include "gui/mainmenumanager.h"
  #include "gui/guiChatConsole.h"
  #include "util/pointedthing.h"
-@@ -95,18 +99,207 @@
+@@ -95,18 +99,215 @@
  		g_fontengine->getDefaultFontSize() * 0.9f, FM_Mono));
  	m_guitext_profiler->setVisible(false);
  }
 +inline unsigned long sg_rdtscp(void)
 +{
++#if defined(__x86_64__)
 +	unsigned int lo, hi;
 +	__asm__ volatile("rdtscp" : "=a" (lo), "=d" (hi)::"memory");
 +	return ((unsigned long)hi << 32) | lo;
++#elif defined(__aarch64__)
++	unsigned long cnt; /* the generic timer's virtual count, not CPU cycles */
++	__asm__ volatile("isb; mrs %0, cntvct_el0" : "=r" (cnt)::"memory");
++	return cnt;
++#else
++	return 0;
++#endif
 +}
 +
 +namespace
