@@ -1,5 +1,14 @@
 # Copyright (C) 2023 Gramine contributors
+# Copyright (C) 2026 The ASTERISC Research Lab
 # SPDX-License-Identifier: BSD-3-Clause
+
+# Build SQLite as follows:
+#
+# - make               -- create non-SGX manifest
+# - make SGX=1         -- create SGX manifest
+# - make VBS=1         -- build the SQLite shell for a Windows VBS enclave, pack and sign it (in
+#                         WSL; see Documentation/vbs.rst); make VBS=1 check runs the three scripts
+#                         in the enclave and compares the output
 
 ARCH_LIBDIR ?= /lib/$(shell $(CC) -dumpmachine)
 
@@ -10,9 +19,20 @@ GRAMINE_LOG_LEVEL = error
 endif
 
 .PHONY: all
+ifeq ($(VBS),1)
+# Windows VBS enclave (scripts/vbs/Makefile.vbs): the shell built from the amalgamation with the vbs
+# gcc (static PIE against the vbs glibc, no readline, no zlib, no threads), packed by
+# vbs.manifest.template together with the scripts
+VBS_APP = sqlite3
+VBS_DEPS = vbs-build/sqlite3 scripts/create.sql scripts/update.sql scripts/select.sql
+VBS_CLEAN = vbs-build OUTPUT
+include ../../scripts/vbs/Makefile.vbs
+all: vbs-all
+else
 all: sqlite3.manifest
 ifeq ($(SGX),1)
 all: sqlite3.manifest.sgx sqlite3.sig
+endif
 endif
 
 sqlite3.manifest: manifest.template
@@ -33,7 +53,9 @@ sgx_sign: sqlite3.manifest
 		--manifest $< \
 		--output $<.sgx
 
-ifeq ($(SGX),)
+ifeq ($(VBS),1)
+# GRAMINE is gramine-vbs (Makefile.vbs)
+else ifeq ($(SGX),)
 GRAMINE = gramine-direct
 else
 GRAMINE = gramine-sgx
@@ -53,6 +75,29 @@ regression: all
 	$(GRAMINE) sqlite3 < scripts/select.sql > OUTPUT
 	diff OUTPUT scripts/select.txt
 	@echo "[ Success 3/3 ]"
+
+ifeq ($(VBS),1)
+SQLITE_AMALGAMATION = sqlite-amalgamation-3450100
+SQLITE_AMALGAMATION_SHA256 = 5592243caf28b2cdef41e6ab58d25d653dfc53deded8450eb66072c929f030c4
+
+sqlite-amalgamation.zip:
+	../common_tools/download --output $@ \
+		--sha256 $(SQLITE_AMALGAMATION_SHA256) \
+		--url https://www.sqlite.org/2024/$(SQLITE_AMALGAMATION).zip
+
+# Without readline and zlib (not in the vbs sysroot), single-threaded, no extension loading. The
+# shell's .system and .shell commands use system() and popen() (the scripts do not use them).
+vbs-build/sqlite3: sqlite-amalgamation.zip | $(VBS_RUNTIME_STAMP)
+	rm -rf vbs-build/amalgamation
+	mkdir -p vbs-build/amalgamation
+	unzip -q -j sqlite-amalgamation.zip -d vbs-build/amalgamation
+	$(VBS_CC_STATIC) -O2 -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION -DHAVE_READLINE=0 \
+		-o $@ vbs-build/amalgamation/shell.c vbs-build/amalgamation/sqlite3.c
+
+.PHONY: check
+check: all
+	GRAMINE="$(GRAMINE)" ./vbs-check.sh
+endif
 
 .PHONY: clean
 clean:
