@@ -44,7 +44,13 @@ enum pal_vbs_ocall {
 };
 
 #define PAL_VBS_CONBUF_SIZE 4096u /* host-owned bounce buffer for console OCALLs */
-#define PAL_VBS_IOBUF_SIZE  (64u * 1024u) /* host-owned buffer of host requests, per thread */
+/* host-owned buffer of host requests, per thread: PAL_VBS_IOBUF_PAYLOAD bytes of data (one send or
+ * receive of up to that size per host call), plus room for the request header and a socket
+ * address, so that a payload of exactly that size still fits in one request */
+#ifndef PAL_VBS_IOBUF_PAYLOAD
+#define PAL_VBS_IOBUF_PAYLOAD (256u * 1024u)
+#endif
+#define PAL_VBS_IOBUF_SIZE  (PAL_VBS_IOBUF_PAYLOAD + 4096u)
 #define PAL_VBS_ARGS_SIZE   4096u          /* host command-line arguments for the application */
 
 /*
@@ -176,7 +182,7 @@ typedef struct pal_vbs_thread_block {
     uint8_t  iobuf[PAL_VBS_IOBUF_SIZE];
 } pal_vbs_thread_block_t;
 
-#define PAL_VBS_ABI_VERSION 5u
+#define PAL_VBS_ABI_VERSION 6u
 
 #define PAL_VBS_MODE_SELFTEST 0u /* run the PAL-level self-test (phases 1 and 2) */
 #define PAL_VBS_MODE_BOOT     1u /* boot the packed vbs PAL, the LibOS and the application */

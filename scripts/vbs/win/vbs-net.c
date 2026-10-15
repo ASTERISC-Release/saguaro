@@ -595,6 +595,15 @@ static int serve_main(int argc, char** argv) {
     double secs = argc > 5 ? atof(argv[5]) : 60;
     if (!g_serve_chunk)
         return 2;
+    /* the same 1 ms timer resolution as pal_vbs_host.exe (raise_timer_resolution), for a fair
+     * comparison of small requests */
+    HMODULE winmm = LoadLibraryW(L"winmm.dll");
+    if (winmm) {
+        typedef UINT(WINAPI * tbp_fn)(UINT);
+        tbp_fn tbp = (tbp_fn)(void*)GetProcAddress(winmm, "timeBeginPeriod");
+        if (tbp)
+            tbp(1);
+    }
     g_serve_body = malloc(g_serve_size + 1);
     memset(g_serve_body, 'x', g_serve_size);
     SOCKET l = socket(AF_INET, SOCK_STREAM, 0);
