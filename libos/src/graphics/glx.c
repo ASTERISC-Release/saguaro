@@ -423,6 +423,7 @@ static void update_window_size_from_viewport(GLXDrawable drawable) {
 }
 
 void glXSwapBuffers(Display *dpy, GLXDrawable drawable) {
+    graphics_ensure_session();
     if (glx_logging_enabled)
         fprintf(stderr, "[glx] glXSwapBuffers(drawable=%lu) begin\n",
                 (unsigned long)drawable);
@@ -548,6 +549,7 @@ void glXSwapBuffers(Display *dpy, GLXDrawable drawable) {
 void glXSwapIntervalEXT(Display *d, GLXDrawable draw, int interval) { eglSwapInterval(eglDpy, interval); }
 
 Bool glXMakeCurrent(Display *dpy, GLXDrawable drawable, GLXContext ctx1) {
+    graphics_ensure_session();
     if (glx_logging_enabled)
         fprintf(stderr, "[glx] glXMakeCurrent(drawable=%lu, context=%p)\n",
                 (unsigned long)drawable, ctx1);
@@ -634,7 +636,8 @@ static bool shared_input_requested(void) {
         const char *value = getenv("EGL_SHARED_INPUT");
         enabled = !(value && strcmp(value, "0") == 0);
     }
-    return in_gramine_vm && enabled;
+    /* Input redirection is a graphics use: it starts the session (see graphics_ensure_session()). */
+    return in_gramine_vm && enabled && graphics_ensure_session();
 }
 
 static unsigned long redirected_core_input_mask(void) {
@@ -1066,6 +1069,8 @@ Bool XFilterEvent(XEvent* event, Window window) {
 int SDL_Init(Uint32 flags) {
     typedef int (*sdl_init_t)(Uint32);
     sdl_init_t real = (sdl_init_t)resolve_sdl_symbol("SDL_Init");
+    if (flags & SDL_INIT_VIDEO)
+        graphics_ensure_session();
     if (sdl_logging_enabled())
         fprintf(stderr, "[sdl] SDL_Init(flags=0x%x) begin\n", flags);
     int ret = real ? real(flags) : -1;
@@ -1078,6 +1083,8 @@ int SDL_InitSubSystem(Uint32 flags) {
     typedef int (*sdl_init_subsystem_t)(Uint32);
     sdl_init_subsystem_t real =
         (sdl_init_subsystem_t)resolve_sdl_symbol("SDL_InitSubSystem");
+    if (flags & SDL_INIT_VIDEO)
+        graphics_ensure_session();
     if (sdl_logging_enabled())
         fprintf(stderr, "[sdl] SDL_InitSubSystem(flags=0x%x) begin\n", flags);
     int ret = real ? real(flags) : -1;
@@ -1089,6 +1096,7 @@ int SDL_InitSubSystem(Uint32 flags) {
 int SDL_VideoInit(const char* driver_name) {
     typedef int (*sdl_video_init_t)(const char*);
     sdl_video_init_t real = (sdl_video_init_t)resolve_sdl_symbol("SDL_VideoInit");
+    graphics_ensure_session();
     if (sdl_logging_enabled())
         fprintf(stderr, "[sdl] SDL_VideoInit(driver=%s) begin\n",
                 driver_name ? driver_name : "(default)");
@@ -1108,6 +1116,7 @@ SDL_Window* SDL_CreateWindow(const char* title, int x, int y, int width, int hei
                 title ? title : "(null)", width, height, flags);
     set_guest_app_window_creation_in_progress(true);
     if (in_gramine_vm) {
+        graphics_ensure_session();
         /* SDL's X11 backend briefly makes a private 32x32 GLX drawable current
          * while constructing the requested window. Allocate redirect buffers
          * at the requested size from the outset; rebuilding the complete
@@ -1348,6 +1357,7 @@ typedef GLXContext (*glXCreateContext_t)(Display *dpy,
                                          Bool direct);
 static glXCreateContext_t real_glXCreateContext = NULL;
 GLXContext glXCreateContext(Display* dpy, XVisualInfo* vis, GLXContext share_list, Bool direct) {
+    graphics_ensure_session();
     if (glx_logging_enabled)
         fprintf(stderr, "[glx] glXCreateContext(visual=%p, share=%p, direct=%d)\n",
                 (void*)vis, share_list, direct);
@@ -1485,6 +1495,7 @@ const char* glXQueryExtensionsString(Display* dpy, int screen) {
 
 XVisualInfo *glXChooseVisual(Display *dpy, int screen, int *attrib_list)
 {
+    graphics_ensure_session();
     #ifdef NATIVE_GLX
     if (!in_gramine_vm) {
         resolve_dlsym();
@@ -1800,6 +1811,7 @@ int glXGetConfig(Display* dpy, XVisualInfo* visual, int attrib, int* value) {
 }
 
 GLXFBConfig* glXChooseFBConfig(Display* dpy, int screen, const int* attrib_list, int* nitems) {
+    graphics_ensure_session();
     if (glx_logging_enabled)
         fprintf(stderr, "[glx] glXChooseFBConfig(screen=%d)\n", screen);
     #ifdef NATIVE_GLX

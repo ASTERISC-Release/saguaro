@@ -12,7 +12,7 @@ FNA on SDL2 and OpenGL, FMOD for audio), under `gramine-vm` with the graphics ho
 | Configuration | Result |
 |---|---|
 | 2 vCPUs, `MULTIPROC=0` (default) | Starts, OpenGL through the redirection, reaches the title screen ("Press Any Key") in about 90 s. FMOD's `sh -c` probe fails (`process creation failed`) and the game continues without sound. Same as `main`. |
-| 2 vCPUs, `MULTIPROC=1` | The game forks for FMOD's probe, but the `sh` child inherits `LD_PRELOAD=/libgraphics.so`, whose constructor repeats the comm-page handshake with the host and hangs, which disturbs the parent too: black window. With a guard in libgraphics (a child inheriting the graphics session skips it; `Documentation/devel/vm-multiproc/bastion-libgraphics-child-guard.patch`, not applied) the child exits 127 (`pulseaudio: not found`) and the title screen appears. |
+| 2 vCPUs, `MULTIPROC=1` | Reaches the title screen and plays (2026-10-14, after the libgraphics session change): FMOD's `sh` child inherits `LD_PRELOAD=/libgraphics.so`, but the library now starts its graphics session (the comm-page handshake with the host) only at the first graphics call, so the child never touches the comm page and exits 127 (`pulseaudio` is not installed); the game goes on without sound. Before that change the child's constructor ran the handshake, hung, and disturbed the parent (black window). |
 | 1 vCPU, either setting | No window within 120 s: the game's GL goes to the host Mesa directly (`XDG_RUNTIME_DIR` error, the AMD GPU's name) instead of the redirected EGL path. `main` does the same, so it is not caused by the multi-process work; not diagnosed (graphics redirection). |
 
 **Played (maintainer-reported, 2026-10-14):** in a run with 2 vCPUs, `MULTIPROC=0`, the merge of
