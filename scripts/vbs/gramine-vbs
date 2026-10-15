@@ -1,0 +1,501 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 Gramine contributors
+"""gramine-vbs: from a manifest to an application running in a Windows VBS enclave.
+
+The work is split between two machines (Documentation/vbs.rst):
+
+* the Linux side (this script): packs the vbs PAL, the LibOS, the vDSO, the manifest and the
+  application's files (`vbs.packed_files`) into the image contents (scripts/vbs/pack.py) and
+  compiles the Windows enclave runtime and host with clang (scripts/vbs/build-objs.sh);
+* the Windows side, over ssh: links, `veiid`s and test-signs the enclave DLL and builds the host
+  (scripts/vbs/link-sign.cmd), then runs the application with pal_vbs_host.exe.
+
+Commands:
+  gramine-vbs build  <manifest>             pack and compile; with a Windows target also sign
+  gramine-vbs sign   <manifest|build dir>   upload, link and sign on Windows
+  gramine-vbs run    <manifest|build dir> [-- args]   run (building first if needed)
+  gramine-vbs verify <manifest|build dir> <report on Windows> [verifier options]
+  gramine-vbs setup-headers                 copy the Windows SDK and MSVC headers from Windows
+
+Settings (options override the environment):
+  --runtime DIR / GRAMINE_VBS_RUNTIME     the meson build directory of `-Dvbs=enabled` (or a folder
+                                          with libpal.so, libsysdb.so and vdso.so)
+  --headers DIR / GRAMINE_VBS_HEADERS     the copied Windows headers (default
+                                          ~/.cache/gramine-vbs/winhdr; see setup-headers)
+  --windows HOST / GRAMINE_VBS_WINDOWS    ssh destination of the Windows machine
+  --windows-dir DIR / GRAMINE_VBS_WINDOWS_DIR   folder on Windows (default
+                                          %USERPROFILE%\\gramine-vbs\\<name>)
+  --cert-name NAME / GRAMINE_VBS_CERT_NAME      signing certificate (current user's store; default
+                                          TheDefaultTestEnclaveCertName)
+  GRAMINE_VBS_SSH_OPTS                    extra ssh/scp options, e.g. "-o BatchMode=yes"
+"""
+
+import argparse
+import base64
+import fnmatch
+import hashlib
+import json
+import os
+import shlex
+import shutil
+import subprocess
+import sys
+import tomllib
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(os.path.dirname(HERE))
+
+# objects of the runtime: (pack name, kind, file name, possible places in a meson build dir, path)
+RUNTIME = [
+    ('libpal', 'pal', 'libpal.so', ['pal/src/host/vbs/libpal.so'], None),
+    ('libsysdb', 'pal', 'libsysdb.so', ['libos/src/libsysdb.so'], '/libsysdb.so'),
+    ('vdso', 'user', 'vdso.so', ['libos/src/vdso/arch/aarch64/vdso.so'], '/gramine/vdso.so'),
+]
+# functions of the vbs glibc (scripts/vbs/build-glibc.sh) that may use x18: they save and restore
+# it or run only where the TEB is not needed (see FINDINGS.md of Documentation/devel/vbs-enclave)
+X18_DEFAULTS = {
+    'libsysdb.so': ['libos_syscall_entry', '_return_from_syscall'],
+    'ld-linux-aarch64.so.1': ['_dl_tlsdesc_dynamic'],
+    'libc.so.6': ['getcontext', 'swapcontext'],
+}
+
+
+def die(msg):
+    sys.exit(f'gramine-vbs: {msg}')
+
+
+def log(msg):
+    print(f'[gramine-vbs] {msg}', flush=True)
+
+
+# ---- settings ----
+
+def setting(args, name, env, default=None):
+    v = getattr(args, name, None)
+    return v if v else os.environ.get(env, default)
+
+
+def ssh_opts():
+    return shlex.split(os.environ.get('GRAMINE_VBS_SSH_OPTS', ''))
+
+
+def windows_host(args):
+    h = setting(args, 'windows', 'GRAMINE_VBS_WINDOWS')
+    if not h:
+        die('no Windows machine: give --windows HOST or set GRAMINE_VBS_WINDOWS')
+    return h
+
+
+# ---- Windows over ssh (the remote shell is PowerShell or cmd: commands go as -EncodedCommand) ----
+
+def ps(host, script, check=True, capture=False):
+    """Runs a PowerShell script on the Windows machine; returns (exit code, output)."""
+    pre = "$ProgressPreference = 'SilentlyContinue'; $ErrorActionPreference = 'Continue'\n"
+    enc = base64.b64encode((pre + script).encode('utf-16-le')).decode()
+    cmd = ['ssh', *ssh_opts(), host,
+           f'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand {enc}']
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                         errors='replace')
+    out = []
+    for line in p.stdout:
+        line = line.rstrip('\r\n')
+        if line.startswith('#< CLIXML') or line.startswith('<Objs'):
+            continue
+        out.append(line)
+        if not capture:
+            print(line, flush=True)
+    rc = p.wait()
+    if check and rc:
+        die(f'the command on {host} failed (exit {rc})')
+    return rc, '\n'.join(out)
+
+
+def psq(s):
+    """a PowerShell single-quoted string"""
+    return "'" + str(s).replace("'", "''") + "'"
+
+
+def windows_dir(args, host, name):
+    d = setting(args, 'windows_dir', 'GRAMINE_VBS_WINDOWS_DIR')
+    if d:
+        return d.rstrip('\\/')
+    _, out = ps(host, 'Write-Output $env:USERPROFILE', capture=True)
+    return out.strip().splitlines()[-1] + '\\gramine-vbs\\' + name
+
+
+def scp_path(host, path):
+    p = path.replace('\\', '/')
+    return f'{host}:"{p}"' if ' ' in p else f'{host}:{p}'
+
+
+def upload(host, files, windir):
+    ps(host, f'New-Item -ItemType Directory -Force -Path {psq(windir)} | Out-Null', capture=True)
+    subprocess.run(['scp', '-q', *ssh_opts(), *files, scp_path(host, windir + '/')], check=True)
+
+
+# ---- the build directory ----
+
+class Build:
+    def __init__(self, target, out=None):
+        if os.path.isdir(target):
+            self.dir = os.path.abspath(target)
+            st = self.load()
+            if not st:
+                die(f'{target} is not a gramine-vbs build directory')
+            self.manifest = st['manifest']
+        else:
+            if target.rstrip('/').endswith('.vbs'):
+                die(f'{target} does not exist: build it first (gramine-vbs build <manifest>)')
+            self.manifest = os.path.abspath(target)
+            stem = os.path.basename(self.manifest)
+            for suffix in ('.manifest.toml', '.manifest'):
+                if stem.endswith(suffix):
+                    stem = stem[:-len(suffix)]
+                    break
+            self.dir = os.path.abspath(out or os.path.join(os.path.dirname(self.manifest),
+                                                           stem + '.vbs'))
+        self.name = os.path.basename(self.dir)[:-4] if self.dir.endswith('.vbs') \
+            else os.path.basename(self.dir)
+
+    @property
+    def state_file(self):
+        return os.path.join(self.dir, 'build.json')
+
+    def load(self):
+        try:
+            with open(self.state_file) as f:
+                return json.load(f)
+        except (OSError, ValueError):
+            return None
+
+    def save(self, **kw):
+        st = self.load() or {}
+        st.update(kw)
+        os.makedirs(self.dir, exist_ok=True)
+        with open(self.state_file, 'w') as f:
+            json.dump(st, f, indent=1)
+
+
+def find_runtime(rt):
+    if not rt:
+        rt = os.path.join(ROOT, 'build-vbs')
+    found = {}
+    for name, _, fname, places, _ in RUNTIME:
+        for c in [fname] + places:
+            p = os.path.join(rt, c)
+            if os.path.isfile(p):
+                found[name] = p
+                break
+        else:
+            die(f'{fname} not found in the runtime directory {rt} (--runtime): build Gramine with '
+                f'`meson setup build-vbs -Dvbs=enabled ...` on an aarch64 Linux machine')
+    return found
+
+
+def is_packable_elf(path):
+    """an AArch64 ELF shared object or PIE (ET_DYN): packed as a loadable object"""
+    try:
+        with open(path, 'rb') as f:
+            h = f.read(20)
+    except OSError:
+        return False
+    return (len(h) == 20 and h[:4] == b'\x7fELF' and h[4] == 2 and h[16] == 3 and h[17] == 0
+            and int.from_bytes(h[18:20], 'little') == 183)
+
+
+def packed_entries(manifest, m):
+    """(source, path in the enclave) of every packed file, from vbs.packed_files"""
+    base = os.path.dirname(manifest)
+    out = []
+    for e in m.get('vbs', {}).get('packed_files', []):
+        if isinstance(e, str):
+            e = {'uri': e}
+        uri = e.get('uri', '')
+        if not uri.startswith('file:'):
+            die(f'vbs.packed_files: {uri!r} is not a "file:" URI')
+        src = os.path.join(base, uri[len('file:'):])
+        path = e.get('path') or ('/' + os.path.basename(src.rstrip('/')))
+        excl = e.get('exclude', [])
+        if os.path.isdir(src):
+            for d, dirs, files in os.walk(src):
+                rel_d = os.path.relpath(d, src)
+                dirs[:] = sorted(x for x in dirs if not any(
+                    fnmatch.fnmatch(os.path.normpath(os.path.join(rel_d, x)) + '/', pat)
+                    or fnmatch.fnmatch(x + '/', pat) for pat in excl))
+                for fn in sorted(files):
+                    rel = os.path.normpath(os.path.join(rel_d, fn))
+                    if any(fnmatch.fnmatch(rel, p) or fnmatch.fnmatch(fn, p) for p in excl):
+                        continue
+                    out.append((os.path.join(d, fn), path.rstrip('/') + '/' + rel))
+        elif os.path.isfile(src):
+            out.append((src, path))
+        else:
+            die(f'vbs.packed_files: {src} does not exist')
+    return out
+
+
+def cmd_build(args):
+    b = Build(args.target, args.output)
+    if not os.path.isfile(b.manifest):
+        die(f'no manifest {b.manifest}')
+    try:
+        with open(b.manifest, 'rb') as f:
+            m = tomllib.load(f)
+    except tomllib.TOMLDecodeError as e:
+        die(f'{b.manifest}: {e} (TOML 1.0: inline tables stay on one line)')
+    if m.get('sys', {}).get('rewrite_syscalls') is not False:
+        die('the manifest must say sys.rewrite_syscalls = false (no run-time code in an enclave)')
+    if m.get('loader', {}).get('entrypoint') != 'file:/libsysdb.so':
+        die('the manifest must say loader.entrypoint = "file:/libsysdb.so" (the packed LibOS)')
+    entry = m.get('libos', {}).get('entrypoint')
+    if not entry:
+        die('the manifest has no libos.entrypoint')
+
+    rt = find_runtime(setting(args, 'runtime', 'GRAMINE_VBS_RUNTIME'))
+    hdr = setting(args, 'headers', 'GRAMINE_VBS_HEADERS',
+                  os.path.expanduser('~/.cache/gramine-vbs/winhdr'))
+    if not os.path.isdir(os.path.join(hdr, 'sdk', 'um')):
+        die(f'no Windows headers in {hdr}: run `gramine-vbs setup-headers` (or give --headers)')
+
+    files = packed_entries(b.manifest, m)
+    paths = [p for _, p in files]
+    if entry not in paths:
+        die(f'libos.entrypoint {entry} is not among vbs.packed_files')
+    if len(set(paths)) != len(paths):
+        die('vbs.packed_files gives a path twice')
+
+    pack_dir = os.path.join(b.dir, 'pack')
+    obj_dir = os.path.join(b.dir, 'obj')
+    shutil.rmtree(pack_dir, ignore_errors=True)
+    shutil.rmtree(obj_dir, ignore_errors=True)
+    os.makedirs(b.dir, exist_ok=True)
+
+    a = []
+    for name, kind, fname, _, path in RUNTIME:
+        a += ['--obj', f'{kind}:{name}:{rt[name]}' + (f':{path}' if path else '')]
+    a += ['--no-svc', 'libpal']
+    x18 = {k: list(v) for k, v in X18_DEFAULTS.items()}
+    for k, v in m.get('vbs', {}).get('x18_allow', {}).items():
+        x18.setdefault(os.path.basename(k), []).extend(v)
+    names = {'libsysdb.so': 'libsysdb'}
+    nobj = nfile = 0
+    for src, path in files:
+        if is_packable_elf(src):
+            nobj += 1
+            name = f'o{nobj}'
+            names.setdefault(os.path.basename(path), name)
+            a += ['--obj', f'user:{name}:{src}:{path}']
+        else:
+            nfile += 1
+            a += ['--file', f'f{nfile}:{src}:{path}']
+    for base, funcs in x18.items():
+        if base in names and funcs:
+            a += ['--x18-allow', f'{names[base]}:{",".join(funcs)}']
+    a += ['--file', f'manifest:{b.manifest}:/{b.name}.manifest']
+    argfile = os.path.join(b.dir, 'pack-args.txt')
+    with open(argfile, 'w') as f:
+        f.write('\n'.join(a) + '\n')
+    log(f'pack: {nobj} objects, {nfile} files (+ the runtime and the manifest) -> {pack_dir}')
+    with open(os.path.join(b.dir, 'pack.log'), 'w') as lf:
+        r = subprocess.run([sys.executable, '-I', os.path.join(HERE, 'pack.py'), '--out', pack_dir,
+                            '@' + argfile], stdout=lf, stderr=subprocess.STDOUT)
+    if r.returncode:
+        sys.stdout.write(open(os.path.join(b.dir, 'pack.log')).read()[-3000:])
+        die('pack.py failed (pack.log)')
+    for line in open(os.path.join(b.dir, 'pack.log')):
+        if line.startswith('enclave configuration') or line.startswith('images '):
+            log(line.strip())
+
+    log(f'Windows objects (clang) -> {obj_dir}')
+    env = dict(os.environ, HDR=hdr, OUT=obj_dir, PACK=pack_dir)
+    with open(os.path.join(b.dir, 'objs.log'), 'w') as lf:
+        r = subprocess.run(['sh', os.path.join(HERE, 'build-objs.sh')], env=env, stdout=lf,
+                           stderr=subprocess.STDOUT)
+    if r.returncode:
+        sys.stdout.write(open(os.path.join(b.dir, 'objs.log')).read()[-3000:])
+        die('build-objs.sh failed (objs.log)')
+    h = hashlib.sha256()
+    for fn in sorted(os.listdir(obj_dir)):
+        h.update(open(os.path.join(obj_dir, fn), 'rb').read())
+    b.save(manifest=b.manifest, name=b.name, objects=h.hexdigest(), signed=None)
+
+    if not args.no_sign and setting(args, 'windows', 'GRAMINE_VBS_WINDOWS'):
+        cmd_sign(args, b)
+    else:
+        log(f'built {b.dir}; `gramine-vbs sign` links and signs it on Windows')
+
+
+def cmd_sign(args, b=None):
+    b = b or Build(args.target)
+    st = b.load()
+    if not st or not st.get('objects'):
+        die(f'{b.dir} is not built (gramine-vbs build)')
+    host = windows_host(args)
+    windir = windows_dir(args, host, b.name)
+    obj_dir = os.path.join(b.dir, 'obj')
+    files = [os.path.join(obj_dir, f) for f in sorted(os.listdir(obj_dir)) if f.endswith('.obj')]
+    # batch files with CRLF line ends (cmd.exe misreads some LF-only constructs)
+    crlf = os.path.join(b.dir, 'link-sign.cmd')
+    with open(os.path.join(HERE, 'link-sign.cmd'), newline='') as f:
+        text = f.read().replace('\r\n', '\n').replace('\n', '\r\n')
+    with open(crlf, 'w', newline='') as f:
+        f.write(text)
+    files += [crlf, os.path.join(ROOT, 'pal/src/host/vbs/enclave/pal_vbs_enclave.def')]
+    log(f'upload {len(files)} files to {host}:{windir}')
+    upload(host, files, windir)
+    cert = setting(args, 'cert_name', 'GRAMINE_VBS_CERT_NAME', 'TheDefaultTestEnclaveCertName')
+    log(f'link, veiid, sign with the certificate "{cert}" (current user store)')
+    rc, out = ps(host, f'''
+Set-Location {psq(windir)}
+$env:VBS_CERT_NAME = {psq(cert)}
+cmd.exe /c "link-sign.cmd > link.log 2>&1"
+$rc = $LASTEXITCODE
+if ($rc -ne 0 -or -not (Select-String -Quiet -Path link.log -Pattern 'build done')) {{
+    Get-Content link.log -Tail 25; exit 1 }}
+Copy-Item pal_vbs_enclave.dll {psq(b.name + '.dll')} -Force
+Get-Item {psq(b.name + '.dll')}, pal_vbs_host.exe | ForEach-Object {{ "$($_.Name) $($_.Length)" }}
+''', check=False, capture=True)
+    print(out)
+    if rc:
+        die('link/sign on Windows failed (link.log there)')
+    b.save(signed=st['objects'], windows=host, windows_dir=windir)
+    log(f'signed: {windir}\\{b.name}.dll')
+
+
+def cmd_run(args):
+    b = Build(args.target)
+    st = b.load()
+    if not os.path.isdir(args.target) and (args.rebuild or not st or not st.get('signed')
+                                           or os.path.getmtime(b.manifest)
+                                           > os.path.getmtime(b.state_file)):
+        args.output, args.no_sign = None, False
+        cmd_build(args)
+        st = b.load()
+    if not st or not st.get('signed'):
+        die(f'{b.dir} is not signed yet (gramine-vbs sign)')
+    host = setting(args, 'windows', 'GRAMINE_VBS_WINDOWS', st.get('windows'))
+    windir = setting(args, 'windows_dir', 'GRAMINE_VBS_WINDOWS_DIR', st.get('windows_dir'))
+    root = args.root or windir + '\\root'
+    app_args = ' '.join(psq(x) for x in args.args)
+    # the host root and the directories the manifest allows (vbs.allowed_files entries ending in /)
+    dirs = [root]
+    try:
+        with open(st['manifest'], 'rb') as f:
+            allowed = tomllib.load(f).get('vbs', {}).get('allowed_files', [])
+        dirs += [root + p.rstrip('/').replace('/', '\\') for p in allowed
+                 if isinstance(p, str) and p.endswith('/') and p.startswith('/')]
+    except (OSError, tomllib.TOMLDecodeError):
+        pass
+    mkdirs = '; '.join(f'New-Item -ItemType Directory -Force -Path {psq(d)} | Out-Null'
+                       for d in dirs)
+    rc, _ = ps(host, f'''
+Set-Location {psq(windir)}
+{mkdirs}
+& .\\pal_vbs_host.exe {psq(b.name + '.dll')} {int(args.threads)} boot {psq(root)} {app_args} 2>&1 |
+    Where-Object {{ {'$true' if args.verbose else "$_ -notmatch '^\\[(vbs-w|host)\\]'"} }} |
+    ForEach-Object {{ "$_" }}
+exit $LASTEXITCODE
+''', check=False)
+    sys.exit(rc)
+
+
+def cmd_verify(args):
+    b = Build(args.target)
+    st = b.load()
+    if not st or not st.get('signed'):
+        die(f'{b.dir} is not signed yet')
+    host = setting(args, 'windows', 'GRAMINE_VBS_WINDOWS', st.get('windows'))
+    windir = setting(args, 'windows_dir', 'GRAMINE_VBS_WINDOWS_DIR', st.get('windows_dir'))
+    extra = ' '.join(psq(x) for x in args.checks)
+    rc, _ = ps(host, f'''
+Set-Location {psq(windir)}
+& .\\pal_vbs_host.exe {psq(b.name + '.dll')} 1 verify {psq(args.report)} {extra} 2>&1 |
+    Where-Object {{ $_ -notmatch '^\\[host\\]' }} | ForEach-Object {{ "$_" }}
+exit $LASTEXITCODE
+''', check=False)
+    sys.exit(rc)
+
+
+def cmd_setup_headers(args):
+    host = windows_host(args)
+    hdr = setting(args, 'headers', 'GRAMINE_VBS_HEADERS',
+                  os.path.expanduser('~/.cache/gramine-vbs/winhdr'))
+    work = windows_dir(args, host, 'headers')
+    log(f'collecting the Windows SDK and MSVC headers on {host} (in {work})')
+    rc, out = ps(host, f'$t = {psq(work)}\n' + r'''
+$vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
+if (-not $vs) { 'no Visual Studio found'; exit 1 }
+$vc = Get-ChildItem "$vs\VC\Tools\MSVC" | Sort-Object Name | Select-Object -Last 1
+$kits = "${env:ProgramFiles(x86)}\Windows Kits\10\Include"
+$sdk = Get-ChildItem $kits | Where-Object { Test-Path "$($_.FullName)\um\winenclave.h" } | Sort-Object Name | Select-Object -Last 1
+if (-not $sdk) { 'no Windows SDK with winenclave.h found'; exit 1 }
+Remove-Item -Recurse -Force "$t\sdk", "$t\vc" -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force -Path "$t\sdk", "$t\vc" | Out-Null
+foreach ($s in 'um', 'shared', 'ucrt') { Copy-Item -Recurse "$($sdk.FullName)\$s" "$t\sdk\$s" }
+Copy-Item -Recurse "$($vc.FullName)\include" "$t\vc\include"
+tar.exe -C $t -czf "$t\winhdr.tgz" sdk vc
+Remove-Item -Recurse -Force "$t\sdk", "$t\vc"
+"SDK $($sdk.Name), MSVC $($vc.Name)"
+Write-Output "$t\winhdr.tgz"
+''', capture=True)
+    lines = out.strip().splitlines()
+    log(lines[-2])
+    os.makedirs(hdr, exist_ok=True)
+    tgz = os.path.join(hdr, 'winhdr.tgz')
+    subprocess.run(['scp', '-q', *ssh_opts(), scp_path(host, lines[-1].strip()), tgz], check=True)
+    subprocess.run(['tar', '-C', hdr, '-xzf', tgz], check=True)
+    os.remove(tgz)
+    ps(host, f'Remove-Item -Force {psq(lines[-1].strip())}', capture=True)
+    log(f'headers in {hdr}')
+
+
+def main():
+    ap = argparse.ArgumentParser(prog='gramine-vbs', description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest='cmd', required=True)
+
+    def common(p, build=False, windows=True):
+        if build:
+            p.add_argument('--runtime')
+            p.add_argument('--headers')
+        if windows:
+            p.add_argument('--windows')
+            p.add_argument('--windows-dir')
+            p.add_argument('--cert-name')
+
+    p = sub.add_parser('build')
+    p.add_argument('target', metavar='manifest')
+    p.add_argument('-o', '--output', help='build directory (default: <manifest name>.vbs)')
+    p.add_argument('--no-sign', action='store_true', help='only the Linux side')
+    common(p, build=True)
+    p = sub.add_parser('sign')
+    p.add_argument('target', metavar='manifest|build-dir')
+    common(p)
+    p = sub.add_parser('run')
+    p.add_argument('target', metavar='manifest|build-dir')
+    p.add_argument('--threads', default=0, help='enclave threads (0: as signed)')
+    p.add_argument('--root', help='host root folder on Windows (default <windows dir>\\root)')
+    p.add_argument('--rebuild', action='store_true')
+    p.add_argument('-v', '--verbose', action='store_true', help='show the host and runtime lines')
+    p.add_argument('args', nargs='*', help='application arguments (after --)')
+    common(p, build=True)
+    p = sub.add_parser('verify')
+    p.add_argument('target', metavar='manifest|build-dir')
+    p.add_argument('report', help='the report file on Windows')
+    p.add_argument('checks', nargs=argparse.REMAINDER,
+                   help='verifier options: --user-data HEX, --same-image, --unique-id HEX, ...')
+    common(p)
+    p = sub.add_parser('setup-headers')
+    p.add_argument('--headers')
+    p.add_argument('--windows')
+    p.add_argument('--windows-dir', help='work folder on Windows (default '
+                   '%%USERPROFILE%%\\gramine-vbs\\headers)')
+
+    args = ap.parse_args()
+    {'build': cmd_build, 'sign': lambda a: cmd_sign(a), 'run': cmd_run, 'verify': cmd_verify,
+     'setup-headers': cmd_setup_headers}[args.cmd](args)
+
+
+if __name__ == '__main__':
+    main()

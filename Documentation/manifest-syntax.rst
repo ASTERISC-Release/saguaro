@@ -786,6 +786,119 @@ This syntax enables the ``flock`` system call in Gramine.
    vulnerabilities. This is temporary; the syscall will be enabled by default in
    the future after thorough validation and this syntax will be removed then.
 
+.. _vbs-syntax:
+
+VBS syntax (Windows VBS enclaves)
+---------------------------------
+
+These keys configure the ``vbs`` PAL, which runs Linux applications inside
+Windows VBS enclaves on ARM64 Windows 11 (see :doc:`vbs`). Other PALs ignore
+them. The image, its configuration and every packed file are fixed when the
+enclave image is built and signed (``gramine-vbs build``); nothing executable
+can be added at run time. A VBS manifest also needs::
+
+    loader.entrypoint = "file:/libsysdb.so"
+    sys.rewrite_syscalls = false
+
+Packed files
+^^^^^^^^^^^^
+
+::
+
+    vbs.packed_files = [
+      "file:[PATH]",
+      { path = "[ENCLAVE PATH]", uri = "file:[PATH]" },
+      { path = "[ENCLAVE PATH]", uri = "file:[DIRECTORY]", exclude = [ "[PATTERN]", ... ] },
+    ]
+
+The files packed into the signed enclave image: the application, its shared
+libraries (for example the ``ld.so``, ``libc`` and ``libm`` of the vbs glibc)
+and its data. ``uri`` names a file or directory on the build machine, relative
+to the manifest; ``path`` is where the enclave sees it (default: ``/`` and the
+file name). A directory is packed with everything below it except the names
+or relative paths that match an ``exclude`` pattern (shell patterns; a pattern
+ending in ``/`` matches directories). AArch64 ELF shared objects and position-
+independent executables are packed as loadable objects at a fixed place in the
+image (their ``svc`` instructions are rewritten at build time); every other file
+is packed as read-only data. ``libos.entrypoint`` must be one of the packed
+paths. Packed files are measured as part of the image (the report's unique ID).
+
+Programs and libraries for the enclave must be built with
+``scripts/vbs/vbs-gcc`` (``-ffixed-x18``, 4 KiB pages, the vbs glibc sysroot).
+
+Trusted and allowed host files
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+::
+
+    vbs.trusted_files = [
+      { path = "[ENCLAVE PATH]", sha256 = "[64 HEX DIGITS]" },
+    ]
+    vbs.allowed_files = [ "[ENCLAVE PATH]", "[ENCLAVE DIRECTORY]/" ]
+
+Host files are read and written through the untrusted host process, below its
+host root folder (``gramine-vbs run --root``). A trusted file is read in full
+when it is opened and refused unless its SHA-256 matches; it is read-only. An
+allowed file or directory (an entry ending in ``/`` covers everything below
+it) is passed through without any protection, as ``sgx.allowed_files``.
+``gramine-vbs run`` creates the allowed directories below the host root.
+
+Debug/production enclave
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+::
+
+    vbs.debug = [true|false]
+    (Default: false)
+
+Whether the image allows debugging (``IMAGE_ENCLAVE_POLICY_DEBUGGABLE``). A
+debug enclave is marked in its attestation reports (identity flag
+``ENCLAVE_FLAG_FULL_DEBUG_ENABLED``), and the verifier refuses it unless asked
+to allow it.
+
+Enclave size and threads
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+::
+
+    vbs.enclave_size = "[SIZE]"
+    (Default: "256M")
+
+    vbs.max_threads = [NUM]
+    (Default: 4)
+
+The enclave's address range (a power of two from 64M to 64G) and the number of
+threads that may be inside the enclave at once (1 to 1024). Both are written
+into the image's enclave configuration and so are part of what is signed; the
+host takes them from the image.
+
+Enclave identity
+^^^^^^^^^^^^^^^^
+
+::
+
+    vbs.family_id = "[HEX, AT MOST 16 BYTES]"
+    vbs.image_id  = "[HEX, AT MOST 16 BYTES]"
+    vbs.isv_svn   = [NUM]
+    (Default: zeros, zeros, 0)
+
+The family ID, image ID and security version number of the enclave image. They
+appear in the identity of every attestation report, so a verifier can check
+them (``--min-svn``).
+
+Registers
+^^^^^^^^^
+
+::
+
+    vbs.x18_allow = { "[FILE NAME]" = [ "[FUNCTION]", ... ] }
+
+The build refuses packed code that uses register x18, which holds the
+enclave's thread environment block. Functions that are known to save and
+restore it can be allowed by the file name of their object. The functions of
+the vbs glibc that need it (``_dl_tlsdesc_dynamic``, ``getcontext``,
+``swapcontext``) and of the LibOS are allowed by default.
+
 .. _sgx-syntax:
 
 SGX syntax

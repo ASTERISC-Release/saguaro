@@ -1,0 +1,6 @@
+# gramine-vbs build directories and the example programs built for the enclave
+*.vbs/
+/helloworld/helloworld
+/attestation/attest
+# these manifests are written by hand (no .manifest.template)
+!*.manifest

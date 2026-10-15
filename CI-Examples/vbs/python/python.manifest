@@ -1,0 +1,25 @@
+# CPython in a Windows VBS enclave (Documentation/vbs.rst). Build CPython and the vbs glibc for the
+# enclave on an aarch64 Linux machine (scripts/vbs/build-glibc.sh, scripts/vbs/build-python.sh);
+# the paths below are relative to this file. Then: gramine-vbs run python.manifest
+loader.entrypoint = "file:/libsysdb.so"
+libos.entrypoint = "/usr/bin/python3.12"
+loader.argv = ["/usr/bin/python3.12", "/app/hello.py"]
+loader.log_level = "error"
+loader.env.LD_LIBRARY_PATH = "/usr/lib"
+loader.env.PYTHONDONTWRITEBYTECODE = "1"
+loader.env.HOME = "/app"
+fs.root.uri = "file:/"
+sys.rewrite_syscalls = false
+
+vbs.debug = false
+vbs.max_threads = 8
+vbs.enclave_size = "512M"
+vbs.packed_files = [
+  { path = "/usr/bin/python3.12", uri = "file:../../../build-vbs-python/usr/bin/python3.12" },
+  # the standard library without its tests, the IDE and Tk parts, and the static library
+  { path = "/usr/lib/python3.12", uri = "file:../../../build-vbs-python/usr/lib/python3.12", exclude = [ "config-3.12-*/", "__pycache__/", "test/", "tests/", "idlelib/", "tkinter/", "turtledemo/", "lib2to3/", "ensurepip/", "pydoc_data/", "*.a" ] },
+  { path = "/usr/lib/ld-linux-aarch64.so.1", uri = "file:../../../build-vbs-glibc/usr/lib/ld-linux-aarch64.so.1" },
+  { path = "/usr/lib/libc.so.6", uri = "file:../../../build-vbs-glibc/usr/lib/libc.so.6" },
+  { path = "/usr/lib/libm.so.6", uri = "file:../../../build-vbs-glibc/usr/lib/libm.so.6" },
+  { path = "/app/hello.py", uri = "file:hello.py" },
+]

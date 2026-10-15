@@ -7,14 +7,17 @@ rem a signed enclave DLL, then build the host executable. Run from a folder that
 rem enclave objects (pal_vbs_enclave.obj, pal_vbs_selftest.obj, pal_vbs_boundary.obj) and the host
 rem object (pal_vbs_host.obj) produced by scripts/vbs/build-objs.sh on Linux. Links with the MSVC
 rem enclave CRT and the Windows SDK enclave libraries, protects with veiid and test-signs with the
-rem current-user certificate CN=TheDefaultTestEnclaveCertName.
+rem current-user certificate CN=TheDefaultTestEnclaveCertName (or the subject name in VBS_CERT_NAME).
 rem
 rem If the folder also holds pal_vbs_packed.obj and pal_vbs_packed_blob.obj (build-objs.sh with PACK),
 rem they are linked in: the in-enclave loader and the packed objects in the .gxpack section.
 rem
 rem Usage: link-sign.cmd            (run inside the object directory)
 setlocal
-call "%ProgramFiles%\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=arm64 -host_arch=arm64 -no_logo || exit /b 1
+rem Visual Studio: the newest installation with the C++ tools (vswhere), or VS_INSTALL_DIR
+if "%VS_INSTALL_DIR%"=="" for /f "usebackq delims=" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath`) do set VS_INSTALL_DIR=%%i
+if "%VS_INSTALL_DIR%"=="" (echo no Visual Studio found & exit /b 1)
+call "%VS_INSTALL_DIR%\Common7\Tools\VsDevCmd.bat" -arch=arm64 -host_arch=arm64 -no_logo || exit /b 1
 set VCLIB=%VCToolsInstallDir%lib\arm64
 set SDKLIB=%WindowsSdkDir%Lib\%WindowsSDKVersion%
 set ENCLAVE_LIBS="%VCLIB%\enclave\libcmt.lib" "%VCLIB%\enclave\libvcruntime.lib" "%SDKLIB%um\arm64\vertdll.lib" "%SDKLIB%um\arm64\bcrypt.lib" "%SDKLIB%ucrt_enclave\arm64\ucrt.lib"
