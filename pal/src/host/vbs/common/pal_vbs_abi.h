@@ -226,7 +226,7 @@ struct pal_vbs_packed_obj {
  * code: P calls them only through its x18-restoring thunk (pal_vbs_wcall.S), because Linux code
  * may have clobbered x18 (the enclave TEB). All values are fixed-width (PLAN.md D4).
  */
-#define PAL_VBS_SERVICES_VERSION 6u
+#define PAL_VBS_SERVICES_VERSION 7u
 
 struct pal_vbs_services {
     uint64_t version;
@@ -278,6 +278,11 @@ struct pal_vbs_services {
                           * c->out_pre, then c->out_iov; c->out_len is set to the bytes stored. No
                           * staging copy in the enclave: one copy each way between the caller's
                           * buffers and the thread's host buffer */
+
+    /* CPU features (version 7): IsProcessorFeaturePresent(n) called inside the enclave by W,
+     * for n = 0..127, as bit (n % 64) of arm_pf[n / 64] (PF_ARM_* numbers of winnt.h). The PAL
+     * turns them into AT_HWCAP/AT_HWCAP2 (Documentation/devel/aarch64/hwcap/PLAN.md). */
+    uint64_t arm_pf[2];
 };
 
 /* a buffer of the vbs PAL proper; the layout of Linux's struct iovec on AArch64 */

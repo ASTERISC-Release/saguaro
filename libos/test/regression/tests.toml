@@ -189,6 +189,12 @@ manifests = [
   "sighandler_divbyzero",
 ]
 
+[arch.aarch64]
+
+manifests = [
+  "hwcap_aarch64",
+]
+
 [sgx]
 
 manifests = [

@@ -606,6 +606,10 @@ int64_t pal_vbs_boot(const struct pal_vbs_shared* shared) {
     g_svc.host_call     = (void*)svc_host_call;
     g_svc.host_call_v   = (void*)svc_host_call_v;
     g_svc.attest        = (void*)svc_attest;
+    /* the enclave's own view of the CPU features (it differs from the host's: phase 0 (d)) */
+    for (uint32_t n = 0; n < 128; n++)
+        if (IsProcessorFeaturePresent(n))
+            g_svc.arm_pf[n / 64] |= 1ull << (n % 64);
     /* host arguments: already copied into the enclave with the shared block (E_PalMain); bounded
      * and NUL-terminated here */
     static char args[PAL_VBS_ARGS_SIZE + 1];

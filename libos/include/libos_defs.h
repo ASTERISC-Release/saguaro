@@ -16,7 +16,11 @@
 #define DEFAULT_VMA_COUNT 64
 
 /* ELF aux vectors  */
+#ifdef __aarch64__
+#define REQUIRED_ELF_AUXV       16 /* number of LibOS-supported vectors (+ AT_HWCAP, AT_HWCAP2) */
+#else
 #define REQUIRED_ELF_AUXV       14 /* number of LibOS-supported vectors */
+#endif
 #define REQUIRED_ELF_AUXV_SPACE 16 /* extra memory space (in bytes) */
 
 #define LIBOS_SYSCALL_BOUND __NR_syscalls

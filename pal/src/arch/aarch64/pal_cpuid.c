@@ -7,8 +7,13 @@
  * map its fields onto the generic `pal_cpu_info` struct the same way Linux's own
  * arch/arm64/kernel/cpuinfo.c does for /proc/cpuinfo ("CPU implementer", "CPU architecture",
  * "CPU variant", "CPU part", "CPU revision").
+ *
+ * The feature words for applications (AT_HWCAP / AT_HWCAP2) come from the host PAL
+ * (_PalGetHwcaps(): host auxv, ID registers or the enclave runtime) and are masked here, in one
+ * place for every PAL, to the allowlist of pal_hwcap.h.
  */
 
+#include "pal_hwcap.h"
 #include "pal_internal.h"
 
 #define MIDR_IMPLEMENTER(midr) (((midr) >> 24) & 0xff)
@@ -90,6 +95,13 @@ int _PalGetCPUInfo(struct pal_cpu_info* ci) {
     ci->cpu_family   = 8;
     ci->cpu_model    = partnum;
     ci->cpu_stepping = (variant << 4) | revision;
+
+    uint64_t hwcap = 0, hwcap2 = 0;
+    _PalGetHwcaps(&hwcap, &hwcap2);
+    ci->cpu_hwcap  = hwcap & PAL_HWCAP_ALLOWED;
+    ci->cpu_hwcap2 = hwcap2 & PAL_HWCAP2_ALLOWED;
+    log_debug("AT_HWCAP 0x%lx AT_HWCAP2 0x%lx (from the platform: 0x%lx 0x%lx)", ci->cpu_hwcap,
+              ci->cpu_hwcap2, hwcap, hwcap2);
 
 #ifdef PAL_HOST_VM
     /* vm kernel (aarch64): -mgeneral-regs-only, so _PalGetBogomips() returns the IEEE-754
