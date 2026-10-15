@@ -1,0 +1,4 @@
+/vk-headless
+/vk-session-shim.so
+/*.manifest
+/*.manifest.sgx
