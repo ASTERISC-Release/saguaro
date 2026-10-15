@@ -16,6 +16,7 @@
  * there the test reaching its end is the evidence.
  */
 
+#define _GNU_SOURCE
 #include <setjmp.h>
 #include <signal.h>
 #include <stdbool.h>
