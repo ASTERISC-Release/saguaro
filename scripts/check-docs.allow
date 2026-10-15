@@ -72,3 +72,6 @@ runtime/glibc$
 
 # the git-ignored work folder of the Proton study (prefixes, traces, downloads)
 ^\.proton-vm/
+
+# git-ignored build directories named in the hwcap test results
+^build/x86-(glibc|none)$
