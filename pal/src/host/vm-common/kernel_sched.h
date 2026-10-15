@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #include "spinlock.h"
@@ -30,6 +32,11 @@ extern bool g_kick_sched_thread;
 
 extern int g_streams_waiting_events_futex;
 
+struct thread;
+#ifdef __x86_64__
+struct memory_address_space;
+#endif
+
 /* the four helper functions are implemented in pal_common_threading.c which knows about the
  * relationship between the TCB (which is pointed to by GS base reg) and the thread struct */
 struct thread* get_thread_ptr(uintptr_t curr_gs_base);
@@ -45,5 +52,21 @@ void sched_thread_wakeup(int* futex_word);
 
 void sched_thread_add(struct thread* thread);
 void sched_thread_remove(struct thread* thread);
+void sched_thread_set_exit_cleanup(void (*cleanup)(void*), void* arg);
+#ifdef __x86_64__
+int sched_thread_share_stack(struct memory_address_space* source,
+                             struct memory_address_space* new_thread_space,
+                             uintptr_t addr, size_t size);
+int sched_thread_share_runtime_stacks(struct memory_address_space* target);
+/* Removes up to `max` threads of an exiting address space that are not running on any CPU and
+ * stores them in `out_threads`; `*out_running` tells whether one of its threads still runs. */
+bool sched_thread_space_has_other_running(struct memory_address_space* space,
+                                          struct thread* self);
+size_t sched_thread_remove_exiting(struct memory_address_space* space, struct thread** out_threads,
+                                   size_t max, bool* out_running);
+#endif
 void sched_thread_set_cpu_affinity(struct thread* thread, unsigned long* cpu_mask,
                                    size_t cpu_mask_len);
+#ifdef __x86_64__
+bool sched_thread_is_stopped(struct thread* thread);
+#endif

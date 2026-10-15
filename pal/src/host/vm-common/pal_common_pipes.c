@@ -4,8 +4,9 @@
 /*
  * This file contains APIs to handle pipes.
  *
- * Two pipes (two ends of the same pipe) share a single buffer object. This buffer object is created
- * when two pipes establish a connection, and it is destroyed when the last of two pipes is closed.
+ * Two pipes (two ends of the same pipe) share a single buffer object. The connecting end creates it
+ * (so that, as with a Unix socket, it can write before the server accepts), the accepting end takes
+ * it over, and it is destroyed when the last of the two pipes is closed.
  */
 
 #include "api.h"
@@ -62,6 +63,39 @@ out:
     return ret;
 }
 
+static struct pal_handle_inner_pipe_buf* pipe_buf_alloc(void) {
+    struct pal_handle_inner_pipe_buf* pipe_buf = calloc(1, sizeof(*pipe_buf) + PIPE_BUF_SIZE);
+    if (!pipe_buf)
+        return NULL;
+    pipe_buf->writable = pipe_buf->readable = true;
+    pipe_buf->write_pos = pipe_buf->read_pos = 0;
+    spinlock_init(&pipe_buf->lock);
+    /* one reference for the connecting end, one held for the end that will accept it */
+    pipe_buf->refcount = 2;
+    return pipe_buf;
+}
+
+/* Drops one reference of a pipe buffer; the other end, if any, sees the pipe closed. */
+static void pipe_buf_put(struct pal_handle_inner_pipe_buf* pipe_buf) {
+    int new_count = __atomic_sub_fetch(&pipe_buf->refcount, 1, __ATOMIC_ACQ_REL);
+    if (new_count < 0) {
+        log_error("Reference count dropped below 0 at %s:%d", __FILE_NAME__, __LINE__);
+        BUG();
+    } else if (new_count > 0) {
+        spinlock_lock(&pipe_buf->lock);
+        pipe_buf->readable = pipe_buf->writable = false; /* close both pipe ends */
+        sched_thread_wakeup(&pipe_buf->reader_futex);
+        sched_thread_wakeup(&pipe_buf->writer_futex);
+        if (pipe_buf->poll_waiting) {
+            /* should be impossible: poll waits on a pipe that is freed?! just in case */
+            sched_thread_wakeup(&g_streams_waiting_events_futex);
+        }
+        spinlock_unlock(&pipe_buf->lock);
+    } else {
+        free(pipe_buf);
+    }
+}
+
 static int pipe_connect(struct pal_handle** handle, const char* name,
                         pal_stream_options_t options) {
     int ret;
@@ -70,13 +104,17 @@ static int pipe_connect(struct pal_handle** handle, const char* name,
     if (!pipe)
         return -PAL_ERROR_NOMEM;
 
+    struct pal_handle_inner_pipe_buf* pipe_buf = pipe_buf_alloc();
+    if (!pipe_buf) {
+        free(pipe);
+        return -PAL_ERROR_NOMEM;
+    }
+
     pipe->hdr.type = PAL_TYPE_PIPE;
     pipe->flags = PAL_HANDLE_FD_READABLE | PAL_HANDLE_FD_WRITABLE;
     pipe->pipe.nonblocking = !!(options & PAL_OPTION_NONBLOCK);
     memcpy(&pipe->pipe.name, name, strlen(name) + 1);
-
-    /* the other pipe end (pipecli) will allocate & set up the pipe_buf object */
-    pipe->pipe.pipe_buf = NULL;
+    pipe->pipe.pipe_buf = pipe_buf;
 
     spinlock_lock(&g_connecting_pipes_lock);
 
@@ -104,8 +142,10 @@ static int pipe_connect(struct pal_handle** handle, const char* name,
     ret = 0;
 out:
     spinlock_unlock(&g_connecting_pipes_lock);
-    if (ret < 0)
+    if (ret < 0) {
+        free(pipe_buf);
         free(pipe);
+    }
     return ret;
 }
 
@@ -135,24 +175,14 @@ int pal_common_pipe_waitforclient(struct pal_handle* server, struct pal_handle**
     if (server->hdr.type != PAL_TYPE_PIPESRV)
         return -PAL_ERROR_NOTSERVER;
 
-    struct pal_handle_inner_pipe_buf* pipe_buf = calloc(1, sizeof(*pipe_buf) + PIPE_BUF_SIZE);
-    if (!pipe_buf)
-        return -PAL_ERROR_NOMEM;
-
     struct pal_handle* pipe = calloc(1, sizeof(*pipe));
-    if (!pipe) {
-        free(pipe_buf);
+    if (!pipe)
         return -PAL_ERROR_NOMEM;
-    }
 
     pipe->hdr.type = PAL_TYPE_PIPECLI;
     pipe->flags = PAL_HANDLE_FD_READABLE | PAL_HANDLE_FD_WRITABLE;
     pipe->pipe.nonblocking = !!(options & PAL_OPTION_NONBLOCK);
     memcpy(&pipe->pipe.name, &server->pipe.name, sizeof(pipe->pipe.name));
-
-    pipe_buf->writable = pipe_buf->readable = true;
-    pipe_buf->write_pos = pipe_buf->read_pos = 0;
-    spinlock_init(&pipe_buf->lock);
 
     /* emulate accept(): wait for the first pipe connecting on server's name */
     spinlock_lock(&g_connecting_pipes_lock);
@@ -180,18 +210,24 @@ int pal_common_pipe_waitforclient(struct pal_handle* server, struct pal_handle**
 
     LISTP_DEL(found_connecting_pipe, &g_connecting_pipes_list, list);
 
-    pipe->pipe.pipe_buf = pipe_buf;
-    found_connecting_pipe->pipe.pipe_buf = pipe_buf;
-    pipe_buf->refcount = 2;
+    /* take over the reference the connecting end holds for us */
+    pipe->pipe.pipe_buf = found_connecting_pipe->pipe.pipe_buf;
+    if (!found_connecting_pipe->pipe.closed_pending) {
+        /* the client still lives; it keeps its handle */
+        found_connecting_pipe = NULL;
+    }
 
     *client = pipe;
     ret = 0;
 out:
     spinlock_unlock(&g_connecting_pipes_lock);
-    if (ret < 0) {
-        free(pipe_buf);
-        free(pipe);
+    if (ret == 0 && found_connecting_pipe) {
+        /* The client closed before being accepted (see pal_common_pipe_destroy); the queue owned
+         * its handle until now. This end reads what it wrote, then end-of-stream. */
+        free(found_connecting_pipe);
     }
+    if (ret < 0)
+        free(pipe);
     return ret;
 }
 
@@ -328,6 +364,8 @@ void pal_common_pipe_destroy(struct pal_handle* handle) {
     bool found_server_pipe = false;
     bool found_connecting_pipe = false;
     struct pal_handle_inner_pipe_buf* pipe_buf = NULL;
+    /* clients queued for a server that is going away; they will never be accepted */
+    LISTP_TYPE(pal_handle) orphans = LISTP_INIT;
 
     spinlock_lock(&g_connecting_pipes_lock);
 
@@ -350,36 +388,46 @@ void pal_common_pipe_destroy(struct pal_handle* handle) {
         }
     }
 
-    if (found_server_pipe)
+    if (found_server_pipe) {
         LISTP_DEL(handle, &g_server_pipes_list, list);
-    if (found_connecting_pipe)
-        LISTP_DEL(handle, &g_connecting_pipes_list, list);
+        struct pal_handle* connecting_pipe;
+        struct pal_handle* tmp;
+        LISTP_FOR_EACH_ENTRY_SAFE(connecting_pipe, tmp, &g_connecting_pipes_list, list) {
+            if (strcmp(connecting_pipe->pipe.name, handle->pipe.name) == 0) {
+                LISTP_DEL(connecting_pipe, &g_connecting_pipes_list, list);
+                LISTP_ADD(connecting_pipe, &orphans, list);
+            }
+        }
+    }
+    if (found_connecting_pipe) {
+        /* A client that closes before the server accepted it stays queued, so that the server's
+         * accept still completes and reads what the client wrote, as with a Unix socket. Without
+         * this, a server waiting in another process would never see a short-lived client. The
+         * queue owns the handle from now on; waitforclient (or the server's destroy) frees it. */
+        handle->pipe.closed_pending = true;
+        pipe_buf = handle->pipe.pipe_buf;
+        spinlock_unlock(&g_connecting_pipes_lock);
+        pipe_buf_put(pipe_buf); /* the client's reference; the server's stays */
+        return;
+    }
 
     if (handle->hdr.type == PAL_TYPE_PIPE || handle->hdr.type == PAL_TYPE_PIPECLI) {
         pipe_buf = handle->pipe.pipe_buf;
     }
     spinlock_unlock(&g_connecting_pipes_lock);
 
-    if (pipe_buf) {
-        int new_count = __atomic_sub_fetch(&pipe_buf->refcount, 1, __ATOMIC_ACQ_REL);
-        if (new_count < 0) {
-            log_error("Reference count dropped below 0 at %s:%d", __FILE_NAME__, __LINE__);
-            BUG();
-        } else if (new_count > 0) {
-            spinlock_lock(&pipe_buf->lock);
-            pipe_buf->readable = pipe_buf->writable = false; /* close both pipe ends */
-            sched_thread_wakeup(&pipe_buf->reader_futex);
-            sched_thread_wakeup(&pipe_buf->writer_futex);
-            if (pipe_buf->poll_waiting) {
-                /* should be impossible: poll waits on a pipe that is freed?! just in case */
-                sched_thread_wakeup(&g_streams_waiting_events_futex);
-            }
-            spinlock_unlock(&pipe_buf->lock);
-        } else {
-            assert(!new_count);
-            free(pipe_buf);
-        }
+    struct pal_handle* orphan;
+    struct pal_handle* tmp;
+    LISTP_FOR_EACH_ENTRY_SAFE(orphan, tmp, &orphans, list) {
+        LISTP_DEL(orphan, &orphans, list);
+        /* drop the reference held for the accepting end: a live client sees the pipe closed */
+        pipe_buf_put(orphan->pipe.pipe_buf);
+        if (orphan->pipe.closed_pending)
+            free(orphan);
     }
+
+    if (pipe_buf)
+        pipe_buf_put(pipe_buf);
 
     free(handle);
 }

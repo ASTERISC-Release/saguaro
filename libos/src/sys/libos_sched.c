@@ -18,6 +18,24 @@
 #include "linux_abi/sched.h"
 #include "pal.h"
 
+/* Gramine currently exposes the default Linux personality only. Keep the ABI state so callers can
+ * query the value they set; personality-specific address-space behavior is not implemented. */
+static uint32_t g_personality;
+
+bool libos_personality_sticky_timeouts(void) {
+    return (__atomic_load_n(&g_personality, __ATOMIC_RELAXED) & 0x04000000) != 0;
+}
+
+long libos_syscall_personality(unsigned long persona) {
+    if (persona == 0xffffffffUL)
+        return __atomic_load_n(&g_personality, __ATOMIC_RELAXED);
+    /* The Linux kernel accepts its historical personality IDs even though Gramine does not
+     * emulate their ABI quirks. The ID is in the low byte; the upper flags are stored as state. */
+    if (persona > UINT32_MAX || (persona & 0xff) > 0x10) /* PER_HPUX is currently the last ID */
+        return -EINVAL;
+    return __atomic_exchange_n(&g_personality, (uint32_t)persona, __ATOMIC_RELAXED);
+}
+
 long libos_syscall_sched_yield(void) {
     PalThreadYieldExecution();
     return 0;

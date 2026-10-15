@@ -273,6 +273,7 @@ long libos_syscall_ppoll(struct pollfd* fds, unsigned int nfds, struct timespec*
     }
 
     uint64_t timeout_us = 0;
+    struct timespec original_tsp = {0};
     if (tsp) {
         if (!is_user_memory_readable(tsp, sizeof(*tsp))) {
             return -EFAULT;
@@ -280,15 +281,20 @@ long libos_syscall_ppoll(struct pollfd* fds, unsigned int nfds, struct timespec*
         if (tsp->tv_sec < 0 || tsp->tv_nsec < 0 || (unsigned long)tsp->tv_nsec >= TIME_NS_IN_S) {
             return -EINVAL;
         }
+        original_tsp = *tsp;
         timeout_us = tsp->tv_sec * TIME_US_IN_S + tsp->tv_nsec / TIME_NS_IN_US;
     }
 
     ret = do_poll(fds, nfds, tsp ? &timeout_us : NULL);
 
     /* If `tsp` is in read-only memory, skip the update. */
-    if (tsp && is_user_memory_writable_no_skip(tsp, sizeof(*tsp))) {
+    if (tsp && !libos_personality_sticky_timeouts() &&
+        is_user_memory_writable_no_skip(tsp, sizeof(*tsp))) {
         tsp->tv_sec = timeout_us / TIME_US_IN_S;
         tsp->tv_nsec = (timeout_us % TIME_US_IN_S) * TIME_NS_IN_US;
+    } else if (tsp && libos_personality_sticky_timeouts() &&
+               is_user_memory_writable_no_skip(tsp, sizeof(*tsp))) {
+        *tsp = original_tsp;
     }
     return ret;
 }
@@ -408,6 +414,7 @@ long libos_syscall_select(int nfds, struct linux_fd_set* read_set, struct linux_
     }
 
     uint64_t timeout_us = 0;
+    struct __kernel_timeval original_tv = {0};
     if (tv) {
         if (!is_user_memory_readable(tv, sizeof(*tv))) {
             return -EFAULT;
@@ -415,15 +422,20 @@ long libos_syscall_select(int nfds, struct linux_fd_set* read_set, struct linux_
         if (tv->tv_sec < 0 || tv->tv_usec < 0 || (unsigned long)tv->tv_usec >= TIME_US_IN_S) {
             return -EINVAL;
         }
+        original_tv = *tv;
         timeout_us = tv->tv_sec * TIME_US_IN_S + tv->tv_usec;
     }
 
     long ret = do_select(nfds, read_set, write_set, except_set, tv ? &timeout_us : NULL);
 
     /* If `tv` is in read-only memory, skip the update. */
-    if (tv && is_user_memory_writable_no_skip(tv, sizeof(*tv))) {
+    if (tv && !libos_personality_sticky_timeouts() &&
+        is_user_memory_writable_no_skip(tv, sizeof(*tv))) {
         tv->tv_sec = timeout_us / TIME_US_IN_S;
         tv->tv_usec = timeout_us % TIME_US_IN_S;
+    } else if (tv && libos_personality_sticky_timeouts() &&
+               is_user_memory_writable_no_skip(tv, sizeof(*tv))) {
+        *tv = original_tv;
     }
     return ret;
 }
@@ -465,6 +477,7 @@ long libos_syscall_pselect6(int nfds, struct linux_fd_set* read_set, struct linu
     }
 
     uint64_t timeout_us = 0;
+    struct __kernel_timespec original_tsp = {0};
     if (tsp) {
         if (!is_user_memory_readable(tsp, sizeof(*tsp))) {
             return -EFAULT;
@@ -472,15 +485,20 @@ long libos_syscall_pselect6(int nfds, struct linux_fd_set* read_set, struct linu
         if (tsp->tv_sec < 0 || tsp->tv_nsec < 0 || (unsigned long)tsp->tv_nsec >= TIME_NS_IN_S) {
             return -EINVAL;
         }
+        original_tsp = *tsp;
         timeout_us = tsp->tv_sec * TIME_US_IN_S + tsp->tv_nsec / TIME_NS_IN_US;
     }
 
     long ret = do_select(nfds, read_set, write_set, except_set, tsp ? &timeout_us : NULL);
 
     /* If `tsp` is in read-only memory, skip the update. */
-    if (tsp && is_user_memory_writable_no_skip(tsp, sizeof(*tsp))) {
+    if (tsp && !libos_personality_sticky_timeouts() &&
+        is_user_memory_writable_no_skip(tsp, sizeof(*tsp))) {
         tsp->tv_sec = timeout_us / TIME_US_IN_S;
         tsp->tv_nsec = (timeout_us % TIME_US_IN_S) * TIME_NS_IN_US;
+    } else if (tsp && libos_personality_sticky_timeouts() &&
+               is_user_memory_writable_no_skip(tsp, sizeof(*tsp))) {
+        *tsp = original_tsp;
     }
     return ret;
 }

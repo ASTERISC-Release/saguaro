@@ -24,6 +24,13 @@
 #include "list.h"
 #include "pal.h"
 
+#define LIBOS_F_SEAL_SEAL         0x0001U
+#define LIBOS_F_SEAL_SHRINK       0x0002U
+#define LIBOS_F_SEAL_GROW         0x0004U
+#define LIBOS_F_SEAL_WRITE        0x0008U
+#define LIBOS_F_SEAL_FUTURE_WRITE 0x0010U
+#define LIBOS_F_SEAL_EXEC         0x0020U
+
 /* Handle types. Many of these are used by a single filesystem. */
 enum libos_handle_type {
     /* Files: */
@@ -47,6 +54,9 @@ enum libos_handle_type {
     TYPE_EPOLL,      /* epoll handles, see `libos_epoll.c` */
     TYPE_EVENTFD,    /* eventfd handles, used by `eventfd` filesystem */
     TYPE_HOSTFD,     /* host fds without a path (gramine-direct), used by `hostfd` filesystem */
+    TYPE_TIMERFD,    /* timerfd handles, used by `timerfd` filesystem */
+    TYPE_SIGNALFD,   /* signalfd handles, used by `signalfd` filesystem */
+    TYPE_INOTIFY,    /* inotify instances, used by `inotify` filesystem */
 
     /* Host redirection handle */
     TYPE_HOST,              /* handle redirected to host OS, used by `host` filesystem */
@@ -55,6 +65,7 @@ enum libos_handle_type {
 
 struct libos_pipe_handle {
     bool ready_for_ops; /* true for pipes, false for FIFOs that were mknod'ed but not open'ed */
+    int peer_fd; /* other end's descriptor for anonymous pipes; -1 for named FIFOs */
     char name[PIPE_URI_SIZE];
 };
 
@@ -153,6 +164,45 @@ struct libos_eventfd_handle {
     uint64_t dummy_host_val;
 };
 
+struct libos_timerfd_handle {
+    bool broken_in_child; /* like eventfd, timerfds do not work across processes */
+    bool armed;
+    int clock_id;
+    spinlock_t lock;      /* protects the fields below */
+    uint64_t expiry_ns;   /* next expiration, in the clock's nanoseconds */
+    uint64_t interval_ns; /* 0 for a one-shot timer */
+    uint64_t expirations; /* expirations not yet read */
+    uint64_t dummy_host_val; /* notifications written to the dummy host eventfd */
+};
+
+struct libos_signalfd_handle {
+    bool broken_in_child; /* as for eventfd/timerfd: not shared with children */
+    __sigset_t mask;      /* the signals this descriptor watches (constant after creation) */
+    spinlock_t lock;      /* protects the field below */
+    uint64_t dummy_host_val; /* arrival notifications written to the dummy host eventfd */
+};
+
+/* An event in one inotify instance's queue; the name (with its padded length `len`) trails. */
+struct libos_inotify_event {
+    struct libos_inotify_event* next;
+    int wd;             /* watch descriptor, or -1 for the overflow event */
+    unsigned int mask;
+    unsigned int cookie;/* shared by the MOVED_FROM/MOVED_TO pair, else 0 */
+    unsigned int len;   /* bytes at `name` (padded to a multiple of 4, NUL included) */
+    char name[];
+};
+
+struct libos_inotify_handle {
+    bool broken_in_child; /* as for eventfd/timerfd: not shared with children */
+    spinlock_t lock;      /* protects the fields below */
+    struct libos_inotify_event* ev_head;
+    struct libos_inotify_event* ev_tail;
+    unsigned int queued;      /* events in the queue, capped at `queue_limit` */
+    unsigned int queue_limit; /* the emulated /proc/sys/fs/inotify/max_queued_events at creation */
+    unsigned int watch_count; /* watches in the global watch list referencing this instance */
+    uint64_t dummy_host_val;  /* arrival notifications written to the dummy host eventfd */
+};
+
 struct libos_handle {
     enum libos_handle_type type;
     bool is_dir;
@@ -228,6 +278,9 @@ struct libos_handle {
 
         struct libos_epoll_handle epoll;         /* TYPE_EPOLL */
         struct libos_eventfd_handle eventfd;     /* TYPE_EVENTFD */
+        struct libos_timerfd_handle timerfd;     /* TYPE_TIMERFD */
+        struct libos_signalfd_handle signalfd;   /* TYPE_SIGNALFD */
+        struct libos_inotify_handle inotify;     /* TYPE_INOTIFY */
     } info;
 
     struct libos_dir_handle dir_info;
@@ -237,6 +290,8 @@ struct libos_handle {
      * contain the open flags without access mode (i.e. set it to `flags & ~O_ACCMODE`). */
     int flags; /* Linux' O_* flags */
     int acc_mode;
+    bool is_memfd;
+    unsigned int memfd_seals;
     struct libos_lock lock;
 
     /* Lock for handle position (`pos`). Intended for operations that change the position (e.g.
@@ -259,6 +314,7 @@ int set_handle_nonblocking(struct libos_handle* hdl, bool on);
 struct libos_fd_handle {
     uint32_t vfd; /* virtual file descriptor */
     int flags;    /* file descriptor flags, only FD_CLOEXEC */
+    int acc_mode; /* per-open access mode */
 
     struct libos_handle* handle;
 };
@@ -298,6 +354,8 @@ int set_new_fd_handle_by_fd(uint32_t fd, struct libos_handle* hdl, int fd_flags,
                             struct libos_handle_map* map);
 int set_new_fd_handle_above_fd(uint32_t fd, struct libos_handle* hdl, int fd_flags,
                                struct libos_handle_map* map);
+int get_fd_acc_mode(uint32_t fd, struct libos_handle_map* map);
+int set_fd_acc_mode(uint32_t fd, int acc_mode, struct libos_handle_map* map);
 struct libos_handle* detach_fd_handle(uint32_t fd, int* flags, struct libos_handle_map* map);
 void detach_all_fds(void);
 void close_cloexec_handles(struct libos_handle_map* map);

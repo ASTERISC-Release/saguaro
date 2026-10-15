@@ -89,6 +89,12 @@ struct handle_ops {
 
     /* 'rename' is used to change name of a stream, or reset its share option */
     int (*rename)(PAL_HANDLE handle, const char* type, const char* uri);
+
+    /* Path-based file creation operations. These are used only by file handles. */
+    int (*symlink)(const char* target, const char* uri);
+    int (*link)(const char* old_uri, const char* new_uri);
+    int (*unlink_path)(const char* uri);
+    int (*rename_path)(const char* old_uri, const char* new_uri);
 };
 
 extern const struct handle_ops* g_pal_handle_ops[];
@@ -164,6 +170,7 @@ noreturn void pal_main(uint64_t instance_id, PAL_HANDLE parent_process, PAL_HAND
 /* For initialization */
 
 unsigned long _PalMemoryQuota(void);
+void PalResetMemoryBookkeepingUpcallsForChild(void);
 int _PalDeviceIoControl(PAL_HANDLE handle, uint32_t cmd, unsigned long arg, int* out_ret);
 /* Host passthrough (pal_host.c has weak defaults; the Linux PAL implements them) */
 int _PalHostReadlink(const char* uri, char* buf, size_t* size);
@@ -309,7 +316,32 @@ int pal_internal_memory_alloc(size_t size, void** out_addr);
 int pal_internal_memory_free(void* addr, size_t size);
 void pal_disable_early_memory_bookkeeping(void);
 
+/* The x86_64 VM PAL copies the `.process_data` section privately into each process address space
+ * (see pal/src/host/vm/pal.lds); every other PAL keeps these variables in ordinary sections. */
+#if defined(PAL_HOST_VM) && defined(__x86_64__)
+#define PAL_PROCESS_DATA      __attribute__((section(".process_data")))
+#define PAL_PROCESS_DATA_PAGE __attribute__((section(".process_data"), aligned(4096)))
+#else
+#define PAL_PROCESS_DATA
+#define PAL_PROCESS_DATA_PAGE
+#endif
+
 void init_slab_mgr(void);
+#if defined(PAL_HOST_VM) && defined(__x86_64__)
+int pal_enable_shared_frame_slab_allocator(void);
+/* Drops one reference of a handle shared with another process; true if others still hold it. */
+bool vm_handle_release_share(PAL_HANDLE handle);
+/* Per-process record of the handles given to the LibOS, destroyed when the process exits. */
+void vm_track_handle(PAL_HANDLE handle);
+void vm_untrack_handle(PAL_HANDLE handle);
+#define PAL_TRACK_HANDLE(ret, handle)              \
+    do {                                           \
+        if ((ret) >= 0 && (handle))                \
+            vm_track_handle(handle);               \
+    } while (0)
+#else
+#define PAL_TRACK_HANDLE(ret, handle) do {} while (0)
+#endif
 void* malloc(size_t size);
 void* calloc(size_t num, size_t size);
 void free(void* mem);

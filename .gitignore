@@ -71,5 +71,6 @@ built-debug
 /libos/test/ltp/install
 
 .ltp-results/
+.mp-probes/
 /.syscall-profiles/
 /.game/

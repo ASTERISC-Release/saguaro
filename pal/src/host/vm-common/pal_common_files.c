@@ -25,6 +25,13 @@
 #define DIRBUF_SIZE 1024
 #define DT_DIR      4
 
+#ifdef __x86_64__
+static struct memory_address_space* current_address_space(void) {
+    struct pal_tcb_vm* tcb = (struct pal_tcb_vm*)pal_get_tcb();
+    return tcb ? tcb->kernel_thread.address_space : NULL;
+}
+#endif
+
 bool g_use_trusted_files = false; /* only TDX PAL will set this */
 
 /* out_modified_path is allocated by this func; must be freed by the caller */
@@ -106,6 +113,104 @@ out:
     free(old_resolved_path);
     free(new_realpath_with_slash);
     free(new_resolved_path);
+    return ret;
+}
+
+int pal_common_file_unlink_path(const char* uri) {
+    int ret;
+    char* modified = NULL;
+    char* dir = NULL;
+    char* base = NULL;
+    char* resolved_dir = NULL;
+    ret = extract_dir_and_base(uri, &modified, &dir, &base);
+    if (ret < 0)
+        goto out;
+    ret = realpath(dir, /*got_path=*/NULL, &resolved_dir);
+    if (ret < 0)
+        goto out;
+    uint64_t dir_nodeid;
+    ret = virtio_fs_fuse_lookup(resolved_dir, &dir_nodeid, /*out_attr=*/NULL);
+    if (ret < 0)
+        goto out;
+    ret = virtio_fs_fuse_unlink(dir_nodeid, base);
+out:
+    free(modified);
+    free(resolved_dir);
+    return ret;
+}
+
+int pal_common_file_rename_path(const char* old_uri, const char* new_uri) {
+    return file_or_dir_rename(old_uri, new_uri);
+}
+
+int pal_common_file_symlink(const char* target, const char* uri) {
+    int ret;
+    char* modified_path = NULL;
+    char* dir_path = NULL;
+    char* base_path = NULL;
+    char* resolved_dir = NULL;
+    ret = extract_dir_and_base(uri, &modified_path, &dir_path, &base_path);
+    if (ret < 0)
+        goto out;
+    ret = realpath(dir_path, /*got_path=*/NULL, &resolved_dir);
+    if (ret < 0)
+        goto out;
+    uint64_t dir_nodeid;
+    ret = virtio_fs_fuse_lookup(resolved_dir, &dir_nodeid, /*out_attr=*/NULL);
+    if (ret < 0)
+        goto out;
+    ret = virtio_fs_fuse_symlink(dir_nodeid, base_path, target);
+out:
+    free(modified_path);
+    free(resolved_dir);
+    return ret;
+}
+
+int pal_common_file_link(const char* old_uri, const char* new_uri) {
+    int ret;
+    char* old_modified = NULL;
+    char* old_dir = NULL;
+    char* old_base = NULL;
+    char* old_resolved_dir = NULL;
+    char* old_resolved_path = NULL;
+    char* new_modified = NULL;
+    char* new_dir = NULL;
+    char* new_base = NULL;
+    char* new_resolved_dir = NULL;
+
+    ret = extract_dir_and_base(old_uri, &old_modified, &old_dir, &old_base);
+    if (ret < 0)
+        goto out;
+    ret = realpath(old_dir, /*got_path=*/NULL, &old_resolved_dir);
+    if (ret < 0)
+        goto out;
+    old_resolved_path = alloc_concat3(old_resolved_dir, -1, "/", 1, old_base, -1);
+    if (!old_resolved_path) {
+        ret = -PAL_ERROR_NOMEM;
+        goto out;
+    }
+    uint64_t old_nodeid;
+    ret = virtio_fs_fuse_lookup(old_resolved_path, &old_nodeid, /*out_attr=*/NULL);
+    if (ret < 0)
+        goto out;
+
+    ret = extract_dir_and_base(new_uri, &new_modified, &new_dir, &new_base);
+    if (ret < 0)
+        goto out;
+    ret = realpath(new_dir, /*got_path=*/NULL, &new_resolved_dir);
+    if (ret < 0)
+        goto out;
+    uint64_t new_dir_nodeid;
+    ret = virtio_fs_fuse_lookup(new_resolved_dir, &new_dir_nodeid, /*out_attr=*/NULL);
+    if (ret < 0)
+        goto out;
+    ret = virtio_fs_fuse_link(old_nodeid, new_dir_nodeid, new_base);
+out:
+    free(old_modified);
+    free(old_resolved_dir);
+    free(old_resolved_path);
+    free(new_modified);
+    free(new_resolved_dir);
     return ret;
 }
 
@@ -378,11 +483,113 @@ void pal_common_file_destroy(struct pal_handle* handle) {
     free(handle);
 }
 
+#ifdef __x86_64__
+/*
+ * Writable MAP_SHARED file mappings of processes with their own address spaces (experimental
+ * multiprocess support). Every process mapping the same host file (same FUSE node) maps the same
+ * frames, so stores are visible to all of them, as with Linux's page cache. The cache keeps its
+ * frames until the VM exits, and the frames are not written back to the host file: the data is
+ * shared between guest processes only. This is what POSIX shared memory (`/dev/shm`) needs.
+ */
+struct shared_file_cache {
+    struct shared_file_cache* next;
+    uint64_t nodeid;
+    size_t frames_count;
+    uintptr_t* frames; /* 0 = page not loaded yet */
+};
+
+static struct shared_file_cache* g_shared_file_caches;
+static spinlock_t g_shared_file_caches_lock = INIT_SPINLOCK_UNLOCKED;
+
+/* Returns the frame of page `page` of the file, loading it on first use. */
+static int shared_file_page(struct pal_handle* handle, uint64_t page, uintptr_t* out_frame) {
+    uintptr_t frame = 0;
+    spinlock_lock(&g_shared_file_caches_lock);
+    struct shared_file_cache* cache = g_shared_file_caches;
+    while (cache && cache->nodeid != handle->file.nodeid)
+        cache = cache->next;
+    if (!cache) {
+        cache = calloc(1, sizeof(*cache));
+        if (!cache) {
+            spinlock_unlock(&g_shared_file_caches_lock);
+            return -PAL_ERROR_NOMEM;
+        }
+        cache->nodeid = handle->file.nodeid;
+        cache->next = g_shared_file_caches;
+        g_shared_file_caches = cache;
+    }
+    if (page >= cache->frames_count) {
+        size_t new_count = MAX(page + 1, cache->frames_count * 2);
+        uintptr_t* frames = calloc(new_count, sizeof(*frames));
+        if (!frames) {
+            spinlock_unlock(&g_shared_file_caches_lock);
+            return -PAL_ERROR_NOMEM;
+        }
+        if (cache->frames_count)
+            memcpy(frames, cache->frames, cache->frames_count * sizeof(*frames));
+        free(cache->frames);
+        cache->frames = frames;
+        cache->frames_count = new_count;
+    }
+    frame = cache->frames[page];
+    spinlock_unlock(&g_shared_file_caches_lock);
+    if (frame) {
+        *out_frame = frame;
+        return 0;
+    }
+
+    /* load outside the lock (the FUSE request may sleep); another process may win the race */
+    int ret = memory_frame_alloc(&frame);
+    if (ret < 0)
+        return ret;
+    ret = emulate_file_map_via_read(handle->file.nodeid, handle->file.fh,
+                                    memory_frame_pointer(frame), page * PAGE_SIZE, PAGE_SIZE);
+    if (ret < 0) {
+        memory_frame_free(frame);
+        return ret;
+    }
+    spinlock_lock(&g_shared_file_caches_lock);
+    if (cache->frames[page]) {
+        memory_frame_free(frame);
+        frame = cache->frames[page];
+    } else {
+        cache->frames[page] = frame;
+    }
+    spinlock_unlock(&g_shared_file_caches_lock);
+    *out_frame = frame;
+    return 0;
+}
+
+static int shared_file_map(struct pal_handle* handle, struct memory_address_space* space,
+                           void* addr, pal_prot_flags_t prot, uint64_t offset, uint64_t size) {
+    bool execute = !!(prot & PAL_PROT_EXEC);
+    for (uint64_t done = 0; done < size; done += PAGE_SIZE) {
+        uintptr_t frame;
+        int ret = shared_file_page(handle, (offset + done) / PAGE_SIZE, &frame);
+        if (ret == 0)
+            ret = memory_address_space_map_shared_frame(space, (uintptr_t)addr + done, frame,
+                                                        /*write=*/true, execute);
+        if (ret < 0) {
+            if (done)
+                (void)memory_address_space_free(space, addr, done);
+            return ret;
+        }
+    }
+    return memory_address_space_flush_range((uintptr_t)addr, size);
+}
+#endif
+
 int pal_common_file_map(struct pal_handle* handle, void* addr, pal_prot_flags_t prot,
                         uint64_t offset, uint64_t size) {
     int ret;
 
     assert(IS_ALLOC_ALIGNED(offset) && IS_ALLOC_ALIGNED(size));
+
+#ifdef __x86_64__
+    if (!(prot & PAL_PROT_WRITECOPY) && (prot & PAL_PROT_WRITE) && memory_frame_pool_active()
+            && current_address_space() && !handle->file.chunk_hashes)
+        return shared_file_map(handle, current_address_space(), addr, prot, offset, size);
+#endif
 
     if (!(prot & PAL_PROT_WRITECOPY) && (prot & PAL_PROT_WRITE)) {
         log_warning("App tries to create a writable shared file mapping. This is impossible.");
@@ -394,7 +601,14 @@ int pal_common_file_map(struct pal_handle* handle, void* addr, pal_prot_flags_t 
     bool read  = !!(prot & PAL_PROT_READ);
     bool write = !!(prot & (PAL_PROT_WRITE | PAL_PROT_WRITECOPY));
     bool execute = !!(prot & PAL_PROT_EXEC);
+#ifdef __x86_64__
+    struct memory_address_space* address_space = current_address_space();
+    ret = address_space
+            ? memory_address_space_alloc(address_space, addr, size, read, /*write=*/true, execute)
+            : memory_alloc(addr, size, read, /*write=*/true, execute);
+#else
     ret = memory_alloc(addr, size, read, /*write=*/true, execute);
+#endif
     if (ret < 0)
         return ret;
 
@@ -434,7 +648,14 @@ int pal_common_file_map(struct pal_handle* handle, void* addr, pal_prot_flags_t 
 
     if (!write) {
         /* restore read-only permission */
+#ifdef __x86_64__
+        ret = address_space
+                ? memory_address_space_protect(address_space, addr, size, read,
+                                               /*write=*/false, execute)
+                : memory_protect(addr, size, read, /*write=*/false, execute);
+#else
         ret = memory_protect(addr, size, read, /*write=*/false, execute);
+#endif
         if (ret < 0) {
             log_error("Cannot restore read-only permission during file mmap, fatal.");
             BUG();
@@ -444,7 +665,14 @@ int pal_common_file_map(struct pal_handle* handle, void* addr, pal_prot_flags_t 
     ret = 0;
 out:
     if (ret < 0)
+#ifdef __x86_64__
+        if (address_space)
+            (void)memory_address_space_free(address_space, addr, size);
+        else
+            (void)memory_free(addr, size);
+#else
         (void)memory_free(addr, size);
+#endif
     return ret;
 }
 
@@ -494,9 +722,29 @@ int pal_common_file_attrquery(const char* type, const char* uri, PAL_STREAM_ATTR
 }
 
 int pal_common_file_attrsetbyhdl(struct pal_handle* handle, PAL_STREAM_ATTR* attr) {
-    struct fuse_setattr_in setattr = { .valid = FATTR_FH | FATTR_MODE,
-                                       .fh    = handle->file.fh,
-                                       .mode  = attr->share_flags };
+    struct fuse_setattr_in setattr = { .valid = FATTR_FH, .fh = handle->file.fh };
+    if (attr->set_atime) {
+        if (attr->atime_now) {
+            setattr.valid |= FATTR_ATIME_NOW;
+        } else {
+            setattr.valid |= FATTR_ATIME;
+            setattr.atime = attr->atime.tv_sec;
+            setattr.atimensec = attr->atime.tv_nsec;
+        }
+    }
+    if (attr->set_mtime) {
+        if (attr->mtime_now) {
+            setattr.valid |= FATTR_MTIME_NOW;
+        } else {
+            setattr.valid |= FATTR_MTIME;
+            setattr.mtime = attr->mtime.tv_sec;
+            setattr.mtimensec = attr->mtime.tv_nsec;
+        }
+    }
+    if (!attr->set_atime && !attr->set_mtime) {
+        setattr.valid |= FATTR_MODE;
+        setattr.mode = attr->share_flags;
+    }
     return virtio_fs_fuse_setattr(handle->file.nodeid, &setattr);
 }
 

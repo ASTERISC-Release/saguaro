@@ -9,10 +9,12 @@
 #define _POSIX_C_SOURCE 200809L  /* for SSIZE_MAX */
 #include <limits.h>
 #include <stdalign.h>
+#include <linux/falloc.h>
 
 #include "libos_fs.h"
 #include "libos_graphics.h"
 #include "libos_handle.h"
+#include "libos_inotify.h"
 #include "libos_internal.h"
 #include "libos_lock.h"
 #include "libos_process.h"
@@ -40,6 +42,19 @@ ssize_t do_handle_read(struct libos_handle* hdl, void* buf, size_t count) {
     return ret;
 }
 
+/*
+ * A memfd reopened through /proc/self/fd/N shares one handle with the original descriptor but may
+ * have a different access mode (the kernel keeps the mode per open file description); the mode is
+ * recorded on the fd table entry, so enforce it there for memfd descriptors. Other file
+ * descriptions of the same handle are unaffected (their entry carries the handle's own mode).
+ */
+static bool fd_memfd_access_denied(int fd, struct libos_handle* hdl, int mask) {
+    if (!hdl->is_memfd)
+        return false;
+    int mode = get_fd_acc_mode((uint32_t)fd, /*handle_map=*/NULL);
+    return mode >= 0 && !(mode & mask);
+}
+
 long libos_syscall_read(int fd, void* buf, size_t count) {
     long retval;
     if (!is_user_memory_writable(buf, count))
@@ -48,6 +63,11 @@ long libos_syscall_read(int fd, void* buf, size_t count) {
     struct libos_handle* hdl = get_fd_handle(fd, NULL, NULL);
     if (!hdl)
         return -EBADF;
+
+    if (fd_memfd_access_denied(fd, hdl, MAY_READ)) {
+        put_handle(hdl);
+        return -EBADF;
+    }
 
     #ifdef ENABLE_GRAPHICS
         if(hdl->type == TYPE_HOST){
@@ -66,6 +86,8 @@ long libos_syscall_read(int fd, void* buf, size_t count) {
     #endif
 
     ssize_t ret = do_handle_read(hdl, buf, count);
+    if (ret > 0 && hdl->dentry && hdl->dentry->inode && S_ISREG(hdl->dentry->inode->type))
+        libos_inotify_file_event(hdl->dentry, IN_ACCESS);
     put_handle(hdl);
     if (ret == -EINTR) {
         ret = -ERESTARTSYS;
@@ -74,6 +96,9 @@ long libos_syscall_read(int fd, void* buf, size_t count) {
 }
 
 ssize_t do_handle_write(struct libos_handle* hdl, const void* buf, size_t count) {
+    int seal_ret = libos_memfd_check_write(hdl, hdl->pos, count);
+    if (seal_ret < 0)
+        return seal_ret;
     if (!(hdl->acc_mode & MAY_WRITE))
         return -EBADF;
 
@@ -101,6 +126,11 @@ long libos_syscall_write(int fd, const void* buf, size_t count) {
     if (!hdl)
         return -EBADF;
 
+    if (fd_memfd_access_denied(fd, hdl, MAY_WRITE)) {
+        put_handle(hdl);
+        return -EBADF;
+    }
+
     #ifdef ENABLE_GRAPHICS
         if(hdl->type == TYPE_HOST){
             log_debug("redirecting write(%d, 0x%lx, %d) to host", fd, buf, count);
@@ -119,6 +149,8 @@ long libos_syscall_write(int fd, const void* buf, size_t count) {
     #endif
 
     ssize_t ret = do_handle_write(hdl, buf, count);
+    if (ret > 0 && hdl->dentry && hdl->dentry->inode && S_ISREG(hdl->dentry->inode->type))
+        libos_inotify_file_event(hdl->dentry, IN_MODIFY);
     put_handle(hdl);
     if (ret == -EINTR) {
         ret = -ERESTARTSYS;
@@ -198,12 +230,66 @@ out:
     return ret;
 }
 
-long libos_syscall_openat(int dfd, const char* filename, int flags, int mode) {
+static long do_openat(int dfd, const char* filename, int flags, int mode, bool user_pointer) {
     struct libos_handle* hdl;
     int ret = 0;
 
-    if (!is_user_string_readable(filename))
+    if (user_pointer && !is_user_string_readable(filename))
         return -EFAULT;
+
+    /* procfs normally resolves /proc/self/fd/N through the target pathname. A memfd has no
+     * pathname after creation, so reopen it by duplicating the live LibOS handle instead. */
+    static const char proc_fd_prefix[] = "/proc/self/fd/";
+    if (!strncmp(filename, proc_fd_prefix, sizeof(proc_fd_prefix) - 1) &&
+        !(flags & ~(O_CLOEXEC | O_LARGEFILE | O_ACCMODE | O_CREAT | O_TRUNC))) {
+        const char* p = filename + sizeof(proc_fd_prefix) - 1;
+        if (*p >= '0' && *p <= '9') {
+            unsigned long target_fd = 0;
+            do {
+                unsigned int digit = (unsigned int)(*p - '0');
+                if (target_fd > (UINT32_MAX - digit) / 10)
+                    return -EBADF;
+                target_fd = target_fd * 10 + digit;
+                p++;
+            } while (*p >= '0' && *p <= '9');
+            if (!*p) {
+                struct libos_handle* target = get_fd_handle((int)target_fd, NULL, NULL);
+                if (target && target->is_memfd) {
+                    /* A memfd reopened through /proc/self/fd/N gets full read-write access (the
+                     * documented memfd behavior — this is why the seals exist); after
+                     * F_SEAL_FUTURE_WRITE a new writable descriptor is refused with EPERM. */
+                    lock(&target->lock);
+                    bool refuse_write = (target->memfd_seals & LIBOS_F_SEAL_FUTURE_WRITE)
+                                        && (flags & O_ACCMODE) != O_RDONLY;
+                    unlock(&target->lock);
+                    if (refuse_write) {
+                        put_handle(target);
+                        return -EPERM;
+                    }
+                    if (flags & O_TRUNC) {
+                        long trunc_ret = libos_syscall_ftruncate((int)target_fd, 0);
+                        if (trunc_ret < 0) {
+                            put_handle(target);
+                            return trunc_ret;
+                        }
+                    }
+                    int new_fd = set_new_fd_handle(target,
+                        (flags & O_CLOEXEC) ? FD_CLOEXEC : 0, NULL);
+                    int acc_mode = 0;
+                    if ((flags & O_ACCMODE) != O_WRONLY)
+                        acc_mode |= MAY_READ;
+                    if ((flags & O_ACCMODE) != O_RDONLY)
+                        acc_mode |= MAY_WRITE;
+                    if (new_fd >= 0)
+                        set_fd_acc_mode((uint32_t)new_fd, acc_mode, NULL);
+                    put_handle(target);
+                    return new_fd;
+                }
+                if (target)
+                    put_handle(target);
+            }
+        }
+    }
 
     /* Graphics handle to redirect open() system call */
 #ifdef ENABLE_GRAPHICS
@@ -284,6 +370,10 @@ long libos_syscall_openat(int dfd, const char* filename, int flags, int mode) {
         }
         goto out_hdl;
     }
+
+    /* inotify: `IN_OPEN` on the opened object (regular files; the kernel's own event) */
+    if (!hdl->is_dir && hdl->dentry && hdl->dentry->inode && S_ISREG(hdl->dentry->inode->type))
+        libos_inotify_file_event(hdl->dentry, IN_OPEN);
 #ifdef ENABLE_GRAPHICS
 graphics_cont:
     if (use_graphics_host) {
@@ -308,6 +398,14 @@ out:
     if (dir)
         put_dentry(dir);
     return ret;
+}
+
+long libos_syscall_openat(int dfd, const char* filename, int flags, int mode) {
+    return do_openat(dfd, filename, flags, mode, true);
+}
+
+long libos_openat_internal(int dfd, const char* filename, int flags, int mode) {
+    return do_openat(dfd, filename, flags, mode, false);
 }
 
 long libos_syscall_close(int fd) {
@@ -455,6 +553,10 @@ long libos_syscall_pread64(int fd, char* buf, size_t count, loff_t offset) {
         ret = -EBADF;
         goto out;
     }
+    if (fd_memfd_access_denied(fd, hdl, MAY_READ)) {
+        ret = -EBADF;
+        goto out;
+    }
 
     if (!fs || !fs->fs_ops)
         goto out;
@@ -495,6 +597,14 @@ long libos_syscall_pwrite64(int fd, char* buf, size_t count, loff_t offset) {
 
     if (!(hdl->acc_mode & MAY_WRITE)) {
         ret = -EBADF;
+        goto out;
+    }
+    if (fd_memfd_access_denied(fd, hdl, MAY_WRITE)) {
+        ret = -EBADF;
+        goto out;
+    }
+    ret = libos_memfd_check_write(hdl, offset, count);
+    if (ret < 0) {
         goto out;
     }
 
@@ -717,6 +827,55 @@ long libos_syscall_fdatasync(int fd) {
     return libos_syscall_fsync(fd);
 }
 
+long libos_syscall_sync(void) {
+    /* Filesystem writes are issued synchronously by the PAL callbacks. */
+    return 0;
+}
+
+long libos_syscall_syncfs(int fd) {
+    struct libos_handle* hdl = get_fd_handle(fd, NULL, NULL);
+    if (!hdl)
+        return -EBADF;
+    put_handle(hdl);
+    return libos_syscall_fsync(fd);
+}
+
+long libos_syscall_sync_file_range(int fd, loff_t offset, loff_t nbytes, unsigned int flags) {
+    const unsigned int supported = 1U | 2U | 4U;
+    if (offset < 0 || nbytes < 0 || (flags & ~supported))
+        return -EINVAL;
+    struct libos_handle* hdl = get_fd_handle(fd, NULL, NULL);
+    if (!hdl)
+        return -EBADF;
+    if (hdl->inode && hdl->inode->type != S_IFREG && hdl->inode->type != S_IFDIR) {
+        put_handle(hdl);
+        return -ESPIPE;
+    }
+    bool can_flush = hdl->fs && hdl->fs->fs_ops && hdl->fs->fs_ops->flush;
+    put_handle(hdl);
+    if ((flags & 2U) && can_flush)
+        return libos_syscall_fsync(fd);
+    return 0;
+}
+
+long libos_syscall_readahead(int fd, loff_t offset, size_t count) {
+    __UNUSED(count);
+    if (offset < 0)
+        return -EINVAL;
+    struct libos_handle* hdl = get_fd_handle(fd, NULL, NULL);
+    if (!hdl)
+        return -EBADF;
+    long ret = 0;
+    if (!(hdl->acc_mode & MAY_READ))
+        ret = -EBADF;
+    else if (hdl->is_dir)
+        ret = -EISDIR;
+    else if (!hdl->fs || !hdl->fs->fs_ops || !hdl->fs->fs_ops->seek)
+        ret = -EINVAL;
+    put_handle(hdl);
+    return ret;
+}
+
 long libos_syscall_truncate(const char* path, loff_t length) {
     if (length < 0)
         return -EINVAL;
@@ -789,6 +948,13 @@ long libos_syscall_ftruncate(int fd, loff_t length) {
         ret = -EINVAL;
         goto out;
     }
+    if (hdl->is_memfd && hdl->inode) {
+        if ((length < hdl->inode->size && (hdl->memfd_seals & LIBOS_F_SEAL_SHRINK)) ||
+            (length > hdl->inode->size && (hdl->memfd_seals & LIBOS_F_SEAL_GROW))) {
+            ret = -EPERM;
+            goto out;
+        }
+    }
 
     ret = fs->fs_ops->truncate(hdl, length);
 out:
@@ -804,8 +970,9 @@ long libos_syscall_fallocate(int fd, int mode, loff_t offset, loff_t len) {
     if (len <= 0) {
         return -EINVAL;
     }
-    if (mode) {
-        log_warning("fallocate only supported with 0 as mode");
+    const int punch_hole_mode = FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE;
+    if (mode && mode != punch_hole_mode) {
+        log_warning("fallocate mode 0x%x is not supported", mode);
         return -ENOSYS;
     }
 
@@ -840,6 +1007,47 @@ long libos_syscall_fallocate(int fd, int mode, loff_t offset, loff_t len) {
     loff_t end;
     if (__builtin_add_overflow(offset, len, &end)) {
         ret = -EFBIG;
+        goto out;
+    }
+
+    file_off_t current_size;
+    lock(&handle->inode->lock);
+    current_size = handle->inode->size;
+    unlock(&handle->inode->lock);
+    if (handle->is_memfd) {
+        if ((handle->memfd_seals & LIBOS_F_SEAL_WRITE) &&
+            mode == punch_hole_mode) {
+            ret = -EPERM;
+            goto out;
+        }
+        if ((handle->memfd_seals & LIBOS_F_SEAL_GROW) && mode == 0 && end > current_size) {
+            ret = -EPERM;
+            goto out;
+        }
+    }
+
+    if (mode == punch_hole_mode) {
+        static const char zeros[4096];
+        lock(&handle->inode->lock);
+        file_off_t size = handle->inode->size;
+        unlock(&handle->inode->lock);
+        file_off_t punch_end = end < size ? end : size;
+        loff_t pos = offset;
+        while (pos < punch_end) {
+            loff_t remaining = punch_end - pos;
+            size_t count = remaining < (loff_t)sizeof(zeros) ? (size_t)remaining : sizeof(zeros);
+            ssize_t written = fs->fs_ops->write(handle, zeros, count, &pos);
+            if (written < 0) {
+                ret = (int)written;
+                break;
+            }
+            if (!written) {
+                ret = -EIO;
+                break;
+            }
+        }
+        if (pos >= punch_end)
+            ret = 0;
         goto out;
     }
 

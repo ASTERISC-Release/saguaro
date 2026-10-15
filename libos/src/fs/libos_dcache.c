@@ -238,8 +238,25 @@ bool dentry_is_ancestor(struct libos_dentry* anc, struct libos_dentry* dent) {
     return false;
 }
 
+/*
+ * An inode's number is the hash of the absolute path of the first dentry asked about it, fixed from
+ * then on: hard links (which share the inode) report the same number, the number survives a
+ * rename, and it is the same in every process of the tree. The inode carries it through a
+ * checkpoint (fork), and a process that looks the path up on its own computes the same hash. (A
+ * per-process counter gave a forked child different numbers than its parent, e.g. for `/`.)
+ */
 ino_t dentry_ino(struct libos_dentry* dent) {
-    return hash_abs_path(dent);
+    struct libos_inode* inode = dent->inode;
+    if (!inode)
+        return hash_abs_path(dent);
+    ino_t ino = __atomic_load_n(&inode->ino, __ATOMIC_RELAXED);
+    if (ino)
+        return ino;
+    ino_t new_ino = hash_abs_path(dent) ?: 1;
+    if (!__atomic_compare_exchange_n(&inode->ino, &ino, new_ino, /*weak=*/false, __ATOMIC_RELAXED,
+                                     __ATOMIC_RELAXED))
+        return ino; /* another thread set it first */
+    return new_ino;
 }
 
 static size_t dentry_path_size(struct libos_dentry* dent, bool relative) {
@@ -427,9 +444,14 @@ struct libos_inode* get_new_inode(struct libos_mount* mount, mode_t type, mode_t
     inode->type = type;
     inode->perm = perm;
     inode->size = 0;
+    inode->nlink = 1;
+    inode->ino = 0; /* set by the first dentry_ino() */
     inode->ctime = 0;
+    inode->ctime_nsec = 0;
     inode->mtime = 0;
+    inode->mtime_nsec = 0;
     inode->atime = 0;
+    inode->atime_nsec = 0;
 
     struct libos_thread* current = get_cur_thread();
     lock(&current->lock);
@@ -684,13 +706,18 @@ BEGIN_CP_FUNC(inode) {
         new_inode->type = inode->type;
         new_inode->perm = inode->perm;
         new_inode->size = inode->size;
+        new_inode->nlink = inode->nlink;
+        new_inode->ino = __atomic_load_n(&inode->ino, __ATOMIC_RELAXED);
 
         new_inode->uid = inode->uid;
         new_inode->gid = inode->gid;
 
         new_inode->ctime = inode->ctime;
+        new_inode->ctime_nsec = inode->ctime_nsec;
         new_inode->mtime = inode->mtime;
+        new_inode->mtime_nsec = inode->mtime_nsec;
         new_inode->atime = inode->atime;
+        new_inode->atime_nsec = inode->atime_nsec;
 
         DO_CP_MEMBER(mount, inode, new_inode, mount);
         DO_CP_MEMBER(fs, inode, new_inode, fs);

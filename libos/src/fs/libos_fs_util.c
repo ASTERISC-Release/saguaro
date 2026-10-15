@@ -65,10 +65,13 @@ static int generic_istat(struct libos_inode* inode, struct stat* buf) {
     buf->st_uid  = inode->uid;
     buf->st_gid  = inode->gid;
     buf->st_atime = inode->atime;
+    buf->st_atime_nsec = inode->atime_nsec;
     buf->st_mtime = inode->mtime;
+    buf->st_mtime_nsec = inode->mtime_nsec;
     buf->st_ctime = inode->ctime;
     if (inode->type == S_IFCHR)
         buf->st_rdev = libos_makedev(inode->rdev_major, inode->rdev_minor);
+    buf->st_ctime_nsec = inode->ctime_nsec;
 
     /* Some programs (e.g. some tests from LTP) require this value. We've picked some random,
      * pretty looking constant - exact value should not affect anything (perhaps except
@@ -81,7 +84,7 @@ static int generic_istat(struct libos_inode* inode, struct stat* buf) {
      * to keep track of the exact value (we would have to list the directory, and also take into
      * account synthetic files created by Gramine, such as named pipes and sockets).
      */
-    buf->st_nlink = (inode->type == S_IFDIR ? 2 : 1);
+    buf->st_nlink = (inode->type == S_IFDIR ? 2 : inode->nlink);
 
     if (inode->mount->uri)
         buf->st_dev = hash_str(inode->mount->uri);

@@ -30,6 +30,11 @@ typedef struct toml_table_t toml_table_t;
 
 typedef uint32_t    PAL_IDX; /*!< an index */
 
+typedef struct {
+    int64_t tv_sec;
+    int64_t tv_nsec;
+} PAL_TIMESPEC;
+
 /* maximum length of URIs */
 #define URI_MAX 4096
 
@@ -487,6 +492,12 @@ typedef struct _PAL_STREAM_ATTR {
     bool nonblocking;
     pal_share_flags_t share_flags;
     size_t pending_size;
+    bool set_atime;
+    bool set_mtime;
+    bool atime_now;
+    bool mtime_now;
+    PAL_TIMESPEC atime;
+    PAL_TIMESPEC mtime;
     union {
         struct {
             uint64_t linger;
@@ -541,6 +552,12 @@ int PalStreamAttributesSetByHandle(PAL_HANDLE handle, PAL_STREAM_ATTR* attr);
  * \brief This API changes the name of an open stream.
  */
 int PalStreamChangeName(PAL_HANDLE handle, const char* typed_uri);
+
+/* Create a symbolic or hard link between host-backed file URIs. */
+int PalFileCreateSymlink(const char* target, const char* typed_uri);
+int PalFileCreateLink(const char* old_typed_uri, const char* new_typed_uri);
+int PalFileUnlink(const char* typed_uri);
+int PalFileRename(const char* old_typed_uri, const char* new_typed_uri);
 
 struct pal_socket_addr {
     enum pal_socket_domain domain;

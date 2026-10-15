@@ -80,6 +80,12 @@ SECTIONS
   .data          : { *(.data .data.*) } :rw
   .bss           : { *(.bss .bss.*) *(COMMON) } :rw
 
+  . = ALIGN(4096);
+  PROVIDE_HIDDEN (__process_data_start = .);
+  .process_data  : { *(.process_data) } :rw
+  . = ALIGN(4096);
+  PROVIDE_HIDDEN (__process_data_end = .);
+
   PROVIDE_HIDDEN (__data_end = .);
 
   /* Executable (rx) segment */

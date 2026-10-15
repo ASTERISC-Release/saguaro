@@ -25,6 +25,9 @@
 #include "perm.h"
 #include "stat.h"
 
+#define UTIME_NOW  ((1L << 30) - 1)
+#define UTIME_OMIT ((1L << 30) - 2)
+
 /*
  * Always add a read permission to files created on host, because PAL requires opening the file even
  * for operations such as `unlink` or `chmod`.
@@ -120,7 +123,8 @@ out:
 /* Open a temporary read-only PAL handle for a file (used by `unlink` etc.) */
 static int chroot_temp_open(struct libos_dentry* dent, PAL_HANDLE* out_palhdl) {
     char* uri;
-    int ret = dentry_uri(dent, dent->inode->type, &uri);
+    mode_t uri_type = dent->inode->type == S_IFDIR ? S_IFDIR : S_IFREG;
+    int ret = dentry_uri(dent, uri_type, &uri);
     if (ret < 0)
         return ret;
 
@@ -242,10 +246,16 @@ static ssize_t chroot_write(struct libos_handle* hdl, const void* buf, size_t co
     assert(actual_count <= count);
     if (hdl->inode->type == S_IFREG) {
         *pos += actual_count;
-        /* Update file size if we just wrote past the end of file */
+        uint64_t time_us;
+        bool have_time = PalSystemTimeQuery(&time_us) >= 0;
+        /* Update cached metadata after a host-backed write. */
         lock(&hdl->inode->lock);
         if (hdl->inode->size < *pos)
             hdl->inode->size = *pos;
+        if (have_time) {
+            hdl->inode->mtime = time_us / 1000000;
+            hdl->inode->mtime_nsec = (time_us % 1000000) * 1000;
+        }
         unlock(&hdl->inode->lock);
     }
 
@@ -365,6 +375,16 @@ static int chroot_unlink(struct libos_dentry* dent) {
 
     int ret;
 
+    if (dent->inode->type == S_IFLNK) {
+        char* uri = NULL;
+        ret = dentry_uri(dent, S_IFREG, &uri);
+        if (ret < 0)
+            return ret;
+        ret = PalFileUnlink(uri);
+        free(uri);
+        return ret < 0 ? pal_to_unix_errno(ret) : 0;
+    }
+
     PAL_HANDLE palhdl;
     ret = chroot_temp_open(dent, &palhdl);
     if (ret < 0)
@@ -378,6 +398,77 @@ static int chroot_unlink(struct libos_dentry* dent) {
     return 0;
 }
 
+static int chroot_symlink(const char* target, struct libos_dentry* dent) {
+    assert(locked(&g_dcache_lock));
+    assert(!dent->inode);
+
+    char* target_copy = strdup(target);
+    if (!target_copy)
+        return -ENOMEM;
+    char* uri = NULL;
+    /* PAL file URIs describe the backing object class and have no symlink URI type. */
+    int ret = dentry_uri(dent, S_IFREG, &uri);
+    if (ret < 0)
+        goto out;
+    ret = chroot_setup_dentry(dent, S_IFLNK, PERM_rwxrwxrwx, strlen(target));
+    if (ret < 0)
+        goto out;
+    ret = PalFileCreateSymlink(target, uri);
+    if (ret < 0) {
+        ret = pal_to_unix_errno(ret);
+        put_inode(dent->inode);
+        dent->inode = NULL;
+        goto out;
+    }
+    dent->inode->data = target_copy;
+    target_copy = NULL;
+out:
+    free(target_copy);
+    free(uri);
+    return ret;
+}
+
+static int chroot_link(struct libos_dentry* old, struct libos_dentry* new) {
+    assert(locked(&g_dcache_lock));
+    assert(old->inode && !new->inode);
+
+    char* old_uri = NULL;
+    char* new_uri = NULL;
+    mode_t uri_type = old->inode->type == S_IFDIR ? S_IFDIR : S_IFREG;
+    int ret = dentry_uri(old, uri_type, &old_uri);
+    if (ret < 0)
+        goto out;
+    ret = dentry_uri(new, uri_type, &new_uri);
+    if (ret < 0)
+        goto out;
+    ret = PalFileCreateLink(old_uri, new_uri);
+    if (ret < 0) {
+        ret = pal_to_unix_errno(ret);
+        goto out;
+    }
+    get_inode(old->inode);
+    new->inode = old->inode;
+    lock(&old->inode->lock);
+    old->inode->nlink++;
+    unlock(&old->inode->lock);
+out:
+    free(old_uri);
+    free(new_uri);
+    return ret;
+}
+
+static int chroot_follow_link(struct libos_dentry* dent, char** out_target) {
+    if (dent->inode->type != S_IFLNK || !dent->inode->data)
+        return -EINVAL;
+    *out_target = strdup(dent->inode->data);
+    return *out_target ? 0 : -ENOMEM;
+}
+
+static void chroot_idrop(struct libos_inode* inode) {
+    if (inode->type == S_IFLNK)
+        free(inode->data);
+}
+
 static int chroot_rename(struct libos_dentry* old, struct libos_dentry* new) {
     assert(locked(&g_dcache_lock));
     assert(old->inode);
@@ -385,7 +476,24 @@ static int chroot_rename(struct libos_dentry* old, struct libos_dentry* new) {
     int ret;
     char* new_uri = NULL;
 
-    ret = dentry_uri(new, old->inode->type, &new_uri);
+    if (old->inode->type == S_IFLNK) {
+        char* old_uri = NULL;
+        ret = dentry_uri(old, S_IFREG, &old_uri);
+        if (ret < 0)
+            return ret;
+        ret = dentry_uri(new, S_IFREG, &new_uri);
+        if (ret < 0) {
+            free(old_uri);
+            return ret;
+        }
+        ret = PalFileRename(old_uri, new_uri);
+        free(old_uri);
+        free(new_uri);
+        return ret < 0 ? pal_to_unix_errno(ret) : 0;
+    }
+
+    mode_t uri_type = old->inode->type == S_IFDIR ? S_IFDIR : S_IFREG;
+    ret = dentry_uri(new, uri_type, &new_uri);
     if (ret < 0)
         goto out;
 
@@ -428,6 +536,58 @@ static int chroot_chmod(struct libos_dentry* dent, mode_t perm) {
     return 0;
 }
 
+static int chroot_set_times(struct libos_dentry* dent, const struct __kernel_timespec times[2]) {
+    assert(locked(&g_dcache_lock));
+    assert(dent->inode);
+
+    if (times[0].tv_nsec == UTIME_OMIT && times[1].tv_nsec == UTIME_OMIT)
+        return 0;
+
+    PAL_HANDLE palhdl;
+    int ret = chroot_temp_open(dent, &palhdl);
+    if (ret < 0)
+        return ret;
+
+    PAL_STREAM_ATTR attr = {0};
+    if (times[0].tv_nsec != UTIME_OMIT) {
+        attr.set_atime = true;
+        attr.atime_now = times[0].tv_nsec == UTIME_NOW;
+        if (!attr.atime_now)
+            attr.atime = (PAL_TIMESPEC){.tv_sec = times[0].tv_sec, .tv_nsec = times[0].tv_nsec};
+    }
+    if (times[1].tv_nsec != UTIME_OMIT) {
+        attr.set_mtime = true;
+        attr.mtime_now = times[1].tv_nsec == UTIME_NOW;
+        if (!attr.mtime_now)
+            attr.mtime = (PAL_TIMESPEC){.tv_sec = times[1].tv_sec, .tv_nsec = times[1].tv_nsec};
+    }
+    ret = PalStreamAttributesSetByHandle(palhdl, &attr);
+    PalObjectDestroy(palhdl);
+    if (ret < 0)
+        return pal_to_unix_errno(ret);
+
+    uint64_t now_us;
+    if (PalSystemTimeQuery(&now_us) < 0)
+        return -EPERM;
+    time_t now = now_us / 1000000;
+    long now_nsec = (now_us % 1000000) * 1000;
+    lock(&dent->inode->lock);
+    if (times[0].tv_nsec != UTIME_OMIT) {
+        dent->inode->atime = times[0].tv_nsec == UTIME_NOW ? now : times[0].tv_sec;
+        /* The host file stores nanosecond precision; the PAL time query is microsecond based, so
+         * `UTIME_NOW` here is accurate to the microsecond. */
+        dent->inode->atime_nsec = times[0].tv_nsec == UTIME_NOW ? now_nsec : times[0].tv_nsec;
+    }
+    if (times[1].tv_nsec != UTIME_OMIT) {
+        dent->inode->mtime = times[1].tv_nsec == UTIME_NOW ? now : times[1].tv_sec;
+        dent->inode->mtime_nsec = times[1].tv_nsec == UTIME_NOW ? now_nsec : times[1].tv_nsec;
+    }
+    dent->inode->ctime = now;
+    dent->inode->ctime_nsec = now_nsec;
+    unlock(&dent->inode->lock);
+    return 0;
+}
+
 static int chroot_fchmod(struct libos_handle* hdl, mode_t perm) {
     int ret;
 
@@ -466,6 +626,11 @@ struct libos_d_ops chroot_d_ops = {
     .unlink  = &chroot_unlink,
     .rename  = &chroot_rename,
     .chmod   = &chroot_chmod,
+    .set_times = &chroot_set_times,
+    .symlink = &chroot_symlink,
+    .link = &chroot_link,
+    .follow_link = &chroot_follow_link,
+    .idrop = &chroot_idrop,
 };
 
 struct libos_fs chroot_builtin_fs = {

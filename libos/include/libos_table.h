@@ -10,6 +10,14 @@
 #include "libos_types.h"
 #include "linux_abi/futex.h"
 #include "linux_abi/sysinfo.h"
+#include <linux/signal.h> /* `struct sigevent`, for the POSIX timer prototypes */
+#include <linux/time.h>   /* `struct __kernel_itimerspec`, for the POSIX timers */
+
+struct __kernel_itimerspec; /* <linux/time.h> */
+
+struct utimbuf;
+struct __kernel_timeval;
+struct libos_handle;
 
 typedef void (*libos_syscall_t)(void);
 
@@ -29,7 +37,7 @@ long libos_syscall_poll(struct pollfd* fds, unsigned int nfds, int timeout);
 long libos_syscall_lseek(int fd, off_t offset, int origin);
 void* libos_syscall_mmap(void* addr, size_t length, int prot, int flags, int fd,
                          unsigned long offset);
-int libos_syscall_getrusage(int who, struct rusage* usage);
+long libos_syscall_getrusage(int who, struct __kernel_rusage* usage);
 long libos_syscall_mprotect(void* addr, size_t len, int prot);
 long libos_syscall_munmap(void* addr, size_t len);
 void* libos_syscall_brk(void* brk);
@@ -43,6 +51,23 @@ long libos_syscall_pread64(int fd, char* buf, size_t count, loff_t pos);
 long libos_syscall_pwrite64(int fd, char* buf, size_t count, loff_t pos);
 long libos_syscall_readv(unsigned long fd, struct iovec* vec, unsigned long vlen);
 long libos_syscall_writev(unsigned long fd, struct iovec* vec, unsigned long vlen);
+#ifdef __x86_64__
+long libos_syscall_preadv(unsigned long fd, struct iovec* vec, unsigned long vlen,
+                         unsigned long pos_l, unsigned long pos_h);
+long libos_syscall_pwritev(unsigned long fd, struct iovec* vec, unsigned long vlen,
+                          unsigned long pos_l, unsigned long pos_h);
+long libos_syscall_preadv2(unsigned long fd, struct iovec* vec, unsigned long vlen,
+                           unsigned long pos_l, unsigned long pos_h, int flags);
+long libos_syscall_pwritev2(unsigned long fd, struct iovec* vec, unsigned long vlen,
+                            unsigned long pos_l, unsigned long pos_h, int flags);
+#else
+long libos_syscall_preadv(unsigned long fd, struct iovec* vec, unsigned long vlen, loff_t offset);
+long libos_syscall_pwritev(unsigned long fd, struct iovec* vec, unsigned long vlen, loff_t offset);
+long libos_syscall_preadv2(unsigned long fd, struct iovec* vec, unsigned long vlen, loff_t offset,
+                           int flags);
+long libos_syscall_pwritev2(unsigned long fd, struct iovec* vec, unsigned long vlen, loff_t offset,
+                            int flags);
+#endif
 long libos_syscall_access(const char* file, mode_t mode);
 long libos_syscall_pipe(int* fildes);
 long libos_syscall_select(int nfds, struct linux_fd_set* readfds, struct linux_fd_set* writefds,
@@ -108,6 +133,17 @@ long libos_syscall_fcntl(int fd, int cmd, unsigned long arg);
 long libos_syscall_flock(unsigned int fd, unsigned int cmd);
 long libos_syscall_fsync(int fd);
 long libos_syscall_fdatasync(int fd);
+long libos_syscall_sync(void);
+long libos_syscall_syncfs(int fd);
+long libos_syscall_sync_file_range(int fd, loff_t offset, loff_t nbytes, unsigned int flags);
+long libos_syscall_readahead(int fd, loff_t offset, size_t count);
+long libos_syscall_copy_file_range(int fd_in, loff_t* off_in, int fd_out, loff_t* off_out,
+                                   size_t len, unsigned int flags);
+long libos_syscall_splice(int fd_in, loff_t* off_in, int fd_out, loff_t* off_out, size_t len,
+                          unsigned int flags);
+long libos_syscall_tee(int fd_in, int fd_out, size_t len, unsigned int flags);
+long libos_syscall_vmsplice(int fd, const struct iovec* iov, unsigned long nr_segs,
+                            unsigned int flags);
 long libos_syscall_truncate(const char* path, loff_t length);
 long libos_syscall_ftruncate(int fd, loff_t length);
 long libos_syscall_fallocate(int fd, int mode, loff_t offset, loff_t len);
@@ -195,6 +231,19 @@ long libos_syscall_statx(int dirfd, const char* pathname, unsigned int flags, un
 long libos_syscall_unlinkat(int dfd, const char* pathname, int flag);
 long libos_syscall_readlinkat(int dirfd, const char* file, char* buf, int bufsize);
 long libos_syscall_renameat(int olddfd, const char* pathname, int newdfd, const char* newname);
+long libos_syscall_renameat2(int olddfd, const char* oldpath, int newdfd, const char* newpath,
+                             unsigned int flags);
+long libos_syscall_utimensat(int dirfd, const char* pathname, const struct __kernel_timespec* times,
+                             int flags);
+long libos_syscall_utime(const char* pathname, const struct utimbuf* times);
+long libos_syscall_utimes(const char* pathname, const struct __kernel_timeval times[2]);
+long libos_syscall_futimesat(int dirfd, const char* pathname,
+                             const struct __kernel_timeval times[2]);
+long libos_syscall_symlink(const char* target, const char* linkpath);
+long libos_syscall_symlinkat(const char* target, int newdirfd, const char* linkpath);
+long libos_syscall_link(const char* oldpath, const char* newpath);
+long libos_syscall_linkat(int olddirfd, const char* oldpath, int newdirfd, const char* newpath,
+                          int flags);
 long libos_syscall_fchmodat(int dfd, const char* filename, mode_t mode);
 long libos_syscall_fchownat(int dfd, const char* filename, uid_t user, gid_t group, int flags);
 long libos_syscall_faccessat(int dfd, const char* filename, mode_t mode);
@@ -221,7 +270,46 @@ long libos_syscall_prlimit64(pid_t pid, int resource, const struct __kernel_rlim
 long libos_syscall_sendmmsg(int fd, struct mmsghdr* msg, unsigned int vlen, unsigned int flags);
 long libos_syscall_eventfd2(unsigned int count, int flags);
 long libos_syscall_eventfd(unsigned int count);
+long libos_syscall_timerfd_create(int clockid, int flags);
+long libos_syscall_timerfd_settime(int fd, int flags,
+                                   const struct __kernel_itimerspec* new_val,
+                                   struct __kernel_itimerspec* old_val);
+long libos_syscall_timerfd_gettime(int fd, struct __kernel_itimerspec* curr);
+long libos_syscall_signalfd(int fd, const __sigset_t* mask, size_t sizemask);
+long libos_syscall_signalfd4(int fd, const __sigset_t* mask, size_t sizemask, int flags);
+long libos_syscall_timer_create(int clockid, struct sigevent* evp, void** out_timerid);
+long libos_syscall_timer_settime(void* timerid, int flags,
+                                 const struct __kernel_itimerspec* new_val,
+                                 struct __kernel_itimerspec* old_val);
+long libos_syscall_timer_gettime(void* timerid, struct __kernel_itimerspec* curr);
+long libos_syscall_timer_getoverrun(void* timerid);
+long libos_syscall_timer_delete(void* timerid);
+
+/* inotify (see libos_inotify.h for the event API used by the filesystem paths) */
+long libos_syscall_inotify_init(void);
+long libos_syscall_inotify_init1(int flags);
+long libos_syscall_inotify_add_watch(int fd, char* pathname, unsigned int mask);
+long libos_syscall_inotify_rm_watch(int fd, int wd);
+
+/* Extended attributes: validated here, answered "not supported" (see libos_xattr.c) */
+long libos_syscall_setxattr(const char* path, const char* name, const void* value, size_t size,
+                            int flags);
+long libos_syscall_lsetxattr(const char* path, const char* name, const void* value, size_t size,
+                             int flags);
+long libos_syscall_fsetxattr(int fd, const char* name, const void* value, size_t size, int flags);
+long libos_syscall_getxattr(const char* path, const char* name, void* value, size_t size);
+long libos_syscall_lgetxattr(const char* path, const char* name, void* value, size_t size);
+long libos_syscall_fgetxattr(int fd, const char* name, void* value, size_t size);
+long libos_syscall_listxattr(const char* path, char* list, size_t size);
+long libos_syscall_llistxattr(const char* path, char* list, size_t size);
+long libos_syscall_flistxattr(int fd, char* list, size_t size);
+long libos_syscall_removexattr(const char* path, const char* name);
+long libos_syscall_lremovexattr(const char* path, const char* name);
+long libos_syscall_fremovexattr(int fd, const char* name);
+
 long libos_syscall_getcpu(unsigned* cpu, unsigned* node, void* unused_cache);
+long libos_syscall_personality(unsigned long persona);
+bool libos_personality_sticky_timeouts(void);
 long libos_syscall_getrandom(char* buf, size_t count, unsigned int flags);
 long libos_syscall_mlock2(unsigned long start, size_t len, int flags);
 long libos_syscall_sysinfo(struct sysinfo* info);
@@ -239,6 +327,26 @@ long libos_syscall_prctl(int option, unsigned long arg2, unsigned long arg3, uns
                          unsigned long arg5);
 long libos_syscall_getresuid(uid_t* ruid, uid_t* euid, uid_t* suid);
 long libos_syscall_getresgid(gid_t* rgid, gid_t* egid, gid_t* sgid);
+long libos_syscall_setresuid(uid_t ruid, uid_t euid, uid_t suid);
+long libos_syscall_setresgid(gid_t rgid, gid_t egid, gid_t sgid);
+long libos_syscall_setreuid(uid_t ruid, uid_t euid);
+long libos_syscall_setregid(gid_t rgid, gid_t egid);
+long libos_syscall_setfsuid(uid_t uid);
+long libos_syscall_setfsgid(gid_t gid);
+long libos_syscall_capget(void* header, void* data);
+long libos_syscall_capset(void* header, const void* data);
+long libos_syscall_memfd_create(const char* name, unsigned int flags);
+int libos_memfd_check_write(struct libos_handle* handle, loff_t offset, size_t count);
+long libos_syscall_shmget(int key, size_t size, int shmflg);
+long libos_syscall_shmat(int shmid, const void* shmaddr, int shmflg);
+long libos_syscall_shmctl(int shmid, int cmd, void* buf);
+long libos_syscall_shmdt(const void* shmaddr);
+long libos_syscall_msgget(int key, int msgflg);
+long libos_syscall_msgsnd(int msqid, const void* msgp, size_t msgsz, int msgflg);
+long libos_syscall_msgrcv(int msqid, void* msgp, size_t msgsz, long msgtyp, int msgflg);
+long libos_syscall_msgctl(int msqid, int cmd, void* buf);
+long libos_openat_internal(int dfd, const char* filename, int flags, int mode);
+long libos_unlink_internal(const char* pathname);
 
 long libos_syscall_kcmp(pid_t pid1, pid_t pid2, int type, unsigned long idx1, unsigned long idx2);
 

@@ -364,6 +364,26 @@ static inline void* slab_alloc(SLAB_MGR mgr, size_t size) {
     return OBJ_RAW(mobj);
 }
 
+/* Check whether a small allocation belongs to this manager. The VM PAL uses this only during its
+ * opt-in allocator transition to keep outstanding boot allocations on their original manager. */
+static inline bool slab_mgr_owns(SLAB_MGR mgr, const void* ptr) {
+    if (!mgr || !ptr)
+        return false;
+
+    unsigned char level = RAW_TO_LEVEL(ptr);
+    if (level == (unsigned char)-1 || level >= SLAB_LEVEL)
+        return false;
+
+    SLAB_AREA area;
+    LISTP_FOR_EACH_ENTRY(area, &mgr->area_list[level], __list) {
+        uintptr_t start = (uintptr_t)area->raw;
+        uintptr_t end = start + area->size * (slab_levels[level] + SLAB_HDR_SIZE);
+        if ((uintptr_t)ptr >= start && (uintptr_t)ptr < end)
+            return true;
+    }
+    return false;
+}
+
 // Returns user buffer size (i.e. excluding size of control structures).
 __attribute_no_sanitize_address
 static inline size_t slab_get_buf_size(const void* ptr) {

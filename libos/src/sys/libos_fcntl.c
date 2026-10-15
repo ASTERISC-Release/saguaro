@@ -25,10 +25,43 @@
 #include "libos_process.h"
 #include "libos_table.h"
 #include "libos_thread.h"
+#include "libos_vma.h"
 #include "linux_abi/errors.h"
 #include "linux_abi/fs.h"
 #include "toml_utils.h"
 #define FCNTL_SETFL_MASK (O_APPEND | O_DIRECT | O_NOATIME | O_NONBLOCK)
+#define F_ADD_SEALS 1033
+#define F_GET_SEALS 1034
+#define F_SEAL_SEAL         LIBOS_F_SEAL_SEAL
+#define F_SEAL_SHRINK       LIBOS_F_SEAL_SHRINK
+#define F_SEAL_GROW         LIBOS_F_SEAL_GROW
+#define F_SEAL_WRITE        LIBOS_F_SEAL_WRITE
+#define F_SEAL_FUTURE_WRITE LIBOS_F_SEAL_FUTURE_WRITE
+#define F_SEAL_EXEC         LIBOS_F_SEAL_EXEC
+#define F_SEAL_MASK (F_SEAL_SEAL | F_SEAL_SHRINK | F_SEAL_GROW | F_SEAL_WRITE | \
+                     F_SEAL_FUTURE_WRITE | F_SEAL_EXEC)
+#ifndef F_GETPIPE_SZ
+#define F_GETPIPE_SZ 1032
+#endif
+
+static int memfd_has_writable_shared_mapping(struct libos_handle* handle) {
+    struct libos_vma_info* vmas = NULL;
+    size_t count = 0;
+    int ret = dump_all_vmas(/*include_unmapped=*/false, &vmas, &count);
+    if (ret < 0)
+        return ret;
+
+    bool found = false;
+    for (size_t i = 0; i < count; i++) {
+        if (vmas[i].file == handle && (vmas[i].flags & MAP_SHARED) &&
+            (vmas[i].prot & PROT_WRITE)) {
+            found = true;
+            break;
+        }
+    }
+    free_vma_info_array(vmas, count);
+    return found;
+}
 
 static int generic_set_flags(struct libos_handle* handle, unsigned int flags, unsigned int mask) {
     /* TODO: DOES THIS WORK LOL
@@ -220,9 +253,47 @@ long libos_syscall_fcntl(int fd, int cmd, unsigned long arg) {
             ret = flags;
             break;
 
+        case F_GETPIPE_SZ:
+            /* Report the Linux default nominal capacity. The PAL stream API does not expose or
+             * enforce a bounded FIFO ring yet; vmsplice observes that limitation. */
+            ret = hdl->type == TYPE_PIPE ? 65536 : -EINVAL;
+            break;
+
         /* F_SETFL (int) */
         case F_SETFL:
             ret = set_handle_flags(hdl, arg, FCNTL_SETFL_MASK);
+            break;
+
+        case F_GET_SEALS:
+            if (!hdl->is_memfd) {
+                ret = -EINVAL;
+                break;
+            }
+            lock(&hdl->lock);
+            ret = hdl->memfd_seals;
+            unlock(&hdl->lock);
+            break;
+
+        case F_ADD_SEALS:
+            if (!hdl->is_memfd || (arg & ~F_SEAL_MASK)) {
+                ret = -EINVAL;
+                break;
+            }
+            if (!(get_fd_acc_mode(fd, handle_map) & MAY_WRITE)) {
+                ret = -EPERM;
+                break;
+            }
+            lock(&hdl->lock);
+            if (hdl->memfd_seals & F_SEAL_SEAL)
+                ret = -EPERM;
+            else if ((arg & F_SEAL_WRITE) && !(hdl->memfd_seals & F_SEAL_WRITE) &&
+                     (ret = memfd_has_writable_shared_mapping(hdl)) != 0)
+                ret = ret < 0 ? ret : -EBUSY;
+            else {
+                hdl->memfd_seals |= arg;
+                ret = 0;
+            }
+            unlock(&hdl->lock);
             break;
 
         /* F_SETLK, F_SETLKW (struct flock*): see `libos_fs_lock.h` for caveats */

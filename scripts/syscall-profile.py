@@ -291,7 +291,7 @@ def usable_tests(name, loader, evidence):
     return rows, usable
 
 
-def check_loader(profile, loader, matrix, evidence, rules, partial_ratio):
+def check_loader(profile, loader, matrix, evidence, rules, partial_ratio, vm_multiprocess=False):
     arch = "aarch64" if profile["arch"] in ("aarch64", "arm64") else "x86_64"
     tolerated = {entry["syscall"]: entry for entry in rules.get("tolerated", [])}
     findings = {"blockers": [], "doubtful": [], "minor": [], "notes": [], "unknown": []}
@@ -344,10 +344,18 @@ def check_loader(profile, loader, matrix, evidence, rules, partial_ratio):
             findings["doubtful"].append(entry)
     multi = profile["multiprocess"]
     if loader == "vm" and (multi["fork_like_calls"] or multi["extra_execs"]):
-        findings["blockers"].append({"syscall": "fork/exec", "calls": multi["fork_like_calls"],
-                                     "why": f"the application is multi-process ({multi['processes']} "
-                                            f"processes, {multi['extra_execs']} extra execs); the VM PAL "
-                                            "has one process by design"})
+        what = (f"the application is multi-process ({multi['processes']} processes, "
+                f"{multi['extra_execs']} extra execs)")
+        if vm_multiprocess:
+            # x86_64 VM PAL with sys.experimental__multiprocess (Documentation/devel/vm-multiproc/)
+            findings["notes"].append({"syscall": "fork/exec", "calls": multi["fork_like_calls"],
+                                      "why": what + "; needs sys.experimental__multiprocess = true "
+                                             "(experimental, x86_64 VM PAL)"})
+        else:
+            findings["blockers"].append({"syscall": "fork/exec", "calls": multi["fork_like_calls"],
+                                         "why": what + "; the VM PAL has one process unless "
+                                                "sys.experimental__multiprocess is set (see "
+                                                "--vm-multiprocess)"})
     for rule in rules.get("rule", []):
         if loader not in rule.get("loaders", ["direct", "vm"]):
             continue
@@ -410,10 +418,11 @@ def report_text(profile, results):
     return "\n".join(lines)
 
 
-def do_check(profile, loaders, as_json, partial_ratio):
+def do_check(profile, loaders, as_json, partial_ratio, vm_multiprocess=False):
     matrix, evidence = load_matrix()
     rules = load_rules()
-    results = [check_loader(profile, loader, matrix, evidence, rules, partial_ratio)
+    results = [check_loader(profile, loader, matrix, evidence, rules, partial_ratio,
+                            vm_multiprocess)
                for loader in loaders]
     if as_json:
         print(json.dumps({"command": profile["command"], "results": results}, indent=1))
@@ -445,10 +454,14 @@ def main():
         p.add_argument("--json", action="store_true")
         p.add_argument("--partial-ratio", type=float, default=0.5,
                        help="LTP pass ratio from which a partial syscall is only a minor note")
+        p.add_argument("--vm-multiprocess", action="store_true",
+                       help="the vm loader runs with sys.experimental__multiprocess (x86_64): "
+                            "multi-process use is a note, not a blocker")
     args = parser.parse_args()
     loaders = ("direct", "vm") if getattr(args, "loader", "both") == "both" else (args.loader,)
     if args.mode == "check":
-        do_check(json.loads(args.profile.read_text()), loaders, args.json, args.partial_ratio)
+        do_check(json.loads(args.profile.read_text()), loaders, args.json, args.partial_ratio,
+                 args.vm_multiprocess)
         return
     command = args.command[1:] if args.command[:1] == ["--"] else args.command
     if not command:
@@ -468,7 +481,7 @@ def main():
         if not args.output:
             print(json.dumps(profile, indent=1))
     else:
-        do_check(profile, loaders, args.json, args.partial_ratio)
+        do_check(profile, loaders, args.json, args.partial_ratio, args.vm_multiprocess)
 
 
 if __name__ == "__main__":

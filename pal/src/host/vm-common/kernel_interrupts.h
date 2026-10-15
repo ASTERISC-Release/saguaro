@@ -148,6 +148,9 @@ static inline noreturn void triple_fault(void) {
 extern bool g_interrupts_enabled;
 
 int pal_common_perform_memfault_handling(uint64_t faulted_addr, struct isr_regs* regs);
+#ifdef __x86_64__
+void pal_common_deliver_pending_interrupt(struct isr_regs* regs);
+#endif
 
 void isr_c(struct isr_regs* regs);
 #ifdef __aarch64__

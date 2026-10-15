@@ -1580,6 +1580,14 @@ int msync_handle(struct libos_handle* hdl) {
     return msync_all(/*begin=*/0, /*end=*/UINTPTR_MAX, hdl);
 }
 
+/* The x86_64 VM PAL builds a child's address space from its parent's page tables, so a page the
+ * child does not replace keeps the parent's frame. MAP_SHARED memory is therefore left in place
+ * there (neither sent nor re-mapped), which keeps it shared between the processes. Other PALs
+ * start a child with an empty address space. */
+static bool child_inherits_shared_mappings(void) {
+    return !strcmp(g_pal_public_state->host_type, "VM");
+}
+
 BEGIN_CP_FUNC(vma) {
     __UNUSED(size);
     assert(size == sizeof(struct libos_vma_info));
@@ -1601,6 +1609,10 @@ BEGIN_CP_FUNC(vma) {
 
         /* by default, file-backed memory (if shared and/or untainted) is re-mapped in child */
         bool remap_from_file = !(vma->flags & VMA_UNMAPPED) && vma->file;
+        bool inherited = !(vma->flags & VMA_UNMAPPED) && (vma->flags & MAP_SHARED)
+                         && child_inherits_shared_mappings();
+        if (inherited)
+            remap_from_file = false;
 
         /*
          * Check whether we need to checkpoint memory this vma bookkeeps: it should be mapped and it
@@ -1610,7 +1622,7 @@ BEGIN_CP_FUNC(vma) {
          * FIXME: In case of anonymous memory, we always checkpoint memory and ignore MAP_SHARED
          *        flag. VMA content in parent and child may diverge.
          */
-        if (!(vma->flags & VMA_UNMAPPED) && (!vma->file ||
+        if (!inherited && !(vma->flags & VMA_UNMAPPED) && (!vma->file ||
                     (vma->flags & (VMA_TAINTED | MAP_PRIVATE)) == (VMA_TAINTED | MAP_PRIVATE))) {
             remap_from_file = false;
 
@@ -1700,6 +1712,22 @@ BEGIN_RS_FUNC(vma) {
 }
 END_RS_FUNC(vma)
 
+/* A PAL may reserve address ranges for later MAP_FIXED users (the VM PAL's graphics arenas). Every
+ * process gets the same reservation from its own PAL at startup, so a reservation the application
+ * has not touched is not sent to a child (it would copy the whole arena and then collide with the
+ * child's own reservation), and execve keeps it. */
+bool is_untouched_user_reserved_range(const struct libos_vma_info* vma) {
+    if (vma->file)
+        return false;
+    for (size_t i = 0; i < g_pal_public_state->initial_mem_ranges_len; i++) {
+        const struct pal_initial_mem_range* range = &g_pal_public_state->initial_mem_ranges[i];
+        if (range->is_user_reserved && !range->is_free && (uintptr_t)vma->addr == range->start
+                && (uintptr_t)vma->addr + vma->length == range->end)
+            return true;
+    }
+    return false;
+}
+
 BEGIN_CP_FUNC(all_vmas) {
     __UNUSED(obj);
     __UNUSED(size);
@@ -1718,7 +1746,8 @@ BEGIN_CP_FUNC(all_vmas) {
     /* Checkpoint VMAs in descending order - checkpointing code requires it. See
      * `create_mem_ranges_array` for details. */
     for (struct libos_vma_info* vma = &vmas[count - 1]; true; vma--) {
-        DO_CP(vma, vma, NULL);
+        if (!is_untouched_user_reserved_range(vma))
+            DO_CP(vma, vma, NULL);
         if (vma == vmas)
             break;
     }

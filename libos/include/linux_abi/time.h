@@ -37,3 +37,6 @@ struct __kernel_timezone {
     int tz_minuteswest; /* minutes west of Greenwich */
     int tz_dsttime;     /* type of dst correction */
 };
+
+/* `struct __kernel_itimerspec` (the `timerfd_settime()`/`timerfd_gettime()` argument) and the
+ * `TFD_*` constants come from `<linux/timerfd.h>`. */

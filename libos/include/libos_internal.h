@@ -156,6 +156,11 @@ extern bool g_eventfd_passthrough_mode;
 int init_eventfd_mode(void);
 int init_external_process_liveness_mode(void);
 int init_sysv_semaphores(void);
+int init_sysv_shm(void);
+int init_sysv_msg(void);
+/* System V message queue limits (0: MSGMNI, 1: MSGMAX, 2: MSGMNB) and `/proc/sysvipc/msg` */
+unsigned int sysv_msg_limit(int which);
+int sysv_msg_proc_load(char** out_data, size_t* out_size);
 
 void warn_unsupported_syscall(unsigned long sysno);
 void debug_print_syscall_before(unsigned long sysno, ...);
@@ -254,6 +259,17 @@ void delete_epoll_items_for_fd(int fd, struct libos_handle* handle);
  * it sees one of the above happening.
  */
 void maybe_epoll_et_trigger(struct libos_handle* handle, int ret, bool in, bool was_partial);
+
+/* drop the timerfd worker's registry reference, if any (`fs/timerfd/fs.c` on close) */
+int libos_timerfd_untrack(struct libos_handle* hdl);
+
+/* signalfd: arrival hint after a signal became pending (`bookkeep/libos_signal.c`), and taking
+ * one pending signal matching a signalfd mask out of the pending queues */
+void libos_signalfd_notify(int sig);
+bool signalfd_take_signal(const __sigset_t* match, siginfo_t* out);
+
+/* drop the signalfd wake registry entry (`fs/signalfd/fs.c` on close) */
+void libos_signalfd_untrack(struct libos_handle* hdl);
 
 int init_stack(const char* const* argv, const char* const* envp, char*** out_argp,
                elf_auxv_t** out_auxv);

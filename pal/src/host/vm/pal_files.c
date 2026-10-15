@@ -18,6 +18,10 @@ struct handle_ops g_file_ops = {
     .attrquerybyhdl = &pal_common_file_attrquerybyhdl,
     .attrsetbyhdl   = &pal_common_file_attrsetbyhdl,
     .rename         = &pal_common_file_rename,
+    .symlink        = &pal_common_file_symlink,
+    .link           = &pal_common_file_link,
+    .unlink_path    = &pal_common_file_unlink_path,
+    .rename_path    = &pal_common_file_rename_path,
 };
 
 struct handle_ops g_dir_ops = {

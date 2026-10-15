@@ -9,8 +9,10 @@
 
 #include "libos_fs.h"
 #include "libos_handle.h"
+#include "libos_inotify.h"
 #include "libos_lock.h"
 #include "libos_process.h"
+#include "libos_thread.h"
 #include "linux_abi/fs.h"
 #include "perm.h"
 #include "stat.h"
@@ -25,11 +27,24 @@ int check_permissions(struct libos_dentry* dent, mode_t mask) {
     if (mask == F_OK)
         return 0;
 
-    /* Check the "user" part of mode against mask */
-    if (((dent->inode->perm >> 6) & mask) == mask)
+    struct libos_thread* current = get_cur_thread();
+    mode_t granted;
+    if (current->fsuid == 0) {
+        /* Root bypasses read/write checks, but execution still needs an execute bit. */
+        if ((mask & MAY_EXEC) && !(dent->inode->perm & (S_IXUSR | S_IXGRP | S_IXOTH)))
+            return -EACCES;
         return 0;
+    }
 
-    return -EACCES;
+    if (current->fsuid == dent->inode->uid) {
+        granted = (dent->inode->perm >> 6) & 7;
+    } else {
+        bool in_group = current->fsgid == dent->inode->gid;
+        for (size_t i = 0; !in_group && i < current->groups_info.count; i++)
+            in_group = current->groups_info.groups[i] == dent->inode->gid;
+        granted = in_group ? (dent->inode->perm >> 3) & 7 : dent->inode->perm & 7;
+    }
+    return (granted & mask) == mask ? 0 : -EACCES;
 }
 
 /* This function works like `lookup_dcache`, but if the dentry is not in cache, it creates a new,
@@ -470,12 +485,14 @@ int open_namei(struct libos_handle* hdl, struct libos_dentry* start, const char*
          * Can happen if user specified O_NOFOLLOW, or O_TRUNC | O_EXCL. Posix requires us to fail
          * with -ELOOP when trying to open a symlink.
          */
-        ret = -ELOOP;
+        ret = (flags & O_CREAT) && (flags & O_EXCL) ? -EEXIST : -ELOOP;
         goto out;
     }
 
     bool need_open = true;
+    bool existed = true;
     if (!dent->inode) {
+        existed = false;
         if (!(flags & O_CREAT)) {
             ret = -ENOENT;
             goto out;
@@ -524,6 +541,11 @@ int open_namei(struct libos_handle* hdl, struct libos_dentry* start, const char*
         if (ret < 0)
             goto out;
     }
+
+    /* inotify: `IN_CREATE` on the parent directory's watches, only when the object was really
+     * created just now (`IN_ISDIR` for `mkdir`), before any `IN_OPEN` of the new file */
+    if (!existed && dent->inode && dent->parent)
+        libos_inotify_child_event(dent->parent, dent, IN_CREATE, /*cookie=*/0);
 
     if (hdl && need_open) {
         ret = dentry_open(hdl, dent, flags);

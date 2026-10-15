@@ -9,7 +9,58 @@
 
 #include "api.h"
 #include "libos_fs_pseudo.h"
+#include "libos_inotify.h"
 #include "libos_process.h"
+
+static int proc_tainted_load(struct libos_dentry* dent, char** out_data, size_t* out_size) {
+    __UNUSED(dent);
+
+    /* the kernel's taint flags: nothing can taint this LibOS, so the mask is always empty (the
+     * LTP timerfd clock-stealing test reads it and requires it to exist) */
+    char* buffer = strdup("0\n");
+    if (!buffer)
+        return -ENOMEM;
+
+    *out_data = buffer;
+    *out_size = strlen(buffer);
+    return 0;
+}
+
+/* `/proc/sys/fs/inotify/{max_queued_events,max_user_instances,max_user_watches}`: the limits the
+ * inotify implementation applies (see `sys/libos_inotify.c`); LTP `inotify05` reads
+ * `max_queued_events` to size its overflow test */
+static int proc_uint_load(unsigned int value, char** out_data, size_t* out_size) {
+    char* buffer = malloc(16);
+    if (!buffer)
+        return -ENOMEM;
+
+    int ret = snprintf(buffer, 16, "%u\n", value);
+    if (ret <= 0 || ret >= 16) {
+        free(buffer);
+        return -EINVAL;
+    }
+    *out_data = buffer;
+    *out_size = strlen(buffer);
+    return 0;
+}
+
+static int proc_inotify_max_queued_events_load(struct libos_dentry* dent, char** out_data,
+                                               size_t* out_size) {
+    __UNUSED(dent);
+    return proc_uint_load(libos_inotify_max_queued_events(), out_data, out_size);
+}
+
+static int proc_inotify_max_user_instances_load(struct libos_dentry* dent, char** out_data,
+                                                size_t* out_size) {
+    __UNUSED(dent);
+    return proc_uint_load(INOTIFY_MAX_INSTANCES, out_data, out_size);
+}
+
+static int proc_inotify_max_user_watches_load(struct libos_dentry* dent, char** out_data,
+                                              size_t* out_size) {
+    __UNUSED(dent);
+    return proc_uint_load(libos_inotify_max_user_watches(), out_data, out_size);
+}
 
 static int proc_pid_max_load(struct libos_dentry* dent, char** out_data, size_t* out_size) {
     __UNUSED(dent);
@@ -59,6 +110,29 @@ static void init_thread_dir(struct pseudo_node* ent) {
     fd_link->list_names = &proc_thread_fd_list_names;
 }
 
+/* System V message queue limits and table (see `sys/libos_sysv_msg.c`): `/proc/sys/kernel/msgmni`
+ * (LTP msgget03 creates that many queues), `msgmax`, `msgmnb`, and `/proc/sysvipc/msg` */
+
+static int proc_msgmni_load(struct libos_dentry* dent, char** out_data, size_t* out_size) {
+    __UNUSED(dent);
+    return proc_uint_load(sysv_msg_limit(0), out_data, out_size);
+}
+
+static int proc_msgmax_load(struct libos_dentry* dent, char** out_data, size_t* out_size) {
+    __UNUSED(dent);
+    return proc_uint_load(sysv_msg_limit(1), out_data, out_size);
+}
+
+static int proc_msgmnb_load(struct libos_dentry* dent, char** out_data, size_t* out_size) {
+    __UNUSED(dent);
+    return proc_uint_load(sysv_msg_limit(2), out_data, out_size);
+}
+
+static int proc_sysvipc_msg_load(struct libos_dentry* dent, char** out_data, size_t* out_size) {
+    __UNUSED(dent);
+    return sysv_msg_proc_load(out_data, out_size);
+}
+
 /* `/proc/<pid>` for other processes, uses IPC */
 static void init_ipc_thread_dir(struct pseudo_node* ent) {
     pseudo_add_link(ent, "root", &proc_ipc_thread_follow_link);
@@ -72,10 +146,25 @@ int init_procfs(void) {
     struct pseudo_node* sys = pseudo_add_dir(root, "sys");
     struct pseudo_node* kernel = pseudo_add_dir(sys, "kernel");
     pseudo_add_str(kernel, "pid_max", &proc_pid_max_load);
+    pseudo_add_str(kernel, "tainted", &proc_tainted_load);
+    pseudo_add_str(kernel, "msgmni", &proc_msgmni_load);
+    pseudo_add_str(kernel, "msgmax", &proc_msgmax_load);
+    pseudo_add_str(kernel, "msgmnb", &proc_msgmnb_load);
+
+    struct pseudo_node* fs_node = pseudo_add_dir(sys, "fs");
+    struct pseudo_node* inotify_node = pseudo_add_dir(fs_node, "inotify");
+    pseudo_add_str(inotify_node, "max_queued_events", &proc_inotify_max_queued_events_load);
+    pseudo_add_str(inotify_node, "max_user_instances", &proc_inotify_max_user_instances_load);
+    pseudo_add_str(inotify_node, "max_user_watches", &proc_inotify_max_user_watches_load);
 
     pseudo_add_str(root, "meminfo", &proc_meminfo_load);
     pseudo_add_str(root, "cpuinfo", &proc_cpuinfo_load);
     pseudo_add_str(root, "stat", &proc_stat_load);
+
+    /* `/proc/sysvipc/{shm,msg}`: the System V shared memory and message queue tables */
+    struct pseudo_node* sysvipc = pseudo_add_dir(root, "sysvipc");
+    pseudo_add_str(sysvipc, "shm", &proc_sysvipc_shm_load);
+    pseudo_add_str(sysvipc, "msg", &proc_sysvipc_msg_load);
 
     pseudo_add_link(root, "self", &proc_self_follow_link);
 

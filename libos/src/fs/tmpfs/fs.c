@@ -22,6 +22,9 @@
 #include "perm.h"
 #include "stat.h"
 
+#define UTIME_NOW  ((1L << 30) - 1)
+#define UTIME_OMIT ((1L << 30) - 2)
+
 #define USEC_IN_SEC 1000000
 
 static int tmpfs_setup_dentry(struct libos_dentry* dent, mode_t type, mode_t perm) {
@@ -47,8 +50,11 @@ static int tmpfs_setup_dentry(struct libos_dentry* dent, mode_t type, mode_t per
     }
 
     inode->ctime = time_us / USEC_IN_SEC;
+    inode->ctime_nsec = (time_us % USEC_IN_SEC) * 1000;
     inode->mtime = inode->ctime;
+    inode->mtime_nsec = inode->ctime_nsec;
     inode->atime = inode->ctime;
+    inode->atime_nsec = inode->ctime_nsec;
 
     dent->inode = inode;
     return 0;
@@ -58,8 +64,12 @@ static void tmpfs_idrop(struct libos_inode* inode) {
     assert(locked(&inode->lock));
 
     if (inode->data) {
-        mem_file_destroy(inode->data);
-        free(inode->data);
+        if (inode->type == S_IFLNK) {
+            free(inode->data);
+        } else {
+            mem_file_destroy(inode->data);
+            free(inode->data);
+        }
     }
 }
 
@@ -71,16 +81,24 @@ struct tmpfs_checkpoint {
 static int tmpfs_icheckpoint(struct libos_inode* inode, void** out_data, size_t* out_size) {
     assert(locked(&inode->lock));
 
-    struct libos_mem_file* mem = inode->data;
-    assert(mem->size >= 0);
-
+    size_t data_size;
+    const void* data;
+    if (inode->type == S_IFLNK) {
+        data_size = strlen(inode->data) + 1;
+        data = inode->data;
+    } else {
+        struct libos_mem_file* mem = inode->data;
+        assert(mem->size >= 0);
+        data_size = mem->size;
+        data = mem->buf;
+    }
     struct tmpfs_checkpoint* cp;
-    size_t cp_size = sizeof(*cp) + mem->size;
+    size_t cp_size = sizeof(*cp) + data_size;
     cp = malloc(cp_size);
     if (!cp)
         return -ENOMEM;
-    cp->size = mem->size;
-    memcpy(cp->data, mem->buf, mem->size);
+    cp->size = data_size;
+    memcpy(cp->data, data, data_size);
 
     *out_data = cp;
     *out_size = cp_size;
@@ -89,6 +107,13 @@ static int tmpfs_icheckpoint(struct libos_inode* inode, void** out_data, size_t*
 
 static int tmpfs_irestore(struct libos_inode* inode, void* data) {
     struct tmpfs_checkpoint* cp = data;
+
+    if (inode->type == S_IFLNK) {
+        inode->data = malloc(cp->size);
+        if (inode->data)
+            memcpy(inode->data, cp->data, cp->size);
+        return inode->data ? 0 : -ENOMEM;
+    }
 
     struct libos_mem_file* mem = malloc(sizeof(*mem));
     if (!mem)
@@ -168,6 +193,45 @@ static int tmpfs_mkdir(struct libos_dentry* dent, mode_t perm) {
     return tmpfs_setup_dentry(dent, S_IFDIR, perm);
 }
 
+static int tmpfs_symlink(const char* target, struct libos_dentry* dent) {
+    assert(locked(&g_dcache_lock));
+    assert(!dent->inode);
+
+    char* target_copy = strdup(target);
+    if (!target_copy)
+        return -ENOMEM;
+    int ret = tmpfs_setup_dentry(dent, S_IFLNK, PERM_rwxrwxrwx);
+    if (ret < 0) {
+        free(target_copy);
+        return ret;
+    }
+    struct libos_mem_file* empty_data = dent->inode->data;
+    mem_file_destroy(empty_data);
+    free(empty_data);
+    dent->inode->data = target_copy;
+    dent->inode->size = strlen(target);
+    return 0;
+}
+
+static int tmpfs_link(struct libos_dentry* old, struct libos_dentry* new) {
+    assert(locked(&g_dcache_lock));
+    assert(old->inode && !new->inode);
+    get_inode(old->inode);
+    new->inode = old->inode;
+    lock(&old->inode->lock);
+    old->inode->nlink++;
+    unlock(&old->inode->lock);
+    return 0;
+}
+
+static int tmpfs_follow_link(struct libos_dentry* dent, char** out_target) {
+    assert(locked(&g_dcache_lock));
+    if (dent->inode->type != S_IFLNK)
+        return -EINVAL;
+    *out_target = strdup(dent->inode->data);
+    return *out_target ? 0 : -ENOMEM;
+}
+
 static int tmpfs_unlink(struct libos_dentry* dent) {
     assert(locked(&g_dcache_lock));
     assert(dent->inode);
@@ -200,14 +264,60 @@ static int tmpfs_rename(struct libos_dentry* old, struct libos_dentry* new) {
 
     lock(&old->inode->lock);
     old->inode->ctime = time_us / USEC_IN_SEC;
+    old->inode->ctime_nsec = (time_us % USEC_IN_SEC) * 1000;
     unlock(&old->inode->lock);
 
+    return 0;
+}
+
+static int tmpfs_exchange(struct libos_dentry* old, struct libos_dentry* new) {
+    assert(locked(&g_dcache_lock));
+    assert(old->inode && new->inode);
+
+    uint64_t time_us;
+    if (PalSystemTimeQuery(&time_us) < 0)
+        return -EPERM;
+
+    time_t now = time_us / USEC_IN_SEC;
+    long now_nsec = (time_us % USEC_IN_SEC) * 1000;
+    lock(&old->inode->lock);
+    old->inode->ctime = now;
+    old->inode->ctime_nsec = now_nsec;
+    unlock(&old->inode->lock);
+    lock(&new->inode->lock);
+    new->inode->ctime = now;
+    new->inode->ctime_nsec = now_nsec;
+    unlock(&new->inode->lock);
     return 0;
 }
 
 static int tmpfs_chmod(struct libos_dentry* dent, mode_t perm) {
     __UNUSED(dent);
     __UNUSED(perm);
+    return 0;
+}
+
+static int tmpfs_set_times(struct libos_dentry* dent, const struct __kernel_timespec times[2]) {
+    if (times[0].tv_nsec == UTIME_OMIT && times[1].tv_nsec == UTIME_OMIT)
+        return 0;
+    uint64_t now_us;
+    if (PalSystemTimeQuery(&now_us) < 0)
+        return -EPERM;
+    time_t now = now_us / USEC_IN_SEC;
+    long now_nsec = (now_us % USEC_IN_SEC) * 1000;
+
+    lock(&dent->inode->lock);
+    if (times[0].tv_nsec != UTIME_OMIT) {
+        dent->inode->atime = times[0].tv_nsec == UTIME_NOW ? now : times[0].tv_sec;
+        dent->inode->atime_nsec = times[0].tv_nsec == UTIME_NOW ? now_nsec : times[0].tv_nsec;
+    }
+    if (times[1].tv_nsec != UTIME_OMIT) {
+        dent->inode->mtime = times[1].tv_nsec == UTIME_NOW ? now : times[1].tv_sec;
+        dent->inode->mtime_nsec = times[1].tv_nsec == UTIME_NOW ? now_nsec : times[1].tv_nsec;
+    }
+    dent->inode->ctime = now;
+    dent->inode->ctime_nsec = now_nsec;
+    unlock(&dent->inode->lock);
     return 0;
 }
 
@@ -269,6 +379,7 @@ static ssize_t tmpfs_write(struct libos_handle* hdl, const void* buf, size_t siz
 
     *pos += ret;
     inode->mtime = time_us / USEC_IN_SEC;
+    inode->mtime_nsec = (time_us % USEC_IN_SEC) * 1000;
     /* keep `ret` */
 
     unlock(&inode->lock);
@@ -300,6 +411,7 @@ static int tmpfs_truncate(struct libos_handle* hdl, file_off_t size) {
         goto out;
 
     hdl->inode->mtime = time_us / USEC_IN_SEC;
+    hdl->inode->mtime_nsec = (time_us % USEC_IN_SEC) * 1000;
     hdl->inode->size = size;
     ret = 0;
 
@@ -331,7 +443,12 @@ struct libos_d_ops tmp_d_ops = {
     .readdir     = &generic_readdir,
     .unlink      = &tmpfs_unlink,
     .rename      = &tmpfs_rename,
+    .exchange    = &tmpfs_exchange,
     .chmod       = &tmpfs_chmod,
+    .set_times   = &tmpfs_set_times,
+    .symlink     = &tmpfs_symlink,
+    .link        = &tmpfs_link,
+    .follow_link = &tmpfs_follow_link,
     .idrop       = &tmpfs_idrop,
     .icheckpoint = &tmpfs_icheckpoint,
     .irestore    = &tmpfs_irestore,

@@ -407,6 +407,8 @@ noreturn void libos_init(const char* const* argv, const char* const* envp) {
     RUN_INIT(init_dcache);
     RUN_INIT(init_handle);
     RUN_INIT(init_sysv_semaphores);
+    RUN_INIT(init_sysv_shm);
+    RUN_INIT(init_sysv_msg);
 
     log_debug("LibOS loaded at %p, ready to initialize", &__load_address);
 

@@ -293,6 +293,34 @@ def kill_test_orphans(binary, existing_pids):
             pass
 
 
+SHM_HOST = '{ type = "untrusted_shm", path = "/dev/shm", uri = "dev:/dev/shm" },'
+SHM_TMPFS = '{ type = "tmpfs", path = "/dev/shm" },'
+
+
+MULTIPROCESS_RE = re.compile(r"^\s*experimental__multiprocess\s*=\s*true\s*$", re.MULTILINE)
+
+
+def set_manifest_shm(manifests, kind):
+    """Give the manifests the /dev/shm mount `kind` needs: "tmpfs" for the VM PAL (it has no
+    dev: stream), "host" for gramine-direct (LTP's library shares its result counters with the
+    forked test process through /dev/shm; a LibOS tmpfs is private to one process, so the counts
+    of a forking test would be lost). "vm" picks per manifest: "host" when the manifest enables
+    the VM PAL's experimental multiprocess support (`sys.experimental__multiprocess`, see
+    Documentation/devel/vm-multiproc/; the x86_64 VM PAL then opens `dev:/dev/shm` as a host file
+    shared between guest processes), "tmpfs" otherwise. Returns the number of manifests changed."""
+    changed = 0
+    for manifest in manifests:
+        text = manifest.read_text()
+        want = kind
+        if kind == "vm":
+            want = "host" if MULTIPROCESS_RE.search(text) else "tmpfs"
+        old, new = (SHM_HOST, SHM_TMPFS) if want == "tmpfs" else (SHM_TMPFS, SHM_HOST)
+        if old in text:
+            manifest.write_text(text.replace(old, new))
+            changed += 1
+    return changed
+
+
 def run_one(name, command, args, per_test_timeout, reserved_cid=None):
     binary = pathlib.Path(args.ltp_root) / "testcases/bin" / ltp_test_command(command)
     env = os.environ.copy()
@@ -369,10 +397,17 @@ def main():
                         help="record NAME as TCONF without executing it")
     parser.add_argument("--skip-reason", default="excluded by --skip-test")
     parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--set-shm", choices=("host", "tmpfs"),
+                        help="only switch every manifest's /dev/shm mount (see set_manifest_shm)")
     parser.add_argument("tests", nargs="*")
     args = parser.parse_args()
     if args.self_test:
         parser_self_test()
+        return
+    if args.set_shm:
+        manifests = sorted(args.harness_dir.glob("*.manifest"))
+        changed = set_manifest_shm(manifests, args.set_shm)
+        print(f"/dev/shm is {args.set_shm} in the {len(manifests)} manifests ({changed} changed)")
         return
     if not args.loader:
         parser.error("--loader is required")
@@ -398,6 +433,24 @@ def main():
                           if not (args.harness_dir / f"{ltp_test_command(scenarios[name])}.manifest").exists()})
         if missing:
             parser.error("manifests missing; build them with gramine-test build first: " + ", ".join(missing[:10]))
+        # Under a Gramine loader the binary comes from the manifests' `install` symlink, not from
+        # --ltp-root: point the symlink at --ltp-root so the two cannot disagree (they once did, and
+        # an "unmodified" run measured the no-fork build). The manifests do not depend on which
+        # install the symlink names; one run at a time per checkout.
+        link = args.harness_dir / "install"
+        if not link.is_symlink():
+            parser.error(f"{link} is not a symlink; build the manifests with scripts/build-ltp-manifests.sh")
+        if link.resolve() != args.ltp_root.resolve():
+            print(f"note: {link} pointed to {link.resolve()}; repointing it to {args.ltp_root.resolve()}",
+                  file=sys.stderr)
+            link.unlink()
+            link.symlink_to(os.path.relpath(args.ltp_root.resolve(), args.harness_dir.resolve()))
+        manifests = sorted({args.harness_dir / f"{ltp_test_command(scenarios[name])}.manifest"
+                            for name in active})
+        changed = set_manifest_shm(manifests, "vm" if args.loader == "vm" else "host")
+        if changed:
+            print(f"note: switched /dev/shm in {changed} manifests for the {args.loader} loader",
+                  file=sys.stderr)
     guest_cids = allocate_guest_cids(1) * len(active) if args.loader == "vm" else [None] * len(active)
 
     results = [{"loader": args.loader, "test": name, "subtests": [],
@@ -430,7 +483,7 @@ def main():
             duration_text = f"{duration:.2f}s" if duration is not None else "n/a"
             print(f"{result['loader']} {result['test']}: {result['status']} ({duration_text})", flush=True)
     results.sort(key=lambda result: selected.index(result["test"]))
-    out = {"loader": args.loader, "results": results}
+    out = {"loader": args.loader, "ltp_root": str(args.ltp_root.resolve()), "results": results}
     if args.results:
         args.results.parent.mkdir(parents=True, exist_ok=True)
         args.results.write_text(json.dumps(out, indent=2) + "\n")

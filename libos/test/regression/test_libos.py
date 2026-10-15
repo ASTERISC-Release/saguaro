@@ -1027,6 +1027,18 @@ class TC_30_Syscall(RegressionTestCase):
         stdout, _ = self.run_binary(['eventfd_races'])
         self.assertIn('TEST OK', stdout)
 
+    def test_075_memfd_seals(self):
+        stdout, _ = self.run_binary(['memfd_seals'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_076_timerfd(self):
+        stdout, _ = self.run_binary(['timerfd'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_077_ptimers(self):
+        stdout, _ = self.run_binary(['ptimer'])
+        self.assertIn('TEST OK', stdout)
+
     @unittest.skipIf(USES_MUSL, 'sched_setscheduler is not supported in musl')
     def test_080_sched(self):
         stdout, _ = self.run_binary(['sched'])
@@ -1069,6 +1081,14 @@ class TC_30_Syscall(RegressionTestCase):
 
     def test_095_kill_all(self):
         stdout, _ = self.run_binary(['kill_all'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_096_sysv_shm(self):
+        stdout, _ = self.run_binary(['sysv_shm'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_097_sysv_msg(self):
+        stdout, _ = self.run_binary(['sysv_msg'])
         self.assertIn('TEST OK', stdout)
 
     def test_100_get_set_groups(self):
@@ -1424,6 +1444,38 @@ class TC_40_FileSystem(RegressionTestCase):
 
     def test_080_close_range(self):
         stdout, _ = self.run_binary(['close_range'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_081a_file_times_chroot(self):
+        stdout, _ = self.run_binary(['file_times', 'tmp'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_081b_file_times_tmpfs(self):
+        stdout, _ = self.run_binary(['file_times', '/mnt/tmpfs'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_082a_links_chroot(self):
+        stdout, _ = self.run_binary(['links', 'tmp'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_082b_links_tmpfs(self):
+        stdout, _ = self.run_binary(['links', '/mnt/tmpfs'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_083a_renameat2_chroot(self):
+        stdout, _ = self.run_binary(['renameat2', 'tmp', 'chroot'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_083b_renameat2_tmpfs(self):
+        stdout, _ = self.run_binary(['renameat2', '/mnt/tmpfs', 'tmpfs'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_084a_credentials_chroot(self):
+        stdout, _ = self.run_binary(['credentials', 'tmp'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_084b_credentials_tmpfs(self):
+        stdout, _ = self.run_binary(['credentials', '/mnt/tmpfs'])
         self.assertIn('TEST OK', stdout)
 
 class TC_50_GDB(RegressionTestCase):

@@ -274,14 +274,22 @@ struct libos_inode {
     /* Device number of a character device (`st_rdev`), if the filesystem knows it */
     uint32_t rdev_major;
     uint32_t rdev_minor;
+    /* Number of directory entries referring to this inode. */
+    uint32_t nlink;
+
+    /* Inode number shared by all hard links to this inode; 0 until dentry_ino() sets it. */
+    ino_t ino;
 
     /* credentials */
     IDTYPE uid, gid;
 
-    /* Create/modify/access time */
+    /* Create/modify/access time. The `_nsec` companions hold the nanosecond part (0..999999999). */
     time_t ctime;
+    long ctime_nsec;
     time_t mtime;
+    long mtime_nsec;
     time_t atime;
+    long atime_nsec;
 
     /* Mounted filesystem this inode belongs to. Does not change. */
     struct libos_mount* mount;
@@ -399,6 +407,15 @@ struct libos_d_ops {
      */
     int (*follow_link)(struct libos_dentry* dent, char** out_target);
 
+    /* Create a symlink at a negative dentry, retaining its target in the new inode. */
+    int (*symlink)(const char* target, struct libos_dentry* dent);
+
+    /* Create a hard link from a positive dentry to a negative dentry. */
+    int (*link)(struct libos_dentry* old, struct libos_dentry* new);
+
+    /* Set access and modification times. Either array element may contain UTIME_OMIT. */
+    int (*set_times)(struct libos_dentry* dent, const struct __kernel_timespec times[2]);
+
     /*
      * \brief Change file permissions.
      *
@@ -428,6 +445,20 @@ struct libos_d_ops {
      * negative, and the new dentry as non-negative.
      */
     int (*rename)(struct libos_dentry* old, struct libos_dentry* new);
+
+    /*!
+     * \brief Atomically exchange two dentries (renameat2 with RENAME_EXCHANGE).
+     *
+     * \param old  First dentry, positive.
+     * \param new  Second dentry, positive.
+     *
+     * Both dentries exist, are on the same mount and are not directories. Filesystems without
+     * exchange support leave this NULL; the LibOS then answers `EOPNOTSUPP`.
+     *
+     * The caller should hold `g_dcache_lock`. On success, the caller swaps the inodes of the two
+     * dentries (this hook only updates the filesystem's own state, e.g. timestamps).
+     */
+    int (*exchange)(struct libos_dentry* old, struct libos_dentry* new);
 
     /*!
      * \brief List all files in the directory.
@@ -963,6 +994,9 @@ int hostfd_install(PAL_HANDLE pal_handle, bool cloexec);
 /* ioctl on a host device or host-fd handle, with the fd translation of known DRM/dma-buf ioctls
  * when `sys.insecure__allow_raw_device_ioctl` is set */
 int raw_device_ioctl(struct libos_handle* hdl, unsigned int cmd, unsigned long arg);
+extern struct libos_fs timerfd_builtin_fs;
+extern struct libos_fs signalfd_builtin_fs;
+extern struct libos_fs inotify_builtin_fs;
 extern struct libos_fs synthetic_builtin_fs;
 extern struct libos_fs path_builtin_fs;
 extern struct libos_fs shm_builtin_fs;

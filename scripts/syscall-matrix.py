@@ -19,6 +19,10 @@ REASONS = ("by design", "LibOS gap", "behaviour difference", "test environment",
 GROUPS = ("file", "memory", "process", "signal", "socket", "ipc", "time", "misc")
 
 
+def run_seconds(results):
+    return round(sum(row.get("duration_seconds") or 0 for row in results.values()))
+
+
 def read_results(path):
     data = json.loads(path.read_text())
     rows = {row["test"]: row for row in data["results"]}
@@ -138,8 +142,11 @@ def markdown(inventory, by_syscall, native, direct, original_vm, vm, reasons, ma
         "and `untested` means no mapped LTP test.", "",
         f"Scope: {len(all_tests)} scenario entries, {mapped_count} mapped and {unmapped_count} "
         "unmapped. `signal06` is an explicit TCONF because it could signal container PID 1. "
-        "All four loaders used one worker; VM runs used one guest and one vCPU. The corrected "
-        "unmodified VM run took 1,082 seconds; the no-fork VM run took 1,922 seconds.", "",
+        "All four loaders used one worker; VM runs used one guest and one vCPU. The unmodified "
+        "VM column runs the stock LTP build, whose library forks before every test (the VM PAL "
+        "cannot fork, so those tests break), the no-fork column the shim build. The test "
+        f"durations sum to {run_seconds(original_vm):,} seconds for the unmodified VM run and "
+        f"{run_seconds(vm):,} seconds for the no-fork VM run.", "",
         "## Loader totals", "", "| Loader | P | F | C | B | T | X | E |", "|---|---:|---:|---:|---:|---:|---:|---:|"
     ]
     for label, result in (("native", native), ("direct", direct), ("VM unmodified", original_vm),

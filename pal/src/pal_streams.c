@@ -105,7 +105,9 @@ int _PalStreamOpen(PAL_HANDLE* handle, const char* typed_uri, enum pal_access ac
 int PalStreamOpen(const char* typed_uri, enum pal_access access, pal_share_flags_t share,
                   enum pal_create_mode create, pal_stream_options_t options, PAL_HANDLE* handle) {
     *handle = NULL;
-    return _PalStreamOpen(handle, typed_uri, access, share, create, options);
+    int ret = _PalStreamOpen(handle, typed_uri, access, share, create, options);
+    PAL_TRACK_HANDLE(ret, *handle);
+    return ret;
 }
 
 static int _PalStreamWaitForClient(PAL_HANDLE handle, PAL_HANDLE* client,
@@ -125,7 +127,9 @@ static int _PalStreamWaitForClient(PAL_HANDLE handle, PAL_HANDLE* client,
 
 int PalStreamWaitForClient(PAL_HANDLE handle, PAL_HANDLE* client, pal_stream_options_t options) {
     *client = NULL;
-    return _PalStreamWaitForClient(handle, client, options);
+    int ret = _PalStreamWaitForClient(handle, client, options);
+    PAL_TRACK_HANDLE(ret, *client);
+    return ret;
 }
 
 int _PalStreamDelete(PAL_HANDLE handle, enum pal_delete_mode delete_mode) {
@@ -374,7 +378,9 @@ int PalReceiveHandle(PAL_HANDLE source_process, PAL_HANDLE* out_cargo) {
     }
 
     *out_cargo = NULL;
-    return _PalReceiveHandle(source_process, out_cargo);
+    int ret = _PalReceiveHandle(source_process, out_cargo);
+    PAL_TRACK_HANDLE(ret, *out_cargo);
+    return ret;
 }
 
 int PalStreamChangeName(PAL_HANDLE hdl, const char* typed_uri) {
@@ -391,6 +397,67 @@ int PalStreamChangeName(PAL_HANDLE hdl, const char* typed_uri) {
         return -PAL_ERROR_NOTSUPPORT;
 
     return hops->rename(hdl, type, uri);
+}
+
+int PalFileCreateSymlink(const char* target, const char* typed_uri) {
+    char type[URI_PREFIX_MAX_LEN + 1];
+    const char* uri;
+    struct handle_ops* ops;
+    int ret = split_uri_and_find_ops(typed_uri, type, &uri, &ops);
+    if (ret < 0)
+        return ret;
+    if (ops != &g_file_ops || !ops->symlink)
+        return -PAL_ERROR_NOTSUPPORT;
+    return ops->symlink(target, uri);
+}
+
+int PalFileCreateLink(const char* old_typed_uri, const char* new_typed_uri) {
+    char old_type[URI_PREFIX_MAX_LEN + 1];
+    char new_type[URI_PREFIX_MAX_LEN + 1];
+    const char* old_uri;
+    const char* new_uri;
+    struct handle_ops* old_ops;
+    struct handle_ops* new_ops;
+    int ret = split_uri_and_find_ops(old_typed_uri, old_type, &old_uri, &old_ops);
+    if (ret < 0)
+        return ret;
+    ret = split_uri_and_find_ops(new_typed_uri, new_type, &new_uri, &new_ops);
+    if (ret < 0)
+        return ret;
+    if (old_ops != &g_file_ops || new_ops != &g_file_ops || old_ops != new_ops || !new_ops->link)
+        return -PAL_ERROR_NOTSUPPORT;
+    return new_ops->link(old_uri, new_uri);
+}
+
+int PalFileUnlink(const char* typed_uri) {
+    char type[URI_PREFIX_MAX_LEN + 1];
+    const char* uri;
+    struct handle_ops* ops;
+    int ret = split_uri_and_find_ops(typed_uri, type, &uri, &ops);
+    if (ret < 0)
+        return ret;
+    if (ops != &g_file_ops || !ops->unlink_path)
+        return -PAL_ERROR_NOTSUPPORT;
+    return ops->unlink_path(uri);
+}
+
+int PalFileRename(const char* old_typed_uri, const char* new_typed_uri) {
+    char old_type[URI_PREFIX_MAX_LEN + 1];
+    char new_type[URI_PREFIX_MAX_LEN + 1];
+    const char* old_uri;
+    const char* new_uri;
+    struct handle_ops* old_ops;
+    struct handle_ops* new_ops;
+    int ret = split_uri_and_find_ops(old_typed_uri, old_type, &old_uri, &old_ops);
+    if (ret < 0)
+        return ret;
+    ret = split_uri_and_find_ops(new_typed_uri, new_type, &new_uri, &new_ops);
+    if (ret < 0)
+        return ret;
+    if (old_ops != &g_file_ops || new_ops != &g_file_ops || old_ops != new_ops ||
+        !new_ops->rename_path)
+        return -PAL_ERROR_NOTSUPPORT;
+    return new_ops->rename_path(old_uri, new_uri);
 }
 
 int PalDebugLog(const void* buffer, size_t size) {
