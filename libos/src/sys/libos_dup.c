@@ -84,7 +84,7 @@ long libos_syscall_dup(unsigned int fd) {
 
 #ifdef ENABLE_GRAPHICS
     /* Graphics logic to avoid overflow into fd range. */
-    if (vfd > GRAPHICS_HOST_FD_OFFSET) {
+    if (vfd >= 0 && (uint64_t)vfd > GRAPHICS_HOST_FD_OFFSET) { /* not for an error */
         log_always("error: dup(..) overflowed into host fd range. (ret: %d)\n", vfd);
         assert(false);
     }

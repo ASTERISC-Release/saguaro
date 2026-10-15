@@ -428,8 +428,9 @@ graphics_cont:
     } else {
         ret = set_new_fd_handle(hdl, flags & O_CLOEXEC ? FD_CLOEXEC : 0, NULL);
 
-        /* Graphics logic to avoid overflow into fd range. */
-        if (ret > GRAPHICS_HOST_FD_OFFSET) {
+        /* Graphics logic to avoid overflow into fd range (only for a descriptor: an error such
+         * as -EMFILE must not compare as a huge unsigned number) */
+        if (ret >= 0 && (uint64_t)ret > GRAPHICS_HOST_FD_OFFSET) {
             log_always("error: openat(..) overflowed into host fd range. (ret: %d)\n", ret);
             assert(false);
         }
