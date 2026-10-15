@@ -217,6 +217,12 @@ int _PalProcessCreate(const char** args, uintptr_t (*reserved_mem_ranges)[2],
 noreturn void _PalProcessExit(int exit_code);
 int _PalThreadSetCpuAffinity(PAL_HANDLE thread, unsigned long* cpu_mask, size_t cpu_mask_len);
 int _PalThreadGetCpuAffinity(PAL_HANDLE thread, unsigned long* cpu_mask, size_t cpu_mask_len);
+#if defined(PAL_HOST_VM) && defined(__x86_64__)
+int _PalFutexSharedAdd(uint32_t* addr, uint32_t val, uint32_t bitset, PAL_HANDLE event,
+                       void** out_waiter);
+int _PalFutexSharedRemove(void* waiter, bool* out_woken);
+int _PalFutexSharedWake(uint32_t* addr, uint32_t bitset, int count, int* out_woken);
+#endif
 
 /* PalEvent calls */
 int _PalEventCreate(PAL_HANDLE* handle_ptr, bool init_signaled, bool auto_clear);

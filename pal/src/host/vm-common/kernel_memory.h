@@ -112,6 +112,8 @@ int memory_address_space_protect(struct memory_address_space* space, void* addr,
                                  bool read, bool write, bool execute);
 int memory_address_space_switch(const struct memory_address_space* space);
 bool memory_address_space_handle_fault(uintptr_t addr, uint64_t error_code);
+/* Physical address of `addr` in the current root (the page must be present). */
+int memory_address_space_translate(uintptr_t addr, uintptr_t* out_phys);
 int memory_address_space_switch_root(uint64_t root);
 #endif
 

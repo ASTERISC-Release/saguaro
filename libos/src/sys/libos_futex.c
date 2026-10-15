@@ -21,14 +21,17 @@
 #include "api.h"
 #include "assert.h"
 #include "avl_tree.h"
+#include "libos_handle.h"
 #include "libos_internal.h"
 #include "libos_refcount.h"
 #include "libos_table.h"
 #include "libos_thread.h"
 #include "libos_types.h"
 #include "libos_utils.h"
+#include "libos_vma.h"
 #include "linux_abi/errors.h"
 #include "linux_abi/futex.h"
+#include "linux_abi/memory.h"
 #include "list.h"
 #include "pal.h"
 #include "spinlock.h"
@@ -693,6 +696,71 @@ out_unlock:
     return ret;
 }
 
+/*
+ * Futexes shared between processes: a non-private FUTEX_WAIT/FUTEX_WAKE on a MAP_SHARED mapping
+ * goes to the PAL's shared wait queue, which keys the futex by the memory under the word, so that
+ * a wake in one process reaches a waiter in another. Only some PALs provide it (the x86_64 VM PAL
+ * with multiprocess support); elsewhere, and for the requeue and wake-op operations, such a futex
+ * stays process-local as before.
+ */
+static bool g_futex_shared_unsupported = false;
+
+static bool use_shared_futex(uint32_t* uaddr) {
+    if (__atomic_load_n(&g_futex_shared_unsupported, __ATOMIC_RELAXED))
+        return false;
+    struct libos_vma_info vma_info;
+    if (lookup_vma(uaddr, &vma_info) < 0)
+        return false;
+    if (vma_info.file)
+        put_handle(vma_info.file);
+    return (vma_info.flags & MAP_SHARED) && !(vma_info.flags & VMA_INTERNAL);
+}
+
+/* Returns -ENOSYS if the PAL has no shared futexes (the caller then uses the private path). */
+static int futex_shared_wait(uint32_t* uaddr, uint32_t val, uint64_t* timeout, uint32_t bitset) {
+    if (!bitset)
+        return -EINVAL;
+
+    thread_prepare_wait();
+    void* waiter = NULL;
+    int ret = PalFutexSharedAdd(uaddr, val, bitset, get_cur_thread()->scheduler_event, &waiter);
+    if (ret == -PAL_ERROR_NOTIMPLEMENTED) {
+        __atomic_store_n(&g_futex_shared_unsupported, true, __ATOMIC_RELAXED);
+        return -ENOSYS;
+    }
+    if (ret == -PAL_ERROR_TRYAGAIN)
+        return -EAGAIN;
+    if (ret < 0)
+        return pal_to_unix_errno(ret);
+
+    ret = thread_wait(timeout, /*ignore_pending_signals=*/false);
+
+    bool woken = false;
+    int remove_ret = PalFutexSharedRemove(waiter, &woken);
+    if (remove_ret < 0)
+        return pal_to_unix_errno(remove_ret);
+    if (woken)
+        return 0;
+    if (ret == 0 || ret == -EINTR)
+        return -ERESTARTSYS;
+    return ret;
+}
+
+static int futex_shared_wake(uint32_t* uaddr, int to_wake, uint32_t bitset) {
+    if (!bitset)
+        return -EINVAL;
+
+    int woken = 0;
+    int ret = PalFutexSharedWake(uaddr, bitset, to_wake, &woken);
+    if (ret == -PAL_ERROR_NOTIMPLEMENTED) {
+        __atomic_store_n(&g_futex_shared_unsupported, true, __ATOMIC_RELAXED);
+        return -ENOSYS;
+    }
+    if (ret < 0)
+        return pal_to_unix_errno(ret);
+    return woken;
+}
+
 #define FUTEX_CHECK_READ  false
 #define FUTEX_CHECK_WRITE true
 static int check_futex_ptr(uint32_t* ptr, bool check_write) {
@@ -755,14 +823,27 @@ static int _libos_syscall_futex(uint32_t* uaddr, int op, uint32_t val, void* uti
         log_warning("Ignoring FUTEX_CLOCK_REALTIME flag");
     }
 
-    if (!(op & FUTEX_PRIVATE_FLAG)) {
-        log_warning("Non-private futexes are not supported, assuming implicit FUTEX_PRIVATE_FLAG");
-    }
-
     /* `uaddr` should be valid pointer in all cases. */
     int ret = check_futex_ptr(uaddr, FUTEX_CHECK_READ);
     if (ret < 0) {
         return ret;
+    }
+
+    if (!(op & FUTEX_PRIVATE_FLAG)) {
+        bool shared_op = cmd == FUTEX_WAIT || cmd == FUTEX_WAIT_BITSET || cmd == FUTEX_WAKE
+                         || cmd == FUTEX_WAKE_BITSET;
+        if (shared_op && use_shared_futex(uaddr)) {
+            if (cmd == FUTEX_WAIT || cmd == FUTEX_WAIT_BITSET) {
+                ret = futex_shared_wait(uaddr, val, no_timeout ? NULL : &timeout,
+                                        cmd == FUTEX_WAIT ? FUTEX_BITSET_MATCH_ANY : val3);
+            } else {
+                ret = futex_shared_wake(uaddr, val,
+                                        cmd == FUTEX_WAKE ? FUTEX_BITSET_MATCH_ANY : val3);
+            }
+            if (ret != -ENOSYS)
+                return ret;
+        }
+        log_warning("Non-private futexes are not supported, assuming implicit FUTEX_PRIVATE_FLAG");
     }
 
     switch (cmd) {

@@ -35,6 +35,9 @@ PalStreamAttributesQueryByHandle
 PalStreamAttributesQuery
 PalProcessCreate
 PalProcessExit
+PalFutexSharedAdd
+PalFutexSharedRemove
+PalFutexSharedWake
 PalSystemTimeQuery
 PalRandomBitsRead
 PalCpuIdRetrieve

@@ -607,6 +607,7 @@ noreturn void _PalProcessExit(int exitcode) {
         __atomic_store_n(&space->exiting, 1, __ATOMIC_RELEASE);
         while (sched_thread_space_has_other_running(space, &tcb->kernel_thread))
             _PalThreadYieldExecution();
+        vm_futex_shared_purge(space);
         vm_destroy_tracked_handles(space, /*keep_threads=*/true);
         log_always("[ VM child exited with code %d ]", exitcode);
         sched_thread_set_exit_cleanup(vm_process_exit_cleanup, (void*)owner_frame);
