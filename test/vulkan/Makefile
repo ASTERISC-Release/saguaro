@@ -7,7 +7,7 @@ LDLIBS = -lvulkan
 GLSLANG ?= glslangValidator
 
 .PHONY: all
-all: vk-headless vk-session-shim.so
+all: vk-headless vk-session-shim.so clock-probe
 
 vk-session-shim.so: vk-session-shim.c
 	$(CC) $(CFLAGS) -shared -fPIC $< -o $@ -ldl
@@ -25,9 +25,11 @@ frag_spv.h: tri.frag
 # gramine-direct: `make direct-<prog>.manifest` for vk-headless (this directory) or a program in
 # /usr/bin (vulkaninfo, vkcube, vkmark); then `gramine-direct direct-<prog> [args]`.
 GRAMINE_LOG_LEVEL ?= error
+EAGER ?= 0
+SHIM ?= 0
 X_DISPLAY_NUM = $(patsubst :%,%,$(firstword $(subst ., ,$(DISPLAY))))
 ETC_VULKAN = $(if $(wildcard /etc/vulkan),1,0)
-prog_binary = $(if $(filter vk-headless,$(1)),vk-headless,/usr/bin/$(1))
+prog_binary = $(if $(filter vk-headless clock-probe,$(1)),$(1),/usr/bin/$(1))
 
 .PHONY: FORCE
 direct-%.manifest: vk-direct.manifest.template FORCE
@@ -35,13 +37,15 @@ direct-%.manifest: vk-direct.manifest.template FORCE
 		-Detc_vulkan=$(ETC_VULKAN) -Dentrypoint=/$* -Dbinary=$(call prog_binary,$*) $< $@
 	gramine-manifest-check $@
 
-# gramine-vm: `make vm-<prog>.manifest` (EGL_DISCRETE=1 for renderD129), then
+# gramine-vm: `make vm-<prog>.manifest` (EGL_DISCRETE=1 for renderD129; EAGER=1 for programs that
+# dlopen the Vulkan loader; SHIM=1 for the phase-0 shim), then
 # `QEMU_PATH=<qemu-tirith>/build/qemu-system-x86_64 gramine-vm vm-<prog> [args]`.
 vm-%.manifest: vk-vm.manifest.template vk-session-shim.so FORCE
 	gramine-manifest -Dlog_level=$(GRAMINE_LOG_LEVEL) -Degl_discrete=$${EGL_DISCRETE:-0} \
+		-Deager=$(EAGER) -Dshim=$(SHIM) \
 		-Detc_vulkan=$(ETC_VULKAN) -Dentrypoint=/$* -Dbinary=$(call prog_binary,$*) $< $@
 	gramine-manifest-check $@ || echo "(gramine-manifest-check failed; see TESTING.md)"
 
 .PHONY: clean
 clean:
-	$(RM) vk-headless vk-session-shim.so *.manifest *.manifest.sgx *.sig
+	$(RM) vk-headless vk-session-shim.so clock-probe *.manifest *.manifest.sgx *.sig

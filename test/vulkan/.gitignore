@@ -2,3 +2,4 @@
 /vk-session-shim.so
 /*.manifest
 /*.manifest.sgx
+/clock-probe

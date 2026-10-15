@@ -2,7 +2,9 @@
 # A Vulkan program under gramine-vm with the graphics redirection (Documentation/devel/vulkan/,
 # phase 0: measures how far the existing OpenGL redirection carries Vulkan). Based on
 # CI-Examples/graphics/glxgears/glxgears.manifest.template. The program is chosen with -Dentrypoint
-# and -Dbinary; vk-session-shim.so starts the graphics session at vkCreateInstance.
+# and -Dbinary. libgraphics.so starts the graphics session at vkCreateInstance; -Deager=1 sets
+# EGL_EAGER_SESSION for programs that load the Vulkan loader with dlopen (vkcube, vulkaninfo);
+# -Dshim=1 adds the phase-0 test shim (test/vulkan/vk-session-shim.c) in front.
 
 libos.entrypoint = "{{ entrypoint }}"
 
@@ -12,7 +14,12 @@ loader.insecure__use_cmdline_argv = true
 loader.log_level = "{{ log_level }}"
 
 loader.env.LD_LIBRARY_PATH = "/lib:/usr/lib:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu"
+{% if shim|string == "1" %}
 loader.env.LD_PRELOAD = "/vk-session-shim.so:./libgraphics.so"
+{% else %}
+loader.env.LD_PRELOAD = "./libgraphics.so"
+{% endif %}
+loader.env.EGL_EAGER_SESSION = "{{ eager }}"
 loader.env.DISPLAY = "2:0"
 vm.net.direct_vsock_ports = [6000]
 loader.env.IVSHMEM_GRAMINE_VM = "1"
@@ -27,7 +34,9 @@ loader.env.EGL_IOCTL_LOG = "0"
 fs.mounts = [
   { path = "{{ entrypoint }}", uri = "file:{{ binary }}" },
   { path = "/libgraphics.so", uri = "file:{{ gramine.libgraphics }}" },
+{% if shim|string == "1" %}
   { path = "/vk-session-shim.so", uri = "file:vk-session-shim.so" },
+{% endif %}
   { path = "/usr", type = "chroot", uri = "file:/usr" },
   { path = "/etc/ld.so.cache", uri = "file:/etc/ld.so.cache" },
 {% if etc_vulkan|string != "0" %}
@@ -38,7 +47,6 @@ fs.mounts = [
   { path = "/sys/devices", type = "chroot", uri = "file:/sys/devices" },
   { path = "/sys/bus/pci", type = "chroot", uri = "file:/sys/bus/pci" },
   { path = "/root/.cache", type = "chroot", uri = "file:/root/.cache" },
-  # memfd replacement of vk-session-shim.so: a host directory, because Mesa sizes its memfds at up
-  # to 1 GiB (sparse), which a tmpfs mount would have to allocate in the LibOS
+  # output files of the tests (vulkaninfo --json -o /tmp/...)
   { path = "/tmp", type = "chroot", uri = "file:/tmp/vkshim" },
 ]
