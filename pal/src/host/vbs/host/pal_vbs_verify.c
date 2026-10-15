@@ -20,6 +20,7 @@
  *      --same-image         the report's UniqueId (image measurement) and AuthorId (signer) are those
  *                           of <enclave.dll> as loaded for the verification
  *      --unique-id HEX, --author-id HEX   pin the identity explicitly (32 bytes each)
+ *      --family-id HEX, --image-id HEX    pin vbs.family_id / vbs.image_id (16 bytes each)
  *      --min-svn N          the enclave's SVN is at least N
  *      --allow-debug        accept a debuggable enclave (refused otherwise)
  * Exit code 0 when every check passes, 1 otherwise, 2 for usage errors.
@@ -107,8 +108,9 @@ int pal_vbs_verify_main(void* enclave, int argc, char** argv) {
     fclose(f);
 
     /* the checks asked for */
-    uint8_t want_data[64] = {0}, want_unique[32], want_author[32];
+    uint8_t want_data[64] = {0}, want_unique[32], want_author[32], want_family[16], want_image[16];
     int have_data = 0, same_image = 0, have_unique = 0, have_author = 0, allow_debug = 0;
+    int have_family = 0, have_image = 0;
     long min_svn = -1;
     for (int i = 5; i < argc; i++) {
         size_t n = 0;
@@ -131,6 +133,14 @@ int pal_vbs_verify_main(void* enclave, int argc, char** argv) {
             if (parse_hex(argv[++i], want_author, 32, &n) < 0 || n != 32)
                 return 2;
             have_author = 1;
+        } else if (!strcmp(argv[i], "--family-id") && i + 1 < argc) {
+            if (parse_hex(argv[++i], want_family, 16, &n) < 0 || n != 16)
+                return 2;
+            have_family = 1;
+        } else if (!strcmp(argv[i], "--image-id") && i + 1 < argc) {
+            if (parse_hex(argv[++i], want_image, 16, &n) < 0 || n != 16)
+                return 2;
+            have_image = 1;
         } else if (!strcmp(argv[i], "--min-svn") && i + 1 < argc) {
             min_svn = atol(argv[++i]);
         } else if (!strcmp(argv[i], "--same-image")) {
@@ -217,6 +227,10 @@ int pal_vbs_verify_main(void* enclave, int argc, char** argv) {
         check(!memcmp(want_unique, r->id.unique_id, 32), "unique id matches");
     if (have_author)
         check(!memcmp(want_author, r->id.author_id, 32), "author id matches");
+    if (have_family)
+        check(!memcmp(want_family, r->id.family_id, 16), "family id matches");
+    if (have_image)
+        check(!memcmp(want_image, r->id.image_id, 16), "image id matches");
     if (min_svn >= 0)
         check(r->id.enclave_svn >= (uint32_t)min_svn, "enclave svn >= the minimum");
     check(allow_debug || !(r->id.flags & (FLAG_FULL_DEBUG_ENABLED | FLAG_DYNAMIC_DEBUG_ENABLED)),

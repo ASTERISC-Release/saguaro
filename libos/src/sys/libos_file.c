@@ -30,7 +30,12 @@
  * only the first thread uses the static buffer whereas other threads fall back to a slower heap
  * allocation.
  */
+#ifdef PAL_HOST_VBS
+/* the vbs PAL sends up to 256 KiB per host call (PAL_VBS_IOBUF_PAYLOAD): one host call per piece */
+#define BUF_SIZE (256 * 1024)
+#else
 #define BUF_SIZE (64 * 1024)
+#endif
 static char g_sendfile_buf[BUF_SIZE];
 static bool g_sendfile_buf_in_use = false;
 
