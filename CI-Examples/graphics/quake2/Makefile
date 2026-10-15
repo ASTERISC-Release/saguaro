@@ -13,6 +13,10 @@ Q2_ARGS ?= +vid_maxfps 999 +toggleconsole
 
 # Input goes through the shared-memory ring in the comm page; 0 falls back to the X connection.
 SHARED_INPUT ?= 1
+# VULKAN=1: the Vulkan renderer ref_vk (built by setup-quake.sh) under gramine-vm, presented through
+# libgraphics.so's Vulkan layer (Documentation/devel/vulkan/)
+VULKAN ?= 0
+LAYER_DIR = $(shell python3 -c "import graminelibos; print(graminelibos._CONFIG_PKGLIBDIR)")/vulkan
 
 
 ifeq ($(DEBUG),1)
@@ -25,7 +29,10 @@ MANIFEST_ARGS = \
 	-Dlog_level=$(GRAMINE_LOG_LEVEL) \
 	-Dq2_dir=$(Q2_DIR) \
 	-Dhome=$(HOME) \
-	-Dshared_input=$(SHARED_INPUT)
+	-Dshared_input=$(SHARED_INPUT) \
+	-Dvulkan=$(VULKAN) \
+	-Degl_discrete=$${EGL_DISCRETE:-0} \
+	-Dlayer_dir=$(LAYER_DIR)
 
 .PHONY: all
 all: quake2.manifest

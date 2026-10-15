@@ -8,6 +8,9 @@
 #   YQ2_REV        git revision of yquake2 to build (default: QUAKE2_8_41, as in Tirith)
 #   Q2_DEMO_URL    where to fetch id Software's Quake II demo (q2-314-demo-x86.exe, a self-extracting
 #                  zip); only its baseq2/pak0.pak is used
+#   YQ2_VULKAN     1 (default when the Vulkan headers are installed): also build the Vulkan renderer
+#                  ref_vk (https://github.com/yquake2/ref_vk) into quake2_bin/release/ref_vk.so
+#   REF_VK_REV     git revision of ref_vk (default: v1.0.9)
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
@@ -19,6 +22,16 @@ echo "--- yquake2 ($YQ2_REV)"
 [ -d quake2_bin ] || git clone https://github.com/yquake2/yquake2.git quake2_bin
 git -C quake2_bin checkout -q "$YQ2_REV"
 make -C quake2_bin -j"$(nproc)"
+
+YQ2_VULKAN=${YQ2_VULKAN:-$([ -e /usr/include/vulkan/vulkan.h ] && echo 1 || echo 0)}
+if [ "$YQ2_VULKAN" = 1 ]; then
+    REF_VK_REV=${REF_VK_REV:-v1.0.9}
+    echo "--- ref_vk ($REF_VK_REV)"
+    [ -d quake2_bin/ref_vk ] || git clone https://github.com/yquake2/ref_vk.git quake2_bin/ref_vk
+    git -C quake2_bin/ref_vk checkout -q "$REF_VK_REV"
+    make -C quake2_bin/ref_vk -j"$(nproc)"
+    cp quake2_bin/ref_vk/release/ref_vk.so quake2_bin/release/
+fi
 
 echo "--- game data (Quake II demo)"
 PAK=quake2_bin/release/baseq2/pak0.pak
@@ -41,4 +54,5 @@ fi
 ls -l "$PAK"
 
 echo "yquake2: $(git -C quake2_bin rev-parse HEAD)"
+[ "$YQ2_VULKAN" = 1 ] && echo "ref_vk: $(git -C quake2_bin/ref_vk rev-parse HEAD)"
 echo "built: $SCRIPT_DIR/quake2_bin/release/quake2"
