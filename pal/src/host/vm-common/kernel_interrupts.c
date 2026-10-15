@@ -58,6 +58,10 @@ extern void isr_spurious(void);
  * and afterwards it is read-only */
 bool g_interrupts_enabled = false;
 
+#ifdef PAL_HOST_VM
+bool g_idt_loaded = false;
+#endif
+
 static struct idt_gate* g_idt = NULL; /* IDT with 256 partially filled gates, see *.S */
 
 /* A single "invalidate TLB" structure used when page table entries (PTEs) are updated by one vCPU.
@@ -463,6 +467,9 @@ int interrupts_init(void) {
     tss_desc += get_per_cpu_data()->cpu_id;
     ltr((char*)tss_desc - gdt_start);
 
+#ifdef PAL_HOST_VM
+    g_idt_loaded = true;
+#endif
     /* enable interrupts */
     sti();
     return 0;
