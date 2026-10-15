@@ -1604,6 +1604,18 @@ class TC_80_Socket(RegressionTestCase):
                     os.close(wfd)
                     socket.send_fds(conn, [b'OK'], [rfd])
                     os.close(rfd)
+                    # a socketpair end: answer through it with another pipe's read end
+                    msg2, fds2, _, _ = socket.recv_fds(conn, 16, 4)
+                    result['msg2'] = msg2
+                    if fds2:
+                        with socket.socket(fileno=fds2[0]) as pair:
+                            rfd, wfd = os.pipe()
+                            os.write(wfd, b'hello from the host')
+                            os.close(wfd)
+                            socket.send_fds(pair, [b'PAIR'], [rfd])
+                            os.close(rfd)
+                        for fd in fds2[1:]:
+                            os.close(fd)
                     conn.recv(1)  # wait for the client to close
             except OSError as e:
                 result['error'] = e
@@ -1620,6 +1632,7 @@ class TC_80_Socket(RegressionTestCase):
         self.assertNotIn('error', result)
         self.assertEqual(result.get('msg'), b'FD')
         self.assertEqual(result.get('file'), b'hello from gramine')
+        self.assertEqual(result.get('msg2'), b'SP')
         self.assertIn('TEST OK', stdout)
 
     def test_000_getsockopt(self):
