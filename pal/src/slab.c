@@ -122,6 +122,11 @@ void pal_startup_allocs_record(bool on) {
     g_startup_allocs_recording = on;
 }
 
+void pal_startup_allocs_forget(void* ptr) {
+    if (ptr)
+        startup_alloc_forget(ptr);
+}
+
 void pal_startup_allocs_free(void) {
     g_startup_allocs_recording = false;
     while (g_startup_allocs_cnt)

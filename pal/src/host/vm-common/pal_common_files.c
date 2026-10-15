@@ -63,6 +63,11 @@ static struct shared_file_cache* shared_file_cache_find(uint64_t nodeid, bool cr
         cache = calloc(1, sizeof(*cache));
         if (!cache)
             return NULL;
+        /* the record is shared by all processes: a child that creates it while it starts (when it
+         * opens the LibOS binary, say) must not free it at its exit */
+#ifdef PAL_HOST_VM
+        pal_startup_allocs_forget(cache);
+#endif
         cache->nodeid = nodeid;
         cache->next = g_shared_file_caches;
         g_shared_file_caches = cache;
@@ -219,6 +224,9 @@ static int shared_file_page(struct pal_handle* handle, uint64_t page, uintptr_t*
             spinlock_unlock(&g_shared_file_caches_lock);
             return -PAL_ERROR_NOMEM;
         }
+#ifdef PAL_HOST_VM
+        pal_startup_allocs_forget(frames); /* shared, as the record */
+#endif
         if (cache->frames_count)
             memcpy(frames, cache->frames, cache->frames_count * sizeof(*frames));
         free(cache->frames);

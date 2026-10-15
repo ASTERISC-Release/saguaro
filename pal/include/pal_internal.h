@@ -343,6 +343,9 @@ int pal_enable_shared_frame_slab_allocator(void);
 /* Records the PAL allocations of a starting child process, to free them when it exits. */
 void pal_startup_allocs_record(bool on);
 void pal_startup_allocs_free(void);
+/* Excludes an allocation from that list: one that joins state shared by all processes and so must
+ * outlive the child. */
+void pal_startup_allocs_forget(void* ptr);
 /* Drops one reference of a handle shared with another process; true if others still hold it. */
 bool vm_handle_release_share(PAL_HANDLE handle);
 /* Per-process record of the handles given to the LibOS, destroyed when the process exits. */
