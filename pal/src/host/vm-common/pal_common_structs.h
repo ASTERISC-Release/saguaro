@@ -85,6 +85,22 @@ struct pal_handle_inner_pipe {
     struct pal_handle_inner_pipe_buf* pipe_buf; /* protected by g_connecting_pipes_lock */
 };
 
+/* The UDP receive ring of a relayed socket (pal_common_sockets.c); every PAL built on vm-common
+ * (vm, tdx) keeps a pointer to it in its `pal_handle` as `region`. */
+#define WRAP_MARKER 0xFFFFFFFFu
+#define DATA_SIZE (1 << 20) /* 1 MiB UDP receive ring */
+
+struct udp_rx_ring {
+    // producer writes tail, consumer writes head
+    uint32_t head;
+    uint32_t tail;
+    uint32_t cap;
+    uint32_t udp_rx_futex;
+    uint32_t sender_port;
+    bool relay_connected;
+    void *ring;
+};
+
 struct pal_handle_inner_sock {
     PAL_IDX fd;
     spinlock_t lock;
