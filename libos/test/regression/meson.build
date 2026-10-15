@@ -167,6 +167,7 @@ tests = {
     'sysfs_common': {},
     'recvmmsg_timeout': {},
     'setid_rules': {},
+    'socket_errnos': {},
     'sysv_msg': {},
     'sysv_sem': {},
     'sysv_shm': {},

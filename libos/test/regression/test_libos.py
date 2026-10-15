@@ -1098,6 +1098,10 @@ class TC_30_Syscall(RegressionTestCase):
         stdout, _ = self.run_binary(['fd_limits'])
         self.assertIn('TEST OK', stdout)
 
+    def test_09b_socket_errnos(self):
+        stdout, _ = self.run_binary(['socket_errnos'])
+        self.assertIn('TEST OK', stdout)
+
     def test_099_sysv_sem(self):
         stdout, _ = self.run_binary(['sysv_sem'])
         self.assertIn('TEST OK', stdout)

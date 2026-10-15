@@ -129,6 +129,29 @@ out:
     unlock(&sock->lock);
 }
 
+#ifndef SO_BINDTODEVICE
+#define SO_BINDTODEVICE 25
+#endif
+#ifndef SOCK_SEQPACKET
+#define SOCK_SEQPACKET 5
+#endif
+
+/* The kernel's checks of an inet socket's type and protocol (`inet_create()`): an unknown type
+ * number is EINVAL, a protocol that does not fit the type EPROTONOSUPPORT (raw sockets need a
+ * protocol). Returns 0 if the combination exists. */
+static int inet_type_protocol_check(int type, int protocol) {
+    if (type < 1 || type > 10 /* SOCK_PACKET */)
+        return -EINVAL;
+    switch (type) {
+        case SOCK_STREAM:
+            return (protocol == 0 || protocol == IPPROTO_TCP) ? 0 : -EPROTONOSUPPORT;
+        case SOCK_DGRAM:
+            return (protocol == 0 || protocol == IPPROTO_UDP) ? 0 : -EPROTONOSUPPORT;
+        default:
+            return -EPROTONOSUPPORT;
+    }
+}
+
 long libos_syscall_socket(int family, int type, int protocol) {
     switch (family) {
         case AF_UNIX:
@@ -152,6 +175,13 @@ long libos_syscall_socket(int family, int type, int protocol) {
     }
 
     type &= SOCK_TYPE_MASK;
+    if (family != AF_UNIX) {
+        int check = inet_type_protocol_check(type, protocol);
+        if (check < 0)
+            return check;
+    } else if (type < 1 || type > 10) {
+        return -EINVAL;
+    }
     switch (type) {
         case SOCK_STREAM:
         case SOCK_DGRAM:
@@ -204,10 +234,6 @@ long libos_syscall_socket(int family, int type, int protocol) {
 }
 
 long libos_syscall_socketpair(int family, int type, int protocol, int* sv) {
-    if (family != AF_UNIX) {
-        return -EAFNOSUPPORT;
-    }
-
     int flags = type & ~SOCK_TYPE_MASK;
     bool is_nonblocking = flags & SOCK_NONBLOCK;
     bool is_cloexec = flags & SOCK_CLOEXEC;
@@ -216,6 +242,15 @@ long libos_syscall_socketpair(int family, int type, int protocol, int* sv) {
     }
 
     type &= SOCK_TYPE_MASK;
+    if (family == AF_INET || family == AF_INET6) {
+        /* the sockets are created first (type/protocol errors), then inet refuses pairs
+         * (`sock_no_socketpair()`), as LTP socketpair01 checks */
+        int ret = inet_type_protocol_check(type, protocol);
+        return ret < 0 ? ret : -EOPNOTSUPP;
+    }
+    if (family != AF_UNIX) {
+        return -EAFNOSUPPORT;
+    }
     if (type != SOCK_STREAM && type != SOCK_DGRAM) {
         log_warning("unsupported socket type %d", type);
         return -EPROTONOSUPPORT;
@@ -397,6 +432,19 @@ long libos_syscall_bind(int fd, void* addr, int _addrlen) {
         // log_always("RET: %ld \n", -EINVAL);
         goto out;
     }
+
+    /* a port below 1024 needs CAP_NET_BIND_SERVICE (the kernel's `inet_port_requires_bind_service()`
+     * with the default ip_unprivileged_port_start; LTP bind02) */
+    /* sockaddr_in and sockaddr_in6 both start with a 16-bit family and the big-endian port */
+    uint16_t family_port[2];
+    if ((sock->domain == AF_INET || sock->domain == AF_INET6) && addrlen >= sizeof(family_port) &&
+            (memcpy(family_port, addr, sizeof(family_port)), family_port[0] == sock->domain)) {
+        uint16_t port = __builtin_bswap16(family_port[1]);
+        if (port != 0 && port < 1024 && !libos_capable(10 /* CAP_NET_BIND_SERVICE */)) {
+            ret = -EACCES;
+            goto out;
+        }
+    }
     // log_always("Gonna bind\n");
     ret = sock->ops->bind(handle, addr, addrlen);
     if (ret < 0) {
@@ -447,6 +495,12 @@ long libos_syscall_listen(int fd, int backlog) {
 
     lock(&sock->lock);
 
+    /* only connection-oriented sockets listen (`sock_no_listen()`, LTP listen01) */
+    if (sock->type != SOCK_STREAM && sock->type != SOCK_SEQPACKET) {
+        ret = -EOPNOTSUPP;
+        goto out;
+    }
+
     switch (sock->state) {
         case SOCK_BOUND:
         case SOCK_LISTENING:
@@ -478,21 +532,6 @@ static int do_accept(int fd, void* addr, int* addrlen_ptr, int flags) {
         return -EINVAL;
     }
 
-    size_t addrlen = 0;
-    if (addr) {
-        if (!is_user_memory_readable(addrlen_ptr, sizeof(*addrlen_ptr))
-                || !is_user_memory_writable(addrlen_ptr, sizeof(*addrlen_ptr))) {
-            return -EFAULT;
-        }
-        if (*addrlen_ptr < 0) {
-            return -EINVAL;
-        }
-        addrlen = *addrlen_ptr;
-        if (!is_user_memory_writable(addr, addrlen)) {
-            return -EFAULT;
-        }
-    }
-
     struct libos_handle* handle = get_fd_handle(fd, NULL, NULL);
     if (!handle) {
         return -EBADF;
@@ -508,8 +547,12 @@ static int do_accept(int fd, void* addr, int* addrlen_ptr, int flags) {
     bool has_recvtimeout_set = false;
     struct libos_sock_handle* sock = &handle->info.sock;
 
+    /* The kernel's order (LTP accept01): a socket type without accept is EOPNOTSUPP, a socket that
+     * does not listen is EINVAL, and only then is the address buffer looked at. */
     lock(&sock->lock);
-    if (sock->state != SOCK_LISTENING) {
+    if (sock->type != SOCK_STREAM && sock->type != SOCK_SEQPACKET) {
+        ret = -EOPNOTSUPP;
+    } else if (sock->state != SOCK_LISTENING) {
         ret = -EINVAL;
     } else if (!sock->can_be_read) {
         ret = -EINVAL;
@@ -519,6 +562,24 @@ static int do_accept(int fd, void* addr, int* addrlen_ptr, int flags) {
     unlock(&sock->lock);
     if (ret) {
         goto out;
+    }
+
+    size_t addrlen = 0;
+    if (addr) {
+        if (!is_user_memory_readable(addrlen_ptr, sizeof(*addrlen_ptr))
+                || !is_user_memory_writable(addrlen_ptr, sizeof(*addrlen_ptr))) {
+            ret = -EFAULT;
+            goto out;
+        }
+        if (*addrlen_ptr < 0) {
+            ret = -EINVAL;
+            goto out;
+        }
+        addrlen = *addrlen_ptr;
+        if (!is_user_memory_writable(addr, addrlen)) {
+            ret = -EFAULT;
+            goto out;
+        }
     }
 
     ret = sock->ops->accept(handle, !!(flags & SOCK_NONBLOCK), &client_handle);
@@ -1463,6 +1524,12 @@ long libos_syscall_setsockopt(int fd, int level, int optname, char* optval, int 
         goto out;
     }
     size_t len = optlen;
+    /* the socket-level options are ints, checked before anything else (`sk_setsockopt()`; LTP
+     * setsockopt01); SO_BINDTODEVICE takes a name of any length */
+    if (level == SOL_SOCKET && optname != SO_BINDTODEVICE && len < sizeof(int)) {
+        ret = -EINVAL;
+        goto out;
+    }
     if (!is_user_memory_readable(optval, len)) {
         ret = -EFAULT;
         goto out;
