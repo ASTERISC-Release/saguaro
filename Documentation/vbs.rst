@@ -34,8 +34,10 @@ How it fits together
   returns is untrusted, as in the SGX PAL.
 - **The Linux side** of a build packs the objects and compiles the Windows
   enclave runtime and host with clang; **the Windows side** links, signs and
-  runs. ``gramine-vbs`` drives both, the Windows side over ssh;
-  ``gramine-vbs.ps1`` does the Windows side alone for objects prepared earlier.
+  runs. There are two ways to drive them: on **one Windows machine**, where
+  the Linux side runs in WSL2 (``gramine-vbs.cmd``, see `Windows only (WSL)`_),
+  or from a **Linux machine** that reaches the Windows machine over ssh
+  (``scripts/vbs/gramine-vbs``).
 
 Security properties and limits
 ------------------------------
@@ -106,6 +108,40 @@ Windows machine
    authentication for your user (the tools use ``ssh`` and ``scp``; the remote
    shell may be PowerShell or cmd).
 
+Windows only (WSL)
+^^^^^^^^^^^^^^^^^^
+
+The whole build can run on the ARM64 Windows machine: its Linux half runs in a
+**WSL2** distribution of the same machine (WSL uses the hypervisor that VBS
+needs anyway). In addition to the Windows steps above (the ssh server is not
+needed):
+
+#. **WSL2 with an aarch64 Ubuntu 24.04** distribution (as administrator:
+   ``wsl --install -d Ubuntu-24.04``, then a restart; on ARM64 Windows the
+   distribution is aarch64). Another name is given with ``-Distro`` or
+   ``GRAMINE_VBS_DISTRO``.
+
+#. **A checkout of the repository on Windows** (any folder; a checkout with
+   Windows line ends, Git's ``core.autocrlf=true``, works).
+
+#. **The build tools inside the distribution**. ``gramine-vbs setup`` checks
+   the Windows side and the distribution and prints what is missing; then
+   either::
+
+       scripts\vbs\gramine-vbs.cmd setup -Install   # no sudo: into ~/.local/share/gramine-vbs
+       scripts\vbs\gramine-vbs.cmd setup -Apt       # sudo apt-get install (asks for the password)
+
+   ``-Install`` downloads the same Ubuntu packages with ``apt-get download``
+   and unpacks them into a folder of your home (about 290 MB, 7 s): bison, m4,
+   pkgconf, meson, ninja, clang 18 and four Python modules. ``-Apt`` installs
+   them system-wide: ``bison m4 pkgconf meson ninja-build python3-tomli
+   python3-tomli-w python3-voluptuous python3-pyelftools clang``. Nothing else
+   is ever installed or changed by the tools.
+
+The first build copies the SDK and MSVC headers into the distribution (once
+per version, 156 MB), builds the vbs glibc (about 2 minutes) and the vbs PAL
+and LibOS (1 minute); see `Quick start on Windows`_.
+
 Linux side
 ^^^^^^^^^^
 
@@ -133,8 +169,34 @@ Linux side
 
    (into ``~/.cache/gramine-vbs/winhdr``; about 160 MB).
 
-Quick start
------------
+Quick start on Windows
+----------------------
+
+In PowerShell or ``cmd``, in the checkout::
+
+    scripts\vbs\gramine-vbs.cmd setup
+    scripts\vbs\gramine-vbs.cmd run CI-Examples\vbs\helloworld\helloworld.manifest
+
+The first ``run`` copies the checkout into the distribution
+(``~/.cache/gramine-vbs/checkouts/<name>-<hash>``), builds the vbs glibc, the
+PAL and LibOS, compiles the program (the manifest's ``vbs.build``), packs,
+compiles the Windows objects with clang in WSL, then links, signs and runs it
+here: 3.5 minutes measured; a ``-Rebuild`` later takes 11 s, a plain ``run``
+of the signed image 0.4 s. The output::
+
+    Hello, world from a VBS enclave (pid 1, 0 arguments)
+
+The dynamically linked example (``CI-Examples\vbs\dynhello``) packs the
+program with the dynamic loader, ``libc.so.6`` and ``libm.so.6``::
+
+    scripts\vbs\gramine-vbs.cmd run CI-Examples\vbs\dynhello\dynhello.manifest
+
+A manifest outside the checkout works too; its folder is copied into the
+distribution (``~/.cache/gramine-vbs/apps``), so its ``vbs.packed_files`` must
+stay inside that folder.
+
+Quick start on Linux
+--------------------
 
 Settings for the examples (or give the matching options)::
 
@@ -143,11 +205,11 @@ Settings for the examples (or give the matching options)::
     # optional: GRAMINE_VBS_WINDOWS_DIR (default %USERPROFILE%\gramine-vbs\<name>),
     #           GRAMINE_VBS_HEADERS, GRAMINE_VBS_CERT_NAME, GRAMINE_VBS_SSH_OPTS
 
-Hello world (``CI-Examples/vbs/helloworld``)::
+Hello world (``CI-Examples/vbs/helloworld``; its ``vbs.build`` compiles the
+program against ``build-vbs-glibc``, so run this on the aarch64 machine or
+build the program there first)::
 
     cd CI-Examples/vbs/helloworld
-    SYSROOT=../../../build-vbs-glibc ../../../scripts/vbs/cc-static-pie.sh \
-        -o helloworld helloworld.c                     # on the aarch64 machine
     ../../../scripts/vbs/gramine-vbs run helloworld.manifest
 
 The first ``run`` builds the image (pack, compile, upload, link, sign: 17 s
@@ -194,9 +256,27 @@ Options: ``--runtime``, ``--headers``, ``--windows``, ``--windows-dir``,
 ``--cert-name`` (and the environment variables of the same names, see
 ``gramine-vbs --help``).
 
-On Windows alone, ``scripts/vbs/gramine-vbs.ps1`` signs, runs and verifies
-objects that ``gramine-vbs build --no-sign`` prepared (copy ``<name>.vbs\obj``
-with ``link-sign.cmd`` and ``pal_vbs_enclave.def``)::
+On Windows, ``scripts\vbs\gramine-vbs.cmd`` (which runs ``gramine-vbs.ps1``
+with Windows PowerShell) has the same commands, with the Linux side in WSL::
+
+    gramine-vbs.cmd setup  [-Install | -Apt]
+    gramine-vbs.cmd build  <manifest> [-Out DIR] [-NoSign]
+    gramine-vbs.cmd sign   <manifest|DIR>
+    gramine-vbs.cmd run    <manifest|DIR> [-Threads N] [-Root DIR] [-Rebuild] [-ShowHost] [-- ARGS]
+    gramine-vbs.cmd verify <manifest|DIR> -Report FILE [-- verifier options]
+
+with ``-Distro NAME`` and ``-CertName SUBJECT`` for all of them. The build
+folder ``<name>.vbs`` is next to the manifest and holds the objects, the
+signed ``<name>.dll``, ``pal_vbs_host.exe``, ``objs-info.txt`` (the clang,
+gcc and header versions and the object hashes; the objects are
+reproducible), and ``root`` (the default host root). ``run`` rebuilds when
+the manifest is newer than the image (or with ``-Rebuild``; a change to the
+application's sources alone needs ``-Rebuild``). Inputs reach WSL in
+environment variables, so folders with spaces or non-ASCII names work.
+
+Objects that ``gramine-vbs build --no-sign`` prepared on Linux (copy
+``<name>.vbs/obj`` with ``link-sign.cmd`` and ``pal_vbs_enclave.def``) are
+signed, run and verified with the earlier form::
 
     .\gramine-vbs.ps1 sign   -Dir <folder> -Name hello
     .\gramine-vbs.ps1 run    -Dir <folder> -Name hello
@@ -248,6 +328,12 @@ command line::
 
     gramine-vbs run attest.manifest -- <64 hex digits>
     gramine-vbs verify attest.vbs <windows folder>\root\data\out\report.bin \
+        --user-data <64 hex digits> --same-image --min-svn 1
+
+and on Windows alone::
+
+    gramine-vbs.cmd run attest.manifest -- <64 hex digits>
+    gramine-vbs.cmd verify attest.vbs -Report attest.vbs\root\data\out\report.bin -- ^
         --user-data <64 hex digits> --same-image --min-svn 1
 
 **What this establishes, and what it does not.** A successful local check
