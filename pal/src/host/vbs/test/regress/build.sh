@@ -24,4 +24,12 @@ for c in $(grep -l 'TEST OK' "$REG"/*.c); do
         bad="$bad $t"
     fi
 done
+# the vbs reproducers of this directory (platform-issues.md)
+for c in "$HERE"/*.c; do
+    t=$(basename "$c" .c)
+    [ "$t" = runner ] && continue
+    $CC -O2 -o "$OUT/tests/$t" "$c"
+done
+# helpers that the suite mounts at fixed paths (packed at /exec_victim)
+$CC -O2 -w -o "$OUT/exec_victim" "$REG/exec_victim.c"
 echo "built $ok programs; not built:$bad"

@@ -67,6 +67,10 @@ int vbs_init_host_files(void);
 const struct vbs_trusted_file* vbs_find_trusted(const char* path);
 bool vbs_is_allowed(const char* path);
 
+/* waits shorter than this poll the clock instead of WaitOnAddress, whose timeout is rounded up to
+ * the system timer tick */
+#define VBS_SHORT_WAIT_NS (2ull * 1000 * 1000)
+
 /* the PAL's per-thread control block */
 typedef struct pal_vbs_tcb {
     PAL_TCB common;
@@ -108,6 +112,8 @@ extern const struct pal_vbs_packed_obj* g_vbs_libos_obj;
 
 /* readiness of an in-enclave pipe end (pal_pipes.c), for _PalStreamsWaitEvents */
 pal_wait_flags_t vbs_pipe_ready(PAL_HANDLE handle);
+/* readiness of an in-enclave eventfd (pal_eventfd.c) */
+pal_wait_flags_t vbs_eventfd_ready(PAL_HANDLE handle);
 
 /* for pal_rtld.c (PAL_HOST_VBS): where the packed object behind a file handle lies */
 int vbs_packed_base(PAL_HANDLE handle, elf_addr_t* out_base, uintptr_t* out_size,

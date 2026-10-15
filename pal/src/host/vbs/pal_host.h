@@ -77,6 +77,11 @@ typedef struct {
         } pipesrv;
 
         struct {
+            struct vbs_eventfd* efd;
+            bool nonblocking;
+        } eventfd;
+
+        struct {
             PAL_IDX tid;
         } thread;
 

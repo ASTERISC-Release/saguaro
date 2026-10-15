@@ -190,8 +190,25 @@ static int read_enclave_config(const wchar_t* image, uint64_t* size, uint32_t* t
     return ret;
 }
 
+/* a 1 ms timer resolution for this process (Windows 11 applies timeBeginPeriod per process; it ends
+ * with the process): the enclave's timed waits (WaitOnAddress) are otherwise rounded up to the
+ * default 15.6 ms tick. GRAMINE_VBS_TIMER_RES=0 keeps the default. */
+static void raise_timer_resolution(void) {
+    const char* env = getenv("GRAMINE_VBS_TIMER_RES");
+    if (env && !strcmp(env, "0"))
+        return;
+    HMODULE winmm = LoadLibraryW(L"winmm.dll");
+    if (!winmm)
+        return;
+    typedef UINT(WINAPI * tbp_fn)(UINT);
+    tbp_fn tbp = (tbp_fn)(void*)GetProcAddress(winmm, "timeBeginPeriod");
+    if (tbp)
+        tbp(1);
+}
+
 int main(int argc, char** argv) {
     setvbuf(stdout, NULL, _IONBF, 0);
+    raise_timer_resolution();
     const wchar_t* image = L"pal_vbs_enclave.dll";
     wchar_t imagebuf[MAX_PATH];
     if (argc > 1) {

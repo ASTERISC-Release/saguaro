@@ -32,6 +32,8 @@ static pal_wait_flags_t ready(PAL_HANDLE h) {
         case PAL_TYPE_PIPE:
         case PAL_TYPE_PIPESRV:
             return vbs_pipe_ready(h);
+        case PAL_TYPE_EVENTFD:
+            return vbs_eventfd_ready(h);
         case PAL_TYPE_CONSOLE:
             return PAL_WAIT_WRITE;
         case PAL_TYPE_FILE:
@@ -136,8 +138,8 @@ int _PalStreamsWaitEvents(size_t count, PAL_HANDLE* handle_array, pal_wait_flags
                 goto out;
             }
         }
-        if (!nsock)
-            vbs_wait(&g_vbs_stream_gen, gen, left_ns);
+        if (!nsock && left_ns >= VBS_SHORT_WAIT_NS)
+            vbs_wait(&g_vbs_stream_gen, gen, left_ns); /* shorter waits poll (pal_events.c) */
     }
 out:
     free(pf);

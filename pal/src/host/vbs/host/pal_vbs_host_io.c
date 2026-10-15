@@ -16,6 +16,7 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <windows.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -154,6 +155,79 @@ static int64_t win_err(DWORD e) {
     }
 }
 
+/* POSIX semantics for unlink and rename (Windows 10 1709 and later, NTFS): the name goes away (or
+ * is replaced) at once even while the file is open elsewhere, and open handles keep the old data,
+ * as on Linux. The structures are declared here because older SDK headers lack the flags. */
+#define VBS_FILE_DISPOSITION_DELETE          0x1
+#define VBS_FILE_DISPOSITION_POSIX_SEMANTICS 0x2
+#define VBS_FILE_RENAME_REPLACE_IF_EXISTS    0x1
+#define VBS_FILE_RENAME_POSIX_SEMANTICS      0x2
+#define VBS_FileRenameInfoEx                 22
+#define VBS_FileDispositionInfoEx            21
+
+/* opens the name itself (a symbolic link, not its target), file or directory */
+static HANDLE open_for_delete(const wchar_t* w) {
+    return CreateFileW(w, DELETE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
+                       OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
+                       NULL);
+}
+
+static int64_t posix_delete(const wchar_t* w, bool is_dir) {
+    DWORD attr = GetFileAttributesW(w);
+    if (attr == INVALID_FILE_ATTRIBUTES)
+        return win_err(GetLastError());
+    bool real_dir = (attr & FILE_ATTRIBUTE_DIRECTORY) && !(attr & FILE_ATTRIBUTE_REPARSE_POINT);
+    if (real_dir && !is_dir)
+        return -L_EISDIR;
+    if (!real_dir && is_dir)
+        return -L_ENOTDIR;
+    HANDLE h = open_for_delete(w);
+    if (h != INVALID_HANDLE_VALUE) {
+        DWORD flags = VBS_FILE_DISPOSITION_DELETE | VBS_FILE_DISPOSITION_POSIX_SEMANTICS;
+        BOOL ok = SetFileInformationByHandle(h, (FILE_INFO_BY_HANDLE_CLASS)VBS_FileDispositionInfoEx,
+                                             &flags, sizeof(flags));
+        DWORD e = GetLastError();
+        CloseHandle(h);
+        if (ok)
+            return 0;
+        if (e == ERROR_DIR_NOT_EMPTY)
+            return win_err(e);
+    }
+    BOOL ok = (attr & FILE_ATTRIBUTE_DIRECTORY) ? RemoveDirectoryW(w) : DeleteFileW(w);
+    return ok ? 0 : win_err(GetLastError());
+}
+
+static int64_t posix_rename(const wchar_t* w1, const wchar_t* w2) {
+    DWORD attr = GetFileAttributesW(w1);
+    if (attr == INVALID_FILE_ATTRIBUTES)
+        return win_err(GetLastError());
+    HANDLE h = open_for_delete(w1);
+    if (h != INVALID_HANDLE_VALUE) {
+        /* FILE_RENAME_INFO with the Flags member, followed by the full new name */
+        wchar_t full[MAX_PATH * 2];
+        DWORD n = GetFullPathNameW(w2, MAX_PATH * 2, full, NULL);
+        if (n > 0 && n < MAX_PATH * 2) {
+            union {
+                FILE_RENAME_INFO info;
+                char bytes[sizeof(FILE_RENAME_INFO) + MAX_PATH * 2 * sizeof(wchar_t)];
+            } ri;
+            memset(&ri, 0, sizeof(FILE_RENAME_INFO));
+            *(DWORD*)&ri.info = VBS_FILE_RENAME_REPLACE_IF_EXISTS | VBS_FILE_RENAME_POSIX_SEMANTICS;
+            ri.info.RootDirectory = NULL;
+            ri.info.FileNameLength = n * sizeof(wchar_t);
+            memcpy(ri.info.FileName, full, (n + 1) * sizeof(wchar_t));
+            BOOL ok = SetFileInformationByHandle(h, (FILE_INFO_BY_HANDLE_CLASS)VBS_FileRenameInfoEx,
+                                                 &ri, sizeof(FILE_RENAME_INFO) + n * sizeof(wchar_t));
+            CloseHandle(h);
+            if (ok)
+                return 0;
+        } else {
+            CloseHandle(h);
+        }
+    }
+    return MoveFileExW(w1, w2, MOVEFILE_REPLACE_EXISTING) ? 0 : win_err(GetLastError());
+}
+
 static int64_t wsa_err(int e) {
     switch (e) {
         case WSAEWOULDBLOCK:    return -L_EAGAIN;
@@ -209,6 +283,152 @@ static int64_t map_path(const char* path, uint64_t len, wchar_t* out, size_t cap
     size_t n = wcslen(out);
     if (n > wcslen(g_root) && out[n - 1] == L'\\')
         out[n - 1] = 0;
+    return 0;
+}
+
+/* ---- symbolic links ---- */
+
+/* the REPARSE_DATA_BUFFER of a symbolic link (declared here: it lives in the DDK headers) */
+struct vbs_symlink_reparse {
+    ULONG tag;
+    USHORT data_len, reserved;
+    USHORT subst_off, subst_len, print_off, print_len;
+    ULONG flags; /* 1: relative */
+    WCHAR path[1];
+};
+#define VBS_SYMLINK_FLAG_RELATIVE 1
+#ifndef SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE
+#define SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE 0x2
+#endif
+
+/* whether the relative symlink target `t` (length tlen), resolved from the directory of the Linux
+ * path `link`, stays below the host root */
+static bool stays_below_root(const char* link, size_t llen, const char* t, size_t tlen) {
+    /* depth of the link's directory: the components of `link` minus the link's own name */
+    long depth = -1;
+    for (size_t i = 0; i < llen; i++)
+        if (link[i] != '/' && (i == 0 || link[i - 1] == '/'))
+            depth++;
+    size_t i = 0;
+    while (i < tlen) {
+        size_t j = i;
+        while (j < tlen && t[j] != '/')
+            j++;
+        size_t n = j - i;
+        if (n == 2 && t[i] == '.' && t[i + 1] == '.') {
+            if (--depth < 0)
+                return false;
+        } else if (n > 0 && !(n == 1 && t[i] == '.')) {
+            depth++;
+        }
+        i = j + 1;
+    }
+    return true;
+}
+
+static int64_t do_symlink(const char* target, size_t tlen, const char* linkpath, size_t llen) {
+    wchar_t wl[MAX_PATH * 2], wt[MAX_PATH * 2];
+    int64_t res = map_path(linkpath, llen, wl, MAX_PATH * 2);
+    if (res < 0)
+        return res;
+    if (tlen == 0)
+        return -L_ENOENT;
+    if (target[0] == '/') {
+        if ((res = map_path(target, tlen, wt, MAX_PATH * 2)) < 0)
+            return res;
+    } else {
+        /* a relative target stays below the host root */
+        if (!stays_below_root(linkpath, llen, target, tlen))
+            return -L_EPERM;
+        char t[1024];
+        if (tlen >= sizeof(t))
+            return -L_ENAMETOOLONG;
+        memcpy(t, target, tlen);
+        t[tlen] = 0;
+        if (!MultiByteToWideChar(CP_UTF8, 0, t, -1, wt, MAX_PATH * 2))
+            return -L_EINVAL;
+        for (wchar_t* c = wt; *c; c++)
+            if (*c == L'/')
+                *c = L'\\';
+    }
+    if (GetFileAttributesW(wl) != INVALID_FILE_ATTRIBUTES)
+        return -L_EEXIST;
+    /* a link to a directory must be a directory link on Windows; one to a missing target is a file
+     * link */
+    DWORD flags = SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE;
+    wchar_t resolved[MAX_PATH * 2];
+    const wchar_t* probe = wt;
+    if (target[0] != '/') {
+        wcscpy(resolved, wl);
+        wchar_t* slash = wcsrchr(resolved, L'\\');
+        if (slash && wcslen(resolved) + wcslen(wt) + 2 < MAX_PATH * 2) {
+            slash[1] = 0;
+            wcscat(resolved, wt);
+            probe = resolved;
+        }
+    }
+    DWORD a = GetFileAttributesW(probe);
+    if (a != INVALID_FILE_ATTRIBUTES && (a & FILE_ATTRIBUTE_DIRECTORY))
+        flags |= SYMBOLIC_LINK_FLAG_DIRECTORY;
+    return CreateSymbolicLinkW(wl, wt, flags) ? 0 : win_err(GetLastError());
+}
+
+static int64_t do_readlink(const char* path, size_t len, char* out, uint64_t* out_len) {
+    wchar_t w[MAX_PATH * 2];
+    int64_t res = map_path(path, len, w, MAX_PATH * 2);
+    if (res < 0)
+        return res;
+    DWORD a = GetFileAttributesW(w);
+    if (a == INVALID_FILE_ATTRIBUTES)
+        return win_err(GetLastError());
+    if (!(a & FILE_ATTRIBUTE_REPARSE_POINT))
+        return -L_EINVAL;
+    HANDLE h = CreateFileW(w, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
+                           OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
+                           NULL);
+    if (h == INVALID_HANDLE_VALUE)
+        return win_err(GetLastError());
+    union {
+        struct vbs_symlink_reparse r;
+        char bytes[16 * 1024];
+    } buf;
+    DWORD got = 0;
+    BOOL ok = DeviceIoControl(h, FSCTL_GET_REPARSE_POINT, NULL, 0, &buf, sizeof(buf), &got, NULL);
+    CloseHandle(h);
+    if (!ok || got < offsetof(struct vbs_symlink_reparse, path) ||
+            buf.r.tag != IO_REPARSE_TAG_SYMLINK)
+        return -L_EINVAL;
+    const wchar_t* t = (const wchar_t*)((char*)buf.r.path + buf.r.subst_off);
+    size_t tl = buf.r.subst_len / sizeof(wchar_t);
+    if ((char*)(t + tl) > buf.bytes + got)
+        return -L_EINVAL;
+    wchar_t tw[MAX_PATH * 2];
+    if (tl >= MAX_PATH * 2)
+        return -L_ENAMETOOLONG;
+    memcpy(tw, t, tl * sizeof(wchar_t));
+    tw[tl] = 0;
+    const wchar_t* rel = tw;
+    if (!(buf.r.flags & VBS_SYMLINK_FLAG_RELATIVE)) {
+        /* "\\??\\C:\\...": absolute; below the host root it becomes "/..." again */
+        if (!wcsncmp(rel, L"\\??\\", 4))
+            rel += 4;
+        size_t rl = wcslen(g_root);
+        if (_wcsnicmp(rel, g_root, rl))
+            return -L_EINVAL; /* not one of ours */
+        rel += rl;
+    }
+    char u[2048];
+    int n = WideCharToMultiByte(CP_UTF8, 0, rel, -1, u, sizeof(u), NULL, NULL);
+    if (n <= 0)
+        return -L_ENAMETOOLONG;
+    for (char* c = u; *c; c++)
+        if (*c == '\\')
+            *c = '/';
+    size_t ul = strlen(u);
+    if (ul > PAL_VBS_HOST_DATA_MAX)
+        return -L_ENAMETOOLONG;
+    memcpy(out, u, ul);
+    *out_len = ul;
     return 0;
 }
 
@@ -508,8 +728,7 @@ void pal_vbs_host_request(uint8_t* buf) {
             wchar_t w[MAX_PATH * 2];
             if ((res = map_path((const char*)data, in_len, w, MAX_PATH * 2)) < 0)
                 break;
-            BOOL ok = a[0] ? RemoveDirectoryW(w) : DeleteFileW(w);
-            res = ok ? 0 : win_err(GetLastError());
+            res = posix_delete(w, a[0] != 0);
             break;
         }
         case PAL_VBS_HOST_RENAME: {
@@ -522,7 +741,79 @@ void pal_vbs_host_request(uint8_t* buf) {
             if ((res = map_path((const char*)data, l1, w1, MAX_PATH * 2)) < 0 ||
                 (res = map_path((const char*)data + l1 + 1, in_len - l1 - 1, w2, MAX_PATH * 2)) < 0)
                 break;
-            res = MoveFileExW(w1, w2, MOVEFILE_REPLACE_EXISTING) ? 0 : win_err(GetLastError());
+            res = posix_rename(w1, w2);
+            break;
+        }
+        case PAL_VBS_HOST_SETTIMES: {
+            wchar_t w[MAX_PATH * 2];
+            if ((res = map_path((const char*)data, in_len, w, MAX_PATH * 2)) < 0)
+                break;
+            DWORD attr = GetFileAttributesW(w);
+            if (attr == INVALID_FILE_ATTRIBUTES) {
+                res = win_err(GetLastError());
+                break;
+            }
+            HANDLE f = CreateFileW(w, FILE_WRITE_ATTRIBUTES,
+                                   FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
+                                   OPEN_EXISTING,
+                                   (attr & FILE_ATTRIBUTE_DIRECTORY) ? FILE_FLAG_BACKUP_SEMANTICS : 0,
+                                   NULL);
+            if (f == INVALID_HANDLE_VALUE) {
+                res = win_err(GetLastError());
+                break;
+            }
+            FILETIME now, at, mt;
+            GetSystemTimePreciseAsFileTime(&now);
+            /* FILETIME: 100 ns units since 1601 */
+            uint64_t at100 = a[1] / 100 + 116444736000000000ull;
+            uint64_t mt100 = a[2] / 100 + 116444736000000000ull;
+            at.dwLowDateTime = (DWORD)at100;
+            at.dwHighDateTime = (DWORD)(at100 >> 32);
+            mt.dwLowDateTime = (DWORD)mt100;
+            mt.dwHighDateTime = (DWORD)(mt100 >> 32);
+            const FILETIME* pa = (a[0] & 1) ? ((a[0] & 4) ? &now : &at) : NULL;
+            const FILETIME* pm = (a[0] & 2) ? ((a[0] & 8) ? &now : &mt) : NULL;
+            res = SetFileTime(f, NULL, pa, pm) ? 0 : win_err(GetLastError());
+            CloseHandle(f);
+            break;
+        }
+        case PAL_VBS_HOST_SYMLINK:
+        case PAL_VBS_HOST_LINK: {
+            size_t l1 = strnlen((const char*)data, in_len);
+            if (l1 >= in_len) {
+                res = -L_EINVAL;
+                break;
+            }
+            const char* p2 = (const char*)data + l1 + 1;
+            size_t l2 = in_len - l1 - 1;
+            if (r->op == PAL_VBS_HOST_SYMLINK) {
+                res = do_symlink((const char*)data, l1, p2, l2);
+                break;
+            }
+            wchar_t w1[MAX_PATH * 2], w2[MAX_PATH * 2];
+            if ((res = map_path((const char*)data, l1, w1, MAX_PATH * 2)) < 0 ||
+                (res = map_path(p2, l2, w2, MAX_PATH * 2)) < 0)
+                break;
+            res = CreateHardLinkW(w2, w1, NULL) ? 0 : win_err(GetLastError());
+            break;
+        }
+        case PAL_VBS_HOST_READLINK:
+            res = do_readlink((const char*)data, in_len, (char*)data, &out_len);
+            break;
+        case PAL_VBS_HOST_CPUTIME: {
+            FILETIME c, e, k, u;
+            BOOL ok = a[0] ? GetThreadTimes(GetCurrentThread(), &c, &e, &k, &u)
+                           : GetProcessTimes(GetCurrentProcess(), &c, &e, &k, &u);
+            if (!ok) {
+                res = win_err(GetLastError());
+                break;
+            }
+            uint64_t t[2];
+            t[0] = (((uint64_t)u.dwHighDateTime << 32) | u.dwLowDateTime) / 10;
+            t[1] = (((uint64_t)k.dwHighDateTime << 32) | k.dwLowDateTime) / 10;
+            memcpy(data, t, sizeof(t));
+            out_len = sizeof(t);
+            res = 0;
             break;
         }
         case PAL_VBS_HOST_MKDIR: {

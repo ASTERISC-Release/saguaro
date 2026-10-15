@@ -24,6 +24,7 @@
 #include "pal_internal.h"
 #include "pal_linux_error.h"
 #include "pal_vbs.h"
+#include "spinlock.h"
 
 #define VBS_FILE_MODE 0555
 #define VBS_DIR_MODE  0555
@@ -64,6 +65,97 @@ static void fill_attr(PAL_STREAM_ATTR* attr, bool dir, size_t size, uint32_t mod
     attr->nonblocking  = false;
     attr->share_flags  = mode;
     attr->pending_size = size;
+}
+
+/*
+ * POSIX permissions of host files. Win32 on NTFS has no mode bits (the host reports 0644, 0444 for
+ * read-only files and 0755 for directories), so chmod/fchmod keep the mode in this in-enclave table,
+ * keyed by path: stat returns it, rename moves it and unlink drops it. It lasts as long as the
+ * enclave; the host files keep their Windows attributes.
+ */
+struct mode_entry {
+    char* path;
+    uint32_t mode;
+};
+static struct mode_entry g_modes[256];
+static spinlock_t g_modes_lock = INIT_SPINLOCK_UNLOCKED;
+
+static struct mode_entry* mode_find(const char* path) {
+    for (size_t i = 0; i < ARRAY_SIZE(g_modes); i++)
+        if (g_modes[i].path && !strcmp(g_modes[i].path, path))
+            return &g_modes[i];
+    return NULL;
+}
+
+static int mode_set(const char* path, uint32_t mode) {
+    int ret = 0;
+    spinlock_lock(&g_modes_lock);
+    struct mode_entry* e = mode_find(path);
+    if (!e) {
+        for (size_t i = 0; i < ARRAY_SIZE(g_modes) && !e; i++)
+            if (!g_modes[i].path)
+                e = &g_modes[i];
+        if (e && !(e->path = strdup(path)))
+            e = NULL;
+    }
+    if (e)
+        e->mode = mode & 07777;
+    else
+        ret = -PAL_ERROR_NOMEM;
+    spinlock_unlock(&g_modes_lock);
+    return ret;
+}
+
+static uint32_t mode_get(const char* path, uint32_t host_mode) {
+    spinlock_lock(&g_modes_lock);
+    struct mode_entry* e = mode_find(path);
+    uint32_t m = e ? e->mode : host_mode;
+    spinlock_unlock(&g_modes_lock);
+    return m;
+}
+
+static void mode_drop(const char* path) {
+    spinlock_lock(&g_modes_lock);
+    struct mode_entry* e = mode_find(path);
+    if (e) {
+        free(e->path);
+        e->path = NULL;
+    }
+    spinlock_unlock(&g_modes_lock);
+}
+
+static void mode_rename(const char* from, const char* to) {
+    spinlock_lock(&g_modes_lock);
+    struct mode_entry* e = mode_find(to);
+    if (e) { /* the replaced file's mode */
+        free(e->path);
+        e->path = NULL;
+    }
+    e = mode_find(from);
+    if (e) {
+        char* dup = strdup(to);
+        if (dup) {
+            free(e->path);
+            e->path = dup;
+        }
+    }
+    spinlock_unlock(&g_modes_lock);
+}
+
+/* chmod and utimensat on a host file or directory (by its path) */
+static int host_attrset(const char* path, PAL_STREAM_ATTR* attr) {
+    if (!vbs_is_allowed(path))
+        return -PAL_ERROR_DENIED;
+    if (attr->set_atime || attr->set_mtime) {
+        uint64_t mask = (attr->set_atime ? 1 : 0) | (attr->set_mtime ? 2 : 0) |
+                        (attr->atime_now ? 4 : 0) | (attr->mtime_now ? 8 : 0);
+        uint64_t at = attr->atime.tv_sec * 1000000000ull + attr->atime.tv_nsec;
+        uint64_t mt = attr->mtime.tv_sec * 1000000000ull + attr->mtime.tv_nsec;
+        int64_t r = vbs_hostcall(PAL_VBS_HOST_SETTIMES, mask, at, mt, 0, path, strlen(path), NULL,
+                                 0, NULL);
+        return r < 0 ? unix_to_pal_error((int)r) : 0;
+    }
+    return mode_set(path, attr->share_flags);
 }
 
 static int host_stat(const char* path, struct pal_vbs_host_stat* st) {
@@ -307,7 +399,10 @@ static int file_delete(PAL_HANDLE handle, enum pal_delete_mode delete_mode) {
         return -PAL_ERROR_DENIED;
     int64_t r = vbs_hostcall(PAL_VBS_HOST_UNLINK, 0, 0, 0, 0, handle->file.path,
                              strlen(handle->file.path), NULL, 0, NULL);
-    return r < 0 ? unix_to_pal_error((int)r) : 0;
+    if (r < 0)
+        return unix_to_pal_error((int)r);
+    mode_drop(handle->file.path);
+    return 0;
 }
 
 /*
@@ -375,8 +470,8 @@ static int file_map(PAL_HANDLE handle, void* addr, pal_prot_flags_t prot, uint64
         }
     }
 
-    /* anywhere else, and every host file: a private copy of the file bytes in ordinary memory
-     * (shared writable mappings of host files are not supported: changes stay private) */
+    /* anywhere else, and every host file: a copy of the file bytes in ordinary memory (the LibOS
+     * writes shared writable mappings back on msync/munmap: file_maps_write_back) */
     if (p & PAL_PROT_EXEC) {
         log_error("vbs: %s: executable file mappings exist only for packed objects at their "
                   "packed address (requested %p)", obj ? obj->path : handle->file.path, addr);
@@ -424,7 +519,7 @@ static int file_attrquery(const char* type, const char* uri, PAL_STREAM_ATTR* at
         if (ret < 0)
             return ret;
         fill_attr(attr, st.is_dir, st.is_dir ? 0 : st.size,
-                  vbs_find_trusted(path) ? 0444 : (uint32_t)st.mode);
+                  vbs_find_trusted(path) ? 0444 : mode_get(path, (uint32_t)st.mode));
         return 0;
     }
     if (is_virtual_dir(path)) {
@@ -451,8 +546,14 @@ static int file_attrquerybyhdl(PAL_HANDLE handle, PAL_STREAM_ATTR* attr) {
         return unix_to_pal_error((int)r);
     if (n != sizeof(st))
         return -PAL_ERROR_DENIED;
-    fill_attr(attr, st.is_dir, st.size, (uint32_t)st.mode);
+    fill_attr(attr, st.is_dir, st.size, mode_get(handle->file.path, (uint32_t)st.mode));
     return 0;
+}
+
+static int file_attrsetbyhdl(PAL_HANDLE handle, PAL_STREAM_ATTR* attr) {
+    if (handle->file.obj || handle->file.host_id < 0)
+        return -PAL_ERROR_DENIED; /* packed and trusted files are part of the signed image */
+    return host_attrset(handle->file.path, attr);
 }
 
 static int host_rename(char** path, const char* uri) {
@@ -472,6 +573,7 @@ static int host_rename(char** path, const char* uri) {
     free(both);
     if (r < 0)
         return unix_to_pal_error((int)r);
+    mode_rename(*path, newpath);
     char* dup = strdup(newpath);
     if (dup) {
         free(*path);
@@ -613,13 +715,22 @@ static int dir_delete(PAL_HANDLE handle, enum pal_delete_mode delete_mode) {
         return -PAL_ERROR_DENIED;
     int64_t r = vbs_hostcall(PAL_VBS_HOST_UNLINK, /*is_dir=*/1, 0, 0, 0, handle->dir.path,
                              strlen(handle->dir.path), NULL, 0, NULL);
-    return r < 0 ? unix_to_pal_error((int)r) : 0;
+    if (r < 0)
+        return unix_to_pal_error((int)r);
+    mode_drop(handle->dir.path);
+    return 0;
 }
 
 static int dir_attrquerybyhdl(PAL_HANDLE handle, PAL_STREAM_ATTR* attr) {
-    __UNUSED(handle);
-    fill_attr(attr, /*dir=*/true, 0, VBS_DIR_MODE);
+    fill_attr(attr, /*dir=*/true, 0,
+              handle->dir.host ? mode_get(handle->dir.path, VBS_DIR_MODE) : VBS_DIR_MODE);
     return 0;
+}
+
+static int dir_attrsetbyhdl(PAL_HANDLE handle, PAL_STREAM_ATTR* attr) {
+    if (!handle->dir.host)
+        return -PAL_ERROR_DENIED;
+    return host_attrset(handle->dir.path, attr);
 }
 
 static int dir_rename(PAL_HANDLE handle, const char* type, const char* uri) {
@@ -627,6 +738,98 @@ static int dir_rename(PAL_HANDLE handle, const char* type, const char* uri) {
     if (!handle->dir.host)
         return -PAL_ERROR_DENIED;
     return host_rename(&handle->dir.path, uri);
+}
+
+/* ---- path operations on host files (allowed files only) ---- */
+
+static int allowed_path(const char* uri, char* path, size_t size) {
+    int ret = vbs_uri_to_path(uri, path, size);
+    if (ret < 0)
+        return ret;
+    if (vbs_find_path(path) || vbs_find_trusted(path))
+        return -PAL_ERROR_DENIED; /* part of the signed image */
+    return vbs_is_allowed(path) ? 0 : -PAL_ERROR_DENIED;
+}
+
+static int host_two_paths(enum pal_vbs_host_op op, const char* a, const char* b) {
+    size_t l1 = strlen(a), l2 = strlen(b);
+    char* both = malloc(l1 + l2 + 2);
+    if (!both)
+        return -PAL_ERROR_NOMEM;
+    memcpy(both, a, l1 + 1);
+    memcpy(both + l1 + 1, b, l2);
+    int64_t r = vbs_hostcall(op, 0, 0, 0, 0, both, l1 + 1 + l2, NULL, 0, NULL);
+    free(both);
+    return r < 0 ? unix_to_pal_error((int)r) : 0;
+}
+
+static int file_symlink(const char* target, const char* uri) {
+    char path[URI_MAX];
+    int ret = allowed_path(uri, path, sizeof(path));
+    if (ret < 0)
+        return ret;
+    return host_two_paths(PAL_VBS_HOST_SYMLINK, target, path);
+}
+
+static int file_link(const char* old_uri, const char* new_uri) {
+    char p1[URI_MAX], p2[URI_MAX];
+    int ret = allowed_path(old_uri, p1, sizeof(p1));
+    if (ret < 0)
+        return ret;
+    ret = allowed_path(new_uri, p2, sizeof(p2));
+    if (ret < 0)
+        return ret;
+    return host_two_paths(PAL_VBS_HOST_LINK, p1, p2);
+}
+
+static int file_unlink_path(const char* uri) {
+    char path[URI_MAX];
+    int ret = allowed_path(uri, path, sizeof(path));
+    if (ret < 0)
+        return ret;
+    int64_t r = vbs_hostcall(PAL_VBS_HOST_UNLINK, 0, 0, 0, 0, path, strlen(path), NULL, 0, NULL);
+    if (r < 0)
+        return unix_to_pal_error((int)r);
+    mode_drop(path);
+    return 0;
+}
+
+static int file_rename_path(const char* old_uri, const char* new_uri) {
+    char p1[URI_MAX], p2[URI_MAX];
+    int ret = allowed_path(old_uri, p1, sizeof(p1));
+    if (ret < 0)
+        return ret;
+    ret = allowed_path(new_uri, p2, sizeof(p2));
+    if (ret < 0)
+        return ret;
+    ret = host_two_paths(PAL_VBS_HOST_RENAME, p1, p2);
+    if (ret == 0)
+        mode_rename(p1, p2);
+    return ret;
+}
+
+static int file_readlink_path(const char* uri, char* buf, size_t* inout_size) {
+    char path[URI_MAX];
+    int ret = vbs_uri_to_path(uri, path, sizeof(path));
+    if (ret < 0)
+        return ret;
+    if (!vbs_is_allowed(path) || vbs_find_path(path) || vbs_find_trusted(path))
+        return -PAL_ERROR_INVAL; /* packed, trusted and virtual names are never links */
+    char* target = malloc(PAL_VBS_HOST_DATA_MAX);
+    if (!target)
+        return -PAL_ERROR_NOMEM;
+    size_t n = 0;
+    int64_t r = vbs_hostcall(PAL_VBS_HOST_READLINK, 0, 0, 0, 0, path, strlen(path), target,
+                             PAL_VBS_HOST_DATA_MAX, &n);
+    if (r < 0 || n > PAL_VBS_HOST_DATA_MAX) {
+        free(target);
+        return r < 0 ? unix_to_pal_error((int)r) : -PAL_ERROR_DENIED;
+    }
+    size_t len = MIN(n, *inout_size); /* truncated like readlink(2) */
+    memcpy(buf, target, len);
+    free(target);
+    *inout_size = len;
+    return 0;
 }
 
 struct handle_ops g_file_ops = {
@@ -641,6 +844,12 @@ struct handle_ops g_file_ops = {
     .attrquery      = &file_attrquery,
     .attrquerybyhdl = &file_attrquerybyhdl,
     .rename         = &file_rename,
+    .attrsetbyhdl   = &file_attrsetbyhdl,
+    .symlink        = &file_symlink,
+    .link           = &file_link,
+    .unlink_path    = &file_unlink_path,
+    .rename_path    = &file_rename_path,
+    .readlink_path  = &file_readlink_path,
 };
 
 struct handle_ops g_dir_ops = {
@@ -651,6 +860,7 @@ struct handle_ops g_dir_ops = {
     .attrquery      = &file_attrquery,
     .attrquerybyhdl = &dir_attrquerybyhdl,
     .rename         = &dir_rename,
+    .attrsetbyhdl   = &dir_attrsetbyhdl,
 };
 
 /* for pal_rtld.c (PAL_HOST_VBS): the load image of the packed object behind a file handle */

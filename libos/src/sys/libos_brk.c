@@ -59,6 +59,11 @@ int init_brk_region(void* brk_start, size_t data_segment_size) {
         return -EINVAL;
     }
 
+#ifdef PAL_HOST_VBS
+    /* The executable lies in the enclave's packed area, which holds the other packed objects right
+     * after it (and which execve leaves unbooked): the heap goes anywhere outside that area. */
+    brk_start = NULL;
+#endif
     if (brk_start && brk_start <= g_pal_public_state->memory_address_end
             && brk_max_size <= (uintptr_t)g_pal_public_state->memory_address_end
             && (uintptr_t)brk_start < (uintptr_t)g_pal_public_state->memory_address_end - brk_max_size) {

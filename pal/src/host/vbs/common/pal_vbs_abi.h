@@ -69,6 +69,13 @@ enum pal_vbs_host_op {
     PAL_VBS_HOST_MKDIR,         /* in: path; a: mode */
     PAL_VBS_HOST_LISTDIR,       /* in: path; a: first index -> out: names '\0' (dirs end in '/'),
                                    result: number of names */
+    PAL_VBS_HOST_SETTIMES,      /* in: path; a: mask (1 atime, 2 mtime, 4 atime now, 8 mtime now),
+                                   atime, mtime (ns since 1970) */
+    PAL_VBS_HOST_SYMLINK,       /* in: target '\0' link path (a relative target has no ".."
+                                   component; an absolute one is below the host root) */
+    PAL_VBS_HOST_READLINK,      /* in: path -> out: target (-EINVAL: not a symbolic link) */
+    PAL_VBS_HOST_LINK,          /* in: old path '\0' new path (hard link) */
+    PAL_VBS_HOST_CPUTIME,       /* a: thread (1) or process (0) -> out: user us, system us */
     PAL_VBS_HOST_SOCKET = 32,   /* a: domain, type (SOCK_STREAM 1 / SOCK_DGRAM 2), nonblocking */
     PAL_VBS_HOST_BIND,          /* in: sockaddr; a: id -> out: bound sockaddr */
     PAL_VBS_HOST_LISTEN,        /* a: id, backlog */

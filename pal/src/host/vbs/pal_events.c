@@ -52,6 +52,11 @@ int _PalEventWait(PAL_HANDLE handle, uint64_t* timeout_us) {
             }
             left_ns = total - spent;
         }
+        if (left_ns < VBS_SHORT_WAIT_NS) {
+            /* a WaitOnAddress timeout is rounded up to the system timer tick (measured: ~15.6 ms,
+             * FINDINGS.md); a short wait polls the clock instead */
+            continue;
+        }
         vbs_wait(&handle->event.signaled, 0, left_ns);
     }
     if (timeout_us) {

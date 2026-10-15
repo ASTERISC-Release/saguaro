@@ -7,6 +7,7 @@
 #include "pal.h"
 #include "pal_error.h"
 #include "pal_internal.h"
+#include "pal_linux_error.h"
 #include "pal_vbs.h"
 
 int _PalSystemTimeQuery(uint64_t* out_usec) {
@@ -16,10 +17,19 @@ int _PalSystemTimeQuery(uint64_t* out_usec) {
 }
 
 int _PalGetCpuTime(bool thread, uint64_t* out_user_us, uint64_t* out_sys_us) {
-    __UNUSED(thread);
-    __UNUSED(out_user_us);
-    __UNUSED(out_sys_us);
-    return -PAL_ERROR_NOTIMPLEMENTED;
+    /* the host's accounting of the calling host thread (which runs this enclave thread) or of the
+     * host process: untrusted, like the time */
+    uint64_t t[2] = {0, 0};
+    size_t n = 0;
+    int64_t r = vbs_hostcall(PAL_VBS_HOST_CPUTIME, thread ? 1 : 0, 0, 0, 0, NULL, 0, t, sizeof(t),
+                             &n);
+    if (r < 0)
+        return unix_to_pal_error((int)r);
+    if (n != sizeof(t))
+        return -PAL_ERROR_DENIED;
+    *out_user_us = t[0];
+    *out_sys_us = t[1];
+    return 0;
 }
 
 int _PalRandomBitsRead(void* buffer, size_t size) {
