@@ -101,7 +101,7 @@ extern const elf_ehdr_t __ehdr_start __attribute__((visibility("hidden")));
 
 static const char* g_pal_soname = NULL;
 static struct link_map g_pal_map;
-#if defined(PAL_HOST_VM) && defined(__x86_64__)
+#if defined(PAL_HOST_VM) && (defined(__x86_64__) || defined(__aarch64__))
 /* The VM PAL copies this range when it creates a process address space. The entrypoint map is
  * mutable while loading LibOS and must not be shared between independently starting processes. */
 static struct link_map g_entrypoint_map __attribute__((section(".process_data")));
@@ -798,7 +798,7 @@ int load_entrypoint(const char* uri) {
     int ret;
     PAL_HANDLE handle;
 
-#if defined(PAL_HOST_VM) && defined(__x86_64__)
+#if defined(PAL_HOST_VM) && (defined(__x86_64__) || defined(__aarch64__))
     /* A child inherits the parent's process-data image before loading its own LibOS. */
     memset(&g_entrypoint_map, 0, sizeof(g_entrypoint_map));
 #endif

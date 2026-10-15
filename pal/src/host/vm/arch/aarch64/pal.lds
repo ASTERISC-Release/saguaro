@@ -98,6 +98,15 @@ SECTIONS
     __init_array_end = .;
   } :rw
   .data          : { *(.data .data.*) } :rw
+  /* PAL state private to each process: the multiprocess support copies these pages into every
+     process root (pal_internal.h, PAL_PROCESS_DATA). Before .bss: a PROGBITS section after the
+     NOBITS .bss (with its 64 MB shared region) would put all of .bss into the file. */
+  . = ALIGN(4096);
+  PROVIDE_HIDDEN (__process_data_start = .);
+  .process_data  : { *(.process_data) } :rw
+  . = ALIGN(4096);
+  PROVIDE_HIDDEN (__process_data_end = .);
+
   .bss           : { *(.bss .bss.*) *(COMMON) } :rw
 
   PROVIDE_HIDDEN (__data_end = .);

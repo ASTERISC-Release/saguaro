@@ -21,7 +21,7 @@ short on purpose; an item that is fixed is removed from the topic list first and
 | Host / PAL | Main open items | Details |
 |---|---|---|
 | `direct` | `kill11` hang; longer soak runs and real applications (openssh, dropbear); ABI-conformance tests | `devel/syscall-compat/TODO.md`, `devel/aarch64/direct/TODO.md` |
-| `vm` | multi-process (`fork`) is not implemented (plan: `devel/vm-multiproc-aarch64/PLAN.md`); async signal resume (`_PalThreadResume`); panics on a signal frame past the stack and on a LibOS user-memory fault; timer granularity; `dev:`/`/sys`/attestation streams; 2 MiB pages | `devel/aarch64/vm/TODO.md`, `devel/syscall-compat/TODO.md` |
+| `vm` | multi-process (`fork`) in progress on `dev-aarch64-multiproc` (address spaces done; spawn, fork, then signals; `devel/vm-multiproc-aarch64/`); async signal resume (`_PalThreadResume`); panics on a signal frame past the stack and on a LibOS user-memory fault; timer granularity; `dev:`/`/sys`/attestation streams; 2 MiB pages | `devel/aarch64/vm/TODO.md`, `devel/syscall-compat/TODO.md`, `devel/vm-multiproc-aarch64/TODO.md` |
 | `direct` with graphics (NVIDIA proprietary driver) | remaining NVIDIA fd-bearing ioctls; several GPU nodes; Vulkan and CUDA untested; `SCM_RIGHTS` on plain socketpairs; syscall cost of Minetest | `devel/graphics-aarch64/TODO.md` |
 | `vm` with graphics | not available: the QEMU fork's listener and the comm-page address are x86-only; redesign deferred (`virtio-gpu` as one option) | `devel/graphics-aarch64/PLAN.md` |
 

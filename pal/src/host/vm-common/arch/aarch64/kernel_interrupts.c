@@ -32,6 +32,10 @@
 #include "kernel_virtio.h"
 
 bool g_interrupts_enabled = false;
+/* False until interrupts_init() on the BSP: spinlock_unlock_enable_irq() (kernel_interrupts.h)
+ * leaves IRQs masked before that, as on x86_64 (where the name refers to the IDT). The timer is
+ * armed in gic_init(), before the per-CPU interrupt stacks exist (init_multicore_prepare()). */
+bool g_idt_loaded = false;
 
 /* TLB-invalidation bookkeeping for the software shootdown protocol below.
  *
@@ -185,11 +189,28 @@ void isr_c(struct isr_regs* regs) {
  * stack; only x16's slot holds the EC-decode scratch value rather than the app's x16 (the
  * pre-dispatch `mrs/ubfx/cmp` has no other scratch GPR) -- harmless for C code, where x16 never
  * lives across an instruction. */
+/* The x86 page-fault error code bits for an AArch64 instruction or data abort (`esr`) that
+ * memory_address_space_handle_fault() takes: present (not a translation fault), write, fetch. */
+static uint64_t abort_fault_code(uint64_t esr, bool fetch) {
+    uint64_t fsc = esr & 0x3f;
+    uint64_t code = ((fsc & 0x3c) == 0x04) ? 0 : 0x1;   /* 0b0001LL: translation fault */
+    if (fetch)
+        code |= 0x10;
+    else if ((esr & (1UL << 6)) && !(esr & (1UL << 8))) /* WnR, not a cache maintenance op */
+        code |= 0x2;
+    return code;
+}
+
 long el0_sync_unexpected_c(struct isr_regs* regs) {
     uint64_t esr, far;
     __asm__ volatile("mrs %0, esr_el1" : "=r"(esr));
     __asm__ volatile("mrs %0, far_el1" : "=r"(far));
     uint64_t ec = esr >> 26;
+
+    /* a demand-zero page of the current process (multiprocess support only): resume as is */
+    if ((ec == 0x20 || ec == 0x24) &&
+            memory_address_space_handle_fault(far, abort_fault_code(esr, ec == 0x20)))
+        return 0;
 
     if (ec == 0x20 /* IABT from EL0 */ || ec == 0x24 /* DABT from EL0 */) {
         if (pal_common_perform_memfault_handling(far, regs) == 0) {
@@ -241,6 +262,22 @@ long el0_sync_unexpected_c(struct isr_regs* regs) {
     }
     triple_fault();
     return -1;
+}
+
+/* Synchronous exception taken *inside the kernel* (EL1), from el1_sync_entry. A translation
+ * fault on a demand-zero page of the current process (LibOS or PAL code touching application
+ * memory; multiprocess support only) is resolved and resumed; anything else is a kernel bug,
+ * reported by isr_kernel_c(), which does not return. */
+void el1_sync_c(struct isr_regs* regs);
+void el1_sync_c(struct isr_regs* regs) {
+    uint64_t esr, far;
+    __asm__ volatile("mrs %0, esr_el1" : "=r"(esr));
+    __asm__ volatile("mrs %0, far_el1" : "=r"(far));
+    uint64_t ec = esr >> 26;
+    if ((ec == 0x21 /* IABT, same EL */ || ec == 0x25 /* DABT, same EL */) &&
+            memory_address_space_handle_fault(far, abort_fault_code(esr, ec == 0x21)))
+        return;
+    isr_kernel_c(regs);
 }
 
 /* Synchronous exception taken *inside the kernel* (EL1). Faults in the unikernel kernel are
@@ -353,6 +390,7 @@ int interrupts_init(void) {
     /* The vector table itself is installed by syscalls_init() (VBAR_EL1) before we get here;
      * the timer and its interrupt line were configured by gic_init()/lapic_timer_init().
      * Unmask Group-1 IRQs at EL1 now that everything that must be ready is ready. */
+    g_idt_loaded = true;
     sti();
     g_interrupts_enabled = true;
     return 0;

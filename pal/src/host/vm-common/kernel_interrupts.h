@@ -107,7 +107,7 @@ static inline void spinlock_lock_disable_irq(spinlock_t* lock) {
     spinlock_lock(lock);
 }
 
-#if defined(__x86_64__) && defined(PAL_HOST_VM)
+#if defined(PAL_HOST_VM)
 /* False until interrupts_init() on the BSP loaded the IDT: an interrupt before that (the LAPIC
  * timer armed in apic_init(), when the boot is slow) triple-faults the guest. */
 extern bool g_idt_loaded;
@@ -115,7 +115,7 @@ extern bool g_idt_loaded;
 
 static inline void spinlock_unlock_enable_irq(spinlock_t* lock) {
     spinlock_unlock(lock);
-#if defined(__x86_64__) && defined(PAL_HOST_VM)
+#if defined(PAL_HOST_VM)
     if (!g_idt_loaded)
         return; /* boot code before interrupts_init(): interrupts stay disabled */
 #endif

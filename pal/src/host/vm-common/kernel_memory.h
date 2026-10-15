@@ -47,7 +47,7 @@ int memory_mark_pages_write_combined(uint64_t addr, size_t size, bool mark);
 
 int memory_pagetables_init(void* memory_address_end, bool current_page_tables_cover_1gb);
 
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
 /* Reserve a supervisor-only range for private process frames. `addr` and `size` must be page
  * aligned and the range must not overlap memory already reserved for another PAL use. */
 int memory_frame_pool_init(uintptr_t addr, size_t size);

@@ -133,6 +133,16 @@ _start:
     add     x1, x1, #PER_CPU_DATA_CUR_TCB
     msr     tpidrro_el0, x1
 
+    /* VBAR_EL1 now, as pal_ap_entry does on the secondary CPUs (syscalls_init() writes the same
+     * value later): the generic timer is armed in gic_init(), before syscalls_init(), and any
+     * spinlock_unlock_enable_irq() of the early boot unmasks IRQs, so a tick in that window would
+     * otherwise be taken through the reset VBAR (0, the flash alias) and hang the boot (the x86_64
+     * boot flake of Documentation/devel/vm-multiproc/FINDINGS.md had the same shape with the IDT) */
+    adrp    x1, vectors
+    add     x1, x1, :lo12:vectors
+    msr     vbar_el1, x1
+    isb
+
     mov     x29, xzr
     mov     x30, xzr
     mov     x0, x20                   /* pal_start_c(const void* fdt) */
@@ -185,7 +195,15 @@ pal_ap_entry:
     mov     x3, #2
     lsl     x3, x3, #32
     orr     x2, x2, x3
+    /* the TTBR1 half, as memory_pagetables_init() set it on the BSP (TCR_T1_FIELDS there):
+     * T1SZ = 25, IRGN1/ORGN1 = WBWA, SH1 = inner, TG1 = 4 KB; TTBR1 = the frame alias table */
+    ldr     x3, =((25 << 16) | (1 << 24) | (1 << 26) | (3 << 28) | (2 << 30))
+    orr     x2, x2, x3
     msr     tcr_el1, x2
+    adrp    x2, g_ttbr1_root
+    add     x2, x2, :lo12:g_ttbr1_root
+    ldr     x2, [x2]
+    msr     ttbr1_el1, x2
     /* TTBR0 := the *live* root table, NOT this file's initial_l1_table.
      * memory_pagetables_init() (pal_start_c, long before PSCI CPU_ON) replaced these coarse
      * boot tables -- whose DRAM entries are 1GB blocks mapped EL1-only -- with the fine

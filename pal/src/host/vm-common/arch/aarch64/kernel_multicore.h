@@ -27,7 +27,7 @@
 /* Temp stack used by save_context_and_restore_next(). x86's 128 bytes fit its hand-written asm; here
  * the same stack also runs the C do_xrstor() (+ write_fpsr/fpcr frames, ~100 bytes at -O0) and takes
  * the 48-byte scratch of an IRQ landing right after the DAIF restore. */
-#define SCHEDULING_STACK_SIZE    4096
+#define SCHEDULING_STACK_SIZE    (4096 * 4) /* + the deferred exit cleanup of a process (x86: 16 KB too) */
 
 /* aarch64 secondary CPUs are started by firmware (PSCI `CPU_ON` SMC call), not by an INIT-SIPI
  * triple with a trampoline page at 32K; there is no equivalent of the x86 AP startup page or of
@@ -65,6 +65,9 @@ struct per_cpu_data {
 } __attribute__((packed));
 
 extern uint32_t g_num_cpus;
+
+/* multiprocess support: the scheduler switches page-table roots (kernel_sched.c) */
+extern bool g_sched_switch_roots;
 
 extern struct per_cpu_data* g_per_cpu_data;
 extern void* g_per_cpu_interrupt_stack;

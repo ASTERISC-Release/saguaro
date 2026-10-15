@@ -231,7 +231,7 @@ int _PalProcessCreate(const char** args, uintptr_t (*reserved_mem_ranges)[2],
 noreturn void _PalProcessExit(int exit_code);
 int _PalThreadSetCpuAffinity(PAL_HANDLE thread, unsigned long* cpu_mask, size_t cpu_mask_len);
 int _PalThreadGetCpuAffinity(PAL_HANDLE thread, unsigned long* cpu_mask, size_t cpu_mask_len);
-#if defined(PAL_HOST_VM) && defined(__x86_64__)
+#if defined(PAL_HOST_VM) && (defined(__x86_64__) || defined(__aarch64__))
 int _PalFutexSharedAdd(uint32_t* addr, uint32_t val, uint32_t bitset, PAL_HANDLE event,
                        void** out_waiter);
 int _PalFutexSharedRemove(void* waiter, bool* out_woken);
@@ -329,7 +329,7 @@ void pal_disable_early_memory_bookkeeping(void);
 
 /* The x86_64 VM PAL copies the `.process_data` section privately into each process address space
  * (see pal/src/host/vm/pal.lds); every other PAL keeps these variables in ordinary sections. */
-#if defined(PAL_HOST_VM) && defined(__x86_64__)
+#if defined(PAL_HOST_VM) && (defined(__x86_64__) || defined(__aarch64__))
 #define PAL_PROCESS_DATA      __attribute__((section(".process_data")))
 #define PAL_PROCESS_DATA_PAGE __attribute__((section(".process_data"), aligned(4096)))
 #else
@@ -338,7 +338,7 @@ void pal_disable_early_memory_bookkeeping(void);
 #endif
 
 void init_slab_mgr(void);
-#if defined(PAL_HOST_VM) && defined(__x86_64__)
+#if defined(PAL_HOST_VM) && (defined(__x86_64__) || defined(__aarch64__))
 int pal_enable_shared_frame_slab_allocator(void);
 /* Records the PAL allocations of a starting child process, to free them when it exits. */
 void pal_startup_allocs_record(bool on);

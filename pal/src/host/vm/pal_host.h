@@ -70,7 +70,7 @@ int vm_process_stream_selfcheck(void);
 int vm_process_runtime_copy_selfcheck(void);
 int vm_process_send_handle(PAL_HANDLE target_process, PAL_HANDLE cargo);
 int vm_process_receive_handle(PAL_HANDLE source_process, PAL_HANDLE* out_cargo);
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
 struct memory_address_space;
 /* Drops the shared-futex waiters of an exiting process (pal_futex.c). */
 void vm_futex_shared_purge(struct memory_address_space* space);

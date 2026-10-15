@@ -33,7 +33,7 @@ extern bool g_kick_sched_thread;
 extern int g_streams_waiting_events_futex;
 
 struct thread;
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
 struct memory_address_space;
 #endif
 
@@ -53,7 +53,7 @@ void sched_thread_wakeup(int* futex_word);
 void sched_thread_add(struct thread* thread);
 void sched_thread_remove(struct thread* thread);
 void sched_thread_set_exit_cleanup(void (*cleanup)(void*), void* arg);
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
 int sched_thread_share_stack(struct memory_address_space* source,
                              struct memory_address_space* new_thread_space,
                              uintptr_t addr, size_t size);
@@ -67,6 +67,6 @@ size_t sched_thread_remove_exiting(struct memory_address_space* space, struct th
 #endif
 void sched_thread_set_cpu_affinity(struct thread* thread, unsigned long* cpu_mask,
                                    size_t cpu_mask_len);
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
 bool sched_thread_is_stopped(struct thread* thread);
 #endif

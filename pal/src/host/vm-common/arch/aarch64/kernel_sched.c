@@ -22,11 +22,13 @@
 #include "api.h"
 #include "cpu.h"
 #include "kernel_interrupts.h"
+#include "kernel_memory.h"
 #include "kernel_multicore.h"
 #include "kernel_thread.h"
 #include "kernel_virtio.h"
 #include "kernel_xsave.h"
 #include "pal.h"
+#include "pal_common.h"
 #include "pal_error.h"
 
 /* below functions are located in kernel_context.S */
@@ -47,6 +49,58 @@ static spinlock_t g_thread_list_lock = INIT_SPINLOCK_UNLOCKED;
 
 /* Atomic variable used to kick sched_thread() into action (instead of waiting for some time) */
 bool g_kick_sched_thread = false;
+
+/* Multiprocess support (`sys.experimental__multiprocess`): set once the frame pool exists. Then
+ * save_context_and_restore_next() (kernel_context.S) installs the next thread's page-table root
+ * and runs a pending exit cleanup after every switch; without it neither happens and every
+ * thread runs in the boot root, as in the single-process VM. */
+bool g_sched_switch_roots = false;
+static void (*g_exit_cleanup[MAX_NUM_CPUS])(void*);
+static void* g_exit_cleanup_arg[MAX_NUM_CPUS];
+/* the cleanup taken by the switch in progress on each CPU (run by sched_post_switch()) */
+static void (*g_post_switch[MAX_NUM_CPUS])(void*);
+static void* g_post_switch_arg[MAX_NUM_CPUS];
+
+static void switch_to_thread_address_space(struct thread* thread) {
+    uint64_t root = thread->address_space ? thread->address_space->root_phys
+                                          : g_pml4_table_base;
+    int ret = memory_address_space_switch_root(root);
+    if (ret < 0) {
+        log_error("Failed to switch to thread address-space root %p: %s", (void*)root,
+                  pal_strerror(ret));
+        BUG();
+    }
+}
+
+/* Called by save_context_and_restore_next() on the scheduling (or interrupt) stack, after the
+ * previous context is saved and cur_tcb holds the next thread's TCB. The root must not change
+ * while still running on the previous thread's stack, which may be private to its process (the
+ * LibOS runs syscalls on the user stack). */
+void sched_switch_to_current_thread_root(void);
+void sched_switch_to_current_thread_root(void) {
+    switch_to_thread_address_space(get_thread_ptr((uintptr_t)get_per_cpu_data()->cur_tcb));
+}
+
+/* Called by save_context_and_restore_next() after the switch and after the scheduler lock is
+ * released: runs the exit cleanup that sched_thread() took for this switch (it may destroy the
+ * previous thread's root and stacks, so it cannot run any earlier). */
+void sched_post_switch(void);
+void sched_post_switch(void) {
+    uint32_t cpu_id = get_per_cpu_data()->cpu_id;
+    void (*cleanup)(void*) = g_post_switch[cpu_id];
+    void* arg = g_post_switch_arg[cpu_id];
+    if (!cleanup)
+        return;
+    g_post_switch[cpu_id] = NULL;
+    g_post_switch_arg[cpu_id] = NULL;
+    cleanup(arg);
+}
+
+static bool thread_is_exiting(struct thread* thread) {
+    return thread->address_space && __atomic_load_n(&thread->address_space->exiting,
+                                                    __ATOMIC_ACQUIRE)
+           && thread->address_space->exit_thread != thread;
+}
 
 /*
  * PSTATE bits of the context we are about to save. x86's `pushfq; pop` captures RFLAGS with IF
@@ -108,6 +162,39 @@ static struct thread* find_next_thread(struct thread* curr_thread) {
     }
 
     uint32_t cpu_id            = get_per_cpu_data()->cpu_id;
+    struct thread* thread;
+
+    if (g_sched_switch_roots) {
+        /* (x86 kernel_sched.c verbatim) Once a process has its own root, prefer its runnable
+         * threads to boot-root helper threads: helpers stay runnable while idle, so scanning them
+         * first can starve a process thread after it yields on an SMP guest. */
+        struct thread* process_thread = NULL;
+        LISTP_FOR_EACH_ENTRY(thread, &g_thread_list, list) {
+            if (thread->state != THREAD_RUNNABLE || thread->is_helper || !thread->address_space ||
+                    thread->address_space->root_phys == g_pml4_table_base ||
+                    thread_is_exiting(thread))
+                continue;
+
+            size_t cpu_mask_idx = cpu_id / BITS_IN_TYPE(unsigned long);
+            unsigned long cpu_mask_bit = 1UL << (cpu_id % BITS_IN_TYPE(unsigned long));
+            if (!(thread->cpu_mask[cpu_mask_idx] & cpu_mask_bit))
+                continue;
+
+            if (!process_thread)
+                process_thread = thread;
+            else
+                __atomic_store_n(&g_kick_sched_thread, true, __ATOMIC_RELEASE);
+        }
+        if (process_thread)
+            return process_thread;
+
+        /* Do not switch a lone process thread to an always-runnable PAL helper on yield. */
+        if (curr_thread && curr_thread->state != THREAD_BLOCKED && !curr_thread->is_helper &&
+                curr_thread->address_space &&
+                curr_thread->address_space->root_phys != g_pml4_table_base &&
+                !thread_is_exiting(curr_thread))
+            return curr_thread;
+    }
 
     /* Console input has no application event-loop path in which to process its
      * receive queue, so ensure CPU0's helper cannot be starved by a continuously
@@ -122,9 +209,8 @@ static struct thread* find_next_thread(struct thread* curr_thread) {
 
     struct thread* next_thread = NULL;
 
-    struct thread* thread;
     LISTP_FOR_EACH_ENTRY(thread, &g_thread_list, list) {
-        if (thread->state != THREAD_RUNNABLE)
+        if (thread->state != THREAD_RUNNABLE || thread_is_exiting(thread))
             continue;
 
         size_t cpu_mask_idx        = cpu_id / BITS_IN_TYPE(unsigned long);
@@ -219,6 +305,11 @@ void sched_thread(uint32_t* lock_to_unlock, int* clear_child_tid) {
     __asm__ volatile("msr tpidr_el0, %0" :: "r"(next_user_tls));
 
     uint64_t next_tcb = (uint64_t)get_gs_base(next_thread);
+    uint32_t cpu_id = get_per_cpu_data()->cpu_id;
+    g_post_switch[cpu_id] = g_exit_cleanup[cpu_id];
+    g_post_switch_arg[cpu_id] = g_exit_cleanup_arg[cpu_id];
+    g_exit_cleanup[cpu_id] = NULL;
+    g_exit_cleanup_arg[cpu_id] = NULL;
     save_context_and_restore_next(curr_tcb_base, next_tcb, lock_to_unlock, clear_child_tid,
                                   &g_thread_list_lock.lock, get_per_cpu_data()->scheduling_stack);
 }
@@ -261,13 +352,21 @@ static void sched_thread_wakeup_common(int* futex_word) {
 
     bool found = false;
     struct thread* thread;
-    LISTP_FOR_EACH_ENTRY(thread, &g_thread_list, list) {
+    struct thread* tmp;
+    LISTP_FOR_EACH_ENTRY_SAFE(thread, tmp, &g_thread_list, list) {
         if (thread->state == THREAD_BLOCKED) {
             /* TODO: add loop of iterating through epoll/select futexes as perf optimization */
             if (thread->blocked_on == futex_word) {
                 thread->state      = THREAD_RUNNABLE;
                 thread->blocked_on = NULL;
                 found              = true;
+                /* with processes, a woken thread runs before threads that used their time
+                 * slice (a parent and child handing a stream back and forth must not wait a
+                 * whole 100-ms slice of a busy thread on every handoff) */
+                if (g_sched_switch_roots && !thread->is_helper) {
+                    LISTP_DEL(thread, &g_thread_list, list);
+                    LISTP_ADD(thread, &g_thread_list, list);
+                }
             }
         }
     }
@@ -317,4 +416,143 @@ void sched_thread_set_cpu_affinity(struct thread* thread, unsigned long* cpu_mas
         }
     }
     spinlock_unlock_enable_irq(&g_thread_list_lock);
+}
+
+void sched_thread_set_exit_cleanup(void (*cleanup)(void*), void* arg) {
+    uint32_t cpu_id = get_per_cpu_data()->cpu_id;
+    assert(cpu_id < MAX_NUM_CPUS);
+    assert(!g_exit_cleanup[cpu_id]);
+    g_exit_cleanup[cpu_id] = cleanup;
+    g_exit_cleanup_arg[cpu_id] = arg;
+}
+
+bool sched_thread_is_stopped(struct thread* thread) {
+    spinlock_lock_disable_irq(&g_thread_list_lock);
+    bool stopped = thread->state == THREAD_STOPPED;
+    spinlock_unlock_enable_irq(&g_thread_list_lock);
+    return stopped;
+}
+
+/* The rest is the x86 kernel_sched.c multiprocess part, unchanged. */
+bool sched_thread_space_has_other_running(struct memory_address_space* space,
+                                          struct thread* self) {
+    bool running = false;
+    spinlock_lock_disable_irq(&g_thread_list_lock);
+    struct thread* thread;
+    LISTP_FOR_EACH_ENTRY(thread, &g_thread_list, list) {
+        if (thread->address_space == space && thread != self && thread->state == THREAD_RUNNING) {
+            running = true;
+            break;
+        }
+    }
+    spinlock_unlock_enable_irq(&g_thread_list_lock);
+    return running;
+}
+
+size_t sched_thread_remove_exiting(struct memory_address_space* space, struct thread** out_threads,
+                                   size_t max, bool* out_running) {
+    size_t count = 0;
+    bool running = false;
+    spinlock_lock_disable_irq(&g_thread_list_lock);
+    struct thread* thread;
+    struct thread* tmp;
+    LISTP_FOR_EACH_ENTRY_SAFE(thread, tmp, &g_thread_list, list) {
+        if (thread->address_space != space)
+            continue;
+        if (thread->state == THREAD_RUNNING) {
+            /* still on another CPU; find_next_thread() will not pick it again */
+            running = true;
+            continue;
+        }
+        if (count == max)
+            break;
+        LISTP_DEL(thread, &g_thread_list, list);
+        thread->state      = THREAD_STOPPED;
+        thread->blocked_on = NULL;
+        out_threads[count++] = thread;
+    }
+    spinlock_unlock_enable_irq(&g_thread_list_lock);
+    *out_running = running;
+    return count;
+}
+
+int sched_thread_share_stack(struct memory_address_space* source,
+                             struct memory_address_space* new_thread_space,
+                             uintptr_t addr, size_t size) {
+    int ret = 0;
+    bool changed = false;
+    spinlock_lock_disable_irq(&g_thread_list_lock);
+
+    /* On AArch64 the boot root is never a target: its tables are shared with the lazy copies (see
+     * memory_address_space_share_range_noflush()), and a stack created before the frame pool
+     * exists is already mapped there. */
+    if (source->root_phys != new_thread_space->root_phys &&
+            new_thread_space != memory_address_space_boot()) {
+        bool range_changed;
+        ret = memory_address_space_share_range_noflush(source, new_thread_space, addr, size,
+                                                       &range_changed);
+        changed |= range_changed;
+        if (ret < 0)
+            goto out;
+    }
+
+    struct thread* thread;
+    LISTP_FOR_EACH_ENTRY(thread, &g_thread_list, list) {
+        struct memory_address_space* space = thread->address_space;
+        if (!space || space == memory_address_space_boot() ||
+                space->root_phys == source->root_phys ||
+                space->root_phys == new_thread_space->root_phys)
+            continue;
+        bool range_changed;
+        ret = memory_address_space_share_range_noflush(source, space, addr, size,
+                                                       &range_changed);
+        changed |= range_changed;
+        if (ret < 0)
+            goto out;
+    }
+
+out:
+    spinlock_unlock_enable_irq(&g_thread_list_lock);
+    if (changed) {
+        int flush_ret = memory_address_space_flush_range(addr, size);
+        if (ret >= 0)
+            ret = flush_ret;
+    }
+    return ret;
+}
+
+/* The per-CPU helper threads and their stacks were allocated before any process root existed
+ * (identity PAL memory); a process root that made the tables over them private must still map
+ * them. The interrupt and scheduling stacks come from the kernel image's shared region, which no
+ * root remaps. */
+int sched_thread_share_runtime_stacks(struct memory_address_space* target) {
+    struct memory_address_space* boot = memory_address_space_boot();
+    for (uint32_t i = 0; i < g_num_cpus; i++) {
+        struct per_cpu_data* cpu = &g_per_cpu_data[i];
+
+        struct thread* helpers[] = {cpu->idle_thread, cpu->bottomhalves_thread};
+        for (size_t h = 0; h < ARRAY_SIZE(helpers); h++) {
+            struct thread* helper = helpers[h];
+            if (!helper)
+                continue;
+            uintptr_t helper_start = ALIGN_DOWN((uintptr_t)helper, PAGE_SIZE);
+            uintptr_t helper_end = ALIGN_UP((uintptr_t)helper + sizeof(*helper), PAGE_SIZE);
+            int ret = memory_address_space_share_range(boot, target, helper_start,
+                                                       helper_end - helper_start);
+            if (ret < 0)
+                return ret;
+
+            uintptr_t tcb = get_gs_base(helper);
+            uintptr_t stack = tcb - (THREAD_STACK_SIZE + ALT_STACK_SIZE -
+                                     sizeof(struct pal_tcb_vm));
+            size_t stack_size = THREAD_STACK_SIZE + ALT_STACK_SIZE + g_xsave_size +
+                                VM_XSAVE_ALIGN;
+            uintptr_t start = ALIGN_DOWN(stack, PAGE_SIZE);
+            uintptr_t end = ALIGN_UP(stack + stack_size, PAGE_SIZE);
+            ret = memory_address_space_share_range(boot, target, start, end - start);
+            if (ret < 0)
+                return ret;
+        }
+    }
+    return 0;
 }

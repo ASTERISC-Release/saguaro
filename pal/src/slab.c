@@ -12,7 +12,7 @@
 #include "pal_internal.h"
 #include "spinlock.h"
 
-#if defined(PAL_HOST_VM) && defined(__x86_64__)
+#if defined(PAL_HOST_VM) && (defined(__x86_64__) || defined(__aarch64__))
 #include "kernel_memory.h"
 static bool g_slab_mgr_use_frame_pool;
 #endif
@@ -30,7 +30,7 @@ static inline void system_mem_free(void* addr, size_t size);
 
 #include "slabmgr.h"
 
-#if defined(PAL_HOST_VM) && defined(__x86_64__)
+#if defined(PAL_HOST_VM) && (defined(__x86_64__) || defined(__aarch64__))
 static SLAB_MGR g_slab_mgr_legacy;
 #endif
 
@@ -39,7 +39,7 @@ static inline void* system_mem_alloc(size_t size) {
 
     size = ALLOC_ALIGN_UP(size);
 
-#if defined(PAL_HOST_VM) && defined(__x86_64__)
+#if defined(PAL_HOST_VM) && (defined(__x86_64__) || defined(__aarch64__))
     if (g_slab_mgr_use_frame_pool) {
         int ret = memory_frame_alloc_contiguous(size, &addr);
         return ret < 0 ? NULL : addr;
@@ -69,7 +69,7 @@ static inline void system_mem_free(void* addr, size_t size) {
     asan_unpoison_region((uintptr_t)addr, size);
 #endif
 
-#if defined(PAL_HOST_VM) && defined(__x86_64__)
+#if defined(PAL_HOST_VM) && (defined(__x86_64__) || defined(__aarch64__))
     if (g_slab_mgr_use_frame_pool) {
         if (memory_frame_is_alias_pointer(addr)) {
             int ret = memory_frame_free_contiguous(addr, size);
@@ -93,7 +93,7 @@ static inline void system_mem_free(void* addr, size_t size) {
 
 static SLAB_MGR g_slab_mgr = NULL;
 
-#if defined(PAL_HOST_VM) && defined(__x86_64__)
+#if defined(PAL_HOST_VM) && (defined(__x86_64__) || defined(__aarch64__))
 /* Allocations a child process's PAL makes while it starts (its environment and arguments, CPU
  * information): nothing outside the process refers to them, but they are in the PAL heap that all
  * processes share, so they are freed when the process exits (pal_startup_allocs_free()). */
@@ -137,7 +137,7 @@ void init_slab_mgr(void) {
         INIT_FAIL("cannot initialize slab manager");
 }
 
-#if defined(PAL_HOST_VM) && defined(__x86_64__)
+#if defined(PAL_HOST_VM) && (defined(__x86_64__) || defined(__aarch64__))
 int pal_enable_shared_frame_slab_allocator(void) {
     if (!g_slab_mgr || g_slab_mgr_use_frame_pool || g_slab_mgr_legacy)
         return -PAL_ERROR_INVAL;
@@ -165,7 +165,7 @@ void* malloc(size_t size) {
         memset(ptr, 0xa5, size);
 #endif
 
-#if defined(PAL_HOST_VM) && defined(__x86_64__)
+#if defined(PAL_HOST_VM) && (defined(__x86_64__) || defined(__aarch64__))
     startup_alloc_note(ptr);
 #endif
     return ptr;
@@ -185,7 +185,7 @@ void* calloc(size_t num, size_t size) {
 void free(void* ptr) {
     if (!ptr)
         return;
-#if defined(PAL_HOST_VM) && defined(__x86_64__)
+#if defined(PAL_HOST_VM) && (defined(__x86_64__) || defined(__aarch64__))
     if (g_startup_allocs_cnt)
         startup_alloc_forget(ptr);
     if (g_slab_mgr_legacy && slab_mgr_owns(g_slab_mgr_legacy, ptr)) {
