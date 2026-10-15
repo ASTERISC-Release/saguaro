@@ -181,6 +181,17 @@ int pal_common_perform_memfault_handling(uint64_t faulted_addr, struct isr_regs*
     if (!curr_tcb)
         return -PAL_ERROR_DENIED;
 
+#if defined(PAL_HOST_VM) && defined(__x86_64__)
+    /* A fault in the PAL's own code is a PAL bug, which the LibOS cannot handle: it would take it
+     * for a fault of the application, and in a child process whose LibOS is not running yet its
+     * handler faults again, forever, while the PAL holds its locks. The caller panics instead,
+     * with the fault's address. */
+    extern char __text_start[], __text_end[];
+    if (!is_user_mode(regs) && regs->rip >= (uintptr_t)__text_start &&
+            regs->rip < (uintptr_t)__text_end)
+        return -PAL_ERROR_DENIED;
+#endif
+
 #ifdef __x86_64__
     /* with the experimental multiprocess support (demand-zero pages may fault in the upcall) */
     if (is_user_mode(regs) && curr_tcb->thread_handle && memory_frame_pool_active())

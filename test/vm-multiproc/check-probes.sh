@@ -40,13 +40,27 @@ ARCH_LIBDIR=/lib/$(gcc -dumpmachine)
 mkdir -p "$WORK" "$LOGDIR"
 
 FAILED=()
-# vm <log> <timeout-seconds> <command...>: run a command (gramine-vm ...) with a KILL timeout,
-# its stdout+stderr (carriage returns removed) appended to <log>
+# vm <log> <timeout-seconds> <command...>: run a command (gramine-vm ...) with a timeout, its
+# stdout+stderr (carriage returns removed) appended to <log>. A guest still running at the timeout
+# is looked at through its QEMU monitor (where its vCPUs are, vm-hang-report.py) and then stopped
+# through it, so that the launcher still reports how the guest ended and its serial output.
 vm() {
-    local log=$1 t=$(( $2 * SCALE )); shift 2
+    local log=$1 t=$(( $2 * SCALE )) mon="$LOGDIR/qemu-monitor.sock" raw="$LOGDIR/vm-output.raw" pid rc i
+    shift 2
     echo "+ $* (timeout ${t}s, $GRAMINE_CPU_NUM vCPUs)" >> "$log"
-    timeout -s KILL "$t" "$@" 2>&1 | tr -d '\r' >> "$log"
-    echo "+ exit status ${PIPESTATUS[0]}" >> "$log"
+    rm -f "$mon"
+    GRAMINE_VM_MONITOR=$mon setsid "$@" > "$raw" 2>&1 < /dev/null &
+    pid=$!
+    for ((i = 0; i < t * 10; i++)); do kill -0 "$pid" 2>/dev/null || break; sleep 0.1; done
+    if kill -0 "$pid" 2>/dev/null; then
+        { echo "+ TIMEOUT after ${t}s"; "$HERE/vm-hang-report.py" "$mon" --quit; } > "$raw.hang" 2>&1
+        for ((i = 0; i < 100; i++)); do kill -0 "$pid" 2>/dev/null || break; sleep 0.1; done
+        kill -KILL -- "-$pid" 2>/dev/null   # the launcher's process group (setsid)
+    fi
+    wait "$pid"; rc=$?
+    tr -d '\r' < "$raw" >> "$log"
+    [ -f "$raw.hang" ] && cat "$raw.hang" >> "$log" && rm -f "$raw.hang"
+    echo "+ exit status $rc" >> "$log"
 }
 # expect <log> <line>: the log has <line> as a whole line
 expect() { grep -qxF -- "$2" "$1" || { echo "  missing line: '$2'"; return 1; }; }

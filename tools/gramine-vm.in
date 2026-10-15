@@ -104,6 +104,10 @@ QEMU_PATH=${QEMU_PATH:-$(command -v qemu-system-x86_64 || echo qemu-system-x86_6
 QEMU_VM="-cpu host,host-phys-bits,-kvm-steal-time,pmu=off,+tsc-deadline,+invtsc \
 -m $QEMU_MEM_SIZE -smp $QEMU_CPU_NUM"
 QEMU_OPTS="-enable-kvm -vga none -display none -no-reboot -monitor none "
+# GRAMINE_VM_MONITOR=<path>: the QEMU monitor on a unix socket, so that a hung guest can be looked
+# at from outside (test/vm-multiproc/vm-hang-report.py)
+[ -n "$GRAMINE_VM_MONITOR" ] && \
+    QEMU_OPTS="${QEMU_OPTS/-monitor none/-monitor unix:$GRAMINE_VM_MONITOR,server=on,wait=off}"
 
 RAW_MEM_SIZE=$(echo $QEMU_MEM_SIZE | tr -d 'G')
 REM_MEM_SIZE=$((RAW_MEM_SIZE - 4))
