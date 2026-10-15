@@ -486,6 +486,57 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL layer_GetPhysicalDeviceXlibPresentationSup
     return ok;
 }
 
+/* Device extensions that extend swapchains or presentation, which the layer's own swapchains do
+ * not implement: hidden from the application, or it would pass a layer swapchain to the driver
+ * (vkWaitForPresentKHR, vkReleaseSwapchainImagesEXT, vkSetHdrMetadataEXT) or chain present
+ * structures the layer ignores (present fences of swapchain_maintenance1). */
+static const char* const g_hidden_device_extensions[] = {
+    "VK_EXT_swapchain_maintenance1", "VK_KHR_swapchain_maintenance1", "VK_KHR_present_id",
+    "VK_KHR_present_wait", "VK_KHR_present_id2", "VK_KHR_present_wait2", "VK_EXT_hdr_metadata",
+    "VK_EXT_full_screen_exclusive", "VK_GOOGLE_display_timing", "VK_EXT_present_timing",
+};
+
+static bool hidden_extension(const char* name) {
+    for (size_t i = 0; i < sizeof(g_hidden_device_extensions) / sizeof(g_hidden_device_extensions[0]);
+            i++)
+        if (!strcmp(name, g_hidden_device_extensions[i]))
+            return true;
+    return false;
+}
+
+static VKAPI_ATTR VkResult VKAPI_CALL layer_EnumerateDeviceExtensionProperties(
+        VkPhysicalDevice pd, const char* layer, uint32_t* count, VkExtensionProperties* props) {
+    struct instance_data* d = get_instance(pd);
+    if (!d)
+        return VK_ERROR_INITIALIZATION_FAILED;
+    if (layer && !strcmp(layer, LAYER_NAME)) {
+        *count = 0;
+        return VK_SUCCESS;
+    }
+    uint32_t n = 0;
+    VkResult r = d->EnumerateDeviceExtensionProperties(pd, layer, &n, NULL);
+    if (r != VK_SUCCESS)
+        return r;
+    VkExtensionProperties* all = calloc(n ? n : 1, sizeof(*all));
+    if (!all)
+        return VK_ERROR_OUT_OF_HOST_MEMORY;
+    r = d->EnumerateDeviceExtensionProperties(pd, layer, &n, all);
+    uint32_t kept = 0;
+    for (uint32_t i = 0; i < n; i++)
+        if (!hidden_extension(all[i].extensionName))
+            all[kept++] = all[i];
+    if (!props) {
+        *count = kept;
+        free(all);
+        return VK_SUCCESS;
+    }
+    uint32_t c = *count < kept ? *count : kept;
+    memcpy(props, all, c * sizeof(*props));
+    *count = c;
+    free(all);
+    return c < kept ? VK_INCOMPLETE : VK_SUCCESS;
+}
+
 /* ------------------------------------------------------------------------------------------------
  * Device
  */
@@ -532,7 +583,8 @@ static VKAPI_ATTR VkResult VKAPI_CALL layer_CreateDevice(VkPhysicalDevice pd,
     const char* exts[128];
     uint32_t n = 0;
     for (uint32_t i = 0; i < info->enabledExtensionCount && n < 120; i++)
-        exts[n++] = info->ppEnabledExtensionNames[i];
+        if (!hidden_extension(info->ppEnabledExtensionNames[i]))
+            exts[n++] = info->ppEnabledExtensionNames[i];
     bool export_ok = true;
     for (size_t w = 0; w < 2; w++) {
         bool present = false;
@@ -635,13 +687,14 @@ static int find_memtype(struct device_data* d, uint32_t bits, VkMemoryPropertyFl
 }
 
 static VkResult make_image(struct device_data* d, VkFormat format, VkExtent2D extent,
-                           VkImageUsageFlags usage, bool exportable, VkImage* image,
-                           VkDeviceMemory* memory) {
+                           VkImageUsageFlags usage, bool exportable, VkImageCreateFlags flags,
+                           const void* next, VkImage* image, VkDeviceMemory* memory) {
     VkExternalMemoryImageCreateInfo ext = {
         .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
         .handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT};
     VkImageCreateInfo ci = {.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-                            .pNext = exportable ? &ext : NULL,
+                            .pNext = exportable ? (const void*)&ext : next,
+                            .flags = flags,
                             .imageType = VK_IMAGE_TYPE_2D,
                             .format = format,
                             .extent = {extent.width, extent.height, 1},
@@ -734,11 +787,27 @@ static VKAPI_ATTR VkResult VKAPI_CALL layer_CreateSwapchainKHR(VkDevice device,
     if (sc->image_count > MAX_IMAGES)
         sc->image_count = MAX_IMAGES;
 
+    /* VK_KHR_swapchain_mutable_format (DXVK uses it for sRGB views): mutable images, with the
+     * application's format list */
+    VkImageCreateFlags image_flags = 0;
+    VkImageFormatListCreateInfo format_list = {.sType =
+                                                   VK_STRUCTURE_TYPE_IMAGE_FORMAT_LIST_CREATE_INFO};
+    const void* image_next = NULL;
+    if (info->flags & VK_SWAPCHAIN_CREATE_MUTABLE_FORMAT_BIT_KHR) {
+        image_flags |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
+        for (const VkBaseInStructure* p = info->pNext; p; p = p->pNext)
+            if (p->sType == VK_STRUCTURE_TYPE_IMAGE_FORMAT_LIST_CREATE_INFO) {
+                const VkImageFormatListCreateInfo* l = (const VkImageFormatListCreateInfo*)p;
+                format_list.viewFormatCount = l->viewFormatCount;
+                format_list.pViewFormats = l->pViewFormats;
+                image_next = &format_list;
+            }
+    }
     VkResult r;
     for (uint32_t i = 0; i < sc->image_count; i++) {
         r = make_image(d, sc->format, sc->extent,
-                       info->imageUsage | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, false, &sc->images[i],
-                       &sc->image_memory[i]);
+                       info->imageUsage | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, false, image_flags,
+                       image_next, &sc->images[i], &sc->image_memory[i]);
         if (r != VK_SUCCESS)
             goto fail;
     }
@@ -746,7 +815,7 @@ static VKAPI_ATTR VkResult VKAPI_CALL layer_CreateSwapchainKHR(VkDevice device,
     send_window_size(sc->extent.width, sc->extent.height, sc->surface->window);
     for (int i = 0; i < NUM_BUFFERS; i++) {
         r = make_image(d, export_format(sc->format), sc->extent, VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-                       true, &sc->export_images[i], &sc->export_memory[i]);
+                       true, 0, NULL, &sc->export_images[i], &sc->export_memory[i]);
         if (r != VK_SUCCESS)
             goto fail;
         VkMemoryGetFdInfoKHR gfi = {.sType = VK_STRUCTURE_TYPE_MEMORY_GET_FD_INFO_KHR,
@@ -1163,6 +1232,7 @@ static VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL layer_GetInstanceProcAddr(VkInst
     INTERCEPT(CreateInstance);
     INTERCEPT(DestroyInstance);
     INTERCEPT(CreateDevice);
+    INTERCEPT(EnumerateDeviceExtensionProperties);
     INTERCEPT(CreateXcbSurfaceKHR);
     INTERCEPT(CreateXlibSurfaceKHR);
     INTERCEPT(DestroySurfaceKHR);
