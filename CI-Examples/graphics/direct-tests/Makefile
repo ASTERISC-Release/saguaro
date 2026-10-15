@@ -4,12 +4,14 @@
 # Test programs for graphics under gramine-direct (x86_64), see
 # Documentation/devel/graphics-direct/. `make check` runs each natively and under gramine-direct.
 
-PROGRAMS = drm_info gbm_map egl_readback ioctl_bench x_roundtrip gl_bench egl_surfaceless
+PROGRAMS = drm_info gbm_map egl_readback ioctl_bench x_roundtrip gl_bench egl_surfaceless x_input
 NODE ?= /dev/dri/renderD128
 # The host's library directory of this architecture, and the NVIDIA driver's device nodes when the
 # host has them (NVIDIA=0 or 1 overrides).
 ARCH_LIBDIR ?= /lib/$(shell $(CC) -dumpmachine)
 NVIDIA ?= $(if $(wildcard /dev/nvidiactl),1,0)
+# the X server of $(DISPLAY) (display 0 when DISPLAY is not set)
+X_DISPLAY_NUM = $(or $(patsubst :%,%,$(firstword $(subst ., ,$(DISPLAY)))),0)
 
 CFLAGS = -Wall -Wextra -O2 $(shell pkg-config --cflags libdrm)
 LDLIBS_drm_info = $(shell pkg-config --libs libdrm)
@@ -37,6 +39,10 @@ ioctl_bench: ioctl_bench.c
 gl_bench: gl_bench.c
 	$(CC) $(CFLAGS) $(shell pkg-config --cflags gbm egl glesv2) $< -o $@ $(LDLIBS_egl_readback)
 
+# X key and button events: ./x_input [seconds] (send keys with xdotool key --window <id> ...)
+x_input: x_input.c
+	$(CC) $(CFLAGS) $< -o $@ $(shell pkg-config --libs x11)
+
 x_roundtrip: x_roundtrip.c
 	$(CC) $(CFLAGS) $< -o $@ $(shell pkg-config --libs xcb)
 
@@ -49,14 +55,14 @@ egl_readback: egl_readback.c
 	$(CC) $(CFLAGS) $(shell pkg-config --cflags gbm egl glesv2) $< -o $@ $(LDLIBS_egl_readback)
 
 %.manifest: direct-tests.manifest.template FORCE
-	gramine-manifest -Dlog_level=$(GRAMINE_LOG_LEVEL) -Darch_libdir=$(ARCH_LIBDIR) -Dnvidia=$(NVIDIA) -Dentrypoint=$* $< $@
+	gramine-manifest -Dlog_level=$(GRAMINE_LOG_LEVEL) -Darch_libdir=$(ARCH_LIBDIR) -Dnvidia=$(NVIDIA) -Ddisplay=$(X_DISPLAY_NUM) -Dentrypoint=$* $< $@
 	gramine-manifest-check $@
 
 .PHONY: FORCE
 
 .PHONY: check
 check: all
-	@for p in $(filter-out ioctl_bench x_roundtrip gl_bench egl_surfaceless,$(PROGRAMS)); do \
+	@for p in $(filter-out ioctl_bench x_roundtrip gl_bench egl_surfaceless x_input,$(PROGRAMS)); do \
 		echo "== $$p native"; ./$$p $(NODE) || exit 1; \
 		echo "== $$p gramine-direct"; gramine-direct $$p $(NODE) || exit 1; \
 	done
@@ -66,7 +72,7 @@ eglinfo: eglinfo.manifest
 	gramine-direct eglinfo -B
 
 eglinfo.manifest: direct-tests.manifest.template FORCE
-	gramine-manifest -Dlog_level=$(GRAMINE_LOG_LEVEL) -Darch_libdir=$(ARCH_LIBDIR) -Dnvidia=$(NVIDIA) -Dentrypoint=/usr/bin/eglinfo $< $@
+	gramine-manifest -Dlog_level=$(GRAMINE_LOG_LEVEL) -Darch_libdir=$(ARCH_LIBDIR) -Dnvidia=$(NVIDIA) -Ddisplay=$(X_DISPLAY_NUM) -Dentrypoint=/usr/bin/eglinfo $< $@
 	gramine-manifest-check $@
 
 .PHONY: clean

@@ -15,8 +15,8 @@ loader.env.LD_LIBRARY_PATH = "/lib:/usr{{ arch_libdir }}"
 # The application may submit any ioctl to the GPU and talk to the X server (see
 # Documentation/manifest-syntax.rst).
 sys.insecure__allow_raw_device_ioctl = true
-sys.insecure__host_unix_sockets = ["/tmp/.X11-unix/X0"]
-loader.env.DISPLAY = ":0"
+sys.insecure__host_unix_sockets = ["/tmp/.X11-unix/X{{ display }}"]
+loader.env.DISPLAY = ":{{ display }}"
 
 fs.mounts = [
 {% if not host_binary %}
