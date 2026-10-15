@@ -115,9 +115,19 @@ long libos_syscall_getrusage(int who, struct __kernel_rusage* usage) {
     if (!is_user_memory_writable(usage, sizeof(*usage)))
         return -EFAULT;
 
-    /* PALs do not currently expose CPU accounting counters. Return a correctly initialized ABI
-     * structure until that interface exists; never synthesize CPU time from wall-clock time. */
+    /* CPU times come from the PAL (`PalGetCpuTime()`: the host's accounting of the Gramine process
+     * or thread under the Linux PAL); a PAL without accounting (the VM PAL) leaves them zero, which
+     * is never synthesized from wall-clock time. Children's usage is not collected (zero). */
     memset(usage, 0, sizeof(*usage));
+    if (who != RUSAGE_CHILDREN) {
+        uint64_t user_us = 0, sys_us = 0;
+        if (PalGetCpuTime(/*thread=*/who == RUSAGE_THREAD, &user_us, &sys_us) == 0) {
+            usage->ru_utime.tv_sec = user_us / TIME_US_IN_S;
+            usage->ru_utime.tv_usec = user_us % TIME_US_IN_S;
+            usage->ru_stime.tv_sec = sys_us / TIME_US_IN_S;
+            usage->ru_stime.tv_usec = sys_us % TIME_US_IN_S;
+        }
+    }
     return 0;
 }
 long libos_syscall_setrlimit(int resource, struct __kernel_rlimit* rlim) {
