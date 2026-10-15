@@ -12,7 +12,11 @@
  *
  * Environment: VKH_DEVICE=<index or name substring> selects the physical device (default 0, the
  * loader's order); VKH_ITER=<n> sets the number of submits in the latency step (default 1000);
- * VKH_SIZE=<n> the number of uints in the compute buffer (default 1M).
+ * VKH_SIZE=<n> the number of uints in the compute buffer (default 1M); VKH_NO_TIMEOUT_WAIT=1 skips
+ * the timeline wait that has to time out; VKH_MEMFLAGS=<VkMemoryPropertyFlags> the property flags the
+ * compute buffer's memory type must have (default 0x6, host-visible and coherent: the first such
+ * type; 0xe adds host-cached, 0x7 asks for device-local, which on a discrete GPU is VRAM through
+ * the PCI BAR).
  */
 #define _GNU_SOURCE
 #include <errno.h>
@@ -224,14 +228,16 @@ int main(void) {
     VkBuffer buf;
     VkDeviceMemory mem;
     VkDeviceSize bytes = (VkDeviceSize)n * 4;
-    CHECK("memory", make_buffer(bytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-                                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                                &buf, &mem));
+    VkMemoryPropertyFlags want = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    if (getenv("VKH_MEMFLAGS"))
+        want = (VkMemoryPropertyFlags)strtoul(getenv("VKH_MEMFLAGS"), NULL, 0);
+    CHECK("memory", make_buffer(bytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, want, &buf, &mem));
     uint32_t* data;
     CHECK("memory", vkMapMemory(g_dev, mem, 0, VK_WHOLE_SIZE, 0, (void**)&data));
     for (uint32_t i = 0; i < n; i++)
         data[i] = i;
-    STEP("memory", true, "%" PRIu64 " KiB host-visible, mapped at %p", bytes >> 10, (void*)data);
+    STEP("memory", true, "%" PRIu64 " KiB, memory flags 0x%x, mapped at %p", bytes >> 10, want,
+         (void*)data);
 
     /* compute pipeline */
     VkDescriptorSetLayoutBinding b = {.binding = 0, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -331,7 +337,11 @@ int main(void) {
     /* a wait that must time out: value 3 is never signalled */
     uint64_t three = 3;
     swi.pValues = &three;
-    VkResult tr = vkWaitSemaphores(g_dev, &swi, 10000000ull);
+    VkResult tr = VK_TIMEOUT;
+    if (getenv("VKH_NO_TIMEOUT_WAIT"))
+        printf("  (VKH_NO_TIMEOUT_WAIT: the wait that must time out is skipped)\n");
+    else
+        tr = vkWaitSemaphores(g_dev, &swi, 10000000ull);
     STEP("timeline", val == 2 && tr == VK_TIMEOUT, "counter %" PRIu64 ", 10 ms wait on 3 -> %d (expect %d)",
          val, tr, VK_TIMEOUT);
 

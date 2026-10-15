@@ -12,7 +12,7 @@ loader.insecure__use_cmdline_argv = true
 loader.log_level = "{{ log_level }}"
 
 loader.env.LD_LIBRARY_PATH = "/lib:/usr/lib:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu"
-loader.env.LD_PRELOAD = "./libgraphics.so:/vk-session-shim.so"
+loader.env.LD_PRELOAD = "/vk-session-shim.so:./libgraphics.so"
 loader.env.DISPLAY = "2:0"
 vm.net.direct_vsock_ports = [6000]
 loader.env.IVSHMEM_GRAMINE_VM = "1"
@@ -38,4 +38,7 @@ fs.mounts = [
   { path = "/sys/devices", type = "chroot", uri = "file:/sys/devices" },
   { path = "/sys/bus/pci", type = "chroot", uri = "file:/sys/bus/pci" },
   { path = "/root/.cache", type = "chroot", uri = "file:/root/.cache" },
+  # memfd replacement of vk-session-shim.so: a host directory, because Mesa sizes its memfds at up
+  # to 1 GiB (sparse), which a tmpfs mount would have to allocate in the LibOS
+  { path = "/tmp", type = "chroot", uri = "file:/tmp/vkshim" },
 ]
