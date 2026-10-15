@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
-# The runtime of a VBS enclave image, on an aarch64 Linux machine (WSL, the build container): the
+# The runtime of a VBS enclave image, on an aarch64 or x86_64 Linux machine (WSL, the build container): the
 # vbs glibc (scripts/vbs/build-glibc.sh, into build-vbs-glibc) and the meson build of the vbs PAL
 # and LibOS (build-vbs) when missing, then ninja. Used by wsl-build.sh (gramine-vbs.ps1 on
 # Windows) and by `gramine-vbs runtime` (the make VBS=1 flow). Step logs: build-vbs-logs/.
@@ -33,7 +33,7 @@ if [ ! -f build-vbs-glibc/usr/lib/libc.so.6 ]; then
     timed glibc sh scripts/vbs/build-glibc.sh
     rm -rf build-vbs-glibc.build
 fi
-if [ ! -f build-vbs-glibc/usr/lib/libsoftfp-x18.a ]; then
+if [ "$(uname -m)" != x86_64 ] && [ ! -f build-vbs-glibc/usr/lib/libsoftfp-x18.a ]; then
     # a sysroot from before build-glibc.sh installed the x18-free soft-float routines
     timed softfp sh scripts/vbs/build-glibc.sh --softfp
 fi

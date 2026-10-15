@@ -16,8 +16,9 @@
 # pal_vbs_packed_blob.S, pal_vbs_packed_table.h); the in-enclave loader and the blob are then built
 # too. Without PACK the image carries no packed objects and no loader (the phase-1 build).
 #
-# VBS_ARCH selects the target: aarch64 (the default: ARM64 Windows) or x86_64 (x64 Windows,
-# Documentation/devel/vbs-enclave/PLAN-x64.md).
+# VBS_ARCH selects the target: aarch64 (ARM64 Windows) or x86_64 (x64 Windows,
+# Documentation/devel/vbs-enclave/PLAN-x64.md); the default is the machine's (uname -m), the
+# architecture of the Linux objects built next to these.
 #
 # Usage: HDR=<scratch> [OUT=<dir>] [PACK=<pack.py output>] [VBS_ARCH=x86_64] scripts/vbs/build-objs.sh
 set -e
@@ -28,7 +29,7 @@ VBS="$ROOT/pal/src/host/vbs"
 OUT=${OUT:-"$ROOT/build-vbs/obj"}
 : "${HDR:?set HDR to the folder holding the copied SDK (sdk/) and MSVC (vc/) headers}"
 mkdir -p "$OUT"
-case "${VBS_ARCH:-aarch64}" in
+case "${VBS_ARCH:-$(uname -m)}" in
     aarch64|arm64) TARGET=aarch64-pc-windows-msvc; BOUNDARY=pal_vbs_boundary.S ;;
     x86_64|x64|amd64) TARGET=x86_64-pc-windows-msvc; BOUNDARY=pal_vbs_boundary_x86_64.S ;;
     *) echo "VBS_ARCH must be aarch64 or x86_64"; exit 2 ;;

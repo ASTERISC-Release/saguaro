@@ -3,7 +3,8 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
 # The Linux side of the Windows-only VBS build (Documentation/devel/vbs-enclave/PLAN-windows-build.md)
-# runs in a WSL2 Ubuntu 24.04 aarch64 distribution. This script checks that distribution for the
+# runs in a WSL2 Ubuntu distribution of the machine's architecture (aarch64 on ARM64 Windows, x86_64
+# on x64 Windows; tested: Ubuntu 24.04 aarch64, Ubuntu 26.04 x86_64). This script checks it for the
 # tools the build needs and installs what is missing, only when asked:
 #
 #   wsl-setup.sh check          list what is missing (exit 1 if anything is)
@@ -29,8 +30,13 @@ PKGS="gcc:gcc make:make patch:patch git:git gawk:gawk bison:bison m4:m4 pkgconf:
 DEPS="pkgconf-bin libpkgconf3"
 if [ "$2" = clang ]; then
     PKGS="$PKGS clang:clang"
-    DEPS="$DEPS clang-18 libclang-common-18-dev libclang-cpp18 libclang1-18 libllvm18 llvm-18-linker-tools"
+    # the versioned packages behind `clang` (18 on Ubuntu 24.04, 21 on 26.04)
+    CV=$(apt-cache depends clang 2>/dev/null | sed -n 's/.*Depends: clang-\([0-9][0-9]*\)$/\1/p' | head -1)
+    CV=${CV:-18}
+    DEPS="$DEPS clang-$CV libclang-common-$CV-dev libclang-cpp$CV libclang1-$CV libllvm$CV llvm-$CV-linker-tools"
 fi
+ARCH=$(uname -m)
+MULTIARCH=$(gcc -dumpmachine 2>/dev/null || echo "$ARCH-linux-gnu")
 
 [ -f "$TOOLS/env.sh" ] && . "$TOOLS/env.sh"
 
@@ -49,7 +55,7 @@ missing() {
 
 case "${1:-check}" in
 check)
-    [ "$(uname -m)" = aarch64 ] || { echo "not an aarch64 distribution ($(uname -m))"; exit 1; }
+    case "$ARCH" in aarch64|x86_64) ;; *) echo "not an aarch64 or x86_64 distribution ($ARCH)"; exit 1 ;; esac
     m=$(missing)
     if [ -n "$m" ]; then
         echo "missing: $m"
@@ -78,7 +84,7 @@ user)
 # user-level tools of the vbs build (scripts/vbs/wsl-setup.sh user)
 export PATH="$TOOLS/root/usr/bin:\$PATH"
 export PYTHONPATH="$TOOLS/root/usr/lib/python3/dist-packages\${PYTHONPATH:+:\$PYTHONPATH}"
-export LD_LIBRARY_PATH="$TOOLS/root/usr/lib/aarch64-linux-gnu\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}"
+export LD_LIBRARY_PATH="$TOOLS/root/usr/lib/$MULTIARCH\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}"
 export BISON_PKGDATADIR="$TOOLS/root/usr/share/bison"
 export M4="$TOOLS/root/usr/bin/m4"
 ENV

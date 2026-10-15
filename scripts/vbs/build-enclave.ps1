@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
-# build-enclave.ps1: on one ARM64 Windows machine, from the pack.py output (made in WSL) and the
+# build-enclave.ps1: on one ARM64 or x64 Windows machine, from the pack.py output (made in WSL) and the
 # sources to a signed enclave image, and optionally run it. The Windows enclave runtime and host are
 # compiled with clang inside the WSL distribution (wsl-build.sh objs, build-objs.sh) against this
 # machine's Windows SDK and MSVC headers; link /ENCLAVE, veiid and signtool run here
@@ -39,8 +39,9 @@ if (-not (Test-Path $vswhere)) { Fail 'no Visual Studio (vswhere.exe not found)'
 $vs = & $vswhere -latest -products * -property installationPath
 if (-not $vs) { Fail 'no Visual Studio installation found' }
 $vc = Get-ChildItem "$vs\VC\Tools\MSVC" -ErrorAction SilentlyContinue | Sort-Object Name | Select-Object -Last 1
-if (-not $vc -or -not (Test-Path "$($vc.FullName)\lib\arm64\enclave\libcmt.lib")) {
-    Fail 'no MSVC ARM64 tools with the enclave CRT (VC\Tools\MSVC\<ver>\lib\arm64\enclave)'
+$VbsArch = if ($env:PROCESSOR_ARCHITECTURE -eq 'AMD64') { 'x64' } else { 'arm64' }
+if (-not $vc -or -not (Test-Path "$($vc.FullName)\lib\$VbsArch\enclave\libcmt.lib")) {
+    Fail "no MSVC $VbsArch tools with the enclave CRT (VC\Tools\MSVC\<ver>\lib\$VbsArch\enclave)"
 }
 $kits = "${env:ProgramFiles(x86)}\Windows Kits\10\Include"
 $sdk = Get-ChildItem $kits -ErrorAction SilentlyContinue |
