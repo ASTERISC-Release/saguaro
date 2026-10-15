@@ -6,6 +6,10 @@
 
 PROGRAMS = drm_info gbm_map egl_readback ioctl_bench x_roundtrip gl_bench egl_surfaceless
 NODE ?= /dev/dri/renderD128
+# The host's library directory of this architecture, and the NVIDIA driver's device nodes when the
+# host has them (NVIDIA=0 or 1 overrides).
+ARCH_LIBDIR ?= /lib/$(shell $(CC) -dumpmachine)
+NVIDIA ?= $(if $(wildcard /dev/nvidiactl),1,0)
 
 CFLAGS = -Wall -Wextra -O2 $(shell pkg-config --cflags libdrm)
 LDLIBS_drm_info = $(shell pkg-config --libs libdrm)
@@ -45,7 +49,7 @@ egl_readback: egl_readback.c
 	$(CC) $(CFLAGS) $(shell pkg-config --cflags gbm egl glesv2) $< -o $@ $(LDLIBS_egl_readback)
 
 %.manifest: direct-tests.manifest.template FORCE
-	gramine-manifest -Dlog_level=$(GRAMINE_LOG_LEVEL) -Dentrypoint=$* $< $@
+	gramine-manifest -Dlog_level=$(GRAMINE_LOG_LEVEL) -Darch_libdir=$(ARCH_LIBDIR) -Dnvidia=$(NVIDIA) -Dentrypoint=$* $< $@
 	gramine-manifest-check $@
 
 .PHONY: FORCE
@@ -62,7 +66,7 @@ eglinfo: eglinfo.manifest
 	gramine-direct eglinfo -B
 
 eglinfo.manifest: direct-tests.manifest.template FORCE
-	gramine-manifest -Dlog_level=$(GRAMINE_LOG_LEVEL) -Dentrypoint=/usr/bin/eglinfo $< $@
+	gramine-manifest -Dlog_level=$(GRAMINE_LOG_LEVEL) -Darch_libdir=$(ARCH_LIBDIR) -Dnvidia=$(NVIDIA) -Dentrypoint=/usr/bin/eglinfo $< $@
 	gramine-manifest-check $@
 
 .PHONY: clean
