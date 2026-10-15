@@ -20,7 +20,6 @@
 #include "toml_utils.h"
 
 const struct pal_vbs_services* g_vbs;
-uint64_t g_vbs_teb;
 
 const size_t g_page_size = PRESET_PAGESIZE;
 
@@ -115,7 +114,6 @@ noreturn void pal_vbs_start(const struct pal_vbs_services* svc) {
     int ret;
 
     g_vbs = svc;
-    g_vbs_teb = svc->teb;
     if (svc->version != PAL_VBS_SERVICES_VERSION) {
         early_write("[vbs-pal] W services version mismatch\n");
         vbs_exit(PAL_ERROR_DENIED);

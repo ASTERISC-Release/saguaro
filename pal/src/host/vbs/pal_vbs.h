@@ -17,11 +17,7 @@
 extern const struct pal_vbs_services* g_vbs;
 extern const size_t g_page_size;
 
-/* x18 of the enclave thread, restored by pal_vbs_wcall before every call into W. One value for now
- * (one enclave thread); per-thread values come with threads (phase 3). */
-extern uint64_t g_vbs_teb;
-
-/* Calls a W service (Windows ARM64 code) with x18 = g_vbs_teb (pal_vbs_wcall.S). */
+/* Calls a W service (Windows ARM64 code); x18 always holds the current TEB (pal_vbs_wcall.S). */
 uint64_t pal_vbs_wcall(void* fn, uint64_t a0, uint64_t a1, uint64_t a2);
 
 static inline void vbs_console_write(const char* buf, size_t len) {

@@ -5,9 +5,11 @@
  * uint64_t pal_vbs_wcall(void* fn, uint64_t a0, uint64_t a1, uint64_t a2);
  *
  * Calls a service of the Windows enclave runtime (Windows ARM64 code) from the vbs PAL proper.
- * Windows code needs x18 = the enclave TEB; Linux code (above all an application's glibc, which is
- * not built with -ffixed-x18) may have used x18, so it is reloaded here before every call. Integer
- * arguments and the result use the same registers in both ABIs (PLAN.md D4).
+ * Windows code needs x18 = the TEB of the current thread. No packed code ever writes x18 (all of it
+ * is built with -ffixed-x18 and pack.py refuses objects that use x18), and the kernel reloads x18
+ * with the TEB whenever a preempted enclave thread resumes, so x18 already holds the right TEB on
+ * every thread: the call needs no fix-up. Integer arguments and the result use the same registers
+ * in both ABIs (PLAN.md D4).
  */
 
     .text
@@ -17,8 +19,6 @@
 pal_vbs_wcall:
     stp     x29, x30, [sp, #-16]!
     mov     x29, sp
-    adrp    x16, g_vbs_teb
-    ldr     x18, [x16, :lo12:g_vbs_teb]
     mov     x16, x0
     mov     x0, x1
     mov     x1, x2

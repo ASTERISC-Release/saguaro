@@ -22,6 +22,12 @@ data page after the stubs; the LibOS fills the slot at run time. An unfilled slo
 execute `brk`, which raises a catchable exception (never a branch to address 0, which would hang the
 thread, blocker 4). Objects listed with --no-svc must contain no `svc` at all (the PAL, the LibOS).
 
+x18. On Windows ARM64 x18 holds the TEB and the kernel reloads it when a preempted enclave thread
+resumes (FINDINGS.md), so packed code must never keep a value of its own there: every packed object
+is disassembled (llvm-objdump or objdump) and the pack fails if an instruction outside the
+functions listed with --x18-allow names x18/w18. (The LibOS's syscall entry saves and restores the
+application's x18, which is then always the TEB: allowed explicitly.)
+
 Every packed file (ELF objects and data files such as the manifest) is also kept as its original
 bytes in a read-only data section (`.gxfile`), from which the PAL serves file reads.
 
@@ -33,7 +39,10 @@ Outputs in DIR: packed.bin, files.bin, pal_vbs_packed_blob.S, pal_vbs_packed_tab
 """
 import argparse
 import os
+import re
+import shutil
 import struct
+import subprocess
 import sys
 
 PT_LOAD, PT_DYNAMIC = 1, 2
@@ -229,6 +238,31 @@ def scan_svc(elf, img):
             if struct.unpack_from('<I', img, off)[0] == SVC0]
 
 
+INSN_RE = re.compile(r'^\s*([0-9a-f]+):\s+(.*)$')
+FUNC_RE = re.compile(r'^[0-9a-f]+ <(.+)>:$')
+X18_RE = re.compile(r'\b[xw]18\b')
+
+
+def x18_uses(path):
+    """(function, address, instruction) for every instruction of an executable section that names
+    x18 or w18"""
+    tool = os.environ.get('OBJDUMP') or shutil.which('llvm-objdump') or shutil.which('objdump')
+    if not tool:
+        sys.exit('no llvm-objdump/objdump for the x18 check (set OBJDUMP, or --skip-x18-check)')
+    out = subprocess.run([tool, '-d', '--no-show-raw-insn', path], check=True,
+                         capture_output=True, text=True).stdout
+    func, hits = '?', []
+    for line in out.splitlines():
+        m = FUNC_RE.match(line)
+        if m:
+            func = m.group(1)
+            continue
+        m = INSN_RE.match(line)
+        if m and X18_RE.search(m.group(2).split('//')[0]):
+            hits.append((func, int(m.group(1), 16), m.group(2).strip()))
+    return hits
+
+
 def c_str(s):
     return '"' + s.replace('\\', '\\\\').replace('"', '\\"') + '"'
 
@@ -240,12 +274,20 @@ def main():
     ap.add_argument('--obj', action='append', default=[], metavar='KIND:NAME:SRC[:PATH]')
     ap.add_argument('--file', action='append', default=[], metavar='NAME:SRC:PATH')
     ap.add_argument('--no-svc', action='append', default=[], metavar='NAME')
+    ap.add_argument('--x18-allow', action='append', default=[], metavar='NAME:FUNC[,FUNC...]',
+                    help='functions of object NAME allowed to name x18')
+    ap.add_argument('--skip-x18-check', action='store_true')
     ap.add_argument('--entry', default='pal_vbs_start packed_entry',
                     help='entry symbol names tried in order (else e_entry)')
     ap.add_argument('objs', nargs='*', metavar='NAME=PATH',
                     help='shorthand of --obj pal:NAME:PATH (phase-2 test objects)')
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
+
+    x18_allow = {}
+    for spec in a.x18_allow:
+        n, _, funcs = spec.partition(':')
+        x18_allow.setdefault(n, set()).update(f for f in funcs.split(',') if f)
 
     specs = [s.split(':', 3) for s in a.obj]
     specs += [['pal'] + s.split('=', 1) for s in a.objs]
@@ -265,6 +307,14 @@ def main():
         name, src = spec[1], spec[2]
         path = spec[3] if len(spec) > 3 else ''
         e = Elf(src)
+        if not a.skip_x18_check:
+            bad = [h for h in x18_uses(src) if h[0] not in x18_allow.get(name, set())]
+            if bad:
+                funcs = sorted({h[0] for h in bad})
+                sys.exit(f'{src}: {len(bad)} instructions use x18, the enclave TEB, in '
+                         f'{len(funcs)} functions: {", ".join(funcs[:12])}'
+                         f'{" ..." if len(funcs) > 12 else ""} (first: {bad[0][2]} at '
+                         f'{bad[0][1]:#x}); build it with -ffixed-x18')
         img = e.load_image()
         map_size = len(img)
         nosvc = name in a.no_svc
