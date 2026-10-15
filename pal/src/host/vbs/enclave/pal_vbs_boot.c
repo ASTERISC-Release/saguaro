@@ -64,8 +64,56 @@ static void svc_console_write(const char* buf, uint64_t len) {
     }
 }
 
+/* The PAL's clock without an OCALL per reading. The host's Unix time (an OCALL, about 8 us) is taken
+ * at most once a second; in between, the time advances by the generic timer's virtual counter
+ * (CNTVCT_EL0, readable in the enclave; CNTFRQ_EL0 gives its rate). A seqlock publishes the
+ * (host time, counter) pair; readings never go backwards, also across a resynchronisation. The
+ * host's time is untrusted either way (as with the OCALL for every reading). */
+static volatile uint64_t g_clk_seq;  /* odd while being updated; 0: never synchronised */
+static volatile uint64_t g_clk_ns;
+static volatile uint64_t g_clk_cnt;
+static volatile uint64_t g_clk_last; /* the latest reading returned */
+static uint64_t g_clk_frq;
+
+static inline uint64_t clk_counter(void) {
+    uint64_t v;
+    __asm__ volatile("isb; mrs %0, cntvct_el0" : "=r"(v) :: "memory");
+    return v;
+}
+
 static uint64_t svc_time_ns(void) {
-    return pal_vbs_w_time_ns();
+    uint64_t frq = __atomic_load_n(&g_clk_frq, __ATOMIC_RELAXED);
+    if (!frq) {
+        __asm__ volatile("mrs %0, cntfrq_el0" : "=r"(frq));
+        if (!frq || frq > 1000000000ull)
+            return pal_vbs_w_time_ns(); /* no usable counter: an OCALL per reading */
+        __atomic_store_n(&g_clk_frq, frq, __ATOMIC_RELAXED);
+    }
+    uint64_t t;
+    uint64_t seq = __atomic_load_n(&g_clk_seq, __ATOMIC_ACQUIRE);
+    uint64_t base_ns = __atomic_load_n(&g_clk_ns, __ATOMIC_RELAXED);
+    uint64_t base_cnt = __atomic_load_n(&g_clk_cnt, __ATOMIC_RELAXED);
+    __atomic_thread_fence(__ATOMIC_ACQUIRE);
+    uint64_t cnt = clk_counter();
+    if (seq && !(seq & 1) && __atomic_load_n(&g_clk_seq, __ATOMIC_RELAXED) == seq &&
+            cnt >= base_cnt && cnt - base_cnt < frq) {
+        /* less than a second of counter ticks: (ticks * 1e9) fits in 64 bits */
+        t = base_ns + (cnt - base_cnt) * 1000000000ull / frq;
+    } else {
+        t = pal_vbs_w_time_ns();
+        cnt = clk_counter();
+        if (!(seq & 1) && __atomic_compare_exchange_n(&g_clk_seq, &seq, seq + 1, false,
+                                                      __ATOMIC_ACQ_REL, __ATOMIC_RELAXED)) {
+            __atomic_store_n(&g_clk_ns, t, __ATOMIC_RELAXED);
+            __atomic_store_n(&g_clk_cnt, cnt, __ATOMIC_RELAXED);
+            __atomic_store_n(&g_clk_seq, seq + 2, __ATOMIC_RELEASE);
+        }
+    }
+    uint64_t last = __atomic_load_n(&g_clk_last, __ATOMIC_RELAXED);
+    while (t > last && !__atomic_compare_exchange_n(&g_clk_last, &last, t, true, __ATOMIC_RELAXED,
+                                                    __ATOMIC_RELAXED))
+        ;
+    return t > last ? t : last;
 }
 
 static int64_t svc_random(void* buf, uint64_t len) {

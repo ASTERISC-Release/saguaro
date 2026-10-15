@@ -41,7 +41,8 @@ endif
 VBS_TEMPLATE ?= vbs.manifest.template
 VBS_MANIFEST := $(VBS_APP).manifest.vbs
 VBS_IMAGE := $(VBS_APP).vbs/image.stamp
-# changes only when the runtime objects or the vbs glibc changed (gramine-vbs runtime)
+# changes only when the runtime objects, the vbs glibc or the sources of the Windows half changed
+# (gramine-vbs runtime)
 VBS_RUNTIME_STAMP := $(GRAMINE_VBS_REPO)/build-vbs/runtime.stamp
 
 GRAMINE_LOG_LEVEL ?= error

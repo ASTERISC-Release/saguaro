@@ -646,6 +646,16 @@ def cmd_runtime(_args):
             h.update(f.read())
     with open(os.path.join(ROOT, 'build-vbs-glibc', 'usr', 'lib', 'libc.so.6'), 'rb') as f:
         h.update(f.read())
+    # the Windows half (enclave runtime, host) and the tools that make an image from them
+    srcs = [os.path.join(HERE, n) for n in ('build-objs.sh', 'pack.py', 'link-sign.cmd')]
+    for d in ('enclave', 'host', 'common'):
+        top = os.path.join(ROOT, 'pal', 'src', 'host', 'vbs', d)
+        for dp, _, fns in os.walk(top):
+            srcs += [os.path.join(dp, fn) for fn in fns]
+    for fn in sorted(srcs):
+        h.update(fn.encode())
+        with open(fn, 'rb') as f:
+            h.update(f.read())
     stamp = os.path.join(ROOT, 'build-vbs', 'runtime.stamp')
     try:
         with open(stamp) as f:
