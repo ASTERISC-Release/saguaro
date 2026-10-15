@@ -9,6 +9,7 @@
 #include "cpu.h"
 #include "pal.h"
 #include "pal_common.h"
+#include "kernel_syscalls.h"
 #include "pal_error.h"
 #include "pal_internal.h"
 
@@ -120,9 +121,16 @@ int pal_common_segment_base_get(enum pal_segment_reg reg, uintptr_t* addr) {
         case PAL_SEGMENT_FS:
             *addr = rdmsr(MSR_IA32_FS_BASE);
             return 0;
-        case PAL_SEGMENT_GS:
-            /* GS is internally used, deny any access to it */
+        case PAL_SEGMENT_GS: {
+#if defined(__x86_64__)
+            /* the application's own GS base, kept per thread (0 when it never set one) */
+            struct pal_tcb_vm* curr_tcb = (struct pal_tcb_vm*)pal_get_tcb();
+            *addr = curr_tcb->kernel_thread.user_gsbase;
+            return 0;
+#else
             return -PAL_ERROR_DENIED;
+#endif
+        }
         default:
             return -PAL_ERROR_INVAL;
     }
@@ -137,8 +145,16 @@ int pal_common_segment_base_set(enum pal_segment_reg reg, uintptr_t addr) {
             wrmsr(MSR_IA32_FS_BASE, addr);
             return 0;
         case PAL_SEGMENT_GS:
-            // The GS segment is used for the internal TCB of PAL
+#if defined(__x86_64__)
+            /* GS holds the PAL TCB while PAL and LibOS code runs; the application's base is
+             * loaded at every return to user mode and swapped out at every entry
+             * (kernel_events.S). From now on this thread enters through syscall_asm_gs. */
+            curr_tcb->kernel_thread.user_gsbase = addr;
+            syscalls_select_entry(get_per_cpu_data(), addr != 0);
+            return 0;
+#else
             return -PAL_ERROR_DENIED;
+#endif
         default:
             return -PAL_ERROR_INVAL;
     }

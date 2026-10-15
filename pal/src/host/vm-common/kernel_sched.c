@@ -60,7 +60,14 @@ static void switch_to_thread_address_space(struct thread* thread) {
  * still running on the previous thread's stack, which may be private to its process. */
 void sched_switch_to_current_thread_root(void);
 void sched_switch_to_current_thread_root(void) {
-    switch_to_thread_address_space(get_thread_ptr(rdmsr(MSR_IA32_GS_BASE)));
+    struct thread* thread = get_thread_ptr(rdmsr(MSR_IA32_GS_BASE));
+    switch_to_thread_address_space(thread);
+    /* the entries of a thread that owns %gs need its TCB from the per-CPU data, and its system
+     * calls enter through syscall_asm_gs (kernel_events.S); LSTAR is only written when the kind
+     * of thread changes */
+    struct per_cpu_data* cpu = get_per_cpu_data();
+    cpu->current_tcb = (void*)get_gs_base(thread);
+    syscalls_select_entry(cpu, thread->user_gsbase != 0);
 }
 
 static uint64_t get_rflags(void) {

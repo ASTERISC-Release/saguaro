@@ -45,9 +45,16 @@ struct per_cpu_data {
     struct thread* bottomhalves_thread; /* only CPU0 has a bottomhalves thread currently */
 
     uint8_t invalidate_tlb_ipi_received; /* to protect against extra "invalidate TLB" interrupts */
-    uint8_t reserved[15];
+    uint8_t lstar_gs;                    /* LSTAR holds syscall_asm_gs (the thread owns %gs) */
+    uint8_t reserved[14];
+
+    /* the TCB of the thread running on this CPU (set at every switch, NULL before the first);
+     * the kernel entries of a thread that owns %gs find it here (kernel_events.S) */
+    void* current_tcb;
+    uint64_t gs_scratch;                 /* a register's home while %gs is swapped */
+    uint8_t reserved2[48];
 } __attribute__((packed));
-static_assert(sizeof(struct per_cpu_data) == 64, "incorrect struct size");
+static_assert(sizeof(struct per_cpu_data) == 128, "incorrect struct size");
 
 extern uint32_t g_num_cpus;
 

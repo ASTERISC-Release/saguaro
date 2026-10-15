@@ -215,6 +215,12 @@ struct pal_public_state {
 
     bool extra_runtime_domain_names_conf;
     struct pal_dns_host_conf dns_host;
+
+    /* VM PAL, x86_64: the stub the LibOS jumps to instead of a signal handler of a thread that owns
+     * %gs (arch_prctl(ARCH_SET_GS)): it loads the application's base and enters the handler
+     * whose address was put at `vm_user_rip_offset`; NULL on other PALs. (Last so that the
+     * offsets of every other field, and the code using them, stay as they were.) */
+    void* vm_jump_to_user_gs;
 };
 
 /* We cannot mark this as returning a pointer to `const` object, because LibOS can

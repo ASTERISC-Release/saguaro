@@ -196,6 +196,16 @@ struct thread {
     void* upcall_fpregs;
     uint64_t upcall_addr;
     int upcall_event;
+
+    /* The application's own GS base (arch_prctl(ARCH_SET_GS), Wine's TEB), 0 when it never set
+     * one. While it is set, user code runs with it in GS and every entry into the kernel swaps the
+     * PAL TCB back in (kernel_events.S: syscall_asm_gs, _isr_common); every return to user mode
+     * loads it again. Threads with 0 run the old paths unchanged. (Last in the thread, which is
+     * last in the TCB: the offsets of every other field stay as they were.) */
+    uint64_t user_gsbase;
+    /* set by _isr_common when it swapped the TCB in over the application's base; the matching
+     * return (iretq) loads the base back and clears it */
+    uint64_t gs_swapped_by_isr;
 #endif
 };
 DEFINE_LISTP(thread);

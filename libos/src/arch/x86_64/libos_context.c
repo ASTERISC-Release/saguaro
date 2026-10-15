@@ -196,6 +196,9 @@ noreturn void restore_child_context_after_clone(struct libos_context* context) {
     context->syscall_nr = -1;
 
     set_tls(context->tls);
+    libos_tcb_t* tcb = container_of(context, libos_tcb_t, context);
+    if (tcb->gs_base)
+        (void)PalSegmentBaseSet(PAL_SEGMENT_GS, tcb->gs_base);
 
     PAL_CONTEXT* regs = context->regs;
     context->regs = NULL;
@@ -303,6 +306,18 @@ void prepare_sigframe(PAL_CONTEXT* context, siginfo_t* siginfo, void* handler, v
     /* If handler was defined as variadic/without prototype it would expect the number of vector
      * register arguments in `rax`. */
     context->rax = 0;
+
+    /* VM PAL, a thread that owns %gs (Wine's TEB): the jump above would enter the handler with the
+     * PAL's TCB in GS; go through the PAL's stub, which loads the application's base first. */
+    if (g_pal_public_state->vm_jump_to_user_gs) {
+        uintptr_t gs_base = 0;
+        if (PalSegmentBaseGet(PAL_SEGMENT_GS, &gs_base) == 0 && gs_base) {
+            void* user_rip_ptr = (char*)pal_get_tcb() + g_pal_public_state->vm_user_rip_offset;
+            uint64_t target = (uint64_t)handler;
+            memcpy(user_rip_ptr, &target, sizeof(target));
+            context->rip = (uint64_t)g_pal_public_state->vm_jump_to_user_gs;
+        }
+    }
 
     log_debug("Created sigframe for sig: %d at %p (handler: %p, restorer: %p)",
               siginfo->si_signo, sigframe, handler, restorer);
