@@ -35,6 +35,33 @@ static inline int64_t vbs_protect(uintptr_t addr, size_t size, pal_prot_flags_t 
 }
 noreturn void vbs_exit(int64_t code);
 
+/* threads and blocking (W services, version 2) */
+static inline int64_t vbs_thread_create(void* entry, void* arg) {
+    return (int64_t)pal_vbs_wcall(g_vbs->thread_create, (uint64_t)entry, (uint64_t)arg, 0);
+}
+noreturn void vbs_thread_exit(void* ctx, int* clear_tid);
+/* WaitOnAddress: 0 if woken (or *addr != expected), -1 on timeout; timeout_ns UINT64_MAX = forever */
+static inline int64_t vbs_wait(uint32_t* addr, uint32_t expected, uint64_t timeout_ns) {
+    return (int64_t)pal_vbs_wcall(g_vbs->wait, (uint64_t)addr, expected, timeout_ns);
+}
+static inline void vbs_wake(uint32_t* addr, bool all) {
+    pal_vbs_wcall(g_vbs->wake, (uint64_t)addr, all, 0);
+}
+
+/* the PAL's per-thread control block */
+typedef struct pal_vbs_tcb {
+    PAL_TCB common;
+    PAL_HANDLE handle;
+    void* w_ctx;             /* W's context of this thread (NULL for the first thread) */
+    void* stack;             /* PAL stack of a thread created by _PalThreadCreate */
+    int (*callback)(void*);
+    void* param;
+} PAL_VBS_TCB;
+
+/* any stream became ready (pipes): waiters of _PalStreamsWaitEvents and blocking reads wait on it */
+extern uint32_t g_vbs_stream_gen;
+void vbs_streams_changed(void);
+
 /* packed objects */
 const struct pal_vbs_packed_obj* vbs_find_path(const char* path);
 const uint8_t* vbs_file_data(const struct pal_vbs_packed_obj* obj);

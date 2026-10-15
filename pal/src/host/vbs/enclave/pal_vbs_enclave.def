@@ -2,3 +2,4 @@ LIBRARY
 
 EXPORTS
         E_PalMain
+        E_ThreadStart

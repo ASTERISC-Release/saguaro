@@ -22,11 +22,24 @@ data page after the stubs; the LibOS fills the slot at run time. An unfilled slo
 execute `brk`, which raises a catchable exception (never a branch to address 0, which would hang the
 thread, blocker 4). Objects listed with --no-svc must contain no `svc` at all (the PAL, the LibOS).
 
+TPIDR_EL0. The kernel does not keep TPIDR_EL0 reliably for enclave threads (FINDINGS.md: after a
+context switch a thread may see another enclave thread's value), so the thread pointer lives in the
+thread's TEB instead: every `mrs Xt, tpidr_el0` of packed code becomes `ldr Xt, [x18, #0x28]` and
+every `msr tpidr_el0, Xt` becomes `str Xt, [x18, #0x28]` (NT_TIB.ArbitraryUserPointer; x18 is
+the TEB and reliable).
+
 x18. On Windows ARM64 x18 holds the TEB and the kernel reloads it when a preempted enclave thread
 resumes (FINDINGS.md), so packed code must never keep a value of its own there: every packed object
 is disassembled (llvm-objdump or objdump) and the pack fails if an instruction outside the
 functions listed with --x18-allow names x18/w18. (The LibOS's syscall entry saves and restores the
 application's x18, which is then always the TEB: allowed explicitly.)
+
+Exceptions. A fault in packed code is dispatched by Windows only if the faulting PC has unwind
+data (vertdll has no run-time function tables, FINDINGS.md), so the generated assembly also emits
+static .pdata/.xdata entries covering every executable range of every packed object (chunks of
+at most 1 MB, the limit of an ARM64 .xdata function length): no unwind codes, and the
+language-specific handler `pal_vbs_packed_exception_handler` of the Windows enclave runtime, which
+hands the fault to the PAL.
 
 Every packed file (ELF objects and data files such as the manifest) is also kept as its original
 bytes in a read-only data section (`.gxfile`), from which the PAL serves file reads.
@@ -35,7 +48,13 @@ Usage:
   pack.py --out DIR [--obj KIND:NAME:SRC[:PATH]]... [--file NAME:SRC:PATH]... [--no-svc NAME]...
     KIND is pal (loaded by the PAL side) or user (mapped by the LibOS); PATH is the absolute path
     under which the enclave's file namespace offers the file.
-Outputs in DIR: packed.bin, files.bin, pal_vbs_packed_blob.S, pal_vbs_packed_table.h
+Enclave configuration. The packed file named "manifest" may set `vbs.max_threads` (default 4): the
+number of threads the signed image allows inside the enclave at once, written into
+pal_vbs_image_config.h for the image's IMAGE_ENCLAVE_CONFIG (the host must initialise the enclave
+with at most that ThreadCount).
+
+Outputs in DIR: packed.bin, files.bin, pal_vbs_packed_blob.S, pal_vbs_packed_table.h,
+pal_vbs_image_config.h
 """
 import argparse
 import os
@@ -44,6 +63,7 @@ import shutil
 import struct
 import subprocess
 import sys
+import tomllib
 
 PT_LOAD, PT_DYNAMIC = 1, 2
 PF_X, PF_W = 1, 2
@@ -232,6 +252,29 @@ def rewrite_svc(elf, img):
     return out, slot, len(sites)
 
 
+MRS_TPIDR = 0xD53BD040     # mrs Xt, tpidr_el0  (| Rt)
+MSR_TPIDR = 0xD51BD040     # msr tpidr_el0, Xt  (| Rt)
+TEB_TLS_OFFSET = 0x28      # NT_TIB.ArbitraryUserPointer
+
+
+def rewrite_tpidr(elf, img):
+    """mrs/msr TPIDR_EL0 -> ldr/str [x18, #0x28]; returns the number of sites"""
+    n = 0
+    for a, b in elf.code_ranges():
+        for off in range(align_up(a, 4), min(b, len(img)) - 3, 4):
+            w = struct.unpack_from('<I', img, off)[0]
+            rt = w & 0x1F
+            if w & ~0x1F == MRS_TPIDR:
+                new = 0xF9400000 | ((TEB_TLS_OFFSET // 8) << 10) | (18 << 5) | rt   # ldr
+            elif w & ~0x1F == MSR_TPIDR:
+                new = 0xF9000000 | ((TEB_TLS_OFFSET // 8) << 10) | (18 << 5) | rt   # str
+            else:
+                continue
+            struct.pack_into('<I', img, off, new)
+            n += 1
+    return n
+
+
 def scan_svc(elf, img):
     return [off for a, b in elf.code_ranges()
             for off in range(align_up(a, 4), min(b, len(img)) - 3, 4)
@@ -263,6 +306,29 @@ def x18_uses(path):
     return hits
 
 
+XDATA_MAX = 0x3FFFF * 4    # largest function length of an ARM64 .xdata record (18 bits, words)
+
+
+def unwind_data(ranges):
+    """static .pdata/.xdata for packed code: one record per chunk of at most XDATA_MAX bytes"""
+    xdata, pdata, n = [], [], 0
+    for lo, hi in sorted(ranges):
+        lo &= ~3
+        while lo < hi:
+            size = min(align_up(hi - lo, 4), XDATA_MAX)
+            # word 0: function length (words) | X=1 (exception handler) | E=1 (one epilog, its
+            # codes at index 0) | 1 code word; the code word is `end` (0xe4) four times
+            w0 = (size // 4) | (1 << 20) | (1 << 21) | (1 << 27)
+            xdata.append(f'gx_xdata_{n}:\n    .long {w0:#x}\n    .long 0xe4e4e4e4\n'
+                         f'    .rva pal_vbs_packed_exception_handler\n    .long 0\n')
+            pdata.append(f'    .rva g_pal_vbs_packed_blob + {lo:#x}\n    .rva gx_xdata_{n}\n')
+            n += 1
+            lo += size
+    return ('/* unwind data of the packed code: faults there reach W\'s exception handler */\n'
+            '    .section .xdata,"dr"\n    .p2align 2\n' + ''.join(xdata) +
+            '    .section .pdata,"dr"\n    .p2align 2\n' + ''.join(pdata))
+
+
 def c_str(s):
     return '"' + s.replace('\\', '\\\\').replace('"', '\\"') + '"'
 
@@ -292,6 +358,7 @@ def main():
     specs = [s.split(':', 3) for s in a.obj]
     specs += [['pal'] + s.split('=', 1) for s in a.objs]
     blob, files, rows = bytearray(), bytearray(), []
+    code_ranges = []
 
     def add_file(src):
         nonlocal files
@@ -317,6 +384,7 @@ def main():
                          f'{bad[0][1]:#x}); build it with -ffixed-x18')
         img = e.load_image()
         map_size = len(img)
+        ntls = rewrite_tpidr(e, img)
         nosvc = name in a.no_svc
         if nosvc:
             hits = scan_svc(e, img)
@@ -338,17 +406,32 @@ def main():
                 break
         entry = entry or e.e_entry
         foff, fsize = add_file(src)
+        # executable ranges (image-relative) for the static unwind data: the code PT_LOADs and the
+        # svc stubs
+        for p_ in e.loads():
+            if p_['flags'] & PF_X:
+                code_ranges.append((off + p_['vaddr'], off + p_['vaddr'] + p_['filesz']))
+        if slot:
+            code_ranges.append((off + align_up(map_size, ALIGN), off + slot))
         rows.append(dict(name=name, path=path, kind=kind, foff=foff, fsize=fsize, ioff=off,
                          isize=len(img), map_size=map_size, entry=entry,
                          dynamic=e.dynamic_vaddr(), slot=slot, nsvc=nsvc))
         print(f'{name}: {spec[0]} image {len(img):#x} at pack+{off:#x} (mapped {map_size:#x}) '
-              f'entry={entry:#x} dynamic={e.dynamic_vaddr():#x} svc-rewritten={nsvc}'
+              f'entry={entry:#x} dynamic={e.dynamic_vaddr():#x} svc-rewritten={nsvc} '
+              f'tpidr-rewritten={ntls}'
               + (f' slot={slot:#x}' if slot else '') + (f' path={path}' if path else ''))
 
+    max_threads = 4
     for spec in a.file:
         p = spec.split(':', 2)
         if len(p) != 3:
             sys.exit(f'bad --file {spec!r}: expected NAME:SRC:PATH')
+        if p[0] == 'manifest':
+            with open(p[1], 'rb') as mf:
+                m = tomllib.load(mf)
+            max_threads = m.get('vbs', {}).get('max_threads', max_threads)
+            if not isinstance(max_threads, int) or not 1 <= max_threads <= 1024:
+                sys.exit(f'{p[1]}: vbs.max_threads must be an integer from 1 to 1024')
         foff, fsize = add_file(p[1])
         rows.append(dict(name=p[0], path=p[2], kind=KIND_FILE, foff=foff, fsize=fsize, ioff=0,
                          isize=0, map_size=0, entry=0, dynamic=0, slot=0, nsvc=0))
@@ -367,6 +450,7 @@ def main():
                 '    .section .gxpack,"xr"\n    .p2align 12\n'
                 '    .globl g_pal_vbs_packed_blob\ng_pal_vbs_packed_blob:\n'
                 '    .incbin "packed.bin"\n'
+                + unwind_data(code_ranges) +
                 '/* original bytes of the packed files: read-only data */\n'
                 '    .section .gxfile,"dr"\n    .p2align 12\n'
                 '    .globl g_pal_vbs_packed_files\ng_pal_vbs_packed_files:\n'
@@ -384,6 +468,11 @@ def main():
                     f'{r["fsize"]:#x}, {r["ioff"]:#x}, {r["isize"]:#x}, {r["map_size"]:#x}, '
                     f'{r["entry"]:#x}, {r["dynamic"]:#x}, {r["slot"]:#x}, {r["nsvc"]} }},\n')
         f.write('};\n')
+    with open(os.path.join(a.out, 'pal_vbs_image_config.h'), 'w') as f:
+        f.write('/* generated by scripts/vbs/pack.py from the manifest: the enclave configuration */\n'
+                '#pragma once\n'
+                f'#define PAL_VBS_THREADS {max_threads} /* vbs.max_threads */\n')
+    print(f'enclave configuration: {max_threads} threads (vbs.max_threads)')
     print(f'images {len(blob):#x} bytes, files {len(files):#x} bytes -> {a.out}/'
           f'{{packed.bin, files.bin, pal_vbs_packed_blob.S, pal_vbs_packed_table.h}}')
 

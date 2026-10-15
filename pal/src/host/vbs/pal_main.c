@@ -23,12 +23,6 @@ const struct pal_vbs_services* g_vbs;
 
 const size_t g_page_size = PRESET_PAGESIZE;
 
-/* the first thread's TCB and handle (one enclave thread for now) */
-typedef struct pal_vbs_tcb {
-    PAL_TCB common;
-    PAL_HANDLE handle;
-} PAL_VBS_TCB;
-
 static PAL_VBS_TCB g_first_tcb;
 
 noreturn void vbs_exit(int64_t code) {
@@ -107,6 +101,18 @@ static char* read_manifest(void) {
     return NULL;
 }
 
+#define VBS_FIRST_STACK_SIZE (1024 * 1024)
+
+noreturn void pal_vbs_run_on_stack(void (*fn)(void*), void* arg, void* stack_top);
+
+static noreturn void call_pal_main(void* first_thread) {
+    /* No host command line: pal_main() takes loader.argv from the manifest, or the entrypoint. */
+    static const char* argv[] = { NULL };
+    static const char* envp[] = { NULL };
+    pal_main(/*instance_id=*/0, /*parent_process=*/NULL, first_thread, argv, envp,
+             /*post_callback=*/NULL);
+}
+
 __attribute_no_stack_protector
 noreturn void pal_vbs_start(const struct pal_vbs_services* svc);
 __attribute_no_stack_protector
@@ -169,9 +175,10 @@ noreturn void pal_vbs_start(const struct pal_vbs_services* svc) {
 
     g_pal_public_state.vbs_packed_lookup = vbs_packed_lookup;
 
-    /* No host command line: pal_main() takes loader.argv from the manifest, or the entrypoint. */
-    static const char* argv[] = { NULL };
-    static const char* envp[] = { NULL };
-    pal_main(/*instance_id=*/0, /*parent_process=*/NULL, first_thread, argv, envp,
-             /*post_callback=*/NULL);
+    /* The Windows stack of the enclave thread is small (its bounds are logged by W at boot); the
+     * PAL and the LibOS's initialisation run on a PAL stack in the pool instead. */
+    void* stack = malloc(VBS_FIRST_STACK_SIZE);
+    if (!stack)
+        INIT_FAIL("Out of memory");
+    pal_vbs_run_on_stack(call_pal_main, first_thread, (char*)stack + VBS_FIRST_STACK_SIZE);
 }

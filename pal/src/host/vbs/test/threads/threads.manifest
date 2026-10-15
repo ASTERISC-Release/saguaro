@@ -1,0 +1,10 @@
+# Phase-3a threads test of the VBS-enclave PAL (packed as the file "manifest").
+loader.entrypoint = "file:/libsysdb.so"
+libos.entrypoint = "/threads"
+loader.argv = ["/threads"]
+loader.log_level = "warning"
+fs.root.uri = "file:/"
+sys.rewrite_syscalls = false
+
+# threads inside the enclave at once, fixed in the signed image (IMAGE_ENCLAVE_CONFIG)
+vbs.max_threads = 8

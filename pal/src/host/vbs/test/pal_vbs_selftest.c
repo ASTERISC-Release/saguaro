@@ -210,11 +210,79 @@ static int step_x18_preempt(void) {
     return 1;
 }
 
+/* ---- step 11: which registers survive preemption (TPIDR_EL0, GPRs, NEON)? measurement ---- */
+static int step_regs_preempt(void) {
+    uint64_t tp = 0;
+    uint64_t t0 = g_env->time_ns();
+    uint64_t mask = g_env->regs_spin(4000000000ull, &tp);
+    uint64_t t1 = g_env->time_ns();
+    out("[selftest] step 11: %llu ms of spinning: changed-register mask 0x%016llx, TPIDR_EL0 "
+        "afterwards 0x%llx (%s)\n", (unsigned long long)((t1 - t0) / 1000000),
+        (unsigned long long)mask, (unsigned long long)tp,
+        mask ? "SOME REGISTERS CHANGED" : "all preserved");
+    return 1; /* a measurement */
+}
+
+/* ---- step 12: does TPIDR_EL0 survive OCALLs (enclave -> host -> enclave)? measurement ---- */
+static int step_tpidr_ocall(void) {
+    uint64_t saved = g_env->get_tpidr();
+    const uint64_t magic = 0x7ee2000000000000ull;
+    uint64_t changed = 0, first_seen = 0, n = 20000;
+    uint64_t t0 = g_env->time_ns();
+    for (uint64_t i = 0; i < n; i++) {
+        g_env->set_tpidr(magic + i);
+        (void)g_env->time_ns(); /* one OCALL */
+        uint64_t v = g_env->get_tpidr();
+        if (v != magic + i) {
+            if (!changed)
+                first_seen = v;
+            changed++;
+        }
+    }
+    uint64_t t1 = g_env->time_ns();
+    g_env->set_tpidr(saved);
+    out("[selftest] step 12: TPIDR_EL0 across %llu OCALLs (%llu ms): changed %llu times%s",
+        (unsigned long long)n, (unsigned long long)((t1 - t0) / 1000000),
+        (unsigned long long)changed, changed ? ", first value seen " : "\n");
+    if (changed)
+        out("0x%llx\n", (unsigned long long)first_seen);
+    return 1; /* a measurement */
+}
+
+/* ---- steps 9 and 10: SP outside the thread's Windows stack (the LibOS's and the application's
+ * stacks are pool memory) ---- */
+static int step_foreign_stack_spin(void) {
+    out("[selftest] step 9: spinning ~1.3 s with SP in VirtualAlloc'd memory...\n");
+    uint64_t t0 = g_env->time_ns();
+    int64_t r = g_env->spin_foreign_stack(4000000000ull);
+    uint64_t t1 = g_env->time_ns();
+    out("[selftest] step 9: survived %llu ms of preemptions with a foreign SP (r=%lld)\n",
+        (unsigned long long)((t1 - t0) / 1000000), (long long)r);
+    return r == 0;
+}
+
+static int step_foreign_stack_brk(void) {
+    /* the probe whose unwind data names a handler: first with the TEB bounds widened to the stack
+     * in use, then without; a failure ends the process (the exception cannot be dispatched) */
+    out("[selftest] step 10a: brk on a foreign stack, own SEH handler, TEB bounds widened...\n");
+    int64_t r1 = g_env->brk_probe(1);
+    out("[selftest] step 10a: %s (r=0x%llx)\n", r1 == 0 ? "handled" : "FAILED", (unsigned long long)r1);
+#ifdef PAL_VBS_SELFTEST_10B
+    /* ends the process on Windows 11 25H2 (FINDINGS.md): run only on purpose */
+    out("[selftest] step 10b: the same without widening the TEB bounds...\n");
+    int64_t r2 = g_env->brk_probe(0);
+    out("[selftest] step 10b: %s (r=0x%llx)\n", r2 == 0 ? "handled" : "FAILED", (unsigned long long)r2);
+    return r1 == 0 && r2 == 0;
+#else
+    return r1 == 0;
+#endif
+}
+
 int64_t pal_vbs_selftest(const pal_vbs_env_t* env, uint64_t* run, uint64_t* passed) {
     g_env = env;
     int (*steps[])(void) = {
         step_console, step_memory, step_time, step_random, step_abi_x18, step_seh, step_packed,
-        step_x18_preempt,
+        step_x18_preempt, step_regs_preempt, step_tpidr_ocall, step_foreign_stack_spin, step_foreign_stack_brk,
     };
     uint64_t n = sizeof(steps) / sizeof(steps[0]);
     *run = 0;

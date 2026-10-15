@@ -30,6 +30,12 @@ typedef struct pal_vbs_env {
                             uint64_t nimports, struct pal_vbs_loaded* out, uint64_t* detail);
     void*    (*packed_sym)(const struct pal_vbs_loaded* obj, const char* sym);
     uint64_t (*x18_spin)(uint64_t iterations, uint64_t magic);
+    int64_t  (*spin_foreign_stack)(uint64_t iterations); /* spin with SP in VirtualAlloc'd memory */
+    int64_t  (*brk_foreign_stack)(void);  /* SEH for a brk with SP there: 0 if caught/resumed */
+    int64_t  (*brk_probe)(int widen);     /* same in a function with its own SEH handler */
+    uint64_t (*regs_spin)(uint64_t iterations, uint64_t* out_tpidr);
+    uint64_t (*get_tpidr)(void);
+    void     (*set_tpidr)(uint64_t v);
 } pal_vbs_env_t;
 
 /* The PAL-level test. Returns 0 if every step passed, else the 1-based index of the first failure.
@@ -48,10 +54,17 @@ void     pal_vbs_w_console_write(const char* s, uint64_t len);
 uint64_t pal_vbs_w_time_ns(void);
 int64_t  pal_vbs_w_random(void* buf, uint64_t len);
 void     pal_vbs_w_log(const char* s);
+uint64_t pal_vbs_w_ocall(uint64_t no, uint64_t a0, uint64_t a1, uint64_t a2);
+int64_t  pal_vbs_w_register_thread(struct pal_vbs_ocall_args* host_args, uint8_t* host_conbuf);
+void     pal_vbs_w_unregister_thread(void);
+void     pal_vbs_w_set_exit_state(void* st);
+void*    pal_vbs_w_get_exit_state(void);
 
 /* Boot the packed vbs PAL (pal_vbs_boot.c). Returns the exit code of the application, or a
  * negative value if booting failed before the PAL took over. */
 struct pal_vbs_shared;
+struct _EXCEPTION_POINTERS;
+long pal_vbs_report_exception(struct _EXCEPTION_POINTERS* ep, const char* where);
 int64_t pal_vbs_boot(const struct pal_vbs_shared* shared);
 
 /* boundary thunks (pal_vbs_boundary.S) */
@@ -59,5 +72,12 @@ uint64_t pal_vbs_read_x18(void);
 uint64_t pal_vbs_enter_sysv(void* fn, uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3);
 int64_t  pal_vbs_brk0(void);
 uint64_t pal_vbs_x18_spin(uint64_t iterations, uint64_t magic);
+uint64_t pal_vbs_spin_on_stack(uint64_t iterations, void* stack_top);
+int64_t  pal_vbs_brk_on_stack(void* stack_top);
+int64_t  pal_vbs_brk_probe(void* stack_top);
+uint64_t pal_vbs_regs_spin(uint64_t iterations, uint64_t* out_tpidr);
+uint64_t pal_vbs_get_tpidr(void);
+uint64_t pal_vbs_tpidr_spin(uint64_t iterations, uint64_t magic, uint64_t* out_first);
+void     pal_vbs_set_tpidr(uint64_t v);
 
 #endif /* PAL_VBS_ENCLAVE_H */
