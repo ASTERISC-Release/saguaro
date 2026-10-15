@@ -164,6 +164,12 @@ int main(int argc, const char** argv) {
     if (strcmp(buf, "beta!\n") != 0)
         errx(1, "hard link does not share content: %s", buf);
 
+    /* 7b. rename() between two links of one file does nothing and succeeds (LTP rename13) */
+    if (rename(a, b))
+        err(1, "rename(link, link)");
+    if (stat(a, &st) || stat(b, &st2) || st.st_ino != st2.st_ino)
+        errx(1, "rename(link, link) removed a name");
+
     /* 8. link() onto an existing name is EEXIST; a missing source is ENOENT */
     if (link(a, a) == 0 || errno != EEXIST)
         errx(1, "link(existing): want EEXIST, got %d", errno);
@@ -188,8 +194,13 @@ int main(int argc, const char** argv) {
     unlink(l2);
     unlink(l1);
 
-    /* 10. link() of a directory is EPERM */
-    if (link(d, b) == 0 || errno != EPERM)
+    /* 10. link() of a directory is EPERM; onto an existing name EEXIST comes first */
+    if (link(d, b) == 0 || errno != EEXIST)
+        errx(1, "link(directory, existing): want EEXIST, got %d", errno);
+    char dlink[600];
+    path_of(dlink, sizeof(dlink), "lnk_dirlink");
+    unlink(dlink);
+    if (link(d, dlink) == 0 || errno != EPERM)
         errx(1, "link(directory): want EPERM, got %d", errno);
 
     /* 11. linkat with bad flags is EINVAL */

@@ -734,6 +734,22 @@ static int do_renameat(int olddirfd, const char* oldpath, int newdirfd, const ch
         goto out;
     }
 
+    /* two hard links of one file: POSIX and Linux do nothing and succeed (LTP rename13) */
+    if (new_dent->inode && old_dent->mount == new_dent->mount) {
+        if (new_dent->inode == old_dent->inode) {
+            ret = 0;
+            goto out;
+        }
+        struct libos_fs* fs = old_dent->inode->fs;
+        struct stat st_old, st_new;
+        if (fs && fs->d_ops && fs->d_ops->stat && old_dent->inode->type == S_IFREG &&
+                fs->d_ops->stat(old_dent, &st_old) == 0 && fs->d_ops->stat(new_dent, &st_new) == 0 &&
+                st_old.st_ino == st_new.st_ino && st_old.st_dev == st_new.st_dev && st_old.st_ino) {
+            ret = 0;
+            goto out;
+        }
+    }
+
     ret = do_rename(old_dent, new_dent);
 
 out:
@@ -1012,15 +1028,15 @@ long libos_syscall_linkat(int olddirfd, const char* oldpath, int newdirfd, const
         ret = -ENOENT;
         goto unlock_out;
     }
-    if (old->inode->type == S_IFDIR) {
-        ret = -EPERM;
-        goto unlock_out;
-    }
     ret = path_lookupat(new_dir, newpath, LOOKUP_NO_FOLLOW | LOOKUP_CREATE, &new);
     if (ret < 0)
         goto unlock_out;
     if (new->inode) {
-        ret = -EEXIST;
+        ret = -EEXIST; /* checked before the directory rule, as in the kernel's do_linkat() */
+        goto unlock_out;
+    }
+    if (old->inode->type == S_IFDIR) {
+        ret = -EPERM;
         goto unlock_out;
     }
     if (!new->parent) {
