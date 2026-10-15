@@ -76,11 +76,11 @@ be a PIE; the examples' Makefiles build it that way.
   AArch64: default ``2G``, at least ``1G``. A manifest's ``sgx.enclave_size`` or
   ``tdx.enclave_size`` takes precedence.
 
-4. Processes: x86_64 only, behind a key
----------------------------------------
+4. Processes: behind a key
+--------------------------
 
-By default the guest runs one process: ``fork`` fails with ``Function not implemented``. On x86_64
-the experimental key ``sys.experimental__multiprocess = true`` enables ``fork``, ``vfork``,
+By default the guest runs one process: ``fork`` fails with ``Function not implemented``. The
+experimental key ``sys.experimental__multiprocess = true`` enables ``fork``, ``vfork``,
 ``execve``, pipes, signals and shared memory between processes. For example, in
 ``CI-Examples/bash`` add the key to ``manifest.template`` and rebuild::
 
@@ -90,9 +90,11 @@ the experimental key ``sys.experimental__multiprocess = true`` enables ``fork``,
     gramine-vm bash -c 'ls / | wc -l'          # prints a number; each child reports its exit
     git checkout manifest.template             # undo the change
 
-The AArch64 vm PAL is single-process: it prints ``'sys.experimental__multiprocess' is supported
-only on x86_64; ignored, this VM stays single-process`` and ``fork`` still fails. Status and
-limits: `Documentation/devel/vm-multiproc/ <../devel/vm-multiproc/>`__.
+On AArch64 the key is newer and prints that it is work in progress: spawn, ``fork``, ``wait``,
+pipes and signals between processes work, but a signal does not yet end a thread's ``pause()``
+or ``poll()`` wait. Status and limits:
+`Documentation/devel/vm-multiproc/ <../devel/vm-multiproc/>`__ (x86_64) and
+`Documentation/devel/vm-multiproc-aarch64/ <../devel/vm-multiproc-aarch64/>`__ (AArch64).
 
 5. Networking
 -------------
