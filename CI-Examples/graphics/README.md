@@ -1,7 +1,7 @@
 # Graphics examples
 
-Games and benchmarks that run under `gramine-vm` with the graphics host redirection, and under
-`gramine-direct` on the host GPU (x86_64 only). This page gives the general procedure for the VM;
+Games and benchmarks that run under `gramine-vm` with the graphics host redirection (x86_64), and
+under `gramine-direct` on the host GPU (x86_64, and AArch64 with the NVIDIA proprietary driver). This page gives the general procedure for the VM;
 details, caveats and results are in `Documentation/devel/graphics/` (`running.md`, `PLAN.md`,
 `FINDINGS.md`, `TODO.md`, `TESTING.md`). For `gramine-direct` see the section at the end and
 `Documentation/devel/graphics-direct/running.md`.
@@ -94,7 +94,8 @@ server, with the host's Mesa (DRI3), no QEMU and no preload library; `PRELOAD=1`
 library instead. The manifests enable three insecure options (raw GPU ioctls, the X server's Unix
 socket, host symbolic links under `/sys`): `gramine-direct` is not a sandbox, see
 `Documentation/devel/graphics-direct/running.md`. Use an install made with `scripts/install.sh`
-(direct PAL, bundled glibc). `direct-tests/` has test programs (`make check`).
+(direct PAL, bundled glibc). The `-direct` manifests mount `~/.cache`: create it first (`mkdir -p
+~/.cache`) in a fresh container. `direct-tests/` has test programs (`make check`).
 
 
 On AArch64 with the NVIDIA proprietary driver (`Documentation/devel/graphics-aarch64/`), the same

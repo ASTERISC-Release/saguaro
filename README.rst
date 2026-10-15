@@ -126,10 +126,16 @@ Per-cell details, build options and the verification status are in
 rows: ``direct`` with graphics was measured on Intel and AMD GPUs (x86_64) and on NVIDIA's GB10
 with the proprietary driver (AArch64), at 76 to 100 % of native speed for the games tried;
 ``vbs`` runs on Windows 11 on ARM64 with VBS enabled and needs the Windows-side tools described in
-`Documentation/vbs.rst <Documentation/vbs.rst>`__.
+`Documentation/vbs.rst <Documentation/vbs.rst>`__. The ``tdx`` and ``sgx`` rows are inherited from
+gramine-tdx and have not been run on TDX or SGX hardware here; as of 2026-10-15 the ``tdx`` PAL does
+not build (`Documentation/quickstart/tdx-sgx.rst <Documentation/quickstart/tdx-sgx.rst>`__).
 
 Installation
 ============
+
+**Quickstart**: `Documentation/quickstart/ <Documentation/quickstart/README.rst>`__ has one short,
+verified guide per platform (``gramine-direct``, ``gramine-vm``, graphics, RISC-V, Windows VBS,
+TDX/SGX), from a fresh checkout to a running example.
 
 See `INSTALL.rst <INSTALL.rst>`__ for how to build and install Gramine on a host or in
 the supplied containers, for the direct and the ``vm`` PAL, on x86_64 and AArch64. It also
@@ -164,6 +170,8 @@ the matrix itself: `Documentation/devel/syscall-compat/MATRIX.md
 Documentation
 =============
 
+- `Quickstart guides <Documentation/quickstart/README.rst>`__: one per platform, with the commands
+  verified on a machine of that platform.
 - `Documentation index <Documentation/README.md>`__: what each document is, and which are inherited
   from upstream.
 - `Features <Documentation/FEATURES.md>`__: what this tree adds to gramine-tdx, and what is planned.

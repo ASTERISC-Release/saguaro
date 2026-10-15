@@ -5,8 +5,9 @@
 
 Reports every file path, markdown link and reStructuredText link in the checked documents that does not name
 a file of the repository (by path, path suffix or file name), and, when docutils is installed, every
-reStructuredText warning in README.rst and INSTALL.rst. Names that are legitimately not in the repository
-(files of the external QEMU fork, kernel paths, historical names) are listed in scripts/check-docs.allow.
+reStructuredText warning in README.rst, INSTALL.rst and Documentation/quickstart/. Names that are
+legitimately not in the repository (files of the external QEMU fork, kernel paths, historical names) are
+listed in scripts/check-docs.allow.
 
 Usage:  scripts/check-docs.py [--no-rst] [FILE...]      (default: the documents of Documentation/devel/README.md)
 Exit status: 0 when nothing is reported, 1 otherwise.
@@ -26,6 +27,7 @@ os.chdir(ROOT)
 # Dated logs (kept as written) and the historical plan are not checked: they name things as they were.
 DEFAULT_GLOBS = [
     'README.rst', 'INSTALL.rst', 'AGENTS.md',
+    'Documentation/quickstart/*.rst',
     'Documentation/README.md', 'Documentation/TODO.md', 'Documentation/FEATURES.md',
     'Documentation/devel/README.md', 'Documentation/devel/summary.md', 'Documentation/devel/syscall-workflow.md',
     'Documentation/devel/multiarch.md', 'Documentation/devel/vm.md',
@@ -138,7 +140,8 @@ def main():
 
     problems = check_paths(docs, load_allow())
     if not args.no_rst:
-        problems += check_rst([d for d in ('README.rst', 'INSTALL.rst') if d in docs])
+        problems += check_rst([d for d in docs if d in ('README.rst', 'INSTALL.rst')
+                               or d.startswith('Documentation/quickstart/')])
     print(f'{len(docs)} documents checked, {problems} problem(s)')
     return 1 if problems else 0
 

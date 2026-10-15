@@ -1,6 +1,10 @@
 Installing
 ==========
 
+Short, verified walk-throughs per platform (direct, vm, graphics, RISC-V, Windows VBS, TDX/SGX) are
+in the `quickstart guides <Documentation/quickstart/README.rst>`__; this page is the complete
+reference.
+
 This tree builds and runs on Debian/Ubuntu (24.04 is the tested baseline) on **x86_64** and
 **aarch64**, in two ways (the experimental **riscv64** port of the direct PAL is cross-built instead;
 see `RISC-V (cross-build and test guest)`_):
@@ -124,9 +128,12 @@ Typical session (on x86_64 the container is ``gramine-vm-x86_64``)::
 
     container/run.sh                              # shell inside
     scripts/install.sh pal libos                  # direct PAL: build, install, run the PAL + LibOS suites
-    scripts/install.sh --vm libos examples hello  # vm PAL: build, install, run the vm test battery
+    scripts/install.sh --vm libos examples hello  # aarch64 vm PAL: build, install, run the vm test battery
+    scripts/install.sh --vm && test/test-vm.sh libos   # x86_64 vm PAL: build, install, LibOS suite in the VM
 
 or as a one-shot command from the host: ``container/run.sh 'scripts/install.sh --vm libos examples hello'``.
+(On x86_64, test suites named after ``--vm`` go to ``test/test-direct.sh``, which has no ``examples`` or
+``hello`` suite.)
 
 Notes:
 
@@ -154,14 +161,18 @@ cannot run it, because it has no seccomp). Everything runs unprivileged, in a co
     container/run.sh --target riscv64                       # shell in the cross container
     scripts/install.sh --target riscv64 --prefix "$PWD/build-riscv64/prefix"   # build and install
     scripts/riscv64/guest.sh start                          # boot the guest (first boot installs packages)
+    scripts/riscv64/render-test-manifests.sh pal            # render the suite's manifests (also: libos)
     scripts/riscv64/run-suite.sh pal                        # PAL regression suite in the guest
+    scripts/riscv64/render-test-manifests.sh libos
     scripts/riscv64/run-suite.sh libos                      # LibOS regression suite in the guest
+    scripts/riscv64/guest.sh ssh 'apt-get install -y build-essential'   # once: a compiler in the guest
     scripts/riscv64/run-examples.sh helloworld bash redis   # example suites, built in the guest
     scripts/riscv64/guest.sh stop
 
 The guest sees the repository at the same path as the container, so it runs the cross-built binaries
 directly; this is why the prefix above lies inside the repository. The suites run from the guest's own
-disk. Design, status and limits: ``Documentation/devel/riscv/PLAN.md``.
+disk. The guest image has no compiler; examples other than ``helloworld`` need more packages (the list
+installed by ``.github/workflows/direct-riscv64-emulated.yml``). Design, status and limits: ``Documentation/devel/riscv/PLAN.md``.
 
 Building by hand
 ----------------
