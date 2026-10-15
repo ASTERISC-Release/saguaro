@@ -234,7 +234,7 @@ class Build:
                 die(f'{target} is not a gramine-vbs build directory')
             self.manifest = st['manifest']
         else:
-            if target.rstrip('/').endswith('.vbs'):
+            if target.rstrip('/').endswith('.vbs') and not os.path.isfile(target):
                 die(f'{target} does not exist: build it first (gramine-vbs build <manifest>)')
             self.manifest = os.path.abspath(target)
             stem = os.path.basename(self.manifest)
