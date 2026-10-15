@@ -16,6 +16,8 @@
 DEFINE_LIST(pal_handle);
 typedef struct pal_handle {
     PAL_HDR hdr;
+    /* the UDP receive ring of a relayed socket (see `struct udp_rx_ring`, vm-common) */
+    struct udp_rx_ring *region;
     /* Bitmask of `PAL_HANDLE_FD_*` flags. */
     uint32_t flags;
     LIST_TYPE(pal_handle) list;

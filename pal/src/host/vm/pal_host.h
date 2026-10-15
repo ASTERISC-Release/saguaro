@@ -13,21 +13,7 @@
 #include <stdatomic.h>
 
 #include "pal_common_structs.h"
-#define WRAP_MARKER 0xFFFFFFFFu
 DEFINE_LIST(pal_handle);
-
-#define DATA_SIZE (1 << 20) /* 1 MiB UDP receive ring */
-
-struct udp_rx_ring {
-    // producer writes tail, consumer writes head
-    uint32_t head;
-    uint32_t tail;
-    uint32_t cap;
-    uint32_t udp_rx_futex;
-    uint32_t sender_port;
-    bool relay_connected;
-    void *ring;
-};
 
 typedef struct pal_handle {
     PAL_HDR hdr;
