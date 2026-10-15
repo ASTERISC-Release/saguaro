@@ -6,9 +6,19 @@ ARCH_LIBDIR ?= /lib/$(shell $(CC) -dumpmachine)
 SELF_EXE = target/release/rust-hyper-http-server
 
 .PHONY: all
+ifeq ($(VBS),1)
+# Windows VBS enclave (scripts/vbs/Makefile.vbs, Documentation/vbs.rst): the server built by cargo
+# for the vbs glibc (the vbs gcc is the linker), in vbs-build/, packed by vbs.manifest.template
+VBS_APP = rust-hyper-http-server
+VBS_DEPS = vbs-build/rust-hyper-http-server vbs-build/libgcc_s.so.1
+VBS_CLEAN = vbs-build OUTPUT
+include ../../scripts/vbs/Makefile.vbs
+all: vbs-all
+else
 all: $(SELF_EXE) rust-hyper-http-server.manifest
 ifeq ($(SGX),1)
 all: rust-hyper-http-server.manifest.sgx rust-hyper-http-server.sig
+endif
 endif
 
 ifeq ($(DEBUG),1)
@@ -43,7 +53,25 @@ sgx_sign: rust-hyper-http-server.manifest $(SELF_EXE)
 		--manifest $< \
 		--output $<.sgx
 
-ifeq ($(SGX),)
+ifeq ($(VBS),1)
+# GRAMINE is gramine-vbs (Makefile.vbs); vbs-check.sh runs the server and a request
+vbs-build/rust-hyper-http-server: Cargo.toml src/main.rs | $(VBS_RUNTIME_STAMP)
+	CARGO_TARGET_DIR=vbs-build/target \
+	CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=$(VBS_GCC) \
+	CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=$(VBS_GCC) \
+		cargo build --release
+	cp vbs-build/target/release/rust-hyper-http-server $@
+
+# glibc's unwinder (libgcc_s.so.1, linked by Rust's std) is not in the vbs sysroot: the host's copy
+# of the same GCC runtime is packed
+vbs-build/libgcc_s.so.1:
+	mkdir -p vbs-build
+	cp -L "$(shell $(CC) -print-file-name=libgcc_s.so.1)" $@
+
+.PHONY: check
+check: all
+	GRAMINE="$(GRAMINE)" ./vbs-check.sh
+else ifeq ($(SGX),)
 GRAMINE = gramine-direct
 else
 GRAMINE = gramine-sgx
@@ -55,7 +83,7 @@ start-gramine-server: all
 
 .PHONY: clean
 clean:
-	$(RM) -rf *.token *.sig *.manifest.sgx *.manifest result-* OUTPUT
+	$(RM) -rf *.token *.sig *.manifest.sgx *.manifest *.manifest.vbs result-* OUTPUT
 
 .PHONY: distclean
 distclean: clean

@@ -1,0 +1,30 @@
+# Copyright (C) 2026 The ASTERISC Research Lab
+# SPDX-License-Identifier: BSD-3-Clause
+
+# hyper HTTP server manifest for a Windows VBS enclave (`make VBS=1`, Documentation/vbs.rst): the
+# counterpart of rust-hyper-http-server.manifest.template. The server (vbs-build/, built by cargo with
+# the vbs gcc as linker, against the vbs glibc) is a dynamic PIE: the dynamic loader, libc, libm and
+# libgcc_s (unwinding, linked by Rust's std) are packed too. It listens on 127.0.0.1:3000.
+
+loader.entrypoint = "file:/libsysdb.so"
+libos.entrypoint = "/rust-hyper-http-server"
+loader.log_level = "{{ log_level }}"
+
+loader.env.LD_LIBRARY_PATH = "{{ arch_libdir }}"
+
+fs.root.uri = "file:/"
+# no run-time code generation in a VBS enclave
+sys.rewrite_syscalls = false
+
+vbs.debug = false
+vbs.enclave_size = "256M"
+# the main thread, the four tokio worker threads (worker_threads = 4 in the source) and the runtime's helpers
+vbs.max_threads = 8
+
+vbs.packed_files = [
+  { path = "/rust-hyper-http-server", uri = "file:vbs-build/rust-hyper-http-server" },
+  { path = "{{ arch_libdir }}/libgcc_s.so.1", uri = "file:vbs-build/libgcc_s.so.1" },
+{% for lib in [vbs.ldso, "libc.so.6", "libm.so.6"] %}
+  { path = "{{ arch_libdir }}/{{ lib }}", uri = "file:{{ vbs.sysroot }}/usr/lib/{{ lib }}" },
+{% endfor %}
+]

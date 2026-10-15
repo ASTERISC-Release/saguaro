@@ -2,3 +2,5 @@
 /OUTPUT
 /result-*
 /Cargo.lock
+/vbs-build/
+/rust-hyper-http-server.manifest.vbs
