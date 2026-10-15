@@ -16,12 +16,12 @@ LIB="$SYSROOT/usr/lib"
 SOFTFP=
 [ -f "$LIB/libsoftfp-x18.a" ] && SOFTFP=$LIB/libsoftfp-x18.a
 # AArch64: -ffixed-x18 (x18 is the enclave TEB); x86_64: no flag, the x86-64 loader (PLAN-x64.md)
-X18=-ffixed-x18; LDSO=ld-linux-aarch64.so.1
-[ "$(uname -m)" = x86_64 ] && { X18=; LDSO=ld-linux-x86-64.so.2; }
+X18=-ffixed-x18; LDSO=ld-linux-aarch64.so.1; INTERP=/usr/lib/$LDSO
+[ "$(uname -m)" = x86_64 ] && { X18=; LDSO=ld-linux-x86-64.so.2; INTERP=/lib64/$LDSO; }
 exec $CC -O2 $X18 -fPIE -pie -nostdinc -nostartfiles -nodefaultlibs \
     -isystem "$($CC -print-file-name=include)" -isystem "$SYSROOT/usr/include" \
     -idirafter /usr/include/$($CC -dumpmachine) -idirafter /usr/include \
-    -Wl,-z,max-page-size=0x10000 -Wl,--dynamic-linker=/usr/lib/$LDSO \
+    -Wl,-z,max-page-size=0x10000 -Wl,--dynamic-linker=$INTERP \
     "$LIB/Scrt1.o" "$LIB/crti.o" "$($CC -print-file-name=crtbeginS.o)" \
     "$@" \
     $SOFTFP "$LIB/libc.so.6" "$LIB/libc_nonshared.a" "$LIB/$LDSO" -lgcc \
