@@ -4,15 +4,13 @@
  */
 
 /*
- * aarch64 has no CPUID instruction/leaf scheme. Feature discovery here reads AT_HWCAP/AT_HWCAP2
- * from /proc/self/auxv (PAL's own auxv parsing at process startup, in pal_main.c, only looks at
- * AT_PAGESZ/AT_SYSINFO_EHDR and doesn't keep the rest around, so this re-reads it independently
- * rather than threading a new field through generic PAL state for what is a purely cosmetic
- * /proc/cpuinfo feature) and maps the bits onto the same lowercase names Linux's own
- * arch/arm64/kernel/cpuinfo.c uses for the "Features:" line.
+ * aarch64 has no CPUID instruction/leaf scheme. The "Features" line of /proc/cpuinfo is made from
+ * the AT_HWCAP/AT_HWCAP2 words the PAL computed for applications (pal_cpu_info.cpu_hwcap/
+ * cpu_hwcap2, already masked; Documentation/devel/aarch64/hwcap/PLAN.md), so what an
+ * application reads there matches what getauxval() tells it, mapped onto the same lowercase
+ * names Linux's own arch/arm64/kernel/cpuinfo.c uses.
  */
 
-#include "elf/elf.h"
 #include "libos_cpuid.h"
 #include "libos_internal.h"
 #include "pal.h"
@@ -85,47 +83,10 @@ static const struct hwcap_flag g_hwcap2_flags[] = {
     { 1ULL << 22, "mte3" },
 };
 
-#define AT_HWCAP  16
-#define AT_HWCAP2 26
-
-/* Reads AT_HWCAP/AT_HWCAP2 out of /proc/self/auxv. Falls back to the universally-guaranteed
- * baseline (FP + ASIMD, bits 0 and 1 of HWCAP) if the read fails for any reason -- this is a
- * cosmetic /proc/cpuinfo feature, not worth failing process startup over. */
-static void read_hwcaps(uint64_t* out_hwcap, uint64_t* out_hwcap2) {
-    *out_hwcap = (1ULL << 0) | (1ULL << 1); /* fp, asimd: always present on aarch64 */
-    *out_hwcap2 = 0;
-
-    PAL_HANDLE handle = NULL;
-    /* PAL_CREATE_NEVER, not PAL_CREATE_IGNORED: the linux PAL's regular-file open treats IGNORED
-     * as "caller should not have used me" (BUG()), and "open it only because it already exists"
-     * is exactly the semantics wanted here anyway (the fallback below covers failure). */
-    int ret = PalStreamOpen("file:/proc/self/auxv", PAL_ACCESS_RDONLY, /*share_flags=*/0,
-                            PAL_CREATE_NEVER, /*options=*/0, &handle);
-    if (ret < 0)
-        return;
-
-    elf_auxv_t auxv[64];
-    size_t total = 0;
-    while (total < sizeof(auxv)) {
-        size_t count = sizeof(auxv) - total;
-        ret = PalStreamRead(handle, /*offset=*/0, &count, (char*)auxv + total);
-        if (ret < 0 || count == 0)
-            break;
-        total += count;
-    }
-    PalObjectDestroy(handle);
-
-    for (size_t i = 0; i * sizeof(auxv[0]) + sizeof(auxv[0]) <= total; i++) {
-        if (auxv[i].a_type == AT_HWCAP)
-            *out_hwcap = auxv[i].a_un.a_val;
-        else if (auxv[i].a_type == AT_HWCAP2)
-            *out_hwcap2 = auxv[i].a_un.a_val;
-    }
-}
-
 int libos_get_cpu_flags(char** out_cpu_flags) {
-    uint64_t hwcap, hwcap2;
-    read_hwcaps(&hwcap, &hwcap2);
+    /* the same words the application gets as AT_HWCAP/AT_HWCAP2 (libos_rtld.c) */
+    uint64_t hwcap  = g_pal_public_state->cpu_info.cpu_hwcap;
+    uint64_t hwcap2 = g_pal_public_state->cpu_info.cpu_hwcap2;
 
     /* Conservative upper bound: every flag name plus a separator, for both tables. */
     size_t max_len = 1;

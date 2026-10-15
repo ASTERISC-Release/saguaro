@@ -36,6 +36,18 @@ struct pal_linux_state g_pal_linux_state;
 
 const size_t g_page_size = PRESET_PAGESIZE;
 
+#ifdef __aarch64__
+/* AT_HWCAP / AT_HWCAP2 of the host kernel for this process: the application runs natively, so
+ * these are the truth (pal_cpuid.c masks them; Documentation/devel/aarch64/hwcap/PLAN.md) */
+static uint64_t g_host_hwcap;
+static uint64_t g_host_hwcap2;
+
+void _PalGetHwcaps(uint64_t* out_hwcap, uint64_t* out_hwcap2) {
+    *out_hwcap  = g_host_hwcap;
+    *out_hwcap2 = g_host_hwcap2;
+}
+#endif
+
 static void read_info_from_stack(void* initial_rsp, int* out_argc, const char*** out_argv,
                                  const char*** out_envp, elf_addr_t* out_sysinfo_ehdr) {
     /* The stack layout on program entry is:
@@ -72,6 +84,14 @@ static void read_info_from_stack(void* initial_rsp, int* out_argc, const char***
             case AT_SYSINFO_EHDR:
                 *out_sysinfo_ehdr = av->a_un.a_val;
                 break;
+#ifdef __aarch64__
+            case AT_HWCAP:
+                g_host_hwcap = av->a_un.a_val;
+                break;
+            case AT_HWCAP2:
+                g_host_hwcap2 = av->a_un.a_val;
+                break;
+#endif
         }
     }
 

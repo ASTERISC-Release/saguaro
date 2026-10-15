@@ -273,6 +273,11 @@ uint64_t _PalGetBogomips(void);
 #else
 double _PalGetBogomips(void);
 #endif
+#ifdef __aarch64__
+/* AT_HWCAP / AT_HWCAP2 words of the CPU as this host PAL sees it, before the allowlist of
+ * pal_hwcap.h is applied (pal/src/arch/aarch64/pal_cpuid.c); every aarch64 host PAL defines it */
+void _PalGetHwcaps(uint64_t* out_hwcap, uint64_t* out_hwcap2);
+#endif
 int _PalSegmentBaseGet(enum pal_segment_reg reg, uintptr_t* addr);
 int _PalSegmentBaseSet(enum pal_segment_reg reg, uintptr_t addr);
 int _PalCpuIdRetrieve(uint32_t leaf, uint32_t subleaf, uint32_t values[4]);

@@ -63,6 +63,7 @@ else
     # port-io/shared-memory callbacks as plain MMIO; single-process pal_process.c (the
     # multiprocess support is x86_64 only).
     pal_vm_sources += files(
+        'arch/aarch64/pal_hwcap.c',
         'arch/aarch64/pal_main.c',
         'arch/aarch64/pal_process.c',
         'arch/aarch64/vm_bootloader.S',

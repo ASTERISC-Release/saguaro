@@ -211,6 +211,12 @@ if host_machine.cpu_family() == 'x86_64'
     }
 endif
 
+if host_machine.cpu_family() == 'aarch64'
+    tests += {
+        'hwcap_aarch64': {},
+    }
+endif
+
 # device_ioctl test may only be executed in a VM environment that prepares the below header file
 if fs.exists('gramine_test_dev_ioctl.h')
     tests += {

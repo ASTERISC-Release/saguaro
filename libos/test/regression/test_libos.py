@@ -5,6 +5,7 @@ import re
 import shutil
 import signal
 import socket
+import struct
 import subprocess
 import time
 import unittest
@@ -452,6 +453,27 @@ class TC_01_Bootstrap(RegressionTestCase):
         # flags exactly (previously x17 was clobbered, which made a thread spin on `br x17`).
         stdout, _ = self.run_binary(['sigreturn_regs'], timeout=120)
         self.assertIn('TEST OK', stdout)
+
+    @unittest.skipUnless(platform.machine() == 'aarch64', 'AT_HWCAP/AT_HWCAP2 are aarch64-specific')
+    def test_605_hwcap_aarch64(self):
+        # The LibOS passes the PAL's (masked) CPU feature words; every advertised feature is
+        # executed once (Documentation/devel/aarch64/hwcap/PLAN.md).
+        stdout, _ = self.run_binary(['hwcap_aarch64'])
+        self.assertIn('TEST OK', stdout)
+        if IS_VM:
+            return
+        # gramine-direct: the words are the host kernel's, masked to the allowlist
+        words = {}
+        with open('/proc/self/auxv', 'rb') as f:
+            auxv = f.read()
+        for i in range(0, len(auxv) - 15, 16):
+            key, val = struct.unpack('<QQ', auxv[i:i + 16])
+            words[key] = val
+        hwcap = int(re.search(r'AT_HWCAP = (0x[0-9a-f]+)', stdout).group(1), 16)
+        hwcap2 = int(re.search(r'AT_HWCAP2 = (0x[0-9a-f]+)', stdout).group(1), 16)
+        allowed = re.search(r'allowlist = (0x[0-9a-f]+) (0x[0-9a-f]+)', stdout)
+        self.assertEqual(hwcap, words.get(16, 0) & int(allowed.group(1), 16))
+        self.assertEqual(hwcap2, words.get(26, 0) & int(allowed.group(2), 16))
 
     @unittest.skipUnless(platform.machine() in ('aarch64', 'riscv64'),
                          'direct-PAL syscall-site rewriting is aarch64/riscv64-specific')

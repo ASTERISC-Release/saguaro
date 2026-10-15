@@ -215,7 +215,7 @@ struct pal_vbs_packed_obj {
  * code: P calls them only through its x18-restoring thunk (pal_vbs_wcall.S), because Linux code
  * may have clobbered x18 (the enclave TEB). All values are fixed-width (PLAN.md D4).
  */
-#define PAL_VBS_SERVICES_VERSION 5u
+#define PAL_VBS_SERVICES_VERSION 6u
 
 struct pal_vbs_services {
     uint64_t version;
@@ -259,6 +259,11 @@ struct pal_vbs_services {
                           * VBS attestation report package (EnclaveGetAttestationReport) with
                           * user_data as its EnclaveData; returns its size (out NULL or too small:
                           * only the size) or -(HRESULT & 0x7fffffff) */
+
+    /* CPU features (version 6): IsProcessorFeaturePresent(n) called inside the enclave by W,
+     * for n = 0..127, as bit (n % 64) of arm_pf[n / 64] (PF_ARM_* numbers of winnt.h). The PAL
+     * turns them into AT_HWCAP/AT_HWCAP2 (Documentation/devel/aarch64/hwcap/PLAN.md). */
+    uint64_t arm_pf[2];
 };
 
 /*
