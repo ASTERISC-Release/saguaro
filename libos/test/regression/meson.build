@@ -172,6 +172,7 @@ tests = {
     'ptimer': {},
     'stat_invalid_args': {},
     'symlink_host': {},
+    'syscall_args': {},
     'synthetic': {},
     'syscall': {},
     'timerfd': {},
