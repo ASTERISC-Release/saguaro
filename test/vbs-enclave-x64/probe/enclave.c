@@ -72,7 +72,7 @@ unsigned long long probe_rdrand(int* ok);
 unsigned long long probe_rdseed(int* ok);
 long long probe_redzone_ud2(void);
 long long probe_redzone_spin(unsigned long long iters);
-long long probe_fs_spin(unsigned long long value, unsigned long long iters, unsigned long long* first_bad);
+long long probe_fs_spin(unsigned long long value, unsigned long long iters, unsigned long long out[3]);
 long long probe_regs_spin(unsigned long long iters);
 long long probe_callout_regs(void* host_fn);
 long long probe_fault_offstack(void* new_rsp);
@@ -494,9 +494,18 @@ static void stack_info(const char* when)
          (void*)probe_read_rsp(), tib->ArbitraryUserPointer);
 }
 
+static __declspec(noinline) long long recurse_kib(int n)
+{
+    volatile char buf[1000];
+    buf[0] = (char)n;
+    buf[999] = (char)n;
+    if (n <= 1) return buf[0] + buf[999];
+    return recurse_kib(n - 1) + buf[0] - buf[999] + 1;
+}
+
 // args[0]: group. 1 = safe probes, 2 = syscall, 3 = trap+resume, 4 = FS base kept across exit/entry,
 // 5 = red zone, 6 = FS base and registers across OCALLs, 7 = FS base and registers under preemption,
-// 8 = exceptions with rsp outside the thread stack, 9 = stack, 10 = CFG, 11 = TEB layout.
+// 8 = exceptions with rsp outside the thread stack, 9 = stack, 10 = CFG, 11 = TEB layout, 12 = stack growth, 13 = exception cost.
 void* CALLBACK E_Exec(void* param)
 {
     PROBE_IO* io = (PROBE_IO*)param;
@@ -595,14 +604,14 @@ void* CALLBACK E_Exec(void* param)
     case 5: {
         // red zone: does the exception dispatch write into the 128 bytes below the faulting rsp?
         trap("red zone pattern, ud2, resume at rip+2", t_redzone, 1, 2);
-        logf("red zone: (the value returned above is the number of the 16 qwords below rsp that changed)\n");
+        logf("red zone: (the value returned above is a bit mask of the 16 qwords below rsp that changed: bit 16 = rsp-8, bit 1 = rsp-128)\n");
         unsigned long long iters = io->args[1] ? io->args[1] : 2000000000ull;
         LARGE_INTEGER f, a, b;
         QueryPerformanceFrequency(&f);
         QueryPerformanceCounter(&a);
         long long changed = probe_redzone_spin(iters);
         QueryPerformanceCounter(&b);
-        logf("red zone: pattern below rsp kept through a spin of %llu iterations (%lld ms, no calls): %lld of 16 qwords changed\n",
+        logf("red zone: pattern below rsp kept through a spin of %llu iterations (%lld ms, no calls): changed mask 0x%llx\n",
              iters, (b.QuadPart - a.QuadPart) * 1000 / f.QuadPart, changed);
         io->out[0] = (unsigned long long)changed;
         break;
@@ -611,7 +620,7 @@ void* CALLBACK E_Exec(void* param)
         // FS base, GS base, ArbitraryUserPointer and callee-saved registers across OCALLs
         LPENCLAVE_ROUTINE fn = (LPENCLAVE_ROUTINE)io->args[1];
         unsigned long long n = io->args[2] ? io->args[2] : 100000;
-        unsigned long long fs_bad = 0, gs_bad = 0, aup_bad = 0, first_fs = 0, calls_bad = 0;
+        unsigned long long fs_bad = 0, gs_bad = 0, aup_bad = 0, first_fs = 0, calls_bad = 0, fs_nz = 0, first_nz = 0;
         NT_TIB* tib = (NT_TIB*)NtCurrentTeb();
         void* aup0 = tib->ArbitraryUserPointer;
         void* sst0 = tib->SubSystemTib;
@@ -630,7 +639,7 @@ void* CALLBACK E_Exec(void* param)
             if (!CallEnclave(fn, (void*)i, TRUE, &ret) || ret != (void*)(i + 1)) calls_bad++;
             if (have_fsgs) {
                 unsigned long long g = probe_rdfsbase();
-                if (g != v) { if (!fs_bad) first_fs = g; fs_bad++; }
+                if (g != v) { if (!fs_bad) first_fs = g; fs_bad++; if (g) { if (!fs_nz) first_nz = g; fs_nz++; } }
                 if (probe_rdgsbase() != gs0) gs_bad++;
             }
             if (tib->ArbitraryUserPointer != (void*)(v + 8) || tib->SubSystemTib != (void*)(v + 16)) aup_bad++;
@@ -640,8 +649,9 @@ void* CALLBACK E_Exec(void* param)
         tib->ArbitraryUserPointer = aup0;
         tib->SubSystemTib = sst0;
         logf("ocall: %llu OCALLs (%llu failed) in %lld ms; FS base changed %llu times (first value 0x%llx); GS base changed %llu times; "
-             "TEB ArbitraryUserPointer or SubSystemTib changed %llu times%s\n", n, calls_bad, (b.QuadPart - a.QuadPart) * 1000 / f.QuadPart,
-             fs_bad, first_fs, gs_bad, aup_bad, have_fsgs ? "" : " (rd/wrfsbase unavailable: FS not tested)");
+             "TEB ArbitraryUserPointer or SubSystemTib changed %llu times%s; FS base changed to a NON-ZERO value %llu times (first 0x%llx)\n",
+             n, calls_bad, (b.QuadPart - a.QuadPart) * 1000 / f.QuadPart,
+             fs_bad, first_fs, gs_bad, aup_bad, have_fsgs ? "" : " (rd/wrfsbase unavailable: FS not tested)", fs_nz, first_nz);
         long long m = probe_callout_regs((void*)fn);
         logf("ocall: callee-saved registers changed across CallEnclave to the host: mask 0x%llx (0 = rbx rsi rdi rbp r12-r15 xmm6-15 kept)\n", m);
         io->out[0] = fs_bad; io->out[1] = gs_bad; io->out[2] = aup_bad; io->out[3] = (unsigned long long)m;
@@ -650,12 +660,12 @@ void* CALLBACK E_Exec(void* param)
     case 7: {
         // FS base and registers under preemption (no calls); run several processes at once for contention
         unsigned long long iters = io->args[1] ? io->args[1] : 4000000000ull;
-        unsigned long long first = 0;
+        unsigned long long fo[3] = { 0 };
         LARGE_INTEGER f, a, b;
         QueryPerformanceFrequency(&f);
         QueryPerformanceCounter(&a);
         long long fs_changes = -1;
-        __try { fs_changes = probe_fs_spin(0x00007ee300000010ull, iters, &first); }
+        __try { fs_changes = probe_fs_spin(0x00007ee300000010ull, iters, fo); }
         __except (filt(GetExceptionCode())) { logf("spin: rdfsbase/wrfsbase exception 0x%08x\n", g_exc_code); }
         QueryPerformanceCounter(&b);
         long long ms1 = (b.QuadPart - a.QuadPart) * 1000 / f.QuadPart;
@@ -663,9 +673,10 @@ void* CALLBACK E_Exec(void* param)
         long long regs = probe_regs_spin(iters / 2);
         QueryPerformanceCounter(&b);
         long long ms2 = (b.QuadPart - a.QuadPart) * 1000 / f.QuadPart;
-        logf("spin: FS base compared on each of %llu iterations (%lld ms): %lld changes, first different value 0x%llx\n", iters, ms1, fs_changes, first);
+        logf("spin: FS base compared on each of %llu iterations (%lld ms): %lld changes, first different value 0x%llx; "
+             "%llu changes to a NON-ZERO value, first 0x%llx\n", iters, ms1, fs_changes, fo[0], fo[2], fo[1]);
         logf("spin: registers after %llu iterations (%lld ms): changed mask 0x%llx (0 = rbx rsi rdi rbp r8-r15 xmm6-15 ymm0-5 kept)\n", iters / 2, ms2, regs);
-        io->out[0] = (unsigned long long)fs_changes; io->out[1] = first; io->out[2] = (unsigned long long)regs;
+        io->out[0] = (unsigned long long)fs_changes; io->out[1] = fo[2]; io->out[2] = (unsigned long long)regs;
         break;
     }
     case 8: {
@@ -701,6 +712,38 @@ void* CALLBACK E_Exec(void* param)
         query("StackLimit-64K", (char*)tib->StackLimit - 65536);
         query("StackBase-4K", (char*)tib->StackBase - 4096);
         io->out[0] = (unsigned long long)((char*)tib->StackBase - (char*)tib->StackLimit);
+        break;
+    }
+    case 12: {
+        // stack growth: recurse args[1] KiB deep (1 KiB per frame)
+        unsigned long long kib = io->args[1] ? io->args[1] : 256;
+        g_exc_code = 0;
+        long long r = -1;
+        __try { r = recurse_kib((int)kib); }
+        __except (filt(GetExceptionCode())) { }
+        stack_info("after recursion");
+        logf("stack: recursion %llu KiB deep -> %lld, exception 0x%08x\n", kib, r, g_exc_code);
+        io->out[0] = (unsigned long long)r;
+        break;
+    }
+    case 13: {
+        // cost of an exception handled by the unwind-data handler and resumed (the path packed code
+        // would take): args[1] iterations of probe_fault_offstack with widened TEB bounds
+        unsigned long long n = io->args[1] ? io->args[1] : 10000;
+        char* st = (char*)VirtualAlloc(NULL, 65536, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+        NT_TIB* tib = (NT_TIB*)NtCurrentTeb();
+        void* sb = tib->StackBase; void* sl = tib->StackLimit;
+        LARGE_INTEGER f, a, b;
+        QueryPerformanceFrequency(&f);
+        g_lh_calls = 0;
+        tib->StackLimit = st; tib->StackBase = st + 65536;
+        QueryPerformanceCounter(&a);
+        for (unsigned long long i = 0; i < n; i++) probe_fault_offstack(st + 65536 - 64);
+        QueryPerformanceCounter(&b);
+        tib->StackLimit = sl; tib->StackBase = sb;
+        double ns = (double)(b.QuadPart - a.QuadPart) * 1e9 / (double)f.QuadPart / (double)n;
+        logf("exccost: %llu exceptions (ud2, unwind-data handler, resume) in the enclave: %.0f ns each; handler calls %ld\n", n, ns, g_lh_calls);
+        io->out[0] = (unsigned long long)ns;
         break;
     }
     case 11: {

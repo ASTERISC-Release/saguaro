@@ -120,7 +120,8 @@ probe_rdseed PROC
 probe_rdseed ENDP
 
 ; long long probe_redzone_ud2(void): fills the 128 bytes below rsp with a pattern, executes ud2 (the
-; probe's handler resumes after it), then returns the number of the 16 qwords that changed.
+; probe's handler resumes after it), then returns a bit mask of the 16 qwords that changed (bit k:
+; the qword at rsp-136+8k, so bit 16 is rsp-8 and bit 1 is rsp-128).
 probe_redzone_ud2 PROC
     mov     rax, 5A5A5A5A00000000h
     mov     ecx, 1
@@ -135,7 +136,7 @@ probe_redzone_ud2 PROC
 @@: lea     rdx, [rax+rcx]
     cmp     [rsp+rcx*8-136], rdx
     je      @F
-    inc     r8
+    bts     r8, rcx
 @@: inc     ecx
     cmp     ecx, 17
     jne     @B
@@ -144,7 +145,7 @@ probe_redzone_ud2 PROC
 probe_redzone_ud2 ENDP
 
 ; long long probe_redzone_spin(unsigned long long iters): the same pattern, then a loop of iters
-; iterations that calls nothing; returns the number of changed qwords.
+; iterations that calls nothing; returns the bit mask of changed qwords.
 probe_redzone_spin PROC
     mov     r9, rcx
     mov     rax, 5A5A5A5A00000000h
@@ -161,7 +162,7 @@ probe_redzone_spin PROC
 @@: lea     rdx, [rax+rcx]
     cmp     [rsp+rcx*8-136], rdx
     je      @F
-    inc     r8
+    bts     r8, rcx
 @@: inc     ecx
     cmp     ecx, 17
     jne     @B
@@ -169,23 +170,35 @@ probe_redzone_spin PROC
     ret
 probe_redzone_spin ENDP
 
-; long long probe_fs_spin(unsigned long long value, unsigned long long iters, unsigned long long *first_bad):
+; long long probe_fs_spin(unsigned long long value, unsigned long long iters, unsigned long long out[3]):
 ; wrfsbase value, then compares rdfsbase with it on every iteration; counts changes (rewriting the
-; value after each change) and stores the first different value. Restores FS base 0 at the end.
+; value after each change). out[0] = first different value, out[1] = first different NON-ZERO value,
+; out[2] = number of changes to a non-zero value. Restores FS base 0 at the end.
 probe_fs_spin PROC
     wrfsbase rcx
     xor     eax, eax
     mov     qword ptr [r8], 0
+    mov     qword ptr [r8+8], 0
+    mov     qword ptr [r8+16], 0
 @@: rdfsbase r9
     cmp     r9, rcx
-    je      @F
+    je      probe_fs_spin_next
     test    rax, rax
     jnz     probe_fs_spin_counted
     mov     [r8], r9
 probe_fs_spin_counted:
     inc     rax
+    test    r9, r9
+    jz      probe_fs_spin_zero
+    cmp     qword ptr [r8+16], 0
+    jne     probe_fs_spin_nz_counted
+    mov     [r8+8], r9
+probe_fs_spin_nz_counted:
+    inc     qword ptr [r8+16]
+probe_fs_spin_zero:
     wrfsbase rcx
-@@: dec     rdx
+probe_fs_spin_next:
+    dec     rdx
     jnz     @B
     xor     ecx, ecx
     wrfsbase rcx
