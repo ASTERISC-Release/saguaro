@@ -96,11 +96,20 @@ static void ring_wake_all(struct pal_pipe_ring* ring) {
     sched_thread_wakeup(&ring->writer_futex);
 }
 
+/* Handles ride through a pipe to another process only where handle objects are shared between
+ * processes: the x86_64 VM PAL (share_refs, vm_handle_release_share in pal_process.c; the same
+ * guard as pal/src/pal_object.c). The TDX PAL and the AArch64 VM PAL have no processes. */
+#if defined(PAL_HOST_VM) && defined(__x86_64__)
+#define PIPE_HANDLES_SHARED 1
+#endif
+
 /* drops the handles of a queue entry nobody will receive (or beyond a reader's capacity) */
 static void ring_handles_drop(struct pal_pipe_ring_handles* e, size_t from) {
     for (size_t i = from; i < e->count; i++) {
         /* the reference the sender took for the receiver (see pal_common_pipe_writehandles) */
+#ifdef PIPE_HANDLES_SHARED
         if (!vm_handle_release_share(e->cargo[i]))
+#endif
             _PalObjectDestroy(e->cargo[i]);
     }
 }
@@ -520,6 +529,11 @@ int64_t pal_common_pipe_writehandles(struct pal_handle* handle, const void* buff
         return pal_common_pipe_write(handle, 0, len, buffer);
     if (cargo_count > PAL_STREAM_MAX_HANDLES)
         return -PAL_ERROR_INVAL;
+#ifndef PIPE_HANDLES_SHARED
+    __UNUSED(meta);
+    __UNUSED(meta_size);
+    return -PAL_ERROR_NOTIMPLEMENTED;
+#else
     for (size_t i = 0; i < cargo_count; i++) {
         /* process endpoints, threads and events are per process (see vm_process_send_handle) */
         if (cargo[i]->hdr.type == PAL_TYPE_PROCESS || cargo[i]->hdr.type == PAL_TYPE_THREAD
@@ -584,6 +598,7 @@ out_err:
     free(cargo_copy);
     free(meta_copy);
     return bytes;
+#endif
 }
 
 void pal_common_pipe_destroy(struct pal_handle* handle) {
