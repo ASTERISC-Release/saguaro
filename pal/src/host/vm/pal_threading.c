@@ -16,9 +16,11 @@
 #include "kernel_thread.h"
 
 static void thread_destroy(PAL_HANDLE handle) {
+#ifdef __x86_64__ /* the multiprocess frame pool exists only on x86_64 */
     if (handle->private_frame)
         (void)memory_frame_free(handle->private_frame);
     else
+#endif
         free(handle);
 }
 

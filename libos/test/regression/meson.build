@@ -104,6 +104,7 @@ tests = {
     'proc_cpuinfo': {},
     'proc_path': {},
     'proc_stat': {},
+    'preadv2_pwritev2': {},
     'pselect': {},
     'pthread_set_get_affinity': {},
     'readdir': {},

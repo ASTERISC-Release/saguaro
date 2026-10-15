@@ -1478,6 +1478,14 @@ class TC_40_FileSystem(RegressionTestCase):
         stdout, _ = self.run_binary(['credentials', '/mnt/tmpfs'])
         self.assertIn('TEST OK', stdout)
 
+    def test_085a_preadv2_pwritev2_chroot(self):
+        stdout, _ = self.run_binary(['preadv2_pwritev2', 'tmp'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_085b_preadv2_pwritev2_tmpfs(self):
+        stdout, _ = self.run_binary(['preadv2_pwritev2', '/mnt/tmpfs'])
+        self.assertIn('TEST OK', stdout)
+
 class TC_50_GDB(RegressionTestCase):
     def setUp(self):
         if not self.has_debug():
