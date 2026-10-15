@@ -20,6 +20,15 @@ loader.env.LD_PRELOAD = "/vk-session-shim.so:./libgraphics.so"
 loader.env.LD_PRELOAD = "./libgraphics.so"
 {% endif %}
 loader.env.EGL_EAGER_SESSION = "{{ eager }}"
+{% if present|string == "1" %}
+# presentation through the layer in libgraphics.so (VK_LAYER_GRAMINE_present), found as an implicit
+# layer under $XDG_DATA_HOME/vulkan/implicit_layer.d
+loader.env.EGL_VULKAN_PRESENT = "1"
+# Mesa's device-select layer asks the X server for its GPU with DRI3, which hangs over the guest's X
+# connection (no fd passing); the GPU is chosen with VK_ICD_FILENAMES or by the application
+loader.env.NODEVICE_SELECT = "1"
+loader.env.XDG_DATA_HOME = "/gramine-xdg"
+{% endif %}
 loader.env.DISPLAY = "2:0"
 vm.net.direct_vsock_ports = [6000]
 loader.env.IVSHMEM_GRAMINE_VM = "1"
@@ -34,6 +43,9 @@ loader.env.EGL_IOCTL_LOG = "0"
 fs.mounts = [
   { path = "{{ entrypoint }}", uri = "file:{{ binary }}" },
   { path = "/libgraphics.so", uri = "file:{{ gramine.libgraphics }}" },
+{% if present|string == "1" %}
+  { path = "/gramine-xdg/vulkan", uri = "file:{{ layer_dir }}" },
+{% endif %}
 {% if shim|string == "1" %}
   { path = "/vk-session-shim.so", uri = "file:vk-session-shim.so" },
 {% endif %}
