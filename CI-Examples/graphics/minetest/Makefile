@@ -61,6 +61,10 @@ run: all dirs
 # default; PRELOAD=1 uses the preload library instead (needs an install built with a VM-type PAL).
 # The X server is the one of $(DISPLAY), reached through its Unix socket.
 PRELOAD ?= 0
+# The host's library directory of this architecture, and the NVIDIA driver's device nodes in the
+# direct manifest when the host has them (NVIDIA=0 or 1 overrides).
+ARCH_LIBDIR ?= /lib/$(shell $(CC) -dumpmachine)
+NVIDIA ?= $(if $(wildcard /dev/nvidiactl),1,0)
 X_DISPLAY_NUM = $(patsubst :%,%,$(firstword $(subst ., ,$(DISPLAY))))
 
 minetest-direct.manifest: minetest-direct.manifest.template $(MT_BIN) FORCE
@@ -68,6 +72,8 @@ minetest-direct.manifest: minetest-direct.manifest.template $(MT_BIN) FORCE
 		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
 		-Dmt_dir=$(MT_DIR) \
 		-Ddisplay=$(X_DISPLAY_NUM) \
+		-Darch_libdir=$(ARCH_LIBDIR) \
+		-Dnvidia=$(NVIDIA) \
 		-Dpreload=$(PRELOAD) \
 		-Degl_discrete=$${EGL_DISCRETE:-0} \
 		$< $@

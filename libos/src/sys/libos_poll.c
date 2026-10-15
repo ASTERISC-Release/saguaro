@@ -192,7 +192,14 @@ static long do_poll(struct pollfd* fds, size_t fds_len, uint64_t* timeout_us) {
     if (ret < 0) {
         ret = pal_to_unix_errno(ret);
         if (ret == -EAGAIN) {
-            /* Timeout - return number of already seen events, which might be 0. */
+            /* Timeout - return number of already seen events, which might be 0. Like Linux, report
+             * no events for the fds that were waited on (their revents would otherwise keep
+             * whatever the caller left there). */
+            for (size_t i = 0; i < fds_len; i++) {
+                if (libos_handles[i]) {
+                    fds[i].revents = 0;
+                }
+            }
             ret = ret_events_count;
         }
         goto out;

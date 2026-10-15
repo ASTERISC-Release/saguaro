@@ -288,11 +288,21 @@ int _PalHostFdGet(PAL_HANDLE handle, int* out_host_fd) {
         case PAL_TYPE_FILE:
         case PAL_TYPE_SOCKET:
         case PAL_TYPE_EVENTFD:
+        /* connected pipe ends are host UNIX stream sockets (the LibOS uses them for socketpair) */
+        case PAL_TYPE_PIPE:
+        case PAL_TYPE_PIPECLI:
             *out_host_fd = handle->generic.fd;
             return 0;
         default:
             return -PAL_ERROR_BADHANDLE;
     }
+}
+
+/* Handles whose host fd is a stream socket that can carry SCM_RIGHTS: a wrapped host fd (host UNIX
+ * socket) or a connected pipe end. */
+static bool is_host_msg_handle(PAL_HANDLE handle) {
+    return handle->hdr.type == PAL_TYPE_DEV || handle->hdr.type == PAL_TYPE_PIPE
+           || handle->hdr.type == PAL_TYPE_PIPECLI;
 }
 
 int _PalHostUnixConnect(const char* path, pal_stream_options_t options, PAL_HANDLE* out_handle) {
@@ -326,7 +336,7 @@ int _PalHostUnixConnect(const char* path, pal_stream_options_t options, PAL_HAND
 
 int _PalHostSendmsg(PAL_HANDLE handle, struct iovec* iov, size_t iov_len, const int* host_fds,
                     size_t host_fds_cnt, bool nonblocking, size_t* out_size) {
-    if (handle->hdr.type != PAL_TYPE_DEV)
+    if (!is_host_msg_handle(handle))
         return -PAL_ERROR_BADHANDLE;
     if (host_fds_cnt > HOST_MSG_MAX_FDS)
         return -PAL_ERROR_INVAL;
@@ -343,7 +353,7 @@ int _PalHostSendmsg(PAL_HANDLE handle, struct iovec* iov, size_t iov_len, const 
         memcpy(CMSG_DATA(cmsg), host_fds, host_fds_cnt * sizeof(int));
     }
 
-    long ret = DO_SYSCALL(sendmsg, handle->dev.fd, &msg,
+    long ret = DO_SYSCALL(sendmsg, handle->generic.fd, &msg,
                           MSG_NOSIGNAL | (nonblocking ? MSG_DONTWAIT : 0));
     if (ret < 0)
         return unix_to_pal_error(ret);
@@ -353,7 +363,7 @@ int _PalHostSendmsg(PAL_HANDLE handle, struct iovec* iov, size_t iov_len, const 
 
 int _PalHostRecvmsg(PAL_HANDLE handle, struct iovec* iov, size_t iov_len, int* host_fds,
                     size_t* host_fds_cnt, bool nonblocking, size_t* out_size) {
-    if (handle->hdr.type != PAL_TYPE_DEV)
+    if (!is_host_msg_handle(handle))
         return -PAL_ERROR_BADHANDLE;
 
     size_t cap = MIN(*host_fds_cnt, (size_t)HOST_MSG_MAX_FDS);
@@ -365,7 +375,7 @@ int _PalHostRecvmsg(PAL_HANDLE handle, struct iovec* iov, size_t iov_len, int* h
         .msg_controllen = cap ? CMSG_SPACE(cap * sizeof(int)) : 0,
     };
 
-    long ret = DO_SYSCALL(recvmsg, handle->dev.fd, &msg,
+    long ret = DO_SYSCALL(recvmsg, handle->generic.fd, &msg,
                           MSG_CMSG_CLOEXEC | (nonblocking ? MSG_DONTWAIT : 0));
     if (ret < 0)
         return unix_to_pal_error(ret);
