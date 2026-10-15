@@ -220,6 +220,7 @@ static long do_clone_new_vm(IDTYPE child_vmid, unsigned long flags, struct libos
     child_process->child_termination_signal = flags & CSIGNAL;
     child_process->uid                      = thread->uid;
     child_process->vmid                     = child_vmid;
+    child_process->pgid                     = process_description.pgid;
 
     long ret = create_process_and_send_checkpoint(&migrate_fork, child_process,
                                                   &process_description, thread);
