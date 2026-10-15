@@ -3,13 +3,16 @@ Gramine in Windows VBS enclaves
 
 .. note::
 
-   The ``vbs`` PAL is new and experimental. It has been run on one machine
-   (Windows 11 Pro 25H2, build 26200, ARM64) with a test-signing certificate.
+   The ``vbs`` PAL is new and experimental. It has been run on two machines
+   (Windows 11 Pro 25H2, build 26200: one ARM64, one x64) with a test-signing
+   certificate.
    The development notes, measurements and open items are in
    ``Documentation/devel/vbs-enclave/``.
 
-The ``vbs`` PAL runs unmodified Linux AArch64 applications inside a Windows
-*virtualization-based security* (VBS) enclave on ARM64 Windows 11. It follows
+The ``vbs`` PAL runs unmodified Linux applications inside a Windows
+*virtualization-based security* (VBS) enclave: AArch64 applications on ARM64
+Windows 11 and x86_64 applications on x64 Windows 11 (see `x64 Windows`_ for
+what differs; an image is always for the architecture of its machine). It follows
 the design of the SGX PAL: a small untrusted host process on Windows creates the
 enclave and serves its requests for files, sockets and time; the PAL, the LibOS
 and the application run inside the enclave.
@@ -69,7 +72,7 @@ machine and is the administrator's decision.
 Windows machine
 ^^^^^^^^^^^^^^^
 
-#. **ARM64 Windows 11** with **VBS running**. Check in PowerShell::
+#. **ARM64 or x64 Windows 11** with **VBS running**. Check in PowerShell::
 
        (Get-CimInstance -Namespace root\Microsoft\Windows\DeviceGuard `
            -ClassName Win32_DeviceGuard).VirtualizationBasedSecurityStatus
@@ -84,7 +87,7 @@ Windows machine
    change ("protected by Secure Boot policy"); see Microsoft's documentation.
 
 #. **Visual Studio** (2022 or later) with the *Desktop development with C++*
-   workload and the **ARM64 build tools**, and the **Windows SDK 10.0.26100**
+   workload (on ARM64 Windows with the **ARM64 build tools**), and the **Windows SDK 10.0.26100**
    or later (it provides ``vertdll.lib``, ``veiid.exe`` and ``signtool.exe``).
    ``link-sign.cmd`` finds Visual Studio with ``vswhere`` (or set
    ``VS_INSTALL_DIR``).
@@ -108,18 +111,48 @@ Windows machine
    authentication for your user (the tools use ``ssh`` and ``scp``; the remote
    shell may be PowerShell or cmd).
 
+x64 Windows
+^^^^^^^^^^^
+
+Everything above works the same on x64 Windows 11; the tools take the
+architecture from the machine (``PROCESSOR_ARCHITECTURE`` on Windows, ``uname
+-m`` in Linux and WSL). The differences:
+
+- **Smart App Control must be off.** In enforcement mode it refuses enclave
+  images signed with a self-made certificate (``LoadEnclaveImageW`` fails with
+  4551, the code-integrity log names the ``VerifiedAndReputableDesktop``
+  policy) and, without cloud lookups, new unsigned executables such as
+  ``pal_vbs_host.exe``. It is turned off in *Windows Security* > *App & browser
+  control* > *Smart App Control settings*; on some Windows builds it cannot be
+  turned on again without resetting Windows.
+- The Linux side runs on an **x86_64** machine or WSL distribution. Its glibc
+  (``build-vbs-glibc``) is the same glibc 2.39, built without special flags, and
+  programs built with ``$(VBS_GCC)`` use the standard
+  ``/lib64/ld-linux-x86-64.so.2`` interpreter path; manifest templates name the
+  loader as ``{{ vbs.ldso }}``. System calls of the packed code are found at
+  pack time and served through the enclave runtime's exception handler, so any
+  glibc works, also an unmodified one.
+- The static manifests under ``CI-Examples/vbs`` that pack
+  ``ld-linux-aarch64.so.1`` by name (``dynhello``, ``python``) are AArch64-only
+  for now; the ``make VBS=1`` examples work on both.
+- Debug enclaves (``vbs.debug = true``) can be read by the host with
+  ``ReadProcessMemory`` on x64; production images must not be debuggable.
+
+The design notes are in ``Documentation/devel/vbs-enclave/PLAN-x64.md``.
+
 Windows only (WSL)
 ^^^^^^^^^^^^^^^^^^
 
-The whole build can run on the ARM64 Windows machine: its Linux half runs in a
+The whole build can run on the Windows machine: its Linux half runs in a
 **WSL2** distribution of the same machine (WSL uses the hypervisor that VBS
 needs anyway). In addition to the Windows steps above (the ssh server is not
 needed):
 
-#. **WSL2 with an aarch64 Ubuntu 24.04** distribution (as administrator:
-   ``wsl --install -d Ubuntu-24.04``, then a restart; on ARM64 Windows the
-   distribution is aarch64). Another name is given with ``-Distro`` or
-   ``GRAMINE_VBS_DISTRO``.
+#. **WSL2 with an Ubuntu** distribution of the machine's architecture (as
+   administrator: ``wsl --install -d Ubuntu-24.04``, then a restart; Windows
+   installs one of its own architecture: aarch64 on ARM64, x86_64 on x64; tested:
+   Ubuntu 24.04 aarch64 and Ubuntu 26.04 x86_64). Another name is given with
+   ``-Distro`` or ``GRAMINE_VBS_DISTRO``.
 
 #. **A checkout of the repository on Windows** (any folder; a checkout with
    Windows line ends, Git's ``core.autocrlf=true``, works).
@@ -145,8 +178,8 @@ and LibOS (1 minute); see `Quick start on Windows`_.
 Linux side
 ^^^^^^^^^^
 
-#. **The vbs PAL and LibOS**, built on an **aarch64 Linux** machine (or in the
-   repository's aarch64 build container)::
+#. **The vbs PAL and LibOS**, built on a **Linux machine of the image's
+   architecture**, aarch64 or x86_64 (or in the repository's build container)::
 
        meson setup build-vbs -Ddirect=disabled -Dvbs=enabled -Dlibc=none \
            -Dtests=disabled -Dbuildtype=release -Dgraphics=disabled
@@ -157,8 +190,8 @@ Linux side
    ``scripts/vbs/build-glibc.sh`` (into ``build-vbs-glibc``).
 
 #. On the machine that runs ``gramine-vbs build`` (any architecture): Python
-   3.11 or later, ``clang`` with the ``aarch64-pc-windows-msvc`` target, and
-   ssh access to the Windows machine. If this is not the aarch64 machine, copy
+   3.11 or later, ``clang`` with the ``aarch64-pc-windows-msvc`` or ``x86_64-pc-windows-msvc`` target, and
+   ssh access to the Windows machine. If this is not the Linux machine of the build, copy
    ``build-vbs`` (or just ``libpal.so``, ``libsysdb.so`` and ``vdso.so``) and
    the files to pack, and point ``--runtime`` at them.
 
@@ -229,7 +262,7 @@ Settings for the examples (or give the matching options)::
     #           GRAMINE_VBS_HEADERS, GRAMINE_VBS_CERT_NAME, GRAMINE_VBS_SSH_OPTS
 
 Hello world (``CI-Examples/vbs/helloworld``; its ``vbs.build`` compiles the
-program against ``build-vbs-glibc``, so run this on the aarch64 machine or
+program against ``build-vbs-glibc``, so run this on the Linux machine of the build or
 build the program there first)::
 
     cd CI-Examples/vbs/helloworld
@@ -242,7 +275,7 @@ measured), later runs start the signed image (0.9 s). The output::
 
 Python (``CI-Examples/vbs/python``; its ``vbs.build`` builds CPython 3.12.7
 once with ``scripts/vbs/build-python.sh --if-needed`` into
-``build-vbs-python``, which needs the aarch64 machine)::
+``build-vbs-python``, which needs the Linux machine of the build)::
 
     cd CI-Examples/vbs/python
     ../../../scripts/vbs/gramine-vbs run python.manifest
@@ -257,7 +290,7 @@ Makefile flow: ``make VBS=1``
 The application examples in ``CI-Examples/<application>/`` keep the structure they have for SGX and
 gain a VBS variant: next to ``<app>.manifest.template`` (direct and SGX) there is a
 ``vbs.manifest.template``, and the example's ``Makefile`` includes ``scripts/vbs/Makefile.vbs``
-when ``VBS=1`` is given. In WSL on the Windows machine (or, for the Linux half, in any aarch64
+when ``VBS=1`` is given. In WSL on the Windows machine (or, for the Linux half, in any aarch64 or x86_64
 Linux shell)::
 
     cd CI-Examples/helloworld
@@ -293,7 +326,7 @@ through ``powershell.exe`` and ``/mnt/<drive>`` paths, copies the objects into a
 ``%USERPROFILE%\gramine-vbs\wsl\<app>-<hash>`` (one per build folder; the base is
 ``GRAMINE_VBS_WINDOWS_BASE``), and links, signs and runs there. The Windows SDK headers come from
 the copy ``gramine-vbs.cmd`` already left in the distribution, or are fetched once. From another
-aarch64 Linux machine, ``GRAMINE_VBS_WINDOWS=user@host`` does the same over ssh;
+Linux machine of the same architecture, ``GRAMINE_VBS_WINDOWS=user@host`` does the same over ssh;
 ``GRAMINE_VBS_WINDOWS=none`` builds only the Linux half (``make VBS=1 vbs-sign`` later).
 
 **Running.** ``gramine-vbs <app> [args]`` runs ``<app>.manifest.vbs`` of the current folder, like
