@@ -264,8 +264,13 @@ def remove_guest_files(cid):
             path.unlink(missing_ok=True)
 
 
-def kill_test_orphans(binary, existing_pids):
-    """Kill exact LTP executable PIDs left behind after their parent times out."""
+RUN_TOKEN_VAR = "LTP_RUNNER_TOKEN"
+
+
+def kill_test_orphans(binary, existing_pids, token):
+    """Kill exact LTP executable PIDs left behind after their parent times out. Only processes
+    that carry this test's token in their environment are killed: another runner (a parallel
+    shard, see scripts/ltp-sharded.py) may be running the same executable at the same time."""
     if psutil is None:
         return
     target = binary.resolve()
@@ -275,8 +280,11 @@ def kill_test_orphans(binary, existing_pids):
             if process.info["pid"] in existing_pids:
                 continue
             argv = process.info["cmdline"] or []
-            if argv and pathlib.Path(argv[0]).resolve() == target:
-                pids.append(process.info["pid"])
+            if not argv or pathlib.Path(argv[0]).resolve() != target:
+                continue
+            if process.environ().get(RUN_TOKEN_VAR) != token:
+                continue
+            pids.append(process.info["pid"])
         except (psutil.Error, OSError):
             continue
     for pid in pids:
@@ -311,20 +319,40 @@ def set_manifest_shm(manifests, kind):
     changed = 0
     for manifest in manifests:
         text = manifest.read_text()
-        want = kind
-        if kind == "vm":
-            want = "host" if MULTIPROCESS_RE.search(text) else "tmpfs"
-        old, new = (SHM_HOST, SHM_TMPFS) if want == "tmpfs" else (SHM_TMPFS, SHM_HOST)
+        old, new = shm_swap(text, kind)
         if old in text:
             manifest.write_text(text.replace(old, new))
             changed += 1
     return changed
 
 
+def shm_swap(text, kind):
+    """The (unwanted, wanted) /dev/shm mount lines of a manifest for `kind` (see set_manifest_shm)."""
+    want = kind
+    if kind == "vm":
+        want = "host" if MULTIPROCESS_RE.search(text) else "tmpfs"
+    return (SHM_HOST, SHM_TMPFS) if want == "tmpfs" else (SHM_TMPFS, SHM_HOST)
+
+
+def manifest_shm_wrong(text, kind):
+    return shm_swap(text, kind)[0] in text
+
+
+def git_commit():
+    """The checkout's commit, with "-dirty" when tracked files differ (None outside git)."""
+    try:
+        return subprocess.run(["git", "-C", str(ROOT), "describe", "--always", "--dirty", "--abbrev=12"],
+                              capture_output=True, text=True, check=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return None
+
+
 def run_one(name, command, args, per_test_timeout, reserved_cid=None):
     binary = pathlib.Path(args.ltp_root) / "testcases/bin" / ltp_test_command(command)
     env = os.environ.copy()
     env["PATH"] = f"{binary.parent}:{env.get('PATH', '/usr/bin:/bin')}"
+    token = f"{os.getpid()}:{name}"
+    env[RUN_TOKEN_VAR] = token
     if args.loader == "vm":
         env["GRAMINE_VM_ID_BASE"] = str(reserved_cid)
     argv = build_argv(command, args.loader, binary)
@@ -350,7 +378,7 @@ def run_one(name, command, args, per_test_timeout, reserved_cid=None):
             stop_guest(proc, qemu_pids)
         else:
             kill_process_group(proc)
-            kill_test_orphans(binary, existing_pids)
+            kill_test_orphans(binary, existing_pids, token)
         output = partial_output(timeout_error)
         # A test may leave a child in uninterruptible kernel sleep. It can retain the pipe after
         # the process group is signalled; closing our read end prevents that child from blocking
@@ -364,7 +392,7 @@ def run_one(name, command, args, per_test_timeout, reserved_cid=None):
                 stop_guest(proc, qemu_pids)
             else:
                 kill_process_group(proc)
-                kill_test_orphans(binary, existing_pids)
+                kill_test_orphans(binary, existing_pids, token)
         raise
     if args.loader == "vm":
         remove_guest_files(cid)
@@ -399,8 +427,26 @@ def main():
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--set-shm", choices=("host", "tmpfs"),
                         help="only switch every manifest's /dev/shm mount (see set_manifest_shm)")
+    parser.add_argument("--shard", metavar="K/N",
+                        help="run only shard K of N (1 <= K <= N): the tests whose index i in the "
+                             "selection has i %% N == K - 1. The harness must already be prepared "
+                             "(--prepare-only); a shard never repoints the install symlink or edits "
+                             "manifests, since other shards share them. See scripts/ltp-sharded.py")
+    parser.add_argument("--prepare-only", action="store_true",
+                        help="only point the harness's install symlink at --ltp-root and set the "
+                             "/dev/shm mount the loader needs in the selected tests' manifests")
     parser.add_argument("tests", nargs="*")
     args = parser.parse_args()
+    # absolute: tests run with the harness directory as their working directory, so a relative
+    # --ltp-root named a binary that did not exist there (every native test a runner_error)
+    args.ltp_root = args.ltp_root.resolve()
+    args.harness_dir = args.harness_dir.resolve()
+    shard = None
+    if args.shard:
+        match = re.fullmatch(r"(\d+)/(\d+)", args.shard)
+        if not match or not 1 <= int(match.group(1)) <= int(match.group(2)):
+            parser.error("--shard must be K/N with 1 <= K <= N")
+        shard = (int(match.group(1)), int(match.group(2)))
     if args.self_test:
         parser_self_test()
         return
@@ -427,7 +473,12 @@ def main():
     unknown_skips = sorted(set(args.skip_test) - set(selected))
     if unknown_skips:
         parser.error("skipped tests missing from selection: " + ", ".join(unknown_skips))
+    scope_count = len(selected)
+    if shard:
+        selected = [name for index, name in enumerate(selected) if index % shard[1] == shard[0] - 1]
     active = [name for name in selected if name not in args.skip_test]
+    if args.prepare_only and shard:
+        parser.error("--prepare-only prepares the whole selection; it does not take --shard")
     if args.loader != "native":
         missing = sorted({ltp_test_command(scenarios[name]) for name in active
                           if not (args.harness_dir / f"{ltp_test_command(scenarios[name])}.manifest").exists()})
@@ -436,21 +487,36 @@ def main():
         # Under a Gramine loader the binary comes from the manifests' `install` symlink, not from
         # --ltp-root: point the symlink at --ltp-root so the two cannot disagree (they once did, and
         # an "unmodified" run measured the no-fork build). The manifests do not depend on which
-        # install the symlink names; one run at a time per checkout.
+        # install the symlink names; one run at a time per harness directory.
         link = args.harness_dir / "install"
         if not link.is_symlink():
             parser.error(f"{link} is not a symlink; build the manifests with scripts/build-ltp-manifests.sh")
-        if link.resolve() != args.ltp_root.resolve():
-            print(f"note: {link} pointed to {link.resolve()}; repointing it to {args.ltp_root.resolve()}",
-                  file=sys.stderr)
-            link.unlink()
-            link.symlink_to(os.path.relpath(args.ltp_root.resolve(), args.harness_dir.resolve()))
         manifests = sorted({args.harness_dir / f"{ltp_test_command(scenarios[name])}.manifest"
                             for name in active})
-        changed = set_manifest_shm(manifests, "vm" if args.loader == "vm" else "host")
-        if changed:
-            print(f"note: switched /dev/shm in {changed} manifests for the {args.loader} loader",
-                  file=sys.stderr)
+        shm_kind = "vm" if args.loader == "vm" else "host"
+        if shard:
+            # Shards share the harness: check, never change (the driver prepared it).
+            if link.resolve() != args.ltp_root.resolve():
+                parser.error(f"{link} names {link.resolve()}, not --ltp-root; run --prepare-only first")
+            unprepared = [m.name for m in manifests if manifest_shm_wrong(m.read_text(), shm_kind)]
+            if unprepared:
+                parser.error("manifests have the wrong /dev/shm mount for this loader; run "
+                             "--prepare-only first: " + ", ".join(unprepared[:10]))
+        else:
+            if link.resolve() != args.ltp_root.resolve():
+                print(f"note: {link} pointed to {link.resolve()}; repointing it to {args.ltp_root.resolve()}",
+                      file=sys.stderr)
+                link.unlink()
+                link.symlink_to(os.path.relpath(args.ltp_root.resolve(), args.harness_dir.resolve()))
+            changed = set_manifest_shm(manifests, shm_kind)
+            if changed:
+                print(f"note: switched /dev/shm in {changed} manifests for the {args.loader} loader",
+                      file=sys.stderr)
+    if args.prepare_only:
+        print(f"prepared {args.harness_dir} for the {args.loader} loader with {args.ltp_root.resolve()}")
+        return
+    # read at the start: a commit made while the shards run must not split them
+    commit = git_commit() if shard else None
     guest_cids = allocate_guest_cids(1) * len(active) if args.loader == "vm" else [None] * len(active)
 
     results = [{"loader": args.loader, "test": name, "subtests": [],
@@ -484,6 +550,10 @@ def main():
             print(f"{result['loader']} {result['test']}: {result['status']} ({duration_text})", flush=True)
     results.sort(key=lambda result: selected.index(result["test"]))
     out = {"loader": args.loader, "ltp_root": str(args.ltp_root.resolve()), "results": results}
+    if shard:
+        # what scripts/ltp-sharded.py checks before it merges shards
+        out.update({"shard": f"{shard[0]}/{shard[1]}", "scope_count": scope_count,
+                    "scenario": str(args.scenario.resolve()), "commit": commit})
     if args.results:
         args.results.parent.mkdir(parents=True, exist_ok=True)
         args.results.write_text(json.dumps(out, indent=2) + "\n")
