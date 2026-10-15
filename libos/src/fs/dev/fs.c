@@ -56,6 +56,34 @@ static ssize_t dev_random_read(struct libos_handle* hdl, void* buf, size_t count
     return count;
 }
 
+/* RNDGETENTCNT reports a full entropy pool: the PAL's random source never blocks (LTP ioctl07);
+ * the requests that change the pool need CAP_SYS_ADMIN, as on Linux, and do nothing */
+#define RNDGETENTCNT   0x80045200
+#define RNDADDTOENTCNT 0x40045201
+#define RNDGETPOOL     0x80085202
+#define RNDADDENTROPY  0x40085203
+#define RNDZAPENTCNT   0x5204
+#define RNDCLEARPOOL   0x5206
+#define RNDRESEEDCRNG  0x5207
+static int dev_random_ioctl(struct libos_handle* hdl, unsigned int cmd, unsigned long arg) {
+    __UNUSED(hdl);
+    switch (cmd) {
+        case RNDGETENTCNT:
+            if (!is_user_memory_writable((void*)arg, sizeof(int)))
+                return -EFAULT;
+            *(int*)arg = 256; /* the pool size in bits */
+            return 0;
+        case RNDADDTOENTCNT:
+        case RNDADDENTROPY:
+        case RNDZAPENTCNT:
+        case RNDCLEARPOOL:
+        case RNDRESEEDCRNG:
+            return libos_capable(21 /* CAP_SYS_ADMIN */) ? 0 : -EPERM;
+        default:
+            return -EINVAL; /* the random driver's answer to an unknown request */
+    }
+}
+
 static int dev_tty_open(struct libos_handle* hdl, struct libos_dentry* dent, int flags) {
     __UNUSED(dent);
 
@@ -152,6 +180,7 @@ int init_devfs(void) {
     /* writes in /dev/random add entropy in normal Linux, but not implemented in Gramine */
     random->dev.dev_ops.write = &dev_null_write;
     random->dev.dev_ops.seek = &dev_null_seek;
+    random->dev.dev_ops.ioctl = &dev_random_ioctl;
 
     struct pseudo_node* urandom = pseudo_add_dev(root, "urandom");
     urandom->perm = PSEUDO_PERM_FILE_RW;

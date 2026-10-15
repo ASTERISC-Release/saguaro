@@ -80,6 +80,7 @@ tests = {
     'append_fsize': {},
     'fcntl_misc': {},
     'fd_limits': {},
+    'ioctl_misc': {},
     'memfd_exec': {},
     'memfd_rw': {},
     'memfd_seals': {},
