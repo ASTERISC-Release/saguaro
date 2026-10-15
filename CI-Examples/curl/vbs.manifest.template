@@ -1,0 +1,32 @@
+# Copyright (C) 2026 The ASTERISC Research Lab
+# SPDX-License-Identifier: BSD-3-Clause
+
+# curl manifest for a Windows VBS enclave (`make VBS=1`, Documentation/vbs.rst): the counterpart of
+# curl.manifest.template. curl is built from source with the vbs gcc against the vbs glibc
+# (vbs-build/curl, a dynamic PIE, HTTP only) and packed with the glibc libraries it needs. The
+# arguments come from the command line (`gramine-vbs curl -s URL`).
+
+loader.entrypoint = "file:/libsysdb.so"
+libos.entrypoint = "/curl"
+loader.log_level = "{{ log_level }}"
+
+loader.insecure__use_cmdline_argv = true
+
+loader.env.LD_LIBRARY_PATH = "{{ arch_libdir }}"
+loader.env.HOME = "/"
+
+fs.root.uri = "file:/"
+# no run-time code generation in a VBS enclave
+sys.rewrite_syscalls = false
+
+vbs.debug = false
+vbs.enclave_size = "256M"
+# the main thread (the resolver is not threaded: see the Makefile)
+vbs.max_threads = 4
+
+vbs.packed_files = [
+  { path = "/curl", uri = "file:vbs-build/curl" },
+{% for lib in [vbs.ldso, "libc.so.6", "libm.so.6"] %}
+  { path = "{{ arch_libdir }}/{{ lib }}", uri = "file:{{ vbs.sysroot }}/usr/lib/{{ lib }}" },
+{% endfor %}
+]
