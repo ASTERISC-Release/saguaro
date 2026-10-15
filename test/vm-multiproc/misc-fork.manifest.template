@@ -1,0 +1,17 @@
+# misc-fork probe: the probe manifest plus a host /tmp (memfd and SysV shm segments are backed by
+# files in /dev/shm or else /tmp; a LibOS tmpfs would be private to each process, and an
+# untrusted_shm /dev/shm does not support read()/write() on the memfd).
+libos.entrypoint = "{{ entry }}"
+loader.log_level = "error"
+loader.env.LD_LIBRARY_PATH = "/lib:{{ arch_libdir }}:/usr{{ arch_libdir }}"
+loader.env.PATH = "/usr/bin:/bin"
+loader.insecure__use_cmdline_argv = true
+sys.experimental__multiprocess = true
+fs.mounts = [
+  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "{{ arch_libdir }}", uri = "file:{{ arch_libdir }}" },
+  { path = "/usr", uri = "file:/usr" },
+  { path = "/bin", uri = "file:/bin" },
+  { path = "/probe", uri = "file:{{ probedir }}" },
+  { path = "/tmp", uri = "file:{{ probedir }}/tmp" },
+]
