@@ -50,6 +50,7 @@ sgx = get_option('sgx') == 'enabled'
 vm = get_option('vm') == 'enabled'
 tdx = get_option('tdx') == 'enabled'
 skeleton = get_option('skeleton') == 'enabled'
+vbs = get_option('vbs') == 'enabled'
 
 dcap = get_option('dcap') == 'enabled'
 ubsan = get_option('ubsan') == 'enabled'

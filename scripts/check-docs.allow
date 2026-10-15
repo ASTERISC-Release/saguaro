@@ -65,8 +65,3 @@ runtime/glibc$
 ^libos/test/ltp/install$
 # the direct-PAL LTP manifests of an aarch64 run (scripts/build-ltp-manifests.sh, LTP_HARNESS_DIR)
 ^\.ltp-harness-direct/
-
-# vbs-enclave PLAN.md names the new PAL and its scripts before phase 1 creates them on this branch;
-# these two entries are removed once pal/src/host/vbs/ and scripts/vbs/ exist (phase 1).
-^pal/src/host/vbs/$
-^scripts/vbs/$

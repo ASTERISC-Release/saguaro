@@ -9,6 +9,9 @@ option('tdx', type: 'combo', choices: ['disabled', 'enabled'],
       description: 'Build Trusted Domain Extensions (aka TDX) PAL')
 option('skeleton', type: 'combo', choices: ['disabled', 'enabled'],
     description: 'Build skeleton PAL')
+option('vbs', type: 'combo', choices: ['disabled', 'enabled'],
+    description: 'Build Windows VBS-enclave PAL (AArch64; built with the Windows/clang toolchain, ' +
+                'not meson -- see pal/src/host/vbs and scripts/vbs; off by default)')
 
 # Tirith "graphics": LibOS code that forwards selected syscalls (/dev and /sys access, GPU
 # ioctls, mmap of host-device memory, ...) to a host agent through a shared communication page. It

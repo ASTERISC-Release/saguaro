@@ -1,0 +1,62 @@
+#!/bin/sh
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 Gramine contributors
+#
+# Phase 1 of the Windows VBS-enclave PAL: compile the enclave and host translation units on LINUX
+# with clang targeting aarch64-pc-windows-msvc, and assemble the AArch64 boundary thunk. This is
+# the Linux half of the build (PLAN.md D3); the Windows half (link /ENCLAVE, veiid, signtool, and
+# the host .exe) runs on the Windows machine -- see link-sign.cmd and build-host.cmd.
+#
+# The Windows SDK and MSVC headers are not redistributable; copy them from the Windows machine into
+# a scratch folder and point HDR at it (same mechanism as test/vbs-enclave/cross-build/xcompile.sh):
+#   HDR/sdk/{um,shared,ucrt}   from  <SDK>/Include/<ver>/{um,shared,ucrt}
+#   HDR/vc/include             from  <VC>/Tools/MSVC/<ver>/include
+#
+# Usage: HDR=<scratch> [OUT=<dir>] scripts/vbs/build-objs.sh
+set -e
+
+HERE=$(cd "$(dirname "$0")" && pwd)
+ROOT=$(cd "$HERE/../.." && pwd)
+VBS="$ROOT/pal/src/host/vbs"
+OUT=${OUT:-"$ROOT/build-vbs/obj"}
+: "${HDR:?set HDR to the folder holding the copied SDK (sdk/) and MSVC (vc/) headers}"
+mkdir -p "$OUT"
+
+INC="-I$VBS/common -I$VBS/enclave"
+CL="clang --driver-mode=cl --target=aarch64-pc-windows-msvc -fms-compatibility-version=19.50 \
+    /imsvc $HDR/vc/include /imsvc $HDR/sdk/ucrt /imsvc $HDR/sdk/um /imsvc $HDR/sdk/shared \
+    -Wno-everything $INC"
+
+# Case-insensitive header shims (the copied headers include each other with mixed case).
+for d in "$HDR/sdk" "$HDR/vc"; do
+    [ -d "$d" ] || continue
+    find "$d" -type f | while read -r f; do
+        l="$(dirname "$f")/$(basename "$f" | tr A-Z a-z)"
+        if [ "$f" != "$l" ] && [ ! -e "$l" ]; then ln -s "$(basename "$f")" "$l"; fi
+    done
+done
+resolve_missing() {
+    for _ in $(seq 1 60); do
+        miss=$($CL /c "$@" 2>&1 | grep -oE "'[^']+' file not found" | head -1 | cut -d"'" -f2) || true
+        [ -z "$miss" ] && return 0
+        f=$(find "$HDR/sdk" "$HDR/vc" -iname "$(basename "$miss")" -not -type l | head -1)
+        [ -z "$f" ] && { echo "header not found: $miss"; return 1; }
+        ln -sf "$(basename "$f")" "$(dirname "$f")/$(basename "$miss")"
+    done
+}
+
+echo "=== enclave: pal_vbs_enclave.c"
+resolve_missing /O1 /guard:cf /MT -DUNICODE /Fo:"$OUT/pal_vbs_enclave.obj" "$VBS/enclave/pal_vbs_enclave.c"
+$CL /c /O1 /guard:cf /MT -DUNICODE /Fo:"$OUT/pal_vbs_enclave.obj" "$VBS/enclave/pal_vbs_enclave.c"
+
+echo "=== enclave: pal_vbs_selftest.c"
+$CL /c /O1 /guard:cf /MT -DUNICODE /Fo:"$OUT/pal_vbs_selftest.obj" "$VBS/test/pal_vbs_selftest.c"
+
+echo "=== enclave: pal_vbs_boundary.S (clang integrated assembler)"
+clang --target=aarch64-pc-windows-msvc -c "$VBS/enclave/pal_vbs_boundary.S" -o "$OUT/pal_vbs_boundary.obj"
+
+echo "=== host: pal_vbs_host.c"
+$CL /c /O2 /MT -DUNICODE -I"$VBS/common" /Fo:"$OUT/pal_vbs_host.obj" "$VBS/host/pal_vbs_host.c"
+
+echo "objects in $OUT:"
+ls -l "$OUT"

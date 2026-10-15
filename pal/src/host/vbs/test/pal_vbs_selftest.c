@@ -1,0 +1,136 @@
+/* SPDX-License-Identifier: LGPL-3.0-or-later */
+/* Copyright (C) 2026 Gramine contributors */
+
+/*
+ * A PAL-level test program for the VBS-enclave PAL (phase 1). It runs INSIDE the enclave on top of
+ * the PAL's primitives (pal_vbs_env) and prints its result through the host console OCALL. It is
+ * deliberately independent of the Gramine LibOS: phase 1's exit criterion is that the PAL boundary
+ * works, not that the LibOS runs (that is phase 2).
+ *
+ * Each step returns true on success; the suite returns 0 on full success, else the 1-based index of
+ * the first failing step.
+ */
+
+#include <stdarg.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+
+#include "pal_vbs_enclave.h"
+
+static const pal_vbs_env_t* g_env;
+
+static void out(const char* fmt, ...) {
+    char buf[512];
+    va_list ap;
+    va_start(ap, fmt);
+    int n = vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+    if (n < 0)
+        return;
+    if (n > (int)sizeof(buf))
+        n = (int)sizeof(buf);
+    g_env->console_write(buf, (uint64_t)n);
+}
+
+/* A trivial "System V / AAPCS64" callee: it clobbers x18 (via an asm statement) to prove the
+ * boundary thunk restores it. It just sums its four arguments. */
+static uint64_t sysv_callee(uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3) {
+#if defined(__aarch64__)
+    __asm__ __volatile__("mov x18, #0xBAD" ::: "x18"); /* a Linux-style clobber of the TEB reg */
+#endif
+    return a0 + a1 + a2 + a3;
+}
+
+static int step_console(void) {
+    out("[selftest] step 1: console OCALL works (you are reading this through the host)\n");
+    return 1;
+}
+
+static int step_memory(void) {
+    const uint64_t sz = 1u << 20; /* 1 MiB */
+    volatile uint8_t* p = (volatile uint8_t*)g_env->mem_alloc(sz);
+    if (!p) {
+        out("[selftest] step 2: mem_alloc(1 MiB) FAILED\n");
+        return 0;
+    }
+    for (uint64_t i = 0; i < sz; i += 4096)
+        p[i] = (uint8_t)(i >> 12);
+    int ok = 1;
+    for (uint64_t i = 0; i < sz; i += 4096)
+        if (p[i] != (uint8_t)(i >> 12))
+            ok = 0;
+    g_env->mem_free((void*)p, sz);
+    out("[selftest] step 2: RW memory alloc/write/readback %s (1 MiB)\n", ok ? "ok" : "MISMATCH");
+    return ok;
+}
+
+static int step_time(void) {
+    uint64_t t0 = g_env->time_ns();
+    uint64_t t1 = g_env->time_ns();
+    /* t1 >= t0 and both plausibly after 2020-01-01 (1577836800 s) */
+    int ok = (t1 >= t0) && (t0 > 1577836800ull * 1000000000ull);
+    out("[selftest] step 3: host time OCALL t0=%llu ns (%s)\n",
+        (unsigned long long)t0, ok ? "ok" : "IMPLAUSIBLE");
+    return ok;
+}
+
+static int step_random(void) {
+    uint8_t a[32] = {0}, b[32] = {0};
+    if (g_env->random(a, sizeof(a)) != 0 || g_env->random(b, sizeof(b)) != 0) {
+        out("[selftest] step 4: BCryptGenRandom FAILED\n");
+        return 0;
+    }
+    int allzero = 1, equal = 1;
+    for (int i = 0; i < 32; i++) {
+        if (a[i])
+            allzero = 0;
+        if (a[i] != b[i])
+            equal = 0;
+    }
+    int ok = !allzero && !equal;
+    out("[selftest] step 4: random %s (first bytes %02x %02x)\n", ok ? "ok" : "SUSPECT", a[0], a[1]);
+    return ok;
+}
+
+static int step_abi_x18(void) {
+    uint64_t before = g_env->read_x18();
+    uint64_t sum = g_env->enter_sysv((void*)sysv_callee, 1, 2, 3, 4);
+    uint64_t after = g_env->read_x18();
+    int ok = (sum == 10) && (before == after) && (before != 0);
+    out("[selftest] step 5: enter_sysv sum=%llu x18 %s (0x%llx -> 0x%llx)\n",
+        (unsigned long long)sum, (before == after) ? "preserved" : "CLOBBERED",
+        (unsigned long long)before, (unsigned long long)after);
+    return ok;
+}
+
+static int step_seh(void) {
+    int64_t r = g_env->try_brk_resume();
+    int ok = (r == 0);
+    out("[selftest] step 6: SEH caught brk and resumed (r=%lld) %s\n",
+        (long long)r, ok ? "ok" : "FAILED");
+    return ok;
+}
+
+int64_t pal_vbs_selftest(const pal_vbs_env_t* env, uint64_t* run, uint64_t* passed) {
+    g_env = env;
+    int (*steps[])(void) = {
+        step_console, step_memory, step_time, step_random, step_abi_x18, step_seh,
+    };
+    uint64_t n = sizeof(steps) / sizeof(steps[0]);
+    *run = 0;
+    *passed = 0;
+    int64_t first_fail = 0;
+    out("[selftest] VBS PAL phase-1 self-test: %llu steps\n", (unsigned long long)n);
+    for (uint64_t i = 0; i < n; i++) {
+        (*run)++;
+        if (steps[i]()) {
+            (*passed)++;
+        } else if (!first_fail) {
+            first_fail = (int64_t)(i + 1);
+        }
+    }
+    out("[selftest] done: %llu/%llu passed, result=%lld\n",
+        (unsigned long long)*passed, (unsigned long long)*run, (long long)first_fail);
+    return first_fail;
+}
