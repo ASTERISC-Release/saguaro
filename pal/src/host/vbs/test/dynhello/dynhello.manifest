@@ -1,0 +1,9 @@
+# Phase-3d dynamically linked test of the VBS-enclave PAL (packed as the file "manifest").
+loader.entrypoint = "file:/libsysdb.so"
+libos.entrypoint = "/dynhello"
+loader.argv = ["/dynhello"]
+loader.log_level = "warning"
+fs.root.uri = "file:/"
+loader.env.LD_LIBRARY_PATH = "/usr/lib"
+sys.rewrite_syscalls = false
+

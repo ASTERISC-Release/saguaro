@@ -3,7 +3,8 @@
 # Copyright (C) 2026 Gramine contributors
 #
 # Compile and link a static PIE against the vbs glibc sysroot (scripts/vbs/build-glibc.sh), with
-# -ffixed-x18 and a 64 KiB max page size (strict W^X per page in the packed image).
+# -ffixed-x18 and a 64 KiB max page size (strict W^X per page in the packed image). Kernel UAPI
+# headers (linux/, asm/) come from the build system, after the sysroot's own headers.
 #
 # Usage: SYSROOT=build-vbs-glibc scripts/vbs/cc-static-pie.sh -o OUT SOURCES... [-lpthread ...]
 set -e
@@ -12,6 +13,7 @@ CC=${CC:-gcc}
 LIB="$SYSROOT/usr/lib"
 exec $CC -O2 -ffixed-x18 -fPIE -static-pie -nostdinc -nostartfiles -nodefaultlibs \
     -isystem "$($CC -print-file-name=include)" -isystem "$SYSROOT/usr/include" \
+    -idirafter /usr/include/$($CC -dumpmachine) -idirafter /usr/include \
     -Wl,-z,max-page-size=0x10000 \
     "$LIB/rcrt1.o" "$LIB/crti.o" "$($CC -print-file-name=crtbeginS.o)" \
     "$@" \

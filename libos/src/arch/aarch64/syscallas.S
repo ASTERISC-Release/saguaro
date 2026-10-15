@@ -280,9 +280,19 @@ _return_from_syscall:
     ldr  x30,      [x19, #(PAL_CONTEXT_REGS_OFF+240)] /* app's live link register */
 
     ldr  x17, [x19, #PAL_CONTEXT_PC_OFF] /* branch target (resume pc or signal handler...) */
+#ifdef PAL_HOST_VBS
+    /* VBS-enclave PAL: x18 is the TEB of the *current* thread and must never come from a saved
+     * context -- a clone child resumes a copy of its parent's registers, and the thread pointer
+     * of packed code lives in the TEB ([x18, #0x28], see scripts/vbs/pack.py). So x18 is left as
+     * it is, and the stack switch goes through x16, which is reloaded afterwards. */
+    ldr  x16, [x19, #PAL_CONTEXT_SP_OFF]
+    mov  sp, x16                          /* switch back to the app stack */
+    ldr  x16, [x19, #(PAL_CONTEXT_REGS_OFF+128)]
+#else
     ldr  x18, [x19, #PAL_CONTEXT_SP_OFF]
     mov  sp, x18                          /* switch back to the app stack */
     ldr  x18, [x19, #(PAL_CONTEXT_REGS_OFF+144)] /* app X18, reloaded via still-live X19 base */
+#endif
 
     /* Restore X19 itself last -- we've been using it as our context-pointer base this whole
      * time; a load's address register is read before being written, so this single instruction

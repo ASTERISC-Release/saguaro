@@ -40,6 +40,7 @@ libpal_vbs = shared_library('pal',
     'pal_events.c',
     'pal_exception.c',
     'pal_files.c',
+    'pal_hostio.c',
     'pal_main.c',
     'pal_memory.c',
     'pal_misc.c',
@@ -90,6 +91,7 @@ libpal_vbs = shared_library('pal',
 
     dependencies: [
         common_dep,
+        cryptoadapter_dep, # SHA-256 of trusted host files (mbedtls, with -ffixed-x18 for vbs)
     ],
 
     install: true,

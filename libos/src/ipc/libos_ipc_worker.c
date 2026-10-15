@@ -386,13 +386,6 @@ static int create_ipc_worker(void) {
         return ret;
     }
 
-#ifdef PAL_HOST_VBS
-    /* VBS-enclave PAL (-Dvbs=enabled builds only): one process per enclave and, until enclave
-     * threads exist (Documentation/devel/vbs-enclave/TODO.md), one thread; there is no IPC peer to
-     * serve, so no worker thread is started. */
-    return 0;
-#endif
-
     g_worker_thread = get_new_internal_thread();
     if (!g_worker_thread) {
         return -ENOMEM;
@@ -416,14 +409,6 @@ int init_ipc_worker(void) {
 }
 
 void terminate_ipc_worker(void) {
-#ifdef PAL_HOST_VBS
-    if (!g_worker_thread) {
-        /* no worker was started (create_ipc_worker) */
-        PalObjectDestroy(g_self_ipc_handle);
-        g_self_ipc_handle = NULL;
-        return;
-    }
-#endif
     set_pollable_event(&g_worker_thread->pollable_event);
 
     while (__atomic_load_n(&g_clear_on_worker_exit, __ATOMIC_ACQUIRE)) {

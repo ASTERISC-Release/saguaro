@@ -1,0 +1,17 @@
+#!/bin/sh
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 Gramine contributors
+#
+# A gcc for programs and libraries that are packed into a VBS enclave image: the vbs glibc sysroot
+# (scripts/vbs/build-glibc.sh), -ffixed-x18 (x18 is the enclave TEB), shared objects and programs
+# with a 4 KiB maximum page size (so the glibc ld.so maps them where they are packed) and the
+# sysroot's /usr/lib/ld-linux-aarch64.so.1 as interpreter. Usable as CC for configure scripts.
+# Kernel UAPI headers (linux/, asm/) and headers of optional libraries come from the build system.
+#
+# Usage: SYSROOT=<repo>/build-vbs-glibc scripts/vbs/vbs-gcc ...
+ROOT=$(cd "$(dirname "$0")/../.." && pwd)
+SYSROOT=${SYSROOT:-$ROOT/build-vbs-glibc}
+exec gcc --sysroot="$SYSROOT" -ffixed-x18 \
+    -idirafter /usr/include/aarch64-linux-gnu -idirafter /usr/include \
+    -Wl,-z,max-page-size=0x1000 -Wl,-z,common-page-size=0x1000 \
+    -Wl,--dynamic-linker=/usr/lib/ld-linux-aarch64.so.1 "$@"

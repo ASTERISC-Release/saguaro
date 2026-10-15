@@ -1,9 +1,8 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
 /* Copyright (C) 2026 Gramine contributors */
 
-/* Events of the vbs PAL proper. With one enclave thread a wait on an unsignaled event can only end
- * by its timeout; the time comes from the host clock. (Blocking with WaitOnAddress across enclave
- * threads comes with threads, phase 3.) */
+/* Events of the vbs PAL proper: a 32-bit word, waited on with WaitOnAddress (W's wait service) and
+ * woken with WakeByAddressAll, which work across enclave threads (phase 0, step e). */
 
 #include "api.h"
 #include "pal.h"
@@ -24,38 +23,42 @@ int _PalEventCreate(PAL_HANDLE* handle_ptr, bool init_signaled, bool auto_clear)
 }
 
 void _PalEventSet(PAL_HANDLE handle) {
-    spinlock_lock(&handle->event.lock);
-    handle->event.signaled = 1;
-    spinlock_unlock(&handle->event.lock);
+    __atomic_store_n(&handle->event.signaled, 1, __ATOMIC_RELEASE);
+    vbs_wake(&handle->event.signaled, /*all=*/true);
 }
 
 void _PalEventClear(PAL_HANDLE handle) {
-    spinlock_lock(&handle->event.lock);
-    handle->event.signaled = 0;
-    spinlock_unlock(&handle->event.lock);
+    __atomic_store_n(&handle->event.signaled, 0, __ATOMIC_RELEASE);
 }
 
 int _PalEventWait(PAL_HANDLE handle, uint64_t* timeout_us) {
-    uint64_t start = vbs_time_ns() / 1000;
+    uint64_t start = timeout_us ? vbs_time_ns() : 0;
     while (1) {
-        spinlock_lock(&handle->event.lock);
-        if (handle->event.signaled) {
-            if (handle->event.auto_clear)
-                handle->event.signaled = 0;
-            spinlock_unlock(&handle->event.lock);
-            return 0;
+        if (handle->event.auto_clear) {
+            uint32_t one = 1;
+            if (__atomic_compare_exchange_n(&handle->event.signaled, &one, 0, false,
+                                            __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
+                break;
+        } else if (__atomic_load_n(&handle->event.signaled, __ATOMIC_ACQUIRE)) {
+            break;
         }
-        spinlock_unlock(&handle->event.lock);
-        if (!timeout_us) {
-            log_error("vbs: waiting forever on an event with one enclave thread");
-            return -PAL_ERROR_DENIED;
+        uint64_t left_ns = UINT64_MAX;
+        if (timeout_us) {
+            uint64_t spent = vbs_time_ns() - start;
+            uint64_t total = *timeout_us * 1000;
+            if (spent >= total) {
+                *timeout_us = 0;
+                return -PAL_ERROR_TRYAGAIN;
+            }
+            left_ns = total - spent;
         }
-        uint64_t now = vbs_time_ns() / 1000;
-        if (now - start >= *timeout_us) {
-            *timeout_us = 0;
-            return -PAL_ERROR_TRYAGAIN;
-        }
+        vbs_wait(&handle->event.signaled, 0, left_ns);
     }
+    if (timeout_us) {
+        uint64_t spent_us = (vbs_time_ns() - start) / 1000;
+        *timeout_us = spent_us >= *timeout_us ? 0 : *timeout_us - spent_us;
+    }
+    return 0;
 }
 
 static void event_destroy(PAL_HANDLE handle) {
