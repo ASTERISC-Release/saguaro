@@ -35,6 +35,8 @@ sys.enable_sigterm_injection = true
 fs.mounts = [
   { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
   { path = "/lib/x86_64-linux-gnu", uri = "file:/lib/x86_64-linux-gnu" },
+  # wine64-preloader (the services) loads ld.so by its absolute path
+  { path = "/lib64", uri = "file:/lib64" },
   { path = "/usr", uri = "file:/usr" },
   { path = "/bin", uri = "file:/bin" },
   { path = "/etc", uri = "file:/etc" },

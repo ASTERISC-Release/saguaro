@@ -1835,6 +1835,13 @@ class TC_80_Socket(RegressionTestCase):
         self.assertIn('read on FIFO: Hello from write end of FIFO!', stdout)
         self.assertIn('[parent] TEST OK', stdout)
 
+    def test_101_socket_unix_fdpass(self):
+        # SCM_RIGHTS between two Gramine processes over a socketpair and a named socket
+        stdout, _ = self.run_binary(['unix_fdpass'], timeout=60)
+        self.assertIn('socketpair OK', stdout)
+        self.assertIn('named socket OK', stdout)
+        self.assertIn('TEST OK', stdout)
+
     def test_100_socket_unix(self):
         stdout, _ = self.run_binary(['unix'])
         self.assertIn('TEST OK', stdout)

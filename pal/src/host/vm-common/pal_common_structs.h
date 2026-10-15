@@ -60,6 +60,18 @@ struct pal_handle_inner_dir {
 #define PIPE_BUF_SIZE PAGE_SIZE   /* also in pal_common.h */
 #endif
 
+/* Handles attached to the data at a position of a ring (PalStreamWriteWithHandles): the reader
+ * that reaches `pos` gets them, as SCM_RIGHTS fds come with their bytes. `cargo` and `meta` are
+ * PAL memory, which every process maps. */
+#define PIPE_RING_HANDLE_SLOTS 8
+struct pal_pipe_ring_handles {
+    uint64_t pos;
+    struct pal_handle** cargo;
+    size_t count;
+    void* meta;
+    size_t meta_size;
+};
+
 /* One direction of a connection: a ring written by one end and read by the other. */
 struct pal_pipe_ring {
     bool       open_write;   /* the writing end is open; else readers get end-of-stream after draining */
@@ -68,6 +80,9 @@ struct pal_pipe_ring {
     uint64_t   read_pos;     /* must be always used as buf[read_pos % PIPE_BUF_SIZE] */
     int        writer_futex; /* waited on by a writer of a full ring */
     int        reader_futex; /* waited on by a reader of an empty ring */
+    uint32_t   hq_head;      /* handle queue, in position order; hq_tail - hq_head entries */
+    uint32_t   hq_tail;
+    struct pal_pipe_ring_handles hq[PIPE_RING_HANDLE_SLOTS];
     char       buf[PIPE_BUF_SIZE];
 };
 

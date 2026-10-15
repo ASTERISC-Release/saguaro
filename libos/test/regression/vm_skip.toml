@@ -48,6 +48,7 @@ tests = [
   "TC_80_Socket::test_092_pipe_ocloexec",
   "TC_80_Socket::test_095_mkfifo",
   "TC_80_Socket::test_100_socket_unix",
+  "TC_80_Socket::test_101_socket_unix_fdpass",
   "TC_80_Socket::test_200_socket_udp",
   "TC_80_Socket::test_300_socket_tcp_msg_peek",
   "TC_80_Socket::test_301_socket_tcp_ancillary",

@@ -193,6 +193,7 @@ tests = {
     'udp': {},
     'uid_gid': {},
     'unix': {},
+    'unix_fdpass': {},
     'vfork_and_exec': {},
     'xattr_misc': {},
 }
