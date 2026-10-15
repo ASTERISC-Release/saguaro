@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
-/* Copyright (C) 2026 Gramine contributors */
+/* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /*
  * Threads inside a VBS enclave (phase 3a): pthread_create/join, a mutex-protected counter and a

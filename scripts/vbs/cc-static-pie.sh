@@ -1,6 +1,6 @@
 #!/bin/sh
 # SPDX-License-Identifier: LGPL-3.0-or-later
-# Copyright (C) 2026 Gramine contributors
+# Copyright (C) 2026 The ASTERISC Research Lab
 #
 # Compile and link a static PIE against the vbs glibc sysroot (scripts/vbs/build-glibc.sh), with
 # -ffixed-x18 and a 64 KiB max page size (strict W^X per page in the packed image). Kernel UAPI

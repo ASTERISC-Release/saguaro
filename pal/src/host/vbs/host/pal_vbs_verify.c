@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
-/* Copyright (C) 2026 Gramine contributors */
+/* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /*
  * The host's `verify` mode: checks a VBS attestation report package (what /dev/attestation/report

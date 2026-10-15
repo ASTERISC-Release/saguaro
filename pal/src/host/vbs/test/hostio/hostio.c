@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
-/* Copyright (C) 2026 Gramine contributors */
+/* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /*
  * Host files and sockets of the VBS-enclave PAL (phase 3e). Host layout below the host root

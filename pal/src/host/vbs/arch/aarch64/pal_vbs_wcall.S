@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
-/* Copyright (C) 2026 Gramine contributors */
+/* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /*
  * uint64_t pal_vbs_wcall(void* fn, uint64_t a0, uint64_t a1, uint64_t a2);

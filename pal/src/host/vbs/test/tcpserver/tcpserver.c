@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
-/* Copyright (C) 2026 Gramine contributors */
+/* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /* A small TCP server inside a VBS enclave (phase 3e): listens on 127.0.0.1:18080 through the
  * host's sockets, answers three clients ("echo from the enclave: <request>"), then exits 0. */

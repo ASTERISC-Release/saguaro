@@ -1,6 +1,6 @@
 #!/bin/sh
 # SPDX-License-Identifier: LGPL-3.0-or-later
-# Copyright (C) 2026 Gramine contributors
+# Copyright (C) 2026 The ASTERISC Research Lab
 #
 # The WSL half of the Windows-only build (Documentation/devel/vbs-enclave/PLAN-windows-build.md):
 # started from Windows by gramine-vbs.ps1 or build-enclave.ps1 with its inputs in environment

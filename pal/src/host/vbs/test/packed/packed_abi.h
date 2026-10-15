@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
-/* Copyright (C) 2026 Gramine contributors */
+/* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /* The tiny PAL table handed to a packed Linux object by the VBS-enclave PAL (phase 2, step a').
  * Shared by the Linux-side test object (built with the GNU toolchain) and the enclave side

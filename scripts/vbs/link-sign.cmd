@@ -1,6 +1,6 @@
 @echo off
 rem SPDX-License-Identifier: LGPL-3.0-or-later
-rem Copyright (C) 2026 Gramine contributors
+rem Copyright (C) 2026 The ASTERISC Research Lab
 rem
 rem Phase 1 Windows half of the VBS-enclave PAL build: link the clang-compiled enclave objects into
 rem a signed enclave DLL, then build the host executable. Run from a folder that holds the three

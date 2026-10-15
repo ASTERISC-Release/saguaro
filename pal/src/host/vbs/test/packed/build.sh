@@ -1,6 +1,6 @@
 #!/bin/sh
 # SPDX-License-Identifier: LGPL-3.0-or-later
-# Copyright (C) 2026 Gramine contributors
+# Copyright (C) 2026 The ASTERISC Research Lab
 #
 # Build the packed test shared object with the GNU AArch64 Linux toolchain (native aarch64 gcc, for
 # example in WSL Ubuntu on the ARM64 Windows machine, as phase 0 step h did; or any aarch64-linux-gnu

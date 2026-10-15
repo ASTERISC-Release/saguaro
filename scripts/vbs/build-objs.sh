@@ -1,6 +1,6 @@
 #!/bin/sh
 # SPDX-License-Identifier: LGPL-3.0-or-later
-# Copyright (C) 2026 Gramine contributors
+# Copyright (C) 2026 The ASTERISC Research Lab
 #
 # Phase 1 of the Windows VBS-enclave PAL: compile the enclave and host translation units on LINUX
 # with clang targeting aarch64-pc-windows-msvc, and assemble the AArch64 boundary thunk. This is

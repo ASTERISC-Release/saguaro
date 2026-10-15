@@ -1,4 +1,4 @@
-# Copyright (C) 2026 Gramine contributors
+# Copyright (C) 2026 The ASTERISC Research Lab
 # SPDX-License-Identifier: BSD-3-Clause
 
 # Redis manifest for a Windows VBS enclave (`make VBS=1`, Documentation/vbs.rst): the counterpart of

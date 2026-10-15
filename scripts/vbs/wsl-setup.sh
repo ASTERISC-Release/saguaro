@@ -1,6 +1,6 @@
 #!/bin/sh
 # SPDX-License-Identifier: LGPL-3.0-or-later
-# Copyright (C) 2026 Gramine contributors
+# Copyright (C) 2026 The ASTERISC Research Lab
 #
 # The Linux side of the Windows-only VBS build (Documentation/devel/vbs-enclave/PLAN-windows-build.md)
 # runs in a WSL2 Ubuntu 24.04 aarch64 distribution. This script checks that distribution for the

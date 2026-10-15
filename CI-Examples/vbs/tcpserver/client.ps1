@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
-# Copyright (C) 2026 Gramine contributors
+# Copyright (C) 2026 The ASTERISC Research Lab
 #
 # A client for the TCP server example: connects to 127.0.0.1:18080, sends a line, prints the answer.
 #   .\client.ps1 [-Message text] [-Port 18080] [-Count 1]

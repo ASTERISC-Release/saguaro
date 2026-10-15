@@ -1,6 +1,6 @@
 #!/bin/sh
 # SPDX-License-Identifier: LGPL-3.0-or-later
-# Copyright (C) 2026 Gramine contributors
+# Copyright (C) 2026 The ASTERISC Research Lab
 #
 # Build the runner and the LibOS regression programs that report "TEST OK" with scripts/vbs/vbs-gcc
 # (dynamically linked against the vbs glibc). Programs that do not build this way are listed and

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
-# Copyright (C) 2026 Gramine contributors
+# Copyright (C) 2026 The ASTERISC Research Lab
 #
 # gramine-vbs.ps1: gramine-vbs on one ARM64 Windows machine (Documentation/vbs.rst). The Linux
 # side of the build (the vbs glibc, the vbs PAL and LibOS, the application's vbs.build recipe,

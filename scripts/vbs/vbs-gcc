@@ -1,6 +1,6 @@
 #!/bin/sh
 # SPDX-License-Identifier: LGPL-3.0-or-later
-# Copyright (C) 2026 Gramine contributors
+# Copyright (C) 2026 The ASTERISC Research Lab
 #
 # A gcc for programs and libraries that are packed into a VBS enclave image: the vbs glibc sysroot
 # (scripts/vbs/build-glibc.sh), -ffixed-x18 (x18 is the enclave TEB), shared objects and programs

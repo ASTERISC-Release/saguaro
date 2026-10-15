@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
-# Copyright (C) 2026 Gramine contributors
+# Copyright (C) 2026 The ASTERISC Research Lab
 #
 # `make VBS=1` for the application examples: the VBS counterpart of `make SGX=1`
 # (Documentation/vbs.rst, "Makefile flow: make VBS=1"). An example's Makefile includes this file

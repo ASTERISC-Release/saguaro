@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
-/* Copyright (C) 2026 Gramine contributors */
+/* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /* Enclave-internal interface of the VBS-enclave PAL (phase 1 skeleton). The PAL exposes a small
  * environment of primitives to a PAL-level test program (test/pal_vbs_selftest.c); keeping the test

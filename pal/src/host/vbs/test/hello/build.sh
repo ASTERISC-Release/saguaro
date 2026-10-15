@@ -1,6 +1,6 @@
 #!/bin/sh
 # SPDX-License-Identifier: LGPL-3.0-or-later
-# Copyright (C) 2026 Gramine contributors
+# Copyright (C) 2026 The ASTERISC Research Lab
 #
 # Build the hello-world application as a static PIE against the vbs glibc (built with -ffixed-x18
 # by scripts/vbs/build-glibc.sh; no syscall patch, the packer rewrites its `svc`).

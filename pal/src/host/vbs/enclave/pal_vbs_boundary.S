@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
-/* Copyright (C) 2026 Gramine contributors */
+/* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /*
  * AArch64 boundary thunks for the VBS-enclave PAL (phase 1 skeleton). GAS syntax; assembled on

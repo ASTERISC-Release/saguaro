@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
-# Copyright (C) 2026 Gramine contributors
+# Copyright (C) 2026 The ASTERISC Research Lab
 #
 # CPython inside a VBS enclave (phase 3e): the interpreter, its extension modules and its standard
 # library are packed into the signed enclave image; this script is a packed file too.

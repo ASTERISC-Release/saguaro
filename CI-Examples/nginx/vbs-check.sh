@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright (C) 2026 Gramine contributors
+# Copyright (C) 2026 The ASTERISC Research Lab
 # SPDX-License-Identifier: BSD-3-Clause
 #
 # `make VBS=1 check`: NGINX in a Windows VBS enclave, checked from the Windows side (the enclave's

@@ -1,6 +1,6 @@
 #!/bin/sh
 # SPDX-License-Identifier: LGPL-3.0-or-later
-# Copyright (C) 2026 Gramine contributors
+# Copyright (C) 2026 The ASTERISC Research Lab
 #
 # Build the glibc that applications packed into a VBS enclave link against: glibc 2.39 (the
 # version of the bundled glibc subproject, same tarball) compiled with -ffixed-x18, installed into

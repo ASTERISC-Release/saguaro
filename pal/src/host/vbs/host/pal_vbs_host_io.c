@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
-/* Copyright (C) 2026 Gramine contributors */
+/* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /*
  * Host requests of the VBS-enclave PAL (PAL_VBS_OCALL_HOST, struct pal_vbs_hostreq in

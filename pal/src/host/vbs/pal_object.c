@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
-/* Copyright (C) 2026 Gramine contributors */
+/* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /* Waiting on streams in the vbs PAL proper: pipes (in-memory), the console, files, and host
  * sockets. Pipes wake a waiter through the stream-change counter g_vbs_stream_gen; host sockets

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
-/* Copyright (C) 2026 Gramine contributors */
+/* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /* Processes of the vbs PAL proper: one process per enclave; exit ends the boot (W's exit service
  * returns from E_PalMain to the host with the exit code). */

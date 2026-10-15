@@ -1,6 +1,6 @@
 #!/bin/sh
 # SPDX-License-Identifier: LGPL-3.0-or-later
-# Copyright (C) 2026 Gramine contributors
+# Copyright (C) 2026 The ASTERISC Research Lab
 #
 # Build CPython for a VBS enclave image (phase 3e): with scripts/vbs/vbs-gcc against the vbs glibc
 # sysroot, installed into DESTDIR (default <repo>/build-vbs-python). Optional modules whose

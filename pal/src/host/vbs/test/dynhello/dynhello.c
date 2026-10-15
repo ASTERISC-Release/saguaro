@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
-/* Copyright (C) 2026 Gramine contributors */
+/* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /* Phase 3d of the VBS-enclave PAL: a dynamically linked program. The LibOS loads it and its
  * interpreter (ld.so) at their packed addresses; ld.so maps libc.so.6 itself (mmap of the file),

@@ -1,6 +1,6 @@
 #!/bin/sh
 # SPDX-License-Identifier: LGPL-3.0-or-later
-# Copyright (C) 2026 Gramine contributors
+# Copyright (C) 2026 The ASTERISC Research Lab
 #
 # The runtime of a VBS enclave image, on an aarch64 Linux machine (WSL, the build container): the
 # vbs glibc (scripts/vbs/build-glibc.sh, into build-vbs-glibc) and the meson build of the vbs PAL

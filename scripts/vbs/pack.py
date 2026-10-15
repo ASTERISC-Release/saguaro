@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: LGPL-3.0-or-later
-# Copyright (C) 2026 Gramine contributors
+# Copyright (C) 2026 The ASTERISC Research Lab
 """
 Build-time packer for the Windows VBS-enclave PAL (phase 2, refinement (a') of PLAN.md D2).
 
