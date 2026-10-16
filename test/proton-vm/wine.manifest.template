@@ -43,6 +43,11 @@ loader.env.DISPLAY = ""
 # Mesa's driver in the guest with its DRM ioctls forwarded, the presentation layer
 # VK_LAYER_GRAMINE_present from libgraphics.so (found through XDG_DATA_HOME), Mesa's device
 # discovery through /sys
+{% if gpu_preload|string == "1" %}
+# the session started by the first process (libgraphics.so preloaded everywhere, as the Vulkan
+# tests do); without it the implicit layer starts it in the first process that creates an instance
+loader.env.LD_PRELOAD = "/libgraphics.so"
+{% endif %}
 loader.env.EGL_VULKAN_PRESENT = "1"
 loader.env.NODEVICE_SELECT = "1"
 loader.env.XDG_DATA_HOME = "/gramine-xdg"
