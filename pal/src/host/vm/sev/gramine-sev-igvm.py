@@ -12,7 +12,8 @@ Subcommands:
            pages for the early page tables. The same file also carries a NATIVE platform (no
            encryption, the SEV pages) for debugging the boot path.
   measure  print the launch digest a platform computes over the file (plain SEV: SHA-256 over the
-           LAUNCH_UPDATE_DATA stream, the GCTX.LD of the SEV API)
+           LAUNCH_UPDATE_DATA stream, the GCTX.LD of the SEV API; SNP: the SHA-384 chain of
+           PAGE_INFO structures, the MEASUREMENT of the attestation report)
   verify-sev
            check a plain-SEV LAUNCH_MEASURE value (QMP query-sev-launch-measure) against the
            digest of the file, with the TIK of the launch session (sevctl session)
@@ -232,6 +233,106 @@ def sev_launch_digest(pages):
     return h.digest()
 
 
+# SNP page types of the launch digest (SEV-SNP firmware ABI, PAGE_INFO)
+SNP_PAGE_NORMAL, SNP_PAGE_VMSA, SNP_PAGE_ZERO, SNP_PAGE_UNMEASURED = 1, 2, 3, 4
+SNP_PAGE_SECRETS, SNP_PAGE_CPUID = 5, 6
+
+
+def snp_extend(ld, page_type, gpa, contents=None):
+    """LD' = SHA-384(PAGE_INFO): the previous digest, the page's SHA-384 (NORMAL, VMSA; zero for
+    the other types), length 0x70, type, IMI 0, VMPL permissions 0, the GPA"""
+    digest = hashlib.sha384(contents).digest() if contents is not None else bytes(48)
+    info = ld + digest + struct.pack('<HBBBBBBQ', 0x70, page_type, 0, 0, 0, 0, 0, gpa)
+    return hashlib.sha384(info).digest()
+
+
+def kvm_vmsa(vmsa):
+    """The VMSA as KVM measures it at SNP_LAUNCH_FINISH: QEMU loads the IGVM VMSA into the vCPU
+    and KVM writes it back from the vCPU state (sev_es_sync_vmsa()), which adds CR4.MCE (and
+    EFER.SVME, which the file has already); checked against attestation reports on the
+    development host (Documentation/devel/sev/FINDINGS.md)"""
+    v = bytearray(vmsa)
+    efer, = struct.unpack_from('<Q', v, 0xd0)
+    struct.pack_into('<Q', v, 0xd0, efer | 0x1000)
+    cr4, = struct.unpack_from('<Q', v, 0x148)
+    struct.pack_into('<Q', v, 0x148, cr4 | 0x40)
+    return bytes(v)
+
+
+def reset_ap_vmsa(vcpu_sig, sev_features):
+    """An AP that the IGVM file gives no VP context: the x86 reset state (as sev-snp-measure)"""
+    v = bytearray(PAGE)
+
+    def seg(off, selector, attrib, limit, base):
+        struct.pack_into('<HHIQ', v, off, selector, attrib, limit, base)
+
+    for off in (0x00, 0x20, 0x30, 0x40, 0x50):
+        seg(off, 0, 0x93, 0xffff, 0)
+    seg(0x10, 0xf000, 0x9b, 0xffff, 0xffff0000)
+    seg(0x60, 0, 0, 0xffff, 0)        # gdtr
+    seg(0x80, 0, 0, 0xffff, 0)        # idtr
+    seg(0x70, 0, 0x82, 0xffff, 0)
+    seg(0x90, 0, 0x8b, 0xffff, 0)
+    struct.pack_into('<Q', v, 0xd0, 0x1000)
+    struct.pack_into('<Q', v, 0x148, 0x40)
+    struct.pack_into('<Q', v, 0x158, 0x10)
+    struct.pack_into('<Q', v, 0x160, 0x400)
+    struct.pack_into('<Q', v, 0x168, 0xffff0ff0)
+    struct.pack_into('<Q', v, 0x170, 0x2)
+    struct.pack_into('<Q', v, 0x178, 0xfff0)
+    struct.pack_into('<Q', v, 0x268, 0x0007040600070406)
+    struct.pack_into('<Q', v, 0x310, vcpu_sig)
+    struct.pack_into('<Q', v, 0x3b0, sev_features)
+    struct.pack_into('<Q', v, 0x3e8, 0x1)
+    struct.pack_into('<I', v, 0x408, 0x1f80)
+    struct.pack_into('<H', v, 0x410, 0x37f)
+    return bytes(v)
+
+
+def snp_launch_digest(pages, vcpus, vcpu_sig):
+    """The SNP launch digest (MEASUREMENT of the attestation report) of the file on `vcpus` vCPUs:
+    the pages in file order, then one VMSA per vCPU"""
+    ld = bytes(48)
+    bsp_vmsa = None
+    for gpa, data, mask, dtype in pages:
+        if not mask & MASK_SNP:
+            continue
+        if dtype == 'vmsa':
+            bsp_vmsa = data
+            continue
+        if dtype == PAGE_DATA_SECRETS:
+            ld = snp_extend(ld, SNP_PAGE_SECRETS, gpa)
+        elif dtype == PAGE_DATA_CPUID:
+            ld = snp_extend(ld, SNP_PAGE_CPUID, gpa)
+        elif data is None:
+            # QEMU passes IGVM zero pages to SNP_LAUNCH_UPDATE as NORMAL pages of zeros
+            # (cgs_set_guest_state() in target/i386/sev.c), not as ZERO pages
+            ld = snp_extend(ld, SNP_PAGE_NORMAL, gpa, bytes(PAGE))
+        else:
+            ld = snp_extend(ld, SNP_PAGE_NORMAL, gpa, data)
+    if bsp_vmsa is None:
+        raise SystemExit('no SNP VMSA in the file')
+    sev_features, = struct.unpack_from('<Q', bsp_vmsa, 0x3b0)
+    for i in range(vcpus):
+        vmsa = kvm_vmsa(bsp_vmsa) if i == 0 else reset_ap_vmsa(vcpu_sig, sev_features)
+        ld = snp_extend(ld, SNP_PAGE_VMSA, VMSA_GPA, vmsa)
+    return ld
+
+
+def host_vcpu_sig():
+    """CPUID 1 EAX of this host (the vCPU signature with -cpu host)"""
+    with open('/proc/cpuinfo') as f:
+        info = dict(line.split(':', 1) for line in f.read().split('\n\n')[0].splitlines()
+                    if ':' in line)
+    family = int(info['cpu family\t'])
+    model = int(info['model\t\t'])
+    stepping = int(info['stepping\t'])
+    base_family = min(family, 0xf)
+    ext_family = family - base_family
+    return ((ext_family << 20) | ((model >> 4) << 16) | (base_family << 8) | ((model & 0xf) << 4)
+            | stepping)
+
+
 def sev_launch_measure(tik, api_major, api_minor, build, policy, digest, mnonce):
     """LAUNCH_MEASURE of the SEV API: HMAC-SHA256 under the TIK."""
     msg = bytes([0x04, api_major, api_minor, build]) + struct.pack('<I', policy) + digest + mnonce
@@ -269,7 +370,10 @@ def main():
     p.add_argument('--output', required=True)
     p = sub.add_parser('measure')
     p.add_argument('igvm')
-    p.add_argument('--mode', choices=['sev'], default='sev')
+    p.add_argument('--mode', choices=['sev', 'snp'], default='sev')
+    p.add_argument('--vcpus', type=int, default=1, help='snp: number of vCPUs')
+    p.add_argument('--vcpu-sig', type=lambda x: int(x, 0),
+                   help='snp: CPUID 1 EAX of the vCPUs (default: this host\'s)')
     p = sub.add_parser('verify-sev')
     p.add_argument('igvm')
     p.add_argument('--tik', required=True, help='TIK file of the launch session (16 bytes)')
@@ -286,7 +390,11 @@ def main():
         pages, vmsa = build_pages(args.pal, args.bios)
         write_igvm(pages, vmsa, args.output)
     elif args.cmd == 'measure':
-        print(sev_launch_digest(read_igvm(args.igvm)).hex())
+        if args.mode == 'sev':
+            print(sev_launch_digest(read_igvm(args.igvm)).hex())
+        else:
+            sig = args.vcpu_sig if args.vcpu_sig is not None else host_vcpu_sig()
+            print(snp_launch_digest(read_igvm(args.igvm), args.vcpus, sig).hex())
     elif args.cmd == 'verify-sev':
         blob = base64.b64decode(args.measurement)
         if len(blob) != 48:

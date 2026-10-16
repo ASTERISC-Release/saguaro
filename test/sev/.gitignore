@@ -1,2 +1,4 @@
 sev_probe
 sev_probe.manifest
+sev_attest
+sev_attest.manifest

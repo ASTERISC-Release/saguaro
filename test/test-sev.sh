@@ -15,6 +15,10 @@
 #            the same run under gramine-vm (COMPARE=1, the default) must see all three
 #   vsock    test/test-vm-loopback.sh under gramine-sev (host-initiated vsock connections into the
 #            guest, through the shared region)
+#   attest   SNP: test/sev/sev_attest gets an attestation report through /dev/attestation with
+#            random report data; the host checks the report data, verifies the report against
+#            AMD's VCEK chain (snpguest, certificates from AMD's KDS; SNP_CERTS caches them) and
+#            compares its measurement with the digest gramine-sev-igvm.py computes (when known)
 #   measure  plain SEV: a launch session from `sevctl session`, then the LAUNCH_MEASURE value that
 #            QEMU reports (QMP query-sev-launch-measure) checked against the launch digest that
 #            gramine-sev-igvm.py computes from the IGVM file, with the session's TIK
@@ -32,12 +36,16 @@ SUITES=()
 while [ $# -gt 0 ]; do
     case $1 in
         --prefix) PREFIX=$2; shift 2 ;;
-        hello|memory|vsock|measure) SUITES+=("$1"); shift ;;
-        -h|--help) sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        hello|memory|vsock|measure|attest) SUITES+=("$1"); shift ;;
+        -h|--help) sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
 done
-[ ${#SUITES[@]} -gt 0 ] || SUITES=(hello memory vsock measure)
+[ ${#SUITES[@]} -gt 0 ] || if [ "${GRAMINE_SEV_MODE:-sev}" = snp ]; then
+    [ ${#SUITES[@]} -gt 0 ] || SUITES=(hello memory vsock attest)
+else
+    [ ${#SUITES[@]} -gt 0 ] || SUITES=(hello memory vsock measure)
+fi
 
 export PATH=$PREFIX/bin:$PATH
 export PYTHONPATH=$(ls -d "$PREFIX"/lib/python3*/site-packages 2>/dev/null | head -1)
@@ -186,6 +194,44 @@ test_measure() {
     "$sevctl" measurement build --api-major "$major" --api-minor "$minor" --build-id "$build" \
         --policy "$policy" --tik "$OUT/gsev_tik.bin" --launch-measure-blob "$meas" \
         --launch-digest "$digest" 2>&1 | sed 's/^/measure: sevctl measurement build: /'
+}
+
+test_attest() {
+    local snpguest=${SNPGUEST:-/root/sev-tools/prefix/bin/snpguest}
+    make -C "$HERE/sev" -s >/dev/null || { fail "building sev_attest"; return; }
+    local data report=$OUT/attest-report.bin log=$OUT/attest.out
+    data=$(head -c 64 /dev/urandom | od -An -tx1 | tr -d ' \n')
+    rm -f "$report"
+    (cd "$HERE/sev" && GRAMINE_CPU_NUM=1 timeout 300 gramine-sev sev_attest "$data" "$report" \
+        >"$log" 2>&1) || { fail "attest: the guest failed: $(tail -n 5 "$log")"; return; }
+    grep -q "attestation_type=sev-snp" "$log" || fail "attest: attestation_type is not sev-snp"
+    [ -s "$report" ] || { fail "attest: no report"; return; }
+    echo "attest: $(grep -a 'quote size' "$log")"
+    local got
+    got=$(python3 -c 'import sys; print(open(sys.argv[1], "rb").read()[0x50:0x90].hex())' "$report")
+    [ "$got" = "$data" ] && echo "attest: report data = the guest's user_report_data" \
+        || fail "attest: report data $got, expected $data"
+    local certs=${SNP_CERTS:-$OUT/certs}
+    mkdir -p "$certs"
+    if [ ! -s "$certs/ark.pem" ]; then
+        "$snpguest" fetch ca pem "$certs" milan -e vcek >/dev/null || { fail "attest: fetch ca"; return; }
+    fi
+    "$snpguest" fetch vcek pem "$certs" "$report" >/dev/null || { fail "attest: fetch vcek"; return; }
+    "$snpguest" verify certs "$certs" | sed 's/^/attest: /'
+    "$snpguest" verify attestation "$certs" "$report" 2>&1 | sed 's/^/attest: /'
+    "$snpguest" verify attestation "$certs" "$report" 2>&1 | grep -q "VEK signed the Attestation Report" \
+        || fail "attest: the report does not verify"
+    local meas
+    meas=$(python3 -c 'import sys; print(open(sys.argv[1], "rb").read()[0x90:0xc0].hex())' "$report")
+    echo "attest: measurement $meas"
+    local igvm_tool igvm expected
+    igvm_tool=$(ls "$(dirname "$(readlink -f "$(command -v gramine-sev)")")"/../lib/*/gramine/sev/gramine-sev-igvm.py | head -1)
+    igvm=${igvm_tool%/*}/gramine-sev.igvm
+    expected=$(python3 "$igvm_tool" measure --mode snp --vcpus 1 "$igvm" 2>/dev/null)
+    if [ -n "$expected" ]; then
+        [ "$expected" = "$meas" ] && echo "attest: measurement = gramine-sev-igvm.py measure --mode snp" \
+            || fail "attest: measurement differs from the computed $expected"
+    fi
 }
 
 echo "test-sev: $(uptime)"

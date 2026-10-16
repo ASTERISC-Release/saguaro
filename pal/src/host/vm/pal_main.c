@@ -843,6 +843,10 @@ noreturn int pal_start_continue(void* cmdline_) {
     g_pal_public_state.first_thread = g_first_thread_handle;
 
     g_pal_public_state.attestation_type = "none";
+#ifdef PAL_HOST_SEV
+    if (sev_snp_active())
+        g_pal_public_state.attestation_type = "sev-snp";
+#endif
 
     extern void sysret_asm(void);
     g_pal_public_state.vm_user_return_stub = (void*)&sysret_asm;

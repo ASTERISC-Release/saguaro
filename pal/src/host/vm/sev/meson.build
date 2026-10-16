@@ -20,6 +20,7 @@ pal_sev_bios = executable('bios',
 
 pal_sev_sources = files(
     'sev.c',
+    'sev_attest.c',
     'sev_callbacks.c',
     'sev_vc_entry.S',
 )
