@@ -315,6 +315,10 @@ el0_sync_entry:
     mov     x0, sp
     bl      el0_sync_unexpected_c         /* 0 = frame rewritten, resume from it */
     cbnz    x0, hang
+    /* the app's V0-V31 and FPCR/FPSR from the area saved above: the LibOS upcall (not built
+     * general-regs-only, unlike the PAL) may have used them before resuming in place */
+    ldr     x0, [sp, #ISR_FPREGS]
+    bl      do_xrstor
 
     /* Resume EL0 from the (possibly rewritten) frame: eret consumes ELR/SPSR from
      * the sysregs and SP_EL0 for the EL0t target, so all three are reinstalled
