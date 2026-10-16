@@ -2,17 +2,22 @@
 Gramine Library OS with Multi-Architectural Support
 *****************************************************
 
-*A Linux-compatible library OS for multi-process applications, on Intel x86_64, AMD64 and AArch64,
-with an experimental RISC-V (RV64) port, experimental graphics for the direct PAL and experimental
-support for Windows VBS enclaves on ARM64.*
+*A Linux-compatible library OS (LibOS) for multi-process applications, on Intel x86_64, AMD64,
+AArch64 and RISC-V.*
 
-Gramine is a lightweight library OS: it runs an unmodified Linux application
-in an isolated environment, with its own implementation of the Linux system
-call interface (the *LibOS*) on top of a small host abstraction layer (the
-*PAL*). This tree extends `gramine-tdx
-<https://github.com/gramineproject/gramine-tdx>`__ -- Gramine with Intel TDX and
-virtual-machine backends -- so that it also runs on AArch64 and, experimentally,
-on RISC-V, and keeps upstream's full history.
+Gramine runs an unmodified Linux application in an isolated environment, with its own
+implementation of the Linux system call interface (the *LibOS*) on top of a small host abstraction
+layer (the *PAL*). This fork supports several PALs:
+
+* Containerized userspace (``direct``)
+* Micro-virtual machine (``vm``)
+* Windows protected virtual machine (``vbs``)
+* Confidential virtual machine (``tdx``)
+
+This tree extends `gramine-tdx <https://github.com/gramineproject/gramine-tdx>`__ -- Gramine with
+Intel TDX and virtual-machine backends -- so that it also runs on AArch64 and, experimentally, on
+RISC-V, and keeps upstream's full history. Which PAL runs on which architecture, and how mature
+each combination is, is in `Platform support`_ below.
 
 Gramine (formerly *Graphene*) was designed and built by a diverse group of
 researchers and engineers from universities and industry. Please see acknowledgements section below.
