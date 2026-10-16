@@ -12,11 +12,14 @@
 
 #include "api.h"
 
+#include "kernel_interrupts.h"
 #include "kernel_multicore.h"
 #include "kernel_syscalls.h"
+#include "pal_common.h"
 
 extern void syscall_asm(void);
 extern void syscall_asm_gs(void);
+extern void int80_ret_asm(void);
 
 #define AMD_CPU_FIX
 
@@ -63,6 +66,92 @@ int syscalls_init(void) {
                                        /*alignment check*/    1 << 18));
 
     return 0;
+}
+
+/*
+ * `int $0x80` is the i386 system-call ABI, which Linux also serves from 64-bit code: the number
+ * in %eax, the arguments in ebx, ecx, edx, esi, edi, ebp, only %eax changed on return. Wine's
+ * new WoW64 uses it for set_thread_area (and modify_ldt), see design-32bit.md. Without an IDT
+ * gate the instruction raises #GP in user mode with error code 0x402 (bit 1: IDT; vector 0x80;
+ * not external). The frame is turned into the entry `syscall_asm` would have made: the LibOS is
+ * entered in ring 0, with the x86_64 number and argument registers, the user RIP (after the two
+ * instruction bytes) in the TCB, RCX = the return stub int80_ret_asm and R11 = the user RFLAGS,
+ * GS kept at the PAL TCB (the ISR entry swapped it in; the stub loads the thread's own base
+ * back). The stub returns with iretq and the user's own registers (kept in the thread), as
+ * Linux preserves every register but eax across `int $0x80`. Only the numbers below are served;
+ * the others return -ENOSYS at once.
+ */
+bool syscalls_emulate_int80(struct isr_regs* regs) {
+    static const struct {
+        uint32_t i386_nr;
+        uint32_t x86_64_nr;
+    } table[] = {
+        { 243, 205 }, /* set_thread_area */
+        { 244, 211 }, /* get_thread_area */
+        { 123, 154 }, /* modify_ldt */
+    };
+
+    if (regs->error_code != ((0x80 << 3) | 2) || (regs->cs & 3) != 3)
+        return false;
+
+    struct pal_tcb_vm* tcb = (struct pal_tcb_vm*)pal_get_tcb();
+    if (!tcb || !tcb->common.libos_tcb)
+        return false;
+
+    regs->rip += 2; /* `int $0x80` is cd 80 */
+
+    uint32_t x86_64_nr = 0;
+    bool found = false;
+    for (size_t i = 0; i < ARRAY_SIZE(table); i++) {
+        if (table[i].i386_nr == (uint32_t)regs->rax) {
+            x86_64_nr = table[i].x86_64_nr;
+            found = true;
+            break;
+        }
+    }
+    if (!found) {
+        regs->rax = (uint64_t)-38; /* -ENOSYS */
+        return true;
+    }
+
+    /* the user's registers, which int80_ret_asm restores on the return (the LibOS restores the
+     * registers of the entry, the i386 arguments below, and `syscall`'s return clobbers RCX and
+     * R11) */
+    struct thread* thread = &tcb->kernel_thread;
+    thread->int80_regs[0] = regs->rdi;
+    thread->int80_regs[1] = regs->rsi;
+    thread->int80_regs[2] = regs->rdx;
+    thread->int80_regs[3] = regs->r10;
+    thread->int80_regs[4] = regs->r8;
+    thread->int80_regs[5] = regs->r9;
+    thread->int80_regs[6] = regs->rcx;
+    thread->int80_regs[7] = regs->r11;
+    thread->int80_rflags  = regs->rflags;
+
+    uint64_t ebx = (uint32_t)regs->rbx, ecx = (uint32_t)regs->rcx, edx = (uint32_t)regs->rdx;
+    uint64_t esi = (uint32_t)regs->rsi, edi = (uint32_t)regs->rdi, ebp = (uint32_t)regs->rbp;
+    regs->rdi = ebx;
+    regs->rsi = ecx;
+    regs->rdx = edx;
+    regs->r10 = esi;
+    regs->r8  = edi;
+    regs->r9  = ebp;
+    regs->rax = x86_64_nr;
+
+    thread->context.user_rip = regs->rip;
+    regs->r11 = regs->rflags;
+    regs->rcx = (uint64_t)&int80_ret_asm;
+    /* `libos_syscall_entry` is at offset 8 of the LibOS TCB (as syscall_asm jumps to it) */
+    regs->rip = *(uint64_t*)((char*)tcb->common.libos_tcb + 8);
+
+    extern char gdt_start[1];
+    extern char gdt_entry_kernel_cs[1];
+    regs->cs = (uint64_t)(gdt_entry_kernel_cs - gdt_start);
+    regs->ss = regs->cs + 8; /* the kernel data descriptor follows the code one */
+    /* the flags `syscall` clears on entry (MSR_SYSCALL_MASK); R11 keeps the user's */
+    regs->rflags &= ~(uint64_t)(1 << 8 | 1 << 10 | 3 << 12 | 1 << 14 | 1 << 18);
+    regs->gs_swapped = 0;
+    return true;
 }
 
 void syscalls_select_entry(struct per_cpu_data* cpu, bool gs) {

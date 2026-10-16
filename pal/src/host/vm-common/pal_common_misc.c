@@ -141,6 +141,13 @@ int pal_common_segment_base_set(enum pal_segment_reg reg, uintptr_t addr) {
 
     switch (reg) {
         case PAL_SEGMENT_FS:
+#if defined(__x86_64__)
+            /* a null %fs first, as Linux's ARCH_SET_FS: Wine calls this while %fs holds its
+             * 32-bit TLS selector and expects this base, not the descriptor's, after the next
+             * context switch (kernel_sched.c reloads a non-null selector) */
+            __asm__ volatile("mov %0, %%fs" :: "r"((uint16_t)0) : "memory");
+            curr_tcb->kernel_thread.user_fs_sel = 0;
+#endif
             curr_tcb->kernel_thread.context.user_fsbase = addr;
             wrmsr(MSR_IA32_FS_BASE, addr);
             return 0;
@@ -160,3 +167,37 @@ int pal_common_segment_base_set(enum pal_segment_reg reg, uintptr_t addr) {
     }
     return -PAL_ERROR_NOTIMPLEMENTED;
 }
+
+#if defined(__x86_64__)
+/* The thread's TLS descriptors (Linux's GDT entries 12 to 14, set_thread_area): kept in the
+ * thread and written into the CPU's GDT at every switch-in (kernel_sched.c); here also into the
+ * running CPU's GDT, with interrupts off so that a switch cannot land the write in another CPU's
+ * GDT. A present descriptor must be a user (DPL 3) code or data segment. */
+int pal_common_segment_descriptor_set(unsigned int entry, uint64_t descriptor) {
+    if (entry < GDT_ENTRY_TLS_MIN || entry >= GDT_ENTRY_TLS_MIN + GDT_ENTRIES_TLS)
+        return -PAL_ERROR_INVAL;
+    bool present = descriptor & (1ULL << 47);
+    bool user_segment = ((descriptor >> 44) & 1) && ((descriptor >> 45) & 3) == 3;
+    if (present && !user_segment)
+        return -PAL_ERROR_INVAL;
+
+    struct pal_tcb_vm* curr_tcb = (struct pal_tcb_vm*)pal_get_tcb();
+    struct thread* thread = &curr_tcb->kernel_thread;
+
+    uint64_t rflags;
+    __asm__ volatile("pushfq; pop %0; cli" : "=r"(rflags) :: "memory", "cc");
+    thread->tls_desc[entry - GDT_ENTRY_TLS_MIN] = descriptor;
+    gdt_load_tls(thread->tls_desc);
+    if (rflags & (1 << 9))
+        sti();
+    return 0;
+}
+
+int pal_common_segment_descriptor_get(unsigned int entry, uint64_t* descriptor) {
+    if (entry < GDT_ENTRY_TLS_MIN || entry >= GDT_ENTRY_TLS_MIN + GDT_ENTRIES_TLS)
+        return -PAL_ERROR_INVAL;
+    struct pal_tcb_vm* curr_tcb = (struct pal_tcb_vm*)pal_get_tcb();
+    *descriptor = curr_tcb->kernel_thread.tls_desc[entry - GDT_ENTRY_TLS_MIN];
+    return 0;
+}
+#endif

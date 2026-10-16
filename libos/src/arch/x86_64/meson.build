@@ -5,6 +5,7 @@ libos_sources_arch_list = {
     'libos_cpuid.c': {},
     'libos_elf_entry.nasm': { 'type': 'nasm' },
     'libos_table.c': {},
+    'libos_thread_area.c': {},
     'start.S': {},
     'syscallas.S': {},
 }

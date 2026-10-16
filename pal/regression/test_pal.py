@@ -239,6 +239,8 @@ class TC_02_Symbols(RegressionTestCase):
     if ON_X86:
         ALL_SYMBOLS.append('PalSegmentBaseGet')
         ALL_SYMBOLS.append('PalSegmentBaseSet')
+        ALL_SYMBOLS.append('PalSegmentDescriptorSet')
+        ALL_SYMBOLS.append('PalSegmentDescriptorGet')
 
     def test_000_symbols(self):
         _, stderr = self.run_binary(['Symbols'])

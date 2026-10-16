@@ -19,3 +19,8 @@ void syscalls_select_entry(struct per_cpu_data* cpu, bool gs);
 #define SYSCALL_RT_SIGRETURN 15
 
 int syscalls_init(void);
+
+struct isr_regs;
+/* #GP handler: an `int $0x80` of user mode (error code: IDT vector 0x80) becomes a system-call
+ * entry into the LibOS; returns false when the #GP is something else */
+bool syscalls_emulate_int80(struct isr_regs* regs);

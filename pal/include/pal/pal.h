@@ -226,6 +226,10 @@ struct pal_public_state {
      * fs, ss), for the signal frames of system-call contexts, which the LibOS fills with Linux's
      * selectors otherwise (syscallas.S); 0 on other PALs */
     uint64_t vm_user_csgsfs;
+    /* VM PAL, x86_64: offset in the PAL TCB of the csgsfs the kernel's sigreturn stub returns
+     * with (the frame's CS: 32-bit code of Wine's WoW64 resumes in its own code segment); 0 on
+     * other PALs */
+    uint64_t vm_user_csgsfs_offset;
 };
 
 /* We cannot mark this as returning a pointer to `const` object, because LibOS can
@@ -1099,6 +1103,32 @@ int PalSegmentBaseGet(enum pal_segment_reg reg, uintptr_t* addr);
  * \returns 0 on success, negative error value on failure.
  */
 int PalSegmentBaseSet(enum pal_segment_reg reg, uintptr_t addr);
+
+/*!
+ * \brief Set a per-thread segment descriptor in a GDT TLS slot (x86_64; Linux's set_thread_area).
+ *
+ * \param entry       The GDT entry, in Linux's numbering (12 to 14 are the TLS slots).
+ * \param descriptor  The raw 8-byte segment descriptor (0 clears the slot). It must describe a
+ *                    user (DPL 3) code or data segment when present.
+ *
+ * \returns 0 on success, negative error value on failure; -PAL_ERROR_NOTIMPLEMENTED where the
+ *          PAL has no per-thread GDT slots (the LibOS reports ENOSYS then).
+ *
+ * The slot belongs to the calling thread: every thread has its own three, empty at creation, and
+ * the PAL makes them effective whenever the thread runs. User code loads the selector
+ * `(entry << 3) | 3` into a segment register itself.
+ */
+int PalSegmentDescriptorSet(unsigned int entry, uint64_t descriptor);
+
+/*!
+ * \brief Get the calling thread's segment descriptor of a GDT TLS slot (x86_64).
+ *
+ * \param      entry       The GDT entry, in Linux's numbering (12 to 14).
+ * \param[out] descriptor  The raw 8-byte descriptor (0 when the slot is empty).
+ *
+ * \returns 0 on success, negative error value on failure.
+ */
+int PalSegmentDescriptorGet(unsigned int entry, uint64_t* descriptor);
 
 /*!
  * \brief Perform a device-specific operation `cmd`.

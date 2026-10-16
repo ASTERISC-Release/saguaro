@@ -28,6 +28,14 @@ int PalSegmentBaseGet(enum pal_segment_reg reg, uintptr_t* addr) {
 int PalSegmentBaseSet(enum pal_segment_reg reg, uintptr_t addr) {
     return _PalSegmentBaseSet(reg, addr);
 }
+
+int PalSegmentDescriptorSet(unsigned int entry, uint64_t descriptor) {
+    return _PalSegmentDescriptorSet(entry, descriptor);
+}
+
+int PalSegmentDescriptorGet(unsigned int entry, uint64_t* descriptor) {
+    return _PalSegmentDescriptorGet(entry, descriptor);
+}
 #endif
 
 int PalDeviceIoControl(PAL_HANDLE handle, uint32_t cmd, unsigned long arg, int* out_ret) {

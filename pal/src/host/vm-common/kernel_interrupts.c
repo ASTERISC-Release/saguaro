@@ -24,6 +24,7 @@
 #include "kernel_multicore.h"
 #include "kernel_pci.h"
 #include "kernel_sched.h"
+#include "kernel_syscalls.h"
 #include "kernel_time.h"
 #include "kernel_virtio.h"
 #include "vm_callbacks.h"
@@ -112,6 +113,10 @@ void isr_c(struct isr_regs* regs) {
             }
             break;
         case 13:
+            /* `int $0x80` from user mode (no IDT gate 0x80): a system call on the i386 ABI, which
+             * Wine's WoW64 uses for set_thread_area; it enters the LibOS like `syscall` does */
+            if (syscalls_emulate_int80(regs))
+                break;
             /* Linux reports user-mode #GP as SIGSEGV with si_addr == NULL. Applications use
              * this behavior to probe instructions such as RDPMC and recover in a signal handler.
              * Forward the fault through the normal LibOS memory-fault path instead of treating
@@ -465,6 +470,28 @@ static int idt_init(void) {
     return 0;
 }
 
+/*
+ * One GDT per CPU: Linux's layout for the first 16 entries (the null, kernel and user
+ * descriptors of kernel_static_structs.S in 0 to 6, unused 7 to 11, the TLS slots of
+ * set_thread_area in 12 to 14) and the CPU's TSS descriptor at entry 16. The static GDT of
+ * kernel_static_structs.S stays the boot GDT and the template, so every selector computed from
+ * its labels (STAR, the IDT's kernel CS, the user selectors) keeps its value. The TLS slots are
+ * per thread: the switch-in (kernel_sched.c) writes the incoming thread's descriptors here before
+ * it reloads %fs, and set_thread_area writes the running thread's.
+ */
+#define GDT_ENTRIES_BEFORE_TSS 16
+struct gdt_per_cpu {
+    uint64_t entries[GDT_ENTRIES_BEFORE_TSS];
+    struct tss_64bitmode_segment_descriptor tss;
+} __attribute__((aligned(64)));
+static_assert(GDT_ENTRY_TLS_MIN + GDT_ENTRIES_TLS <= GDT_ENTRIES_BEFORE_TSS, "TLS slots");
+static struct gdt_per_cpu g_gdt_per_cpu[MAX_NUM_CPUS];
+
+void gdt_load_tls(const uint64_t tls_desc[GDT_ENTRIES_TLS]) {
+    struct gdt_per_cpu* gdt = &g_gdt_per_cpu[get_per_cpu_data()->cpu_id];
+    memcpy(&gdt->entries[GDT_ENTRY_TLS_MIN], tls_desc, GDT_ENTRIES_TLS * sizeof(uint64_t));
+}
+
 int interrupts_init(void) {
     extern char gdt_start[1];
     extern struct tss_64bitmode_segment_descriptor tss_64bitmode_desc[1];
@@ -479,16 +506,28 @@ int interrupts_init(void) {
     if (ret < 0)
         return ret;
 
+    /* this CPU's GDT: the template's descriptors (which end where its TSS descriptors start),
+     * empty TLS slots and this CPU's TSS descriptor as tss_init() filled it in the template */
+    uint32_t cpu_id = get_per_cpu_data()->cpu_id;
+    struct gdt_per_cpu* gdt = &g_gdt_per_cpu[cpu_id];
+    size_t template_size = (char*)tss_64bitmode_desc - gdt_start;
+    if (template_size > GDT_ENTRY_TLS_MIN * sizeof(uint64_t))
+        return -PAL_ERROR_BADADDR;
+    memset(gdt, 0, sizeof(*gdt));
+    memcpy(gdt->entries, gdt_start, template_size);
+    gdt->tss = tss_64bitmode_desc[cpu_id];
+
     /* load our GDT and IDT */
-    extern char gdtr[1];
+    struct {
+        uint16_t limit;
+        uint64_t base;
+    } __attribute__((packed)) gdtr_value = { .limit = sizeof(*gdt) - 1, .base = (uint64_t)gdt };
     extern char idtr[1];
-    __asm__ volatile("lgdt %0" :: "m"(gdtr));
+    __asm__ volatile("lgdt %0" :: "m"(gdtr_value));
     __asm__ volatile("lidt %0" :: "m"(idtr));
 
     /* flush TSS descriptor */
-    struct tss_64bitmode_segment_descriptor* tss_desc = tss_64bitmode_desc;
-    tss_desc += get_per_cpu_data()->cpu_id;
-    ltr((char*)tss_desc - gdt_start);
+    ltr(offsetof(struct gdt_per_cpu, tss));
 
 #ifdef PAL_HOST_VM
     g_idt_loaded = true;

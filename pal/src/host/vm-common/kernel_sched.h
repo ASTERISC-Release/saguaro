@@ -46,6 +46,11 @@ uintptr_t replace_with_null_if_dummy_gs_base(uintptr_t gs_base);
 
 void sched_thread_uninterruptable(struct isr_regs* userland_regs);
 void sched_thread(uint32_t* lock_to_unlock, int* clear_child_tid);
+#ifdef __x86_64__
+/* records the thread's live %fs selector (and base, if a selector), %ds and %es before its
+ * context is left, including a deferred upcall's re-entry through save_context_and_restore_next() */
+void sched_thread_save_segs(struct thread* thread);
+#endif
 void sched_thread_wait(int* futex_word, spinlock_t* lock);
 /* As sched_thread_wait(), for a wait the application may be interrupted in (a blocking read, poll,
  * futex, accept, ...): returns 0 after a wakeup (the caller re-checks its condition) and

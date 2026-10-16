@@ -199,6 +199,10 @@ long libos_syscall_mlockall(int flags);
 long libos_syscall_munlockall(void);
 long libos_syscall_rt_sigsuspend(const __sigset_t* mask, size_t setsize);
 long libos_syscall_arch_prctl(int code, unsigned long addr);
+/* x86_64: the GDT TLS slots (libos/src/arch/x86_64/libos_thread_area.c); `u_info` is a
+ * `struct user_desc` */
+long libos_syscall_set_thread_area(void* u_info);
+long libos_syscall_get_thread_area(void* u_info);
 long libos_syscall_setrlimit(int resource, struct __kernel_rlimit* rlim);
 long libos_syscall_chroot(const char* filename);
 long libos_syscall_sethostname(char* name, int len);

@@ -63,6 +63,16 @@ int _PalSegmentBaseSet(enum pal_segment_reg reg, uintptr_t addr) {
     return pal_common_segment_base_set(reg, addr);
 }
 
+#ifdef __x86_64__
+int _PalSegmentDescriptorSet(unsigned int entry, uint64_t descriptor) {
+    return pal_common_segment_descriptor_set(entry, descriptor);
+}
+
+int _PalSegmentDescriptorGet(unsigned int entry, uint64_t* descriptor) {
+    return pal_common_segment_descriptor_get(entry, descriptor);
+}
+#endif
+
 int _PalAttestationReport(const void* user_report_data, size_t* user_report_data_size,
                           void* target_info, size_t* target_info_size, void* report,
                           size_t* report_size) {

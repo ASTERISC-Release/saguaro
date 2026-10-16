@@ -207,6 +207,25 @@ struct thread {
      * through isr_iret_to_userland (a preempted thread, a deferred upcall), which loads the base
      * back and clears this */
     uint64_t gs_swapped_by_isr;
+
+    /* Linux's GDT TLS slots (entries GDT_ENTRY_TLS_MIN.., set_thread_area, Wine's 32-bit %fs):
+     * the thread's raw descriptors, written into the CPU's GDT at every switch-in, and the user's
+     * %fs selector as saved at switch-out (0: the base is user_fsbase alone; otherwise the
+     * selector is reloaded first, then user_fsbase, which holds the live base). See
+     * kernel_sched.c and Documentation/devel/proton-vm/design-32bit.md. */
+    uint64_t tls_desc[GDT_ENTRIES_TLS];
+    uint16_t user_fs_sel;
+    /* the user's %ds and %es too (0 for 64-bit code; the user data selector while Wine runs
+     * 32-bit code, which addresses through them): another CPU holds the kernel's data selector
+     * in them, which an iretq to ring 3 nulls, so they are per thread as on Linux */
+    uint16_t user_ds_sel;
+    uint16_t user_es_sel;
+
+    /* an `int $0x80` system call in progress (kernel_syscalls.c): the user's rdi, rsi, rdx, r10,
+     * r8, r9, rcx, r11 and RFLAGS at the instruction, which int80_ret_asm (kernel_events.S)
+     * restores on the return, as Linux preserves every register but eax */
+    uint64_t int80_regs[8];
+    uint64_t int80_rflags;
 #endif
 
     /* An interruptible wait (sched_thread_wait_interruptible(): a blocking PAL call made for the

@@ -48,6 +48,8 @@ PalObjectDestroy
 PalSetExceptionHandler
 PalSegmentBaseGet
 PalSegmentBaseSet
+PalSegmentDescriptorSet
+PalSegmentDescriptorGet
 PalStreamChangeName
 PalFileCreateSymlink
 PalFileExchange
