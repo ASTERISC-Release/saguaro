@@ -32,7 +32,16 @@ x18. On Windows ARM64 x18 holds the TEB and the kernel reloads it when a preempt
 resumes (FINDINGS.md), so packed code must never keep a value of its own there: every packed object
 is disassembled (llvm-objdump or objdump) and the pack fails if an instruction outside the
 functions listed with --x18-allow names x18/w18. (The LibOS's syscall entry saves and restores the
-application's x18, which is then always the TEB: allowed explicitly.)
+application's x18, which is then always the TEB: allowed explicitly.) An instruction is counted in a
+function only inside the function symbol's extent (st_size): code past the end of a symbol, such
+as the local functions of a stripped library, is named SYMBOL+0xSIZE (the end of that symbol), so
+that an allow-list entry for a function never covers code that merely follows it. The constructors
+of a user object (DT_INIT, DT_INIT_ARRAY, DT_PREINIT_ARRAY) run at load time, so no allow-list
+entry can make an x18 use reachable from them safe: the pack fails if one is reachable (following
+direct branches and calls inside the object), unless the object is listed with
+--x18-skip-constructors, which makes each such constructor return at once (for constructors whose
+work the application does not need: libgcc_s's AArch64 CPU-feature detection for function
+multi-versioning, which nothing in libgcc_s reads; PLAN-packer-align.md).
 
 Exceptions. A fault in packed code is dispatched by Windows only if the faulting PC has unwind
 data (vertdll has no run-time function tables, FINDINGS.md), so the generated assembly also emits
@@ -43,6 +52,14 @@ hands the fault to the PAL.
 
 Every packed file (ELF objects and data files such as the manifest) is also kept as its original
 bytes in a read-only data section (`.gxfile`), from which the PAL serves file reads.
+
+Segment alignment. A user object's PT_LOAD p_align above 4 KiB (64 KiB in the AArch64 libraries of
+the distributions: libgcc_s, libstdc++) makes glibc's ld.so reserve an aligned anonymous span and
+map the object into it with MAP_FIXED, at an address that is not the packed one, which the PAL then
+refuses (Documentation/devel/vbs-enclave/PLAN-packer-align.md). The packed image fixes the address
+anyway, so p_align of such segments is lowered to 4 KiB, in the load image and in the kept file
+bytes (from which ld.so reads the program headers); this is legal when p_offset and p_vaddr are
+congruent modulo 4 KiB, and an object where they are not is refused.
 
 x86_64 (Documentation/devel/vbs-enclave/PLAN-x64.md). The objects' machine decides; all must agree.
 A `syscall` returns an error in a VBS enclave instead of trapping (FINDINGS-x64.md), so every
@@ -192,6 +209,22 @@ class Elf:
     def loads(self):
         return [p for p in self.ph if p['type'] == PT_LOAD]
 
+    def lower_load_align(self):
+        """p_align of every PT_LOAD above PAGE becomes PAGE (in self.data and self.ph); returns the
+        number of segments changed"""
+        d, n = bytearray(self.data), 0
+        for i, p in enumerate(self.ph):
+            if p['type'] != PT_LOAD or p['align'] <= PAGE:
+                continue
+            if (p['offset'] - p['vaddr']) % PAGE:
+                sys.exit(f'{self.path}: PT_LOAD at {p["vaddr"]:#x} (offset {p["offset"]:#x}) cannot '
+                         f'be mapped with 4 KiB pages; relink with -z max-page-size=0x1000')
+            struct.pack_into('<Q', d, self.e_phoff + i * self.e_phentsize + 48, PAGE)
+            p['align'] = PAGE
+            n += 1
+        self.data = bytes(d)
+        return n
+
     def dynamic_vaddr(self):
         for p in self.ph:
             if p['type'] == PT_DYNAMIC:
@@ -215,6 +248,61 @@ class Elf:
                 if self.data[strtab + st_name:end] == want:
                     return st_value
         return 0
+
+    def func_sizes(self):
+        """{st_value: st_size} of the function symbols (.symtab and .dynsym)"""
+        sizes = {}
+        for sh in self.sh:
+            if sh['type'] not in (2, SHT_DYNSYM) or not sh['entsize']:
+                continue
+            for i in range(sh['size'] // sh['entsize']):
+                o = sh['offset'] + i * sh['entsize']
+                st_info, st_shndx = self.data[o + 4], read_u(self.data, o + 6, 2)
+                st_value, st_size = read_u(self.data, o + 8, 8), read_u(self.data, o + 16, 8)
+                if st_info & 0xF == 2 and st_shndx:   # STT_FUNC, defined
+                    sizes[st_value] = max(sizes.get(st_value, 0), st_size)
+        return sizes
+
+    def vaddr_to_offset(self, v):
+        for p in self.loads():
+            if p['vaddr'] <= v < p['vaddr'] + p['filesz']:
+                return p['offset'] + v - p['vaddr']
+        return None
+
+    def dynamic(self):
+        """{tag: value} of the dynamic section (first occurrence of each tag)"""
+        d, off = {}, None
+        for p in self.ph:
+            if p['type'] == PT_DYNAMIC:
+                off, size = p['offset'], p['filesz']
+        if off is None:
+            return d
+        for o in range(off, off + size - 15, 16):
+            tag, val = read_u(self.data, o, 8), read_u(self.data, o + 8, 8)
+            if tag == DT_NULL:
+                break
+            d.setdefault(tag, val)
+        return d
+
+    def constructors(self):
+        """[(vaddr of the function, vaddr of its init-array slot or None for DT_INIT)]"""
+        dyn = self.dynamic()
+        rel = {}
+        if DT_RELA in dyn and DT_RELASZ in dyn:
+            o = self.vaddr_to_offset(dyn[DT_RELA])
+            for e in range(o, o + dyn[DT_RELASZ], 24):
+                r_offset, r_info, r_addend = struct.unpack_from('<QQq', self.data, e)
+                if r_info & 0xFFFFFFFF == R_AARCH64_RELATIVE:
+                    rel[r_offset] = (e, r_addend)
+        out = [(dyn[DT_INIT], None)] if dyn.get(DT_INIT) else []
+        for tag, sztag in ((DT_PREINIT_ARRAY, DT_PREINIT_ARRAYSZ), (DT_INIT_ARRAY, DT_INIT_ARRAYSZ)):
+            if tag not in dyn:
+                continue
+            for slot in range(dyn[tag], dyn[tag] + dyn.get(sztag, 0), 8):
+                fn = rel[slot][1] if slot in rel else read_u(self.data, self.vaddr_to_offset(slot), 8)
+                if fn not in (0, 0xFFFFFFFFFFFFFFFF):
+                    out.append((fn, slot))
+        return out
 
     def code_ranges(self):
         """vaddr ranges of executable sections (section headers), or of executable PT_LOADs when
@@ -293,6 +381,15 @@ def rewrite_tpidr(elf, img):
     return n
 
 
+def skip_constructor(img, fn):
+    """make the function at image offset `fn` return at once, keeping a BTI landing pad"""
+    w = struct.unpack_from('<I', img, fn)[0]
+    if w in (BTI_C, PACIASP, PACIBSP):
+        struct.pack_into('<II', img, fn, BTI_C, RET)
+    else:
+        struct.pack_into('<I', img, fn, RET)
+
+
 def scan_svc(elf, img):
     return [off for a, b in elf.code_ranges()
             for off in range(align_up(a, 4), min(b, len(img)) - 3, 4)
@@ -300,28 +397,67 @@ def scan_svc(elf, img):
 
 
 INSN_RE = re.compile(r'^\s*([0-9a-f]+):\s+(.*)$')
-FUNC_RE = re.compile(r'^[0-9a-f]+ <(.+)>:$')
+FUNC_RE = re.compile(r'^([0-9a-f]+) <(.+)>:$')
 X18_RE = re.compile(r'\b[xw]18\b')
+TARGET_RE = re.compile(r'\b(?:0x)?([0-9a-f]+) <')
+R_AARCH64_RELATIVE = 1027
+DT_NULL, DT_INIT, DT_RELA, DT_RELASZ = 0, 12, 7, 8
+DT_INIT_ARRAY, DT_INIT_ARRAYSZ, DT_PREINIT_ARRAY, DT_PREINIT_ARRAYSZ = 25, 27, 32, 33
+BTI_C, PACIASP, PACIBSP, RET = 0xD503245F, 0xD503233F, 0xD503237F, 0xD65F03C0
 
 
-def x18_uses(path):
-    """(function, address, instruction) for every instruction of an executable section that names
-    x18 or w18"""
+def disassemble(path):
+    """(function, function start, address, instruction text) for every instruction of the
+    executable sections"""
     tool = os.environ.get('OBJDUMP') or shutil.which('llvm-objdump') or shutil.which('objdump')
     if not tool:
         sys.exit('no llvm-objdump/objdump for the x18 check (set OBJDUMP, or --skip-x18-check)')
     out = subprocess.run([tool, '-d', '--no-show-raw-insn', path], check=True,
                          capture_output=True, text=True).stdout
-    func, hits = '?', []
+    func, start, insns = '?', 0, []
     for line in out.splitlines():
         m = FUNC_RE.match(line)
         if m:
-            func = m.group(1)
+            func, start = m.group(2), int(m.group(1), 16)
             continue
         m = INSN_RE.match(line)
-        if m and X18_RE.search(m.group(2).split('//')[0]):
-            hits.append((func, int(m.group(1), 16), m.group(2).strip()))
+        if m:
+            insns.append((func, start, int(m.group(1), 16), m.group(2).split('//')[0].strip()))
+    return insns
+
+
+def x18_uses(insns, sizes):
+    """(function, address, instruction) for every instruction that names x18 or w18; past the end
+    of a function symbol of known size the function is SYMBOL+0xSIZE (see "x18" above)"""
+    hits = []
+    for func, start, addr, text in insns:
+        if X18_RE.search(text):
+            size = sizes.get(start, 0)
+            if size and addr >= start + size:
+                func = f'{func}+{size:#x}'
+            hits.append((func, addr, text))
     return hits
+
+
+def reachable(insns, entry):
+    """addresses of the instructions reachable from `entry` by falling through and by direct
+    branches and calls (indirect branches and calls, e.g. through the PLT, are not followed)"""
+    at = {addr: text for _, _, addr, text in insns}
+    seen, todo = set(), [entry]
+    while todo:
+        a = todo.pop()
+        while a in at and a not in seen:
+            seen.add(a)
+            text = at[a]
+            op = text.split(None, 1)[0] if text else ''
+            m = TARGET_RE.search(text)
+            if m and (op in ('b', 'bl', 'cbz', 'cbnz', 'tbz', 'tbnz') or op.startswith('b.')):
+                todo.append(int(m.group(1), 16))
+            if op in ('b', 'br', 'ret', 'retaa', 'retab', 'braa', 'brab', 'braaz', 'brabz',
+                      'eret', 'udf', 'brk'):
+                break
+            a += 4
+    return seen
 
 
 def objdump_lines(path):
@@ -335,7 +471,7 @@ def objdump_lines(path):
     for line in out.splitlines():
         m = FUNC_RE.match(line)
         if m:
-            func = m.group(1)
+            func = m.group(2)
             continue
         m = INSN_RE.match(line)
         if m:
@@ -416,6 +552,8 @@ def main():
     ap.add_argument('--x18-allow', action='append', default=[], metavar='NAME:FUNC[,FUNC...]',
                     help='functions of object NAME allowed to name x18')
     ap.add_argument('--skip-x18-check', action='store_true')
+    ap.add_argument('--x18-skip-constructors', action='append', default=[], metavar='NAME',
+                    help='constructors of object NAME that reach an x18 use return at once')
     ap.add_argument('--red-zone-allow', action='append', default=[], metavar='NAME:FUNC[,FUNC...]',
                     help='x86_64: functions of object NAME allowed to address the red zone')
     ap.add_argument('--red-zone-check', action='store_true',
@@ -443,10 +581,11 @@ def main():
     blob, files, rows = bytearray(), bytearray(), []
     code_ranges = []
 
-    def add_file(src):
+    def add_file(src, data=None):
         nonlocal files
         off = align_up(len(files), 16)
-        data = open(src, 'rb').read()
+        if data is None:
+            data = open(src, 'rb').read()
         files += b'\0' * (off - len(files)) + data
         return off, len(data)
 
@@ -457,6 +596,9 @@ def main():
         name, src = spec[1], spec[2]
         path = spec[3] if len(spec) > 3 else ''
         e = Elf(src)
+        # user objects are mapped by ld.so (or the LibOS) at run time: see "Segment alignment"
+        nalign = e.lower_load_align() if kind == KIND_USER else 0
+        align_note = f' p_align-lowered={nalign}' if nalign else ''
         if machine is None:
             machine = e.machine
         elif e.machine != machine:
@@ -485,7 +627,7 @@ def main():
                 if entry:
                     break
             entry = entry or e.e_entry
-            foff, fsize = add_file(src)
+            foff, fsize = add_file(src, e.data)
             for p_ in e.loads():
                 if p_['flags'] & PF_X:
                     code_ranges.append((off + p_['vaddr'], off + p_['vaddr'] + p_['filesz']))
@@ -494,18 +636,41 @@ def main():
                              dynamic=e.dynamic_vaddr(), slot=0, nsvc=len(sites)))
             print(f'{name}: {spec[0]} x86_64 image {len(img):#x} at pack+{off:#x} entry={entry:#x} '
                   f'dynamic={e.dynamic_vaddr():#x} syscall->ud2={len(sites)} red-zone-insns='
-                  f'{len(redzone)}' + (f' path={path}' if path else ''))
+                  f'{len(redzone)}' + align_note + (f' path={path}' if path else ''))
             continue
+        skip_ctors = []
         if not a.skip_x18_check:
-            bad = [h for h in x18_uses(src) if h[0] not in x18_allow.get(name, set())]
+            insns = disassemble(src)
+            hits = x18_uses(insns, e.func_sizes())
+            bad = [h for h in hits if h[0] not in x18_allow.get(name, set())]
             if bad:
                 funcs = sorted({h[0] for h in bad})
                 sys.exit(f'{src}: {len(bad)} instructions use x18, the enclave TEB, in '
                          f'{len(funcs)} functions: {", ".join(funcs[:12])}'
                          f'{" ..." if len(funcs) > 12 else ""} (first: {bad[0][2]} at '
                          f'{bad[0][1]:#x}); build it with -ffixed-x18')
+            if hits and kind == KIND_USER:
+                where = {h[1]: h for h in hits}
+                for fn, slot in e.constructors():
+                    used = sorted(reachable(insns, fn) & where.keys())
+                    if not used:
+                        continue
+                    h = where[used[0]]
+                    if name not in a.x18_skip_constructors:
+                        sys.exit(f'{src}: the constructor at {fn:#x} runs at load time and reaches '
+                                 f'{len(used)} instructions that use x18 (first: {h[2]} at '
+                                 f'{h[1]:#x} in {h[0]}); --x18-allow cannot cover it; build the '
+                                 f'object with -ffixed-x18, or skip the constructor with '
+                                 f'--x18-skip-constructors {name} (vbs.x18_skip_constructors = '
+                                 f'[ "{os.path.basename(path or src)}" ]) if the application '
+                                 f'does not need it')
+                    skip_ctors.append((fn, h))
         img = e.load_image()
         map_size = len(img)
+        for fn, h in skip_ctors:
+            skip_constructor(img, fn)
+            print(f'{name}: constructor at {fn:#x} skipped (reaches x18: {h[2]} at {h[1]:#x} '
+                  f'in {h[0]})')
         ntls = rewrite_tpidr(e, img)
         nosvc = name in a.no_svc
         if nosvc:
@@ -527,7 +692,7 @@ def main():
             if entry:
                 break
         entry = entry or e.e_entry
-        foff, fsize = add_file(src)
+        foff, fsize = add_file(src, e.data)
         # executable ranges (image-relative) for the static unwind data: the code PT_LOADs and the
         # svc stubs
         for p_ in e.loads():
@@ -540,7 +705,7 @@ def main():
                          dynamic=e.dynamic_vaddr(), slot=slot, nsvc=nsvc))
         print(f'{name}: {spec[0]} image {len(img):#x} at pack+{off:#x} (mapped {map_size:#x}) '
               f'entry={entry:#x} dynamic={e.dynamic_vaddr():#x} svc-rewritten={nsvc} '
-              f'tpidr-rewritten={ntls}'
+              f'tpidr-rewritten={ntls}' + align_note
               + (f' slot={slot:#x}' if slot else '') + (f' path={path}' if path else ''))
 
     max_threads = 4

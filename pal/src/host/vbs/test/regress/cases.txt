@@ -101,3 +101,4 @@ unix
 xattr_misc|tmp
 xattr_misc|/mnt/tmpfs
 async_signal
+dlopen_align64
