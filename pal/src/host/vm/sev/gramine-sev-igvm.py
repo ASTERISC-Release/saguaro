@@ -17,6 +17,11 @@ Subcommands:
   verify-sev
            check a plain-SEV LAUNCH_MEASURE value (QMP query-sev-launch-measure) against the
            digest of the file, with the TIK of the launch session (sevctl session)
+  verify-snp
+           check an SNP attestation report (from /dev/attestation/quote) against the file: its
+           MEASUREMENT must be the launch digest for the vCPU count, VMPL 0, the policy without
+           debugging, the report data as expected; with --certs, also its signature (VCEK chain,
+           through `snpguest verify attestation`)
   cbitpos  print the host's C-bit position (CPUID 0x8000001F EBX[5:0])
 
 Only the Python standard library is used; the file format follows the IGVM specification
@@ -383,6 +388,14 @@ def main():
     p.add_argument('--api-minor', type=int, required=True)
     p.add_argument('--build-id', type=int, required=True)
     p.add_argument('--policy', type=lambda x: int(x, 0), required=True)
+    p = sub.add_parser('verify-snp')
+    p.add_argument('igvm')
+    p.add_argument('report')
+    p.add_argument('--vcpus', type=int, default=1)
+    p.add_argument('--vcpu-sig', type=lambda x: int(x, 0))
+    p.add_argument('--report-data', help='expected REPORT_DATA, 128 hex digits')
+    p.add_argument('--certs', help='directory with ark.pem, ask.pem, vcek.pem (snpguest fetch)')
+    p.add_argument('--snpguest', default='snpguest')
     sub.add_parser('cbitpos')
     args = parser.parse_args()
 
@@ -411,6 +424,39 @@ def main():
             print('MISMATCH')
             return 1
         print('OK')
+    elif args.cmd == 'verify-snp':
+        with open(args.report, 'rb') as f:
+            report = f.read()
+        if len(report) != 1184:
+            raise SystemExit(f'{args.report}: {len(report)} bytes, an SNP report has 1184')
+        version, _svn, policy = struct.unpack_from('<IIQ', report, 0)
+        vmpl, = struct.unpack_from('<I', report, 0x30)
+        measurement = report[0x90:0xc0]
+        sig = args.vcpu_sig if args.vcpu_sig is not None else host_vcpu_sig()
+        expected = snp_launch_digest(read_igvm(args.igvm), args.vcpus, sig)
+        ok = True
+
+        def check(cond, what):
+            nonlocal ok
+            print(f'{"ok  " if cond else "FAIL"} {what}')
+            ok = ok and cond
+
+        check(measurement == expected, f'measurement {measurement.hex()} '
+              f'{"=" if measurement == expected else "!="} launch digest of the file on '
+              f'{args.vcpus} vCPUs')
+        check(vmpl == 0, f'VMPL {vmpl}')
+        check(not policy & (1 << 19), f'policy 0x{policy:x} does not allow debugging')
+        check(version >= 2, f'report version {version}')
+        if args.report_data:
+            check(report[0x50:0x90].hex() == args.report_data.lower(), 'report data')
+        if args.certs:
+            import subprocess
+            res = subprocess.run([args.snpguest, 'verify', 'attestation', args.certs, args.report],
+                                 capture_output=True, text=True)
+            check(res.returncode == 0 and 'VEK signed the Attestation Report' in res.stdout,
+                  'signature by the VCEK (snpguest verify attestation)')
+        print('OK' if ok else 'FAILED')
+        return 0 if ok else 1
     elif args.cmd == 'cbitpos':
         print(host_cbitpos())
     return 0

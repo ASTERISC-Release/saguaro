@@ -202,6 +202,7 @@ tests = {
 
 if host_machine.cpu_family() == 'x86_64'
     tests += {
+        'attestation_sev_snp': {},
         'avx': {
             'c_args': '-mavx',
         },

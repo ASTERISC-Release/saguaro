@@ -232,6 +232,12 @@ test_attest() {
         [ "$expected" = "$meas" ] && echo "attest: measurement = gramine-sev-igvm.py measure --mode snp" \
             || fail "attest: measurement differs from the computed $expected"
     fi
+    grep -q "launch digest of .* on 1 vCPUs: $meas" "$log" \
+        && echo "attest: the digest gramine-sev printed at launch = the report's measurement" \
+        || fail "attest: gramine-sev printed no launch digest equal to the report's"
+    python3 "$igvm_tool" verify-snp "$igvm" "$report" --vcpus 1 --report-data "$data" \
+        --certs "$certs" --snpguest "$snpguest" | sed 's/^/attest: verify-snp: /'
+    [ "${PIPESTATUS[0]}" = 0 ] || fail "attest: verify-snp"
 }
 
 echo "test-sev: $(uptime)"

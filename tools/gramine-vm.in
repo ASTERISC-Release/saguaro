@@ -255,11 +255,28 @@ export GRAMINE_RAM_BASES=$RAM_BASES
 if [ -n "$SEV_IGVM_PATH" ]; then
     # AMD SEV (Documentation/devel/sev/): the IGVM file holds the PAL and its boot stub, QEMU
     # encrypts and measures every page of it at launch; no -kernel, no BIOS loader.
-    # GRAMINE_SEV_MODE: sev (plain SEV), snp (SEV-SNP) or native (the same image without
-    # encryption, for debugging the boot path; the PAL then refuses to run). GRAMINE_SEV_SESSION=<prefix>: the
+    # GRAMINE_SEV_MODE (or the manifest's `sev.mode`): snp (SEV-SNP, the default), sev (plain SEV)
+    # or native (the same image without encryption, for debugging the boot path; the PAL then
+    # refuses to run). GRAMINE_SEV_POLICY (or `sev.policy`): the guest policy (SNP 0x30000, SEV 0x1). GRAMINE_SEV_SESSION=<prefix>: the
     # launch session of `sevctl session` (<prefix>_godh.b64, <prefix>_session.b64), whose TIK
     # verifies the launch measurement.
-    SEV_MODE=${GRAMINE_SEV_MODE:-sev}
+    # The manifest may choose them too (`sev.mode`, `sev.policy`); the environment wins.
+    SEV_MANIFEST=$(python3 -c "
+import sys
+try:
+    import tomllib
+except ImportError:
+    import tomli as tomllib
+try:
+    with open(sys.argv[1], 'rb') as f:
+        sev = tomllib.load(f).get('sev', {})
+except Exception:
+    sev = {}
+print(sev.get('mode', ''), sev.get('policy', ''))
+" "$GRAMINE_MANIFEST" 2>/dev/null)
+    read -r SEV_MANIFEST_MODE SEV_MANIFEST_POLICY <<<"$SEV_MANIFEST"
+    SEV_MODE=${GRAMINE_SEV_MODE:-${SEV_MANIFEST_MODE:-snp}}
+    GRAMINE_SEV_POLICY=${GRAMINE_SEV_POLICY:-$SEV_MANIFEST_POLICY}
     SEV_CBITPOS=${GRAMINE_SEV_CBITPOS:-$(python3 "$HOST_PAL_PATH/gramine-sev-igvm.py" cbitpos)}
     case "$SEV_MODE" in
         sev)
@@ -283,6 +300,13 @@ if [ -n "$SEV_IGVM_PATH" ]; then
     esac
     QEMU_MACHINE+=" -object igvm-cfg,id=igvm0,file=$SEV_IGVM_PATH"
     QEMU_BINARIES=""
+    # the launch digest the platform must report for this file and vCPU count (SNP: the
+    # MEASUREMENT of the attestation report; SEV: the digest inside LAUNCH_MEASURE)
+    if [ "$SEV_MODE" != native ]; then
+        SEV_DIGEST=$(python3 "$HOST_PAL_PATH/gramine-sev-igvm.py" measure --mode "$SEV_MODE" \
+                     --vcpus "$QEMU_CPU_NUM" "$SEV_IGVM_PATH")
+        echo "gramine-sev: $SEV_MODE launch digest of $SEV_IGVM_PATH on $QEMU_CPU_NUM vCPUs: $SEV_DIGEST" >&2
+    fi
 elif [ "$TDSHIM_PAL_PATH" == "" ]; then
     QEMU_MACHINE="-M q35,kernel_irqchip=on"
     QEMU_BINARIES="-kernel $LIBPAL_PATH -device loader,file=$BIOS_PATH"
