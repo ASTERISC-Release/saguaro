@@ -112,6 +112,20 @@ static void tlb_shootdown_answer_pending(void) {
  * echo the INTID returned by IAR (GICv3 ICC_EOIR1_EL1 is write-with-INTID, not the x86-style
  * "end whatever is in-service" write).
  */
+bool memory_address_space_handle_oom_fault(uintptr_t addr, uint64_t error_code);
+bool memory_address_space_current_doomed(void);
+noreturn void _PalProcessExit(int exitcode);
+
+/* A process that ran out of frames in PAL code (memory_address_space_handle_oom_fault()) ends
+ * here, at an exception or tick from EL0, where it holds no PAL lock: exit code 137, as for the
+ * SIGKILL of the OOM killer of Linux. */
+static void end_doomed_process(void) {
+    if (!memory_address_space_current_doomed())
+        return;
+    log_error("Out of memory: ending the process (exit code 137)");
+    _PalProcessExit(137);
+}
+
 void isr_c(struct isr_regs* regs) {
     uint32_t intid = gic_acknowledge_intid();
 
@@ -142,6 +156,7 @@ void isr_c(struct isr_regs* regs) {
              * resume path re-restoring the same thread before it ever reached EL0; SMP made
              * the migration-with-poisoned-context common. */
             if ((regs->spsr & 0xc) == 0 /* SPSR.M[3:2] == 0b00: interrupted EL0t */) {
+                end_doomed_process();
                 sched_thread_uninterruptable(regs);
             }
             break;
@@ -219,6 +234,8 @@ long el0_sync_unexpected_c(struct isr_regs* regs) {
     __asm__ volatile("mrs %0, esr_el1" : "=r"(esr));
     __asm__ volatile("mrs %0, far_el1" : "=r"(far));
     uint64_t ec = esr >> 26;
+
+    end_doomed_process();
 
     /* a demand-zero page of the current process (multiprocess support only): resume as is */
     if ((ec == 0x20 || ec == 0x24) &&
@@ -308,6 +325,16 @@ void el1_sync_c(struct isr_regs* regs) {
      * the LibOS left it alone (it fixed the mapping), never with a pc or PSTATE it changed. */
     extern char __text_start[], __text_end[];
     bool in_pal = regs->elr >= (uintptr_t)__text_start && regs->elr < (uintptr_t)__text_end;
+    if (ec == 0x25 && in_pal &&
+            memory_address_space_handle_oom_fault(far, abort_fault_code(esr, /*fetch=*/false))) {
+        static uint32_t reported;
+        uint32_t n = __atomic_fetch_add(&reported, 1, __ATOMIC_RELAXED);
+        if (n < 4)
+            log_error("Out of memory: PAL code at 0x%lx wrote to 0x%lx; the process ends at its "
+                      "next return to user mode%s", regs->elr, far,
+                      n == 3 ? " (further ones not reported)" : "");
+        return;
+    }
     if ((ec == 0x21 || ec == 0x25) && !in_pal) {
         uint64_t elr = regs->elr;
         uint64_t spsr = regs->spsr;

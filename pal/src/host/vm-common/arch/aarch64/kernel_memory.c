@@ -793,6 +793,16 @@ static int boot_root_set_blocks(uint64_t addr, size_t size, uint64_t attrs) {
     return 0;
 }
 
+/* Out of frames (multiprocess support): a PAL copy into application memory (a process-stream
+ * read, a file read) that meets a demand-zero page when the pool is empty cannot fail the access,
+ * and ending the process there would leave the PAL's locks held. Such a page gets this one
+ * reserved frame instead, so the copy completes into memory nobody reads, and the process is
+ * marked: it is ended at its next exception or tick from EL0, where it holds no PAL lock
+ * (memory_address_space_current_doomed()). The OOM killer of Linux sends SIGKILL instead. */
+static uintptr_t g_oom_sink_frame;
+#define OOM_DOOMED_MAX 32
+static uintptr_t g_oom_doomed_roots[OOM_DOOMED_MAX];
+
 int memory_frame_pool_init(uintptr_t addr, size_t size) {
     if (g_frame_pool_bitmap || !size || !IS_ALIGNED(addr, PAGE_2M_SIZE) ||
             !IS_ALIGNED(size, PAGE_2M_SIZE) || addr < g_dram_base || addr + size < addr ||
@@ -840,6 +850,7 @@ int memory_frame_pool_init(uintptr_t addr, size_t size) {
     g_boot_address_space.base_root = NULL;
     __atomic_store_n(&g_frame_pool_bitmap, bitmap, __ATOMIC_RELEASE);
     __atomic_store_n(&g_sched_switch_roots, true, __ATOMIC_RELEASE);
+    (void)memory_frame_alloc(&g_oom_sink_frame); /* see memory_address_space_handle_oom_fault() */
     log_always("Private frame pool: [%p, %p), %zu frames; TTBR1 frame alias at %p; CTR_EL0 0x%lx"
                " (IDC %d, DIC %d)", (void*)addr, (void*)(addr + size), frame_count,
                (void*)FRAME_ALIAS_BASE, ctr, !g_need_dcache_clean, !g_need_icache_invalidate);
@@ -1341,6 +1352,11 @@ size_t memory_address_space_destroy(struct memory_address_space* space) {
         return 0;
     if (space == &g_boot_address_space)
         BUG();
+    for (size_t d = 0; space->root_phys && d < OOM_DOOMED_MAX; d++) {
+        uintptr_t doomed = space->root_phys;
+        __atomic_compare_exchange_n(&g_oom_doomed_roots[d], &doomed, 0, /*weak=*/false,
+                                    __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE);
+    }
     if (space->root && space->root_phys && g_frame_pool_bitmap)
         address_space_put_leaves(space->root, 1, 0);
     uintptr_t frame = space->owned_frame_head;
@@ -1647,7 +1663,12 @@ bool memory_address_space_handle_fault(uintptr_t addr, uint64_t error_code) {
 
     uintptr_t frame;
     if (memory_frame_alloc(&frame) < 0) {
-        log_error("Out of frames for a demand-zero page at 0x%lx", addr);
+        /* a process that runs out usually faults on page after page: report the first few */
+        static uint32_t reported;
+        uint32_t n = __atomic_fetch_add(&reported, 1, __ATOMIC_RELAXED);
+        if (n < 4)
+            log_error("Out of frames for a demand-zero page at 0x%lx%s", addr,
+                      n == 3 ? " (further ones not reported)" : "");
         return false;
     }
     if (!(old & PTE_UXN))
@@ -1661,6 +1682,70 @@ bool memory_address_space_handle_fault(uintptr_t addr, uint64_t error_code) {
      * is enough */
     __asm__ volatile("dsb ishst\n\tisb" ::: "memory");
     return true;
+}
+
+/* The fallback of memory_address_space_handle_fault() for a fault of PAL code when the pool is
+ * empty (see g_oom_sink_frame): maps the sink frame at the demand-zero page of the current root,
+ * which must be a process root, and marks that root. Returns false if the fault is not such a
+ * page or the sink cannot take another reference. */
+bool memory_address_space_handle_oom_fault(uintptr_t addr, uint64_t error_code) {
+    if (!g_oom_sink_frame || !g_frame_pool_bitmap || (error_code & FAULT_PRESENT) ||
+            addr >= (1UL << 39))
+        return false;
+    uintptr_t root_phys = current_ttbr0();
+    if (root_phys == g_pml4_table_base)
+        return false;
+    uint64_t* root = memory_frame_pointer(root_phys);
+    uint64_t l1e = root[PT_INDEX_L1(addr)];
+    if (!is_table(l1e))
+        return false;
+    uint64_t l2e = table_pointer(l1e)[PT_INDEX_L2(addr)];
+    if (!is_table(l2e))
+        return false;
+    uint64_t* pte = &table_pointer(l2e)[PT_INDEX_L3(addr)];
+    uint64_t old = __atomic_load_n(pte, __ATOMIC_ACQUIRE);
+    if (leaf_valid(old))
+        return true;
+    if (!(old & PTE_LAZY))
+        return false;
+    if ((error_code & FAULT_WRITE) && (old & PTE_AP_MASK) != PTE_AP_EL0RW)
+        return false;
+
+    size_t i = (g_oom_sink_frame - g_frame_pool_start) / PAGE_SIZE;
+    uint64_t flags = frame_pool_lock();
+    if (g_frame_refcount[i] == UINT16_MAX) {
+        frame_pool_unlock(flags);
+        return false;
+    }
+    g_frame_refcount[i]++; /* the leaf's reference, dropped when the leaf goes */
+    frame_pool_unlock(flags);
+
+    bool marked = false;
+    for (size_t d = 0; d < OOM_DOOMED_MAX && !marked; d++) {
+        uintptr_t expected = 0;
+        marked = __atomic_load_n(&g_oom_doomed_roots[d], __ATOMIC_ACQUIRE) == root_phys ||
+                 __atomic_compare_exchange_n(&g_oom_doomed_roots[d], &expected, root_phys,
+                                             /*weak=*/false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE);
+    }
+    if (!marked) {
+        memory_frame_put(g_oom_sink_frame);
+        return false;
+    }
+    uint64_t new = g_oom_sink_frame | PTE_USER_PAGE | (old & PTE_RIGHTS) | PTE_UXN;
+    if (!__atomic_compare_exchange_n(pte, &old, new, /*weak=*/false, __ATOMIC_ACQ_REL,
+                                     __ATOMIC_ACQUIRE))
+        memory_frame_put(g_oom_sink_frame);
+    __asm__ volatile("dsb ishst\n\tisb" ::: "memory");
+    return true;
+}
+
+/* Whether the current root was marked by memory_address_space_handle_oom_fault(). */
+bool memory_address_space_current_doomed(void) {
+    uintptr_t root_phys = current_ttbr0();
+    for (size_t d = 0; d < OOM_DOOMED_MAX; d++)
+        if (__atomic_load_n(&g_oom_doomed_roots[d], __ATOMIC_ACQUIRE) == root_phys)
+            return true;
+    return false;
 }
 
 int memory_address_space_translate(uintptr_t addr, uintptr_t* out_phys) {
