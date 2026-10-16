@@ -37,7 +37,7 @@ gramine-manifest -Dproton="$PROTON" -Dprefix="$PREFIX" -Dtests="$TESTS" -Dwork="
     -Dlog_level="${LOG_LEVEL:-error}" -Dwinedebug="${WINEDEBUG:--all}" -Dsync="${SYNC:-0}" \
     -Dgame="${GAME:-}" -Ddisplay="${DISPLAY_NUM:-}" -Dffmpeg="$FFMPEG_LIBS" \
     -Dvk_icd="${VK_ICD:-/usr/share/vulkan/icd.d/lvp_icd.json}" -Ddxvk_device="${DXVK_DEVICE:-llvmpipe}" \
-    -Ddxvk_hud="${DXVK_HUD:-}" -Ddxvk_config="${DXVK_CONFIG:-}" -Dnet="${NET:-allow}" \
+    -Ddxvk_hud="${DXVK_HUD:-}" -Ddxvk_config="${DXVK_CONFIG:-}" -Ddxvk_log_level="${DXVK_LOG_LEVEL:-info}" -Dnet="${NET:-allow}" \
     -Dwinearch="${WINEARCH:-}" -Dgpu="$GPU" -Dgpu_preload="${GPU_PRELOAD:-0}" -Dgpu_eager="${GPU_EAGER:-0}" -Dlayer_dir="${LAYER_DIR:-}" -Degl_discrete="${EGL_DISCRETE:-1}" \
     "$HERE/wine.manifest.template" wine.manifest || exit 1
 echo "# $(date -u +%Y-%m-%dT%H:%MZ) loader=$LOADER args: $* cpus=${GRAMINE_CPU_NUM:-1} ram=${GRAMINE_RAM_SIZE:-default} $(uptime | sed 's/.*load/load/')"
