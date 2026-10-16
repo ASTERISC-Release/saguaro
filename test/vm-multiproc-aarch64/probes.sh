@@ -7,8 +7,10 @@
 # x86_64 runner (test/vm-multiproc/run-probes.sh) hardcodes the x86_64 library directory; this one
 # takes the build machine's (gcc -dumpmachine) and keeps one log per probe.
 #
-# Usage: test/vm-multiproc-aarch64/probes.sh [--prefix DIR] [--cpus N] [spawn|sh|forks|signals]...
-#        (default: sh spawn)
+# Usage: test/vm-multiproc-aarch64/probes.sh [--prefix DIR] [--cpus N]
+#            [spawn|sh|forks|signals|forks-mem|eintr|efault]...   (default: sh spawn)
+# eintr: test/vm-multiproc-aarch64/eintr.c, a signal against each kind of blocking call.
+# efault: test/vm-multiproc-aarch64/efault.c, LibOS faults on application memory, key on and off.
 set -u
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 REPO=$(cd "$HERE/../.." && pwd)
@@ -29,10 +31,11 @@ WORK=${WORK:-$REPO/.mp-probes-aarch64}
 LOGS=${LOGS:-$WORK/logs}
 mkdir -p "$WORK" "$LOGS" && cd "$WORK"
 SRC=$REPO/test/vm-multiproc
-cp "$SRC"/spawn.c "$SRC"/forks.c "$SRC"/sig.sh "$SRC"/manifest.template .
-gcc -O2 -o spawn spawn.c && gcc -O2 -o forks forks.c || exit 2
+cp "$SRC"/spawn.c "$SRC"/forks.c "$SRC"/sig.sh "$SRC"/manifest.template "$HERE"/eintr.c "$HERE"/efault.c .
+gcc -O2 -o spawn spawn.c && gcc -O2 -o forks forks.c && gcc -O2 -o eintr eintr.c -lpthread && \
+    gcc -O2 -o efault efault.c || exit 2
 LIBDIR=/lib/$(gcc -dumpmachine)
-for entry in /usr/bin/sh /usr/bin/bash "$WORK/spawn" "$WORK/forks"; do
+for entry in /usr/bin/sh /usr/bin/bash "$WORK/spawn" "$WORK/forks" "$WORK/eintr" "$WORK/efault"; do
     name=$(basename "$entry")
     case $entry in "$WORK"/*) e=/probe/$name ;; *) e=$entry ;; esac
     gramine-manifest -Darch_libdir="$LIBDIR" -Dentry="$e" -Dprobedir="$WORK" \
@@ -55,6 +58,22 @@ for what in "${WHAT[@]}"; do
         spawn)   run spawn 60 gramine-vm spawn ;;
         forks)   run forks-1000 900 gramine-vm forks 1000 1; run forks-64x8 600 gramine-vm forks 64 8 ;;
         signals) run signals 60 gramine-vm bash /probe/sig.sh ;;
+        eintr)   # one guest per case: a case that times out ends its process
+                 for c in poll ppoll-null pause pipe-read epoll_wait select nanosleep futex \
+                          child-pause; do
+                     LINES_SHOWN=${LINES_SHOWN:-2} run eintr-$c 40 gramine-vm eintr $c
+                 done ;;
+        efault)  # key on: each case in a child; key off: in the process itself (no fork)
+                 grep -v experimental__multiprocess efault.manifest > efault-nokey.manifest
+                 ln -sf efault efault-nokey
+                 for c in sigframe altstack; do
+                     for k in on off; do
+                         m=efault; [ $k = off ] && m=efault-nokey
+                         LINES_SHOWN=0 run efault-$c-$k 60 gramine-vm $m $c
+                         grep -a "child \|no fork\|Internal\|Panic\|exited with" \
+                             "$LOGS/efault-$c-$k.log" | tail -4
+                     done
+                 done ;;
         forks-mem)
             # pool frames in use after each child's exit (log_debug of pal_process.c): the first
             # and the last of N sequential forks, and of N forks in batches of 8
