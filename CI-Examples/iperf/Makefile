@@ -1,5 +1,14 @@
 # Copyright (C) 2024 Gramine contributors
+# Copyright (C) 2026 The ASTERISC Research Lab
 # SPDX-License-Identifier: BSD-3-Clause
+
+# Build iperf3 as follows:
+#
+# - make               -- create non-SGX manifest (gramine-direct)
+# - make SGX=1         -- create SGX manifest
+# - make VBS=1         -- build iperf3 for a Windows VBS enclave, pack and sign it (in WSL; see
+#                         Documentation/vbs.rst); make VBS=1 check runs the server in the enclave
+#                         and a client on the loopback
 
 ARCH_LIBDIR ?= /lib/$(shell $(CC) -dumpmachine)
 
@@ -15,9 +24,19 @@ GRAMINE_LOG_LEVEL = error
 endif
 
 .PHONY: all
+ifeq ($(VBS),1)
+# Windows VBS enclave (scripts/vbs/Makefile.vbs): iperf3 built with the vbs gcc against the vbs
+# glibc (no OpenSSL, no shared libiperf) in vbs-build/, packed by vbs.manifest.template
+VBS_APP = iperf3
+VBS_DEPS = vbs-build/iperf3 vbs-build/libgcc_s.so.1
+VBS_CLEAN = vbs-build OUTPUT client.log
+include ../../scripts/vbs/Makefile.vbs
+all: vbs-all
+else
 all: install/iperf3 install/libiperf.so.0 iperf3.manifest
 ifeq ($(SGX),1)
 all: iperf3.manifest.sgx iperf3.sig
+endif
 endif
 
 $(IPERF_DIR)/configure:
@@ -64,6 +83,35 @@ install/iperf3: $(IPERF_DIR)/src/.libs/iperf3
 install/libiperf.so.0: $(IPERF_DIR)/src/.libs/libiperf.so.0
 	mkdir -p install
 	cp $< $@
+
+ifeq ($(VBS),1)
+$(IPERF_SRC):
+	../common_tools/download --output $@ \
+		--sha256 $(IPERF_SHA256) \
+		$(foreach mirror,$(IPERF_MIRRORS),--url $(mirror)/$(IPERF_SRC))
+
+# no OpenSSL (only the authentication feature needs it) and no shared library: one executable
+vbs-build/src/configure: $(IPERF_SRC)
+	mkdir -p vbs-build/src
+	tar -C vbs-build/src --strip-components=1 -xf $(IPERF_SRC)
+	touch $@
+
+vbs-build/src/Makefile: vbs-build/src/configure | $(VBS_RUNTIME_STAMP)
+	cd vbs-build/src && ./configure CC=$(VBS_GCC) --disable-shared --without-openssl
+
+vbs-build/iperf3: vbs-build/src/Makefile
+	$(MAKE) -C vbs-build/src CC=$(VBS_GCC)
+	cp vbs-build/src/src/iperf3 $@
+
+# the host's libgcc_s: glibc's pthread_cancel loads it (the vbs glibc does not ship it)
+vbs-build/libgcc_s.so.1:
+	mkdir -p vbs-build
+	cp "$$(gcc -print-file-name=libgcc_s.so.1)" $@
+
+.PHONY: check
+check: all
+	GRAMINE="$(GRAMINE)" ./vbs-check.sh
+endif
 
 ################################## CLEANUP ####################################
 
