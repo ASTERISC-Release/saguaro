@@ -53,6 +53,7 @@
 #define XCB_DRI3_PIXMAP_SCANOUT (1 << 0)
 #define __NR_ACQUIRE_LLOCK 500
 #define __NR_RELINQUISH_LLOCK 501
+#define __NR_GRAPHICS_PHYSMEM 502
 
 extern struct gbm_device *gbm;
 #define DEFAULT_WIDTH 300
@@ -81,7 +82,14 @@ typedef struct buffer {
   xcb_sync_fence_t idle_sync_fence;
   GLuint rbo_depth;
 } check;
-extern check bufs[NUM_BUFFERS];
+/* the buffer descriptors the listener reads and writes: in physically contiguous memory when
+ * the LibOS provides it (graphics_physmem(); a process with its own page tables), with the
+ * address the listener gets in bufs_pa (equal to bufs otherwise) */
+extern check* bufs;
+extern uint64_t bufs_pa;
+/* `size` bytes the host listener can read by their physical address `*out_pa`; NULL when the
+ * LibOS has no such memory (identity-mapped memory: use any memory and its own address) */
+void* graphics_physmem(size_t size, uint64_t* out_pa);
 
 extern int cur;
 extern xcb_window_t win;

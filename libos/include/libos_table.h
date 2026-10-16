@@ -355,3 +355,4 @@ long libos_syscall_kcmp(pid_t pid1, pid_t pid2, int type, unsigned long idx1, un
 
 long libos_syscall_acquire_libos_lock(void);
 long libos_syscall_relinquish_libos_lock(long offset);
+long libos_syscall_graphics_physmem(size_t size, uint64_t* out_pa);

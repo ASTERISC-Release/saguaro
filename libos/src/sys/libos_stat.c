@@ -109,13 +109,23 @@ long libos_syscall_fstat(int fd, struct stat* stat) {
         {
             long _offset = libos_syscall_acquire_libos_lock();
             comm_page_t* c = comm_page(_offset);
+            struct gbounce* b = graphics_bounce(_offset);
+            uint64_t stat_pa;
+            void* out = graphics_bounce_out(b, stat, sizeof(*stat), &stat_pa);
+            if (!out) {
+                libos_syscall_relinquish_libos_lock(_offset);
+                put_handle(hdl);
+                return -ENOMEM;
+            }
             c->p1 = (uint64_t) fd;
-            c->p2 = (uint64_t) stat;
+            c->p2 = stat_pa;
             __sync_synchronize();
             c->req_bit = FSTAT;
             put_handle(hdl);
 
             long retval = comm_sync_notify(c);
+            if (retval == 0 && out != stat)
+                memcpy(stat, out, sizeof(*stat));
             libos_syscall_relinquish_libos_lock(_offset);
             return retval;
         }  
@@ -193,13 +203,24 @@ long libos_syscall_readlink(const char* file, char* buf, int bufsize) {
         if(graphics_redirect_enabled() && strstr(file, "/sys/")){
             long _offset = libos_syscall_acquire_libos_lock();
             comm_page_t* c = comm_page(_offset);
-            c->p1 = (uint64_t) file;
-            c->p2 = (uint64_t) buf;
-            c->p3 = (uint64_t) bufsize;
+            struct gbounce* b = graphics_bounce(_offset);
+            uint64_t path_pa = graphics_bounce_in(b, file, strlen(file) + 1);
+            size_t chunk = bufsize > 0 ? MIN((size_t)bufsize, graphics_bounce_room(b)) : 0;
+            uint64_t buf_pa;
+            void* out = graphics_bounce_out(b, buf, chunk, &buf_pa);
+            if (!path_pa || !out) {
+                libos_syscall_relinquish_libos_lock(_offset);
+                return -ENAMETOOLONG;
+            }
+            c->p1 = path_pa;
+            c->p2 = buf_pa;
+            c->p3 = (uint64_t) chunk;
 
             __sync_synchronize();
             c->req_bit = READLINK;
             long retval = comm_sync_notify(c);
+            if (retval > 0 && out != buf)
+                memcpy(buf, out, MIN((size_t)retval, chunk));
             libos_syscall_relinquish_libos_lock(_offset);
             return retval;
         }
@@ -286,15 +307,25 @@ long libos_syscall_newfstatat(int dirfd, const char* pathname, struct stat* stat
         if(graphics_redirect_enabled() && (strstr(pathname, "/dev") || strstr(pathname, "/sys") || strstr(pathname, "/proc/sys"))){
             if(!strstr(pathname, "devtest")){
                 long _offset = libos_syscall_acquire_libos_lock();
-            comm_page_t* c = comm_page(_offset);
+                comm_page_t* c = comm_page(_offset);
+                struct gbounce* b = graphics_bounce(_offset);
+                uint64_t path_pa = graphics_bounce_in(b, pathname, strlen(pathname) + 1);
+                uint64_t stat_pa;
+                void* out = graphics_bounce_out(b, statbuf, sizeof(*statbuf), &stat_pa);
+                if (!path_pa || !out) {
+                    libos_syscall_relinquish_libos_lock(_offset);
+                    return -ENAMETOOLONG;
+                }
                 c->p1 = (uint64_t) dirfd;
-                c->p2 = (uint64_t) pathname;
-                c->p3 = (uint64_t) statbuf;
+                c->p2 = path_pa;
+                c->p3 = stat_pa;
                 c->p4 = (uint64_t) flags;
 
                 __sync_synchronize();
                 c->req_bit = NEWFSTAT;
                 long retval = comm_sync_notify(c);
+                if (retval == 0 && out != statbuf)
+                    memcpy(statbuf, out, sizeof(*statbuf));
                 libos_syscall_relinquish_libos_lock(_offset);
                 return retval;
             }

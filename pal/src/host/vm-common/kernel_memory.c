@@ -235,6 +235,48 @@ int memory_frame_free(uintptr_t frame) {
     return 0;
 }
 
+/* Allocates `size` bytes of physically contiguous frames and maps them into `space` at `addr`
+ * (read-write, user mode); `*out_phys` is the first frame's guest-physical address. For the
+ * LibOS's graphics bounce buffers: the host listener reads guest RAM by physical address, so what
+ * the LibOS hands it from a demand-paged process must sit in frames it knows the address of
+ * (Documentation/devel/proton-vm/design-gpu.md). Without a frame pool or a process address space
+ * (the single-process VM) memory is identity-mapped and a plain allocation serves. */
+int memory_address_space_alloc_contiguous(struct memory_address_space* space, void* addr,
+                                          size_t size, bool execute, uintptr_t* out_phys) {
+    if (!addr || !size || !out_phys || !IS_ALIGNED_POW2((uintptr_t)addr, PAGE_SIZE) ||
+            !IS_ALIGNED_POW2(size, PAGE_SIZE))
+        return -PAL_ERROR_INVAL;
+    if (!g_frame_pool_bitmap || !space) {
+        int ret = memory_alloc(addr, size, /*read=*/true, /*write=*/true, execute);
+        if (ret < 0)
+            return ret;
+        *out_phys = (uintptr_t)addr;
+        return 0;
+    }
+    void* alias;
+    int ret = memory_frame_alloc_contiguous(size, &alias);
+    if (ret < 0)
+        return ret;
+    uintptr_t frame = g_frame_alias_mapped_size && (uintptr_t)alias >= FRAME_POOL_ALIAS_BASE
+                      ? (uintptr_t)alias - FRAME_POOL_ALIAS_BASE : (uintptr_t)alias;
+    for (size_t done = 0; done < size; done += PAGE_SIZE) {
+        ret = memory_address_space_map_owned(space, (uintptr_t)addr + done, frame + done,
+                                             /*write=*/true, execute, /*usermode=*/true);
+        if (ret < 0) {
+            if (done)
+                (void)memory_address_space_free(space, addr, done);
+            for (size_t rest = done; rest < size; rest += PAGE_SIZE)
+                memory_frame_free(frame + rest);
+            return ret;
+        }
+    }
+    ret = memory_address_space_flush_range((uintptr_t)addr, size);
+    if (ret < 0)
+        return ret;
+    *out_phys = frame;
+    return 0;
+}
+
 int memory_frame_alloc_contiguous(size_t size, void** out_alias) {
     if (!g_frame_pool_bitmap || !size || !out_alias || size > SIZE_MAX - PAGE_SIZE + 1)
         return -PAL_ERROR_INVAL;

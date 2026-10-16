@@ -289,8 +289,8 @@ sigreturn_asm:
     mov     %rax, %gs:PAL_TCB_VM_SIGRETURN_USER_RAX
 
     mov     %gs:PAL_TCB_VM_SIGRETURN_PSEUDO_RSP, %rsp
-    // push SS: 64-bit user data
-    pushq   $0x23 // SS segment selector: Index=100 (4), GDT, RPL=11
+    // push SS: user data (selector 0x2b after the GDT matches Linux's numbering)
+    pushq   $0x2b // SS segment selector: GDT index 5, RPL=3
     // push user RSP
     mov     %gs:PAL_TCB_VM_SIGRETURN_USER_RSP, %rax
     push    %rax
@@ -299,8 +299,8 @@ sigreturn_asm:
     pop     %rax
     or      $0x200, %rax
     push    %rax
-    // push CS: 64-bit user code
-    pushq   $0x2b // CS segment selector: Index=101 (5), GDT, RPL=11
+    // push CS: 64-bit user code (selector 0x33 after the GDT matches Linux's numbering)
+    pushq   $0x33 // CS segment selector: GDT index 6, RPL=3
     // push user RIP
     mov     %gs:PAL_TCB_VM_USER_RIP, %rax
     push    %rax

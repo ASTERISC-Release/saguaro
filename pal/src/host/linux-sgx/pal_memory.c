@@ -170,3 +170,12 @@ int init_reserved_ranges(void* urts_ptr, size_t urts_size) {
                                  + urts_size / sizeof(*g_urts_next_reserved_range);
     return 0;
 }
+
+int _PalVirtualMemoryAllocContiguous(void* addr, size_t size, pal_prot_flags_t prot,
+                                     uint64_t* out_phys) {
+    __UNUSED(addr);
+    __UNUSED(size);
+    __UNUSED(prot);
+    __UNUSED(out_phys);
+    return -PAL_ERROR_NOTIMPLEMENTED;
+}

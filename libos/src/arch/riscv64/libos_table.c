@@ -45,6 +45,7 @@
 /* Graphics, syscall no. for acquiring lock from gramine to synchronize libgraphics comms*/
 #define __NR_ACQUIRE_LLOCK 500
 #define __NR_RELINQUISH_LLOCK 501
+#define __NR_GRAPHICS_PHYSMEM 502
 
 libos_syscall_t libos_syscall_table[LIBOS_SYSCALL_BOUND] = {
     [__NR_io_setup]                   = (libos_syscall_t)0, // libos_syscall_io_setup
@@ -369,4 +370,5 @@ libos_syscall_t libos_syscall_table[LIBOS_SYSCALL_BOUND] = {
     /* Graphics: some file descriptors are host-based, and we need to pass them as-is. */
     [__NR_register_host_identity_fd] = (libos_syscall_t)libos_syscall_register_host_identity_fd,
     [__NR_ACQUIRE_LLOCK]              = (libos_syscall_t)libos_syscall_acquire_libos_lock,
-    [__NR_RELINQUISH_LLOCK]           = (libos_syscall_t)libos_syscall_relinquish_libos_lock,};
+    [__NR_RELINQUISH_LLOCK]           = (libos_syscall_t)libos_syscall_relinquish_libos_lock,
+    [__NR_GRAPHICS_PHYSMEM]          = (libos_syscall_t)libos_syscall_graphics_physmem,};

@@ -45,6 +45,19 @@ int _PalVirtualMemoryAlloc(void* addr, size_t size, pal_prot_flags_t prot) {
     return memory_alloc(addr, size, read, write, execute);
 }
 
+int _PalVirtualMemoryAllocContiguous(void* addr, size_t size, pal_prot_flags_t prot,
+                                     uint64_t* out_phys) {
+    assert(WITHIN_MASK(prot, PAL_PROT_MASK));
+    assert(addr);
+    uintptr_t phys = 0;
+    int ret = memory_address_space_alloc_contiguous(current_address_space(), addr, size,
+                                                    !!(prot & PAL_PROT_EXEC), &phys);
+    if (ret < 0)
+        return ret;
+    *out_phys = phys;
+    return 0;
+}
+
 int _PalVirtualMemoryFree(void* addr, size_t size) {
     assert(addr);
     struct memory_address_space* address_space = current_address_space();

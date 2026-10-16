@@ -341,12 +341,27 @@ long libos_syscall_fcntl(int fd, int cmd, unsigned long arg) {
             log_debug("redirecting fcntl(%d, %d, %lu) to host", fd, cmd, arg);
             long _offset = libos_syscall_acquire_libos_lock();
             comm_page_t* c = comm_page(_offset);
+            /* the lock commands pass a struct flock; every other argument is a value */
+            bool lock_arg = cmd == F_GETLK || cmd == F_SETLK || cmd == F_SETLKW ||
+                            cmd == F_OFD_GETLK || cmd == F_OFD_SETLK || cmd == F_OFD_SETLKW;
+            struct gbounce* b = lock_arg ? graphics_bounce(_offset) : NULL;
+            uint64_t arg_pa = arg;
+            void* out = NULL;
+            if (lock_arg) {
+                out = graphics_bounce_out(b, (void*)arg, sizeof(struct flock), &arg_pa);
+                if (!out) {
+                    libos_syscall_relinquish_libos_lock(_offset);
+                    return -ENOMEM;
+                }
+            }
             c->p1 = (uint64_t) fd;
             c->p2 = (uint64_t) cmd;
-            c->p3 = (uint64_t) arg;
+            c->p3 = arg_pa;
             c->req_bit = FCNTL;
 
             retval = comm_sync_notify(c);
+            if (lock_arg && retval == 0 && out != (void*)arg)
+                memcpy((void*)arg, out, sizeof(struct flock));
             libos_syscall_relinquish_libos_lock(_offset);
         }
     #endif

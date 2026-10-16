@@ -47,8 +47,8 @@ if [ "$LOADER" = vm ]; then
         export GRAMINE_VM_X_PROXY=0
         sleep 0.5
     fi
-    # the X relay without the GEM arenas: Wine renders in software and needs the demand-paged range
-    export GRAMINE_VM_GRAPHICS=${GRAMINE_VM_GRAPHICS:-0}
+    # the X relay without the GEM arenas unless GPU=1 (run-wine.sh turns them on for the GPU)
+    [ "${GPU:-0}" = 1 ] || export GRAMINE_VM_GRAPHICS=${GRAMINE_VM_GRAPHICS:-0}
     GAME=$(dirname "$EXE") DISPLAY_NUM=${DISP#:} TIMEOUT=$((SECS + 60)) "$HERE/run-wine.sh" vm "$EXE" "$@" >"$OUT/wine.out" 2>"$OUT/wine.err" &
 else
     $WINE64 "$(basename "$EXE")" "$@" >"$OUT/wine.out" 2>"$OUT/wine.err" &
@@ -69,7 +69,7 @@ if [ -n "${XDO:-}" ]; then
               focus) FOCUS=$arg1; refocus ;;
               key|type|click|mousemove) refocus; xdotool "$cmd" $arg1 $arg2; echo "$(date +%T) $cmd $arg1 $arg2: exit $?" >>"$OUT/xdo.log" ;;
               "") ;; \#*) ;;
-              *) xdotool "$cmd" $arg1 $arg2 ;;
+              *) xdotool "$cmd" $arg1 $arg2; echo "$(date +%T) $cmd $arg1 $arg2: exit $?" >>"$OUT/xdo.log" ;;
           esac
       done <"$XDO" ) >>"$OUT/xdo.log" 2>&1 &
 fi

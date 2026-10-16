@@ -23,11 +23,21 @@ LOADER=${1:-vm}; shift || true
 [ -n "${QEMU_PATH:-}" ] || { [ -x /root/qemu-tirith/build/qemu-system-x86_64 ] && export QEMU_PATH=/root/qemu-tirith/build/qemu-system-x86_64; }
 mkdir -p "$WORK/tmp" "$WORK/home" "$WORK/shm" && cd "$WORK"
 FFMPEG_LIBS=${FFMPEG_LIBS:-/opt/ffmpeg8/lib}; [ -d "$FFMPEG_LIBS" ] || FFMPEG_LIBS=
+# GPU=1: the graphics redirection (design-gpu.md): AMD by default (EGL_DISCRETE=1, renderD129)
+GPU=${GPU:-0}
+if [ "$GPU" = 1 ]; then
+    LAYER_DIR=$(python3 -c "import graminelibos; print(graminelibos._CONFIG_PKGLIBDIR)")/vulkan
+    VK_ICD=${VK_ICD:-/usr/share/vulkan/icd.d/radeon_icd.json}
+    DXVK_DEVICE=${DXVK_DEVICE:-AMD}
+    export GRAMINE_VM_GRAPHICS=1
+    mkdir -p "$WORK/home/.cache"
+fi
 gramine-manifest -Dproton="$PROTON" -Dprefix="$PREFIX" -Dtests="$TESTS" -Dwork="$WORK" \
     -Dlog_level="${LOG_LEVEL:-error}" -Dwinedebug="${WINEDEBUG:--all}" -Dsync="${SYNC:-0}" \
     -Dgame="${GAME:-}" -Ddisplay="${DISPLAY_NUM:-}" -Dffmpeg="$FFMPEG_LIBS" \
     -Dvk_icd="${VK_ICD:-/usr/share/vulkan/icd.d/lvp_icd.json}" -Ddxvk_device="${DXVK_DEVICE:-llvmpipe}" \
-    -Ddxvk_hud="${DXVK_HUD:-}" -Ddxvk_config="${DXVK_CONFIG:-}" \
+    -Ddxvk_hud="${DXVK_HUD:-}" -Ddxvk_config="${DXVK_CONFIG:-}" -Dnet="${NET:-allow}" \
+    -Dgpu="$GPU" -Dgpu_preload="${GPU_PRELOAD:-0}" -Dgpu_eager="${GPU_EAGER:-0}" -Dlayer_dir="${LAYER_DIR:-}" -Degl_discrete="${EGL_DISCRETE:-1}" \
     "$HERE/wine.manifest.template" wine.manifest || exit 1
 echo "# $(date -u +%Y-%m-%dT%H:%MZ) loader=$LOADER args: $* cpus=${GRAMINE_CPU_NUM:-1} ram=${GRAMINE_RAM_SIZE:-default} $(uptime | sed 's/.*load/load/')"
 case $LOADER in

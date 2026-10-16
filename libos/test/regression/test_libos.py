@@ -1077,6 +1077,13 @@ class TC_30_Syscall(RegressionTestCase):
         self.assertIn('memfd over SCM_RIGHTS, private rw-then-ro reader: ok', stdout)
         self.assertIn('TEST OK', stdout)
 
+    def test_075c_netlink_ifaces(self):
+        # the loopback-only NETLINK_ROUTE: if_nameindex(), getifaddrs(), a raw RTM_GETLINK dump
+        stdout, _ = self.run_binary(['netlink_ifaces'])
+        self.assertIn('lo is index 1', stdout)
+        self.assertIn('lo has inet, inet6 and packet entries', stdout)
+        self.assertIn('TEST OK', stdout)
+
     def test_075a_memfd_exec(self):
         stdout, _ = self.run_binary(['memfd_exec'])
         self.assertIn('TEST OK', stdout)

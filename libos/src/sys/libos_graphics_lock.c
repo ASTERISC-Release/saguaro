@@ -175,6 +175,12 @@ long libos_syscall_acquire_libos_lock(void) {
     return -ENOSYS;
 }
 
+long libos_syscall_graphics_physmem(size_t size, uint64_t* out_pa) {
+    __UNUSED(size);
+    __UNUSED(out_pa);
+    return -ENOSYS;
+}
+
 long libos_syscall_relinquish_libos_lock(long offset) {
     __UNUSED(offset);
     return -ENOSYS;

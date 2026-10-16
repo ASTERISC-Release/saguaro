@@ -272,6 +272,20 @@ struct pal_initial_mem_range {
 int PalVirtualMemoryAlloc(void* addr, size_t size, pal_prot_flags_t prot);
 
 /*!
+ * \brief Allocate physically contiguous memory at a given virtual address.
+ *
+ * \param addr      Virtual address, page-aligned (a range the caller bookkept).
+ * \param size      Size, page-aligned.
+ * \param prot      See #PalVirtualMemoryAlloc (read-write at least).
+ * \param out_phys  The physical (host-visible) address of the first page.
+ *
+ * For the VM PAL's graphics redirection: the host reads such memory by its physical address.
+ * Freed with #PalVirtualMemoryFree. Other PALs return -PAL_ERROR_NOTIMPLEMENTED.
+ */
+int PalVirtualMemoryAllocContiguous(void* addr, size_t size, pal_prot_flags_t prot,
+                                    uint64_t* out_phys);
+
+/*!
  * \brief Deallocate a previously allocated memory mapping.
  *
  * \param addr  The address.

@@ -376,7 +376,7 @@ void glBindFramebuffer(GLenum target, GLuint framebuffer) {
                  * query_idle_fence_buffer() is also a no-op. */
                 long _offset = acquire_libos_lock();
                 comm_page_t* c = comm_page(_offset);
-                c->p1 = (uint64_t)bufs;
+                c->p1 = bufs_pa;
                 c->p2 = (uint64_t)cur;
                 __sync_synchronize();
 
@@ -516,7 +516,7 @@ void glXSwapBuffers(Display *dpy, GLXDrawable drawable) {
         /* Send message to the host */
         long _offset = acquire_libos_lock();
         comm_page_t* c = comm_page(_offset);
-        c->p1          = (uint64_t)bufs;
+        c->p1          = bufs_pa;
         c->p2          = (uint64_t)cur;
         __sync_synchronize();
 
