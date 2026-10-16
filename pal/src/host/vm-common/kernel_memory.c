@@ -70,6 +70,12 @@ static inline void frame_pool_unlock(uint64_t flags) {
 /* Software bit of a non-present leaf (ignored by the hardware): a demand-zero page whose access
  * rights are the entry's W and NX bits; see memory_address_space_handle_fault(). */
 #define PTE_LAZY    (1UL << 9)
+/* Software bits of a leaf that maps a frame shared with a file's cache (a MAP_PRIVATE file
+ * mapping, Linux's page-cache semantics): the page is read-only in the hardware bits and a write
+ * must first copy the frame (memory_address_space_map_cow_frame()). PTE_COW_WRITABLE says the
+ * mapping allows writes, so the fault handler copies; without it a write is a genuine fault. */
+#define PTE_COW          (1UL << 10)
+#define PTE_COW_WRITABLE (1UL << 11)
 
 static struct memory_address_space g_boot_address_space;
 
@@ -765,6 +771,30 @@ int memory_address_space_map_shared_frame(struct memory_address_space* space, ui
     if (ret < 0)
         memory_frame_put(frame);
     return ret;
+}
+
+/* Copies a frame-pool frame into a fresh one (for copy-on-write). */
+static int cow_copy_frame(uintptr_t frame, uintptr_t* out_copy) {
+    uintptr_t copy;
+    int ret = memory_frame_alloc(&copy);
+    if (ret < 0)
+        return ret;
+    memcpy(memory_frame_pointer(copy), memory_frame_pointer(frame), PAGE_SIZE);
+    *out_copy = copy;
+    return 0;
+}
+
+int memory_address_space_map_cow_frame(struct memory_address_space* space, uintptr_t addr,
+                                       uintptr_t frame, bool writable, bool execute) {
+    int ret = memory_address_space_map_shared_frame(space, addr, frame, /*write=*/false, execute);
+    if (ret < 0)
+        return ret;
+    uint64_t* pte;
+    ret = address_space_get_leaf_entry(space, addr, /*make_private=*/true, &pte);
+    if (ret < 0)
+        return ret;
+    *pte |= PTE_COW | (writable ? PTE_COW_WRITABLE : 0);
+    return 0;
 }
 
 int memory_address_space_share_range(struct memory_address_space* source,
@@ -1928,8 +1958,10 @@ int memory_address_space_alloc(struct memory_address_space* space, void* addr, s
  * for any other fault. Runs in interrupt context, for faults from user and kernel mode alike. */
 bool memory_address_space_handle_fault(uintptr_t addr, uint64_t error_code) {
     const uint64_t addr_mask = 0x00000ffffffff000UL;
-    if (!g_frame_pool_bitmap || (error_code & PTE_PRESENT) || addr >= MEMORY_ADDRESS_SPACE_LIMIT)
-        return false; /* protection violation on a present page, or not a user address */
+    if (!g_frame_pool_bitmap || addr >= MEMORY_ADDRESS_SPACE_LIMIT)
+        return false; /* not a user address */
+    if ((error_code & PTE_PRESENT) && !(error_code & PTE_WRITE))
+        return false; /* a protection violation other than a write: a genuine fault */
 
     uint64_t root;
     __asm__ volatile("mov %%cr3, %0" : "=r"(root));
@@ -1942,8 +1974,35 @@ bool memory_address_space_handle_fault(uintptr_t addr, uint64_t error_code) {
     }
     uint64_t* pte = &table[(addr >> 12) & 0x1ff];
     uint64_t old = __atomic_load_n(pte, __ATOMIC_ACQUIRE);
-    if (old & PTE_PRESENT)
-        return true; /* another vCPU materialized it meanwhile */
+    if (old & PTE_PRESENT) {
+        if (old & PTE_WRITE)
+            return true; /* another vCPU materialized or copied it meanwhile */
+        if (!(error_code & PTE_WRITE) || !(old & PTE_COW_WRITABLE))
+            return false; /* a write to a page that is read-only for good: a genuine fault */
+        /* copy-on-write: the page maps a frame of a file's cache (a MAP_PRIVATE file mapping
+         * that allows writes); give this address space its own copy. Only this vCPU's TLB is
+         * invalidated here (a shootdown waits for the other vCPUs, which an interrupt handler
+         * cannot do): another vCPU of the process keeps a read-only translation of the old
+         * frame until its next flush and reads the file's content instead of this write there
+         * meanwhile; a write there faults and finds the copy. */
+        uintptr_t old_frame = old & addr_mask;
+        uintptr_t copy;
+        if (cow_copy_frame(old_frame, &copy) < 0) {
+            log_error("Out of frames for a copy-on-write page at 0x%lx", addr);
+            return false;
+        }
+        uint64_t new = copy | PTE_PRESENT | PTE_WRITE | PTE_USER | (old & PTE_NX);
+        if (!__atomic_compare_exchange_n(pte, &old, new, /*weak=*/false, __ATOMIC_ACQ_REL,
+                                         __ATOMIC_ACQUIRE)) {
+            memory_frame_free(copy); /* lost a race; the winner's mapping (or change) stands */
+            return true;
+        }
+        __asm__ volatile("invlpg (%0)" : : "r"(addr) : "memory");
+        memory_frame_put(old_frame); /* the leaf's reference to the shared frame */
+        return true;
+    }
+    if (error_code & PTE_PRESENT)
+        return true; /* the entry changed under the fault (unmapped meanwhile): let it retry */
     if (!(old & PTE_LAZY))
         return false;
     if ((error_code & PTE_WRITE) && !(old & PTE_WRITE))
@@ -2103,13 +2162,33 @@ int memory_address_space_protect(struct memory_address_space* space, void* addr,
             continue;
         }
         uintptr_t frame = *entry & addr_mask;
+        uint64_t cow = *entry & (PTE_COW | PTE_COW_WRITABLE);
         if (!(*entry & PTE_PRESENT) && !leaf_holds_reference(va, *entry)) {
             /* an unbacked page (never touched, or a PROT_NONE reservation) stays demand-zero */
             ret = address_space_restore_pte(space, va, lazy);
         } else if (!read && !write && !execute) {
-            ret = address_space_restore_pte(space, va, frame);
+            ret = address_space_restore_pte(space, va, frame | (cow & PTE_COW));
+        } else if (cow && write) {
+            /* a copy-on-write page (a frame of a file's cache) becomes writable: copy it now;
+             * map_owned drops the leaf's reference to the shared frame */
+            uintptr_t copy;
+            ret = cow_copy_frame(frame, &copy);
+            if (ret < 0)
+                return ret;
+            ret = memory_address_space_map_owned(space, va, copy, write, execute,
+                                                 /*usermode=*/true);
+            if (ret < 0)
+                memory_frame_free(copy);
         } else {
             ret = memory_address_space_map(space, va, frame, write, execute, /*usermode=*/true);
+            if (ret == 0 && cow) {
+                /* still a shared frame, read-only: keep the mark (a later write must copy; it
+                 * is allowed by a fault only while the mapping is writable, which it is not) */
+                uint64_t* leaf;
+                ret = address_space_get_leaf_entry(space, va, /*make_private=*/true, &leaf);
+                if (ret == 0)
+                    *leaf |= PTE_COW;
+            }
         }
         if (ret < 0)
             return ret;

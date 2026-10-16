@@ -6,7 +6,10 @@
 #   run-wine.sh [direct|vm] [ARGS...]      default args: --version
 # Environment: WINEDEBUG (default -all), SYNC=1 (esync/fsync/ntsync on), LOG_LEVEL (default error),
 # GRAMINE_CPU_NUM, GRAMINE_RAM_SIZE for the VM. The manifest and its scratch dirs are in WORK
-# (default .proton-vm/wine-vm).
+# (default .proton-vm/wine-vm). Games (step 2 of "Next phases"): GAME=<dir> mounts the game's folder,
+# DISPLAY_NUM=N gives the application the host X server :N through the vsock relay (the launcher's
+# own DISPLAY must then be :N too), VK_ICD (default lavapipe), DXVK_DEVICE (default llvmpipe),
+# DXVK_HUD, DXVK_CONFIG, FFMPEG_LIBS (default /opt/ffmpeg8/lib if it exists).
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../.." && pwd)
@@ -19,8 +22,12 @@ LOADER=${1:-vm}; shift || true
 . "${GRAMINE_PREFIX:-$HOME/.local/gramine-vm}/env.sh"
 [ -n "${QEMU_PATH:-}" ] || { [ -x /root/qemu-tirith/build/qemu-system-x86_64 ] && export QEMU_PATH=/root/qemu-tirith/build/qemu-system-x86_64; }
 mkdir -p "$WORK/tmp" "$WORK/home" "$WORK/shm" && cd "$WORK"
+FFMPEG_LIBS=${FFMPEG_LIBS:-/opt/ffmpeg8/lib}; [ -d "$FFMPEG_LIBS" ] || FFMPEG_LIBS=
 gramine-manifest -Dproton="$PROTON" -Dprefix="$PREFIX" -Dtests="$TESTS" -Dwork="$WORK" \
     -Dlog_level="${LOG_LEVEL:-error}" -Dwinedebug="${WINEDEBUG:--all}" -Dsync="${SYNC:-0}" \
+    -Dgame="${GAME:-}" -Ddisplay="${DISPLAY_NUM:-}" -Dffmpeg="$FFMPEG_LIBS" \
+    -Dvk_icd="${VK_ICD:-/usr/share/vulkan/icd.d/lvp_icd.json}" -Ddxvk_device="${DXVK_DEVICE:-llvmpipe}" \
+    -Ddxvk_hud="${DXVK_HUD:-}" -Ddxvk_config="${DXVK_CONFIG:-}" \
     "$HERE/wine.manifest.template" wine.manifest || exit 1
 echo "# $(date -u +%Y-%m-%dT%H:%MZ) loader=$LOADER args: $* cpus=${GRAMINE_CPU_NUM:-1} ram=${GRAMINE_RAM_SIZE:-default} $(uptime | sed 's/.*load/load/')"
 case $LOADER in

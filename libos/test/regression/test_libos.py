@@ -1067,6 +1067,16 @@ class TC_30_Syscall(RegressionTestCase):
         stdout, _ = self.run_binary(['memfd_shared'])
         self.assertIn('TEST OK', stdout)
 
+    def test_075b_mmap_shared_ro(self):
+        # a read-only MAP_SHARED mapping sees another process's stores through its writable one
+        # (a host file and a memfd passed over SCM_RIGHTS; Wine's clients read the server's
+        # session block that way)
+        stdout, _ = self.run_binary(['mmap_shared_ro'], timeout=60)
+        self.assertIn('host file, reader first: ok', stdout)
+        self.assertIn('memfd over SCM_RIGHTS, writer first: ok', stdout)
+        self.assertIn('memfd over SCM_RIGHTS, private rw-then-ro reader: ok', stdout)
+        self.assertIn('TEST OK', stdout)
+
     def test_075a_memfd_exec(self):
         stdout, _ = self.run_binary(['memfd_exec'])
         self.assertIn('TEST OK', stdout)

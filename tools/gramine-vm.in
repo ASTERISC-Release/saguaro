@@ -118,7 +118,10 @@ REM_MEM_SIZE=$((RAW_MEM_SIZE - 4))
 # and must fit inside guest RAM: data + 1G <= 2G (ram1) + REM, i.e. RAM >= 3G + data, and at
 # least 5G so that a non-empty huge2 backs the application itself. (The rendered manifest lists
 # the environment keys inside the [loader.env] table, hence the bare DISPLAY match.)
-if grep -Eq '^DISPLAY[^=]*=[[:space:]]*"2:' "$GRAMINE_MANIFEST" 2>/dev/null; then
+# GRAMINE_VM_GRAPHICS=0 keeps the X relay (below) but configures no arenas: for an X11 application
+# that renders in software and needs the demand-paged address space instead of the identity-mapped
+# first process the arenas imply (Wine, Documentation/devel/proton-vm/).
+if [ "${GRAMINE_VM_GRAPHICS:-1}" != 0 ] && grep -Eq '^DISPLAY[^=]*=[[:space:]]*"2:' "$GRAMINE_MANIFEST" 2>/dev/null; then
     GRAPHICS_DATA_SIZE=${GRAMINE_DATA_SIZE:-1G}
     # Where the data arena starts. 4G is the anchor today; an explicit override relocates it
     # (the arena and the hugepage arena after it must still be backed by guest RAM, which lives
