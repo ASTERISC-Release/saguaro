@@ -31,6 +31,7 @@ const struct generated_offset generated_offsets[] = {
      * it in via offset-based stores, rather than x86_64's sequence of individual pushes -- so,
      * unlike x86_64's syscallas.S, it needs the total size as a constant. */
     DEFINE(PAL_CONTEXT_SIZE, sizeof(struct PAL_CONTEXT)),
+    DEFINE(LIBOS_XSTATE_SIZE, sizeof(struct libos_xstate)),
     /* immediate of the `brk` that asks the PAL to restore a context exactly (pal_arch.h) */
     DEFINE(PAL_BRK_RESTORE_CONTEXT, PAL_BRK_RESTORE_CONTEXT),
 #elif defined(__riscv)

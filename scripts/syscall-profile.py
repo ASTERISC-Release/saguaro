@@ -346,11 +346,10 @@ def check_loader(profile, loader, matrix, evidence, rules, partial_ratio, vm_mul
     if loader == "vm" and (multi["fork_like_calls"] or multi["extra_execs"]):
         what = (f"the application is multi-process ({multi['processes']} processes, "
                 f"{multi['extra_execs']} extra execs)")
-        if vm_multiprocess:
-            # x86_64 VM PAL with sys.experimental__multiprocess (Documentation/devel/vm-multiproc/)
+        if vm_multiprocess and profile["arch"] in ("x86_64", "amd64", "aarch64", "arm64"):
             findings["notes"].append({"syscall": "fork/exec", "calls": multi["fork_like_calls"],
                                       "why": what + "; needs sys.experimental__multiprocess = true "
-                                             "(experimental, x86_64 VM PAL)"})
+                                             f"(experimental, {arch} VM PAL)"})
         else:
             findings["blockers"].append({"syscall": "fork/exec", "calls": multi["fork_like_calls"],
                                          "why": what + "; the VM PAL has one process unless "
@@ -455,7 +454,8 @@ def main():
         p.add_argument("--partial-ratio", type=float, default=0.5,
                        help="LTP pass ratio from which a partial syscall is only a minor note")
         p.add_argument("--vm-multiprocess", action="store_true",
-                       help="the vm loader runs with sys.experimental__multiprocess (x86_64): "
+                       help="the x86_64 or AArch64 vm loader runs with "
+                            "sys.experimental__multiprocess: "
                             "multi-process use is a note, not a blocker")
     args = parser.parse_args()
     loaders = ("direct", "vm") if getattr(args, "loader", "both") == "both" else (args.loader,)

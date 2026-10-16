@@ -882,6 +882,12 @@ bool handle_signal(PAL_CONTEXT* context) {
     }
     if (handler != SIG_IGN) {
         /* User provided handler. */
+#ifdef __aarch64__
+        if (!aarch64_signal_frame_fits(context, !!(sa->sa_flags & SA_ONSTACK))) {
+            unlock(&current->signal_dispositions->lock);
+            sighandler_core(SIGSEGV);
+        }
+#endif
         long sysnr = libos_get_tcb()->context.syscall_nr;
         if (sysnr >= 0) {
             switch (pal_context_get_retval(context)) {

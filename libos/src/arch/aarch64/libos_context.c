@@ -118,6 +118,27 @@ struct sigframe {
     siginfo_t siginfo;
 };
 
+bool aarch64_signal_frame_fits(PAL_CONTEXT* context, bool should_use_altstack) {
+    stack_t* alt = &get_cur_thread()->signal_altstack;
+    if (alt->ss_flags & SS_DISABLE || !alt->ss_size)
+        return true;
+
+    uintptr_t begin = (uintptr_t)alt->ss_sp;
+    uintptr_t end = begin + alt->ss_size;
+    bool on_altstack = begin <= context->sp && context->sp <= end;
+    if (!on_altstack && !should_use_altstack)
+        return true;
+    if (on_altstack && context->sp == begin)
+        return false;
+
+    uintptr_t stack = get_stack_for_sighandler(context->sp, should_use_altstack);
+    if (stack < sizeof(struct sigframe))
+        return false;
+    stack = ALIGN_DOWN(stack - sizeof(struct sigframe), alignof(struct sigframe));
+    stack = ALIGN_DOWN(stack, 0x10);
+    return stack >= begin;
+}
+
 /* aarch64 has no SA_RESTORER-style caller-provided restorer: the arm64 kernel itself writes a
  * two-instruction trampoline (`mov x8, #139; svc #0`, i.e. `rt_sigreturn`) into the signal
  * frame and points LR at it -- verified empirically on a native arm64 box: LR inside a plain
@@ -138,6 +159,7 @@ struct sigframe {
  * emulation path -- indistinguishable from the glibc syscall wrapper's own `svc` at a libc
  * text address. */
 static_assert(__NR_rt_sigreturn == 139, "hard-coded mov x8 immediate below must match");
+static_assert(FPSIMD_MAGIC == 0x46508001u, "syscallas.S writes this FPSIMD magic");
 static_assert(PAL_PSTATE_EXACT_CONTEXT == (1ULL << 62),
               "syscallas.S tests bit 62 of pstate (_return_from_syscall exact-restore path)");
 __attribute__((naked)) static void rt_sigreturn_trampoline(void) {

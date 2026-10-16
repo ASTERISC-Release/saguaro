@@ -41,7 +41,6 @@
 #include "asm_offsets.h"
 
 .extern libos_emulate_syscall
-.extern libos_xstate_size
 .extern libos_xstate_restore
 .extern g_pal_tcb_singleton
 
@@ -189,26 +188,42 @@ libos_syscall_entry:
     str  xzr, [x17, #PAL_CONTEXT_ESR_OFF]
     str  xzr, [x17, #PAL_CONTEXT_OLDMASK_OFF]
 
-    /* Save FPSR/FPCR into the context's scalar fields (lightweight control state only; the full
-     * FP/SIMD register file is *not* captured here, matching x86_64's approach of only saving
-     * mxcsr/fpcw at syscall entry -- real applications don't assume full FP/SIMD state survives
-     * a syscall, same reasoning the top-of-file x86_64 comment spells out). */
+    /* Save the application's full FP/SIMD state before the first C call. A signal delivered at
+     * this syscall's return needs it in its ucontext, even if the syscall itself used no FP. */
+    sub  x16, x17, #LIBOS_XSTATE_SIZE
+    mov  sp, x16
+    str  x16, [x17, #PAL_CONTEXT_FPREGS_OFF]
+    stp  q0,  q1,  [x16, #16]
+    stp  q2,  q3,  [x16, #48]
+    stp  q4,  q5,  [x16, #80]
+    stp  q6,  q7,  [x16, #112]
+    stp  q8,  q9,  [x16, #144]
+    stp  q10, q11, [x16, #176]
+    stp  q12, q13, [x16, #208]
+    stp  q14, q15, [x16, #240]
+    stp  q16, q17, [x16, #272]
+    stp  q18, q19, [x16, #304]
+    stp  q20, q21, [x16, #336]
+    stp  q22, q23, [x16, #368]
+    stp  q24, q25, [x16, #400]
+    stp  q26, q27, [x16, #432]
+    stp  q28, q29, [x16, #464]
+    stp  q30, q31, [x16, #496]
     mrs  x0, fpsr
     mrs  x1, fpcr
     str  w0, [x17, #PAL_CONTEXT_FPSR_OFF]
     str  w1, [x17, #PAL_CONTEXT_FPCR_OFF]
-    strb wzr, [x17, #PAL_CONTEXT_FPREGS_USED_OFF]
+    str  w0, [x16, #8]
+    str  w1, [x16, #12]
+    movz w0, #0x8001
+    movk w0, #0x4650, lsl #16           /* FPSIMD_MAGIC */
+    str  w0, [x16]
+    mov  w0, #LIBOS_XSTATE_SIZE
+    str  w0, [x16, #4]
+    mov  w0, #1
+    strb w0, [x17, #PAL_CONTEXT_FPREGS_USED_OFF]
 
     mov  x19, x17   /* X19 (callee-saved) = PAL_CONTEXT base, kept across the calls below */
-
-    /* Reserve libos_xstate_size() bytes directly below the context for context->fpregs to point
-     * at (unpopulated for now -- only filled in if a signal needs full FP/SIMD state while this
-     * syscall is being handled). */
-    bl   libos_xstate_size
-    sub  x16, x19, x0
-    and  x16, x16, #0xfffffffffffffff0
-    mov  sp, x16
-    str  x16, [x19, #PAL_CONTEXT_FPREGS_OFF]
 
     mov  x0, x19
     bl   libos_emulate_syscall    /* does not return */

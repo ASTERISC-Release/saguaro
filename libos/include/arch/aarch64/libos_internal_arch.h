@@ -17,6 +17,9 @@
  * comment in arch/aarch64/libos_context.c. */
 void* libos_rt_sigreturn_trampoline_addr(void);
 
+/* A full alternate stack cannot hold another signal frame. */
+bool aarch64_signal_frame_fits(PAL_CONTEXT* context, bool should_use_altstack);
+
 /* SIGILL handling hooks used by illegal_upcall() (see bookkeep/libos_signal.c). */
 
 /* True if an illegal instruction at \p addr is an intentional Gramine-internal one: here, the

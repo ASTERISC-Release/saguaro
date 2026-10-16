@@ -8,7 +8,7 @@
 # takes the build machine's (gcc -dumpmachine) and keeps one log per probe.
 #
 # Usage: test/vm-multiproc-aarch64/probes.sh [--prefix DIR] [--cpus N]
-#            [spawn|sh|forks|signals|forks-mem|eintr|efault]...   (default: sh spawn)
+#            [spawn|sh|forks|signals|forks-mem|eintr|efault|shared]...   (default: sh spawn)
 # eintr: test/vm-multiproc-aarch64/eintr.c, a signal against each kind of blocking call.
 # efault: test/vm-multiproc-aarch64/efault.c, LibOS faults on application memory, key on and off.
 set -u
@@ -29,17 +29,20 @@ export GRAMINE_PREFIX=$PREFIX
 . "$PREFIX/env.sh"
 WORK=${WORK:-$REPO/.mp-probes-aarch64}
 LOGS=${LOGS:-$WORK/logs}
-mkdir -p "$WORK" "$LOGS" && cd "$WORK"
+mkdir -p "$WORK" "$LOGS" "$WORK/tmp" && cd "$WORK"
 SRC=$REPO/test/vm-multiproc
-cp "$SRC"/spawn.c "$SRC"/forks.c "$SRC"/sig.sh "$SRC"/manifest.template "$HERE"/eintr.c "$HERE"/efault.c .
+cp "$SRC"/spawn.c "$SRC"/forks.c "$SRC"/sig.sh "$SRC"/manifest.template \
+   "$SRC"/sysv-fork.manifest.template "$HERE"/eintr.c "$HERE"/efault.c "$HERE"/shared.c .
 gcc -O2 -o spawn spawn.c && gcc -O2 -o forks forks.c && gcc -O2 -o eintr eintr.c -lpthread && \
-    gcc -O2 -o efault efault.c || exit 2
+    gcc -O2 -o efault efault.c && gcc -O2 -o shared shared.c || exit 2
 LIBDIR=/lib/$(gcc -dumpmachine)
-for entry in /usr/bin/sh /usr/bin/bash "$WORK/spawn" "$WORK/forks" "$WORK/eintr" "$WORK/efault"; do
+for entry in /usr/bin/sh /usr/bin/bash "$WORK/spawn" "$WORK/forks" "$WORK/eintr" "$WORK/efault" "$WORK/shared"; do
     name=$(basename "$entry")
     case $entry in "$WORK"/*) e=/probe/$name ;; *) e=$entry ;; esac
+    template=manifest.template
+    [ "$name" = shared ] && template=sysv-fork.manifest.template
     gramine-manifest -Darch_libdir="$LIBDIR" -Dentry="$e" -Dprobedir="$WORK" \
-        manifest.template "$name.manifest" 2>/dev/null || exit 2
+        "$template" "$name.manifest" 2>/dev/null || exit 2
 done
 run() {
     local tag=$1 t=$2; shift 2
@@ -58,10 +61,21 @@ for what in "${WHAT[@]}"; do
         spawn)   run spawn 60 gramine-vm spawn ;;
         forks)   run forks-1000 900 gramine-vm forks 1000 1; run forks-64x8 600 gramine-vm forks 64 8 ;;
         signals) run signals 60 gramine-vm bash /probe/sig.sh ;;
+        shared)  run shared 60 gramine-vm shared
+                 grep -qx 'shared: 5/5 passed (pipes, Unix sockets, MAP_SHARED, futex, /dev/shm)' \
+                     "$LOGS/shared.log" || exit 1 ;;
         eintr)   # one guest per case: a case that times out ends its process
                  for c in poll ppoll-null pause pipe-read epoll_wait select nanosleep futex \
                           child-pause; do
                      LINES_SHOWN=${LINES_SHOWN:-2} run eintr-$c 40 gramine-vm eintr $c
+                     if [ "$c" = child-pause ]; then
+                         grep -q 'child-pause killed=1 sig=15' "$LOGS/eintr-$c.log" || exit 1
+                     else
+                         grep -q 'handler=1.*d8 kept' "$LOGS/eintr-$c.log" || exit 1
+                         [ "$c" = futex ] || \
+                             grep -q 'errno=Interrupted system call' "$LOGS/eintr-$c.log" || exit 1
+                     fi
+                     grep -q '\[ VM exited with code 0 \]' "$LOGS/eintr-$c.log" || exit 1
                  done ;;
         efault)  # key on: each case in a child; key off: in the process itself (no fork)
                  grep -v experimental__multiprocess efault.manifest > efault-nokey.manifest
@@ -72,6 +86,12 @@ for what in "${WHAT[@]}"; do
                          LINES_SHOWN=0 run efault-$c-$k 60 gramine-vm $m $c
                          grep -a "child \|no fork\|Internal\|Panic\|exited with" \
                              "$LOGS/efault-$c-$k.log" | tail -4
+                         case $c-$k in
+                             sigframe-on)  grep -q 'sigframe: child killed by signal 30' "$LOGS/efault-$c-$k.log" ;;
+                             sigframe-off) grep -q '\[ VM exited with code 1 \]' "$LOGS/efault-$c-$k.log" ;;
+                             altstack-on)  grep -q 'altstack: child killed by signal 11' "$LOGS/efault-$c-$k.log" ;;
+                             altstack-off) grep -q '\[ VM exited with code 139 \]' "$LOGS/efault-$c-$k.log" ;;
+                         esac || exit 1
                      done
                  done ;;
         forks-mem)
