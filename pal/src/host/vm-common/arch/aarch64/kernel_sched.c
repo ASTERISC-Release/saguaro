@@ -68,6 +68,11 @@ static void thread_list_lock_disable_irq(void) {
 
 /* Atomic variable used to kick sched_thread() into action (instead of waiting for some time) */
 bool g_kick_sched_thread = false;
+/* Incremented whenever a thread becomes runnable (a wakeup, an interruption, a new thread): the
+ * bottom-half thread's back-off (kernel_thread.c) waits for a change of it. g_kick_sched_thread
+ * cannot serve there: it stays set until an idle thread runs, which never happens while every
+ * other vCPU is busy. */
+uint64_t g_sched_runnable_gen = 0;
 
 /* Multiprocess support (`sys.experimental__multiprocess`): set once the frame pool exists. Then
  * save_context_and_restore_next() (kernel_context.S) installs the next thread's page-table root
@@ -450,6 +455,7 @@ void sched_thread_interrupt(struct thread* thread) {
                 LISTP_DEL(thread, &g_thread_list, list);
                 LISTP_ADD(thread, &g_thread_list, list);
             }
+            __atomic_fetch_add(&g_sched_runnable_gen, 1, __ATOMIC_RELEASE);
             __atomic_store_n(&g_kick_sched_thread, true, __ATOMIC_RELEASE);
         }
     } else if (thread->state != THREAD_STOPPED) {
@@ -483,8 +489,10 @@ static void sched_thread_wakeup_common(int* futex_word) {
         }
     }
 
-    if (found)
+    if (found) {
+        __atomic_fetch_add(&g_sched_runnable_gen, 1, __ATOMIC_RELEASE);
         __atomic_store_n(&g_kick_sched_thread, true, __ATOMIC_RELEASE);
+    }
 }
 
 void sched_thread_wakeup_uninterruptable(int* futex_word) {
@@ -502,6 +510,7 @@ void sched_thread_wakeup(int* futex_word) {
 void sched_thread_add(struct thread* thread) {
     thread_list_lock_disable_irq();
     LISTP_ADD_TAIL(thread, &g_thread_list, list);
+    __atomic_fetch_add(&g_sched_runnable_gen, 1, __ATOMIC_RELEASE);
     spinlock_unlock_enable_irq(&g_thread_list_lock);
 }
 
