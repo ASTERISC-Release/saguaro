@@ -9,10 +9,12 @@ Gramine (formerly *Graphene*) runs an unmodified Linux application in an isolate
 implementation of the Linux system call interface (the *LibOS*) on top of a small host abstraction
 layer (the *PAL*). It was initially designed and built by a diverse group of researchers
 and engineers from universities and industry to run on Intel x86 platforms. Please see the
-`Acknowledgements`_ section below.
+`Acknowledgements`_ section below and the `upstream repository
+<https://github.com/gramineproject/gramine>`__.
 
 This fork has been significantly extended to support additional architectures, backends and
-features. It is implemented and maintained by the `ASU Trusted, Reliable, and Secure Computing
+features. It extends `gramine-tdx <https://github.com/gramineproject/gramine-tdx>`__ -- Gramine
+with Intel TDX and virtual-machine backends -- and keeps upstream's full history. It is implemented and maintained by the `ASU Trusted, Reliable, and Secure Computing
 (ASTERISC) Research Lab <https://asteriscresearchlab.com/>`__. This fork supports several host environments:
 
 * Containerized userspace (``direct``)
@@ -210,14 +212,15 @@ Contributing
 Bug reports and pull requests are welcome through the GitHub repository. By
 submitting a contribution you agree that it is licensed under the license of the
 file it modifies or adds (LGPL-3.0-or-later, or BSD-3-Clause for files under
-``CI-Examples/``).
+``CI-Examples/``), and that you have the right to submit it under that license.
 
 License
 =======
 
 Gramine is licensed under the LGPL-3.0-or-later (see ``LICENSE.txt``); the
 examples in ``CI-Examples/`` are BSD-3-Clause unless a file says otherwise (see
-``LICENSE.addendum.txt``). 
+``LICENSE.addendum.txt``). The copyright notices of upstream Gramine and gramine-tdx
+are retained.
 
 Citation
 ========
@@ -233,6 +236,8 @@ This work is the culmination of several research projects undertaken by our lab,
 Acknowledgements
 ================
 
-We thank the Gramine and gramine-tdx authors and contributors; the organizations and individuals are listed in
+This work builds on `Gramine <https://github.com/gramineproject/gramine>`__ and its
+Intel TDX and virtual-machine fork `gramine-tdx
+<https://github.com/gramineproject/gramine-tdx>`__. We thank the Gramine and gramine-tdx authors and contributors; the organizations and individuals are listed in
 `ACKNOWLEDGEMENTS.rst <ACKNOWLEDGEMENTS.rst>`__.
 
