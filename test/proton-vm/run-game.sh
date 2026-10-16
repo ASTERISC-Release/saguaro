@@ -45,12 +45,21 @@ if [ "$LOADER" = vm ]; then
     # the host's (not writable), so Xvfb/Xorg listen on the abstract socket only: relay to that one
     N=${DISP#:}
     if [ ! -S "/tmp/.X11-unix/X$N" ] || [ "$TARGET" != "$DISP" ]; then
-        ss -H -ln --vsock "sport = :$((6000 + N))" 2>/dev/null | grep -q . || \
-            setsid -f nohup socat -b 1048576 "VSOCK-LISTEN:$((6000 + N)),fork,reuseaddr,max-children=50" \
-                "$([ -S "/tmp/.X11-unix/X${TARGET#:}" ] && echo UNIX || echo ABSTRACT)-CONNECT:/tmp/.X11-unix/X${TARGET#:}" \
-                </dev/null >"$OUT/socat.log" 2>&1
         # (setsid -f: detached, or the script's final wait would block on it; the relay stays for
         # the next runs of the same display, like a relay started by hand)
+        if ! ss -H -ln --vsock "sport = :$((6000 + N))" 2>/dev/null | grep -q .; then
+            if [ -S "/tmp/.X11-unix/X${TARGET#:}" ]; then
+                # a host server with a filesystem socket (Xwayland): through the filtering relay,
+                # which hides DRI3 and Present from the guest (tools/gramine-vm-xfilter.py; a DRI3
+                # server makes Mesa open the GPU through the X connection with fd passing, which no
+                # vsock relay can carry: the guest hangs in winex11's GL initialisation)
+                setsid -f nohup python3 "$ROOT/tools/gramine-vm-xfilter.py" --port $((6000 + N)) \
+                    --x-socket "/tmp/.X11-unix/X${TARGET#:}" </dev/null >"$OUT/socat.log" 2>&1
+            else
+                setsid -f nohup socat -b 1048576 "VSOCK-LISTEN:$((6000 + N)),fork,reuseaddr,max-children=50" \
+                    "ABSTRACT-CONNECT:/tmp/.X11-unix/X${TARGET#:}" </dev/null >"$OUT/socat.log" 2>&1
+            fi
+        fi
         export GRAMINE_VM_X_PROXY=0
         sleep 0.5
     fi

@@ -32,6 +32,12 @@ loader.env.DXVK_LOG_LEVEL = "{{ dxvk_log_level }}"
 # EGL_VULKAN_RATE_LOG=<s>: the layer logs its present rate every so many seconds (GPU runs on the
 # dummy server, where the window content is not visible)
 loader.env.EGL_VULKAN_RATE_LOG = "{{ rate_log }}"
+{% if mesa_wsi|string != "" %}
+# MESA_VK_WSI_DEBUG=sw: Mesa's X11 WSI without DRI3 (a DRI3 server such as Xwayland makes it open
+# the GPU through the X connection with fd passing, which the vsock relay cannot carry: the guest
+# hangs in winex11's GPU enumeration; FINDINGS.md 2026-10-16). Presents go through the layer anyway.
+loader.env.MESA_VK_WSI_DEBUG = "{{ mesa_wsi }}"
+{% endif %}
 {% if refresh|string != "" %}
 # EGL_VULKAN_REFRESH / EGL_VULKAN_MAX_FPS: the layer's present pacing (FIFO at REFRESH Hz, the
 # other modes at most MAX_FPS per second; vklayer.c): raised for a frame-rate measurement
@@ -77,6 +83,9 @@ loader.env.GLIBC_TUNABLES = "glibc.pthread.rseq=0"
 # software rendering first (step 2 of "Next phases"): Mesa's llvmpipe for GLX, lavapipe for Vulkan
 # (DXVK); the X11 WSI presents with XPutImage when the server has no DRI3
 loader.env.LIBGL_ALWAYS_SOFTWARE = "1"
+# no DRI3 for the guest's GL either: on a DRI3 server (Xwayland) Mesa would open the GPU through the
+# X connection with fd passing, which the vsock relay cannot carry (FINDINGS.md 2026-10-16)
+loader.env.LIBGL_DRI3_DISABLE = "1"
 {% endif %}
 loader.env.VK_ICD_FILENAMES = "{{ vk_icd }}"
 loader.env.DXVK_FILTER_DEVICE_NAME = "{{ dxvk_device }}"
