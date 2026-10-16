@@ -10,6 +10,9 @@ option('tdx', type: 'combo', choices: ['disabled', 'enabled'],
 option('sev', type: 'combo', choices: ['disabled', 'enabled'],
       description: 'Also build the AMD SEV / SEV-SNP variant of the VM PAL and gramine-sev ' +
                    '(x86-64; needs -Dvm=enabled; the vm PAL itself is unchanged)')
+option('sev_qemu', type: 'string', value: '',
+      description: 'QEMU binary that gramine-sev runs when QEMU_PATH is not set (it needs ' +
+                   'sev-guest/sev-snp-guest and igvm-cfg, e.g. container/sev/build-sev-tools.sh)')
 option('skeleton', type: 'combo', choices: ['disabled', 'enabled'],
     description: 'Build skeleton PAL')
 option('vbs', type: 'combo', choices: ['disabled', 'enabled'],

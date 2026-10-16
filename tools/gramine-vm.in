@@ -10,6 +10,7 @@ HOST_PAL_PATH=@HOST_PAL_PATH@
 TDSHIM_PAL_PATH=@TDSHIM_PAL_PATH@
 # gramine-sev (the AMD SEV build of this launcher): the IGVM boot image, empty for gramine-vm
 SEV_IGVM_PATH=@SEV_IGVM_PATH@
+SEV_QEMU_PATH=@SEV_QEMU_PATH@
 
 # The per-VM vsock relay (Documentation/devel/vm-network/), shared with gramine-vm-aarch64; installed
 # next to the VM PAL. The launcher runs Python snippets and the relay from this installation: a caller
@@ -101,6 +102,9 @@ QEMU_CPU_NUM=${QEMU_CPU_NUM:-"1"}
 
 # QEMU: QEMU_PATH in the environment, else a stock qemu-system-x86_64 from PATH. TDX and the graphics
 # redirection need a QEMU fork built outside this repository (see Documentation/devel/graphics/).
+# gramine-sev: the QEMU configured with -Dsev_qemu, if any (the LibOS tests run it with a stripped
+# environment)
+[ -n "$SEV_QEMU_PATH" ] && QEMU_PATH=${QEMU_PATH:-$SEV_QEMU_PATH}
 QEMU_PATH=${QEMU_PATH:-$(command -v qemu-system-x86_64 || echo qemu-system-x86_64)}
 
 QEMU_VM="-cpu host,host-phys-bits,-kvm-steal-time,pmu=off,+tsc-deadline,+invtsc \
@@ -251,8 +255,8 @@ export GRAMINE_RAM_BASES=$RAM_BASES
 if [ -n "$SEV_IGVM_PATH" ]; then
     # AMD SEV (Documentation/devel/sev/): the IGVM file holds the PAL and its boot stub, QEMU
     # encrypts and measures every page of it at launch; no -kernel, no BIOS loader.
-    # GRAMINE_SEV_MODE: sev (plain SEV) or native (the same image without encryption, for
-    # debugging the boot path; the PAL then refuses to run). GRAMINE_SEV_SESSION=<prefix>: the
+    # GRAMINE_SEV_MODE: sev (plain SEV), snp (SEV-SNP) or native (the same image without
+    # encryption, for debugging the boot path; the PAL then refuses to run). GRAMINE_SEV_SESSION=<prefix>: the
     # launch session of `sevctl session` (<prefix>_godh.b64, <prefix>_session.b64), whose TIK
     # verifies the launch measurement.
     SEV_MODE=${GRAMINE_SEV_MODE:-sev}
@@ -264,10 +268,14 @@ if [ -n "$SEV_IGVM_PATH" ]; then
                 SEV_OBJECT+=",dh-cert-file=${GRAMINE_SEV_SESSION}_godh.b64,session-file=${GRAMINE_SEV_SESSION}_session.b64"
             QEMU_MACHINE="-M q35,kernel_irqchip=on,confidential-guest-support=sev0,igvm-cfg=igvm0 \
             -object $SEV_OBJECT" ;;
+        snp)
+            SEV_OBJECT="sev-snp-guest,id=sev0,cbitpos=$SEV_CBITPOS,reduced-phys-bits=1,policy=${GRAMINE_SEV_POLICY:-0x30000}"
+            QEMU_MACHINE="-M q35,kernel_irqchip=on,confidential-guest-support=sev0,igvm-cfg=igvm0 \
+            -object $SEV_OBJECT" ;;
         native)
             QEMU_MACHINE="-M q35,kernel_irqchip=on,igvm-cfg=igvm0" ;;
         *)
-            echo "Error: GRAMINE_SEV_MODE must be sev or native (got '$SEV_MODE')." >&2
+            echo "Error: GRAMINE_SEV_MODE must be sev, snp or native (got '$SEV_MODE')." >&2
             exit 2 ;;
     esac
     QEMU_MACHINE+=" -object igvm-cfg,id=igvm0,file=$SEV_IGVM_PATH"

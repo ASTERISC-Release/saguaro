@@ -87,6 +87,7 @@ if sev
     conf_gramine_sev.set_quoted('BIOS_PATH', join_paths(hostpalpath_sev, 'bios'))
     conf_gramine_sev.set_quoted('LIBPAL_PATH', join_paths(hostpalpath_sev, 'pal'))
     conf_gramine_sev.set_quoted('SEV_IGVM_PATH', join_paths(hostpalpath_sev, 'gramine-sev.igvm'))
+    conf_gramine_sev.set_quoted('SEV_QEMU_PATH', get_option('sev_qemu'))
 
     install_data('gramine-vm-relay.sh', install_dir: hostpalpath_sev, rename: 'vm-relay.sh')
 

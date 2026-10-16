@@ -1804,6 +1804,18 @@ int memory_alloc(void* addr, size_t size, bool read, bool write, bool execute) {
         return egl_redirect_region;
 
     if (!read && !write && !execute) {
+#ifdef PAL_HOST_SEV
+        /* SEV: memory the guest has not written yet reads as ciphertext, not zero, and a later
+         * protect() makes these pages accessible without zeroing them (glibc maps a thread stack
+         * PROT_NONE and then mprotect()s it), so zero them now */
+        if (!egl_redirect_region) {
+            int sev_ret = memory_mark_pages_on((uint64_t)addr, size, /*write=*/true,
+                                               /*execute=*/false, /*usermode=*/false);
+            if (sev_ret < 0)
+                return sev_ret;
+            memset(memory_frame_pointer((uintptr_t)addr), 0, size);
+        }
+#endif
         memory_mark_pages_off((uint64_t)addr, size);
 #ifdef ASAN
         asan_poison_region((uintptr_t)addr, size, ASAN_POISON_USER);

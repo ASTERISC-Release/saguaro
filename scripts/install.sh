@@ -192,6 +192,12 @@ if [ "$LIBC" = none ] && [ "$SGX" = enabled ]; then
     exit 2
 fi
 
+# gramine-sev's default QEMU (SEV_QEMU overrides): the one of container/sev/build-sev-tools.sh
+SEV_QEMU=${SEV_QEMU:-}
+if [ "$SEV" = enabled ] && [ -z "$SEV_QEMU" ] && [ -x /root/sev-tools/prefix/bin/qemu-system-x86_64 ]; then
+    SEV_QEMU=/root/sev-tools/prefix/bin/qemu-system-x86_64
+fi
+
 PREFIX=$(realpath -m "$PREFIX")
 
 missing_tools() {
@@ -225,7 +231,7 @@ if ! meson setup "$BUILDDIR" \
         --prefix="$PREFIX" \
         -Dbuildtype=release \
         -Ddirect="$DIRECT" \
-        -Dsgx="$SGX" -Dvm="$VM" -Dtdx="$TDX" -Dsev="$SEV" -Dgraphics="$GRAPHICS" \
+        -Dsgx="$SGX" -Dvm="$VM" -Dtdx="$TDX" -Dsev="$SEV" -Dsev_qemu="$SEV_QEMU" -Dgraphics="$GRAPHICS" \
         -Dtests="$TESTS" -Dtests_pie="$TESTS_PIE" \
         -Dlibc="$LIBC" ${CROSS_ARGS[@]+"${CROSS_ARGS[@]}"} \
         2>"$BUILDDIR-setup.err"; then
@@ -234,7 +240,7 @@ if ! meson setup "$BUILDDIR" \
         --prefix="$PREFIX" \
         -Dbuildtype=release \
         -Ddirect="$DIRECT" \
-        -Dsgx="$SGX" -Dvm="$VM" -Dtdx="$TDX" -Dsev="$SEV" -Dgraphics="$GRAPHICS" \
+        -Dsgx="$SGX" -Dvm="$VM" -Dtdx="$TDX" -Dsev="$SEV" -Dsev_qemu="$SEV_QEMU" -Dgraphics="$GRAPHICS" \
         -Dtests="$TESTS" -Dtests_pie="$TESTS_PIE" \
         -Dlibc="$LIBC" ${CROSS_ARGS[@]+"${CROSS_ARGS[@]}"} \
     || { echo "ERROR: meson setup failed:"; tail -5 "$BUILDDIR-setup.err"; exit 1; }
