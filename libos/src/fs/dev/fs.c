@@ -11,6 +11,7 @@
 
 #include "libos_flags_conv.h"
 #include "libos_fs_pseudo.h"
+#include "linux_abi/errors.h"
 #include "pal.h"
 #include "libos_graphics.h"
 static ssize_t dev_null_read(struct libos_handle* hdl, void* buf, size_t count) {
@@ -45,6 +46,16 @@ static ssize_t dev_zero_read(struct libos_handle* hdl, void* buf, size_t count) 
     __UNUSED(hdl);
     memset(buf, 0, count);
     return count;
+}
+
+/* /dev/full: reads as /dev/zero, every write fails with ENOSPC (Linux's drivers/char/mem.c).
+ * ALSA's null PCM plugin opens it for playback, which Wine's audio under gramine-vm needs with a
+ * `type null` default device (Documentation/devel/proton-vm/FINDINGS.md, 2026-10-16). */
+static ssize_t dev_full_write(struct libos_handle* hdl, const void* buf, size_t count) {
+    __UNUSED(hdl);
+    __UNUSED(buf);
+    __UNUSED(count);
+    return -ENOSPC;
 }
 
 static ssize_t dev_random_read(struct libos_handle* hdl, void* buf, size_t count) {
@@ -171,6 +182,15 @@ int init_devfs(void) {
     zero->dev.dev_ops.write = &dev_null_write;
     zero->dev.dev_ops.seek = &dev_null_seek;
     zero->dev.dev_ops.truncate = &dev_null_truncate;
+
+    struct pseudo_node* full = pseudo_add_dev(root, "full");
+    full->perm = PSEUDO_PERM_FILE_RW;
+    full->dev.major = 1;
+    full->dev.minor = 7;
+    full->dev.dev_ops.read = &dev_zero_read;
+    full->dev.dev_ops.write = &dev_full_write;
+    full->dev.dev_ops.seek = &dev_null_seek;
+    full->dev.dev_ops.truncate = &dev_null_truncate;
 
     struct pseudo_node* random = pseudo_add_dev(root, "random");
     random->perm = PSEUDO_PERM_FILE_RW;
