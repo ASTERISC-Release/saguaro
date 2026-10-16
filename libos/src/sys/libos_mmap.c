@@ -60,6 +60,11 @@ static bool overlaps_graphics_arena(uintptr_t addr, size_t length) {
             continue;
         if (strcmp(r->comment, "egl_redirect_data") && strcmp(r->comment, "egl_redirect_huge"))
             continue;
+        /* the whole arena at its base is the graphics library's own mapping of its data region
+         * (libos/src/graphics/gramine.c: setup_syscall_comms), which the PAL serves from the
+         * arena; a mapping of a part of it is an application's (Wine's preloader) and is refused */
+        if (addr == r->start && addr + length == r->end)
+            continue;
         if (addr < r->end && r->start < addr + length)
             return true;
     }

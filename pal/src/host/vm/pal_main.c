@@ -846,10 +846,13 @@ noreturn int pal_start_continue(void* cmdline_) {
         ret = memory_address_space_clone(g_pml4_table_base, &g_initial_process_address_space);
         if (ret < 0)
             INIT_FAIL("Failed to create the initial process address space: %s", pal_strerror(ret));
-        /* The graphics redirection passes guest pointers to the host as guest-physical addresses
-         * (comm page requests, buffers), so the first process, the graphics application, keeps
-         * the identity-mapped memory of the single-process VM; its children get private frames. */
-        g_initial_process_address_space.identity_memory = g_graphics_configured;
+        /* Every process is demand-paged from the frame pool, the first one too. With the graphics
+         * redirection configured the arenas and the comm page keep their fixed guest-physical
+         * ranges and map into any process at those addresses (memory_address_space_alloc() shares
+         * the boot root's entries there); the addresses the LibOS hands the host (ioctl arguments
+         * and the pointers inside them) are translated by the LibOS, no longer by an identity
+         * mapping of the whole process (Documentation/devel/proton-vm/design-gpu.md, option B). */
+        g_initial_process_address_space.identity_memory = false;
         struct pal_tcb_vm* current_tcb = (struct pal_tcb_vm*)pal_get_tcb();
         if (!current_tcb)
             INIT_FAIL("Cannot find the initial thread control block");
@@ -858,18 +861,19 @@ noreturn int pal_start_continue(void* cmdline_) {
         if (ret < 0)
             INIT_FAIL("Failed to switch to the initial process address space: %s", pal_strerror(ret));
 
-        if (!g_graphics_configured) {
+        {
             /* Every process's memory is demand-paged from the frame pool through its own page
              * tables, so the application's virtual range need not end with the guest RAM: it
              * reaches the page tables' limit. The kernel's own uses of the RAM end (the frame
              * pool, the arenas, the shared range, the free-memory walk) took their values above;
              * the LibOS places everything beyond RAM lazily. Wine reserves and probes tens of
-             * GiB (Documentation/devel/proton-vm/PLAN.md, blocker 6). Not with graphics: the
-             * first process then keeps identity-mapped memory, which must be RAM. */
+             * GiB (Documentation/devel/proton-vm/PLAN.md, blocker 6). With graphics the arenas
+             * are reserved physical ranges inside the RAM part (the LibOS refuses fixed mappings
+             * there), which does not shorten the range. */
             g_pal_public_state.memory_address_end = (void*)MEMORY_ADDRESS_SPACE_LIMIT;
             log_always("Application address space: up to %p (demand-paged processes; guest RAM "
-                       "ends at %p)", g_pal_public_state.memory_address_end,
-                       g_vm_physical_memory_end);
+                       "ends at %p%s)", g_pal_public_state.memory_address_end,
+                       g_vm_physical_memory_end, g_graphics_configured ? "; graphics arenas" : "");
         }
     }
 #endif
