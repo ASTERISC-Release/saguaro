@@ -20,7 +20,7 @@
 #            gramine-sev-igvm.py computes from the IGVM file, with the session's TIK
 #
 # Usage: test/test-sev.sh [--prefix DIR] [suite...]   (default: hello memory vsock)
-#   GRAMINE_SEV_MODE=sev     the gramine-sev mode (sev; snp once phase 2 of the plan is done)
+#   GRAMINE_SEV_MODE=sev     the gramine-sev mode: sev or snp (measure: sev only)
 #   GRAMINE_RAM_SIZE=4G      guest RAM (SEV pins all of it at launch, so smaller boots faster)
 #   COMPARE=1                memory: also run the probe under gramine-vm as the control
 set -u
@@ -120,6 +120,10 @@ print(f"len={len(open(sys.argv[1], "rb").read())} sum={s:016x}")' "$input")
     hits=$(sed -n 's/^marker_hits=//p' <<<"$res")
     shared=$(sed -n 's/^console_in_shared=//p' <<<"$res")
     if [ "$expect" = sev ]; then
+        # SNP: QEMU keeps the plaintext copy of the (public, measured) launch image in the shared
+        # backing of guest_memfd RAM, so the PAL's ELF header stays readable there; the private
+        # pages themselves are not accessible to the host
+        [ "$GRAMINE_SEV_MODE" = snp ] && elf=0
         [ "$plain" = 0 ] && [ "$elf" = 0 ] && [ "$hits" = 0 ] && [ "$shared" = 1 ] \
             || fail "$tag: the host sees private memory or not the shared region ($res)"
     else
