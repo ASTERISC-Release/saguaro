@@ -10,6 +10,8 @@
 #include "libos_internal.h"
 #include "libos_process.h"
 #include "libos_signal.h"
+#include <linux/netlink.h>
+
 #include "libos_socket.h"
 #include "libos_table.h"
 #include "linux_abi/errors.h"
@@ -80,6 +82,9 @@ struct libos_handle* get_new_socket_handle(int family, int type, int protocol,
         case AF_INET:
         case AF_INET6:
             sock->ops = &sock_ip_ops;
+            break;
+        case AF_NETLINK:
+            sock->ops = &sock_netlink_ops;
             break;
     }
 
@@ -158,6 +163,18 @@ long libos_syscall_socket(int family, int type, int protocol) {
         case AF_INET:
         case AF_INET6:
             break;
+        case AF_NETLINK:
+            /* net/netlink.c: NETLINK_ROUTE with the loopback interface only, for the interface
+             * enumeration of glibc's if_nameindex() and getifaddrs(); a raw socket there is a
+             * datagram socket for the LibOS (the kernel treats the two alike for netlink) */
+            if (protocol != NETLINK_ROUTE) {
+                log_warning("unsupported netlink protocol %d", protocol);
+                return -EPROTONOSUPPORT;
+            }
+            if ((type & SOCK_TYPE_MASK) != SOCK_RAW && (type & SOCK_TYPE_MASK) != SOCK_DGRAM)
+                return -ESOCKTNOSUPPORT;
+            type = (type & ~SOCK_TYPE_MASK) | SOCK_DGRAM;
+            break;
         default:
             log_warning("unsupported socket domain %d", family);
             return -EAFNOSUPPORT;
@@ -175,7 +192,7 @@ long libos_syscall_socket(int family, int type, int protocol) {
     }
 
     type &= SOCK_TYPE_MASK;
-    if (family != AF_UNIX) {
+    if (family == AF_INET || family == AF_INET6) {
         int check = inet_type_protocol_check(type, protocol);
         if (check < 0)
             return check;

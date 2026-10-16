@@ -90,6 +90,7 @@ tests = {
     'memfd_seals': {},
     'memfd_shared': {},
     'mmap_shared_ro': {},
+    'netlink_ifaces': {},
     'mremap_misc': {},
     'perm_checks': {},
     'prctl_misc': {},

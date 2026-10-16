@@ -68,6 +68,7 @@ struct cmsghdr {
 #define SOCK_TYPE_MASK 0xf
 #define SOCK_STREAM 1
 #define SOCK_DGRAM 2
+#define SOCK_RAW 3
 
 #define SOCK_CLOEXEC O_CLOEXEC
 #define SOCK_NONBLOCK O_NONBLOCK
