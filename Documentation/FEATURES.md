@@ -13,7 +13,7 @@ production use.
 
 ### Platforms
 
-- **AArch64 direct PAL** (done). `gramine-direct` runs on AArch64 Linux: LibOS regression 145 passed / 36
+- **AArch64 direct PAL** (done). `gramine-direct` runs on AArch64 Linux: LibOS regression about 195 passed / 36
   skipped, PAL regression 28 / 8, 12 example suites. `aarch64/direct/`
 - **AArch64 vm PAL** (experimental). `gramine-vm` boots a microVM under stock QEMU `virt` with KVM at 1 to 4
   vCPUs and runs LibOS applications; `fork`, `vfork` and `execve` are available behind
@@ -26,8 +26,11 @@ production use.
 
 - **Windows VBS enclaves** (experimental, ARM64 and x64 Windows 11). The `vbs` PAL runs an application inside a
   signed VBS enclave: the library OS, a glibc and the application are packed into the enclave image at build
-  time; threads, signals, host files and sockets, Python and servers (Redis, NGINX, memcached, lighttpd) run, with
-  local attestation. Limits: no `fork`, no run-time code loading (no JIT), test-signed debug enclaves.
+  time. Threads, signals, host files and sockets, Python, servers (Redis, NGINX, memcached, lighttpd), SQLite,
+  curl (HTTP), a Rust server, `iperf3` and single BusyBox applets run, with local attestation; an opt-in TLS
+  example binds its key to the attestation report. `nodejs`, NumPy/SciPy, MongoDB and PyTorch are blocked by the
+  ARM64 `x18` rule or the loader, `openjdk` by run-time code generation and R by process creation
+  (`vbs-enclave/APPS.md`). Limits: no `fork`, no run-time code loading (no JIT), test-signed debug enclaves.
   `gramine-vbs` and `make VBS=1` drive it. `Documentation/vbs.rst`, `vbs-enclave/`
 
 ### System calls and libc
@@ -56,7 +59,17 @@ production use.
 
 - **Processes** (experimental, x86_64 and AArch64). `fork`, `vfork`, `execve`, `wait`, signals between processes,
   pipes, shared futexes, guest-wide `/dev/shm` and System V IPC, behind `sys.experimental__multiprocess`; shells,
-  nginx with workers and Redis `BGSAVE` run. `vm-multiproc/`, `vm-multiproc-aarch64/`
+  nginx with workers and Redis `BGSAVE` run on x86_64. On AArch64 spawn, `fork` and `wait` work (phases 0 to 3);
+  nginx, Redis and Bash have not been checked there, and the 4-vCPU `fork` speed fix and interruptible waits are on a
+  paused branch (`dev-aarch64-multiproc-p4`). `vm-multiproc/`, `vm-multiproc-aarch64/`
+
+- **Windows games with Wine and Proton** (experimental, x86_64 `vm`). GE-Proton's Wine runs in a guest: `hello.exe`,
+  then DOOM I Enhanced (64-bit, Direct3D 11 through DXVK) to its title screen and first level with keyboard input,
+  in software rendering (44 to 48 FPS, about 57 % of native at equal thread counts). It needed named Unix-socket
+  nodes, `fork` without copying reservations, `SCM_RIGHTS`, a virtual `%gs` for the application, interruptible waits,
+  exception events, a 512 GiB address space, syscall user dispatch and a loopback netlink socket. Native Vulkan
+  programs reach the GPU from demand-paged processes; Wine's GPU path and 32-bit games (Psychonauts) are open.
+  `proton-vm/`
 
 - **TCP and UDP in the guest** (experimental). Guest sockets are carried over vsock to one relay process per
   VM: TCP, UDP, DNS, loopback, non-blocking connect, `SO_RCVTIMEO`, with outbound policy and inbound forwards
@@ -101,6 +114,8 @@ production use.
 
 ## Planned
 
+- **Proton, next.** The per-process graphics channel for Wine on the GPU, 32-bit games (a per-process LDT),
+  Intel's driver tables, faster synchronisation. `proton-vm/TODO.md`
 - **VM memory size from the manifest.** The guest RAM of `gramine-vm` chosen by a manifest key instead of a
   launcher default (proposed, branch `dev-vm-memory`).
 - **RISC-V on hardware, and a RISC-V vm PAL.** Validate the direct PAL and the rewriting on a board, then make
@@ -108,13 +123,11 @@ production use.
 - **Graphics in the vm PAL on AArch64.** Deferred until the QEMU listener is redesigned. `graphics-aarch64/`
 - **Graphics fixes.** Faster Quake II mouse look and Minetest, a discrete GPU, Team Fortress 2, huge pages, more
   vCPUs. `graphics/TODO.md`
-- **Proton (Wine, DXVK, VKD3D-Proton) under `gramine-vm`.** In progress: `hello.exe` runs in a guest; games and
-  Direct3D are next. `proton-vm/`
 - **AMD SEV.** A confidential-VM backend for AMD64; no code yet.
 - **VBS: more.** `fork`, sealing, production signing, a Windows-only build without WSL. `vbs-enclave/TODO.md`
-- **Asynchronous signals and a finer timer in the vm PAL.** `_PalThreadResume()` is a stub, so a signal does not
-  end a thread's blocking system call everywhere (some waits are interruptible now); timed waits are 100 ms
-  ticks. `aarch64/vm/TODO.md`
+- **Asynchronous signals and a finer timer in the vm PAL.** Blocking calls are interruptible on the x86_64 `vm` PAL;
+  on AArch64 `main` `_PalThreadResume()` is still a stub (the implementation is on the paused phase-4 branch);
+  timed waits are 100 ms ticks. `aarch64/vm/TODO.md`, `vm-multiproc-aarch64/TODO.md`
 - **VM networking.** IPv6 destinations, reaching guest servers from the real host, a faster relay, UDP policy,
   `SO_SNDTIMEO`. `vm-network/TODO.md`
 - **Syscall interception.** An x86_64 evaluation (it keeps the patched glibc for now), one shared rewriting

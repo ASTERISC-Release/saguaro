@@ -56,6 +56,8 @@ be used in production**. Current work is focused on the following:
 - **Graphics:** redirection to the host GPU in the ``vm``/``direct`` PAL (see `Tirith
   <https://arxiv.org/abs/2609.17525>`__).
 - **Windows VBS enclaves:** running applications inside VBS enclaves on Windows 11 (ARM64 and x64).
+- **Windows applications:** Wine and Proton in the ``vm`` PAL (a 64-bit game reaches its first level in
+  software rendering; the GPU path and 32-bit games are in progress).
 - **System call support:** richer coverage, including multi-process, signaling, and network.
 
 The features added so far and the planned/future ones are listed in
@@ -100,7 +102,7 @@ Sandboxing Environments
      - ⚠️
      - ⚠️
      - ⚠️
-     - ⚠️
+     - ❌
    * - ``vm`` (``gramine-vm``)
      - ✅
      - ⚠️
@@ -125,12 +127,12 @@ Protected Computing
      - AArch64
      - RISC-V (RV64)
    * - ``sgx`` (Intel SGX)
-     - ✅
+     - ⚠️
      - ➖
      - ➖
      - ➖
    * - ``tdx`` (Intel TDX)
-     - ✅
+     - ⚠️
      - ➖
      - ➖
      - ➖
@@ -144,6 +146,9 @@ Protected Computing
      - ⚠️
      - ⚠️
      - ➖
+
+``sgx`` and ``tdx`` are inherited from Gramine and gramine-tdx: they are built (``tdx`` in CI), but this
+tree has not run them on hardware, so they are marked experimental.
 
 Please refer to per-cell details, build options and verification status: `Documentation/devel/multiarch.md <Documentation/devel/multiarch.md>`__.
 
