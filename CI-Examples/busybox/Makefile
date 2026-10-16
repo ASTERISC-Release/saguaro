@@ -21,9 +21,19 @@ RA_CLIENT_SPID ?=
 RA_CLIENT_LINKABLE ?= 0
 
 .PHONY: all
+ifeq ($(VBS),1)
+# Windows VBS enclave (scripts/vbs/Makefile.vbs, Documentation/vbs.rst): BusyBox built with the vbs
+# gcc (against the vbs glibc) in vbs-build/, packed by vbs.manifest.template
+VBS_APP = busybox
+VBS_DEPS = vbs-build/busybox helper-files/data.txt
+VBS_CLEAN = vbs-build OUTPUT
+include ../../scripts/vbs/Makefile.vbs
+all: vbs-all
+else
 all: busybox busybox.manifest
 ifeq ($(SGX),1)
 all: busybox.manifest.sgx busybox.sig
+endif
 endif
 
 $(SRCDIR)/Makefile:
@@ -70,17 +80,42 @@ sgx_sign: busybox.manifest busybox
 busybox: $(SRCDIR)/busybox
 	cp $(SRCDIR)/busybox busybox
 
-ifeq ($(SGX),)
+ifeq ($(VBS),1)
+# BusyBox for the enclave: the same configuration as above, built with the vbs gcc in vbs-build/
+busybox.tar.bz2:
+	../common_tools/download --output $@ --sha256 $(BUSYBOX_SHA256) \
+		$(foreach mirror,$(BUSYBOX_MIRRORS),--url $(mirror)/$(BUSYBOX_SRC))
+
+vbs-build/src/.config: busybox.tar.bz2 | $(VBS_RUNTIME_STAMP)
+	rm -rf vbs-build/src && mkdir -p vbs-build/src
+	tar -C vbs-build/src --strip-components=1 -xjf busybox.tar.bz2
+	$(MAKE) -C vbs-build/src defconfig
+	sed -e 's/.*CONFIG_FEATURE_SH_STANDALONE.*/CONFIG_FEATURE_SH_STANDALONE=y/' \
+		-i vbs-build/src/.config
+	sed -e 's/^CONFIG_\(TC\|ARP\|ARPING\)=y/# CONFIG_\1 is not set/' \
+		-i vbs-build/src/.config
+
+# the applets that need no fork (a VBS enclave has one process): echo, cat, ls, grep, sh builtins
+vbs-build/busybox: vbs-build/src/.config
+	$(MAKE) -C vbs-build/src CC=$(VBS_GCC)
+	cp vbs-build/src/busybox $@
+
+.PHONY: check
+check: all
+	GRAMINE="$(GRAMINE)" ./vbs-check.sh
+else ifeq ($(SGX),)
 GRAMINE = gramine-direct
 else
 GRAMINE = gramine-sgx
 endif
 
+ifneq ($(VBS),1)
 .PHONY: check
 check: all
 	$(GRAMINE) busybox echo "Hello" > OUTPUT
 	@grep -q "Hello" OUTPUT && echo "[ Success 1/1 ]"
 	@rm OUTPUT
+endif
 
 .PHONY: clean
 clean:

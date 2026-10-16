@@ -1,0 +1,32 @@
+# Copyright (C) 2026 The ASTERISC Research Lab
+# SPDX-License-Identifier: BSD-3-Clause
+
+# BusyBox manifest for a Windows VBS enclave (`make VBS=1`, Documentation/vbs.rst): the counterpart of
+# busybox.manifest.template. BusyBox (vbs-build/busybox, built with the vbs gcc against the vbs glibc)
+# is a dynamic PIE; one applet runs per enclave run, its arguments come from the command line
+# (`gramine-vbs busybox cat /app/data.txt`). The loader, libc, libm and libresolv are packed too.
+
+loader.entrypoint = "file:/libsysdb.so"
+libos.entrypoint = "/busybox"
+loader.log_level = "{{ log_level }}"
+
+loader.insecure__use_cmdline_argv = true
+loader.env.LD_LIBRARY_PATH = "{{ arch_libdir }}"
+loader.env.HOME = "/"
+
+fs.root.uri = "file:/"
+# no run-time code generation in a VBS enclave
+sys.rewrite_syscalls = false
+
+vbs.debug = false
+vbs.enclave_size = "256M"
+vbs.max_threads = 4
+
+vbs.packed_files = [
+  { path = "/busybox", uri = "file:vbs-build/busybox" },
+  { path = "/app/data.txt", uri = "file:helper-files/data.txt" },
+  { path = "/etc/hosts", uri = "file:helper-files/hosts" },
+{% for lib in [vbs.ldso, "libc.so.6", "libm.so.6", "libresolv.so.2"] %}
+  { path = "{{ arch_libdir }}/{{ lib }}", uri = "file:{{ vbs.sysroot }}/usr/lib/{{ lib }}" },
+{% endfor %}
+]
