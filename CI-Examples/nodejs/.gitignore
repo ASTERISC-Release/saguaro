@@ -1,1 +1,4 @@
 /OUTPUT
+/vbs-build/
+/*.manifest.vbs
+/node-*.tar.xz

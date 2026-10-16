@@ -26,7 +26,7 @@ sys.rewrite_syscalls = false
 sys.stack.size = "2M"
 
 vbs.debug = false
-vbs.enclave_size = "1G"
+vbs.enclave_size = "2G"
 vbs.max_threads = 16
 
 vbs.packed_files = [
@@ -36,6 +36,14 @@ vbs.packed_files = [
 {% for lib in [vbs.ldso, "libc.so.6", "libm.so.6"] %}
   { path = "{{ arch_libdir }}/{{ lib }}", uri = "file:{{ vbs.sysroot }}/usr/lib/{{ lib }}" },
 {% endfor %}
+  # NumPy and SciPy (the manylinux wheels unpacked in vbs-build/site, Makefile) and the host runtime
+  { path = "/usr/lib/python3.12/site-packages/numpy", uri = "file:vbs-build/site/numpy" },
+  { path = "/usr/lib/python3.12/site-packages/scipy", uri = "file:vbs-build/site/scipy" },
+  { path = "/usr/lib/python3.12/site-packages/numpy.libs", uri = "file:vbs-build/site/numpy.libs" },
+  { path = "/usr/lib/python3.12/site-packages/scipy.libs", uri = "file:vbs-build/site/scipy.libs" },
+  { path = "/usr/lib/libstdc++.so.6", uri = "file:vbs-build/lib/libstdc++.so.6" },
+  { path = "/usr/lib/libgcc_s.so.1", uri = "file:vbs-build/lib/libgcc_s.so.1" },
+  { path = "/usr/lib/libz.so.1", uri = "file:vbs-build/lib/libz.so.1" },
   { path = "/app/scripts", uri = "file:scripts" },
   { path = "/etc/hosts", uri = "file:helper-files/hosts" },
 ]

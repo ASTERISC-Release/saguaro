@@ -1,3 +1,7 @@
 /OUTPUT
 /db/*
 !/db/.gitkeep
+/vbs-build/
+/sqlite-amalgamation.zip
+/sqlite3.manifest.vbs
+/OUTPUT

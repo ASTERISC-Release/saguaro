@@ -4,3 +4,6 @@
 /server.PID
 /TEST_STDERR
 /TEST_STDOUT
+/*.whl
+/vbs-build/
+/*.manifest.vbs
