@@ -397,7 +397,10 @@ What applications have to give up in a VBS enclave, and how the examples do it:
 - **Only packed code**: everything that runs, including modules loaded with ``dlopen``, is in
   ``vbs.packed_files`` and built with the vbs gcc against the vbs glibc; libraries that the vbs
   sysroot lacks are built for the enclave too (memcached's libevent) or their features left out
-  (OpenSSL, zlib, PCRE, libcrypt).
+  (OpenSSL, zlib, PCRE, libcrypt). A distribution library packed as it is (the AArch64
+  ``libgcc_s``, which glibc's ``pthread_cancel`` loads) works when its x18 uses are never reached:
+  the packer lowers its 64 KiB segment alignment to 4 KiB, and ``vbs.x18_allow`` and
+  ``vbs.x18_skip_constructors`` name what it may keep (``CI-Examples/iperf``).
 - **Read-only packed files**: files the application writes go to a ``tmpfs`` mount or to
   ``vbs.allowed_files``.
 - **Sockets are the Windows host's**: listen on 127.0.0.1 (another interface would need a
