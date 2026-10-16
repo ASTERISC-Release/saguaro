@@ -8,9 +8,10 @@
 # takes the build machine's (gcc -dumpmachine) and keeps one log per probe.
 #
 # Usage: test/vm-multiproc-aarch64/probes.sh [--prefix DIR] [--cpus N]
-#            [spawn|sh|forks|signals|forks-mem|eintr|efault|shared]...   (default: sh spawn)
+#            [spawn|sh|forks|signals|forks-mem|eintr|efault|shared|cntvct]...   (default: sh spawn)
 # eintr: test/vm-multiproc-aarch64/eintr.c, a signal against each kind of blocking call.
 # efault: test/vm-multiproc-aarch64/efault.c, LibOS faults on application memory, key on and off.
+# cntvct: test/vm-multiproc-aarch64/cntvct.c, EL0 reads of the virtual counter, key on and off.
 set -u
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 REPO=$(cd "$HERE/../.." && pwd)
@@ -32,11 +33,11 @@ LOGS=${LOGS:-$WORK/logs}
 mkdir -p "$WORK" "$LOGS" "$WORK/tmp" && cd "$WORK"
 SRC=$REPO/test/vm-multiproc
 cp "$SRC"/spawn.c "$SRC"/forks.c "$SRC"/sig.sh "$SRC"/manifest.template \
-   "$SRC"/sysv-fork.manifest.template "$HERE"/eintr.c "$HERE"/efault.c "$HERE"/shared.c .
+   "$SRC"/sysv-fork.manifest.template "$HERE"/eintr.c "$HERE"/efault.c "$HERE"/shared.c "$HERE"/cntvct.c .
 gcc -O2 -o spawn spawn.c && gcc -O2 -o forks forks.c && gcc -O2 -o eintr eintr.c -lpthread && \
-    gcc -O2 -o efault efault.c && gcc -O2 -o shared shared.c || exit 2
+    gcc -O2 -o efault efault.c && gcc -O2 -o shared shared.c && gcc -O2 -o cntvct cntvct.c || exit 2
 LIBDIR=/lib/$(gcc -dumpmachine)
-for entry in /usr/bin/sh /usr/bin/bash "$WORK/spawn" "$WORK/forks" "$WORK/eintr" "$WORK/efault" "$WORK/shared"; do
+for entry in /usr/bin/sh /usr/bin/bash "$WORK/spawn" "$WORK/forks" "$WORK/eintr" "$WORK/efault" "$WORK/shared" "$WORK/cntvct"; do
     name=$(basename "$entry")
     case $entry in "$WORK"/*) e=/probe/$name ;; *) e=$entry ;; esac
     template=manifest.template
@@ -93,6 +94,14 @@ for what in "${WHAT[@]}"; do
                              altstack-off) grep -q '\[ VM exited with code 139 \]' "$LOGS/efault-$c-$k.log" ;;
                          esac || exit 1
                      done
+                 done ;;
+        cntvct)  grep -v experimental__multiprocess cntvct.manifest > cntvct-nokey.manifest
+                 ln -sf cntvct cntvct-nokey
+                 for k in on off; do
+                     m=cntvct; [ $k = off ] && m=cntvct-nokey
+                     LINES_SHOWN=${LINES_SHOWN:-2} run cntvct-$k 60 gramine-vm $m
+                     grep -q '^cntvct: ok' "$LOGS/cntvct-$k.log" || exit 1
+                     grep -q '\[ VM exited with code 0 \]' "$LOGS/cntvct-$k.log" || exit 1
                  done ;;
         forks-mem)
             # pool frames in use after each child's exit (log_debug of pal_process.c): the first

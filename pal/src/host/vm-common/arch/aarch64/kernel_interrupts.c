@@ -237,9 +237,15 @@ long el0_sync_unexpected_c(struct isr_regs* regs) {
     /* ESR_EL1 detail bits for EC=0x20..0x25 (faults): DFSC/IFSC [5:0], WnR [6], S1PTW [11].
      * FSC decodes as: 0b0001LL translation fault level LL, 0b0010LL access-flag level LL,
      * 0b0011LL permission fault level LL (QEMU's get_S1prot rules, see kernel_memory.c). */
-    log_error("       FSC=0x%02lx %s WnR=%lu S1PTW=%lu IL=%lu", esr & 0x3f,
-              (esr & (1UL << 11)) ? "S1PTW!" : "    ", (esr >> 6) & 1, (esr >> 11) & 1,
-              (esr >> 31) & 1);
+    if (ec >= 0x20 && ec <= 0x25) {
+        log_error("       FSC=0x%02lx %s WnR=%lu S1PTW=%lu IL=%lu", esr & 0x3f,
+                  (esr & (1UL << 11)) ? "S1PTW!" : "    ", (esr >> 6) & 1, (esr >> 11) & 1,
+                  (esr >> 25) & 1);
+    } else {
+        /* not an abort: the ISS has another layout (EC 0x18, a trapped system-register access:
+         * op0, op1, CRn, CRm, op2, Rt and the direction), so print it raw */
+        log_error("       ISS=0x%07lx IL=%lu", esr & 0x1ffffff, (esr >> 25) & 1);
+    }
     log_error("       pc=0x%016lx sp=0x%016lx", regs->elr, regs->sp);
     for (unsigned i = 0; i < 32; i += 4) {
         if (i == 16) {

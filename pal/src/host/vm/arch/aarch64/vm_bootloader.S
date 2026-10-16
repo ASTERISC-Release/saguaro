@@ -116,6 +116,15 @@ _start:
     msr     fpcr, xzr
     msr     fpsr, xzr
 
+    /* CNTKCTL_EL1.EL0VCTEN (bit 1): EL0 may read CNTVCT_EL0, as on Linux (applications and
+     * their libraries read the virtual counter directly, e.g. OpenSSL's timing code; with the
+     * bit clear the read traps as EC 0x18 and the guest panics). Per-CPU, so pal_ap_entry does
+     * the same; the other bits (EL0PCTEN, the event stream, EL0 timer access) stay as they are. */
+    mrs     x1, cntkctl_el1
+    orr     x1, x1, #(1 << 1)
+    msr     cntkctl_el1, x1
+    isb
+
     /* zero the user TLS register (TPIDR_EL0 belongs to the guest app later; the kernel must
      * never leave boot junk there -- see the cur_tcb design in kernel_multicore.h) */
     msr     tpidr_el0, xzr
@@ -238,6 +247,10 @@ pal_ap_entry:
     mrs     x2, cpacr_el1
     orr     x2, x2, #(3 << 20)          /* CPACR_EL1.FPEN = 0b11 */
     msr     cpacr_el1, x2
+    isb
+    mrs     x2, cntkctl_el1
+    orr     x2, x2, #(1 << 1)           /* CNTKCTL_EL1.EL0VCTEN, as on the boot CPU */
+    msr     cntkctl_el1, x2
     isb
     msr     fpcr, xzr
     msr     fpsr, xzr
