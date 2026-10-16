@@ -153,6 +153,8 @@ void setup_syscall_comms(void) {
     /* the first process: the request slots start clean (the state area keeps its word) */
     memset(addr, 0, NUM_COMM_PAGES * sizeof(comm_page_t));
 
+    /* the ABI version goes with the magic; the listener answers with its own in p5 */
+    addr[0].p4 = GRAPHICS_COMM_ABI_VERSION;
     addr[0].magic = 0x1234567812345678ULL;
     __sync_synchronize();
 
@@ -160,6 +162,15 @@ void setup_syscall_comms(void) {
         __sync_synchronize();
         usleep(1000);
     }
+    if (addr[0].p5 != GRAPHICS_COMM_ABI_VERSION) {
+        fprintf(stderr, "[!] graphics: the host listener speaks comm ABI version %llu, this guest "
+                "version %llu (graphics_comm_abi.h): rebuild the QEMU fork against this tree "
+                "(qemu-tirith/tirith-build.sh)\n", (unsigned long long)addr[0].p5,
+                (unsigned long long)GRAPHICS_COMM_ABI_VERSION);
+        abort();
+    }
+    addr[0].p4 = 0;
+    addr[0].p5 = 0;
     addr[0].magic = 0x1234567812345678ULL;
     fprintf(stderr, "[*] COMMS: 0x%llx\n", SYS_COMMS_ADDR);
 

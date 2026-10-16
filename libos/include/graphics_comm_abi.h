@@ -125,8 +125,17 @@ typedef enum graphics_request {
 
 /* The offset between a guest fd and the forwarded host fd of the same object:
  * the guest installs host fds at (host fd + GRAPHICS_FS_OFFSET) and the host
- * listener translates request fd payloads back with the same constant. */
-#define GRAPHICS_FS_OFFSET 500ULL
+ * listener translates request fd payloads back with the same constant. The
+ * application's own fds must stay below it: 500 was too low for a Wine server
+ * with a Unity game (Documentation/devel/proton-vm/TESTING.md, 2026-10-16). */
+#define GRAPHICS_FS_OFFSET 4096ULL
+
+/* The version of this ABI as the two sides compiled it. The guest writes it to slot 0's p4
+ * before the setup magic and the listener answers the magic with its own version in p5; each
+ * side stops with a message when they differ, instead of failing later in odd ways (as a
+ * mismatched GRAPHICS_FS_OFFSET would). Bump it with every change of the constants, the request
+ * ids or the slot layout. 2: GRAPHICS_FS_OFFSET 4096 and this check (2026-10-16). */
+#define GRAPHICS_COMM_ABI_VERSION 2ULL
 
 /* Compiled fallbacks for the arena geometry; the runtime values arrive from the
  * launcher (GRAMINE_DATA_ADDR / GRAMINE_DATA_SIZE / GRAMINE_HUGEPAGE_ADDR as
