@@ -116,6 +116,11 @@ int memory_address_space_map_shared_frame(struct memory_address_space* space, ui
 /* Maps `frame` (a frame of a file's cache) read-only as a copy-on-write page of a MAP_PRIVATE file
  * mapping: a write copies it first (by the fault handler if `writable`, by a later protect()
  * otherwise), so the page shows the file's current content until then (x86_64 only). */
+/* Physically contiguous frames mapped into `space` at `addr`; `*out_phys` is their physical
+ * address (the LibOS's graphics bounce buffers, design-gpu.md). x86_64 only; AArch64 returns
+ * -PAL_ERROR_NOTIMPLEMENTED. */
+int memory_address_space_alloc_contiguous(struct memory_address_space* space, void* addr,
+                                          size_t size, bool execute, uintptr_t* out_phys);
 int memory_address_space_map_cow_frame(struct memory_address_space* space, uintptr_t addr,
                                        uintptr_t frame, bool writable, bool execute);
 int memory_address_space_share_range(struct memory_address_space* source,

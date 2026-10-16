@@ -113,13 +113,33 @@ static long forwarded_ioctl(unsigned int fd, unsigned int cmd, unsigned long arg
 
     long _offset = libos_syscall_acquire_libos_lock();
     comm_page_t* c = comm_page(_offset);
+    /* the argument structure goes through the bounce (its size is in the request); pointers
+     * inside it are the next step of design-gpu.md (stage 3: a per-request pointer table) */
+    size_t arg_size = _IOC_SIZE(cmd);
+    struct gbounce* b = arg_size ? graphics_bounce(_offset) : NULL;
+    uint64_t arg_pa = arg;
+    void* arg_copy = NULL;
+    if (arg_size) {
+        if (!is_user_memory_readable((void*)arg, arg_size)) {
+            libos_syscall_relinquish_libos_lock(_offset);
+            return -EFAULT;
+        }
+        arg_copy = graphics_bounce_out(b, (void*)arg, arg_size, &arg_pa);
+        if (!arg_copy) {
+            libos_syscall_relinquish_libos_lock(_offset);
+            return -ENOMEM;
+        }
+    }
     c->p1 = (uint64_t)fd;
     c->p2 = (uint64_t)cmd;
-    c->p3 = (uint64_t)arg;
+    c->p3 = arg_pa;
     c->p4 = time_field;
     c->p5 = time_field ? GRAPHICS_IOCTL_TIME_REL_MAGIC : 0;
     c->req_bit = IOCTL;
     long ret = (long)comm_sync_notify(c);
+    if (arg_copy && arg_copy != (void*)arg && (_IOC_DIR(cmd) & _IOC_READ) &&
+            is_user_memory_writable((void*)arg, arg_size))
+        memcpy((void*)arg, arg_copy, arg_size);
     libos_syscall_relinquish_libos_lock(_offset);
 
     if (!ti)

@@ -131,6 +131,7 @@ libos_sources = files(
     'sys/libos_prctl.c',
     'sys/libos_mremap.c',
     'sys/libos_getresid.c',
+    'sys/libos_graphics_bounce.c',
     'sys/libos_graphics_lock.c'
 )
 

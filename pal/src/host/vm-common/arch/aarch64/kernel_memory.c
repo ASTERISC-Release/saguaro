@@ -1756,3 +1756,13 @@ int memory_address_space_protect(struct memory_address_space* space, void* addr,
     }
     return memory_address_space_flush_range(start, size);
 }
+
+int memory_address_space_alloc_contiguous(struct memory_address_space* space, void* addr,
+                                          size_t size, bool execute, uintptr_t* out_phys) {
+    __UNUSED(space);
+    __UNUSED(addr);
+    __UNUSED(size);
+    __UNUSED(execute);
+    __UNUSED(out_phys);
+    return -PAL_ERROR_NOTIMPLEMENTED;
+}
