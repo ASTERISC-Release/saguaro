@@ -143,6 +143,12 @@ build_qemu() {
     [ -f "$PREFIX/lib64/pkgconfig/igvm.pc" ] || build_igvm
     rm -rf "$BUILD/qemu-$QEMU_VERSION"
     tar -xJf "$SRC/$tarball" -C "$BUILD"
+    # local fixes, each explained in its header (plain SEV + IGVM launch measurement order)
+    for p in "$HERE"/qemu-"$QEMU_VERSION"-*.patch; do
+        [ -e "$p" ] || continue
+        log "applying $(basename "$p")"
+        patch -d "$BUILD/qemu-$QEMU_VERSION" -p1 < "$p"
+    done
     mkdir -p "$BUILD/qemu-$QEMU_VERSION/build"
     cd "$BUILD/qemu-$QEMU_VERSION/build"
     log "QEMU $QEMU_VERSION (x86_64-softmmu, KVM, IGVM)"
