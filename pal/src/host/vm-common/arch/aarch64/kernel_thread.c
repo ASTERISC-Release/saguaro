@@ -207,6 +207,28 @@ noreturn int thread_idle_run(void* args) {
     __builtin_unreachable();
 }
 
+/* The bottom-half thread is what CPU0 runs when it has nothing else to run, so its loop was a
+ * tight loop through sched_thread(): millions of acquisitions of the scheduler lock per second, with
+ * IRQs masked for each list walk. With four vCPUs that contention made 1,000 forks take 150 to 480 s
+ * instead of about 25 s in most runs (FINDINGS.md, phase 4 part C). Between two rounds without
+ * work it now waits up to BOTTOMHALVES_BACKOFF_US for a reason to look again: a kick of the
+ * scheduler (a thread became runnable) or a new bottom-half trigger (set by the virtio IRQs).
+ * Not while vsock rings are being polled (g_vsock_polling): that polling is the work. */
+#define BOTTOMHALVES_BACKOFF_US 50
+static void bottomhalves_backoff(void) {
+    extern uint64_t g_tsc_mhz;
+    if (__atomic_load_n(&g_vsock_polling, __ATOMIC_ACQUIRE))
+        return;
+    uint64_t until = get_tsc() + BOTTOMHALVES_BACKOFF_US * g_tsc_mhz;
+    while (get_tsc() < until) {
+        if (__atomic_load_n(&g_kick_sched_thread, __ATOMIC_ACQUIRE) ||
+                __atomic_load_n(&g_vsock_trigger_bottomhalf, __ATOMIC_ACQUIRE) ||
+                __atomic_load_n(&g_console_trigger_bottomhalf, __ATOMIC_ACQUIRE))
+            return;
+        CPU_RELAX();
+    }
+}
+
 /* Thread that performs heavy tasks triggered on IRQs in normal context; runs only on CPU0 */
 noreturn int thread_bottomhalves_run(void* args) {
     __UNUSED(args);
@@ -226,6 +248,8 @@ noreturn int thread_bottomhalves_run(void* args) {
         if (console_trigger)
             (void)virtio_console_bottomhalf();
 
+        if (!vsock_trigger && !console_trigger)
+            bottomhalves_backoff();
         sched_thread(/*lock_to_unlock=*/NULL, /*clear_child_tid=*/NULL);
     }
 
