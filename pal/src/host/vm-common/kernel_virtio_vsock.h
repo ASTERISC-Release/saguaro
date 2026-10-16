@@ -36,7 +36,14 @@
 #define VSOCK_MAX_PAYLOAD_SIZE 980U
 
 /* Sizes of RX and TX virtio queues. */
+#ifdef PAL_HOST_SEV
+/* vhost-vsock queues hold at most 128 entries; newer QEMUs (11.1.2, which the SEV build needs) refuse
+ * a larger size ("virtio: queue 0 size 256 exceeds max size 128") and vhost then rejects descriptors
+ * from 128 on. Documentation/devel/sev/FINDINGS.md, 2026-10-16 (phase 1); the vm PAL keeps 256. */
+#define VIRTIO_VSOCK_QUEUE_SIZE 128
+#else
 #define VIRTIO_VSOCK_QUEUE_SIZE 256
+#endif
 
 /* Size of the Event virtio queue (currently unused). */
 #define VIRTIO_VSOCK_EVENT_QUEUE_SIZE 32

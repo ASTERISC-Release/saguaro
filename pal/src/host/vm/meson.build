@@ -56,8 +56,9 @@ if host_machine.cpu_family() == 'x86_64'
         'pal_main.c',
         'pal_process.c',
         'vm_bootloader.S',
-        'vm_callbacks.c',
     )
+    # kept apart so that the SEV build (sev/meson.build) can replace it
+    pal_vm_callbacks_sources = files('vm_callbacks.c')
 else
     # aarch64: boot sequence (DTB entry), ELF entry trampoline (no BIOS stage), and the
     # port-io/shared-memory callbacks as plain MMIO. The multiprocess support (processes,
@@ -70,12 +71,13 @@ else
         'arch/aarch64/pal_hwcap.c',
         'arch/aarch64/pal_main.c',
         'arch/aarch64/vm_bootloader.S',
-        'arch/aarch64/vm_callbacks.c',
     )
+    pal_vm_callbacks_sources = files('arch/aarch64/vm_callbacks.c')
 endif
 
 libpal_vm = executable('pal',
     pal_vm_sources,
+    pal_vm_callbacks_sources,
     pal_vm_common_sources,
     pal_vm_common_nontdx_sources,
     pal_vm_common_asm_offsets_h,
@@ -172,4 +174,9 @@ if debug
         install: true,
         install_dir: pkglibdir / 'vm',
     )
+endif
+
+# AMD SEV / SEV-SNP: a second build of these sources (Documentation/devel/sev/PLAN.md D2)
+if sev
+    subdir('sev')
 endif

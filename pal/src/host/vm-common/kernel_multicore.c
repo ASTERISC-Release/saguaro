@@ -234,6 +234,15 @@ int init_multicore(uint32_t num_cpus, void* hob_list_addr) {
     uint32_t* g_started_cpus_addr = &g_started_cpus;
     memcpy((uint32_t**)AP_STARTUP_PAGE_COUNTER, &g_started_cpus_addr, sizeof(uint32_t*));
 
+#ifdef PAL_HOST_SEV
+    /* SEV: the APs' static page tables (kernel_multicore.S: 2 PT pages, a PD, a PDPT, then the
+     * PML4) map the PAL as private memory only with the C-bit set, like vm_bootloader.S's */
+    extern uint64_t g_sev_c_bit_mask;
+    uint64_t* ap_tables = (uint64_t*)((uintptr_t)&initial_ap_pml4_table_base - 4 * PAGE_SIZE);
+    for (size_t i = 0; i < 4 * PAGE_SIZE / sizeof(uint64_t) + 1; i++)
+        if (ap_tables[i])
+            ap_tables[i] |= g_sev_c_bit_mask;
+#endif
     uint64_t* initial_ap_pml4_table_base_addr = &initial_ap_pml4_table_base;
     memcpy((uint64_t**)AP_STARTUP_PAGE_PML4, &initial_ap_pml4_table_base_addr, sizeof(uint64_t*));
 

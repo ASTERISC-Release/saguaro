@@ -78,6 +78,24 @@ static inline void frame_pool_unlock(uint64_t flags) {
 #define PTE_COW_WRITABLE (1UL << 11)
 
 static struct memory_address_space g_boot_address_space;
+#endif
+
+#ifdef PAL_HOST_SEV
+/* AMD SEV (pal/src/host/vm/sev/): the C-bit as a page-table-entry mask, set by vm_bootloader.S.
+ * Private (encrypted) memory has it set; the shared heap and the MMIO hole, which the host must
+ * read and write, have it clear. Guest page tables must be private: hardware walks them with the
+ * guest key whatever the C-bit says. */
+extern uint64_t g_sev_c_bit_mask;
+static uint64_t sev_c_bit_for_phys(uint64_t phys) {
+    if (SHARED_MEM_ADDR <= phys && phys < SHARED_MEM_ADDR + SHARED_MEM_SIZE)
+        return 0;
+    if (PCI_HOLE_ADDR <= phys && phys < PCI_HOLE_ADDR + PCI_HOLE_SIZE)
+        return 0;
+    return g_sev_c_bit_mask;
+}
+#endif
+
+#ifdef __x86_64__
 
 void* memory_frame_pointer(uintptr_t frame) {
     if (g_frame_alias_mapped_size && frame < g_frame_alias_mapped_size)
@@ -1407,10 +1425,20 @@ static int pagetables_init(size_t memory_size, uint64_t page_tables_addr, size_t
 
     uint64_t ptr = page_tables_addr;
 
+#ifdef PAL_HOST_SEV
+    /* SEV: memory that the launch did not write reads as garbage, not zero; the partly used table
+     * pages (PDP, PML4) must not keep stale "present" entries */
+    _real_memset((void*)page_tables_addr, 0, total_tables_cnt * PAGE_SIZE);
+    tree_flags |= g_sev_c_bit_mask;
+#endif
+
     /* page tables with PTE leaf entries */
     uint64_t page_tables_base = ptr;
     for (size_t i = 0; i < pages_4k_cnt; i++) {
         uint64_t entry = ((ptr - page_tables_base) / 8) * PAGE_SIZE + leaf_flags;
+#ifdef PAL_HOST_SEV
+        entry |= sev_c_bit_for_phys(entry & ~(PAGE_SIZE - 1));
+#endif
         _real_memcpy((void*)ptr, &entry, sizeof(entry));
         ptr += sizeof(entry);
     }

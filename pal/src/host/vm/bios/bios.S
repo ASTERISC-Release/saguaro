@@ -6,6 +6,15 @@
     .hidden _reset
 
     .section .rodata
+#ifdef BIOS_SEV_IGVM
+// The SEV variant of this reset stub is not loaded by `-device loader` but placed into the IGVM
+// file of gramine-sev (pal/src/host/vm/sev/gramine-sev-igvm.py), which also loads the PAL and
+// writes the PAL's entry point into the slot after this tag: fw_cfg has no kernel entry then.
+    .align  8
+    .ascii  "GSEVPALE"
+_sev_pal_entry:
+    .long   0
+#endif
 _MSG_NO_KERNEL:
     .ascii  "Kernel not found! Please specify \"-kernel <ELF file>\" on QEMU command line!\r\n"
 _MSG_NO_KERNEL_SIZE = . - _MSG_NO_KERNEL
@@ -29,7 +38,11 @@ _start32:
     mov     $0xc0000080, %ecx           // EFER MSR
     wrmsr                               // SCE, LME, NXE
 
+#ifdef BIOS_SEV_IGVM
+    mov     _sev_pal_entry, %eax        // flat 32-bit segments: the absolute address
+#else
     rdfwcfg $FW_CFG_KERNEL_ENTRY
+#endif
     test    %eax, %eax
     jz      1f
 

@@ -78,6 +78,27 @@ if vm
     )
 endif
 
+if sev
+    # gramine-sev is gramine-vm.in with the paths of the SEV build of the vm PAL (pal/src/host/vm/sev)
+    hostpalpath_sev = join_paths(get_option('prefix'), pkglibdir, 'sev')
+    conf_gramine_sev = configuration_data()
+    conf_gramine_sev.merge_from(conf)
+    conf_gramine_sev.set_quoted('HOST_PAL_PATH', hostpalpath_sev)
+    conf_gramine_sev.set_quoted('BIOS_PATH', join_paths(hostpalpath_sev, 'bios'))
+    conf_gramine_sev.set_quoted('LIBPAL_PATH', join_paths(hostpalpath_sev, 'pal'))
+    conf_gramine_sev.set_quoted('SEV_IGVM_PATH', join_paths(hostpalpath_sev, 'gramine-sev.igvm'))
+
+    install_data('gramine-vm-relay.sh', install_dir: hostpalpath_sev, rename: 'vm-relay.sh')
+
+    configure_file(
+        input: 'gramine-vm.in',
+        output: 'gramine-sev',
+        configuration: conf_gramine_sev,
+        install_dir: get_option('bindir'),
+        install_mode: 'rwxr-xr-x',
+    )
+endif
+
 if tdx
     hostpalpath_tdx = join_paths(get_option('prefix'), pkglibdir, 'tdx')
     conf_gramine_tdx = configuration_data()

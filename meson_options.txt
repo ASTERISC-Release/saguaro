@@ -7,6 +7,9 @@ option('vm', type: 'combo', choices: ['disabled', 'enabled'],
       description: 'Build Virtual Machine (VM, currently only x86-64) PAL')
 option('tdx', type: 'combo', choices: ['disabled', 'enabled'],
       description: 'Build Trusted Domain Extensions (aka TDX) PAL')
+option('sev', type: 'combo', choices: ['disabled', 'enabled'],
+      description: 'Also build the AMD SEV / SEV-SNP variant of the VM PAL and gramine-sev ' +
+                   '(x86-64; needs -Dvm=enabled; the vm PAL itself is unchanged)')
 option('skeleton', type: 'combo', choices: ['disabled', 'enabled'],
     description: 'Build skeleton PAL')
 option('vbs', type: 'combo', choices: ['disabled', 'enabled'],

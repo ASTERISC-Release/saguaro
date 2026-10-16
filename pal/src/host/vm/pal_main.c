@@ -35,6 +35,9 @@
 #include "kernel_virtio.h"
 #include "kernel_vmm_inputs.h"
 #include "kernel_xsave.h"
+#ifdef PAL_HOST_SEV
+#include "sev.h"
+#endif
 
 /* the VMM supplied a graphics-arena layout (graphics redirection configured) */
 static bool g_graphics_configured;
@@ -611,6 +614,10 @@ noreturn void pal_start_c(void) {
     /* untrusted_shm mappings (dev:/dev/shm) live in ordinary guest memory, as on the Linux PAL */
     g_pal_public_state.shared_address_start = g_pal_public_state.memory_address_start;
     g_pal_public_state.shared_address_end = g_pal_public_state.memory_address_end;
+#endif
+
+#ifdef PAL_HOST_SEV
+    sev_init_early();
 #endif
 
     /* vm_bootloader.S installed tiny page tables that cover [0..32MB) of RAM */
