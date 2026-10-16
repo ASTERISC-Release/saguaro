@@ -270,7 +270,14 @@ int pal_common_pipe_waitforclient(struct pal_handle* server, struct pal_handle**
                 ret = -PAL_ERROR_TRYAGAIN;
                 goto out;
             }
+#ifdef __aarch64__ /* interruptible by _PalThreadResume() */
+            ret = sched_thread_wait_interruptible(&server->pipe.connect_futex,
+                                                  &g_connecting_pipes_lock);
+            if (ret < 0)
+                goto out;
+#else
             sched_thread_wait(&server->pipe.connect_futex, &g_connecting_pipes_lock);
+#endif
         }
     }
     assert(found_connecting_pipe);
@@ -327,7 +334,15 @@ static ssize_t ring_read_locked(struct pal_handle* handle, struct pal_handle_inn
             goto out;
         }
 
+#ifdef __aarch64__ /* interruptible by _PalThreadResume() */
+        int wret = sched_thread_wait_interruptible(&ring->reader_futex, &pipe_buf->lock);
+        if (wret < 0) {
+            bytes = wret;
+            goto out;
+        }
+#else
         sched_thread_wait(&ring->reader_futex, &pipe_buf->lock);
+#endif
     }
 
     assert(ring->read_pos != ring->write_pos);
@@ -466,7 +481,16 @@ static ssize_t ring_write_locked(struct pal_handle* handle, struct pal_handle_in
             if (pipe_buf->poll_waiting)
                 sched_thread_wakeup(&g_streams_waiting_events_futex);
             sched_thread_wakeup(&ring->reader_futex);
+#ifdef __aarch64__ /* interruptible by _PalThreadResume() */
+            int wret = sched_thread_wait_interruptible(&ring->writer_futex, &pipe_buf->lock);
+            if (wret < 0) {
+                if (!bytes)
+                    bytes = wret; /* a partial write counts, as on Linux */
+                goto out;
+            }
+#else
             sched_thread_wait(&ring->writer_futex, &pipe_buf->lock);
+#endif
         }
 
         /* limited by three factors: how much is requested by caller, how much left for writing in
@@ -569,7 +593,13 @@ int64_t pal_common_pipe_writehandles(struct pal_handle* handle, const void* buff
             bytes = -PAL_ERROR_TRYAGAIN;
             goto out_err;
         }
+#ifdef __aarch64__ /* interruptible by _PalThreadResume() */
+        bytes = sched_thread_wait_interruptible(&ring->writer_futex, &pipe_buf->lock);
+        if (bytes < 0)
+            goto out_err;
+#else
         sched_thread_wait(&ring->writer_futex, &pipe_buf->lock);
+#endif
     }
     /* the receiver shares the handle objects: one reference each, as PalSendHandle gives */
     for (size_t i = 0; i < cargo_count; i++)

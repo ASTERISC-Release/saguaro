@@ -197,6 +197,16 @@ struct thread {
     uint64_t upcall_addr;
     int upcall_event;
 #endif
+
+#ifdef __aarch64__
+    /* An interruptible wait (sched_thread_wait_interruptible(): a blocking PAL call made for the
+     * application) is in progress; _PalThreadResume() of another thread then wakes this one with
+     * `woken_by_interrupt` set and the wait returns -PAL_ERROR_INTERRUPTED, as a host signal
+     * interrupts a system call on the Linux PAL. Both under g_thread_list_lock. (AArch64 only on
+     * this branch, so that the x86_64 layout stays as it is.) */
+    bool wait_interruptible;
+    bool woken_by_interrupt;
+#endif
 };
 DEFINE_LISTP(thread);
 

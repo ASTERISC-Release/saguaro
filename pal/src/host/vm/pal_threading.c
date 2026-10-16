@@ -37,6 +37,17 @@ void _PalThreadYieldExecution(void) {
 }
 
 int _PalThreadResume(struct pal_handle* thread) {
+#ifdef __aarch64__
+    /* End the thread's blocking PAL call, if it is in one (an interruptible wait returns
+     * -PAL_ERROR_INTERRUPTED and the LibOS handles the thread's pending signals), otherwise mark it
+     * so that its next such wait does not sleep. Nothing is delivered to a thread that runs in user
+     * mode (it notices the signal at its next system call): the delivery at a user-mode timer tick
+     * stalled Mono on x86_64 (below). Documentation/devel/vm-multiproc-aarch64/FINDINGS.md. */
+    if (!thread->thread.kernel_thread)
+        return 0;
+    sched_thread_interrupt(thread->thread.kernel_thread);
+    return 0;
+#endif
     /* Not implemented: the LibOS wakes a thread blocked in its own waits, and a thread notices a
      * new signal at its next system call. Delivering the signal at the thread's next user-mode
      * timer tick (resume_pending, pal_common_deliver_pending_interrupt()) was tried with the

@@ -374,6 +374,91 @@ void sched_thread_wait(int* futex_word, spinlock_t* lock) {
     spinlock_lock(lock);
 }
 
+/* The PAL contract of the x86_64 VM PAL (sched_thread_wait_interruptible() and
+ * sched_thread_interrupt() of vm-common/kernel_sched.c on the Proton branch): a blocking PAL call
+ * made for the application sleeps here, and _PalThreadResume() ends the sleep with
+ * -PAL_ERROR_INTERRUPTED, which the caller returns to the LibOS (EINTR or a restart, as a host
+ * signal interrupts a system call on the Linux PAL). Unlike x86_64, nothing is delivered to a
+ * thread running in user mode: an interruption that finds the thread outside such a wait stays
+ * pending (resume_pending) for its next interruptible wait only, so that a signal sent just before
+ * the thread blocks (glibc's pause() is ppoll() on AArch64) is not lost. */
+int sched_thread_wait_interruptible(int* futex_word, spinlock_t* lock) {
+    assert(spinlock_is_locked(lock));
+    assert(lock != &g_thread_list_lock);
+
+    thread_list_lock_disable_irq(); /* will be unlocked during save_context, or below */
+
+    uint64_t curr_tcb_base     = (uintptr_t)get_per_cpu_data()->cur_tcb;
+    struct thread* curr_thread = get_thread_ptr(curr_tcb_base);
+
+    /* an interruption that arrived before this wait (the thread was in user mode or on its way
+     * here): do not sleep, as a system call with a signal pending does not */
+    if (__atomic_exchange_n(&curr_thread->resume_pending, false, __ATOMIC_ACQ_REL)) {
+        spinlock_unlock_enable_irq(&g_thread_list_lock);
+        return -PAL_ERROR_INTERRUPTED;
+    }
+
+    spinlock_unlock(lock);
+
+    curr_thread->state              = THREAD_BLOCKED;
+    curr_thread->blocked_on         = futex_word;
+    curr_thread->wait_interruptible = true;
+    curr_thread->woken_by_interrupt = false;
+
+    struct thread* next_thread = find_next_thread(curr_thread);
+    next_thread->state         = THREAD_RUNNING;
+
+    assert(next_thread != curr_thread);
+
+    curr_thread->context.user_tls = arm_get_user_tls();
+    uint64_t next_user_tls = next_thread->context.user_tls;
+    __asm__ volatile("msr tpidr_el0, %0" :: "r"(next_user_tls));
+
+    uint64_t next_tcb = (uint64_t)get_gs_base(next_thread);
+    save_context_and_restore_next(curr_tcb_base, next_tcb, /*lock_to_unlock=*/NULL,
+                                  /*clear_child_tid=*/NULL, &g_thread_list_lock.lock,
+                                  get_per_cpu_data()->scheduling_stack);
+
+    /* scheduled back: woken by the futex word or by sched_thread_interrupt(); until the flag is
+     * cleared here, an interruption that comes after the wakeup is still this wait's (it returns
+     * -PAL_ERROR_INTERRUPTED, the woken condition stays for the caller's next check) */
+    thread_list_lock_disable_irq();
+    curr_thread->wait_interruptible = false;
+    bool interrupted = curr_thread->woken_by_interrupt;
+    curr_thread->woken_by_interrupt = false;
+    spinlock_unlock_enable_irq(&g_thread_list_lock);
+
+    spinlock_lock(lock);
+    return interrupted ? -PAL_ERROR_INTERRUPTED : 0;
+}
+
+void sched_thread_interrupt(struct thread* thread) {
+    /* the caller's IRQ state is restored, not unmasked: the LibOS may call this from an exception
+     * upcall that runs on the interrupt stack (a fatal signal kills the other threads) */
+    uint64_t daif;
+    __asm__ volatile("mrs %0, daif" : "=r"(daif));
+    thread_list_lock_disable_irq();
+    if (thread->wait_interruptible) {
+        /* in an interruptible wait (asleep, or woken and not yet back from it): the wait's
+         * -PAL_ERROR_INTERRUPTED return is the delivery; nothing stays pending */
+        thread->woken_by_interrupt = true;
+        __atomic_store_n(&thread->resume_pending, false, __ATOMIC_RELEASE);
+        if (thread->state == THREAD_BLOCKED) {
+            thread->state      = THREAD_RUNNABLE;
+            thread->blocked_on = NULL;
+            if (g_sched_switch_roots && !thread->is_helper) {
+                LISTP_DEL(thread, &g_thread_list, list);
+                LISTP_ADD(thread, &g_thread_list, list);
+            }
+            __atomic_store_n(&g_kick_sched_thread, true, __ATOMIC_RELEASE);
+        }
+    } else if (thread->state != THREAD_STOPPED) {
+        __atomic_store_n(&thread->resume_pending, true, __ATOMIC_RELEASE);
+    }
+    spinlock_unlock(&g_thread_list_lock);
+    __asm__ volatile("msr daif, %0" : : "r"(daif) : "memory");
+}
+
 static void sched_thread_wakeup_common(int* futex_word) {
     assert(spinlock_is_locked(&g_thread_list_lock));
 
