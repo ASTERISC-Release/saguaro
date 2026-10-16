@@ -16,7 +16,8 @@
 #     guest's exit code is recovered from the "[ VM exited with code N ]" console line
 #
 # Environment knobs:
-#   GRAMINE_RAM_SIZE (default 2G; a manifest's sgx/tdx.enclave_size wins, floor 1G)
+#   GRAMINE_RAM_SIZE (default 2G, 4G with sys.experimental__multiprocess; a manifest's
+#                    sgx/tdx.enclave_size wins, floor 1G)
 #   GRAMINE_CPU_NUM  (default 1)          GRAMINE_ACCEL (kvm)     GRAMINE_CPU (host)
 #   QEMU_PATH        (qemu-system-aarch64 from PATH)
 #   GRAMINE_VSOCK    1 (default) adds a vhost-vsock device (guest-cid = the VM id), which the guest's
@@ -80,6 +81,20 @@ size = int(re.search(r'\d+', size_str).group())
 print(size_str if unit * size > (1 << 30) else '1G')
 " 2>/dev/null)
 QEMU_MEM_SIZE=${QEMU_MEM_SIZE:-$GRAMINE_RAM_SIZE}
+# With the multiprocess key the default is 4G: the frame pool takes half of the free guest RAM out
+# of the application address space (Documentation/devel/vm-multiproc-aarch64/FINDINGS.md), which
+# in 2G left too little room for a large mmap now and then. Guest RAM costs host memory only when
+# the guest touches it.
+if [ -z "$QEMU_MEM_SIZE" ] && python3 -c "
+import os
+import sys
+from graminelibos import Manifest
+with open(os.environ['GRAMINE_MANIFEST'], 'rb') as f:
+    manifest = Manifest.loads(f.read().decode('utf-8'))
+sys.exit(0 if manifest.get('sys', {}).get('experimental__multiprocess') else 1)
+" 2>/dev/null; then
+    QEMU_MEM_SIZE=4G
+fi
 QEMU_MEM_SIZE=${QEMU_MEM_SIZE:-"2G"}
 QEMU_CPU_NUM=${GRAMINE_CPU_NUM:-1}
 
