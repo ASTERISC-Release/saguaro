@@ -5,6 +5,7 @@
 
 #include "api.h"
 #include "pal_internal.h"
+#include "spinlock.h"
 
 #include "kernel_interrupts.h"
 #include "kernel_memory.h"
@@ -80,6 +81,57 @@ static void bitmap_set_range(uint64_t start, uint64_t end) {
     }
 }
 
+/* validate the page at guest-physical `pa`, reached through the mapping `va`, unless the bitmap
+ * already has it */
+static int validate_page_once(uint64_t va, uint64_t pa) {
+    uint64_t pfn = pa / PAGE_SIZE;
+    if (pfn >= g_sev_valid_bitmap_pages)
+        return -PAL_ERROR_INVAL;
+    if (SHARED_MEM_ADDR <= pa && pa < SHARED_MEM_ADDR + SHARED_MEM_SIZE)
+        return -PAL_ERROR_INVAL;
+    uint8_t bit = 1 << (pfn % 8);
+    if (__atomic_load_n(&g_sev_valid_bitmap[pfn / 8], __ATOMIC_ACQUIRE) & bit)
+        return 0;
+    if (pvalidate_page(va) < 0)
+        return -PAL_ERROR_DENIED;
+    __atomic_or_fetch(&g_sev_valid_bitmap[pfn / 8], bit, __ATOMIC_RELEASE);
+    return 0;
+}
+
+int sev_validate_frame(uint64_t frame) {
+    if (!sev_snp_active())
+        return 0;
+    /* through the supervisor alias of the frame pool: the current root may not map the frame */
+    return validate_page_once((uint64_t)memory_frame_pointer(frame), frame);
+}
+
+/* Kernel metadata that must be private (page tables and frame-pool bookkeeping of the
+ * multiprocess support, which the vm PAL keeps in the shared heap): a bump allocator in the unused
+ * tail of the page-table region, after the validation bitmap */
+static uint64_t g_sev_private_heap_pos;
+
+void* sev_alloc_private(size_t size) {
+    static spinlock_t lock = INIT_SPINLOCK_UNLOCKED;
+    if (!size)
+        return NULL;
+    size = ALIGN_UP(size, PAGE_SIZE);
+    spinlock_lock(&lock);
+    uint64_t addr = g_sev_private_heap_pos;
+    if (!addr || addr + size > PAGE_TABLES_ADDR + PAGE_TABLES_SIZE) {
+        spinlock_unlock(&lock);
+        return NULL;
+    }
+    g_sev_private_heap_pos += size;
+    spinlock_unlock(&lock);
+    if (sev_snp_active()) {
+        for (uint64_t page = addr; page < addr + size; page += PAGE_SIZE)
+            if (validate_page_once(page, page) < 0)
+                return NULL;
+    }
+    memset((void*)addr, 0, size);
+    return (void*)addr;
+}
+
 int sev_validate_on_demand(uint64_t addr, size_t size) {
     if (!sev_snp_active())
         return 0;
@@ -116,8 +168,10 @@ void sev_memory_after_temp_tables(void) {
 }
 
 void sev_memory_after_final_tables(uint64_t memory_end, uint64_t tables_end) {
-    if (!sev_snp_active())
+    if (!sev_snp_active()) {
+        g_sev_private_heap_pos = ALIGN_UP(tables_end, PAGE_SIZE);
         return;
+    }
     uint64_t t0 = get_tsc();
     /* the bitmap goes right after the page tables, in their reserved region */
     uint64_t pages = ALIGN_UP(memory_end, PAGE_SIZE) / PAGE_SIZE;
@@ -128,6 +182,7 @@ void sev_memory_after_final_tables(uint64_t memory_end, uint64_t tables_end) {
     sev_validate_early(bitmap, bitmap_end);
     g_sev_valid_bitmap = (uint8_t*)bitmap;
     memset(g_sev_valid_bitmap, 0, bitmap_end - bitmap);
+    g_sev_private_heap_pos = bitmap_end;
     g_sev_valid_bitmap_pages = pages;
     bitmap_set_range(0, 8UL * 1024 * 1024);
     bitmap_set_range(PAGE_TABLES_ADDR, bitmap_end);

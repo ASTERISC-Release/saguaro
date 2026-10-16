@@ -69,6 +69,10 @@ void sev_memory_before_page_tables(uint64_t addr, size_t size);
 void sev_memory_after_temp_tables(void);
 void sev_memory_after_final_tables(uint64_t memory_end, uint64_t tables_end);
 int sev_validate_on_demand(uint64_t addr, size_t size);
+/* SNP: validate a frame of the multiprocess frame pool when it is allocated */
+int sev_validate_frame(uint64_t frame);
+/* private, zeroed kernel memory for page tables and frame-pool metadata (never freed) */
+void* sev_alloc_private(size_t size);
 uint64_t sev_validated_pages(void);
 extern uint8_t* g_sev_valid_bitmap;
 extern uint64_t g_sev_valid_bitmap_pages;
