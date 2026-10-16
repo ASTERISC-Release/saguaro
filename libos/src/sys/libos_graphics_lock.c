@@ -7,6 +7,9 @@
 #include "libos_thread.h"
 #include "linux_abi/errors.h"
 #include "cpu.h"
+#include "libos_vma.h"
+#include "linux_abi/memory.h"
+#include "pal.h"
 
 #ifdef ENABLE_GRAPHICS
 
@@ -183,6 +186,28 @@ long libos_syscall_relinquish_libos_lock(long offset) {
     return 0;
 }
 
+int graphics_ensure_comm_mapped(void) {
+    if (__atomic_load_n(&g_graphics_comm_mapped, __ATOMIC_ACQUIRE))
+        return 0;
+    /* the same fixed, physically shared page the graphics library maps with mmap(MAP_FIXED): the
+     * VM PAL maps the comm range into this address space (kernel_memory.c) */
+    void* addr = (void*)COMM_ADDR;
+    int ret = bkeep_mmap_fixed(addr, PAGE_SIZE, PROT_READ | PROT_WRITE,
+                               MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, /*file=*/NULL, /*offset=*/0,
+                               "graphics-comm");
+    if (ret < 0)
+        return ret;
+    ret = PalVirtualMemoryAlloc(addr, PAGE_SIZE, PAL_PROT_READ | PAL_PROT_WRITE);
+    if (ret < 0) {
+        void* tmp_vma = NULL;
+        if (bkeep_munmap(addr, PAGE_SIZE, /*is_internal=*/false, &tmp_vma) == 0)
+            bkeep_remove_tmp_vma(tmp_vma);
+        return pal_to_unix_errno(ret);
+    }
+    __atomic_store_n(&g_graphics_comm_mapped, true, __ATOMIC_RELEASE);
+    return 0;
+}
+
 #else /* !ENABLE_GRAPHICS */
 
 /* The syscall tables always reference these two (custom) syscalls; without graphics they
@@ -199,6 +224,10 @@ long libos_syscall_graphics_physmem(size_t size, uint64_t* out_pa) {
 
 long libos_syscall_relinquish_libos_lock(long offset) {
     __UNUSED(offset);
+    return -ENOSYS;
+}
+
+int graphics_ensure_comm_mapped(void) {
     return -ENOSYS;
 }
 

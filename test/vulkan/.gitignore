@@ -1,5 +1,6 @@
 /vk-headless
 /vk-two
+/gfx-fdpass
 /vk-session-shim.so
 /*.manifest
 /*.manifest.sgx

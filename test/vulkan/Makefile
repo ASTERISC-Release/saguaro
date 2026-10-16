@@ -7,7 +7,7 @@ LDLIBS = -lvulkan
 GLSLANG ?= glslangValidator
 
 .PHONY: all
-all: vk-headless vk-mt vk-two vk-session-shim.so clock-probe xwin-dump xsend-key
+all: vk-headless vk-mt vk-two gfx-fdpass vk-session-shim.so clock-probe xwin-dump xsend-key
 
 xsend-key: xsend-key.c
 	$(CC) $(CFLAGS) $< -o $@ -lX11
@@ -20,6 +20,10 @@ vk-mt: vk-mt.c
 
 # several graphics processes at once (design-gpu.md): forks N children that exec /vk-headless
 vk-two: vk-two.c
+	$(CC) $(CFLAGS) $< -o $@
+
+# a graphics host fd (the render node) passed over SCM_RIGHTS to another guest process
+gfx-fdpass: gfx-fdpass.c
 	$(CC) $(CFLAGS) $< -o $@
 
 vk-session-shim.so: vk-session-shim.c
@@ -45,7 +49,7 @@ PRESENT ?= 0
 LAYER_DIR = $(shell python3 -c "import graminelibos; print(graminelibos._CONFIG_PKGLIBDIR)")/vulkan
 X_DISPLAY_NUM = $(patsubst :%,%,$(firstword $(subst ., ,$(DISPLAY))))
 ETC_VULKAN = $(if $(wildcard /etc/vulkan),1,0)
-prog_binary = $(if $(filter vk-headless vk-mt vk-two clock-probe,$(1)),$(1),/usr/bin/$(1))
+prog_binary = $(if $(filter vk-headless vk-mt vk-two gfx-fdpass clock-probe,$(1)),$(1),/usr/bin/$(1))
 
 .PHONY: FORCE
 direct-%.manifest: vk-direct.manifest.template FORCE
@@ -67,4 +71,4 @@ vm-%.manifest: vk-vm.manifest.template vk-session-shim.so FORCE
 
 .PHONY: clean
 clean:
-	$(RM) vk-headless vk-mt vk-two vk-session-shim.so clock-probe xwin-dump xsend-key *.manifest *.manifest.sgx *.sig
+	$(RM) vk-headless vk-mt vk-two gfx-fdpass vk-session-shim.so clock-probe xwin-dump xsend-key *.manifest *.manifest.sgx *.sig

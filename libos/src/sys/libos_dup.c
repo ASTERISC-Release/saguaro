@@ -13,6 +13,19 @@
 #include "libos_thread.h"
 #include "linux_abi/errors.h"
 
+#ifdef ENABLE_GRAPHICS
+long graphics_host_dup_request(int fd, int type) {
+    long _offset = libos_syscall_acquire_libos_lock();
+    comm_page_t* c = comm_page(_offset);
+    c->p1 = (uint64_t)fd;
+    __sync_synchronize();
+    c->req_bit = type == TYPE_HOST_IDENTITY ? DUP_IDENTITY : DUP;
+    uint64_t comm_ret = comm_sync_notify(c);
+    libos_syscall_relinquish_libos_lock(_offset);
+    return (long)(int64_t)comm_ret;
+}
+#endif
+
 long libos_syscall_dup(unsigned int fd) {
     long retval;
     struct libos_handle* hdl;
@@ -50,21 +63,11 @@ long libos_syscall_dup(unsigned int fd) {
     if(hdl->type == TYPE_HOST || hdl->type == TYPE_HOST_IDENTITY)
     {
         log_debug("redirecting dup(%d) to host", fd);
-        long _offset = libos_syscall_acquire_libos_lock();
-            comm_page_t* c = comm_page(_offset);
-        c->p1 = (uint64_t) fd;
-        __sync_synchronize();
-        if (hdl->type == TYPE_HOST_IDENTITY) {
-            c->req_bit = DUP_IDENTITY;
-        } else {
-            c->req_bit = DUP;
-        }
-        uint64_t comm_ret = comm_sync_notify(c);
-        libos_syscall_relinquish_libos_lock(_offset);
-        if ((int64_t)comm_ret < 0) {
+        long comm_ret = graphics_host_dup_request(fd, hdl->type);
+        if (comm_ret < 0) {
             /* the host's dup() failed: the listener returns -errno */
             put_handle(hdl);
-            return (long)comm_ret;
+            return comm_ret;
         }
 
         /* Create a new handle and mark it the same as the old handle. A stale TYPE_HOST handle at
