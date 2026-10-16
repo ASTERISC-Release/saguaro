@@ -833,7 +833,7 @@ noreturn int pal_start_continue(void* cmdline_) {
 
     extern void sysret_asm(void);
     g_pal_public_state.vm_user_return_stub = (void*)&sysret_asm;
-    g_pal_public_state.vm_user_csgsfs = 0x2bULL | (0x23ULL << 48); /* kernel_events.S: user CS, SS */
+    g_pal_public_state.vm_user_csgsfs = 0x33ULL | (0x2bULL << 48); /* user CS 0x33, SS 0x2b (Linux numbering) */
     g_pal_public_state.vm_user_rip_offset = offsetof(struct pal_tcb_vm,
                                                      kernel_thread.context.user_rip);
 

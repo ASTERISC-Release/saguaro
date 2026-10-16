@@ -77,10 +77,12 @@ _gdt_start:
 _gdt_entry_kernel_cs:
     .long   0xffff, 0xaf9b00                    // 64-bit kernel code
     .long   0xffff, 0xaf9300                    // 64-bit kernel data
+    // padding so the user selectors match Linux's numbering (see kernel_static_structs.S)
+    .quad   0
 _gdt_entry_user_cs:
-    .long   0xffff, 0xcffb00                    // 32-bit user code
-    .long   0xffff, 0xcff300                    // 32-bit user data
-    .long   0xffff, 0xaffb00                    // 64-bit user code
+    .long   0xffff, 0xcffb00                    // 32-bit user code (selector 0x23)
+    .long   0xffff, 0xcff300                    // user data         (selector 0x2b)
+    .long   0xffff, 0xaffb00                    // 64-bit user code  (selector 0x33)
 _gdtr:
     .word   . - _gdt_start - 1
     .quad  AP_STARTUP_PAGE_ADDRESS + _gdt_start - ap_startup_page_start
