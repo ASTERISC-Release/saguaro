@@ -354,16 +354,21 @@ static void probe_huge(void) {
     static const size_t gib = 1ull << 30;
     size_t sizes[] = {4, 16, 64, 256, 1024};
     for (unsigned i = 0; i < sizeof(sizes) / sizeof(sizes[0]); i++) {
+        double t0 = now_s();
         void* p = mmap(NULL, sizes[i] * gib, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
-        P("huge", "%s reserve %zu GiB PROT_NONE: %s", p == MAP_FAILED ? "FAIL" : "PASS", sizes[i], p == MAP_FAILED ? E() : "ok");
+        double t1 = now_s();
         if (p != MAP_FAILED) munmap(p, sizes[i] * gib);
+        double t2 = now_s();
+        P("huge", "%s reserve %zu GiB PROT_NONE: %s (mmap %.3f s, munmap %.3f s)", p == MAP_FAILED ? "FAIL" : "PASS", sizes[i], p == MAP_FAILED ? E() : "ok", t1 - t0, t2 - t1);
     }
     /* commit: 4 GiB RW NORESERVE, touch a byte per 2 MiB; then 1 GiB a byte per 4 KiB */
+    double tm0 = now_s();
     char* p = mmap(NULL, 4 * gib, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
     if (p == MAP_FAILED) {
         P("huge", "FAIL mmap 4 GiB RW: %s", E());
         return;
     }
+    P("huge", "PASS mmap 4 GiB RW NORESERVE in %.3f s", now_s() - tm0);
     long rss0 = rss_kib();
     double t0 = now_s();
     for (size_t off = 0; off < 4 * gib; off += 2 << 20) p[off] = 1;
@@ -377,7 +382,9 @@ static void probe_huge(void) {
     int r = madvise(p, gib, MADV_DONTNEED);
     t1 = now_s();
     P("huge", "%s madvise(MADV_DONTNEED) 1 GiB: %s in %.3f s, RSS %ld KiB, byte now %d", r == 0 ? "PASS" : "FAIL", r == 0 ? "ok" : E(), t1 - t0, rss_kib(), p[0]);
+    t0 = now_s();
     munmap(p, 4 * gib);
+    P("huge", "PASS munmap 4 GiB in %.3f s", now_s() - t0);
 }
 
 /* ------------------------------------------------------------------------------------------- */

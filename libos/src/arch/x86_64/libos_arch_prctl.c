@@ -41,6 +41,20 @@ long libos_syscall_arch_prctl(int code, unsigned long addr) {
             }
             return pal_to_unix_errno(PalSegmentBaseGet(PAL_SEGMENT_FS, (unsigned long*)addr));
 
+        /* The application's own GS base (Wine: the TEB at %gs:0x30). PALs whose own code lives in
+         * %gs answer DENIED, reported as ENOSYS as before; the VM PAL keeps the base per thread and
+         * swaps it in at every return to user mode. */
+        case ARCH_SET_GS:
+            ret = PalSegmentBaseSet(PAL_SEGMENT_GS, addr);
+            return ret == -PAL_ERROR_DENIED ? -ENOSYS : pal_to_unix_errno(ret);
+
+        case ARCH_GET_GS:
+            if (!is_user_memory_writable((unsigned long*)addr, sizeof(unsigned long))) {
+                return -EFAULT;
+            }
+            ret = PalSegmentBaseGet(PAL_SEGMENT_GS, (unsigned long*)addr);
+            return ret == -PAL_ERROR_DENIED ? -ENOSYS : pal_to_unix_errno(ret);
+
         /* Emulate ARCH_GET_XCOMP_SUPP, ARCH_GET_XCOMP_PERM, ARCH_REQ_XCOMP_PERM by querying CPUID,
          * it's safe because the PAL already requested AMX permission at startup. Note that
          * supported and currently enabled sets are always the same in Gramine (because PAL always

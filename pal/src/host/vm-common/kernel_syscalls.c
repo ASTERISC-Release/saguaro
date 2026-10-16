@@ -12,9 +12,11 @@
 
 #include "api.h"
 
+#include "kernel_multicore.h"
 #include "kernel_syscalls.h"
 
 extern void syscall_asm(void);
+extern void syscall_asm_gs(void);
 
 #define AMD_CPU_FIX
 
@@ -50,6 +52,7 @@ int syscalls_init(void) {
 
     /* IA32_LSTAR MSR simply contains the 64-bit address of the syscall entry */
     wrmsr(MSR_LSTAR, (uint64_t)&syscall_asm);
+    get_per_cpu_data()->lstar_gs = 0;
 
     /* IA32_SYSCALL_MASK MSR contains RFLAGS that are cleared on `syscall` (taken from Linux);
      * we don't clear the Interrupt Flag because our kernel is ok to be interrupted */
@@ -60,4 +63,11 @@ int syscalls_init(void) {
                                        /*alignment check*/    1 << 18));
 
     return 0;
+}
+
+void syscalls_select_entry(struct per_cpu_data* cpu, bool gs) {
+    if (cpu->lstar_gs == (uint8_t)gs)
+        return;
+    wrmsr(MSR_LSTAR, gs ? (uint64_t)&syscall_asm_gs : (uint64_t)&syscall_asm);
+    cpu->lstar_gs = gs;
 }

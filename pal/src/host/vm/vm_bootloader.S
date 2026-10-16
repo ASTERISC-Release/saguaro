@@ -25,7 +25,7 @@ _start32:
     mov     %eax, %cr3
 
     mov     %cr4, %eax
-    or      $(1 << 18) + (1 << 10) + (1 << 9) + (1 << 6) + (1 << 5), %eax
+    or      $(1 << 18) + (1 << 16) + (1 << 10) + (1 << 9) + (1 << 6) + (1 << 5), %eax   // + FSGSBASE: rdgsbase/wrgsbase for the %gs hand-over (kernel_events.S)
     mov     %eax, %cr4                  // OSXSAVE, OSXMMEXCPT, OSFXSR, MCE, PAE
 
     xor     %edx, %edx

@@ -10,6 +10,11 @@
 
 #include "spinlock.h"
 
+/* A process address space (the multiprocess support, x86_64) spans [0, this): one PML4 slot of
+ * private page tables; its application may map, demand-paged, up to here (pal_main.c extends
+ * memory_address_end to it when every process has private frames). */
+#define MEMORY_ADDRESS_SPACE_LIMIT (512UL * 1024 * 1024 * 1024)
+
 #define PAGE_TABLES_ADDR 0x20000000UL          /* page tables occupy [512MB, 658MB) */
 #define PAGE_TABLES_SIZE (146UL * 1024 * 1024) /* 146MB, enough to describe 64GB of addr space +
                                                 * AddressSanitizer shadow memory for these 64GB */

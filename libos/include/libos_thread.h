@@ -126,6 +126,17 @@ struct libos_thread {
     /* futex robust list */
     struct robust_list_head* robust_list; // careful - unverified user pointer!
 
+    /* prctl(PR_SET_SYSCALL_USER_DISPATCH): a system call made from outside [start, start + len)
+     * is turned into SIGSYS (SYS_USER_DISPATCH) unless the byte at `selector` (a user pointer,
+     * may be NULL) says SYSCALL_DISPATCH_FILTER_ALLOW. Per thread, inherited by clone and fork,
+     * cleared by execve, as on Linux. Wine runs its PE code's `syscall` instructions on it. */
+    struct {
+        bool on;
+        uintptr_t start;
+        uintptr_t len;
+        char* selector; // careful - unverified user pointer!
+    } syscall_user_dispatch;
+
     PAL_HANDLE scheduler_event;
 
     struct wake_queue_node wake_queue;

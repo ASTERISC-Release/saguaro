@@ -14,7 +14,7 @@ short on purpose; an item that is fixed is removed from the topic list first and
 | `vm` | robust mutex for the System V shared tables; `/proc/<pid>/stat` of other processes; `PROT_NONE` enforcement; finer timer than the 100 ms tick; async signal resume; UDP/IPv6 relay gaps | `devel/vm-multiproc/TODO.md`, `devel/libos-syscalls/TODO.md`, `devel/syscall-compat/TODO.md`, `devel/vm-network/TODO.md` |
 | `vm` with graphics (OpenGL, Vulkan) | present events and a non-flipping blit for Vulkan, idle CPU of the listener, two-thread submission cost, SuperTuxKart start hang, sound, Team Fortress 2 | `devel/graphics/TODO.md`, `devel/vulkan/TODO.md` |
 | `tdx` and `sgx` | never run on this tree's hardware; extend the interrupt-before-IDT guard to TDX; the SGX build needs `protobuf-c` (not in `dependencies.sh` or the container); the TDX install needs `td-shim` | `devel/vm-multiproc/TODO.md`, `quickstart/tdx-sgx.rst` |
-| Proton (Wine, DXVK) | phase 1 steps 1 to 3 done 2026-10-15 on `dev-proton-vm-p1` (Unix-socket nodes, fork of reservations, `SCM_RIGHTS`); next: the `%gs` decision (`devel/proton-vm/design-gs.md`), then interruptible blocking calls and exception vectors in the VM PAL | `devel/proton-vm/PLAN.md` |
+| Proton (Wine, DXVK) | phase 1 steps 1 to 3 done 2026-10-15 on `dev-proton-vm-p1` (Unix-socket nodes, fork of reservations, `SCM_RIGHTS`); `dev-proton-vm-p2` (2026-10-15): `%gs` handed to the application, interruptible waits, exception vectors, the address space to 512 GiB, drive links, syscall user dispatch: `hello.exe` prints all its lines in the VM; next: the end of a run (the wineserver stays), then the graphics tests | `devel/proton-vm/PLAN.md` |
 
 ## AArch64
 
