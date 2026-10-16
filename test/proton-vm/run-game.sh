@@ -25,7 +25,11 @@ NAME=$(basename "$EXE" .exe)
 [ -n "$OUT" ] || OUT=$ROOT/.proton-vm/games/runs/$NAME-$LOADER-$(date -u +%H%M%S)
 mkdir -p "$OUT"
 [ -z "${XDO:-}" ] || XDO=$(readlink -f "$XDO") # the run changes into the game's folder below
-export DISPLAY=$DISP
+# X_TARGET=:M shows the guest's display :N (-d) on the host server :M instead: the relay of vsock
+# port 6000+N then connects to :M, and screenshots and window checks use :M (for the real display
+# when another relay already owns port 6000, FINDINGS.md 2026-10-16)
+TARGET=${X_TARGET:-$DISP}
+export DISPLAY=$TARGET
 if ! xdpyinfo >/dev/null 2>&1; then
     Xvfb "$DISP" -screen 0 "${GEOM}x24" -nolisten tcp >"$OUT/xvfb.log" 2>&1 &
     for _ in $(seq 50); do xdpyinfo >/dev/null 2>&1 && break; sleep 0.1; done
@@ -40,10 +44,13 @@ if [ "$LOADER" = vm ]; then
     # gramine-vm relays vsock port 6000+N to /tmp/.X11-unix/XN; in the container that directory is
     # the host's (not writable), so Xvfb/Xorg listen on the abstract socket only: relay to that one
     N=${DISP#:}
-    if [ ! -S "/tmp/.X11-unix/X$N" ]; then
+    if [ ! -S "/tmp/.X11-unix/X$N" ] || [ "$TARGET" != "$DISP" ]; then
         ss -H -ln --vsock "sport = :$((6000 + N))" 2>/dev/null | grep -q . || \
-            setsid nohup socat -b 1048576 "VSOCK-LISTEN:$((6000 + N)),fork,reuseaddr,max-children=50" \
-                "ABSTRACT-CONNECT:/tmp/.X11-unix/X$N" </dev/null >"$OUT/socat.log" 2>&1 &
+            setsid -f nohup socat -b 1048576 "VSOCK-LISTEN:$((6000 + N)),fork,reuseaddr,max-children=50" \
+                "$([ -S "/tmp/.X11-unix/X${TARGET#:}" ] && echo UNIX || echo ABSTRACT)-CONNECT:/tmp/.X11-unix/X${TARGET#:}" \
+                </dev/null >"$OUT/socat.log" 2>&1
+        # (setsid -f: detached, or the script's final wait would block on it; the relay stays for
+        # the next runs of the same display, like a relay started by hand)
         export GRAMINE_VM_X_PROXY=0
         sleep 0.5
     fi
