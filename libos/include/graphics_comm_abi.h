@@ -53,6 +53,38 @@ _Static_assert(offsetof(comm_page_t, p5) == 56,
 _Static_assert(sizeof(comm_page_t) == 64,
                "graphics communication ABI must fit one cache line");
 
+/*
+ * Guest-private state of the graphics session, in the comm page between the request slots and
+ * the input ring (offset 512): the listener never reads this range. The comm page is one
+ * physical page that every process of the guest maps, so this is what makes one session serve
+ * several processes (Documentation/devel/proton-vm/design-gpu.md, "Several graphics processes"):
+ * the first process to turn `session_state` from 0 to 1 runs the setup handshake and publishes
+ * the arena geometry it used, then stores 2; the others wait for 2 and only map the arenas. The
+ * slot-busy flags are the request-slot locks of the LibOS (libos_graphics_lock.c), shared by the
+ * processes instead of per process.
+ */
+#define GRAPHICS_GUEST_STATE_OFFSET 256
+
+enum {
+    GRAPHICS_SESSION_NONE = 0,
+    GRAPHICS_SESSION_SETTING_UP = 1,
+    GRAPHICS_SESSION_UP = 2,
+};
+
+typedef struct {
+    volatile uint64_t session_state;
+    volatile uint64_t data_addr;
+    volatile uint64_t data_size;
+    volatile uint64_t huge_addr;
+    volatile uint64_t huge_size;
+    volatile uint32_t slot_busy[NUM_COMM_PAGES];
+} graphics_guest_state_t;
+
+_Static_assert(GRAPHICS_GUEST_STATE_OFFSET >= NUM_COMM_PAGES * sizeof(comm_page_t),
+               "the guest state must follow the request slots");
+_Static_assert(GRAPHICS_GUEST_STATE_OFFSET + sizeof(graphics_guest_state_t) <= 512,
+               "the guest state must end before the input ring");
+
 typedef enum graphics_request {
     LOG_MMAP_EVENT = 1,
     SETUP_DATA = 2,

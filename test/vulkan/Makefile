@@ -7,7 +7,7 @@ LDLIBS = -lvulkan
 GLSLANG ?= glslangValidator
 
 .PHONY: all
-all: vk-headless vk-mt vk-session-shim.so clock-probe xwin-dump xsend-key
+all: vk-headless vk-mt vk-two vk-session-shim.so clock-probe xwin-dump xsend-key
 
 xsend-key: xsend-key.c
 	$(CC) $(CFLAGS) $< -o $@ -lX11
@@ -17,6 +17,10 @@ xwin-dump: xwin-dump.c
 
 vk-mt: vk-mt.c
 	$(CC) $(CFLAGS) $< -o $@ $(LDLIBS) -lpthread
+
+# several graphics processes at once (design-gpu.md): forks N children that exec /vk-headless
+vk-two: vk-two.c
+	$(CC) $(CFLAGS) $< -o $@
 
 vk-session-shim.so: vk-session-shim.c
 	$(CC) $(CFLAGS) -shared -fPIC $< -o $@ -ldl
@@ -41,7 +45,7 @@ PRESENT ?= 0
 LAYER_DIR = $(shell python3 -c "import graminelibos; print(graminelibos._CONFIG_PKGLIBDIR)")/vulkan
 X_DISPLAY_NUM = $(patsubst :%,%,$(firstword $(subst ., ,$(DISPLAY))))
 ETC_VULKAN = $(if $(wildcard /etc/vulkan),1,0)
-prog_binary = $(if $(filter vk-headless vk-mt clock-probe,$(1)),$(1),/usr/bin/$(1))
+prog_binary = $(if $(filter vk-headless vk-mt vk-two clock-probe,$(1)),$(1),/usr/bin/$(1))
 
 .PHONY: FORCE
 direct-%.manifest: vk-direct.manifest.template FORCE
@@ -50,15 +54,17 @@ direct-%.manifest: vk-direct.manifest.template FORCE
 	gramine-manifest-check $@
 
 # gramine-vm: `make vm-<prog>.manifest` (EGL_DISCRETE=1 for renderD129; EAGER=1 for programs that
-# dlopen the Vulkan loader; SHIM=1 for the phase-0 shim; PRESENT=1 for windows through the layer),
-# then
+# dlopen the Vulkan loader; SHIM=1 for the phase-0 shim; PRESENT=1 for windows through the layer;
+# MULTIPROCESS=1 for the VM PAL's demand-paged processes, which vm-vk-two needs: its children are
+# processes; TWO=1 also mounts /vk-headless for them), then
 # `QEMU_PATH=<qemu-tirith>/build/qemu-system-x86_64 gramine-vm vm-<prog> [args]`.
 vm-%.manifest: vk-vm.manifest.template vk-session-shim.so FORCE
 	gramine-manifest -Dlog_level=$(GRAMINE_LOG_LEVEL) -Degl_discrete=$${EGL_DISCRETE:-0} \
 		-Deager=$(EAGER) -Dshim=$(SHIM) -Dpresent=$(PRESENT) -Dlayer_dir=$(LAYER_DIR) \
+		-Dmultiprocess=$${MULTIPROCESS:-0} -Dtwo=$${TWO:-0} \
 		-Detc_vulkan=$(ETC_VULKAN) -Dentrypoint=/$* -Dbinary=$(call prog_binary,$*) $< $@
 	gramine-manifest-check $@ || echo "(gramine-manifest-check failed; see TESTING.md)"
 
 .PHONY: clean
 clean:
-	$(RM) vk-headless vk-mt vk-session-shim.so clock-probe xwin-dump xsend-key *.manifest *.manifest.sgx *.sig
+	$(RM) vk-headless vk-mt vk-two vk-session-shim.so clock-probe xwin-dump xsend-key *.manifest *.manifest.sgx *.sig

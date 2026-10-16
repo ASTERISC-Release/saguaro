@@ -1,4 +1,5 @@
 /vk-headless
+/vk-two
 /vk-session-shim.so
 /*.manifest
 /*.manifest.sgx

@@ -1888,9 +1888,30 @@ int memory_address_space_alloc(struct memory_address_space* space, void* addr, s
         return egl_redirect_region;
     if (egl_redirect_region || is_graphics_comm_range(addr, size)
             || (space && space->identity_memory)) {
-        int ret = memory_alloc(addr, size, read, write, execute);
-        if (ret < 0)
-            return ret;
+        /* The comm page and the GEM arenas are fixed physical ranges that every process of the
+         * guest maps at the same address and shares with the host listener (one graphics session
+         * per guest, design-gpu.md): the first process to map one allocates it (the zero-fill of
+         * the comm page, the page attributes); a later process only gets the boot root's entries,
+         * or its mmap would wipe the session's state and reset the arenas' write-combining. */
+        static uintptr_t g_shared_graphics_bases[3];
+        bool shared_range = egl_redirect_region || is_graphics_comm_range(addr, size);
+        bool already_mapped = false;
+        if (shared_range) {
+            size_t free_slot = ARRAY_SIZE(g_shared_graphics_bases);
+            for (size_t i = 0; i < ARRAY_SIZE(g_shared_graphics_bases); i++) {
+                if (g_shared_graphics_bases[i] == (uintptr_t)addr)
+                    already_mapped = true;
+                else if (!g_shared_graphics_bases[i] && free_slot == ARRAY_SIZE(g_shared_graphics_bases))
+                    free_slot = i;
+            }
+            if (!already_mapped && free_slot < ARRAY_SIZE(g_shared_graphics_bases))
+                g_shared_graphics_bases[free_slot] = (uintptr_t)addr;
+        }
+        if (!already_mapped) {
+            int ret = memory_alloc(addr, size, read, write, execute);
+            if (ret < 0)
+                return ret;
+        }
         return memory_address_space_share_range(memory_address_space_boot(), space,
                                                 (uintptr_t)addr, size);
     }

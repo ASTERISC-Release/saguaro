@@ -126,8 +126,23 @@ static int get_slot_for_tid(unsigned int tid) {
  * a long host call (a GPU wait) therefore stalls only the threads queued behind its slot, and only
  * when all slots are in use.
  */
-static int g_slot_busy[NUM_COMM_PAGES];
+static uint32_t g_slot_busy_private[NUM_COMM_PAGES];
 static bool g_slot_queued_holder[NUM_COMM_PAGES];
+
+/* The slot-busy flags live in the comm page's guest-private area once the process has mapped it
+ * (graphics_comm_abi.h): one physical page for the whole guest, so the four request slots are
+ * mutually exclusive across processes (several Wine processes share one session,
+ * design-gpu.md). Before that mapping (nothing uses slots then) the private array stands in;
+ * a process always acquires and releases through the same array, since the mapping happens
+ * before its first request. */
+static volatile uint32_t* slot_busy_flags(void) {
+    if (__atomic_load_n(&g_graphics_comm_mapped, __ATOMIC_ACQUIRE)) {
+        graphics_guest_state_t* state =
+            (graphics_guest_state_t*)(uintptr_t)(COMM_ADDR + GRAPHICS_GUEST_STATE_OFFSET);
+        return state->slot_busy;
+    }
+    return g_slot_busy_private;
+}
 
 long libos_syscall_acquire_libos_lock(void) {
 #if TRACK_ACQUIRE_THREADS
@@ -136,9 +151,10 @@ long libos_syscall_acquire_libos_lock(void) {
     _Static_assert(NUM_COMM_PAGES * sizeof(comm_page_t) <= 512,
                    "the request slots must end before the input ring");
 
+    volatile uint32_t* busy = slot_busy_flags();
     for (int i = 0; i < NUM_COMM_PAGES; i++) {
-        if (!__atomic_load_n(&g_slot_busy[i], __ATOMIC_RELAXED) &&
-                !__atomic_exchange_n(&g_slot_busy[i], 1, __ATOMIC_ACQUIRE))
+        if (!__atomic_load_n(&busy[i], __ATOMIC_RELAXED) &&
+                !__atomic_exchange_n(&busy[i], 1, __ATOMIC_ACQUIRE))
             return i * sizeof(comm_page_t);
     }
 
@@ -147,7 +163,7 @@ long libos_syscall_acquire_libos_lock(void) {
     lock(&comm_locks[index]);
     /* The VM PAL schedules cooperatively: yield, or the slot's holder may never run again on
      * this vCPU (seen with four Mesa shader-cache threads and one vCPU). */
-    while (__atomic_exchange_n(&g_slot_busy[index], 1, __ATOMIC_ACQUIRE)) {
+    while (__atomic_exchange_n(&busy[index], 1, __ATOMIC_ACQUIRE)) {
         CPU_RELAX();
         PalThreadYieldExecution();
     }
@@ -161,7 +177,7 @@ long libos_syscall_relinquish_libos_lock(long offset) {
         return -EINVAL;
     bool queued = g_slot_queued_holder[index];
     g_slot_queued_holder[index] = false;
-    __atomic_store_n(&g_slot_busy[index], 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&slot_busy_flags()[index], 0, __ATOMIC_RELEASE);
     if (queued)
         unlock(&comm_locks[index]);
     return 0;
