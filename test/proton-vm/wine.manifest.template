@@ -29,6 +29,15 @@ loader.env.WINELOADERNOEXEC = "1"
 loader.env.WINEDEBUG = "{{ winedebug }}"
 # DXVK_LOG_LEVEL=debug shows where DXVK stops (its default is info)
 loader.env.DXVK_LOG_LEVEL = "{{ dxvk_log_level }}"
+# EGL_VULKAN_RATE_LOG=<s>: the layer logs its present rate every so many seconds (GPU runs on the
+# dummy server, where the window content is not visible)
+loader.env.EGL_VULKAN_RATE_LOG = "{{ rate_log }}"
+{% if refresh|string != "" %}
+# EGL_VULKAN_REFRESH / EGL_VULKAN_MAX_FPS: the layer's present pacing (FIFO at REFRESH Hz, the
+# other modes at most MAX_FPS per second; vklayer.c): raised for a frame-rate measurement
+loader.env.EGL_VULKAN_REFRESH = "{{ refresh }}"
+loader.env.EGL_VULKAN_MAX_FPS = "{{ refresh }}"
+{% endif %}
 loader.env.WINEESYNC = "{{ sync }}"
 loader.env.WINEFSYNC = "{{ sync }}"
 loader.env.WINENTSYNC = "{{ sync }}"

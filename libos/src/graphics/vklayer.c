@@ -203,6 +203,8 @@ struct swapchain {
     double last_x_present;   /* when the last buffer went to the listener (s) */
     uint64_t presents;
     uint64_t skipped;        /* frames not sent to X because of the pacing below */
+    double rate_log_start;   /* EGL_VULKAN_RATE_LOG: the window's start and presents then */
+    uint64_t rate_log_presents;
 };
 
 static double now_s(void) {
@@ -220,6 +222,10 @@ static double now_s(void) {
  * cross-GPU copy of about 3 ms per 1920x1080 frame). */
 static double g_fifo_interval = 1.0 / 60;
 static double g_max_interval = 1.0 / 144;
+/* EGL_VULKAN_RATE_LOG=<seconds>: a line with the presents of that window and their rate, on
+ * stderr, every so many seconds (a frame-rate reading where the window's own HUD is not visible,
+ * e.g. the Xorg dummy server; 0 or unset: off) */
+static double g_rate_log_interval = 0;
 
 static void read_pacing_env(void) {
     const char* r = getenv("EGL_VULKAN_REFRESH");
@@ -228,6 +234,28 @@ static void read_pacing_env(void) {
     const char* m = getenv("EGL_VULKAN_MAX_FPS");
     if (m && atof(m) > 0)
         g_max_interval = 1.0 / atof(m);
+    const char* l = getenv("EGL_VULKAN_RATE_LOG");
+    if (l && atof(l) > 0)
+        g_rate_log_interval = atof(l);
+}
+
+static void rate_log(struct swapchain* sc) {
+    if (g_rate_log_interval <= 0)
+        return;
+    double now = now_s();
+    if (!sc->rate_log_start) {
+        sc->rate_log_start = now;
+        sc->rate_log_presents = sc->presents;
+        return;
+    }
+    double dt = now - sc->rate_log_start;
+    if (dt < g_rate_log_interval)
+        return;
+    uint64_t n = sc->presents - sc->rate_log_presents;
+    LOG("rate: %lu presents in %.1f s = %.1f per second (%lu since start)\n", (unsigned long)n,
+        dt, n / dt, (unsigned long)sc->presents);
+    sc->rate_log_start = now;
+    sc->rate_log_presents = sc->presents;
 }
 
 /* ------------------------------------------------------------------------------------------------
@@ -1128,6 +1156,7 @@ static VkResult present_one(struct swapchain* sc, uint32_t index, const VkSemaph
      * semaphore, whose signal comes later in submission order than this blit. */
     sc->held[index] = false;
     sc->presents++;
+    rate_log(sc);
     deliver_pending(sc);
     sc->pending = (int)e;
     return sc->out_of_date ? VK_ERROR_OUT_OF_DATE_KHR : VK_SUCCESS;
