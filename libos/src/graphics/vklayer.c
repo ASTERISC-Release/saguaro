@@ -189,7 +189,9 @@ struct swapchain {
     /* export ring */
     VkImage export_images[NUM_BUFFERS];
     VkDeviceMemory export_memory[NUM_BUFFERS];
-    check bufs[NUM_BUFFERS]; /* read and written by the host listener */
+    check* bufs;     /* read and written by the host listener: physical memory when available */
+    uint64_t bufs_pa; /* what the listener gets (equal to bufs with identity-mapped memory) */
+    check bufs_local[NUM_BUFFERS];
     uint32_t next_export;
     VkCommandPool pool;
     VkCommandBuffer cmds[NUM_BUFFERS]; /* one per export image */
@@ -243,10 +245,10 @@ static void send_window_size(uint32_t w, uint32_t h, xcb_window_t window) {
     relinquish_libos_lock(off);
 }
 
-static void send_setup(check* bufs, int i, uint64_t size, uint64_t stride) {
+static void send_setup(uint64_t bufs_pa, int i, uint64_t size, uint64_t stride) {
     long off = acquire_libos_lock();
     comm_page_t* c = comm_page(off);
-    c->p1 = (uint64_t)(uintptr_t)bufs;
+    c->p1 = bufs_pa;
     c->p2 = (uint64_t)i;
     c->p3 = size;
     c->p4 = stride;
@@ -256,10 +258,10 @@ static void send_setup(check* bufs, int i, uint64_t size, uint64_t stride) {
     relinquish_libos_lock(off);
 }
 
-static void send_present(check* bufs, int i) {
+static void send_present(uint64_t bufs_pa, int i) {
     long off = acquire_libos_lock();
     comm_page_t* c = comm_page(off);
-    c->p1 = (uint64_t)(uintptr_t)bufs;
+    c->p1 = bufs_pa;
     c->p2 = (uint64_t)i;
     __sync_synchronize();
     c->req_bit = X11_PRESENT;
@@ -776,6 +778,13 @@ static VKAPI_ATTR VkResult VKAPI_CALL layer_CreateSwapchainKHR(VkDevice device,
     if (!d || !d->export_ok || d->queue_family == UINT32_MAX)
         return VK_ERROR_INITIALIZATION_FAILED;
     struct swapchain* sc = calloc(1, sizeof(*sc));
+    if (sc) {
+        sc->bufs = graphics_physmem(sizeof(check) * NUM_BUFFERS, &sc->bufs_pa);
+        if (!sc->bufs) {
+            sc->bufs = sc->bufs_local;
+            sc->bufs_pa = (uint64_t)(uintptr_t)sc->bufs_local;
+        }
+    }
     if (!sc)
         return VK_ERROR_OUT_OF_HOST_MEMORY;
     sc->dev = d;
@@ -841,7 +850,7 @@ static VKAPI_ATTR VkResult VKAPI_CALL layer_CreateSwapchainKHR(VkDevice device,
         }
         memset(&sc->bufs[i], 0, sizeof(sc->bufs[i]));
         sc->bufs[i].bo_fd = dup_fd - 500;
-        send_setup(sc->bufs, i, layout.size + layout.offset, layout.rowPitch);
+        send_setup(sc->bufs_pa, i, layout.size + layout.offset, layout.rowPitch);
     }
 
     VkCommandPoolCreateInfo pci = {.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -1059,7 +1068,7 @@ static void deliver_pending(struct swapchain* sc) {
         return;
     }
     sc->last_x_present = now;
-    send_present(sc->bufs, e);
+    send_present(sc->bufs_pa, e);
 }
 
 static VkResult present_one(struct swapchain* sc, uint32_t index, const VkSemaphore* waits,

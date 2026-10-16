@@ -53,7 +53,9 @@
 #define MESA_DRI_IMAGE_FOURCC_SXRGB8888 0x85324258
 
 struct gbm_device *gbm;
-check bufs[NUM_BUFFERS];
+static check bufs_static[NUM_BUFFERS];
+check* bufs = bufs_static;
+uint64_t bufs_pa;
 
 PFNGLFRAMEBUFFERTEXTURE2DPROC glFramebufferTexture2D_ptr;
 PFNGLFENCESYNCPROC glFenceSync_ptr = NULL;
@@ -291,7 +293,14 @@ void setup_egl(void) {
         fprintf(stderr, "Missing required EGL/GL entry points\n");
         assert(false);
     }
-    memset(bufs, 0, sizeof(bufs));
+    if (!bufs_pa) {
+        void* m = graphics_physmem(sizeof(check) * NUM_BUFFERS, &bufs_pa);
+        if (m)
+            bufs = m;
+        else
+            bufs_pa = (uint64_t)(uintptr_t)bufs;
+    }
+    memset(bufs, 0, sizeof(check) * NUM_BUFFERS);
 
     for (int i = 0; i < NUM_BUFFERS; ++i) {
         fprintf(stderr, "************************************\n");
@@ -351,7 +360,7 @@ void setup_egl(void) {
             /* Send this communication to the host */
             long _offset = acquire_libos_lock();
     comm_page_t* c = comm_page(_offset);
-            c->p1 = (uint64_t) bufs;
+            c->p1 = bufs_pa;
             c->p2 = (uint64_t) i;
             c->p3 = (uint64_t) size_bytes;
             c->p4 = (uint64_t) stride;

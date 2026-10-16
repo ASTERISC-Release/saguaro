@@ -206,6 +206,13 @@ void setup_syscall_comms(void) {
     relinquish_libos_lock(_offset);
 }
 
+void* graphics_physmem(size_t size, uint64_t* out_pa) {
+    long ret = syscall(__NR_GRAPHICS_PHYSMEM, size, out_pa);
+    if (ret < 0 && ret > -4096)
+        return NULL;
+    return (void*)ret;
+}
+
 long acquire_libos_lock(void){
     long ret = syscall(__NR_ACQUIRE_LLOCK);
     return ret;

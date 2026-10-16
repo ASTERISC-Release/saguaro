@@ -17,6 +17,7 @@
 #include "libos_graphics.h"
 #include "libos_internal.h"
 #include "libos_lock.h"
+#include "libos_table.h"
 #include "libos_vma.h"
 #include "pal.h"
 
@@ -124,6 +125,31 @@ size_t graphics_bounce_room(struct gbounce* b) {
         return SIZE_MAX;
     size_t used = ALIGN_UP(b->used, 16);
     return used < b->size ? b->size - used : 0;
+}
+
+/* The graphics library's own request structures (the buffer descriptors of its present requests)
+ * are read and written by the listener too: this custom system call (__NR_GRAPHICS_PHYSMEM) gives
+ * the library `size` bytes of physically contiguous memory and their physical address, or ENOSYS
+ * where the PAL has none (identity-mapped memory: the library then uses its own addresses). */
+long libos_syscall_graphics_physmem(size_t size, uint64_t* out_pa) {
+    if (!size || size > 64 * 1024 * 1024 || !is_user_memory_writable(out_pa, sizeof(*out_pa)))
+        return -EINVAL;
+    size = ALLOC_ALIGN_UP(size);
+    void* addr = NULL;
+    int ret = bkeep_mmap_any(size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS,
+                             /*file=*/NULL, /*offset=*/0, "graphics_physmem", &addr);
+    if (ret < 0)
+        return ret;
+    uint64_t pa = 0;
+    ret = PalVirtualMemoryAllocContiguous(addr, size, PAL_PROT_READ | PAL_PROT_WRITE, &pa);
+    if (ret < 0) {
+        void* tmp_vma = NULL;
+        if (bkeep_munmap(addr, size, /*is_internal=*/false, &tmp_vma) == 0)
+            bkeep_remove_tmp_vma(tmp_vma);
+        return ret == -PAL_ERROR_NOTIMPLEMENTED ? -ENOSYS : pal_to_unix_errno(ret);
+    }
+    *out_pa = pa;
+    return (long)(uintptr_t)addr;
 }
 
 #endif /* ENABLE_GRAPHICS */
