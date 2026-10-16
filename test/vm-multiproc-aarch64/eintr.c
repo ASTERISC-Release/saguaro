@@ -35,10 +35,16 @@ static volatile sig_atomic_t g_handled;
 static pid_t g_tid;
 static struct timespec g_sent;
 
-static double ms_since(const struct timespec* t) {
+/* integer microseconds: the FP/SIMD registers are what this probe also checks, keep them out of
+ * the measurement */
+static long us_since(const struct timespec* t) {
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
-    return (now.tv_sec - t->tv_sec) * 1e3 + (now.tv_nsec - t->tv_nsec) / 1e6;
+    return (now.tv_sec - t->tv_sec) * 1000000L + (now.tv_nsec - t->tv_nsec) / 1000L;
+}
+
+static long us_between(const struct timespec* a, const struct timespec* b) {
+    return (b->tv_sec - a->tv_sec) * 1000000L + (b->tv_nsec - a->tv_nsec) / 1000L;
 }
 
 static struct timespec g_handled_at;
@@ -124,13 +130,13 @@ static int run_case(const char* name) {
     __asm__ volatile("" : "+w"(keep));
     fp = keep == 1234.5 + (double)strlen(name) ? "kept" : "CHANGED";
 #endif
-    double ms = ms_since(&g_sent);
-    double handler_ms = g_handled ? ms - ms_since(&g_handled_at) : -1;
+    long us = us_since(&g_sent);
+    long handler_us = g_handled ? us_between(&g_sent, &g_handled_at) : -1;
     pthread_join(s, NULL);
     pthread_cancel(w);
     pthread_join(w, NULL);
-    printf("%-11s ret=%ld errno=%s handler=%d (at %.1f ms) returned %.1f ms after the signal, "
-           "d8 %s\n", name, ret, err ? strerror(err) : "0", (int)g_handled, handler_ms, ms, fp);
+    printf("%-11s ret=%ld errno=%s handler=%d (at %ld us) returned %ld us after the signal, d8 %s\n",
+           name, ret, err ? strerror(err) : "0", (int)g_handled, handler_us, us, fp);
     fflush(stdout);
     close(fds[0]);
     close(fds[1]);
@@ -156,8 +162,8 @@ static int child_case(void) {
     for (int i = 0; i < 500; i++) {
         pid_t r = waitpid(pid, &status, WNOHANG);
         if (r == pid) {
-            printf("child-pause killed=%d sig=%d after %.1f ms\n", WIFSIGNALED(status),
-                   WIFSIGNALED(status) ? WTERMSIG(status) : 0, ms_since(&t));
+            printf("child-pause killed=%d sig=%d reaped %ld us after the kill (10-ms polling)\n",
+                   WIFSIGNALED(status), WIFSIGNALED(status) ? WTERMSIG(status) : 0, us_since(&t));
             return 0;
         }
         usleep(10 * 1000);
