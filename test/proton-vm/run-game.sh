@@ -69,7 +69,7 @@ if [ -n "${XDO:-}" ]; then
               focus) FOCUS=$arg1; refocus ;;
               key|type|click|mousemove) refocus; xdotool "$cmd" $arg1 $arg2; echo "$(date +%T) $cmd $arg1 $arg2: exit $?" >>"$OUT/xdo.log" ;;
               "") ;; \#*) ;;
-              *) xdotool "$cmd" $arg1 $arg2 ;;
+              *) xdotool "$cmd" $arg1 $arg2; echo "$(date +%T) $cmd $arg1 $arg2: exit $?" >>"$OUT/xdo.log" ;;
           esac
       done <"$XDO" ) >>"$OUT/xdo.log" 2>&1 &
 fi
