@@ -291,6 +291,30 @@ void el1_sync_c(struct isr_regs* regs) {
     if ((ec == 0x21 /* IABT, same EL */ || ec == 0x25 /* DABT, same EL */) &&
             memory_address_space_handle_fault(far, abort_fault_code(esr, ec == 0x21)))
         return;
+
+    /* A fault of LibOS code (it runs at EL1, in the application's address space), typically on bad
+     * application memory: a signal frame written past the end of the user stack, a copy from an
+     * address the LibOS did not validate. The LibOS's memory-fault upcall handles it as on the
+     * other PALs (x86_64 VM: a kernel-mode #PF outside the PAL's text; Linux: SIGSEGV in LibOS
+     * code): "Internal memory fault" and the process exits, instead of a guest panic. A fault in
+     * the PAL's own code stays a panic (pal_common_exception.c of x86_64 refuses it the same way).
+     * The upcall runs here, on the interrupt stack with IRQs masked, as the EL0 fault upcall does;
+     * for a fault in LibOS code it does not return. Should it return, the frame is resumed only if
+     * the LibOS left it alone (it fixed the mapping), never with a pc or PSTATE it changed. */
+    extern char __text_start[], __text_end[];
+    bool in_pal = regs->elr >= (uintptr_t)__text_start && regs->elr < (uintptr_t)__text_end;
+    if ((ec == 0x21 || ec == 0x25) && !in_pal) {
+        uint64_t elr = regs->elr;
+        uint64_t spsr = regs->spsr;
+        uint64_t sp = regs->sp;
+        if (pal_common_perform_memfault_handling(far, regs) == 0) {
+            if (regs->elr == elr && regs->spsr == spsr && regs->sp == sp)
+                return;
+            log_error("Panic: the LibOS changed the context of an EL1 fault (elr 0x%lx -> 0x%lx)",
+                      elr, regs->elr);
+            triple_fault();
+        }
+    }
     isr_kernel_c(regs);
 }
 
