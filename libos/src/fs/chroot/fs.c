@@ -363,7 +363,8 @@ static int chroot_mmap(struct libos_handle* hdl, void* addr, size_t size, int pr
  * own copies (the VM PAL with multiprocess support), write them back as for encrypted files. */
 static int chroot_msync(struct libos_handle* hdl, void* addr, size_t size, int prot, int flags,
                         uint64_t offset) {
-    /* a read-only mapping is a copy taken at mmap() time, never newer than the file */
+    /* a read-only mapping has nothing to write back (on the VM PAL it maps the same cached frames
+     * as the writable mappings of the file, so it is as new as they are) */
     if (!g_pal_public_state->file_maps_write_back || !(prot & PROT_WRITE))
         return 0;
     return generic_emulated_msync(hdl, addr, size, prot, flags, offset);

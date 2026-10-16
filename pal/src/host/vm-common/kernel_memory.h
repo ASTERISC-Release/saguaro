@@ -113,6 +113,11 @@ int memory_address_space_map_owned(struct memory_address_space* space, uintptr_t
  * reference. */
 int memory_address_space_map_shared_frame(struct memory_address_space* space, uintptr_t addr,
                                           uintptr_t frame, bool write, bool execute);
+/* Maps `frame` (a frame of a file's cache) read-only as a copy-on-write page of a MAP_PRIVATE file
+ * mapping: a write copies it first (by the fault handler if `writable`, by a later protect()
+ * otherwise), so the page shows the file's current content until then (x86_64 only). */
+int memory_address_space_map_cow_frame(struct memory_address_space* space, uintptr_t addr,
+                                       uintptr_t frame, bool writable, bool execute);
 int memory_address_space_share_range(struct memory_address_space* source,
                                      struct memory_address_space* target, uintptr_t addr,
                                      size_t size);
