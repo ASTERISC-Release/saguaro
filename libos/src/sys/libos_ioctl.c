@@ -71,6 +71,171 @@ static void close_host_fd(int host_fd) {
     libos_syscall_relinquish_libos_lock(_offset);
 }
 
+/*
+ * Pointers inside forwarded ioctl arguments (design-gpu.md, stage 3). The host kernel follows
+ * them, so they must be physical: each pointed-to array is copied into the slot's bounce, the
+ * field in the bounced argument is rewritten to the copy's physical address, outputs are copied
+ * back afterwards and the application's pointer values are restored before the argument itself
+ * is copied back. The sizes come from a count field (times an element size, or times a size
+ * field) or a byte-length field. AMDGPU_CS nests three levels and is handled in code.
+ */
+enum ptr_dir { PTR_IN = 1, PTR_OUT = 2, PTR_INOUT = 3 };
+enum cnt_kind { CNT_U32, CNT_U64, CNT_SIZET_BYTES, CNT_U32_BYTES };
+struct ptr_field {
+    uint16_t ptr_off;   /* the u64 pointer field */
+    uint16_t cnt_off;   /* the count or byte-length field */
+    uint8_t  cnt_kind;
+    uint16_t elem;      /* element size (CNT_U32/CNT_U64), or 0: the size is in `elem_off` */
+    uint16_t elem_off;  /* a u32 field holding the element size (AMDGPU_BO_LIST) */
+    uint8_t  dir;
+};
+struct ptr_ioctl {
+    unsigned int cmd;
+    struct ptr_field fields[3];
+    size_t fields_cnt;
+};
+#define DRM_SYNCOBJ_ARRAY(cmd_, cnt_off_) \
+    { cmd_, {{0, cnt_off_, CNT_U32, 4, 0, PTR_IN}}, 1 }
+static const struct ptr_ioctl g_ptr_ioctls[] = {
+    /* struct drm_version: three string buffers with size_t lengths (written by the kernel) */
+    { 0xc0406400, {{24, 16, CNT_SIZET_BYTES, 1, 0, PTR_OUT}, {40, 32, CNT_SIZET_BYTES, 1, 0, PTR_OUT},
+                   {56, 48, CNT_SIZET_BYTES, 1, 0, PTR_OUT}}, 3 },
+    /* struct drm_unique */
+    { 0xc0106401, {{8, 0, CNT_SIZET_BYTES, 1, 0, PTR_OUT}}, 1 },
+    /* struct drm_syncobj_wait: handles[count_handles] */
+    DRM_SYNCOBJ_ARRAY(0xc02864c3, 16),
+    /* struct drm_syncobj_array: RESET, SIGNAL */
+    DRM_SYNCOBJ_ARRAY(0xc01064c4, 8),
+    DRM_SYNCOBJ_ARRAY(0xc01064c5, 8),
+    /* struct drm_syncobj_timeline_wait: handles and points */
+    { 0xc03064ca, {{0, 24, CNT_U32, 4, 0, PTR_IN}, {8, 24, CNT_U32, 8, 0, PTR_IN}}, 2 },
+    /* struct drm_syncobj_timeline_array: TIMELINE_SIGNAL (points in), QUERY (points out) */
+    { 0xc01864cd, {{0, 16, CNT_U32, 4, 0, PTR_IN}, {8, 16, CNT_U32, 8, 0, PTR_IN}}, 2 },
+    { 0xc01864cb, {{0, 16, CNT_U32, 4, 0, PTR_IN}, {8, 16, CNT_U32, 8, 0, PTR_INOUT}}, 2 },
+    /* struct drm_amdgpu_info: return_pointer, return_size bytes */
+    { 0x40206445, {{0, 8, CNT_U32_BYTES, 1, 0, PTR_OUT}}, 1 },
+    /* union drm_amdgpu_wait_fences: fences[fence_count] of struct drm_amdgpu_fence (24 bytes) */
+    { 0xc0186452, {{0, 8, CNT_U32, 24, 0, PTR_IN}}, 1 },
+    /* union drm_amdgpu_bo_list: bo_info_ptr[bo_number] of bo_info_size bytes each */
+    { 0xc0186443, {{16, 8, CNT_U32, 0, 12, PTR_IN}}, 1 },
+    /* struct drm_amdgpu_gem_va (64-byte form): input_fence_syncobj_handles[num_syncobj_handles] */
+    { 0xc0406448, {{56, 52, CNT_U32, 4, 0, PTR_IN}}, 1 },
+};
+#define DRM_IOCTL_AMDGPU_CS_CMD 0xc0186444
+#define AMDGPU_CHUNK_ID_BO_HANDLES_ID 0x06
+
+struct ptr_fixup {
+    void* user;   /* the application's buffer */
+    void* copy;   /* its copy in the bounce */
+    size_t size;
+    bool out;
+};
+#define MAX_FIXUPS 64
+
+static const struct ptr_ioctl* find_ptr_ioctl(unsigned int cmd) {
+    for (size_t i = 0; i < ARRAY_SIZE(g_ptr_ioctls); i++)
+        if (g_ptr_ioctls[i].cmd == cmd)
+            return &g_ptr_ioctls[i];
+    return NULL;
+}
+
+/* copies a user array into the bounce and rewrites the pointer slot `pslot` (in a bounced
+ * structure) to its physical address; records the copy for the output phase */
+static int bounce_array(struct gbounce* b, uint64_t* pslot, size_t size, bool out,
+                        struct ptr_fixup* fixups, size_t* nfix) {
+    void* user = (void*)(uintptr_t)*pslot;
+    if (!user || !size)
+        return 0;
+    if (!is_user_memory_readable(user, size) || (out && !is_user_memory_writable(user, size)))
+        return -EFAULT;
+    uint64_t pa;
+    void* copy = graphics_bounce_out(b, user, size, &pa);
+    if (!copy)
+        return -ENOMEM;
+    if (*nfix >= MAX_FIXUPS)
+        return -ENOMEM;
+    fixups[*nfix] = (struct ptr_fixup){ .user = user, .copy = copy, .size = size, .out = out };
+    (*nfix)++;
+    *pslot = pa;
+    return 0;
+}
+
+static size_t field_count(const char* arg, const struct ptr_field* f) {
+    switch (f->cnt_kind) {
+        case CNT_U32: return *(const uint32_t*)(arg + f->cnt_off);
+        case CNT_U64: return (size_t)*(const uint64_t*)(arg + f->cnt_off);
+        case CNT_SIZET_BYTES: return *(const size_t*)(arg + f->cnt_off);
+        case CNT_U32_BYTES: return *(const uint32_t*)(arg + f->cnt_off);
+    }
+    return 0;
+}
+
+/* AMDGPU_CS: chunks -> u64[num_chunks] of chunk pointers -> struct drm_amdgpu_cs_chunk
+ * {chunk_id, length_dw, chunk_data} -> chunk_data (length_dw * 4 bytes); a BO_HANDLES chunk's data
+ * is a struct drm_amdgpu_bo_list_in whose bo_info_ptr points to bo_number * bo_info_size bytes. */
+static int translate_amdgpu_cs(struct gbounce* b, char* arg, struct ptr_fixup* fixups, size_t* nfix) {
+    uint32_t num_chunks = *(uint32_t*)(arg + 8);
+    uint64_t* chunks_slot = (uint64_t*)(arg + 16);
+    if (!num_chunks || !*chunks_slot)
+        return 0;
+    if (num_chunks > 64)
+        return -EINVAL;
+    size_t n0 = *nfix;
+    int ret = bounce_array(b, chunks_slot, num_chunks * sizeof(uint64_t), /*out=*/false, fixups, nfix);
+    if (ret < 0)
+        return ret;
+    uint64_t* chunk_ptrs = fixups[n0].copy;
+    for (uint32_t i = 0; i < num_chunks; i++) {
+        size_t n1 = *nfix;
+        ret = bounce_array(b, &chunk_ptrs[i], 16, /*out=*/false, fixups, nfix);
+        if (ret < 0)
+            return ret;
+        char* chunk = fixups[n1].copy;
+        uint32_t chunk_id = *(uint32_t*)chunk;
+        uint32_t length_dw = *(uint32_t*)(chunk + 4);
+        uint64_t* data_slot = (uint64_t*)(chunk + 8);
+        size_t n2 = *nfix;
+        ret = bounce_array(b, data_slot, (size_t)length_dw * 4, /*out=*/false, fixups, nfix);
+        if (ret < 0)
+            return ret;
+        if (chunk_id == AMDGPU_CHUNK_ID_BO_HANDLES_ID && length_dw * 4 >= 24) {
+            char* bo_list = fixups[n2].copy;
+            uint32_t bo_number = *(uint32_t*)(bo_list + 8);
+            uint32_t bo_info_size = *(uint32_t*)(bo_list + 12);
+            ret = bounce_array(b, (uint64_t*)(bo_list + 16), (size_t)bo_number * bo_info_size,
+                               /*out=*/false, fixups, nfix);
+            if (ret < 0)
+                return ret;
+        }
+    }
+    return 0;
+}
+
+static int translate_pointers(unsigned int cmd, struct gbounce* b, char* arg, size_t arg_size,
+                              struct ptr_fixup* fixups, size_t* nfix) {
+    if (!b)
+        return 0; /* identity-mapped memory: the kernel reaches the application's buffers */
+    if (cmd == DRM_IOCTL_AMDGPU_CS_CMD)
+        return translate_amdgpu_cs(b, arg, fixups, nfix);
+    const struct ptr_ioctl* pi = find_ptr_ioctl(cmd);
+    if (!pi)
+        return 0;
+    for (size_t i = 0; i < pi->fields_cnt; i++) {
+        const struct ptr_field* f = &pi->fields[i];
+        if ((size_t)f->ptr_off + 8 > arg_size)
+            return -EINVAL;
+        size_t count = field_count(arg, f);
+        size_t elem = f->elem ? f->elem : *(const uint32_t*)(arg + f->elem_off);
+        if (count && elem && count > SIZE_MAX / elem)
+            return -EINVAL;
+        int ret = bounce_array(b, (uint64_t*)(arg + f->ptr_off), count * elem,
+                               !!(f->dir & PTR_OUT), fixups, nfix);
+        if (ret < 0)
+            return ret;
+    }
+    return 0;
+}
+
 static long forwarded_ioctl(unsigned int fd, unsigned int cmd, unsigned long arg) {
     const struct translated_ioctl* ti = find_translated_ioctl(cmd);
     int64_t saved[2] = {0};
@@ -130,6 +295,15 @@ static long forwarded_ioctl(unsigned int fd, unsigned int cmd, unsigned long arg
             return -ENOMEM;
         }
     }
+    struct ptr_fixup fixups[MAX_FIXUPS];
+    size_t nfix = 0;
+    if (arg_copy && arg_copy != (void*)arg) {
+        int tret = translate_pointers(cmd, b, arg_copy, arg_size, fixups, &nfix);
+        if (tret < 0) {
+            libos_syscall_relinquish_libos_lock(_offset);
+            return tret;
+        }
+    }
     c->p1 = (uint64_t)fd;
     c->p2 = (uint64_t)cmd;
     c->p3 = arg_pa;
@@ -137,9 +311,30 @@ static long forwarded_ioctl(unsigned int fd, unsigned int cmd, unsigned long arg
     c->p5 = time_field ? GRAPHICS_IOCTL_TIME_REL_MAGIC : 0;
     c->req_bit = IOCTL;
     long ret = (long)comm_sync_notify(c);
+    /* outputs back to the application, innermost last is fine (they do not overlap); the pointer
+     * slots the translation rewrote live in bounce copies, so restore them there before any
+     * structure is copied back: the copies of nested structures (chunks) are not copied back,
+     * only the argument is */
+    for (size_t i = 0; i < nfix; i++)
+        if (fixups[i].out && ret >= 0)
+            memcpy(fixups[i].user, fixups[i].copy, fixups[i].size);
     if (arg_copy && arg_copy != (void*)arg && (_IOC_DIR(cmd) & _IOC_READ) &&
-            is_user_memory_writable((void*)arg, arg_size))
+            is_user_memory_writable((void*)arg, arg_size)) {
+        /* the application's pointer values, not the bounce addresses */
+        if (cmd == DRM_IOCTL_AMDGPU_CS_CMD) {
+            uint64_t* slot = (uint64_t*)((char*)arg_copy + 16);
+            if (nfix) *slot = (uint64_t)(uintptr_t)fixups[0].user;
+        } else {
+            const struct ptr_ioctl* pi = find_ptr_ioctl(cmd);
+            size_t k = 0;
+            for (size_t i = 0; pi && i < pi->fields_cnt; i++) {
+                uint64_t* slot = (uint64_t*)((char*)arg_copy + pi->fields[i].ptr_off);
+                if (*slot && k < nfix)
+                    *slot = (uint64_t)(uintptr_t)fixups[k++].user;
+            }
+        }
         memcpy((void*)arg, arg_copy, arg_size);
+    }
     libos_syscall_relinquish_libos_lock(_offset);
 
     if (!ti)
