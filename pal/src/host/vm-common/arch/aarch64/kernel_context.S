@@ -146,6 +146,13 @@ el0_sync_entry:
      * Full signal delivery: .Lel0_sync_unexpected builds the full el0_irq-shaped frame and
      * forwards it through the LibOS memfault path (x86 #PF parity); only ECs LibOS does not
      * service (e.g. EC=0x00 `udf`, whose x86 #UD twin is likewise not forwarded) panic. */
+    /* The EC decode needs a scratch register, and every GPR of the app must survive a fault
+     * that is resumed (a demand-zero page: the faulting instruction runs again with the frame's
+     * registers). x16 is parked in TPIDRRO_EL0, as el1_sync_entry parks x30, and the EL0 TCB cell
+     * is put back from TPIDR_EL1 on both paths. Before, the frame's x16 slot held the EC (0x24
+     * for a data abort), so code that kept a value in x16 across the faulting instruction, such
+     * as jemalloc's `str x16, [x0, #80]` in redis, stored 0x24 instead. */
+    msr     tpidrro_el0, x16
     mrs     x16, esr_el1
     ubfx    x16, x16, #26, #6                      /* EC */
     cmp     x16, #0x15                             /* SVC64 from AArch64 EL0 */
@@ -172,7 +179,9 @@ el0_sync_entry:
      * hangs it in the EL1 sync path (the kernel-address poison crashes). Likewise the
      * readback-after-IRQ would hand the app the IRQ's saved PSTATE instead of its x9. */
     mrs     x16, tpidr_el1
-    ldr     x16, [x16, #PER_CPU_DATA_CUR_TCB]   /* x86 %gs base, two loads instead */
+    add     x16, x16, #PER_CPU_DATA_CUR_TCB
+    msr     tpidrro_el0, x16                       /* EL0's TCB cell again (vm_bootloader.S) */
+    ldr     x16, [x16]                             /* cur_tcb (x86: the %gs base) */
     cbz     x16, hang                           /* svc with no thread context: cannot happen */
     str     x9,  [x16, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 8] /* snapshot the app's x9 early */
     mrs     x9, elr_el1                         /* address right after the 4-byte `svc` */
@@ -284,6 +293,11 @@ el0_sync_entry:
     stp     x12, x13, [x30, #ISR_REGS + 96]
     stp     x14, x15, [x30, #ISR_REGS + 112]
     stp     x16, x17, [x30, #ISR_REGS + 128]
+    mrs     x16, tpidrro_el0                       /* the app's x16, parked at entry */
+    str     x16, [x30, #ISR_REGS + 16 * 8]
+    mrs     x16, tpidr_el1
+    add     x16, x16, #PER_CPU_DATA_CUR_TCB
+    msr     tpidrro_el0, x16                       /* EL0's TCB cell again */
     stp     x18, x19, [x30, #ISR_REGS + 144]
     stp     x20, x21, [x30, #ISR_REGS + 160]
     stp     x22, x23, [x30, #ISR_REGS + 176]

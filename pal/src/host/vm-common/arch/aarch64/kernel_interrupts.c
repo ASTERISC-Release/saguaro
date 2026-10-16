@@ -200,9 +200,8 @@ void isr_c(struct isr_regs* regs) {
  * fault (DFSC 0x0e), not a translation fault. Other ECs (notably EC=0x00 `udf`, whose x86 #UD
  * twin the x86 vm-PAL likewise does not forward) stay a visible panic; SIGILL for those is a
  * B-tail item. Entered with `regs` the fully populated el0_irq-shaped frame on the interrupt
- * stack; only x16's slot holds the EC-decode scratch value rather than the app's x16 (the
- * pre-dispatch `mrs/ubfx/cmp` has no other scratch GPR) -- harmless for C code, where x16 never
- * lives across an instruction. */
+ * stack, every GPR slot the app's (x16 is parked in TPIDRRO_EL0 during the EC decode, see
+ * el0_sync_entry). */
 /* The x86 page-fault error code bits for an AArch64 instruction or data abort (`esr`) that
  * memory_address_space_handle_fault() takes: present (not a translation fault), write, fetch. */
 static uint64_t abort_fault_code(uint64_t esr, bool fetch) {
