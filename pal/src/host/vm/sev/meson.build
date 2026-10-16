@@ -20,23 +20,50 @@ pal_sev_bios = executable('bios',
 
 pal_sev_sources = files(
     'sev.c',
+    'sev_callbacks.c',
+    'sev_vc_entry.S',
+)
+
+pal_sev_inc = [
+    includes_pal_common,
+    pal_vm_common_inc,
+    include_directories('..'),
+    include_directories('.'),
+]
+
+# The #VC handler and the GHCB calls: they run inside any context, user mode included, and save
+# no FPU state, so they must not use SSE registers (-mgeneral-regs-only) nor the stack protector
+# (its canary lives in %gs, which may be the application's)
+pal_sev_vc_lib = static_library('pal_sev_vc',
+    'sev_vc.c',
+    'sev_ghcb.c',
+    pal_vm_common_asm_offsets_h,
+    include_directories: pal_sev_inc,
+    c_args: [
+        cflags_pal_common,
+        '-DHOST_TYPE=VM',
+        '-DPAL_HOST_VM=1',
+        '-DPAL_HOST_SEV=1',
+        '-mno-red-zone',
+        '-mgeneral-regs-only',
+        '-fno-stack-protector',
+        '-Wno-address-of-packed-member',
+    ],
+    # headers only: common_dep also carries the common sources, which the PAL links itself
+    dependencies: [common_dep.partial_dependency(includes: true, compile_args: true)],
+    pic: true,
 )
 
 libpal_sev = executable('pal',
     pal_vm_sources,
-    pal_vm_callbacks_sources,
     pal_vm_common_sources,
     pal_vm_common_nontdx_sources,
     pal_vm_common_asm_offsets_h,
     pal_common_sources,
     pal_sev_sources,
 
-    include_directories: [
-        includes_pal_common,
-        pal_vm_common_inc,
-        include_directories('..'),
-        include_directories('.'),
-    ],
+    include_directories: pal_sev_inc,
+    link_whole: pal_sev_vc_lib,
 
     c_args: [
         cflags_pal_common,

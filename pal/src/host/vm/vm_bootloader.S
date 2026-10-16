@@ -3,6 +3,11 @@
 .hidden \sym
 .endm
 
+#ifdef PAL_HOST_SEV
+#include "sev.h"
+#define MSR_AMD64_SEV_ES_GHCB 0xc0010130
+#endif
+
     globl   pal_start
 
 _start64:
@@ -26,6 +31,41 @@ _start32:
     // private (encrypted). If CPUID 0x8000001F reports SEV and SEV_STATUS (MSR 0xC0010131) bit 0
     // says it is active, remember the C-bit (CPUID 0x8000001F EBX[5:0]) and set it in the static
     // page tables below, so that the PAL's memory stays private once paging is on.
+    //
+    // SEV-SNP enters here from the IGVM file's VMSA with ESI = SEV_SNP_BOOT_MAGIC: CPUID would
+    // raise #VC (no handler yet), so the C-bit comes from the CPUID page that the SNP firmware
+    // checked at launch; SEV_STATUS is not intercepted.
+    cmp     $SEV_SNP_BOOT_MAGIC, %esi
+    jne     4f
+    mov     $MSR_AMD64_SEV_STATUS, %ecx
+    rdmsr
+    test    $SEV_STATUS_SEV_SNP, %eax
+    jz      5f
+    mov     %eax, (g_sev_status - _start32)(%ebp)
+    mov     %edx, (g_sev_status + 4 - _start32)(%ebp)
+    mov     $SEV_SNP_CPUID_PAGE_GPA, %edi
+    mov     (%edi), %ecx                // number of entries
+    cmp     $64, %ecx
+    ja      5f
+    add     $16, %edi
+6:  test    %ecx, %ecx
+    jz      5f
+    cmpl    $0x8000001f, (%edi)         // eax_in
+    je      7f
+    add     $48, %edi
+    dec     %ecx
+    jmp     6b
+7:  mov     28(%edi), %esi              // ebx
+    jmp     8f
+5:  // SNP entry but no SNP or no C-bit: terminate through the GHCB MSR protocol
+    xor     %edx, %edx
+    mov     $(0x100 | (SEV_TERM_NOT_SNP << 16)), %eax
+    mov     $MSR_AMD64_SEV_ES_GHCB, %ecx
+    wrmsr
+    rep; vmmcall
+    hlt
+    jmp     5b
+4:
     mov     $0x80000000, %eax
     cpuid
     cmp     $0x8000001f, %eax
@@ -41,7 +81,7 @@ _start32:
     jz      2f
     mov     %eax, (g_sev_status - _start32)(%ebp)
     mov     %edx, (g_sev_status + 4 - _start32)(%ebp)
-    mov     %esi, %ecx
+8:  mov     %esi, %ecx
     and     $0x3f, %ecx
     cmp     $32, %ecx                   // the C-bit is above bit 31 on every SEV CPU
     jb      2f
@@ -67,10 +107,15 @@ _start32:
     or      $(1 << 18) + (1 << 16) + (1 << 10) + (1 << 9) + (1 << 6) + (1 << 5), %eax   // + FSGSBASE: rdgsbase/wrgsbase for the %gs hand-over (kernel_events.S)
     mov     %eax, %cr4                  // OSXSAVE, OSXMMEXCPT, OSFXSR, MCE, PAE
 
+#ifdef PAL_HOST_SEV
+    testl   $(SEV_STATUS_SEV_ES | SEV_STATUS_SEV_SNP), (g_sev_status - _start32)(%ebp)
+    jnz     1f                          // XSETBV would raise #VC: XCR0 comes from the VMSA
+#endif
     xor     %edx, %edx
     mov     $3, %eax                    // SSE and X87
     xor     %ecx, %ecx
     xsetbv
+1:
 
     mov     %cr0, %eax
     or      $(1 << 31), %eax            // PG
@@ -115,6 +160,7 @@ _end:
 
 // 4KB leaf entries (PTE): 16 pages, each with 512 entries
 #ifdef PAL_HOST_SEV
+    globl   _initial_page_tables
 _initial_page_tables:
 #endif
 1:  .rept   16 * 512

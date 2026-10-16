@@ -85,11 +85,13 @@ static struct memory_address_space g_boot_address_space;
  * Private (encrypted) memory has it set; the shared heap and the MMIO hole, which the host must
  * read and write, have it clear. Guest page tables must be private: hardware walks them with the
  * guest key whatever the C-bit says. */
-extern uint64_t g_sev_c_bit_mask;
+#include "sev.h"
 static uint64_t sev_c_bit_for_phys(uint64_t phys) {
     if (SHARED_MEM_ADDR <= phys && phys < SHARED_MEM_ADDR + SHARED_MEM_SIZE)
         return 0;
     if (PCI_HOLE_ADDR <= phys && phys < PCI_HOLE_ADDR + PCI_HOLE_SIZE)
+        return 0;
+    if (phys == g_sev_extra_shared_page)
         return 0;
     return g_sev_c_bit_mask;
 }
@@ -1508,6 +1510,10 @@ int memory_pagetables_init(void* memory_address_end, bool current_page_tables_co
         if (ret < 0)
             return ret;
     }
+#ifdef PAL_HOST_SEV
+    /* SNP: RAM not in the launch image must be validated before use (the final tables below) */
+    sev_memory_after_temp_tables();
+#endif
 
     /* now set up the new page tables hierarchy to cover range [0x0, memory_address_end) (aligned to
      * the next power of 2); we will use these page tables until the end of execution */
@@ -1538,6 +1544,9 @@ int memory_pagetables_init(void* memory_address_end, bool current_page_tables_co
                     total_tables_cnt);
     if (ret < 0)
         return ret;
+#ifdef PAL_HOST_SEV
+    sev_memory_after_final_tables((uint64_t)memory_address_end);
+#endif
 
     g_pml4_table_base = pml4_table_base;
 #ifdef __x86_64__

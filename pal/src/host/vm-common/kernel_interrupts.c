@@ -27,6 +27,9 @@
 #include "kernel_time.h"
 #include "kernel_virtio.h"
 #include "vm_callbacks.h"
+#ifdef PAL_HOST_SEV
+#include "sev.h"
+#endif
 
 /* Interrupt Service Routines (ISRs) are defined in the *.S */
 extern void isr_0(void);
@@ -338,6 +341,10 @@ static int tss_init(void) {
 
     /* interrupt_stack is a base address, but we want top of the stack */
     tss->ist1 = (uint64_t)get_per_cpu_data()->interrupt_stack + INTERRUPT_STACK_SIZE;
+#ifdef PAL_HOST_SEV
+    if (sev_es_active())
+        tss->ist2_unused = sev_vc_stack_top(get_per_cpu_data()->cpu_id);
+#endif
 
     struct tss_64bitmode_segment_descriptor* tss_desc = tss_64bitmode_desc;
     tss_desc += get_per_cpu_data()->cpu_id;
@@ -445,6 +452,16 @@ static int idt_init(void) {
     ret = idt_gate_set(20, &isr_20); /* Virtualization Exception (#VE) */
     if (ret < 0)
         return -PAL_ERROR_BADADDR;
+#ifdef PAL_HOST_SEV
+    if (sev_es_active()) {
+        /* VMM Communication exception (#VC, SEV-ES/SNP) on its own stack (IST2): it is raised
+         * inside other interrupt handlers too (EOI, timer MSRs), see pal/src/host/vm/sev/ */
+        ret = idt_gate_set(29, &isr_vc);
+        if (ret < 0)
+            return -PAL_ERROR_BADADDR;
+        g_idt[29].ist_offset = 2;
+    }
+#endif
 
     ret = idt_gate_set(32, &isr_32); /* Local APIC timer IRQ */
     if (ret < 0)

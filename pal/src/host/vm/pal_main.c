@@ -594,6 +594,11 @@ noreturn void pal_start_c(void) {
     g_pal_public_state.alloc_align = PAGE_SIZE;
     assert(IS_POWER_OF_2(g_pal_public_state.alloc_align));
 
+#ifdef PAL_HOST_SEV
+    /* first: under SEV-ES/SNP every port I/O, MSR and CPUID below needs the GHCB and #VC handler */
+    sev_init_early();
+#endif
+
     uint32_t num_cpus = rdfwcfg(FW_CFG_NB_CPUS, sizeof(uint32_t));
     if (num_cpus < 1 || num_cpus > MAX_NUM_CPUS)
         INIT_FAIL("Detected unsupported number of virtual CPUs: %u (supported: 1..%u)", num_cpus,
@@ -614,10 +619,6 @@ noreturn void pal_start_c(void) {
     /* untrusted_shm mappings (dev:/dev/shm) live in ordinary guest memory, as on the Linux PAL */
     g_pal_public_state.shared_address_start = g_pal_public_state.memory_address_start;
     g_pal_public_state.shared_address_end = g_pal_public_state.memory_address_end;
-#endif
-
-#ifdef PAL_HOST_SEV
-    sev_init_early();
 #endif
 
     /* vm_bootloader.S installed tiny page tables that cover [0..32MB) of RAM */
@@ -712,6 +713,11 @@ noreturn void pal_start_c(void) {
     ret = init_multicore_prepare(num_cpus);
     if (ret < 0)
         INIT_FAIL("Failed to initialize multicore preparation (per-CPU data and stacks)");
+#ifdef PAL_HOST_SEV
+    ret = sev_percpu_prepare(num_cpus);
+    if (ret < 0)
+        INIT_FAIL("SEV: failed to prepare the per-CPU state (#VC stacks, GHCBs)");
+#endif
 
     /* interrupts must be enabled (via `sti`) after all other parts of the kernel are initialized */
     ret = interrupts_init();
