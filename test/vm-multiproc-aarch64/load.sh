@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # AArch64 VM process qualification, in this checkout's container after a --vm install.
 # Usage: GRAMINE_PREFIX=... GRAMINE_CPU_NUM=1|2|4 test/vm-multiproc-aarch64/load.sh bash|nginx|redis
+# MP=0 (nginx only): without the multiprocess key, as one process (`master_process off`), the same
+# fetches and no worker check -- the key-off reference (test/test-direct.sh needs curl).
 # Nginx and Redis must first be built in CI-Examples; host ports are checked before use.
 set -euo pipefail
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
@@ -47,6 +49,8 @@ SH
 import socket, sys
 for port in map(int, sys.argv[1:]):
     with socket.socket() as s:
+        # as a server would: TIME_WAIT connections of an earlier run must not count as busy
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.bind(("127.0.0.1", port))
 PY
         cp "$D/nginx.manifest" "$WORK/nginx.manifest.orig"
@@ -68,8 +72,14 @@ PY
             fi
         }
         trap cleanup EXIT
-        sed -i '/^enable_sigterm_injection = true$/a experimental__multiprocess = true' \
-            "$D/nginx.manifest"
+        # test/test-direct.sh leaves `master_process off;` in the installed configuration
+        sed -i '/^master_process off;$/d' "$D/install/conf/nginx-gramine.conf"
+        if [ "${MP:-1}" = 0 ]; then
+            sed -i '1i master_process off;' "$D/install/conf/nginx-gramine.conf"
+        else
+            sed -i '/^enable_sigterm_injection = true$/a experimental__multiprocess = true' \
+                "$D/nginx.manifest"
+        fi
         sed -i 's|^#error_log  logs/error.log  notice;|error_log  logs/error.log  notice;|' \
             "$D/install/conf/nginx-gramine.conf"
         gramine-argv-serializer nginx -p "$D/install/" -c conf/nginx-gramine.conf \
@@ -108,7 +118,11 @@ PY
         sleep 1
         workers=$(tail -c +$((before + 1)) "$error_log" 2>/dev/null \
             | grep -c 'start worker process ' || true)
-        echo "nginx: $workers worker starts recorded ($CPUS vCPUs)"
-        [ "$workers" -ge 4 ] ;;
+        if [ "${MP:-1}" = 0 ]; then
+            echo "nginx: one process, key off ($CPUS vCPUs)"
+        else
+            echo "nginx: $workers worker starts recorded ($CPUS vCPUs)"
+            [ "$workers" -ge 4 ]
+        fi ;;
     *) echo "usage: $0 bash|nginx|redis" >&2; exit 2 ;;
 esac
