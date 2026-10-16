@@ -91,7 +91,12 @@ import sys
 from graminelibos import Manifest
 with open(os.environ['GRAMINE_MANIFEST'], 'rb') as f:
     manifest = Manifest.loads(f.read().decode('utf-8'))
-sys.exit(0 if manifest.get('sys', {}).get('experimental__multiprocess') else 1)
+# Manifest has no get(): index it, a missing table or key means off
+try:
+    multiprocess = manifest['sys']['experimental__multiprocess']
+except KeyError:
+    multiprocess = False
+sys.exit(0 if multiprocess else 1)
 " 2>/dev/null; then
     QEMU_MEM_SIZE=4G
 fi
