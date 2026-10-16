@@ -17,6 +17,9 @@ loader.env.HOME = "/"
 loader.env.UV_THREADPOOL_SIZE = "4"
 
 fs.root.uri = "file:/"
+fs.mounts = [
+  { type = "tmpfs", path = "/tmp" },
+]
 # no run-time code generation in a VBS enclave
 sys.rewrite_syscalls = false
 
