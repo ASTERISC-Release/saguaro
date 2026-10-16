@@ -48,9 +48,12 @@ image::
 
 The output contains::
 
-    gramine-sev: snp launch digest of .../sev/gramine-sev.igvm on 1 vCPUs: 2f5e5299...df747148
+    gramine-sev: snp launch digest of .../sev/gramine-sev.igvm on 1 vCPUs: <96 hex digits>
     Hello, world
     [ VM exited with code 0 ]
+
+The digest depends on the build of the PAL and on the vCPU count; it is the value the attestation
+report must carry (section 3).
 
 The guest's serial log (``GRAMINE_VM_SERIAL_LOG=<file>``) starts with ``SEV: memory encryption
 active: SEV SEV-ES SEV-SNP (SEV_STATUS 0x7), C-bit 51``. The SEV PAL refuses to run without
