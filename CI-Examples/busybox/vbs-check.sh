@@ -17,7 +17,7 @@ check() {  # check "<wanted>" applet args...
 }
 check "Hello" echo Hello
 check "$(printf 'Hello from a file packed into a VBS enclave\nsecond line')" cat /app/data.txt
-check "2" grep -c line /app/data.txt
+check "1" grep -c line /app/data.txt
 check "3" sh -c 'x=1; echo $((x+2))'
 check "/app/data.txt" ls /app/data.txt
 echo "[ Success ]"
