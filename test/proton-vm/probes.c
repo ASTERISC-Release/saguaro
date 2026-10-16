@@ -11,8 +11,12 @@
  * What Wine does (dlls/ntdll/unix/signal_x86_64.c, virtual.c, loader/preloader.c, checked
  * 2026-10-15) and the probe that checks it:
  *   gs        arch_prctl(ARCH_SET_GS, teb) per thread; NtCurrentTeb() is `mov %gs:0x30`
- *   fs32      the 32-bit TEB selector for new WoW64: set_thread_area / modify_ldt, loaded into %fs
+ *   fs32      the 32-bit TEB selector for new WoW64: set_thread_area (also through `int $0x80`,
+ *             as Wine issues it; modify_ldt is its fallback only), loaded into %fs, per thread
+ *             across context switches
  *   cs32      new WoW64 runs 32-bit code through a far jump to selector 0x23 (hard-coded on Linux)
+ *   sig32     a signal while in 32-bit code with %fs loaded, with Wine's handler protocol, and the
+ *             sigreturn back into the 32-bit code
  *   fixed     the preloader's reservations at fixed addresses (0x10000, 0x110000 to 0x200000000)
  *             and ntdll's top-down area 0x7ff000000000-0x7ff600000000, with MAP_FIXED_NOREPLACE
  *   huge      PROT_NONE MAP_NORESERVE reservations of many GiB; commit by touching
@@ -106,8 +110,23 @@ static long rss_kib(void) {
 /* ---- a SIGSEGV/SIGILL/SIGBUS catcher for the probes that may fault ---- */
 static sigjmp_buf g_jmp;
 static volatile int g_fault_sig;
+static unsigned long g_tls_base; /* the thread's TLS base, for a fault while %fs is a 32-bit selector */
+static volatile unsigned long g_fault_fsbase, g_fault_ip;
+static volatile unsigned g_fault_fs;
 static void fault_jump(int sig, siginfo_t* si, void* uc) {
-    (void)si; (void)uc;
+    (void)si;
+    /* what %fs was at the fault (FSGSBASE: rdfsbase works in user mode in the VM) */
+    unsigned long fsb = 0;
+    unsigned fs_sel;
+    __asm__ volatile("movw %%fs, %w0" : "=r"(fs_sel));
+    __asm__ volatile("rdfsbase %0" : "=r"(fsb));
+    g_fault_fs = fs_sel;
+    g_fault_fsbase = fsb;
+    g_fault_ip = ((ucontext_t*)uc)->uc_mcontext.gregs[REG_RIP];
+    /* a fault in 32-bit code (fs32, sig32) enters here with %fs still the 32-bit selector: the
+     * TLS base first, as Wine's init_handler, before libc's siglongjmp reads its pointer guard */
+    long rax_ = SYS_arch_prctl;
+    __asm__ volatile("syscall" : "+a"(rax_) : "D"(ARCH_SET_FS), "S"(g_tls_base) : "rcx", "r11", "memory");
     g_fault_sig = sig;
     siglongjmp(g_jmp, 1);
 }
@@ -115,6 +134,7 @@ static void catch_faults(int on) {
     struct sigaction sa = {0};
     sa.sa_sigaction = fault_jump;
     sa.sa_flags = SA_SIGINFO | SA_NODEFER | SA_ONSTACK;
+    syscall(SYS_arch_prctl, ARCH_GET_FS, &g_tls_base);
     if (!on) { sa.sa_handler = SIG_DFL; sa.sa_flags = 0; }
     sigaction(SIGSEGV, &sa, NULL);
     sigaction(SIGILL, &sa, NULL);
@@ -202,7 +222,7 @@ static int try_fs_selector(unsigned sel, uint32_t* base, const char* how) {
         __asm__ volatile("movw %w0, %%fs" ::"r"(sel));
         __asm__ volatile("movl %%fs:0, %0" : "=r"(v));
         /* restore the TLS base with a raw syscall: libc must not run while %fs is not the TLS */
-        __asm__ volatile("syscall" ::"a"(SYS_arch_prctl), "D"(ARCH_SET_FS), "S"(fsbase) : "rcx", "r11", "memory");
+        long rax_ = SYS_arch_prctl; __asm__ volatile("syscall" : "+a"(rax_) : "D"(ARCH_SET_FS), "S"(fsbase) : "rcx", "r11", "memory"); (void)rax_;
         ok = v == *base;
         P("fs32", "%s %s: selector %#x loaded into %%fs, read %#x (want %#x)", ok ? "PASS" : "FAIL", how, sel, v, *base);
         return ok;
@@ -210,6 +230,53 @@ static int try_fs_selector(unsigned sel, uint32_t* base, const char* how) {
     syscall(SYS_arch_prctl, ARCH_SET_FS, fsbase);
     P("fs32", "FAIL %s: loading selector %#x into %%fs raised signal %d", how, sel, g_fault_sig);
     return 0;
+}
+/* set_thread_area the way Wine issues it: `int $0x80` (the i386 ABI, number 243), the user_desc
+ * copied to `low` (an address below 4 GiB, as only 32 bits reach ebx); the 64-bit number 205 is
+ * ENOSYS in this container (seccomp), so the probes use this form where it matters */
+static long set_thread_area_int80(void* low, struct user_desc* d) {
+    memcpy(low, d, 16);
+    long ret = 243;
+    __asm__ volatile("int $0x80" : "+a"(ret) : "b"((uint32_t)(uintptr_t)low) : "memory");
+    memcpy(d, low, 16);
+    return ret;
+}
+#define FS32_SWITCH_ITERATIONS 300
+static int g_fs32_entry;
+static volatile int g_fs32_fail[2];
+/* %fs = the TLS selector with this thread's base in the shared entry, then FS32_SWITCH_ITERATIONS
+ * reads through %fs:0 with a sched_yield between them and a 1 ms nanosleep every 16th; raw
+ * system calls only, since libc's TLS is unreachable while %fs is the 32-bit selector */
+static void fs32_switch_loop(uint32_t* base, int who) {
+    struct user_desc d = {.entry_number = g_fs32_entry, .base_addr = (uint32_t)(uintptr_t)base, .limit = 0xfff,
+                          .seg_32bit = 1, .useable = 1};
+    if (set_thread_area_int80(base + 32, &d) < 0) {
+        g_fs32_fail[who] = -2;
+        return;
+    }
+    unsigned long fsbase = 0;
+    syscall(SYS_arch_prctl, ARCH_GET_FS, &fsbase);
+    struct timespec* ts = (struct timespec*)(base + 96); /* scratch in the low page, past the thread's marker */
+    ts->tv_sec = 0;
+    ts->tv_nsec = 1000000;
+    uint32_t want = *base;
+    int fail = -1;
+    __asm__ volatile("movw %w0, %%fs" ::"r"((d.entry_number << 3) | 3));
+    for (int i = 0; i < FS32_SWITCH_ITERATIONS; i++) {
+        uint32_t v;
+        __asm__ volatile("movl %%fs:0, %0" : "=r"(v));
+        if (v != want) { fail = i; break; }
+        if (i % 16 == 15)
+            { long rax_ = SYS_nanosleep; __asm__ volatile("syscall" : "+a"(rax_) : "D"(ts), "S"(0) : "rcx", "r11", "memory"); }
+        else
+            { long rax_ = SYS_sched_yield; __asm__ volatile("syscall" : "+a"(rax_) : : "rcx", "r11", "memory"); }
+    }
+    long rax_ = SYS_arch_prctl; __asm__ volatile("syscall" : "+a"(rax_) : "D"(ARCH_SET_FS), "S"(fsbase) : "rcx", "r11", "memory"); (void)rax_;
+    g_fs32_fail[who] = fail;
+}
+static void* fs32_thread(void* arg) {
+    fs32_switch_loop(arg, 1);
+    return NULL;
 }
 static void probe_fs32(void) {
     uint32_t* base = mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_32BIT, -1, 0);
@@ -227,15 +294,43 @@ static void probe_fs32(void) {
     setup_altstack();
     catch_faults(1);
     if (syscall(SYS_set_thread_area, &d) < 0)
-        P("fs32", "FAIL set_thread_area: %s", E());
+        P("fs32", "%s set_thread_area through `syscall` (number 205): %s", errno == ENOSYS ? "INFO" : "FAIL", E());
     else
         try_fs_selector((d.entry_number << 3) | 3, base, "set_thread_area");
     struct user_desc l = d;
     l.entry_number = 0;
     if (syscall(SYS_modify_ldt, 0x11, &l, sizeof(l)) < 0)
-        P("fs32", "FAIL modify_ldt: %s", E());
+        /* Wine's new WoW64 only falls back to modify_ldt when set_thread_area failed
+         * (Documentation/devel/proton-vm/design-32bit.md), so the VM leaves it out */
+        P("fs32", "INFO modify_ldt: %s (not needed: set_thread_area works)", E());
     else
         try_fs_selector((0 << 3) | 7, base, "modify_ldt");
+    /* Wine's alloc_fs_sel: the same entry again through `int $0x80` (the i386 ABI: number 243 in
+     * eax, the user_desc's 32-bit address in ebx; limit ~0, seg_32bit|usable), from 64-bit code */
+    struct user_desc w = {.entry_number = -1, .base_addr = (uint32_t)(uintptr_t)base, .limit = ~0u, .seg_32bit = 1, .useable = 1};
+    long int80_ret = set_thread_area_int80(base + 16, &w);
+    if (int80_ret < 0) {
+        P("fs32", "FAIL int $0x80 set_thread_area: %ld", int80_ret);
+        catch_faults(0);
+        return;
+    }
+    try_fs_selector((w.entry_number << 3) | 3, base, "int $0x80 set_thread_area");
+    d.entry_number = w.entry_number;
+    /* two threads with their own base in the same entry (Wine: one selector, one WoW64 TEB per
+     * thread), each keeping %fs loaded across context switches (yields and sleeps, on every vCPU):
+     * the base must stay the thread's own without any reload */
+    g_fs32_entry = d.entry_number;
+    g_fs32_fail[0] = g_fs32_fail[1] = -1;
+    pthread_t th;
+    uint32_t* other = base + 256;
+    *other = 0x600dbeef;
+    pthread_create(&th, NULL, fs32_thread, other);
+    fs32_switch_loop(base, 0);
+    pthread_join(th, NULL);
+    P("fs32", "%s two threads, one entry, %%fs loaded across %d yields and sleeps each: main %d, "
+      "thread %d (-1 = all reads saw the thread's own base)",
+      g_fs32_fail[0] == -1 && g_fs32_fail[1] == -1 ? "PASS" : "FAIL", FS32_SWITCH_ITERATIONS,
+      g_fs32_fail[0], g_fs32_fail[1]);
     catch_faults(0);
 }
 
@@ -249,6 +344,9 @@ __asm__(".text\n"
         "  push %rbx\n push %rbp\n push %r12\n push %r13\n push %r14\n push %r15\n"
         "  mov %rsp, 0xf0(%rdi)\n"          /* the 64-bit stack, restored by the return stub */
         "  lea 0xf80(%rdi), %rsp\n"         /* a stack inside the low page for the 32-bit code */
+        "  mov $0x2b, %ecx\n"               /* compat mode checks DS/ES: the user data selector, as */
+        "  mov %ecx, %ds\n"                 /* Wine's dispatcher loads them (null in 64-bit code) */
+        "  mov %ecx, %es\n"
         "  movzwl 0xf8(%rdi), %ecx\n"       /* the 32-bit code selector under test */
         "  push %rcx\n"
         "  lea 0x40(%rdi), %rcx\n"
@@ -288,6 +386,128 @@ static int try_cs32(unsigned char* page, unsigned sel) {
     }
     P("cs32", "FAIL selector %#x: far return raised signal %d", sel, g_fault_sig);
     return 0;
+}
+/* sig32: a signal (tgkill from another thread) while the thread runs 32-bit code at cs 0x23 with
+ * %fs = its 32-bit TLS selector, handled the way Wine does: the handler (64-bit) first restores the
+ * TLS base with arch_prctl(ARCH_SET_FS), records the frame's cs/fs, sets the flag the 32-bit loop
+ * waits for, reloads %fs with the 32-bit selector (leave_handler) and returns; the kernel's
+ * sigreturn must go back to the 32-bit code (the frame's CS), whose next read through %fs must
+ * see the 32-bit base */
+unsigned long g_sig32_tls;
+uint64_t g_sig32_csgsfs;
+unsigned char* g_sig32_page;
+unsigned g_sig32_sel;
+volatile int g_sig32_handled;
+static pid_t g_sig32_tid;
+extern void sig32_handler(int, siginfo_t*, void*);
+__asm__(".text\n"
+        ".globl sig32_handler\n"
+        ".type sig32_handler,@function\n"
+        "sig32_handler:\n"
+        "  push %rbx\n"
+        "  mov 184(%rdx), %rbx\n"             /* uc_mcontext.gregs[REG_CSGSFS] */
+        "  mov $158, %eax\n"                  /* arch_prctl(ARCH_SET_FS, tls): first, as Wine's init_handler */
+        "  mov $0x1002, %edi\n"
+        "  mov g_sig32_tls(%rip), %rsi\n"
+        "  syscall\n"
+        "  mov %rbx, g_sig32_csgsfs(%rip)\n"
+        "  movl $1, g_sig32_handled(%rip)\n"
+        "  mov g_sig32_page(%rip), %rax\n"
+        "  movl $1, 0xe8(%rax)\n"             /* the 32-bit loop's flag */
+        "  cmpw $0x23, %bx\n"                /* leave_handler: back to the 32-bit selector, only */
+        "  jne 1f\n"                         /* when the signal interrupted 32-bit code */
+        "  mov g_sig32_sel(%rip), %eax\n"
+        "  movw %ax, %fs\n"
+        "1:\n"
+        "  pop %rbx\n"
+        "  ret\n"
+        ".size sig32_handler, .-sig32_handler\n");
+static void* sig32_killer(void* arg) {
+    (void)arg;
+    usleep(50000);
+    syscall(SYS_tgkill, getpid(), g_sig32_tid, SIGUSR1);
+    return NULL;
+}
+static void probe_sig32(void) {
+    uint16_t cs64;
+    __asm__("movw %%cs, %0" : "=r"(cs64));
+    unsigned char* page = mmap(NULL, 4096, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS | MAP_32BIT, -1, 0);
+    if (page == MAP_FAILED)
+        page = mmap((void*)0x32000000, 4096, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, -1, 0);
+    if (page == MAP_FAILED || (uintptr_t)page >= 0x100000000ull) {
+        P("sig32", "FAIL no executable page below 4 GiB: %s", E());
+        return;
+    }
+    memset(page, 0xcc, 0x1000);
+    *(uint32_t*)page = 0xfeedc0de; /* read through %fs:0 by the 32-bit code */
+    struct user_desc d = {.entry_number = -1, .base_addr = (uint32_t)(uintptr_t)page, .limit = 0xfff, .seg_32bit = 1, .useable = 1};
+    long sta = set_thread_area_int80(page + 0x100, &d);
+    if (sta < 0) {
+        P("sig32", "FAIL int $0x80 set_thread_area: %ld", sta);
+        return;
+    }
+    g_sig32_sel = (d.entry_number << 3) | 3;
+    g_sig32_page = page;
+    g_sig32_tid = syscall(SYS_gettid);
+    syscall(SYS_arch_prctl, ARCH_GET_FS, &g_sig32_tls);
+    /* 32-bit code at +0x40: ecx = 0xffffffff (seconds of spinning: the VM delivers the signal at
+     * a timer tick, up to a few hundred ms after the tgkill); loop: eax = flag; jnz done; dec ecx;
+     * jnz loop; done: page+0xec = ecx (0 = the count ran out); ebx = %fs:0; push cs64;
+     * push page+0x80; lret */
+    unsigned char* c = page + 0x40;
+    *c++ = 0xb9; put32(c, 0xffffffff); c += 4;
+    *c++ = 0xa1; put32(c, (uint32_t)(uintptr_t)(page + 0xe8)); c += 4;
+    *c++ = 0x85; *c++ = 0xc0;
+    *c++ = 0x75; *c++ = 0x03;
+    *c++ = 0x49;
+    *c++ = 0x75; *c++ = 0xf4;
+    *c++ = 0x89; *c++ = 0x0d; put32(c, (uint32_t)(uintptr_t)(page + 0xec)); c += 4;
+    *c++ = 0x64; *c++ = 0x8b; *c++ = 0x1d; put32(c, 0); c += 4;
+    *c++ = 0x68; put32(c, cs64); c += 4;
+    *c++ = 0x68; put32(c, (uint32_t)(uintptr_t)(page + 0x80)); c += 4;
+    *c++ = 0xcb;
+    /* the 64-bit return stub at +0x80, as try_cs32() */
+    c = page + 0x80;
+    *c++ = 0x48; *c++ = 0x8b; *c++ = 0x24; *c++ = 0x25; put32(c, (uint32_t)(uintptr_t)(page + 0xf0)); c += 4;
+    *c++ = 0x89; *c++ = 0x04; *c++ = 0x25; put32(c, (uint32_t)(uintptr_t)(page + 0xe0)); c += 4;
+    *c++ = 0x89; *c++ = 0x1c; *c++ = 0x25; put32(c, (uint32_t)(uintptr_t)(page + 0xe4)); c += 4;
+    const unsigned char pops[] = {0x41, 0x5f, 0x41, 0x5e, 0x41, 0x5d, 0x41, 0x5c, 0x5d, 0x5b, 0xc3};
+    memcpy(c, pops, sizeof(pops));
+    *(uint16_t*)(page + 0xf8) = 0x23;
+    *(uint32_t*)(page + 0xe0) = 0;
+    *(uint32_t*)(page + 0xe4) = 0;
+    *(uint32_t*)(page + 0xe8) = 0;
+    *(uint32_t*)(page + 0xec) = 0;
+    setup_altstack();
+    struct sigaction sa = {0};
+    sa.sa_sigaction = sig32_handler;
+    sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
+    sigaction(SIGUSR1, &sa, NULL);
+    catch_faults(1);
+    pthread_t th;
+    pthread_create(&th, NULL, sig32_killer, NULL);
+    if (sigsetjmp(g_jmp, 1) == 0) {
+        __asm__ volatile("movw %w0, %%fs" ::"r"(g_sig32_sel));
+        cs32_trampoline(page);
+        long rax_ = SYS_arch_prctl; __asm__ volatile("syscall" : "+a"(rax_) : "D"(ARCH_SET_FS), "S"(g_sig32_tls) : "rcx", "r11", "memory");
+        pthread_join(th, NULL);
+        uint32_t ebx = *(uint32_t*)(page + 0xe4);
+        unsigned cs = g_sig32_csgsfs & 0xffff, fs = (g_sig32_csgsfs >> 32) & 0xffff;
+        /* Linux stores 0 for fs and gs in a 64-bit frame (setup_sigcontext); Wine uses its own
+         * thread_data->fs, so the value is reported, not required */
+        uint32_t by_flag = *(uint32_t*)(page + 0xec);
+        int ok = g_sig32_handled && cs == 0x23 && by_flag && ebx == 0xfeedc0de;
+        P("sig32", "%s signal in 32-bit code: handler ran %d, frame cs %#x (want 0x23), frame fs %#x (Linux: 0), "
+          "%s, read %#x through %%fs after it (want 0xfeedc0de)",
+          ok ? "PASS" : "FAIL", g_sig32_handled, cs, fs,
+          by_flag ? "the 32-bit loop resumed and saw the handler's flag" : "the 32-bit loop ran out before the signal arrived", ebx);
+    } else {
+        syscall(SYS_arch_prctl, ARCH_SET_FS, g_sig32_tls);
+        P("sig32", "FAIL signal %d while running 32-bit code with %%fs loaded (handler ran %d; at the fault: ip %#lx, "
+          "%%fs %#x, fs base %#lx; the page is %p, the TLS %#lx)", g_fault_sig, g_sig32_handled, g_fault_ip,
+          g_fault_fs, g_fault_fsbase, page, g_sig32_tls);
+    }
+    catch_faults(0);
 }
 static void probe_cs32(void) {
     uint16_t cs64, ss;
@@ -1164,7 +1384,7 @@ static const struct probe probes[] = {
     {"sig_chld", probe_sig_chld}, {"sig_spin", probe_sig_spin}, {"sig_block", probe_sig_block}, {"sig_proc", probe_sig_proc},
     {"threads", probe_threads}, {"procs", probe_procs}, {"proc", probe_proc},       {"misc", probe_misc},
     {"gs", probe_gs},         {"fs32", probe_fs32},     {"cs32", probe_cs32},       {"traps", probe_traps},
-    {"wrgsbase", probe_wrgsbase},
+    {"wrgsbase", probe_wrgsbase}, {"sig32", probe_sig32},
 };
 
 static void run_probe(const struct probe* p, int inline_only) {

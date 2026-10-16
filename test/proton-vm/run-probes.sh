@@ -21,7 +21,7 @@ case $LOADER in
     native) timeout 300 ./probes "$@" ;;
     direct) timeout 300 gramine-direct probes "$@" ;;
     vm)     # one guest per probe (a guest panic in one probe must not lose the others)
-            [ $# -gt 0 ] && [ "$1" != all ] || set -- fixed huge noreplace futexv eventfd scm unixsock unixsock2 sud signals sig_chld sig_spin sig_block sig_proc threads procs proc misc gs fs32 cs32 traps wrgsbase
+            [ $# -gt 0 ] && [ "$1" != all ] || set -- fixed huge noreplace futexv eventfd scm unixsock unixsock2 sud signals sig_chld sig_spin sig_block sig_proc threads procs proc misc gs fs32 cs32 traps wrgsbase sig32
             for probe in "$@"; do
                 t0=$(date +%s.%N)
                 timeout "${PROBE_TIMEOUT:-60}" gramine-vm probes "$probe" 2>&1 | grep -v "self-check\|Frame-pool\|boot\]\|Physical\|Configuring\|REM_MEM\|vm-relay\|frame pool\|^(qemu)\|^qemu-system\|^$\|PROBES DONE"

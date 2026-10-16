@@ -20,6 +20,10 @@ loader.env.HOME = "/home/user"
 loader.env.USER = "user"
 loader.env.TMPDIR = "/tmp"
 loader.env.WINEPREFIX = "{{ prefix }}"
+{% if winearch|string != "" %}
+# WOW64=1 (wine-env.sh): a 32-bit game in the new WoW64 prefix (design-32bit.md)
+loader.env.WINEARCH = "{{ winearch }}"
+{% endif %}
 loader.env.WINEDLLPATH = "{{ proton }}/files/lib/wine/x86_64-unix:{{ proton }}/files/lib/wine/i386-unix"
 loader.env.WINELOADERNOEXEC = "1"
 loader.env.WINEDEBUG = "{{ winedebug }}"

@@ -460,6 +460,17 @@ class TC_01_Bootstrap(RegressionTestCase):
         stdout, _ = self.run_binary(['sigreturn_regs'], timeout=120)
         self.assertIn('TEST OK', stdout)
 
+    @unittest.skipUnless(ON_X86, 'x86-specific')
+    @unittest.skipUnless(USE_GRAMINE_VM, 'per-thread GDT TLS slots exist only in the VM PAL '
+                         '(set_thread_area is ENOSYS elsewhere)')
+    def test_606_thread_area_x86_64(self):
+        # set_thread_area/get_thread_area (also through `int $0x80`, as Wine's new WoW64 issues
+        # them), per-thread bases in one entry across context switches, 32-bit code at Linux's
+        # selector 0x23, and a signal that interrupts it with the sigreturn back into it
+        # (Documentation/devel/proton-vm/design-32bit.md).
+        stdout, _ = self.run_binary(['thread_area_x86_64'], timeout=120)
+        self.assertIn('TEST OK', stdout)
+
     @unittest.skipUnless(platform.machine() == 'aarch64', 'AT_HWCAP/AT_HWCAP2 are aarch64-specific')
     def test_605_hwcap_aarch64(self):
         # The LibOS passes the PAL's (masked) CPU feature words; every advertised feature is
