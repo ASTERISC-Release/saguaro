@@ -38,9 +38,26 @@ vm.net.outbound = "{{ net }}"
 {% else %}
 loader.env.DISPLAY = ""
 {% endif %}
+{% if gpu|string == "1" %}
+# the GPU through the graphics redirection (design-gpu.md): the arenas (GRAMINE_VM_GRAPHICS=1),
+# Mesa's driver in the guest with its DRM ioctls forwarded, the presentation layer
+# VK_LAYER_GRAMINE_present from libgraphics.so (found through XDG_DATA_HOME), Mesa's device
+# discovery through /sys
+loader.env.EGL_VULKAN_PRESENT = "1"
+loader.env.NODEVICE_SELECT = "1"
+loader.env.XDG_DATA_HOME = "/gramine-xdg"
+loader.env.EGL_EAGER_SESSION = "1"
+loader.env.EGL_GRAMINE = "1"
+loader.env.EGL_DISCRETE = "{{ egl_discrete }}"
+loader.env.EGL_SHARED_INPUT = "0"
+loader.env.GBM_BACKEND = "dri"
+loader.env.IVSHMEM_GRAMINE_VM = "1"
+loader.env.GLIBC_TUNABLES = "glibc.pthread.rseq=0"
+{% else %}
 # software rendering first (step 2 of "Next phases"): Mesa's llvmpipe for GLX, lavapipe for Vulkan
 # (DXVK); the X11 WSI presents with XPutImage when the server has no DRI3
 loader.env.LIBGL_ALWAYS_SOFTWARE = "1"
+{% endif %}
 loader.env.VK_ICD_FILENAMES = "{{ vk_icd }}"
 loader.env.DXVK_FILTER_DEVICE_NAME = "{{ dxvk_device }}"
 loader.env.DXVK_HUD = "{{ dxvk_hud }}"
@@ -68,6 +85,15 @@ fs.mounts = [
   { path = "{{ tests }}", uri = "file:{{ tests }}" },
 {% if game %}
   { path = "{{ game }}", uri = "file:{{ game }}" },
+{% endif %}
+{% if gpu|string == "1" %}
+  { path = "/libgraphics.so", uri = "file:{{ gramine.libgraphics }}" },
+  { path = "/gramine-xdg/vulkan", uri = "file:{{ layer_dir }}" },
+  { path = "/sys", type = "chroot", uri = "file:/sys" },
+  { path = "/sys/dev", type = "chroot", uri = "file:/sys/dev" },
+  { path = "/sys/devices", type = "chroot", uri = "file:/sys/devices" },
+  { path = "/sys/bus/pci", type = "chroot", uri = "file:/sys/bus/pci" },
+  { path = "/home/user/.cache", type = "chroot", uri = "file:{{ work }}/home/.cache" },
 {% endif %}
 {% if ffmpeg %}
   # FFmpeg 8 for GE-Proton's winedmo (the intake, FINDINGS.md 2026-10-16)
