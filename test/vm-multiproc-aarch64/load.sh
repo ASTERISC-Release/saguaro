@@ -22,13 +22,13 @@ case ${1:-} in
             -Dprobedir="$WORK" manifest.template bash.manifest
         cat > pipeline.sh <<'SH'
 [ -d /probe/tmp ] && export TMPDIR=/probe/tmp
-seq 1 200000 | awk '{print $1 % 977}' | sort -n | uniq -c | sort -rn | head -3 | md5sum
+seq 1 200000 | cut -c1-3 | sort -n | uniq -c | sort -rn | head -3 | md5sum
 SH
         expected=$(bash pipeline.sh)
         timeout -s KILL 300 gramine-vm bash /probe/pipeline.sh > bash-$CPUS.log 2>&1
         actual=$(grep -- ' -$' bash-$CPUS.log | tail -1)
         [ "$actual" = "$expected" ] || { echo "bash mismatch: $actual vs $expected"; exit 1; }
-        echo "bash: 200,000 lines through six processes matched native ($CPUS vCPUs)" ;;
+        echo "bash: 200,000 lines through seven processes matched native ($CPUS vCPUs)" ;;
     redis)
         [ -f "$REPO/CI-Examples/redis/redis-server.manifest" ] || {
             echo "build CI-Examples/redis first" >&2; exit 2;
