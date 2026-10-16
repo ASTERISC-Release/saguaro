@@ -1,0 +1,32 @@
+# Copyright (C) 2026 The ASTERISC Research Lab
+# SPDX-License-Identifier: BSD-3-Clause
+
+# Rust (hyper) HTTP server manifest for a Windows VBS enclave (`make VBS=1`, Documentation/vbs.rst):
+# the counterpart of rust-hyper-http-server.manifest.template. The server is a static PIE built by
+# cargo against the vbs glibc (vbs-build/rust-hyper-http-server): nothing to pack but the program.
+
+loader.entrypoint = "file:/libsysdb.so"
+libos.entrypoint = "/rust-hyper-http-server"
+loader.log_level = "{{ log_level }}"
+
+# See https://gramine.readthedocs.io/en/stable/performance.html#glibc-malloc-tuning
+loader.env.MALLOC_ARENA_MAX = "1"
+
+fs.root.uri = "file:/"
+# no run-time code generation in a VBS enclave
+sys.rewrite_syscalls = false
+
+vbs.debug = false
+vbs.enclave_size = "256M"
+# the main thread and the four tokio worker threads (worker_threads = 4 in src/main.rs), plus helpers
+vbs.max_threads = 8
+
+vbs.packed_files = [
+  { path = "/rust-hyper-http-server", uri = "file:vbs-build/rust-hyper-http-server" },
+]
+
+# The static libgcc (the quad-precision helper __multf3, linked in with glibc's strtold, which the
+# server never calls) is not built with -ffixed-x18: it uses x18 (the TEB). Nothing in the server
+# reaches it (checked: its callers are glibc's strtold family, and std does not parse long double).
+# Remove this entry if the server starts to use _Float128 or long double arithmetic.
+vbs.x18_allow = { "rust-hyper-http-server" = [ "__multf3" ] }
