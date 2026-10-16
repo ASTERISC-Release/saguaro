@@ -40,67 +40,114 @@ void sev_init_early(void) {
                g_sev_extra_shared_page ? ", the boot GHCB page" : "");
 }
 
-/* ---- SNP memory validation ---- */
+/* ---- SNP memory validation ----
+ *
+ * Under SNP, private RAM must be validated (PVALIDATE) before use, and a page must never be
+ * validated twice: a hypervisor that remaps a validated page makes it unvalidated, and validating
+ * it again would accept the hypervisor's page. Validating all RAM at boot costs about 1 s per GB
+ * here (4K pages, each a nested page fault in KVM), so the SEV build validates on demand: early
+ * boot validates what it touches ([0, 8 MB) and the page tables), memory_alloc() validates what it
+ * hands out, and a bitmap (one bit per 4K page, after the page tables) remembers what is
+ * validated. A #VC "page not validated" on a page the bitmap marks as validated is an attack. */
 
+uint8_t* g_sev_valid_bitmap;   /* used by sev_vc.c too */
+uint64_t g_sev_valid_bitmap_pages;
 static uint64_t g_sev_validated_pages;
 
-/* PVALIDATE [start, end) (identity-mapped, page-aligned) except the shared heap; 2 MB pages where
- * the RMP has them, 4 KB otherwise; pages validated at launch are left as they are */
-static void sev_validate_range(uint64_t start, uint64_t end) {
-    uint64_t addr = start;
-    while (addr < end) {
-        if (SHARED_MEM_ADDR <= addr && addr < SHARED_MEM_ADDR + SHARED_MEM_SIZE) {
-            addr = SHARED_MEM_ADDR + SHARED_MEM_SIZE;
+static int pvalidate_page(uint64_t addr) {
+    int rc = sev_pvalidate(addr, /*huge=*/false, /*validate=*/true);
+    if (rc != 0 && rc != SEV_PVALIDATE_NOCHANGE)
+        return -PAL_ERROR_DENIED;
+    __atomic_add_fetch(&g_sev_validated_pages, 1, __ATOMIC_RELAXED);
+    return 0;
+}
+
+/* PVALIDATE [start, end) now, before the bitmap exists (identity-mapped, page-aligned, private) */
+static void sev_validate_early(uint64_t start, uint64_t end) {
+    for (uint64_t addr = start; addr < end; addr += PAGE_SIZE) {
+        if (addr == g_sev_extra_shared_page)
             continue;
-        }
-        if (addr == g_sev_extra_shared_page) {
-            addr += PAGE_SIZE;
-            continue;
-        }
-        bool can_huge = !(addr & (0x200000UL - 1)) && end - addr >= 0x200000UL &&
-                        !(addr < SHARED_MEM_ADDR + SHARED_MEM_SIZE && SHARED_MEM_ADDR < addr + 0x200000UL) &&
-                        !(g_sev_extra_shared_page >= addr && g_sev_extra_shared_page < addr + 0x200000UL);
-        if (can_huge) {
-            int rc = sev_pvalidate(addr, /*huge=*/true, /*validate=*/true);
-            if (rc == 0 || rc == SEV_PVALIDATE_NOCHANGE) {
-                g_sev_validated_pages += 512;
-                addr += 0x200000UL;
-                continue;
-            }
-            if (rc != SEV_PVALIDATE_FAIL_SIZEMISMATCH && rc != 1)
-                sev_terminate(SEV_TERM_PVALIDATE);
-            /* the RMP holds 4K entries here (or a part was validated at launch): go 4K */
-        }
-        int rc = sev_pvalidate(addr, /*huge=*/false, /*validate=*/true);
-        if (rc != 0 && rc != SEV_PVALIDATE_NOCHANGE)
+        if (pvalidate_page(addr) < 0)
             sev_terminate(SEV_TERM_PVALIDATE);
-        g_sev_validated_pages++;
-        addr += PAGE_SIZE;
     }
+}
+
+static void bitmap_set_range(uint64_t start, uint64_t end) {
+    for (uint64_t addr = start; addr < end; addr += PAGE_SIZE) {
+        uint64_t pfn = addr / PAGE_SIZE;
+        if (pfn < g_sev_valid_bitmap_pages)
+            __atomic_or_fetch(&g_sev_valid_bitmap[pfn / 8], 1 << (pfn % 8), __ATOMIC_RELAXED);
+    }
+}
+
+int sev_validate_on_demand(uint64_t addr, size_t size) {
+    if (!sev_snp_active())
+        return 0;
+    uint64_t start = ALIGN_DOWN(addr, PAGE_SIZE);
+    uint64_t end = ALIGN_UP(addr + size, PAGE_SIZE);
+    for (uint64_t page = start; page < end; page += PAGE_SIZE) {
+        uint64_t pfn = page / PAGE_SIZE;
+        if (pfn >= g_sev_valid_bitmap_pages)
+            return -PAL_ERROR_INVAL;
+        if (SHARED_MEM_ADDR <= page && page < SHARED_MEM_ADDR + SHARED_MEM_SIZE)
+            return -PAL_ERROR_INVAL;
+        uint8_t bit = 1 << (pfn % 8);
+        if (__atomic_load_n(&g_sev_valid_bitmap[pfn / 8], __ATOMIC_ACQUIRE) & bit)
+            continue;
+        if (pvalidate_page(page) < 0)
+            return -PAL_ERROR_DENIED;
+        __atomic_or_fetch(&g_sev_valid_bitmap[pfn / 8], bit, __ATOMIC_RELEASE);
+    }
+    return 0;
+}
+
+void sev_memory_before_page_tables(uint64_t addr, size_t size) {
+    if (!sev_snp_active())
+        return;
+    /* the temporary tables at [4 MB, 8 MB) were validated at launch; the final ones at 512 MB not */
+    sev_validate_early(addr, addr + size);
 }
 
 void sev_memory_after_temp_tables(void) {
     if (!sev_snp_active())
         return;
-    /* the temporary page tables map [0, 1 GB); the final ones go to [512 MB, 658 MB) */
-    sev_validate_range(0, 1UL * 1024 * 1024 * 1024);
+    /* low memory (AP trampoline, DOS area) and the rest of the PAL's range up to 8 MB */
+    sev_validate_early(0, 8UL * 1024 * 1024);
 }
 
-void sev_memory_after_final_tables(uint64_t memory_end) {
+void sev_memory_after_final_tables(uint64_t memory_end, uint64_t tables_end) {
     if (!sev_snp_active())
         return;
     uint64_t t0 = get_tsc();
-    if (memory_end > 1UL * 1024 * 1024 * 1024)
-        sev_validate_range(1UL * 1024 * 1024 * 1024, MIN(memory_end, PCI_HOLE_ADDR));
-    if (memory_end > PCI_HOLE_ADDR + PCI_HOLE_SIZE)
-        sev_validate_range(PCI_HOLE_ADDR + PCI_HOLE_SIZE, memory_end);
+    /* the bitmap goes right after the page tables, in their reserved region */
+    uint64_t pages = ALIGN_UP(memory_end, PAGE_SIZE) / PAGE_SIZE;
+    uint64_t bitmap = ALIGN_UP(tables_end, PAGE_SIZE);
+    uint64_t bitmap_end = ALIGN_UP(bitmap + UDIV_ROUND_UP(pages, 8), PAGE_SIZE);
+    if (bitmap_end > PAGE_TABLES_ADDR + PAGE_TABLES_SIZE)
+        INIT_FAIL("SEV-SNP: no room for the validation bitmap after the page tables");
+    sev_validate_early(bitmap, bitmap_end);
+    g_sev_valid_bitmap = (uint8_t*)bitmap;
+    memset(g_sev_valid_bitmap, 0, bitmap_end - bitmap);
+    g_sev_valid_bitmap_pages = pages;
+    bitmap_set_range(0, 8UL * 1024 * 1024);
+    bitmap_set_range(PAGE_TABLES_ADDR, bitmap_end);
+    if (g_sev_extra_shared_page) {
+        uint64_t pfn = g_sev_extra_shared_page / PAGE_SIZE;
+        g_sev_valid_bitmap[pfn / 8] &= ~(1 << (pfn % 8));
+    }
+
     uint64_t t1 = get_tsc();
     if (sev_psc_range(SHARED_MEM_ADDR, SHARED_MEM_SIZE, /*shared=*/true) < 0)
         INIT_FAIL("SEV-SNP: the hypervisor refused to make the shared heap shared");
     uint64_t t2 = get_tsc();
-    log_always("SEV-SNP: validated guest RAM (%lu pages up to 0x%lx, %lu Mcycles), shared heap "
-               "converted to shared (%lu Mcycles)", g_sev_validated_pages, memory_end,
-               (t1 - t0) / 1000000, (t2 - t1) / 1000000);
+    log_always("SEV-SNP: validated %lu pages at boot (low 8 MB, page tables, bitmap; %lu Mcycles), "
+               "the rest of RAM up to 0x%lx on demand; shared heap converted to shared "
+               "(%lu Mcycles)", g_sev_validated_pages, (t1 - t0) / 1000000, memory_end,
+               (t2 - t1) / 1000000);
+}
+
+uint64_t sev_validated_pages(void) {
+    return g_sev_validated_pages;
 }
 
 /* ---- per-CPU state ---- */

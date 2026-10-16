@@ -151,6 +151,10 @@ void sev_cpuid(uint32_t leaf, uint32_t subleaf, uint32_t out[4]) {
     }
 }
 
+uint64_t g_sev_vc_late_validations;
+static void vc_puts(const char* s);
+static void vc_puthex(uint64_t v);
+
 /* ---- instruction decoding ---- */
 
 struct insn {
@@ -289,6 +293,35 @@ int sev_vc_handler(struct isr_regs* regs) {
             regs->rip += insn.len + (exit_code == SVM_EXIT_RDTSCP ? 3 : 2);
             return 0;
         }
+        case SVM_EXIT_PAGE_NOT_VALIDATED: {
+            /* an access to private RAM that memory_alloc() did not validate (a path that bypasses
+             * it): validate the page once; a page the bitmap knows as validated was remapped by
+             * the hypervisor, and validating it again would accept the hypervisor's page */
+            uint64_t cr2;
+            __asm__ volatile("mov %%cr2, %0" : "=r"(cr2));
+            uint64_t page = cr2 & ~0xfffUL;
+            uint64_t pfn = page >> 12;
+            if (!g_sev_valid_bitmap || pfn >= g_sev_valid_bitmap_pages)
+                return -PAL_ERROR_DENIED;
+            uint8_t bit = 1 << (pfn % 8);
+            if (g_sev_vc_late_validations < 8) {
+                vc_puts("SEV-SNP: #VC page-not-validated, cr2 ");
+                vc_puthex(cr2);
+                vc_puts(" rip ");
+                vc_puthex(regs->rip);
+                vc_puts("\n");
+            }
+            if (__atomic_load_n(&g_sev_valid_bitmap[pfn / 8], __ATOMIC_ACQUIRE) & bit) {
+                vc_puts("SEV-SNP: page-not-validated #VC on a validated page: terminating\n");
+                sev_terminate(SEV_TERM_REVALIDATE);
+            }
+            int rc = sev_pvalidate(page, /*huge=*/false, /*validate=*/true);
+            if (rc != 0)
+                return -PAL_ERROR_DENIED;
+            __atomic_or_fetch(&g_sev_valid_bitmap[pfn / 8], bit, __ATOMIC_RELEASE);
+            __atomic_add_fetch(&g_sev_vc_late_validations, 1, __ATOMIC_RELAXED);
+            return 0; /* the faulting instruction runs again */
+        }
         default:
             return -PAL_ERROR_NOTIMPLEMENTED;
     }
@@ -329,4 +362,21 @@ void sev_vc_entry_c(struct isr_regs* regs) {
     vc_puthex(*(const uint64_t*)regs->rip);
     vc_puts("\n");
     sev_terminate(SEV_TERM_VC_UNHANDLED);
+}
+
+/* an exception before the kernel's IDT (sev_vc_entry.S): report it and terminate */
+__attribute__((noreturn)) void sev_early_fault_c(uint64_t vector, uint64_t error_code,
+                                                 uint64_t rip) {
+    uint64_t cr2;
+    __asm__ volatile("mov %%cr2, %0" : "=r"(cr2));
+    vc_puts("SEV: early exception ");
+    vc_puthex(vector);
+    vc_puts(" error code ");
+    vc_puthex(error_code);
+    vc_puts(" rip ");
+    vc_puthex(rip);
+    vc_puts(" cr2 ");
+    vc_puthex(cr2);
+    vc_puts("\n");
+    sev_terminate(SEV_TERM_GENERAL);
 }

@@ -33,6 +33,9 @@
 #define SEV_TERM_PSC             0x06
 #define SEV_TERM_VC_UNHANDLED    0x07
 #define SEV_TERM_NOT_SNP         0x08
+#define SEV_TERM_REVALIDATE      0x09
+
+#define SEV_SNP_REPORT_SIZE      1184 /* ATTESTATION_REPORT of the SNP firmware ABI */
 
 #define SEV_PVALIDATE_NOCHANGE   0x100
 #define SEV_PVALIDATE_FAIL_SIZEMISMATCH 6
@@ -59,10 +62,17 @@ void sev_init_early(void);
 /* Physical page that stays shared besides the shared heap and the MMIO hole (the boot GHCB), or 0 */
 extern uint64_t g_sev_extra_shared_page;
 
-/* kernel_memory.c hooks: after the temporary 1 GB page tables, validate [0, 1 GB) under SNP; after
- * the final ones, validate the rest of RAM and make the shared heap shared */
+/* kernel_memory.c hooks (SNP; no-ops otherwise): validate the pages of the page tables before
+ * they are written, low memory after the temporary tables; after the final ones set up the
+ * validation bitmap and make the shared heap shared; memory_alloc() validates on demand */
+void sev_memory_before_page_tables(uint64_t addr, size_t size);
 void sev_memory_after_temp_tables(void);
-void sev_memory_after_final_tables(uint64_t memory_end);
+void sev_memory_after_final_tables(uint64_t memory_end, uint64_t tables_end);
+int sev_validate_on_demand(uint64_t addr, size_t size);
+uint64_t sev_validated_pages(void);
+extern uint8_t* g_sev_valid_bitmap;
+extern uint64_t g_sev_valid_bitmap_pages;
+extern uint64_t g_sev_vc_late_validations; /* #VC-driven validations (diagnostics) */
 
 /* Per-CPU SEV state for `num_cpus` vCPUs (#VC stacks, GHCBs of the APs); after
  * init_multicore_prepare(), before interrupts_init(). */
@@ -77,6 +87,9 @@ int sev_snp_start_ap(uint32_t cpu_idx, void (*entry)(uint32_t));
 
 /* first C code of an AP under SNP (called by the AP's VMSA entry): GHCB, early #VC handler */
 void sev_ap_early(uint32_t cpu_idx);
+
+/* An SNP attestation report with `user_data` as its REPORT_DATA (sev_attest.c) */
+int sev_snp_get_report(const uint8_t user_data[64], uint8_t report[SEV_SNP_REPORT_SIZE]);
 
 /* sev_vc.c, sev_ghcb.c (general-regs-only) */
 uint32_t sev_this_cpu_id(void);

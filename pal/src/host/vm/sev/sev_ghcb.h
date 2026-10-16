@@ -45,6 +45,7 @@
 #define SVM_EXIT_MWAIT         0x8bUL
 #define SVM_EXIT_XSETBV        0x8dUL
 #define SVM_EXIT_NPF           0x400UL
+#define SVM_EXIT_PAGE_NOT_VALIDATED 0x404UL /* SNP: #VC on an unvalidated private page */
 #define SVM_VMGEXIT_MMIO_READ  0x80000001UL
 #define SVM_VMGEXIT_MMIO_WRITE 0x80000002UL
 #define SVM_VMGEXIT_PSC        0x80000010UL

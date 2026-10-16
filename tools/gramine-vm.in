@@ -269,6 +269,9 @@ if [ -n "$SEV_IGVM_PATH" ]; then
             QEMU_MACHINE="-M q35,kernel_irqchip=on,confidential-guest-support=sev0,igvm-cfg=igvm0 \
             -object $SEV_OBJECT" ;;
         snp)
+            # KVM offers no TSC-deadline timer to SEV-ES/SNP guests (the PAL uses the one-shot
+            # LAPIC timer instead), so do not ask for it
+            QEMU_VM=${QEMU_VM/,+tsc-deadline/}
             SEV_OBJECT="sev-snp-guest,id=sev0,cbitpos=$SEV_CBITPOS,reduced-phys-bits=1,policy=${GRAMINE_SEV_POLICY:-0x30000}"
             QEMU_MACHINE="-M q35,kernel_irqchip=on,confidential-guest-support=sev0,igvm-cfg=igvm0 \
             -object $SEV_OBJECT" ;;

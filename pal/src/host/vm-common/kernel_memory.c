@@ -1430,6 +1430,7 @@ static int pagetables_init(size_t memory_size, uint64_t page_tables_addr, size_t
 #ifdef PAL_HOST_SEV
     /* SEV: memory that the launch did not write reads as garbage, not zero; the partly used table
      * pages (PDP, PML4) must not keep stale "present" entries */
+    sev_memory_before_page_tables(page_tables_addr, total_tables_cnt * PAGE_SIZE);
     _real_memset((void*)page_tables_addr, 0, total_tables_cnt * PAGE_SIZE);
     tree_flags |= g_sev_c_bit_mask;
 #endif
@@ -1545,7 +1546,8 @@ int memory_pagetables_init(void* memory_address_end, bool current_page_tables_co
     if (ret < 0)
         return ret;
 #ifdef PAL_HOST_SEV
-    sev_memory_after_final_tables((uint64_t)memory_address_end);
+    sev_memory_after_final_tables((uint64_t)memory_address_end,
+                                  PAGE_TABLES_ADDR + total_tables_cnt * PAGE_SIZE);
 #endif
 
     g_pml4_table_base = pml4_table_base;
@@ -1816,10 +1818,14 @@ int memory_alloc(void* addr, size_t size, bool read, bool write, bool execute) {
 #ifdef PAL_HOST_SEV
         /* SEV: memory the guest has not written yet reads as ciphertext, not zero, and a later
          * protect() makes these pages accessible without zeroing them (glibc maps a thread stack
-         * PROT_NONE and then mprotect()s it), so zero them now */
+         * PROT_NONE and then mprotect()s it), so zero them now (SNP: validate them first) */
         if (!egl_redirect_region) {
+            /* PVALIDATE needs the pages mapped */
             int sev_ret = memory_mark_pages_on((uint64_t)addr, size, /*write=*/true,
                                                /*execute=*/false, /*usermode=*/false);
+            if (sev_ret < 0)
+                return sev_ret;
+            sev_ret = sev_validate_on_demand((uint64_t)addr, size);
             if (sev_ret < 0)
                 return sev_ret;
             memset(memory_frame_pointer((uintptr_t)addr), 0, size);
@@ -1839,6 +1845,12 @@ int memory_alloc(void* addr, size_t size, bool read, bool write, bool execute) {
     int ret = memory_mark_pages_on((uint64_t)addr, size, write, execute, /*usermode=*/true);
     if (ret < 0)
         return ret;
+#ifdef PAL_HOST_SEV
+    /* SNP: private RAM is validated when it is first handed out (PVALIDATE needs it mapped) */
+    ret = sev_validate_on_demand((uint64_t)addr, size);
+    if (ret < 0)
+        return ret;
+#endif
 
 #ifdef ASAN
     asan_unpoison_region((uintptr_t)addr, size);

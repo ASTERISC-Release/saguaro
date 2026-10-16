@@ -65,11 +65,21 @@ isr_vc:
     add     $16, %rsp           // int_number, error_code
     iretq
 
-    // void sev_vc_early_idt_init(void): fill gate 29 of the early IDT (64-bit interrupt gate,
-    // kernel CS of the current GDT, no IST) and load it
-sev_vc_early_idt_init:
-    lea     isr_vc(%rip), %rax
-    lea     sev_vc_early_idt + 29 * 16(%rip), %rdi
+    // early fatal exceptions (#DF, #GP, #PF before the kernel's IDT): report and terminate
+.macro earlyfault num
+sev_early_fault_\num:
+    mov     $\num, %edi
+    mov     (%rsp), %rsi                // error code
+    mov     8(%rsp), %rdx               // rip
+    and     $~0xF, %rsp
+    call    sev_early_fault_c
+.endm
+    earlyfault 8
+    earlyfault 13
+    earlyfault 14
+
+    // set_gate: %rax = handler, %rdi = gate address
+set_gate:
     mov     %ax, (%rdi)                 // offset 15:0
     mov     %cs, %dx
     mov     %dx, 2(%rdi)                // selector
@@ -80,6 +90,23 @@ sev_vc_early_idt_init:
     shr     $16, %rax
     mov     %eax, 8(%rdi)               // offset 63:32
     movl    $0, 12(%rdi)
+    ret
+
+    // void sev_vc_early_idt_init(void): fill gate 29 of the early IDT (64-bit interrupt gate,
+    // kernel CS of the current GDT, no IST) and the fatal ones, and load it
+sev_vc_early_idt_init:
+    lea     isr_vc(%rip), %rax
+    lea     sev_vc_early_idt + 29 * 16(%rip), %rdi
+    call    set_gate
+    lea     sev_early_fault_8(%rip), %rax
+    lea     sev_vc_early_idt + 8 * 16(%rip), %rdi
+    call    set_gate
+    lea     sev_early_fault_13(%rip), %rax
+    lea     sev_vc_early_idt + 13 * 16(%rip), %rdi
+    call    set_gate
+    lea     sev_early_fault_14(%rip), %rax
+    lea     sev_vc_early_idt + 14 * 16(%rip), %rdi
+    call    set_gate
     lea     sev_vc_early_idt(%rip), %rax
     mov     %rax, sev_vc_early_idtr + 2(%rip)   // base filled at run time (before relocation)
     lidt    sev_vc_early_idtr(%rip)
