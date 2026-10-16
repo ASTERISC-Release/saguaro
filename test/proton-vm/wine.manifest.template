@@ -32,6 +32,9 @@ loader.env.WINEDLLOVERRIDES = "d3d11,d3d10core,d3d9,dxgi,d3d12,d3d12core=n;winem
 # test/proton-vm/xorg-dummy.conf) through gramine-vm's vsock relay (Documentation/devel/graphics/running.md)
 loader.env.DISPLAY = "2:{{ display }}"
 vm.net.direct_vsock_ports = [{{ 6000 + display|int }}]
+# NET=deny: a game's online features fail at once instead of waiting on the relay (Doom's
+# Bethesda.net login dialog froze the game in the guest, FINDINGS.md 2026-10-16)
+vm.net.outbound = "{{ net }}"
 {% else %}
 loader.env.DISPLAY = ""
 {% endif %}

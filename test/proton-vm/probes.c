@@ -60,6 +60,9 @@
 #include <sys/syscall.h>
 #include <sys/time.h>
 #include <sys/wait.h>
+#include <net/if.h>
+#include <ifaddrs.h>
+#include <sys/ioctl.h>
 #include <time.h>
 #include <ucontext.h>
 #include <unistd.h>
@@ -719,6 +722,34 @@ static void* sud_thread(void* arg) {
     g_sud_done = 1;
     return NULL;
 }
+/* interface enumeration as Wine's nsiproxy.sys does it (ndis.c: if_nameindex() without a NULL
+ * check, SIOCGIFFLAGS/SIOCGIFMTU, /proc/net/dev); the game's login dialog calls
+ * GetAdaptersAddresses and its driver thread died on the NULL under Gramine */
+static void probe_ifaces(void) {
+    struct if_nameindex* ix = if_nameindex();
+    int n = 0;
+    if (ix) { for (struct if_nameindex* e = ix; e->if_index; e++) n++; if_freenameindex(ix); }
+    P("ifaces", "%s if_nameindex(): %s, %d interface(s)", ix ? "PASS" : "FAIL", ix ? "ok" : E(), n);
+    struct ifaddrs* ifa = NULL;
+    int r = getifaddrs(&ifa);
+    n = 0;
+    for (struct ifaddrs* a = ifa; a; a = a->ifa_next) n++;
+    if (!r) freeifaddrs(ifa);
+    P("ifaces", "%s getifaddrs(): %s, %d entries", r == 0 ? "PASS" : "FAIL", r == 0 ? "ok" : E(), n);
+    int fd = socket(AF_INET, SOCK_DGRAM, 0);
+    char buf[1024];
+    struct ifconf ifc = { .ifc_len = sizeof(buf), .ifc_buf = buf };
+    r = ioctl(fd, SIOCGIFCONF, &ifc);
+    P("ifaces", "%s SIOCGIFCONF: %s, %d interface(s)", r == 0 ? "PASS" : "FAIL", r == 0 ? "ok" : E(), r == 0 ? (int)(ifc.ifc_len / sizeof(struct ifreq)) : 0);
+    struct ifreq req; memset(&req, 0, sizeof(req)); strcpy(req.ifr_name, "lo");
+    r = ioctl(fd, SIOCGIFFLAGS, &req);
+    P("ifaces", "%s SIOCGIFFLAGS(lo): %s flags %#x", r == 0 ? "PASS" : "FAIL", r == 0 ? "ok" : E(), r == 0 ? req.ifr_flags : 0);
+    close(fd);
+    FILE* f = fopen("/proc/net/dev", "r");
+    n = 0;
+    if (f) { while (fgets(buf, sizeof(buf), f)) n++; fclose(f); }
+    P("ifaces", "%s /proc/net/dev: %s, %d lines", f ? "PASS" : "FAIL", f ? "ok" : E(), n);
+}
 static void probe_sud(void) {
     struct sigaction sa = {0};
     sa.sa_sigaction = sigsys_handler;
@@ -1129,7 +1160,7 @@ struct probe { const char* name; void (*fn)(void); };
 static const struct probe probes[] = {
     /* the ones that may take the guest down come last */
     {"fixed", probe_fixed},   {"huge", probe_huge},     {"noreplace", probe_noreplace}, {"futexv", probe_futexv},
-    {"eventfd", probe_eventfd}, {"scm", probe_scm},     {"unixsock", probe_unixsock}, {"unixsock2", probe_unixsock2}, {"sud", probe_sud},       {"signals", probe_signals},
+    {"eventfd", probe_eventfd}, {"scm", probe_scm},     {"unixsock", probe_unixsock}, {"unixsock2", probe_unixsock2}, {"sud", probe_sud}, {"ifaces", probe_ifaces},       {"signals", probe_signals},
     {"sig_chld", probe_sig_chld}, {"sig_spin", probe_sig_spin}, {"sig_block", probe_sig_block}, {"sig_proc", probe_sig_proc},
     {"threads", probe_threads}, {"procs", probe_procs}, {"proc", probe_proc},       {"misc", probe_misc},
     {"gs", probe_gs},         {"fs32", probe_fs32},     {"cs32", probe_cs32},       {"traps", probe_traps},
