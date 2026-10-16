@@ -38,6 +38,7 @@
 #include <xcb/xcb.h>
 
 #include "common.h"
+#include "graphics_comm_abi.h"
 
 #define LAYER_NAME "VK_LAYER_GRAMINE_present"
 #define MAX_OBJECTS 64
@@ -865,19 +866,20 @@ static VKAPI_ATTR VkResult VKAPI_CALL layer_CreateSwapchainKHR(VkDevice device,
         VkImageSubresource sub = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0};
         VkSubresourceLayout layout;
         d->GetImageSubresourceLayout(d->device, sc->export_images[i], &sub, &layout);
-        /* The guest fd is a forwarded host fd (host fd + 500). The listener's XCB hands the fd to
+        /* The guest fd is a forwarded host fd (host fd + GRAPHICS_FS_OFFSET, the shared ABI
+         * constant: the listener gets the raw host fd number). The listener's XCB hands the fd to
          * the X server and closes it, so give it a host duplicate and keep our own fd. The guest
          * handle of the duplicate goes stale then and is left alone (the LibOS drops it when the
          * host reuses the number). */
         int dup_fd = dup(fd);
         close(fd);
-        if (dup_fd < 500) {
+        if (dup_fd < (int)GRAPHICS_FS_OFFSET) {
             LOG("unexpected dma-buf fd %d (not a forwarded host fd)\n", dup_fd);
             r = VK_ERROR_INITIALIZATION_FAILED;
             goto fail;
         }
         memset(&sc->bufs[i], 0, sizeof(sc->bufs[i]));
-        sc->bufs[i].bo_fd = dup_fd - 500;
+        sc->bufs[i].bo_fd = dup_fd - GRAPHICS_FS_OFFSET;
         send_setup(sc->bufs_pa, i, layout.size + layout.offset, layout.rowPitch);
     }
 
