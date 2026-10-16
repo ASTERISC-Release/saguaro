@@ -1,0 +1,39 @@
+# Copyright (C) 2026 The ASTERISC Research Lab
+# SPDX-License-Identifier: BSD-3-Clause
+
+# Node.js manifest for a Windows VBS enclave (`make VBS=1`, Documentation/vbs.rst): the counterpart of
+# nodejs.manifest.template. The official Node.js binary (vbs-build/node) is a dynamic program: the
+# dynamic loader, libc, libm, libdl, libpthread, libstdc++ and libgcc_s are packed. V8 runs with
+# --jitless (passed on the command line, see vbs-check.sh): an enclave has no executable memory that
+# the program can create or change at run time.
+
+loader.entrypoint = "file:/libsysdb.so"
+libos.entrypoint = "/node"
+loader.log_level = "{{ log_level }}"
+
+loader.insecure__use_cmdline_argv = true
+loader.env.LD_LIBRARY_PATH = "{{ arch_libdir }}"
+loader.env.HOME = "/"
+loader.env.UV_THREADPOOL_SIZE = "4"
+
+fs.root.uri = "file:/"
+# no run-time code generation in a VBS enclave
+sys.rewrite_syscalls = false
+
+vbs.debug = false
+# V8 reserves about 1.7 GB of address space at start-up (the nodejs manifest's note)
+vbs.enclave_size = "{{ env.get('VBS_ENCLAVE_SIZE', '2G') }}"
+# main thread, V8 platform workers (--v8-pool-size), libuv's pool (4), the four worker_threads of
+# heavy.js and the runtime's helpers
+vbs.max_threads = {{ env.get('VBS_MAX_THREADS', '24') }}
+
+vbs.packed_files = [
+  { path = "/node", uri = "file:vbs-build/node" },
+  { path = "/app/helloworld.js", uri = "file:helloworld.js" },
+  { path = "/app/heavy.js", uri = "file:heavy.js" },
+  { path = "/usr/lib/libstdc++.so.6", uri = "file:vbs-build/libstdc++.so.6" },
+  { path = "/usr/lib/libgcc_s.so.1", uri = "file:vbs-build/libgcc_s.so.1" },
+{% for lib in [vbs.ldso, "libc.so.6", "libm.so.6", "libdl.so.2", "libpthread.so.0"] %}
+  { path = "{{ arch_libdir }}/{{ lib }}", uri = "file:{{ vbs.sysroot }}/usr/lib/{{ lib }}" },
+{% endfor %}
+]

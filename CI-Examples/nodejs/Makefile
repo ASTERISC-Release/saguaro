@@ -12,10 +12,25 @@ else
 GRAMINE_LOG_LEVEL = error
 endif
 
+NODE_VERSION = 22.23.3
+NODE_TARBALL = node-v$(NODE_VERSION)-linux-x64.tar.xz
+NODE_SHA256 = df450af89261115ef9f9e3830c3eeb2cc9213b63c720b1af623cb5dcbe2e02de
+
 .PHONY: all
+ifeq ($(VBS),1)
+# Windows VBS enclave (scripts/vbs/Makefile.vbs, Documentation/vbs.rst): the official Node.js
+# linux-x64 binary (not rebuilt), with the host's libstdc++ and GCC runtime, packed into the image.
+# V8 runs with --jitless (no executable memory in a VBS enclave), see vbs-check.sh
+VBS_APP = nodejs
+VBS_DEPS = vbs-build/node vbs-build/libstdc++.so.6 vbs-build/libgcc_s.so.1 helloworld.js heavy.js
+VBS_CLEAN = vbs-build OUTPUT
+include ../../scripts/vbs/Makefile.vbs
+all: vbs-all
+else
 all: nodejs.manifest
 ifeq ($(SGX),1)
 all: nodejs.manifest.sgx nodejs.sig
+endif
 endif
 
 nodejs.manifest: nodejs.manifest.template helloworld.js
@@ -38,21 +53,48 @@ sgx_sign: nodejs.manifest
 		--manifest $< \
 		--output $<.sgx
 
-ifeq ($(SGX),)
+ifeq ($(VBS),1)
+# GRAMINE is gramine-vbs (Makefile.vbs)
+else ifeq ($(SGX),)
 GRAMINE = gramine-direct
 else
 GRAMINE = gramine-sgx
 endif
 
+ifeq ($(VBS),1)
+node-$(NODE_VERSION)-linux-x64.tar.xz:
+	../common_tools/download --output $@ --sha256 $(NODE_SHA256) \
+		--url https://nodejs.org/dist/v$(NODE_VERSION)/$(NODE_TARBALL)
+
+vbs-build/node: node-$(NODE_VERSION)-linux-x64.tar.xz
+	mkdir -p vbs-build
+	tar -C vbs-build -xJf $< node-v$(NODE_VERSION)-linux-x64/bin/node
+	mv vbs-build/node-v$(NODE_VERSION)-linux-x64/bin/node $@
+	rm -rf vbs-build/node-v$(NODE_VERSION)-linux-x64
+
+# libstdc++ and the GCC runtime: not in the vbs sysroot, so the host's copies of the same runtime
+vbs-build/libstdc++.so.6:
+	mkdir -p vbs-build
+	cp -L "$(shell $(CC) -print-file-name=libstdc++.so.6)" $@
+
+vbs-build/libgcc_s.so.1:
+	mkdir -p vbs-build
+	cp -L "$(shell $(CC) -print-file-name=libgcc_s.so.1)" $@
+
+.PHONY: check
+check: all
+	GRAMINE="$(GRAMINE)" ./vbs-check.sh
+else
 .PHONY: check
 check: all
 	$(GRAMINE) ./nodejs helloworld.js > OUTPUT
 	@grep -q "Hello World" OUTPUT && echo "[ Success 1/1 ]"
 	@rm OUTPUT
+endif
 
 .PHONY: clean
 clean:
-	$(RM) *.manifest *.manifest.sgx *.token *.sig OUTPUT
+	$(RM) *.manifest *.manifest.sgx *.token *.sig OUTPUT *.manifest.vbs
 
 .PHONY: distclean
 distclean: clean
