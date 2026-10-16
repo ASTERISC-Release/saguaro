@@ -706,6 +706,19 @@ static void sigsys_handler(int sig, siginfo_t* si, void* ucv) {
      * libc's address range when it turns the dispatch on */
     g_sud_selector = SYSCALL_DISPATCH_FILTER_ALLOW;
 }
+static volatile int g_sud_ready, g_sud_go, g_sud_done;
+static void* sud_thread(void* arg) {
+    /* a raw system call from code outside any allowed range while the creator's selector says
+     * BLOCK (the creator flips it only once this thread runs, so its own clone() is not blocked) */
+    g_sud_ready = 1;
+    while (!g_sud_go)
+        __asm__ volatile("pause" ::: "memory");
+    long r;
+    __asm__ volatile("syscall" : "=a"(r) : "0"(SYS_getpid) : "rcx", "r11", "memory");
+    *(long*)arg = r;
+    g_sud_done = 1;
+    return NULL;
+}
 static void probe_sud(void) {
     struct sigaction sa = {0};
     sa.sa_sigaction = sigsys_handler;
@@ -723,8 +736,43 @@ static void probe_sud(void) {
     __asm__ volatile("syscall" : "=a"(ret) : "0"(SYS_getpid) : "rcx", "r11", "memory");
     g_sud_selector = SYSCALL_DISPATCH_FILTER_ALLOW;
     int sigs = g_sigsys;
-    prctl(PR_SET_SYSCALL_USER_DISPATCH, PR_SYS_DISPATCH_OFF, 0, 0, 0);
     P("sud", "%s syscall user dispatch: blocked getpid raised SIGSYS %d time(s), result %ld", sigs == 1 && ret == -ENOSYS ? "PASS" : "FAIL", sigs, ret);
+
+    /* Linux starts every new task with the dispatch off ("any fork or exec of the existing
+     * process resets the mechanism"; kernel/fork.c clears it for threads too). Wine's new threads
+     * make system calls from libc before they set up their own dispatch, while the parent's
+     * selector may say BLOCK. */
+    pthread_t t;
+    long child_ret = 0;
+    int before = g_sigsys;
+    if (pthread_create(&t, NULL, sud_thread, &child_ret) == 0) {
+        while (!g_sud_ready)
+            __asm__ volatile("pause" ::: "memory");
+        g_sud_selector = SYSCALL_DISPATCH_FILTER_BLOCK;
+        g_sud_go = 1;
+        while (!g_sud_done) /* no system call of our own while the selector says BLOCK */
+            __asm__ volatile("pause" ::: "memory");
+        g_sud_selector = SYSCALL_DISPATCH_FILTER_ALLOW;
+        pthread_join(t, NULL);
+    }
+    P("sud", "%s a new thread starts with the dispatch off: its getpid returned %ld, SIGSYS %d time(s)",
+      child_ret > 0 && g_sigsys == before ? "PASS" : "FAIL", child_ret, g_sigsys - before);
+
+    pid_t pid = fork();
+    if (pid == 0) {
+        /* the child's copy of the selector: BLOCK before its first system call */
+        g_sud_selector = SYSCALL_DISPATCH_FILTER_BLOCK;
+        long r2;
+        __asm__ volatile("syscall" : "=a"(r2) : "0"(SYS_getpid) : "rcx", "r11", "memory");
+        g_sud_selector = SYSCALL_DISPATCH_FILTER_ALLOW;
+        _exit(r2 > 0 && g_sigsys == before ? 0 : 1);
+    }
+    int st = -1;
+    if (pid > 0)
+        waitpid(pid, &st, 0);
+    prctl(PR_SET_SYSCALL_USER_DISPATCH, PR_SYS_DISPATCH_OFF, 0, 0, 0);
+    P("sud", "%s a forked child starts with the dispatch off: child exit %d",
+      pid > 0 && WIFEXITED(st) && WEXITSTATUS(st) == 0 ? "PASS" : "FAIL", pid > 0 && WIFEXITED(st) ? WEXITSTATUS(st) : -1);
 }
 
 /* ------------------------------------------------------------------------------------------- */
