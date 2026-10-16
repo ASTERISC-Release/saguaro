@@ -439,6 +439,14 @@ def cmd_build(args):
     for base, funcs in x18.items():
         if base in names and funcs:
             a += ['--x18-allow', f'{names[base]}:{",".join(funcs)}']
+    # constructors that reach x18 and that the application does not need (pack.py, "x18")
+    skip = m.get('vbs', {}).get('x18_skip_constructors', [])
+    if not isinstance(skip, list) or not all(isinstance(x, str) for x in skip):
+        die('vbs.x18_skip_constructors must be a list of packed object names')
+    for base in skip:
+        if os.path.basename(base) not in names:
+            die(f'vbs.x18_skip_constructors: {base} is not a packed object')
+        a += ['--x18-skip-constructors', names[os.path.basename(base)]]
     a += ['--file', f'manifest:{b.manifest}:/{b.name}.manifest']
     argfile = os.path.join(b.dir, 'pack-args.txt')
     with open(argfile, 'w') as f:

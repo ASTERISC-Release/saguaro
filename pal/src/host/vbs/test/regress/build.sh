@@ -27,8 +27,14 @@ done
 # the vbs reproducers of this directory (platform-issues.md)
 for c in "$HERE"/*.c; do
     t=$(basename "$c" .c)
-    [ "$t" = runner ] && continue
-    $CC -O2 -o "$OUT/tests/$t" "$c"
+    case "$t" in
+        runner) continue ;;
+        # a shared object with the 64 KiB PT_LOAD alignment of the distribution libraries
+        # (dlopen_align64 loads it; Documentation/devel/vbs-enclave/PLAN-packer-align.md)
+        lib*) $CC -O2 -fPIC -shared -Wl,-z,max-page-size=0x10000 -Wl,-z,common-page-size=0x10000 \
+                  -o "$OUT/tests/$t.so" "$c" ;;
+        *) $CC -O2 -pthread -o "$OUT/tests/$t" "$c" ;;
+    esac
 done
 # helpers that the suite mounts at fixed paths (packed at /exec_victim)
 $CC -O2 -w -o "$OUT/exec_victim" "$REG/exec_victim.c"

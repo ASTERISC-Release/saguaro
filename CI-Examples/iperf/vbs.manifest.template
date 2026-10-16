@@ -43,5 +43,10 @@ vbs.packed_files = [
 # The host's libgcc_s is not built with -ffixed-x18: four of its quad-precision helpers use x18 (the
 # TEB). Nothing in this image references them (checked with nm -D: not in iperf3, libc or libm), so
 # they are never reached. Remove this entry if the image starts to use _Float128 or long double
-# arithmetic that calls libgcc.
-vbs.x18_allow = { "libgcc_s.so.1" = [ "__divmodbitint4@@GCC_14.0.0", "__divtf3@@GCC_3.0", "__mulbitint3@@GCC_14.0.0", "__multf3@@GCC_3.0" ] }
+# arithmetic that calls libgcc. The fifth name is the code after __divmodbitint4 (pack.py names
+# code past the end of a symbol SYMBOL+0xSIZE): libgcc's local CPU-feature detection for function
+# multi-versioning (__init_cpu_features_resolver), which uses x18 as a scratch register and is run
+# only by a constructor of libgcc_s; that constructor is skipped (vbs.x18_skip_constructors: it
+# returns at once), and nothing in libgcc_s reads what it would have computed.
+vbs.x18_allow = { "libgcc_s.so.1" = [ "__divmodbitint4@@GCC_14.0.0", "__divtf3@@GCC_3.0", "__mulbitint3@@GCC_14.0.0", "__multf3@@GCC_3.0", "__divmodbitint4@@GCC_14.0.0+0xfc8" ] }
+vbs.x18_skip_constructors = [ "libgcc_s.so.1" ]
