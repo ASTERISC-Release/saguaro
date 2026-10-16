@@ -24,6 +24,7 @@ EXE=$1; shift
 NAME=$(basename "$EXE" .exe)
 [ -n "$OUT" ] || OUT=$ROOT/.proton-vm/games/runs/$NAME-$LOADER-$(date -u +%H%M%S)
 mkdir -p "$OUT"
+[ -z "${XDO:-}" ] || XDO=$(readlink -f "$XDO") # the run changes into the game's folder below
 export DISPLAY=$DISP
 if ! xdpyinfo >/dev/null 2>&1; then
     Xvfb "$DISP" -screen 0 "${GEOM}x24" -nolisten tcp >"$OUT/xvfb.log" 2>&1 &
@@ -55,9 +56,22 @@ fi
 WPID=$!
 # a Windows-style line for xdotool scripts
 if [ -n "${XDO:-}" ]; then
-    ( while read -r cmd arg1 arg2; do
-          case $cmd in sleep) sleep "$arg1" ;; "") ;; \#*) ;; *) xdotool "$cmd" $arg1 $arg2 ;; esac
-      done <"$XDO" ) &
+    # "focus NAME" names the window every later key/click goes to: it is focused again right
+    # before each of them (the newest window of that name: a game recreates its window when it
+    # switches to full screen, and nothing else gives focus on the virtual server)
+    ( FOCUS=
+      refocus() { [ -n "$FOCUS" ] || return 0; W=$(xdotool search --name "$FOCUS" 2>/dev/null | tail -1)
+                  [ -n "$W" ] && xdotool windowfocus --sync "$W"
+                  echo "$(date +%T) focus '$FOCUS' -> window ${W:-none}, now $(xdotool getwindowfocus 2>/dev/null)" >>"$OUT/xdo.log"; }
+      while read -r cmd arg1 arg2; do
+          case $cmd in
+              sleep) sleep "$arg1" ;;
+              focus) FOCUS=$arg1; refocus ;;
+              key|type|click|mousemove) refocus; xdotool "$cmd" $arg1 $arg2; echo "$(date +%T) $cmd $arg1 $arg2: exit $?" >>"$OUT/xdo.log" ;;
+              "") ;; \#*) ;;
+              *) xdotool "$cmd" $arg1 $arg2 ;;
+          esac
+      done <"$XDO" ) >>"$OUT/xdo.log" 2>&1 &
 fi
 I=0
 while [ $(( $(date +%s) - START )) -lt "$SECS" ]; do
