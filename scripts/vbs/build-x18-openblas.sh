@@ -8,9 +8,10 @@
 # kernels written in assembly ignore that flag, so they are patched first:
 #  - `stp x18, x19, [...]` / `ldp x18, x19, [...]` (the prologue and epilogue of 48 kernels) become
 #    `stp xzr, x19, ...` / `ldp xzr, x19, ...` (same stack layout, x18 untouched);
-#  - a kernel that uses x18 as a working register has x18/w18 replaced by a caller-saved register
-#    (x16 down to x9) that the file does not mention anywhere; if none is free the script stops
-#    and names the file.
+#  - a kernel that uses x18 as a working register has x18/w18 replaced by a register the file does
+#    not mention (comments ignored): a caller-saved one (x16, x17, x15..x9) if free, else x29, which
+#    the kernel's own save slot of x18 (the stp/ldp pair above) then saves and restores. If none is
+#    free the script stops and names the file (in OpenBLAS 0.3.26 x29 is free in all 12 such files).
 # Needs the compiler and gfortran built by scripts/vbs/build-x18-runtime.sh (run it first).
 #
 # Everything is under PREFIX (default ~/.local/share/gramine-vbs/x18-runtime): sources, build,
@@ -42,25 +43,40 @@ cd "$BLD/OpenBLAS-$VERSION"
 
 python3 - <<'PY'
 import glob, re, sys
+def strip(t):
+    t = re.sub(r'/\*.*?\*/', '', t, flags=re.S)
+    return re.sub(r'//.*', '', t)
+PAIR = r'\b(stp|ldp)(\s+)x18,(\s*)x19,'
 bad = []
 for f in sorted(glob.glob('kernel/arm64/*.S')):
     t = open(f).read()
-    if not re.search(r'\b[xw]18\b', t):
+    code = re.sub(PAIR, r'\1\2xzr,\3x19,', strip(t))
+    if not re.search(r'\b[xw]18\b', strip(t)):
         continue
-    t = re.sub(r'\b(stp|ldp)(\s+)x18,(\s*)x19,', r'\1\2xzr,\3x19,', t)
-    if re.search(r'\b[xw]18\b', t):
-        used = set(re.findall(r'\b[xw](\d+)\b', t))
-        for n in (16, 17, 15, 14, 13, 12, 11, 10, 9):
+    if not re.search(r'\b[xw]18\b', code):
+        # x18 only saved and restored: keep the stack layout, never touch x18
+        t = re.sub(PAIR, r'\1\2xzr,\3x19,', t)
+        print(f'{f}: save/restore of x18 -> xzr')
+    else:
+        used = set(re.findall(r'\b[xw](\d+)\b', code))
+        for n in (16, 17, 15, 14, 13, 12, 11, 10, 9, 29):
             if str(n) not in used:
-                t = re.sub(r'\bx18\b', f'x{n}', t)
-                t = re.sub(r'\bw18\b', f'w{n}', t)
-                print(f'{f}: x18 -> x{n}')
                 break
         else:
             bad.append(f)
+            continue
+        if n == 29:
+            # x29 is callee-saved: the kernel's own save slot for x18 now saves x29
+            t = re.sub(r'\bx18\b', 'x29', t)
+            t = re.sub(r'\bw18\b', 'w29', t)
+        else:
+            t = re.sub(PAIR, r'\1\2xzr,\3x19,', t)
+            t = re.sub(r'\bx18\b', f'x{n}', t)
+            t = re.sub(r'\bw18\b', f'w{n}', t)
+        print(f'{f}: x18 -> x{n}')
     open(f, 'w').write(t)
 if bad:
-    sys.exit('no free caller-saved register in: ' + ' '.join(bad))
+    sys.exit('no free register in: ' + ' '.join(bad))
 PY
 
 export LD_LIBRARY_PATH="$GCCP/lib64:$PREFIX/deps/usr/lib/aarch64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
