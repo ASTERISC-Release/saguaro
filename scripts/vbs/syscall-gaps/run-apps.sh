@@ -13,6 +13,10 @@ ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 APPS=("$@")
 [ ${#APPS[@]} -gt 0 ] || APPS=(helloworld python redis nginx memcached lighttpd sqlite curl iperf rust busybox nodejs)
 mkdir -p "$OUT"
+# Windows-side load (WSL's own uptime restarts with the VM): boot time and CPU % over 2 s
+winload() {
+    powershell.exe -NoProfile -Command "\$o=Get-CimInstance Win32_OperatingSystem; \$c=(Get-Counter '\\Processor(_Total)\\% Processor Time' -SampleInterval 1 -MaxSamples 2).CounterSamples | % {[math]::Round(\$_.CookedValue,1)}; 'boot='+\$o.LastBootUpTime+' cpu%='+(\$c -join ',')+' freeMB='+[int](\$o.FreePhysicalMemory/1024)" 2>/dev/null | tr -d '\r'
+}
 { echo "# $(date -Is) host=$(hostname) uptime: $(uptime)"; } > "$OUT/header.txt"
 printf 'app\tstatus\tseconds\tlog\n' > "$OUT/results.tsv"
 for a in "${APPS[@]}"; do
@@ -22,10 +26,12 @@ for a in "${APPS[@]}"; do
         printf '%s\tskipped\t0\t-\n' "$a" >> "$OUT/results.tsv"; continue
     fi
     s=$(date +%s)
+    echo "$a before: $(winload)" >> "$OUT/load.txt"
     ( cd "$d" && timeout "$T" make VBS=1 && timeout "$T" make VBS=1 check ) > "$log" 2>&1
     rc=$?
     e=$(( $(date +%s) - s ))
     case $rc in 0) st=pass;; 124) st=timeout;; *) st="fail($rc)";; esac
+    echo "$a after:  $(winload)" >> "$OUT/load.txt"
     printf '%s\t%s\t%s\t%s\n' "$a" "$st" "$e" "$log" >> "$OUT/results.tsv"
     ( cd "$d" && make VBS=1 clean >/dev/null 2>&1 || true )
     echo "$a $st ${e}s"
