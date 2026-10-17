@@ -27,7 +27,7 @@ for a in "${APPS[@]}"; do
     fi
     s=$(date +%s)
     echo "$a before: $(winload)" >> "$OUT/load.txt"
-    ( cd "$d" && timeout "$T" make VBS=1 && timeout "$T" make VBS=1 check ) > "$log" 2>&1
+    ( cd "$d" && timeout "$T" make VBS=1 && timeout "$T" make VBS=1 check ) > "$log" 2>&1 < /dev/null
     rc=$?
     e=$(( $(date +%s) - s ))
     case $rc in 0) st=pass;; 124) st=timeout;; *) st="fail($rc)";; esac
