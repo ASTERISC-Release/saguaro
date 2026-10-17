@@ -22,7 +22,7 @@ container/run.sh 'test/test-vm.sh'             # ... and run the vm battery
 
 `container/run.sh --target riscv64 [...]` uses a third container instead, `gramine-riscv64-cross`
 (`Containerfile.riscv64-cross`, x86_64 hosts only): the riscv64 cross toolchain and
-`qemu-system-riscv64` for the test guest of the RISC-V direct-PAL port (see `INSTALL.rst`).
+`qemu-system-riscv64` for the test guest of the RISC-V direct-PAL port (see `INSTALL.md`).
 
 `CONTAINER_NAME` / `IMAGE_NAME` override the names. Images are tagged per Containerfile version
 (`<name>:cf-<first 12 digits of the Containerfile's sha256>`), so checkouts with different Containerfiles

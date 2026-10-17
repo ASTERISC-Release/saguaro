@@ -46,7 +46,7 @@ Use Ctrl-C to terminate the server once you are finished testing lighttpd.
 
 # lighttpd in a Windows VBS enclave
 
-In WSL on an ARM64 Windows machine with VBS (`Documentation/vbs.rst`, "Makefile flow"):
+In WSL on an ARM64 Windows machine with VBS (`Documentation/vbs.md`, "Makefile flow"):
 
 ```sh
 make VBS=1          # lighttpd built with the vbs gcc, installed into vbs-build/root, packed, signed

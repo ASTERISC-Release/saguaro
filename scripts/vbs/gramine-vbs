@@ -3,7 +3,7 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 """gramine-vbs: from a manifest to an application running in a Windows VBS enclave.
 
-The work is split between two machines (Documentation/vbs.rst):
+The work is split between two machines (Documentation/vbs.md):
 
 * the Linux side (this script): packs the vbs PAL, the LibOS, the vDSO, the manifest and the
   application's files (`vbs.packed_files`) into the image contents (scripts/vbs/pack.py) and

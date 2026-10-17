@@ -32,7 +32,7 @@ production use.
   example binds its key to the attestation report. `nodejs`, NumPy/SciPy, MongoDB and PyTorch are blocked by the
   ARM64 `x18` rule or the loader, `openjdk` by run-time code generation and R by process creation
   (`vbs-enclave/APPS.md`). Limits: no `fork`, no run-time code loading (no JIT), test-signed debug enclaves.
-  `gramine-vbs` and `make VBS=1` drive it. `Documentation/vbs.rst`, `vbs-enclave/`
+  `gramine-vbs` and `make VBS=1` drive it. `Documentation/vbs.md`, `vbs-enclave/`
 
 ### System calls and libc
 
@@ -94,7 +94,7 @@ production use.
 ### Build, test and workflow
 
 - **`scripts/install.sh`** (done). One command builds and installs the direct and VM PALs (`--vm`,
-  `--graphics`, `--libc`, `--target riscv64`) and can run the tests. `INSTALL.rst`
+  `--graphics`, `--libc`, `--target riscv64`) and can run the tests. `INSTALL.md`
 - **Containers and workspaces** (done). `container/run.sh` gives each checkout its own rootless container,
   guest CIDs and ports, so several branches and agents work side by side. `AGENTS.md`
 - **Test batteries** (done). `test/test-direct.sh` (PAL, LibOS, 12 example suites; `GRAMINE_RUNNER=gramine-vm`

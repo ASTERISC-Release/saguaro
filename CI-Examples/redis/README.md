@@ -58,7 +58,7 @@ USE_SELECT=1`.
 
 # Redis in a Windows VBS enclave
 
-In WSL on an ARM64 Windows machine with VBS (`Documentation/vbs.rst`, "Makefile flow"):
+In WSL on an ARM64 Windows machine with VBS (`Documentation/vbs.md`, "Makefile flow"):
 
 ```sh
 make VBS=1          # Redis 6.0.5 built with the vbs gcc in vbs-build/, packed, signed on Windows

@@ -1,7 +1,7 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 # SPDX-License-Identifier: BSD-3-Clause
 
-# NGINX manifest for a Windows VBS enclave (`make VBS=1`, Documentation/vbs.rst): the counterpart of
+# NGINX manifest for a Windows VBS enclave (`make VBS=1`, Documentation/vbs.md): the counterpart of
 # nginx.manifest.template. NGINX (built with the vbs gcc, prefix /nginx), its configuration
 # (nginx-vbs.conf: one process, one worker, HTTP) and the static files are packed into the signed
 # image; /tmp is an in-enclave tmpfs for the pid file and temporary files.

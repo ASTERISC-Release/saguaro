@@ -11,7 +11,7 @@ endif
 
 .PHONY: all
 ifeq ($(VBS),1)
-# Windows VBS enclave (scripts/vbs/Makefile.vbs, Documentation/vbs.rst): CPython built for the
+# Windows VBS enclave (scripts/vbs/Makefile.vbs, Documentation/vbs.md): CPython built for the
 # enclave once (scripts/vbs/build-python.sh), packed with the scripts by vbs.manifest.template
 VBS_PYTHON_STAMP = ../../build-vbs-python/.vbs-python
 VBS_APP = python

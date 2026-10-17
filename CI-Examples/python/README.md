@@ -47,7 +47,7 @@ run `sgx-quote.py` and verify the output, you will need to provide an
 
 ## Building for a Windows VBS enclave
 
-In WSL on an ARM64 Windows machine with VBS (see `Documentation/vbs.rst`, "Makefile flow"), run
+In WSL on an ARM64 Windows machine with VBS (see `Documentation/vbs.md`, "Makefile flow"), run
 `make VBS=1` in the directory. The first time it builds CPython 3.12.7 for the enclave against the
 vbs glibc (`scripts/vbs/build-python.sh`, about 80 s, kept in `build-vbs-python` of the checkout);
 then it renders `vbs.manifest.template` into `python.manifest.vbs`, packs the interpreter, its

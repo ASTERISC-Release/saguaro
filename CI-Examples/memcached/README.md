@@ -33,7 +33,7 @@ kill %%
 
 # Memcached in a Windows VBS enclave
 
-In WSL on an ARM64 Windows machine with VBS (`Documentation/vbs.rst`, "Makefile flow"):
+In WSL on an ARM64 Windows machine with VBS (`Documentation/vbs.md`, "Makefile flow"):
 
 ```sh
 make VBS=1          # libevent 2.1.12 (static) and memcached built with the vbs gcc, packed, signed

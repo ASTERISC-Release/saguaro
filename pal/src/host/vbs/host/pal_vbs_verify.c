@@ -12,7 +12,7 @@
  * 2. The platform signature: a fresh enclave of <enclave.dll> (any signed VBS enclave would do)
  *    calls EnclaveVerifyAttestationReport (E_VerifyReport). This checks the signature chain to the
  *    Secure Kernel of THIS machine; it says nothing about another machine (that needs Microsoft
- *    Azure Attestation and the machine's boot log; Documentation/attestation.rst).
+ *    Azure Attestation and the machine's boot log; Documentation/attestation.md).
  * 3. The checks asked for:
  *      --user-data HEX      the report's 64 bytes of user data (HEX shorter than 64 bytes is
  *                           padded with zero bytes, as /dev/attestation/user_report_data does)

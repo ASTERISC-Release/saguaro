@@ -7,7 +7,7 @@
 # - make               -- create non-SGX manifest (gramine-direct)
 # - make SGX=1         -- create SGX manifest
 # - make VBS=1         -- build iperf3 for a Windows VBS enclave, pack and sign it (in WSL; see
-#                         Documentation/vbs.rst); make VBS=1 check runs the server in the enclave
+#                         Documentation/vbs.md); make VBS=1 check runs the server in the enclave
 #                         and a client on the loopback
 
 ARCH_LIBDIR ?= /lib/$(shell $(CC) -dumpmachine)

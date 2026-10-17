@@ -16,7 +16,7 @@ Run `make SGX=1` (non-debug) or `make SGX=1 DEBUG=1` (debug) in the directory.
 
 ## Building for a Windows VBS enclave
 
-In WSL on an ARM64 Windows machine with VBS (see `Documentation/vbs.rst`, "Makefile flow"), run
+In WSL on an ARM64 Windows machine with VBS (see `Documentation/vbs.md`, "Makefile flow"), run
 `make VBS=1` in the directory: it builds the program as a static PIE against the vbs glibc (in
 `vbs-build/`), renders `vbs.manifest.template` into `helloworld.manifest.vbs`, packs it into
 `helloworld.vbs/` and links and signs `helloworld.dll` on Windows. `make VBS=1 check` runs it.

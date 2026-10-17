@@ -4,7 +4,7 @@
  * Copyright (C) 2019 Intel Corporation
  */
 
-/* See README.rst for protected files overview */
+/* See README.md for protected files overview */
 
 #pragma once
 

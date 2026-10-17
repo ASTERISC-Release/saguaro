@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
-# gramine-vbs.ps1: gramine-vbs on one ARM64 or x64 Windows machine (Documentation/vbs.rst). The Linux
+# gramine-vbs.ps1: gramine-vbs on one ARM64 or x64 Windows machine (Documentation/vbs.md). The Linux
 # side of the build (the vbs glibc, the vbs PAL and LibOS, the application's vbs.build recipe,
 # pack.py and the clang-compiled Windows objects) runs inside a WSL2 distribution of this machine;
 # linking, veiid, signing and running happen here. gramine-vbs.cmd next to this file runs it.
@@ -312,14 +312,14 @@ function Do-Setup {
     Write-Host 'Windows:'
     Check ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64' -or $env:PROCESSOR_ARCHITECTURE -eq 'AMD64') "ARM64 or x64 Windows ($env:PROCESSOR_ARCHITECTURE)" 'an ARM64 or x64 Windows 11 machine is needed'
     $dg = Get-CimInstance -Namespace root\Microsoft\Windows\DeviceGuard -ClassName Win32_DeviceGuard -ErrorAction SilentlyContinue
-    Check ($dg -and $dg.VirtualizationBasedSecurityStatus -eq 2) 'VBS running' 'turn on memory integrity (Core isolation) and restart (Documentation/vbs.rst)'
+    Check ($dg -and $dg.VirtualizationBasedSecurityStatus -eq 2) 'VBS running' 'turn on memory integrity (Core isolation) and restart (Documentation/vbs.md)'
     $t = Find-Toolchain
     Check $t.vs "Visual Studio ($($t.vs))" "install Visual Studio with Desktop development with C++ (and the $VbsArch build tools)"
     Check $t.vc "MSVC $VbsArch with the enclave CRT ($($t.vc.Name))" "Visual Studio Installer: MSVC $VbsArch build tools"
     Check $t.sdk "Windows SDK with winenclave.h ($($t.sdk.Name))" 'Visual Studio Installer: Windows 11 SDK 10.0.26100 or later'
     Check ($t.sdkbin -and (Test-Path "$($t.sdkbin)\veiid.exe") -and (Test-Path "$($t.sdkbin)\signtool.exe")) "veiid.exe and signtool.exe (SDK, $VbsArch)" 'the Windows SDK signing tools'
     $cert = Get-ChildItem Cert:\CurrentUser\My -ErrorAction SilentlyContinue | Where-Object { $_.Subject -eq "CN=$CertName" }
-    Check $cert "signing certificate CN=$CertName (current user)" 'create one as Documentation/vbs.rst describes, or give -CertName'
+    Check $cert "signing certificate CN=$CertName (current user)" 'create one as Documentation/vbs.md describes, or give -CertName'
     Check (Get-Command tar.exe -ErrorAction SilentlyContinue) 'tar.exe' 'part of Windows 10 1803 and later'
     Write-Host 'WSL:'
     $wsl = Get-Command wsl.exe -ErrorAction SilentlyContinue

@@ -1,4 +1,4 @@
-# Hello world in a Windows VBS enclave (Documentation/vbs.rst): gramine-vbs run helloworld.manifest
+# Hello world in a Windows VBS enclave (Documentation/vbs.md): gramine-vbs run helloworld.manifest
 # (vbs.build compiles the program for the enclave first: a static PIE against the vbs glibc).
 loader.entrypoint = "file:/libsysdb.so"
 libos.entrypoint = "/helloworld"

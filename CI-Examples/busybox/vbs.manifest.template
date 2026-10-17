@@ -1,7 +1,7 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 # SPDX-License-Identifier: BSD-3-Clause
 
-# BusyBox manifest for a Windows VBS enclave (`make VBS=1`, Documentation/vbs.rst): the counterpart of
+# BusyBox manifest for a Windows VBS enclave (`make VBS=1`, Documentation/vbs.md): the counterpart of
 # busybox.manifest.template. BusyBox is built with the vbs gcc (vbs-build/busybox, a dynamic PIE) and
 # packed with the glibc libraries it needs. One applet per enclave: the arguments come from the command
 # line (`gramine-vbs busybox cat /etc/hosts`); a VBS enclave has one process, so a shell pipeline or an

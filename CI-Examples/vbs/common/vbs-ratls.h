@@ -3,7 +3,7 @@
 
 /*
  * vbs-ratls: an OPTIONAL helper for applications in a Windows VBS enclave that add TLS themselves
- * and want a client to verify that the TLS peer is the attested enclave (Documentation/vbs.rst,
+ * and want a client to verify that the TLS peer is the attested enclave (Documentation/vbs.md,
  * "TLS with attestation (optional, per application)"). Nothing in Gramine uses it by itself: an
  * application compiles vbs-ratls.c and links mbedtls only if it chooses to (CI-Examples/vbs/tls-echo
  * is the example).

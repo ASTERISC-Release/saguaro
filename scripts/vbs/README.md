@@ -11,7 +11,7 @@ and the design of the hello-world path). An enclave image holds two kinds of cod
   machine (the repository's build container), and the manifest, all placed into the image by
   `pack.py`.
 
-`gramine-vbs` (in this folder; `Documentation/vbs.rst`) does all of the steps below from a
+`gramine-vbs` (in this folder; `Documentation/vbs.md`) does all of the steps below from a
 manifest: `gramine-vbs run app.manifest`. `gramine-vbs.ps1` is its Windows-only half. The steps by
 hand (the commands used for the phase-2 hello world):
 

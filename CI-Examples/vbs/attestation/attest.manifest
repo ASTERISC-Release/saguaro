@@ -1,4 +1,4 @@
-# Attestation in a Windows VBS enclave (Documentation/vbs.rst): the program writes user data to
+# Attestation in a Windows VBS enclave (Documentation/vbs.md): the program writes user data to
 # /dev/attestation/user_report_data and saves the report to the host; `gramine-vbs verify` checks
 # it. vbs.build compiles the program (pal/src/host/vbs/test/attest/attest.c) for the enclave.
 #   gramine-vbs run attest.manifest -- <user data hex>

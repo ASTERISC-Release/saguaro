@@ -15,7 +15,7 @@ and harden the configurations.
 ## Prerequisites
 
 Install and enable Gramine first (`scripts/dependencies.sh`, `scripts/install.sh`
-and `. ~/.local/gramine/env.sh`, see `INSTALL.rst` in the repository root). Some examples need
+and `. ~/.local/gramine/env.sh`, see `INSTALL.md` in the repository root). Some examples need
 extra host packages: each has an `install-prereqs.sh`, and
 `install-all-prereqs.sh` runs all of them.
 

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
-# Checks that the development documents name only files that exist and that README.rst and INSTALL.rst
+# Checks that the development documents name only files that exist and that README.md and INSTALL.md
 # parse (scripts/check-docs.py). It needs no build and runs in seconds.
 #
 # Manual trigger only (Actions tab -> "Documentation check" -> Run workflow), like the other workflows.
@@ -19,7 +19,5 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Install docutils
-        run: sudo apt-get install -y -qq python3-docutils
       - name: Check the documents
         run: scripts/check-docs.py

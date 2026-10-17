@@ -13,8 +13,8 @@ short on purpose; an item that is fixed is removed from the topic list first and
 | `direct` | audit PAL state that a starting child allocates and frees at exit (the shared file cache was one case); sound and the remaining GPU-driver gaps for graphics | `devel/vm-multiproc/TODO.md`, `devel/graphics-direct/TODO.md` |
 | `vm` | multi-vCPU performance: check and improve `gramine-vm` at 2 and 4 vCPUs (multi-process fork cost, TLB shootdowns, scheduler lock contention, cross-CPU handoffs); robust mutex for the System V shared tables; `/proc/<pid>/stat` of other processes; `PROT_NONE` enforcement; finer timer than the 100 ms tick; async signal resume; UDP/IPv6 relay gaps | `devel/vm-multiproc/TODO.md`, `devel/libos-syscalls/TODO.md`, `devel/syscall-compat/TODO.md`, `devel/vm-network/TODO.md` |
 | `vm` with graphics (OpenGL, Vulkan) | present events and a non-flipping blit for Vulkan, idle CPU of the listener, two-thread submission cost, SuperTuxKart start hang, sound, Team Fortress 2 | `devel/graphics/TODO.md`, `devel/vulkan/TODO.md` |
-| `tdx` and `sgx` | never run on this tree's hardware; extend the interrupt-before-IDT guard to TDX; the SGX build needs `protobuf-c` (not in `dependencies.sh` or the container); the TDX install needs `td-shim` | `devel/vm-multiproc/TODO.md`, `quickstart/tdx-sgx.rst` |
-| `sev` (AMD64) | planned; no code yet | `README.rst` |
+| `tdx` and `sgx` | never run on this tree's hardware; extend the interrupt-before-IDT guard to TDX; the SGX build needs `protobuf-c` (not in `dependencies.sh` or the container); the TDX install needs `td-shim` | `devel/vm-multiproc/TODO.md`, `quickstart/tdx-sgx.md` |
+| `sev` (AMD64) | planned; no code yet | `README.md` |
 | `vbs` (x64 Windows 11) | see the VBS section below | `devel/vbs-enclave/TODO.md` |
 | Proton (Wine, DXVK) | phase 1 steps 1 to 3 done 2026-10-15 on `dev-proton-vm-p1` (Unix-socket nodes, fork of reservations, `SCM_RIGHTS`); `dev-proton-vm-p2` (merged, 2026-10-15): `%gs` handed to the application, interruptible waits, exception vectors, the address space to 512 GiB, drive links, syscall user dispatch: `hello.exe` prints all its lines in the VM; next: the end of a run (the wineserver stays), then the graphics tests | `devel/proton-vm/PLAN.md` |
 
@@ -33,7 +33,7 @@ short on purpose; an item that is fixed is removed from the topic list first and
 | Host / PAL | Main open items | Details |
 |---|---|---|
 | `direct` | validation on hardware (stress under 8-hart load, other example suites); syscall-rewriting stress and the hosted `test_603` timeout; CPU identification in the PAL | `devel/riscv/TODO.md`, `devel/riscv-hardware/TODO.md`, `devel/syscall-interception/TODO.md` |
-| `vm` | not available (planned) | `README.rst` |
+| `vm` | not available (planned) | `README.md` |
 
 ## Windows 11 (ARM64 and x64): VBS enclaves (`vbs` PAL)
 

@@ -7,7 +7,7 @@
 # - make               -- create non-SGX manifest (system curl)
 # - make SGX=1         -- create SGX manifest
 # - make VBS=1         -- build curl for a Windows VBS enclave (from source, against the vbs glibc,
-#                         HTTP only), pack and sign it (in WSL; see Documentation/vbs.rst);
+#                         HTTP only), pack and sign it (in WSL; see Documentation/vbs.md);
 #                         make VBS=1 check runs it against a server in WSL
 
 THIS_DIR := $(dir $(lastword $(MAKEFILE_LIST)))
