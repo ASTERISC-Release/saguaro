@@ -12,6 +12,9 @@
 #    not mention (comments ignored): a caller-saved one (x16, x17, x15..x9) if free, else x29, which
 #    the kernel's own save slot of x18 (the stp/ldp pair above) then saves and restores. If none is
 #    free the script stops and names the file (in OpenBLAS 0.3.26 x29 is free in all 12 such files).
+# One fixed kernel set, TARGET=ARMV8 (not DYNAMIC_ARCH): the dynamic build's own tests die with
+# SIGILL (`cntw`, an SVE instruction, in `ssyrk_kernel_U`) on a CPU without SVE, which includes the
+# VBS machine's Snapdragon; ARMV8 runs on every AArch64 CPU. Slower than the tuned kernels.
 # Needs the compiler and gfortran built by scripts/vbs/build-x18-runtime.sh (run it first).
 #
 # Everything is under PREFIX (default ~/.local/share/gramine-vbs/x18-runtime): sources, build,
@@ -81,7 +84,7 @@ PY
 
 export LD_LIBRARY_PATH="$GCCP/lib64:$PREFIX/deps/usr/lib/aarch64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 s=$(date +%s)
-make -j"$(nproc)" DYNAMIC_ARCH=1 USE_OPENMP=0 USE_THREAD=1 NUM_THREADS=8 NO_AFFINITY=1 \
+make -j"$(nproc)" TARGET=ARMV8 USE_OPENMP=0 USE_THREAD=1 NUM_THREADS=8 NO_AFFINITY=1 \
     BUILD_LAPACK_DEPRECATED=0 NO_STATIC=1 CC=gcc FC="$GCCP/bin/gfortran" LDFLAGS="-L$GCCP/lib64" \
     COMMON_OPT="-O2 -ffixed-x18" FCOMMON_OPT="-O2 -ffixed-x18" >"$BLD/make.log" 2>&1 \
     || { tail -30 "$BLD/make.log"; exit 1; }
@@ -90,7 +93,7 @@ make PREFIX="$BLD/inst" NO_STATIC=1 install >"$BLD/install.log" 2>&1 || { tail -
 rm -rf "$OUT" && mkdir -p "$OUT" && cp -P "$BLD"/inst/lib/libopenblas* "$OUT/" 2>/dev/null || true
 if [ -n "$TEST" ]; then
     s=$(date +%s)
-    make DYNAMIC_ARCH=1 USE_OPENMP=0 USE_THREAD=1 NUM_THREADS=8 NO_AFFINITY=1 NO_STATIC=1 \
+    make TARGET=ARMV8 USE_OPENMP=0 USE_THREAD=1 NUM_THREADS=8 NO_AFFINITY=1 NO_STATIC=1 \
         CC=gcc FC="$GCCP/bin/gfortran" LDFLAGS="-L$GCCP/lib64" tests >"$BLD/tests.log" 2>&1 \
         && log "OpenBLAS tests passed in $(( $(date +%s) - s )) s" \
         || { tail -30 "$BLD/tests.log"; log "OpenBLAS tests FAILED"; exit 1; }
