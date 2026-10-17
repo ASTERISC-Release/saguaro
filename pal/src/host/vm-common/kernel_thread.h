@@ -196,17 +196,25 @@ struct thread {
     void* upcall_fpregs;
     uint64_t upcall_addr;
     int upcall_event;
+
+    /* The application's own GS base (arch_prctl(ARCH_SET_GS), Wine's TEB), 0 when it never set
+     * one. While it is set, user code runs with it in GS and every entry into the kernel swaps the
+     * PAL TCB back in (kernel_events.S: syscall_asm_gs, _isr_common); every return to user mode
+     * loads it again. Threads with 0 run the old paths unchanged. (Last in the thread, which is
+     * last in the TCB: the offsets of every other field stay as they were.) */
+    uint64_t user_gsbase;
+    /* the interrupted context ran with the application's base (isr_regs.gs_swapped) and returns
+     * through isr_iret_to_userland (a preempted thread, a deferred upcall), which loads the base
+     * back and clears this */
+    uint64_t gs_swapped_by_isr;
 #endif
 
-#ifdef __aarch64__
     /* An interruptible wait (sched_thread_wait_interruptible(): a blocking PAL call made for the
      * application) is in progress; _PalThreadResume() of another thread then wakes this one with
      * `woken_by_interrupt` set and the wait returns -PAL_ERROR_INTERRUPTED, as a host signal
-     * interrupts a system call on the Linux PAL. Both under g_thread_list_lock. (AArch64 only on
-     * this branch, so that the x86_64 layout stays as it is.) */
+     * interrupts a system call on the Linux PAL. Both under g_thread_list_lock. */
     bool wait_interruptible;
     bool woken_by_interrupt;
-#endif
 };
 DEFINE_LISTP(thread);
 

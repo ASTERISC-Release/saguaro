@@ -142,6 +142,14 @@ if ! podman container exists "$CONTAINER"; then
     for d in /dev/kvm /dev/vhost-vsock /dev/vhost-net /dev/net/tun /dev/dri/renderD*; do
         [ -e "$d" ] && DEVICES+=(--device "$d:$d")
     done
+    # AMD SEV (Documentation/devel/sev/): QEMU opens /dev/sev for the launch commands of an SEV,
+    # SEV-ES or SEV-SNP guest. The node is usually root-only; where the host gives it to a group
+    # (e.g. `sev`, mode 0660), keep-groups carries the user's supplementary groups into the
+    # rootless container so the device stays accessible (needs the crun runtime).
+    if [ -e /dev/sev ]; then
+        DEVICES+=(--device /dev/sev:/dev/sev)
+        [ -r /dev/sev ] && [ -w /dev/sev ] && DEVICES+=(--group-add keep-groups)
+    fi
     # Graphics (x86_64, see Documentation/devel/graphics/): the host X socket and DISPLAY for the
     # QEMU listener's window, and the QEMU fork when it is checked out next to this repository.
     GRAPHICS=()
@@ -150,6 +158,10 @@ if ! podman container exists "$CONTAINER"; then
     fi
     QEMU_TIRITH=${QEMU_TIRITH_DIR:-$(dirname "$REPO_ROOT")/qemu-tirith}
     [ -d "$QEMU_TIRITH" ] && GRAPHICS+=(-v "$QEMU_TIRITH:/root/qemu-tirith:rw")
+    # AMD SEV tooling (QEMU with SEV-SNP/IGVM, snpguest, ...; container/sev/build-sev-tools.sh):
+    # kept next to this repository as sev-tools/ (or at SEV_TOOLS_DIR) so it survives recreation.
+    SEV_TOOLS=${SEV_TOOLS_DIR:-$(dirname "$REPO_ROOT")/sev-tools}
+    [ -d "$SEV_TOOLS" ] && GRAPHICS+=(-v "$SEV_TOOLS:/root/sev-tools:rw")
     # Opt-in (GRAMINE_CONTAINER_NVIDIA=1, see Documentation/devel/graphics-aarch64/): the NVIDIA
     # proprietary driver's device nodes and the host's matching userspace (GLX/EGL vendor libraries,
     # libnvidia-*, GBM backend, vendor configuration files), read-only. The libraries must match the

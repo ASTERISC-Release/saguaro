@@ -215,6 +215,17 @@ struct pal_public_state {
 
     bool extra_runtime_domain_names_conf;
     struct pal_dns_host_conf dns_host;
+
+    /* VM PAL, x86_64: the kernel's return stub for a system call (sysret_asm): the LibOS makes a
+     * thread that owns %gs (arch_prctl(ARCH_SET_GS)) enter a signal handler through it instead
+     * of jumping to the handler itself, so that the thread's own GS base is loaded (the handler's
+     * address goes to `vm_user_rip_offset`); NULL on other PALs. (Last so that the offsets of
+     * every other field, and the code using them, stay as they were.) */
+    void* vm_user_return_stub;
+    /* VM PAL, x86_64: the user-mode code and stack selectors in Linux's csgsfs layout (cs, gs,
+     * fs, ss), for the signal frames of system-call contexts, which the LibOS fills with Linux's
+     * selectors otherwise (syscallas.S); 0 on other PALs */
+    uint64_t vm_user_csgsfs;
 };
 
 /* We cannot mark this as returning a pointer to `const` object, because LibOS can
@@ -259,6 +270,20 @@ struct pal_initial_mem_range {
  * This function must not dynamically allocate any internal memory (must not use `malloc`)!
  */
 int PalVirtualMemoryAlloc(void* addr, size_t size, pal_prot_flags_t prot);
+
+/*!
+ * \brief Allocate physically contiguous memory at a given virtual address.
+ *
+ * \param addr      Virtual address, page-aligned (a range the caller bookkept).
+ * \param size      Size, page-aligned.
+ * \param prot      See #PalVirtualMemoryAlloc (read-write at least).
+ * \param out_phys  The physical (host-visible) address of the first page.
+ *
+ * For the VM PAL's graphics redirection: the host reads such memory by its physical address.
+ * Freed with #PalVirtualMemoryFree. Other PALs return -PAL_ERROR_NOTIMPLEMENTED.
+ */
+int PalVirtualMemoryAllocContiguous(void* addr, size_t size, pal_prot_flags_t prot,
+                                    uint64_t* out_phys);
 
 /*!
  * \brief Deallocate a previously allocated memory mapping.

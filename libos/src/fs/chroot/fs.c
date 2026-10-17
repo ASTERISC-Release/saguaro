@@ -60,6 +60,24 @@ static int chroot_setup_dentry(struct libos_dentry* dent, mode_t type, mode_t pe
     return 0;
 }
 
+/* Whether a host link's target (absolute, or relative to the link's directory) exists in Gramine's
+ * file system: a nested lookup, under the cache lock the caller holds. Links met while probing
+ * are probed in turn, to a small depth (a link whose target passes through itself ends there). */
+static bool link_target_in_gramine(struct libos_dentry* dent, const char* target) {
+    static unsigned int g_probe_depth; /* under g_dcache_lock */
+    assert(locked(&g_dcache_lock));
+    if (g_probe_depth >= 4)
+        return false;
+    g_probe_depth++;
+    struct libos_dentry* found = NULL;
+    int ret = path_lookupat(dent->parent, target, LOOKUP_FOLLOW, &found);
+    g_probe_depth--;
+    if (ret < 0)
+        return false;
+    put_dentry(found);
+    return true;
+}
+
 static int chroot_lookup(struct libos_dentry* dent) {
     assert(locked(&g_dcache_lock));
 
@@ -80,9 +98,13 @@ static int chroot_lookup(struct libos_dentry* dent) {
      * shown as a link when resolving it inside Gramine is the same as on the host: a relative
      * target without ".." stays in the same directory of the same mount. A dangling link is a
      * link too (it used to be reported missing). Other links (absolute targets, ones climbing out
-     * with "..", e.g. into the host's /etc/alternatives) are followed on the host as before, since
-     * manifests rely on that; so is a mount's root (no parent), whose host path is often itself a
-     * link (/bin -> usr/bin). Mounts with `host_symlinks` keep host resolution for every link
+     * with "..", e.g. into the host's /etc/alternatives) are links too when their target exists in
+     * Gramine's own file system (a nested lookup under the cache lock, bounded in depth), so that
+     * the link and its target are one dentry with one identity: Wine finds the drive of a path by
+     * the (st_dev, st_ino) of its drive links (dosdevices/z: -> /, c: -> ../drive_c); otherwise
+     * they are followed on the host as before, since manifests rely on that (a target outside
+     * every mount); so is a mount's root (no parent), whose host path is often itself a link
+     * (/bin -> usr/bin). Mounts with `host_symlinks` keep host resolution for every link
      * (readlink asks the host there, see `chroot_host_readlink()`).
      */
     PAL_STREAM_ATTR pal_attr;
@@ -104,7 +126,7 @@ static int chroot_lookup(struct libos_dentry* dent) {
         bool same_dir = link_buf[0] != '/' && strcmp(link_buf, "..") != 0 &&
                         strncmp(link_buf, "../", 3) != 0 && !strstr(link_buf, "/../") &&
                         !(link_len >= 3 && !strcmp(link_buf + link_len - 3, "/.."));
-        bool as_link = same_dir ||
+        bool as_link = same_dir || link_target_in_gramine(dent, link_buf) ||
                        PalStreamAttributesQuery(uri, &pal_attr) == -PAL_ERROR_STREAMNOTEXIST;
         if (as_link) {
             char* target = strdup(link_buf);
@@ -341,7 +363,8 @@ static int chroot_mmap(struct libos_handle* hdl, void* addr, size_t size, int pr
  * own copies (the VM PAL with multiprocess support), write them back as for encrypted files. */
 static int chroot_msync(struct libos_handle* hdl, void* addr, size_t size, int prot, int flags,
                         uint64_t offset) {
-    /* a read-only mapping is a copy taken at mmap() time, never newer than the file */
+    /* a read-only mapping has nothing to write back (on the VM PAL it maps the same cached frames
+     * as the writable mappings of the file, so it is as new as they are) */
     if (!g_pal_public_state->file_maps_write_back || !(prot & PROT_WRITE))
         return 0;
     return generic_emulated_msync(hdl, addr, size, prot, flags, offset);

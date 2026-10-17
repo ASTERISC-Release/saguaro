@@ -1,1 +1,4 @@
 /OUTPUT
+/vbs-build/
+/curl-*.tar.gz
+/curl.manifest.vbs

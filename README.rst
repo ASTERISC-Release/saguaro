@@ -2,196 +2,218 @@
 Gramine Library OS with Multi-Architectural Support
 *****************************************************
 
-*A Linux-compatible library OS for multi-process applications, on Intel x86_64, AMD64 and AArch64,
-with an experimental RISC-V (RV64) port, experimental graphics for the direct PAL and experimental
-support for Windows VBS enclaves on ARM64.*
+*A Linux-compatible library OS (LibOS) for multi-process applications, on Intel x86_64, AMD64,
+AArch64 and RISC-V.*
 
-Gramine is a lightweight library OS: it runs an unmodified Linux application
-in an isolated environment, with its own implementation of the Linux system
-call interface (the *LibOS*) on top of a small host abstraction layer (the
-*PAL*). This tree extends `gramine-tdx
-<https://github.com/gramineproject/gramine-tdx>`__ -- Gramine with Intel TDX and
-virtual-machine backends -- so that it also runs on AArch64 and, experimentally,
-on RISC-V, and keeps upstream's full history.
+Gramine (formerly *Graphene*) runs an unmodified Linux application in an isolated environment, with its own
+implementation of the Linux system call interface (the *LibOS*) on top of a small host abstraction
+layer (the *PAL*). It was initially designed and built by a diverse group of researchers
+and engineers from universities and industry to run on Intel x86 platforms. Please see the
+`Acknowledgements`_ section below and the `upstream repository
+<https://github.com/gramineproject/gramine>`__.
 
-Gramine (formerly *Graphene*) was designed and built by a diverse group of
-researchers and engineers from universities and industry. Please see acknowledgements section below.
+This fork has been significantly extended to support additional architectures, backends and
+features. It extends `gramine-tdx <https://github.com/gramineproject/gramine-tdx>`__ -- Gramine
+with Intel TDX and virtual-machine backends -- and keeps upstream's full history. It is implemented and maintained by the `ASU Trusted, Reliable, and Secure Computing
+(ASTERISC) Research Lab <https://asteriscresearchlab.com/>`__. This fork supports several host environments:
+
+* Containerized userspace (``direct``)
+* Isolated userspace (``sgx``)
+* Micro-virtual machine (``vm``)
+* Windows protected virtual machine (``vbs``)
+* Confidential virtual machine (``tdx``, ``sev``)
+
+Use-Cases
+=========
+
+
+**(1) Sandboxing untrusted Linux applications (e.g., AI agents and games):** An application runs
+on Gramine's own system call interface rather than directly on the host kernel, reducing the
+host interface that the application can reach. The ``direct`` PAL runs it as a lightweight 
+container-like environment. The ``vm`` PAL runs it in a minimal virtual machine that holds only 
+the application, the library OS and a small kernel. Graphics-intensive applications are supported through
+redirection to the host GPU in an efficient manner.
+
+**(2) Running unmodified Linux applications in diverse protected contexts:** The same library OS
+runs an application inside hardware-protected environments, so that it is protected from the
+platform that hosts it: Intel SGX enclaves (``sgx``), Intel TDX and AMD SEV confidential virtual
+machines (``tdx``, ``sev``) and Windows VBS enclaves (``vbs``). The application does not need to be modified
+or ported to a different enclave interface. Remote attestation lets a remote party verify what is running.
+
+**(3) Teaching Linux-inspired operating system implementations on different architectures:** The
+library OS and the small bare-metal kernel of the ``vm`` PAL (page tables, scheduler, interrupts,
+and virtio drivers) are compact and readable. The same Linux-compatible interface is implemented
+on x86_64, AArch64 and RISC-V, so that the architecture-specific parts can be compared directly.
+
 
 Status
 ======
 
-This is a Gramine fork for development, research and teaching. It is **experimental, comes with no
-warranty and should not be used in production**.
+This is a research and teaching fork. It is **experimental, comes with no warranty and should not
+be used in production**. Current work is focused on the following:
 
-Current work:
+- **Multi-architecture:** AMD64, AArch64 and RISC-V.
+- **Graphics:** redirection to the host GPU in the ``vm``/``direct`` PAL (see `Tirith
+  <https://arxiv.org/abs/2609.17525>`__).
+- **Windows VBS enclaves:** running applications inside VBS enclaves on Windows 11 (ARM64 and x64).
+- **Windows applications:** Wine and Proton in the ``vm`` PAL (a 64-bit game reaches its first level in
+  software rendering; the GPU path and 32-bit games are in progress).
+- **System call support:** richer coverage, including multi-process, signaling, and network.
 
-- multi-architecture support: AMD64, AArch64 and RISC-V
-- graphics through redirection to the host GPU (see `Tirith <https://arxiv.org/abs/2609.17525>`__)
-  in the ``vm`` PAL, and, experimentally, direct use of the host's GPU by ``gramine-direct`` on x86_64
-  and AArch64
-- running applications inside Windows VBS enclaves (experimental, AArch64 only: Windows 11 on ARM64)
-- richer system call support (for example `uFork <https://arxiv.org/pdf/2509.09439>`__)
+The features added so far and the planned/future ones are listed in
+`Documentation/FEATURES.md <Documentation/FEATURES.md>`__ and
+`Documentation/TODO.md <Documentation/TODO.md>`__.
 
-What it is for:
-
-- **Sandboxing applications.** An unmodified Linux application runs on Gramine's own system call
-  interface, either as an ordinary process (``gramine-direct``) or, with the ``vm`` PAL, in a minimal
-  virtual machine (a *microVM*) that holds only the application, the library OS and a small kernel.
-- **Running microVM workloads**, such as games with the (experimental) graphics redirection, or
-  services that should not see the host operating system.
-- **Running one application stack on x86_64, AArch64 and RISC-V**, to compare behaviour and
-  performance.
-- **Studying and teaching operating-system design.** The library OS and the small bare-metal kernel
-  (page tables, scheduler, interrupts, virtio drivers, SMP) are readable, with design logs under
-  ``Documentation/devel/``.
-- **Using the inherited confidential-computing back ends** (Intel TDX and SGX) on x86_64.
-- **Running an application in a Windows VBS enclave** (experimental, ARM64 Windows 11): the library
-  OS, a glibc and the application are packed into a signed enclave image at build time and run
-  protected from the rest of Windows, with local attestation (``gramine-vbs``; see
-  `Documentation/vbs.rst <Documentation/vbs.rst>`__). Limits: no ``fork``, no run-time code loading
-  (no JIT), debug enclaves signed with a test certificate.
-- **Using the host's GPU from** ``gramine-direct`` (experimental, x86_64 with Intel or AMD GPUs and
-  AArch64 with NVIDIA's proprietary driver): opt-in manifest keys let an unmodified OpenGL application
-  (and, on x86_64, a Vulkan application) use the host's render node and X server. ``gramine-direct`` is not a sandbox, and these
-  keys give the application access to the GPU; see
-  `Documentation/devel/graphics-direct/running.md <Documentation/devel/graphics-direct/running.md>`__.
-
-The features added so far, and the planned ones, are listed in
-`Documentation/FEATURES.md <Documentation/FEATURES.md>`__. Not available yet: a RISC-V ``vm`` PAL,
-graphics in the ``vm`` PAL on AArch64, VBS enclaves on x86_64, delivery of asynchronous signals to blocked threads in the ``vm`` PAL, and a
-finer-grained timer. The AArch64 ``vm`` PAL runs single-process applications and, with the experimental ``sys.experimental__multiprocess`` manifest key, multi-process ones (fork, exec, wait, signals; not merged yet); TCP and UDP work
-through a vsock relay. See `Documentation/TODO.md <Documentation/TODO.md>`__ for open items.
-
-The RISC-V port covers the ``direct`` PAL only and is **experimental**: it is cross-built, and its
-regression suites and example applications pass in an emulated RISC-V Linux guest
-(``qemu-system-riscv64``), but it has not been run on RISC-V hardware.
-
-Platform support
+Platform Support
 ================
 
+.. list-table::
+   :widths: 14 86
 
-==========  ===================================================================
-Symbol      Meaning
-==========  ===================================================================
-✅          supported: works and is covered by tests
-⚠️          experimental: runs, but incomplete, with known limits, or not yet fully validated
-🛫          planned: on the roadmap, not started or not usable yet
-❌          not supported: possible in principle, but it does not work (yet)
-➖          not applicable: the combination does not exist
-==========  ===================================================================
+   * - ✅
+     - supported: works and is covered by tests
+   * - ⚠️
+     - experimental: runs, but incomplete, with known limits, or not yet fully validated
+   * - 🛫
+     - planned: on the roadmap, not started or not usable yet
+   * - ❌
+     - not supported: possible in principle, but it does not work (yet)
+   * - ➖
+     - not applicable: the combination does not exist
+
+Sandboxing Environments
+-----------------------
 
 .. list-table::
    :header-rows: 1
    :widths: 36 16 16 16 16
 
-   * - PAL (backend)
+   * - Platform Adaptation Layer (PAL)
      - Intel x86_64
      - AMD64
      - AArch64
      - RISC-V (RV64)
-   * - ``direct`` (``gramine-direct``): an ordinary Linux process
+   * - ``direct``
      - ✅
      - ✅
      - ✅
      - ⚠️
-   * - ``vm`` (``gramine-vm``): a unikernel in a QEMU guest
+   * - ``direct`` with redirected graphics
+     - ⚠️
+     - ⚠️
+     - ⚠️
+     - ❌
+   * - ``vm`` (``gramine-vm``)
      - ✅
      - ⚠️
      - ⚠️
      - 🛫
-   * - ↳ ``vm`` with ``graphics`` (host redirection)
+   * - ``vm`` with redirected graphics
      - ⚠️
      - ⚠️
      - 🛫
      - ❌
-   * - ↳ ``direct`` with graphics (host GPU through the render node; opt-in manifest keys)
+
+Protected Computing
+-------------------
+
+.. list-table::
+   :header-rows: 1
+   :widths: 36 16 16 16 16
+
+   * - Platform Adaptation Layer (PAL)
+     - Intel x86_64
+     - AMD64
+     - AArch64
+     - RISC-V (RV64)
+   * - ``sgx`` (Intel SGX)
+     - ⚠️
+     - ➖
+     - ➖
+     - ➖
+   * - ``tdx`` (Intel TDX)
+     - ⚠️
+     - ➖
+     - ➖
+     - ➖
+   * - ``sev`` (AMD SEV)
+     - ➖
+     - ⚠️
+     - ➖
+     - ➖
+   * - ``vbs`` (Windows VBS enclaves)
      - ⚠️
      - ⚠️
      - ⚠️
-     - ❌
-   * - ``vbs`` (Windows VBS enclaves, ``gramine-vbs``): the application is packed into a signed enclave
-       image
-     - ❌
-     - ❌
-     - ⚠️
-     - ➖
-   * - ``tdx`` (Intel TDX) and ``sgx`` (Intel SGX)
-     - ✅
-     - ➖
-     - ➖
      - ➖
 
-Per-cell details, build options and the verification status are in
-`Documentation/devel/multiarch.md <Documentation/devel/multiarch.md>`__. Notes on the experimental
-rows: ``direct`` with graphics was measured on Intel and AMD GPUs (x86_64) and on NVIDIA's GB10
-with the proprietary driver (AArch64), at 76 to 100 % of native speed for the games tried;
-``vbs`` runs on Windows 11 on ARM64 with VBS enabled and needs the Windows-side tools described in
-`Documentation/vbs.rst <Documentation/vbs.rst>`__. The ``tdx`` and ``sgx`` rows are inherited from
-gramine-tdx and have not been run on TDX or SGX hardware here; the ``tdx`` PAL is compiled in CI
-(build only, see `Documentation/quickstart/tdx-sgx.rst <Documentation/quickstart/tdx-sgx.rst>`__).
+``sgx`` and ``tdx`` are inherited from Gramine and gramine-tdx: they are built (``tdx`` in CI), but this
+tree has not run them on hardware, so they are marked experimental.
+``sev`` (``gramine-sev``, the vm PAL as an AMD SEV-SNP or plain SEV guest) runs the LibOS regression
+suite and attestation on an EPYC (Milan) host; it is experimental: no CI runner has SEV, and the
+host-supplied files are not yet checked (Documentation/devel/sev/).
 
-Installation
-============
+Please refer to per-cell details, build options and verification status: `Documentation/devel/multiarch.md <Documentation/devel/multiarch.md>`__.
 
-**Quickstart**: `Documentation/quickstart/ <Documentation/quickstart/README.rst>`__ has one short,
-verified guide per platform (``gramine-direct``, ``gramine-vm``, graphics, RISC-V, Windows VBS,
-TDX/SGX), from a fresh checkout to a running example.
+Getting Started
+===============
 
-See `INSTALL.rst <INSTALL.rst>`__ for how to build and install Gramine on a host or in
-the supplied containers, for the direct and the ``vm`` PAL, on x86_64 and AArch64. It also
-describes the cross-build and the test guest of the RISC-V port.
+Each quickstart guide goes from a fresh checkout to a running example, with the commands verified
+on a machine of that platform:
 
-Once installed, run an application::
+- **Containerized userspace** (``direct``): `Documentation/quickstart/direct.rst
+  <Documentation/quickstart/direct.rst>`__
+- **Micro-virtual machine** (``vm``): `Documentation/quickstart/vm.rst
+  <Documentation/quickstart/vm.rst>`__
+- **Windows VBS enclaves** (``vbs``): `Documentation/quickstart/vbs-windows.rst
+  <Documentation/quickstart/vbs-windows.rst>`__
+- **Intel TDX and SGX** (``tdx``, ``sgx``): `Documentation/quickstart/tdx-sgx.rst
+  <Documentation/quickstart/tdx-sgx.rst>`__
+- **AMD SEV-SNP** (``sev``): `Documentation/quickstart/sev.rst
+  <Documentation/quickstart/sev.rst>`__
 
-    cd CI-Examples/helloworld
-    make
-    gramine-direct helloworld
+Guides for graphics and for the RISC-V cross-build are listed in the `quickstart index
+<Documentation/quickstart/README.rst>`__. 
 
-``CI-Examples/`` contains ready-made applications;
-``CI-Examples/install-all-prereqs.sh`` installs the host packages that some of them
-(curl, gcc, iperf, mongodb, nodejs, openjdk, pytorch, r) need.
+`INSTALL.rst <INSTALL.rst>`__ is the complete reference
+for building and installing, on a host or in the supplied containers.
 
-Will my application run?
-========================
-
-To check whether an application is likely to run under ``gramine-direct`` or ``gramine-vm``,
-trace its system calls and compare them with the syscall matrix built from the LTP tests::
-
-    scripts/syscall-profile.py run -- ./app args      # which syscalls, and a verdict per loader
-    scripts/syscall-tolerance.py -- ./app args        # does it still work without the ones
-                                                      # that are not supported?
-
-The results are heuristic and cover only the code paths of the traced run. How it works, how to
-run it and how well it did on ten applications:
-`Documentation/devel/syscall-profile/README.md <Documentation/devel/syscall-profile/README.md>`__;
-the matrix itself: `Documentation/devel/syscall-compat/MATRIX.md
-<Documentation/devel/syscall-compat/MATRIX.md>`__.
+``CI-Examples/`` contains ready-made applications. To check whether your own application is likely
+to run, see `Will my application run? <Documentation/will-it-run.rst>`__.
 
 Documentation
 =============
 
-- `Quickstart guides <Documentation/quickstart/README.rst>`__: one per platform, with the commands
-  verified on a machine of that platform.
-- `Documentation index <Documentation/README.md>`__: what each document is, and which are inherited
-  from upstream.
+Using this tree:
+
+- `Quickstart guides <Documentation/quickstart/README.rst>`__: one per platform.
+- `INSTALL.rst <INSTALL.rst>`__: building, installing, containers, the RISC-V cross-build.
+- `Will my application run? <Documentation/will-it-run.rst>`__: the syscall profiler and the
+  tolerance check.
+- `Windows VBS enclaves <Documentation/vbs.rst>`__: the manual (installation on Windows, the
+  ``gramine-vbs`` tool, attestation, limits).
+- Graphics: in ``gramine-direct`` on `x86_64 <Documentation/devel/graphics-direct/>`__ and
+  `AArch64 <Documentation/devel/graphics-aarch64/>`__, in the ``vm`` PAL on
+  `x86_64 <Documentation/devel/graphics/>`__; examples in `CI-Examples/graphics/
+  <CI-Examples/graphics/>`__.
+
+Reference:
+
 - `Features <Documentation/FEATURES.md>`__: what this tree adds to gramine-tdx, and what is planned.
-- `Development documents <Documentation/devel/>`__: one directory per port or feature, with its plan,
-  log, open items and test results; `summary <Documentation/devel/summary.md>`__ gives the outcome of
-  each on one page.
-- `Syscall support and application profiling <Documentation/devel/syscall-profile/README.md>`__: the
-  matrix, the profiler and the tolerance check.
 - `Multi-architecture notes <Documentation/devel/multiarch.md>`__: configurations, build options,
   tests, benchmarks and CI workflows.
+- `Syscall compatibility matrix <Documentation/devel/syscall-compat/MATRIX.md>`__.
 - `Differences from upstream gramine-tdx <Documentation/devel/graphics/tirith-delta.md>`__.
-- `Graphics examples <CI-Examples/graphics/>`__ and how to run them: in the ``vm`` PAL (x86_64)
-  `Documentation/devel/graphics/ <Documentation/devel/graphics/>`__, in ``gramine-direct``
-  `Documentation/devel/graphics-direct/ <Documentation/devel/graphics-direct/>`__ (x86_64) and
-  `Documentation/devel/graphics-aarch64/ <Documentation/devel/graphics-aarch64/>`__ (AArch64).
-- `Windows VBS enclaves <Documentation/vbs.rst>`__: the manual (installation on Windows, quick
-  start, the ``gramine-vbs`` tool, attestation, limits).
-- For features shared with Gramine in general (manifest syntax, ...) the
-  `upstream documentation <https://gramine.readthedocs.io>`__ is a useful reference; details may
-  differ in this tree.
+- `Upstream documentation <https://gramine.readthedocs.io>`__ for features shared with Gramine
+  (manifest syntax and others); details may differ in this tree.
+
+Development:
+
+- `Documentation index <Documentation/README.md>`__: what each document is, and which are inherited
+  from upstream.
+- `Development documents <Documentation/devel/>`__: one directory per port or feature, with its
+  plan, log, open items and test results; the `summary <Documentation/devel/summary.md>`__ gives
+  the outcome of each on one page.
 
 Contributing
 ============
@@ -209,12 +231,22 @@ examples in ``CI-Examples/`` are BSD-3-Clause unless a file says otherwise (see
 ``LICENSE.addendum.txt``). The copyright notices of upstream Gramine and gramine-tdx
 are retained.
 
+Citation
+========
+
+This work is the culmination of several research projects undertaken by our lab, including:
+
+- ``Tirith`` 
+- ``Erebor``
+- ``Whitepaper``
+
+(TODO: complete later)
+
 Acknowledgements
 ================
 
 This work builds on `Gramine <https://github.com/gramineproject/gramine>`__ and its
 Intel TDX and virtual-machine fork `gramine-tdx
-<https://github.com/gramineproject/gramine-tdx>`__. We thank the Gramine and
-gramine-tdx authors and contributors; the organizations and individuals are listed in
+<https://github.com/gramineproject/gramine-tdx>`__. We thank the Gramine and gramine-tdx authors and contributors; the organizations and individuals are listed in
 `ACKNOWLEDGEMENTS.rst <ACKNOWLEDGEMENTS.rst>`__.
 

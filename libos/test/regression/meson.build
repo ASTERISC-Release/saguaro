@@ -89,6 +89,8 @@ tests = {
     'memfd_rw': {},
     'memfd_seals': {},
     'memfd_shared': {},
+    'mmap_shared_ro': {},
+    'netlink_ifaces': {},
     'mremap_misc': {},
     'perm_checks': {},
     'prctl_misc': {},
@@ -200,6 +202,7 @@ tests = {
 
 if host_machine.cpu_family() == 'x86_64'
     tests += {
+        'attestation_sev_snp': {},
         'avx': {
             'c_args': '-mavx',
         },

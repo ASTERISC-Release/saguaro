@@ -19,6 +19,7 @@
 
 #include "kernel_apic.h"
 #include "kernel_interrupts.h"
+#include "pal_common.h"
 #include "kernel_memory.h"
 #include "kernel_multicore.h"
 #include "kernel_pci.h"
@@ -26,6 +27,9 @@
 #include "kernel_time.h"
 #include "kernel_virtio.h"
 #include "vm_callbacks.h"
+#ifdef PAL_HOST_SEV
+#include "sev.h"
+#endif
 
 /* Interrupt Service Routines (ISRs) are defined in the *.S */
 extern void isr_0(void);
@@ -89,6 +93,27 @@ void isr_c(struct isr_regs* regs) {
     uint64_t kernel_cs = (uint64_t)(gdt_entry_kernel_cs - gdt_start);
 
     switch (regs->int_number) {
+        case 0:  /* #DE, divide error */
+        case 16: /* #MF, x87 floating-point error */
+        case 19: /* #XM, SIMD floating-point error */
+            /* SIGFPE for the application (Wine installs a handler; its si_addr is the instruction).
+             * In the PAL's own code it stays a panic, as before. */
+            ret = pal_common_perform_event_handling(PAL_EVENT_ARITHMETIC_ERROR, regs->rip, regs);
+            if (ret < 0) {
+                log_error("Panic: arithmetic exception (vector nr. %lu) not handled (rip=0x%lx "
+                          "rsp=0x%lx)", regs->int_number, regs->rip, regs->rsp);
+                triple_fault();
+            }
+            break;
+        case 6:  /* #UD, invalid opcode */
+            /* SIGILL for the application (ud2, an instruction the CPU lacks, Wine's probes) */
+            ret = pal_common_perform_event_handling(PAL_EVENT_ILLEGAL, regs->rip, regs);
+            if (ret < 0) {
+                log_error("Panic: invalid opcode not handled (rip=0x%lx rsp=0x%lx)", regs->rip,
+                          regs->rsp);
+                triple_fault();
+            }
+            break;
         case 13:
             /* Linux reports user-mode #GP as SIGSEGV with si_addr == NULL. Applications use
              * this behavior to probe instructions such as RDPMC and recover in a signal handler.
@@ -316,6 +341,10 @@ static int tss_init(void) {
 
     /* interrupt_stack is a base address, but we want top of the stack */
     tss->ist1 = (uint64_t)get_per_cpu_data()->interrupt_stack + INTERRUPT_STACK_SIZE;
+#ifdef PAL_HOST_SEV
+    if (sev_es_active())
+        tss->ist2_unused = sev_vc_stack_top(get_per_cpu_data()->cpu_id);
+#endif
 
     struct tss_64bitmode_segment_descriptor* tss_desc = tss_64bitmode_desc;
     tss_desc += get_per_cpu_data()->cpu_id;
@@ -423,6 +452,16 @@ static int idt_init(void) {
     ret = idt_gate_set(20, &isr_20); /* Virtualization Exception (#VE) */
     if (ret < 0)
         return -PAL_ERROR_BADADDR;
+#ifdef PAL_HOST_SEV
+    if (sev_es_active()) {
+        /* VMM Communication exception (#VC, SEV-ES/SNP) on its own stack (IST2): it is raised
+         * inside other interrupt handlers too (EOI, timer MSRs), see pal/src/host/vm/sev/ */
+        ret = idt_gate_set(29, &isr_vc);
+        if (ret < 0)
+            return -PAL_ERROR_BADADDR;
+        g_idt[29].ist_offset = 2;
+    }
+#endif
 
     ret = idt_gate_set(32, &isr_32); /* Local APIC timer IRQ */
     if (ret < 0)

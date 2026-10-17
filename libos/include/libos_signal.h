@@ -135,6 +135,9 @@ struct libos_thread;
 int init_signal_handling(void);
 
 int append_signal(struct libos_thread* thread, siginfo_t* info);
+/* A synchronous signal for the current thread, delivered at the next handle_signal() ahead of
+ * the queues (a fault's, or SIGSYS of syscall user dispatch). */
+void libos_force_signal(siginfo_t* info);
 
 /* callback for walk_thread_list() */
 int wakeup_one_thread_on_signal(struct libos_thread* thread, void* arg);

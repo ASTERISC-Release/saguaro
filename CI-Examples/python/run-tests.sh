@@ -72,11 +72,6 @@ stop_http_server
 trap - EXIT INT TERM
 rm -f OUTPUT1 OUTPUT2
 
-if test -n "${VBS:-}"; then
-    echo "NumPy and SciPy are not built for the VBS enclave: 3/4 and 4/4 skipped"
-    exit 0
-fi
-
 # === numpy ===
 $GRAMINE ./python scripts/test-numpy.py > OUTPUT
 grep -q "dot: " OUTPUT && echo "[ Success 3/4 ]"

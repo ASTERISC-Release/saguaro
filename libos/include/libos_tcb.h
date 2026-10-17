@@ -28,6 +28,9 @@ struct libos_tcb {
     void*                syscall_scratch_pc;
     void*                vma_cache;
     char                 log_prefix[32];
+    /* The application's own GS base (arch_prctl(ARCH_SET_GS); PALs that hand %gs over) to give a
+     * forked child; used only in fork. Last so that the other offsets (syscallas.S) stay. */
+    uintptr_t            gs_base;
 };
 
 static_assert(offsetof(PAL_TCB, libos_tcb) + offsetof(libos_tcb_t, libos_syscall_entry)

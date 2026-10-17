@@ -375,3 +375,12 @@ int vbs_init_memory(void) {
     g_pal_public_state.shared_address_end = (void*)win_hi;
     return 0;
 }
+
+int _PalVirtualMemoryAllocContiguous(void* addr, size_t size, pal_prot_flags_t prot,
+                                     uint64_t* out_phys) {
+    __UNUSED(addr);
+    __UNUSED(size);
+    __UNUSED(prot);
+    __UNUSED(out_phys);
+    return -PAL_ERROR_NOTIMPLEMENTED;
+}

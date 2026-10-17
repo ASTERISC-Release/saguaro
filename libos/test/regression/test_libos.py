@@ -20,6 +20,7 @@ from graminelibos.regression import (
     ON_X86,
     USE_GRAMINE_VM,
     USES_MUSL,
+    VM_LAUNCHER,
     RegressionTestCase,
 )
 
@@ -679,6 +680,16 @@ class TC_04_Attestation(RegressionTestCase):
         self.assertIn("Test local attestation... SUCCESS", stdout)
         self.assertIn("Test quote interface... SUCCESS", stdout)
 
+@unittest.skipUnless(USE_GRAMINE_VM and VM_LAUNCHER == 'gramine-sev'
+                     and os.environ.get('GRAMINE_SEV_MODE') == 'snp',
+    'SEV-SNP attestation: only under gramine-sev with GRAMINE_SEV_MODE=snp')
+class TC_04_AttestationSevSnp(RegressionTestCase):
+    def test_000_attestation_sev_snp(self):
+        stdout, _ = self.run_binary(['attestation_sev_snp'], timeout=120)
+        self.assertIn('attestation_type: sev-snp', stdout)
+        self.assertIn('Test resource leaks in attestation filesystem... SUCCESS', stdout)
+        self.assertIn('Test SEV-SNP report interface... SUCCESS', stdout)
+
 class TC_30_Syscall(RegressionTestCase):
     def test_000_getcwd(self):
         stdout, _ = self.run_binary(['getcwd'])
@@ -1065,6 +1076,23 @@ class TC_30_Syscall(RegressionTestCase):
 
     def test_075_memfd_shared(self):
         stdout, _ = self.run_binary(['memfd_shared'])
+        self.assertIn('TEST OK', stdout)
+
+    def test_075b_mmap_shared_ro(self):
+        # a read-only MAP_SHARED mapping sees another process's stores through its writable one
+        # (a host file and a memfd passed over SCM_RIGHTS; Wine's clients read the server's
+        # session block that way)
+        stdout, _ = self.run_binary(['mmap_shared_ro'], timeout=60)
+        self.assertIn('host file, reader first: ok', stdout)
+        self.assertIn('memfd over SCM_RIGHTS, writer first: ok', stdout)
+        self.assertIn('memfd over SCM_RIGHTS, private rw-then-ro reader: ok', stdout)
+        self.assertIn('TEST OK', stdout)
+
+    def test_075c_netlink_ifaces(self):
+        # the loopback-only NETLINK_ROUTE: if_nameindex(), getifaddrs(), a raw RTM_GETLINK dump
+        stdout, _ = self.run_binary(['netlink_ifaces'])
+        self.assertIn('lo is index 1', stdout)
+        self.assertIn('lo has inet, inet6 and packet entries', stdout)
         self.assertIn('TEST OK', stdout)
 
     def test_075a_memfd_exec(self):

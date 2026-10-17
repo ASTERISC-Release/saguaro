@@ -10,6 +10,11 @@
 
 #include "spinlock.h"
 
+/* A process address space (the multiprocess support, x86_64) spans [0, this): one PML4 slot of
+ * private page tables; its application may map, demand-paged, up to here (pal_main.c extends
+ * memory_address_end to it when every process has private frames). */
+#define MEMORY_ADDRESS_SPACE_LIMIT (512UL * 1024 * 1024 * 1024)
+
 #define PAGE_TABLES_ADDR 0x20000000UL          /* page tables occupy [512MB, 658MB) */
 #define PAGE_TABLES_SIZE (146UL * 1024 * 1024) /* 146MB, enough to describe 64GB of addr space +
                                                 * AddressSanitizer shadow memory for these 64GB */
@@ -108,6 +113,16 @@ int memory_address_space_map_owned(struct memory_address_space* space, uintptr_t
  * reference. */
 int memory_address_space_map_shared_frame(struct memory_address_space* space, uintptr_t addr,
                                           uintptr_t frame, bool write, bool execute);
+/* Maps `frame` (a frame of a file's cache) read-only as a copy-on-write page of a MAP_PRIVATE file
+ * mapping: a write copies it first (by the fault handler if `writable`, by a later protect()
+ * otherwise), so the page shows the file's current content until then (x86_64 only). */
+/* Physically contiguous frames mapped into `space` at `addr`; `*out_phys` is their physical
+ * address (the LibOS's graphics bounce buffers, design-gpu.md). x86_64 only; AArch64 returns
+ * -PAL_ERROR_NOTIMPLEMENTED. */
+int memory_address_space_alloc_contiguous(struct memory_address_space* space, void* addr,
+                                          size_t size, bool execute, uintptr_t* out_phys);
+int memory_address_space_map_cow_frame(struct memory_address_space* space, uintptr_t addr,
+                                       uintptr_t frame, bool writable, bool execute);
 int memory_address_space_share_range(struct memory_address_space* source,
                                      struct memory_address_space* target, uintptr_t addr,
                                      size_t size);

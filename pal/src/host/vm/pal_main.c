@@ -35,9 +35,16 @@
 #include "kernel_virtio.h"
 #include "kernel_vmm_inputs.h"
 #include "kernel_xsave.h"
+#ifdef PAL_HOST_SEV
+#include "sev.h"
+#endif
 
 /* the VMM supplied a graphics-arena layout (graphics redirection configured) */
 static bool g_graphics_configured;
+
+/* the end of guest RAM (pal_memory.c); memory_address_end of the public state may be extended
+ * past it below */
+extern void* g_vm_physical_memory_end;
 
 uint64_t g_tsc_mhz;
 
@@ -587,6 +594,11 @@ noreturn void pal_start_c(void) {
     g_pal_public_state.alloc_align = PAGE_SIZE;
     assert(IS_POWER_OF_2(g_pal_public_state.alloc_align));
 
+#ifdef PAL_HOST_SEV
+    /* first: under SEV-ES/SNP every port I/O, MSR and CPUID below needs the GHCB and #VC handler */
+    sev_init_early();
+#endif
+
     uint32_t num_cpus = rdfwcfg(FW_CFG_NB_CPUS, sizeof(uint32_t));
     if (num_cpus < 1 || num_cpus > MAX_NUM_CPUS)
         INIT_FAIL("Detected unsupported number of virtual CPUs: %u (supported: 1..%u)", num_cpus,
@@ -602,6 +614,7 @@ noreturn void pal_start_c(void) {
                       &g_pal_public_state.memory_address_end);
     if (ret < 0)
         INIT_FAIL("Failed to initialize physical memory");
+    g_vm_physical_memory_end = g_pal_public_state.memory_address_end;
 #ifdef __x86_64__
     /* untrusted_shm mappings (dev:/dev/shm) live in ordinary guest memory, as on the Linux PAL */
     g_pal_public_state.shared_address_start = g_pal_public_state.memory_address_start;
@@ -700,6 +713,11 @@ noreturn void pal_start_c(void) {
     ret = init_multicore_prepare(num_cpus);
     if (ret < 0)
         INIT_FAIL("Failed to initialize multicore preparation (per-CPU data and stacks)");
+#ifdef PAL_HOST_SEV
+    ret = sev_percpu_prepare(num_cpus);
+    if (ret < 0)
+        INIT_FAIL("SEV: failed to prepare the per-CPU state (#VC stacks, GHCBs)");
+#endif
 
     /* interrupts must be enabled (via `sti`) after all other parts of the kernel are initialized */
     ret = interrupts_init();
@@ -825,7 +843,14 @@ noreturn int pal_start_continue(void* cmdline_) {
     g_pal_public_state.first_thread = g_first_thread_handle;
 
     g_pal_public_state.attestation_type = "none";
+#ifdef PAL_HOST_SEV
+    if (sev_snp_active())
+        g_pal_public_state.attestation_type = "sev-snp";
+#endif
 
+    extern void sysret_asm(void);
+    g_pal_public_state.vm_user_return_stub = (void*)&sysret_asm;
+    g_pal_public_state.vm_user_csgsfs = 0x33ULL | (0x2bULL << 48); /* user CS 0x33, SS 0x2b (Linux numbering) */
     g_pal_public_state.vm_user_rip_offset = offsetof(struct pal_tcb_vm,
                                                      kernel_thread.context.user_rip);
 
@@ -838,10 +863,13 @@ noreturn int pal_start_continue(void* cmdline_) {
         ret = memory_address_space_clone(g_pml4_table_base, &g_initial_process_address_space);
         if (ret < 0)
             INIT_FAIL("Failed to create the initial process address space: %s", pal_strerror(ret));
-        /* The graphics redirection passes guest pointers to the host as guest-physical addresses
-         * (comm page requests, buffers), so the first process, the graphics application, keeps
-         * the identity-mapped memory of the single-process VM; its children get private frames. */
-        g_initial_process_address_space.identity_memory = g_graphics_configured;
+        /* Every process is demand-paged from the frame pool, the first one too. With the graphics
+         * redirection configured the arenas and the comm page keep their fixed guest-physical
+         * ranges and map into any process at those addresses (memory_address_space_alloc() shares
+         * the boot root's entries there); the addresses the LibOS hands the host (ioctl arguments
+         * and the pointers inside them) are translated by the LibOS, no longer by an identity
+         * mapping of the whole process (Documentation/devel/proton-vm/design-gpu.md, option B). */
+        g_initial_process_address_space.identity_memory = false;
         struct pal_tcb_vm* current_tcb = (struct pal_tcb_vm*)pal_get_tcb();
         if (!current_tcb)
             INIT_FAIL("Cannot find the initial thread control block");
@@ -849,6 +877,21 @@ noreturn int pal_start_continue(void* cmdline_) {
         ret = memory_address_space_switch(&g_initial_process_address_space);
         if (ret < 0)
             INIT_FAIL("Failed to switch to the initial process address space: %s", pal_strerror(ret));
+
+        {
+            /* Every process's memory is demand-paged from the frame pool through its own page
+             * tables, so the application's virtual range need not end with the guest RAM: it
+             * reaches the page tables' limit. The kernel's own uses of the RAM end (the frame
+             * pool, the arenas, the shared range, the free-memory walk) took their values above;
+             * the LibOS places everything beyond RAM lazily. Wine reserves and probes tens of
+             * GiB (Documentation/devel/proton-vm/PLAN.md, blocker 6). With graphics the arenas
+             * are reserved physical ranges inside the RAM part (the LibOS refuses fixed mappings
+             * there), which does not shorten the range. */
+            g_pal_public_state.memory_address_end = (void*)MEMORY_ADDRESS_SPACE_LIMIT;
+            log_always("Application address space: up to %p (demand-paged processes; guest RAM "
+                       "ends at %p%s)", g_pal_public_state.memory_address_end,
+                       g_vm_physical_memory_end, g_graphics_configured ? "; graphics arenas" : "");
+        }
     }
 #endif
 

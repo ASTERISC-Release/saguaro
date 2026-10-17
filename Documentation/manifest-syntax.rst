@@ -897,7 +897,21 @@ The build refuses packed code that uses register x18, which holds the
 enclave's thread environment block. Functions that are known to save and
 restore it can be allowed by the file name of their object. The functions of
 the vbs glibc that need it (``_dl_tlsdesc_dynamic``, ``getcontext``,
-``swapcontext``) and of the LibOS are allowed by default.
+``swapcontext``) and of the LibOS are allowed by default. A function is the
+extent of its symbol (``st_size``); code past the end of a symbol, such as a
+local function of a stripped library, is named ``SYMBOL+0xSIZE`` (for example
+``__divmodbitint4@@GCC_14.0.0+0xfc8``) and must be allowed by that name.
+
+::
+
+    vbs.x18_skip_constructors = [ "[FILE NAME]", ... ]
+
+The constructors of a packed object run when it is loaded, so the build also
+refuses an x18 use that its constructors reach, whatever ``vbs.x18_allow``
+says. For an object listed here, each such constructor is made to return at
+once instead; use it only for constructors whose work the application does not
+need (the AArch64 ``libgcc_s`` of the distributions: its CPU-feature detection
+for function multi-versioning, which nothing in ``libgcc_s`` reads).
 
 Build recipe
 ^^^^^^^^^^^^

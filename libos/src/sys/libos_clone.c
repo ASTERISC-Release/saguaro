@@ -27,8 +27,21 @@ struct libos_clone_args {
     struct libos_thread* thread;
     void* stack;
     unsigned long tls;
+    unsigned long gs_base; /* the creator's own GS base (ARCH_SET_GS), inherited as on Linux */
     PAL_CONTEXT* regs;
 };
+
+/* the thread's own GS base, 0 where the PAL does not hand GS to the application */
+static unsigned long current_gs_base(void) {
+    unsigned long gs_base = 0;
+#ifdef __x86_64__
+    /* PalSegmentBaseGet exists on x86_64 only (pal/src/pal_misc.c); other architectures have no
+     * second segment register to hand over */
+    if (PalSegmentBaseGet(PAL_SEGMENT_GS, &gs_base) < 0)
+        gs_base = 0;
+#endif
+    return gs_base;
+}
 
 static int clone_implementation_wrapper(void* arg_) {
     /* The child thread created by PAL is now running on the PAL allocated stack. We need to switch
@@ -85,6 +98,12 @@ static int clone_implementation_wrapper(void* arg_) {
      * the scheduler might try to restore the thread on another vCPU and install an
      * uninitialized FS base. */
     set_tls(arg->tls);
+#ifdef __x86_64__
+    if (arg->gs_base) {
+        (void)PalSegmentBaseSet(PAL_SEGMENT_GS, arg->gs_base);
+        tcb->gs_base = arg->gs_base; /* restore_child_context_after_clone() enters user code with it */
+    }
+#endif
 
     /* Diagnostic: log the TLS values we just set so we can verify per-thread FS base. */
 #ifdef __x86_64__
@@ -170,6 +189,7 @@ static long do_clone_new_vm(IDTYPE child_vmid, unsigned long flags, struct libos
      * a shallow copy, so `libos_tcb.context.regs` will be shared with the parent. */
     libos_tcb.context.regs = self->libos_tcb->context.regs;
     libos_tcb.context.tls  = tls;
+    libos_tcb.gs_base = current_gs_base();
 
     thread->libos_tcb = &libos_tcb;
 
@@ -497,6 +517,7 @@ long libos_syscall_clone(unsigned long flags, unsigned long user_stack_addr, int
         .is_thread_initialized = false,
         .stack  = (void*)(user_stack_addr ?: pal_context_get_sp(self->libos_tcb->context.regs)),
         .tls    = tls,
+        .gs_base = current_gs_base(),
         .regs   = self->libos_tcb->context.regs,
         .thread = thread,
     };

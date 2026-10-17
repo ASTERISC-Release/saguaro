@@ -24,6 +24,8 @@
 #   --add-to-profile       also source <prefix>/env.sh from ~/.bashrc, so new shells have Gramine
 #                          on PATH (idempotent)
 #   --sgx | --vm | --tdx   enable extra PAL backends (off by default; "direct" is always built)
+#   --sev                  --vm plus the AMD SEV build of the vm PAL and gramine-sev (x86_64;
+#                          Documentation/devel/sev/)
 #   --graphics enabled|disabled
 #                          compile the Tirith graphics host-redirection paths into the LibOS
 #                          (default: enabled)
@@ -86,7 +88,7 @@ DO_DEPS=0
 ADD_TO_PROFILE=0
 RUN_TESTS=0
 JOBS="$(nproc)"
-SGX=disabled VM=disabled TDX=disabled
+SGX=disabled VM=disabled TDX=disabled SEV=disabled
 GRAPHICS=enabled   # Tirith graphics paths in the LibOS (see meson_options.txt)
 LIBC=              # empty: chosen after the options are parsed (see --libc)
 TEST_SUITES=()
@@ -105,6 +107,7 @@ while [ $# -gt 0 ]; do
         --sgx)            SGX=enabled; shift ;;
         --vm)             VM=enabled; shift ;;
         --tdx)            TDX=enabled; shift ;;
+        --sev)            SEV=enabled; VM=enabled; shift ;;
         --graphics)       GRAPHICS=$2; shift 2 ;;
         --libc)           LIBC=$2; shift 2 ;;
         -j*)              JOBS=${1#-j}; [ -n "$JOBS" ] || { JOBS=$2; shift; }; shift ;;
@@ -189,6 +192,12 @@ if [ "$LIBC" = none ] && [ "$SGX" = enabled ]; then
     exit 2
 fi
 
+# gramine-sev's default QEMU (SEV_QEMU overrides): the one of container/sev/build-sev-tools.sh
+SEV_QEMU=${SEV_QEMU:-}
+if [ "$SEV" = enabled ] && [ -z "$SEV_QEMU" ] && [ -x /root/sev-tools/prefix/bin/qemu-system-x86_64 ]; then
+    SEV_QEMU=/root/sev-tools/prefix/bin/qemu-system-x86_64
+fi
+
 PREFIX=$(realpath -m "$PREFIX")
 
 missing_tools() {
@@ -215,14 +224,14 @@ for tool in meson ninja python3 cc make bison; do
     command -v "$tool" >/dev/null || { echo "ERROR: '$tool' not found after dependency install"; exit 1; }
 done
 
-echo ">>> configuring ($BUILDDIR -> $PREFIX, direct=$DIRECT sgx=$SGX vm=$VM tdx=$TDX graphics=$GRAPHICS libc=$LIBC tests=$TESTS)"
+echo ">>> configuring ($BUILDDIR -> $PREFIX, direct=$DIRECT sgx=$SGX vm=$VM tdx=$TDX sev=$SEV graphics=$GRAPHICS libc=$LIBC tests=$TESTS)"
 # On an already-configured build dir this reconfigures in place (cheap);
 # --reconfigure covers the case where meson insists on regeneration.
 if ! meson setup "$BUILDDIR" \
         --prefix="$PREFIX" \
         -Dbuildtype=release \
         -Ddirect="$DIRECT" \
-        -Dsgx="$SGX" -Dvm="$VM" -Dtdx="$TDX" -Dgraphics="$GRAPHICS" \
+        -Dsgx="$SGX" -Dvm="$VM" -Dtdx="$TDX" -Dsev="$SEV" -Dsev_qemu="$SEV_QEMU" -Dgraphics="$GRAPHICS" \
         -Dtests="$TESTS" -Dtests_pie="$TESTS_PIE" \
         -Dlibc="$LIBC" ${CROSS_ARGS[@]+"${CROSS_ARGS[@]}"} \
         2>"$BUILDDIR-setup.err"; then
@@ -231,7 +240,7 @@ if ! meson setup "$BUILDDIR" \
         --prefix="$PREFIX" \
         -Dbuildtype=release \
         -Ddirect="$DIRECT" \
-        -Dsgx="$SGX" -Dvm="$VM" -Dtdx="$TDX" -Dgraphics="$GRAPHICS" \
+        -Dsgx="$SGX" -Dvm="$VM" -Dtdx="$TDX" -Dsev="$SEV" -Dsev_qemu="$SEV_QEMU" -Dgraphics="$GRAPHICS" \
         -Dtests="$TESTS" -Dtests_pie="$TESTS_PIE" \
         -Dlibc="$LIBC" ${CROSS_ARGS[@]+"${CROSS_ARGS[@]}"} \
     || { echo "ERROR: meson setup failed:"; tail -5 "$BUILDDIR-setup.err"; exit 1; }

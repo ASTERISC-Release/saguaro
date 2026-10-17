@@ -6,7 +6,9 @@
 #include "api.h"
 #include "pal.h"
 #include "pal_error.h"
+#if defined(__aarch64__)
 #include "pal_hwcap.h"
+#endif
 #include "pal_internal.h"
 #include "pal_linux_error.h"
 #include "pal_vbs.h"
@@ -132,6 +134,8 @@ double _PalGetBogomips(void) {
     return 0.0;
 }
 
+#if defined(__aarch64__) /* AT_HWCAP is AArch64 only (the x86_64 PAL has no pal_hwcap.h) */
+
 /* PF_ARM_* numbers of winnt.h (Windows SDK 10.0.26100) and the AT_HWCAP/AT_HWCAP2 bits each one
  * stands for; the SVE/SME numbers are not mapped (masked anyway, pal_hwcap.h) */
 static const struct {
@@ -169,3 +173,5 @@ void _PalGetHwcaps(uint64_t* out_hwcap, uint64_t* out_hwcap2) {
     *out_hwcap  = hwcap;
     *out_hwcap2 = hwcap2;
 }
+
+#endif /* __aarch64__ */

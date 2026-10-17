@@ -1,0 +1,37 @@
+# Copyright (C) 2026 The ASTERISC Research Lab
+# SPDX-License-Identifier: BSD-3-Clause
+
+# Node.js manifest for a Windows VBS enclave (`make VBS=1`, Documentation/vbs.rst). The node binary is
+# the official linux-arm64 build (dynamic, not built with the vbs glibc); its interpreter is
+# /lib/ld-linux-aarch64.so.1 and its libraries are packed in /usr/lib. The arguments come from the
+# command line: `gramine-vbs node --jitless --v8-pool-size=1 /app/helloworld.js`.
+
+loader.entrypoint = "file:/libsysdb.so"
+libos.entrypoint = "/node"
+loader.log_level = "{{ log_level }}"
+
+loader.insecure__use_cmdline_argv = true
+loader.env.LD_LIBRARY_PATH = "{{ arch_libdir }}"
+loader.env.HOME = "/"
+
+fs.root.uri = "file:/"
+# no run-time code generation in a VBS enclave (node runs with --jitless)
+sys.rewrite_syscalls = false
+
+vbs.debug = false
+vbs.enclave_size = "1G"
+# main thread, the V8 platform pool (--v8-pool-size=1) and the libuv threads, plus helpers
+vbs.max_threads = 8
+
+vbs.packed_files = [
+  { path = "/node", uri = "file:vbs-build/node" },
+  { path = "/app/helloworld.js", uri = "file:helloworld.js" },
+  { path = "/app/heavy.js", uri = "file:heavy.js" },
+  { path = "/lib/ld-linux-aarch64.so.1", uri = "file:{{ vbs.sysroot }}/usr/lib/ld-linux-aarch64.so.1" },
+  { path = "{{ arch_libdir }}/libc.so.6", uri = "file:{{ vbs.sysroot }}/usr/lib/libc.so.6" },
+  { path = "{{ arch_libdir }}/libm.so.6", uri = "file:{{ vbs.sysroot }}/usr/lib/libm.so.6" },
+  { path = "{{ arch_libdir }}/libdl.so.2", uri = "file:{{ vbs.sysroot }}/usr/lib/libdl.so.2" },
+  { path = "{{ arch_libdir }}/libpthread.so.0", uri = "file:{{ vbs.sysroot }}/usr/lib/libpthread.so.0" },
+  { path = "{{ arch_libdir }}/libstdc++.so.6", uri = "file:vbs-build/lib/libstdc++.so.6" },
+  { path = "{{ arch_libdir }}/libgcc_s.so.1", uri = "file:vbs-build/lib/libgcc_s.so.1" },
+]

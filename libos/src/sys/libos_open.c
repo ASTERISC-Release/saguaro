@@ -77,12 +77,23 @@ long libos_syscall_read(int fd, void* buf, size_t count) {
             log_debug("redirecting read(%d, 0x%lx, %d) to host", fd, buf, count);
             long _offset = libos_syscall_acquire_libos_lock();
             comm_page_t* c = comm_page(_offset);
+            struct gbounce* b = graphics_bounce(_offset);
+            size_t chunk = MIN(count, graphics_bounce_room(b)); /* a short read is allowed */
+            uint64_t buf_pa;
+            void* out = graphics_bounce_out(b, buf, chunk, &buf_pa);
+            if (!out) {
+                libos_syscall_relinquish_libos_lock(_offset);
+                put_handle(hdl);
+                return -ENOMEM;
+            }
             c->p1 = (uint64_t) fd;
-            c->p2 = (uint64_t) buf;
-            c->p3 = (uint64_t) count;
+            c->p2 = buf_pa;
+            c->p3 = (uint64_t) chunk;
             c->req_bit = READ;
             put_handle(hdl);
             retval = (long)comm_sync_notify(c);
+            if (retval > 0 && out != buf)
+                memcpy(buf, out, MIN((size_t)retval, chunk));
             libos_syscall_relinquish_libos_lock(_offset);
             return retval;
         }
@@ -182,9 +193,16 @@ long libos_syscall_write(int fd, const void* buf, size_t count) {
             log_debug("redirecting write(%d, 0x%lx, %d) to host", fd, buf, count);
             long _offset = libos_syscall_acquire_libos_lock();
             comm_page_t* c = comm_page(_offset);
+            struct gbounce* b = graphics_bounce(_offset);
+            size_t chunk = MIN(count, graphics_bounce_room(b)); /* a short write is allowed */
+            uint64_t buf_pa = graphics_bounce_in(b, buf, chunk);
+            if (chunk && !buf_pa) {
+                libos_syscall_relinquish_libos_lock(_offset);
+                return -ENOMEM;
+            }
             c->p1 = (uint64_t) fd;
-            c->p2 = (uint64_t) buf;
-            c->p3 = (uint64_t) count;
+            c->p2 = buf_pa;
+            c->p3 = (uint64_t) chunk;
             c->req_bit = WRITE;
             put_handle(hdl);
 
@@ -371,8 +389,14 @@ static long do_openat(int dfd, const char* filename, int flags, int mode, bool u
     if (use_graphics_host) {
         log_debug("Device open(): %s\n", filename);
         long _offset = libos_syscall_acquire_libos_lock();
-            comm_page_t* c = comm_page(_offset);
-        c->p1 = (uint64_t)filename;
+        comm_page_t* c = comm_page(_offset);
+        struct gbounce* b = graphics_bounce(_offset);
+        uint64_t path_pa = graphics_bounce_in(b, filename, strlen(filename) + 1);
+        if (!path_pa) {
+            libos_syscall_relinquish_libos_lock(_offset);
+            return -ENAMETOOLONG;
+        }
+        c->p1 = path_pa;
         c->p2 = (uint64_t)flags;
         c->p3 = (uint64_t)mode;
         c->req_bit = OPEN;
@@ -871,11 +895,21 @@ long libos_syscall_getdents64(int fd, struct linux_dirent64* buf, size_t count) 
         if(graphics_redirect_enabled() && fd>fs_offset){
             long _offset = libos_syscall_acquire_libos_lock();
             comm_page_t* c = comm_page(_offset);
+            struct gbounce* b = graphics_bounce(_offset);
+            size_t chunk = MIN(count, graphics_bounce_room(b));
+            uint64_t buf_pa;
+            void* out = graphics_bounce_out(b, buf, chunk, &buf_pa);
+            if (!out) {
+                libos_syscall_relinquish_libos_lock(_offset);
+                return -ENOMEM;
+            }
             c->p1 = (uint64_t) fd;
-            c->p2 = (uint64_t) buf;
-            c->p3 = (uint64_t) count;
+            c->p2 = buf_pa;
+            c->p3 = (uint64_t) chunk;
             c->req_bit = GETDENT;
             retval = (long)comm_sync_notify(c);
+            if (retval > 0 && out != buf)
+                memcpy(buf, out, MIN((size_t)retval, chunk));
             libos_syscall_relinquish_libos_lock(_offset);
             return retval;
         }

@@ -1,0 +1,2 @@
+Hello from a file packed into a VBS enclave
+second line

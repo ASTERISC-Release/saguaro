@@ -42,3 +42,11 @@ redirection need a QEMU fork kept outside this repository. For graphics on x86_6
 `qemu-tirith` checkout found next to this repository (or at `QEMU_TIRITH_DIR`) at `/root/qemu-tirith`, and
 passes the DRM render nodes, the host X socket and `DISPLAY` into the container; the image has the packages
 to build it. See `Documentation/devel/graphics/running.md`.
+
+AMD SEV (see `Documentation/devel/sev/`): when the host has `/dev/sev`, `run.sh` passes it into the
+container, with `--group-add keep-groups` when the user can open it through a group (for example
+`sev`, mode 0660). The SEV-SNP and IGVM capable QEMU, firmware and tools are not in the image:
+`container/sev/build-sev-tools.sh` builds them into a `sev-tools/` directory next to the checkout,
+which `run.sh` mounts at `/root/sev-tools` when it exists (`SEV_TOOLS_DIR` names another one).
+Select that QEMU with `QEMU_PATH=/root/sev-tools/prefix/bin/qemu-system-x86_64`.
+`container/sev/smoke-test.sh none|sev|sev-es|snp` boots a stock Linux guest at each level.

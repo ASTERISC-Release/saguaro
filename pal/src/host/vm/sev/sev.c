@@ -1,0 +1,346 @@
+/* SPDX-License-Identifier: LGPL-3.0-or-later */
+/* Copyright (C) 2026 The ASTERISC Research Lab */
+
+/* AMD SEV / SEV-SNP support of the vm PAL (Documentation/devel/sev/PLAN.md). */
+
+#include "api.h"
+#include "pal_internal.h"
+#include "spinlock.h"
+
+#include "kernel_interrupts.h"
+#include "kernel_memory.h"
+#include "kernel_multicore.h"
+#include "kernel_sched.h"
+#include "sev.h"
+#include "sev_ghcb.h"
+#include "sev_vmsa.h"
+
+#define SEV_VC_STACK_SIZE (4 * PAGE_SIZE)
+
+static void* g_sev_vc_stacks[MAX_NUM_CPUS];
+
+void sev_init_early(void) {
+    if (!(g_sev_status & SEV_STATUS_SEV) || !g_sev_c_bit_mask) {
+        /* the SEV PAL keeps nothing secret without encryption: refuse to run */
+        INIT_FAIL("SEV: memory encryption is not active (SEV_STATUS 0x%lx); this PAL runs only "
+                  "as an AMD SEV guest (use gramine-vm otherwise)", g_sev_status);
+    }
+
+    if (sev_es_active()) {
+        /* everything that exits to the host from now on is a GHCB call or a #VC */
+        sev_vc_early_idt_init();
+        sev_ghcb_init_boot();
+    }
+
+    log_always("SEV: memory encryption active: %s%s%s (SEV_STATUS 0x%lx), C-bit %d",
+               "SEV", sev_es_active() ? " SEV-ES" : "", sev_snp_active() ? " SEV-SNP" : "",
+               g_sev_status, __builtin_ctzl(g_sev_c_bit_mask));
+    log_always("SEV: shared (unencrypted) guest memory: [0x%lx, 0x%lx) for virtio, [0x%lx, 0x%lx) "
+               "MMIO%s; everything else private", SHARED_MEM_ADDR,
+               SHARED_MEM_ADDR + SHARED_MEM_SIZE, PCI_HOLE_ADDR, PCI_HOLE_ADDR + PCI_HOLE_SIZE,
+               g_sev_extra_shared_page ? ", the boot GHCB page" : "");
+}
+
+/* ---- SNP memory validation ----
+ *
+ * Under SNP, private RAM must be validated (PVALIDATE) before use, and a page must never be
+ * validated twice: a hypervisor that remaps a validated page makes it unvalidated, and validating
+ * it again would accept the hypervisor's page. Validating all RAM at boot costs about 1 s per GB
+ * here (4K pages, each a nested page fault in KVM), so the SEV build validates on demand: early
+ * boot validates what it touches ([0, 8 MB) and the page tables), memory_alloc() validates what it
+ * hands out, and a bitmap (one bit per 4K page, after the page tables) remembers what is
+ * validated. A #VC "page not validated" on a page the bitmap marks as validated is an attack. */
+
+uint8_t* g_sev_valid_bitmap;   /* used by sev_vc.c too */
+uint64_t g_sev_valid_bitmap_pages;
+static uint64_t g_sev_validated_pages;
+
+static int pvalidate_page(uint64_t addr) {
+    int rc = sev_pvalidate(addr, /*huge=*/false, /*validate=*/true);
+    if (rc != 0 && rc != SEV_PVALIDATE_NOCHANGE)
+        return -PAL_ERROR_DENIED;
+    __atomic_add_fetch(&g_sev_validated_pages, 1, __ATOMIC_RELAXED);
+    return 0;
+}
+
+/* PVALIDATE [start, end) now, before the bitmap exists (identity-mapped, page-aligned, private) */
+static void sev_validate_early(uint64_t start, uint64_t end) {
+    for (uint64_t addr = start; addr < end; addr += PAGE_SIZE) {
+        if (addr == g_sev_extra_shared_page)
+            continue;
+        if (pvalidate_page(addr) < 0)
+            sev_terminate(SEV_TERM_PVALIDATE);
+    }
+}
+
+static void bitmap_set_range(uint64_t start, uint64_t end) {
+    for (uint64_t addr = start; addr < end; addr += PAGE_SIZE) {
+        uint64_t pfn = addr / PAGE_SIZE;
+        if (pfn < g_sev_valid_bitmap_pages)
+            __atomic_or_fetch(&g_sev_valid_bitmap[pfn / 8], 1 << (pfn % 8), __ATOMIC_RELAXED);
+    }
+}
+
+/* validate the page at guest-physical `pa`, reached through the mapping `va`, unless the bitmap
+ * already has it */
+static int validate_page_once(uint64_t va, uint64_t pa) {
+    uint64_t pfn = pa / PAGE_SIZE;
+    if (pfn >= g_sev_valid_bitmap_pages)
+        return -PAL_ERROR_INVAL;
+    if (SHARED_MEM_ADDR <= pa && pa < SHARED_MEM_ADDR + SHARED_MEM_SIZE)
+        return -PAL_ERROR_INVAL;
+    uint8_t bit = 1 << (pfn % 8);
+    if (__atomic_load_n(&g_sev_valid_bitmap[pfn / 8], __ATOMIC_ACQUIRE) & bit)
+        return 0;
+    if (pvalidate_page(va) < 0)
+        return -PAL_ERROR_DENIED;
+    __atomic_or_fetch(&g_sev_valid_bitmap[pfn / 8], bit, __ATOMIC_RELEASE);
+    return 0;
+}
+
+int sev_validate_frame(uint64_t frame) {
+    if (!sev_snp_active())
+        return 0;
+    /* through the supervisor alias of the frame pool: the current root may not map the frame */
+    return validate_page_once((uint64_t)memory_frame_pointer(frame), frame);
+}
+
+/* Kernel metadata that must be private (page tables and frame-pool bookkeeping of the
+ * multiprocess support, which the vm PAL keeps in the shared heap): a bump allocator in the unused
+ * tail of the page-table region, after the validation bitmap */
+static uint64_t g_sev_private_heap_pos;
+
+void* sev_alloc_private(size_t size) {
+    static spinlock_t lock = INIT_SPINLOCK_UNLOCKED;
+    if (!size)
+        return NULL;
+    size = ALIGN_UP(size, PAGE_SIZE);
+    spinlock_lock(&lock);
+    uint64_t addr = g_sev_private_heap_pos;
+    if (!addr || addr + size > PAGE_TABLES_ADDR + PAGE_TABLES_SIZE) {
+        spinlock_unlock(&lock);
+        return NULL;
+    }
+    g_sev_private_heap_pos += size;
+    spinlock_unlock(&lock);
+    if (sev_snp_active()) {
+        for (uint64_t page = addr; page < addr + size; page += PAGE_SIZE)
+            if (validate_page_once(page, page) < 0)
+                return NULL;
+    }
+    memset((void*)addr, 0, size);
+    return (void*)addr;
+}
+
+int sev_validate_on_demand(uint64_t addr, size_t size) {
+    if (!sev_snp_active())
+        return 0;
+    uint64_t start = ALIGN_DOWN(addr, PAGE_SIZE);
+    uint64_t end = ALIGN_UP(addr + size, PAGE_SIZE);
+    for (uint64_t page = start; page < end; page += PAGE_SIZE) {
+        uint64_t pfn = page / PAGE_SIZE;
+        if (pfn >= g_sev_valid_bitmap_pages)
+            return -PAL_ERROR_INVAL;
+        if (SHARED_MEM_ADDR <= page && page < SHARED_MEM_ADDR + SHARED_MEM_SIZE)
+            return -PAL_ERROR_INVAL;
+        uint8_t bit = 1 << (pfn % 8);
+        if (__atomic_load_n(&g_sev_valid_bitmap[pfn / 8], __ATOMIC_ACQUIRE) & bit)
+            continue;
+        if (pvalidate_page(page) < 0)
+            return -PAL_ERROR_DENIED;
+        __atomic_or_fetch(&g_sev_valid_bitmap[pfn / 8], bit, __ATOMIC_RELEASE);
+    }
+    return 0;
+}
+
+void sev_memory_before_page_tables(uint64_t addr, size_t size) {
+    if (!sev_snp_active())
+        return;
+    /* the temporary tables at [4 MB, 8 MB) were validated at launch; the final ones at 512 MB not */
+    sev_validate_early(addr, addr + size);
+}
+
+void sev_memory_after_temp_tables(void) {
+    if (!sev_snp_active())
+        return;
+    /* low memory (AP trampoline, DOS area) and the rest of the PAL's range up to 8 MB */
+    sev_validate_early(0, 8UL * 1024 * 1024);
+}
+
+void sev_memory_after_final_tables(uint64_t memory_end, uint64_t tables_end) {
+    if (!sev_snp_active()) {
+        g_sev_private_heap_pos = ALIGN_UP(tables_end, PAGE_SIZE);
+        return;
+    }
+    uint64_t t0 = get_tsc();
+    /* the bitmap goes right after the page tables, in their reserved region */
+    uint64_t pages = ALIGN_UP(memory_end, PAGE_SIZE) / PAGE_SIZE;
+    uint64_t bitmap = ALIGN_UP(tables_end, PAGE_SIZE);
+    uint64_t bitmap_end = ALIGN_UP(bitmap + UDIV_ROUND_UP(pages, 8), PAGE_SIZE);
+    if (bitmap_end > PAGE_TABLES_ADDR + PAGE_TABLES_SIZE)
+        INIT_FAIL("SEV-SNP: no room for the validation bitmap after the page tables");
+    sev_validate_early(bitmap, bitmap_end);
+    g_sev_valid_bitmap = (uint8_t*)bitmap;
+    memset(g_sev_valid_bitmap, 0, bitmap_end - bitmap);
+    g_sev_private_heap_pos = bitmap_end;
+    g_sev_valid_bitmap_pages = pages;
+    bitmap_set_range(0, 8UL * 1024 * 1024);
+    bitmap_set_range(PAGE_TABLES_ADDR, bitmap_end);
+    if (g_sev_extra_shared_page) {
+        uint64_t pfn = g_sev_extra_shared_page / PAGE_SIZE;
+        g_sev_valid_bitmap[pfn / 8] &= ~(1 << (pfn % 8));
+    }
+
+    uint64_t t1 = get_tsc();
+    if (sev_psc_range(SHARED_MEM_ADDR, SHARED_MEM_SIZE, /*shared=*/true) < 0)
+        INIT_FAIL("SEV-SNP: the hypervisor refused to make the shared heap shared");
+    uint64_t t2 = get_tsc();
+    log_always("SEV-SNP: validated %lu pages at boot (low 8 MB, page tables, bitmap; %lu Mcycles), "
+               "the rest of RAM up to 0x%lx on demand; shared heap converted to shared "
+               "(%lu Mcycles)", g_sev_validated_pages, (t1 - t0) / 1000000, memory_end,
+               (t2 - t1) / 1000000);
+}
+
+uint64_t sev_validated_pages(void) {
+    return g_sev_validated_pages;
+}
+
+/* ---- per-CPU state ---- */
+
+int sev_percpu_prepare(uint32_t num_cpus) {
+    for (uint32_t i = 0; i < num_cpus; i++) {
+        if (!sev_es_active())
+            break;
+        g_sev_vc_stacks[i] = malloc(SEV_VC_STACK_SIZE);
+        if (!g_sev_vc_stacks[i])
+            return -PAL_ERROR_NOMEM;
+        if (i == 0)
+            continue; /* CPU 0 keeps the boot GHCB */
+        struct ghcb* ghcb = memory_get_shared_region(PAGE_SIZE);
+        if (!ghcb)
+            return -PAL_ERROR_NOMEM;
+        memset(ghcb, 0, PAGE_SIZE);
+        g_sev_ghcbs[i] = ghcb;
+    }
+    return 0;
+}
+
+uint64_t sev_vc_stack_top(uint32_t cpu_id) {
+    return (uint64_t)g_sev_vc_stacks[cpu_id] + SEV_VC_STACK_SIZE;
+}
+
+/* ---- SNP AP start ---- */
+
+static void* g_sev_ap_vmsas[MAX_NUM_CPUS];
+
+/* RMPADJUST: set the VMSA attribute of a page (for VMPL1, the only target VMPL0 may adjust) */
+static int sev_rmpadjust_vmsa(void* page, bool vmsa) {
+    int rc;
+    uint64_t attrs = 1 | (vmsa ? 1UL << 16 : 0); /* target VMPL 1, VMSA bit */
+    __asm__ volatile(".byte 0xf3, 0x0f, 0x01, 0xfe" /* rmpadjust */
+                     : "=a"(rc) : "a"(page), "c"(0), "d"(attrs) : "memory", "cc");
+    return rc;
+}
+
+static void vmsa_seg(struct sev_vmsa_seg* seg, uint16_t selector, uint16_t attrib, uint32_t limit,
+                     uint64_t base) {
+    seg->selector = selector;
+    seg->attrib = attrib;
+    seg->limit = limit;
+    seg->base = base;
+}
+
+int sev_snp_start_ap(uint32_t cpu_idx, void (*entry)(uint32_t)) {
+    /* a VMSA must not be 2 MB aligned (SNP erratum, as Linux does): take the second of two pages */
+    char* pages = malloc(3 * PAGE_SIZE);
+    if (!pages)
+        return -PAL_ERROR_NOMEM;
+    struct sev_vmsa* vmsa = (struct sev_vmsa*)(ALIGN_UP_PTR(pages, PAGE_SIZE) + PAGE_SIZE);
+    if (IS_ALIGNED_POW2((uintptr_t)vmsa, 0x200000UL))
+        vmsa = (struct sev_vmsa*)((char*)vmsa - PAGE_SIZE);
+    memset(vmsa, 0, PAGE_SIZE);
+
+    void* stack = malloc(4 * PAGE_SIZE);
+    if (!stack)
+        return -PAL_ERROR_NOMEM;
+
+    struct {
+        uint16_t limit;
+        uint64_t base;
+    } __attribute__((packed)) gdtr, idtr;
+    __asm__ volatile("sgdt %0" : "=m"(gdtr));
+    __asm__ volatile("sidt %0" : "=m"(idtr));
+    uint16_t cs, ds;
+    __asm__ volatile("mov %%cs, %0" : "=r"(cs));
+    __asm__ volatile("mov %%ds, %0" : "=r"(ds));
+    uint64_t cr0, cr3, cr4;
+    __asm__ volatile("mov %%cr0, %0" : "=r"(cr0));
+    __asm__ volatile("mov %%cr3, %0" : "=r"(cr3));
+    __asm__ volatile("mov %%cr4, %0" : "=r"(cr4));
+    uint32_t xcr0_lo, xcr0_hi;
+    __asm__ volatile("xgetbv" : "=a"(xcr0_lo), "=d"(xcr0_hi) : "c"(0));
+
+    vmsa_seg(&vmsa->cs, cs, 0xa9b, 0xffffffff, 0);  /* 64-bit code */
+    vmsa_seg(&vmsa->ds, ds, 0xc93, 0xffffffff, 0);
+    vmsa_seg(&vmsa->es, ds, 0xc93, 0xffffffff, 0);
+    vmsa_seg(&vmsa->ss, ds, 0xc93, 0xffffffff, 0);
+    vmsa_seg(&vmsa->fs, 0, 0xc93, 0xffffffff, 0);
+    vmsa_seg(&vmsa->gs, 0, 0xc93, 0xffffffff, 0);
+    vmsa_seg(&vmsa->gdtr, 0, 0, gdtr.limit, gdtr.base);
+    vmsa_seg(&vmsa->idtr, 0, 0, 0, 0);
+    vmsa_seg(&vmsa->ldtr, 0, 0x82, 0xffff, 0);
+    vmsa_seg(&vmsa->tr, 0, 0x8b, 0xffff, 0);
+    vmsa->efer = 0x1d01; /* SCE, LME, LMA, NXE, SVME */
+    vmsa->cr0 = cr0;
+    vmsa->cr3 = cr3;
+    vmsa->cr4 = cr4;
+    vmsa->xcr0 = ((uint64_t)xcr0_hi << 32) | xcr0_lo;
+    vmsa->dr6 = 0xffff0ff0;
+    vmsa->dr7 = 0x400;
+    vmsa->rflags = 0x2;
+    vmsa->g_pat = 0x0007040600070406UL;
+    vmsa->rip = (uint64_t)entry;
+    vmsa->rsp = (uint64_t)stack + 4 * PAGE_SIZE - 8;
+    vmsa->rdi = cpu_idx;
+    vmsa->mxcsr = 0x1f80;
+    vmsa->x87_fcw = 0x37f;
+    vmsa->vmpl = 0;
+    vmsa->sev_features = SEV_FEATURE_SNP_ACTIVE;
+    (void)idtr;
+
+    int rc = sev_rmpadjust_vmsa(vmsa, /*vmsa=*/true);
+    if (rc) {
+        log_error("SEV-SNP: RMPADJUST of the AP VMSA failed (%d)", rc);
+        return -PAL_ERROR_DENIED;
+    }
+    g_sev_ap_vmsas[cpu_idx] = vmsa;
+
+    uint64_t flags;
+    __asm__ volatile("pushfq; pop %0; cli" : "=r"(flags) : : "memory");
+    struct ghcb* ghcb = sev_this_ghcb();
+    memset(ghcb->valid_bitmap, 0, sizeof(ghcb->valid_bitmap));
+    GHCB_SET(ghcb, rax, vmsa->sev_features);
+    rc = sev_ghcb_call(ghcb, SVM_VMGEXIT_AP_CREATION,
+                       ((uint64_t)cpu_idx << 32) | SVM_VMGEXIT_AP_CREATE, (uint64_t)vmsa);
+    if (flags & 0x200)
+        __asm__ volatile("sti" : : : "memory");
+    if (rc < 0) {
+        log_error("SEV-SNP: AP creation of vCPU %u refused (exit info 0x%lx 0x%lx)", cpu_idx,
+                  ghcb->sw_exit_info_1, ghcb->sw_exit_info_2);
+        return rc;
+    }
+    return 0;
+}
+
+extern struct per_cpu_data* g_per_cpu_data;
+
+void sev_ap_early(uint32_t cpu_idx) {
+    /* the per-CPU data first: sev_this_ghcb() finds the vCPU through KERNEL_GS_BASE */
+    uint64_t per_cpu = (uint64_t)&g_per_cpu_data[cpu_idx];
+    __asm__ volatile("wrmsr" : : "c"(0xc0000102U), "a"((uint32_t)per_cpu),
+                     "d"((uint32_t)(per_cpu >> 32)));
+    g_per_cpu_data[cpu_idx].cpu_id = cpu_idx;
+    sev_vc_early_idt_init();
+    if (sev_ghcb_register(g_sev_ghcbs[cpu_idx], cpu_idx) < 0)
+        sev_terminate(SEV_TERM_GHCB_REGISTER);
+}

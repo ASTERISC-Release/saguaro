@@ -269,15 +269,35 @@ static int shared_file_page(struct pal_handle* handle, uint64_t page, uintptr_t*
     return 0;
 }
 
+/* Whether another mapping already put pages of the file in the cache (a writer exists). */
+static bool shared_file_has_cache(uint64_t nodeid) {
+    spinlock_lock(&g_shared_file_caches_lock);
+    struct shared_file_cache* cache = shared_file_cache_find(nodeid, /*create=*/false);
+    bool has = cache && cache->frames_count;
+    spinlock_unlock(&g_shared_file_caches_lock);
+    return has;
+}
+
+/* `private`: a MAP_PRIVATE mapping that shares the cached frames read-only until a write copies
+ * them (Linux's page-cache semantics; Wine's clients map the wineserver's session block
+ * PROT_READ|PROT_WRITE MAP_PRIVATE, protect it read-only and read what the server writes). */
 static int shared_file_map(struct pal_handle* handle, struct memory_address_space* space,
-                           void* addr, pal_prot_flags_t prot, uint64_t offset, uint64_t size) {
+                           void* addr, pal_prot_flags_t prot, uint64_t offset, uint64_t size,
+                           bool private) {
+    bool write   = !!(prot & PAL_PROT_WRITE);
     bool execute = !!(prot & PAL_PROT_EXEC);
     for (uint64_t done = 0; done < size; done += PAGE_SIZE) {
         uintptr_t frame;
         int ret = shared_file_page(handle, (offset + done) / PAGE_SIZE, &frame);
         if (ret == 0) {
-            ret = memory_address_space_map_shared_frame(space, (uintptr_t)addr + done, frame,
-                                                        /*write=*/true, execute);
+#ifdef __x86_64__
+            if (private)
+                ret = memory_address_space_map_cow_frame(space, (uintptr_t)addr + done, frame,
+                                                         /*writable=*/write, execute);
+            else
+#endif
+                ret = memory_address_space_map_shared_frame(space, (uintptr_t)addr + done, frame,
+                                                            write, execute);
             memory_frame_unref(frame);
         }
         if (ret < 0) {
@@ -845,9 +865,25 @@ int pal_common_file_map(struct pal_handle* handle, void* addr, pal_prot_flags_t 
     assert(IS_ALLOC_ALIGNED(offset) && IS_ALLOC_ALIGNED(size));
 
 #if defined(__x86_64__) || defined(__aarch64__)
-    if (!(prot & PAL_PROT_WRITECOPY) && (prot & PAL_PROT_WRITE) && memory_frame_pool_active()
-            && current_address_space() && !handle->file.chunk_hashes)
-        return shared_file_map(handle, current_address_space(), addr, prot, offset, size);
+    /* Every MAP_SHARED mapping of a host file (no WRITECOPY), read-only ones included, maps the
+     * node's cached frames: a read-only mapping must see what another process writes through its
+     * writable mapping (Wine's clients read the server's session block that way), which a copy
+     * taken from the host file at mmap() time never does. A PROT_NONE mapping keeps the plain
+     * path (nothing to see until an mprotect, which lands on the copy; none is known to do that). */
+    if (!(prot & PAL_PROT_WRITECOPY) && (prot & (PAL_PROT_READ | PAL_PROT_WRITE | PAL_PROT_EXEC))
+            && memory_frame_pool_active() && current_address_space() && !handle->file.chunk_hashes)
+        return shared_file_map(handle, current_address_space(), addr, prot, offset, size,
+                               /*private=*/false);
+#endif
+#ifdef __x86_64__
+    /* A MAP_PRIVATE mapping of a file that another mapping writes through the cache shares the
+     * cached frames copy-on-write, so that it sees those writes until it writes itself (Linux:
+     * one page cache). Files without such a writer keep the copy below (no behaviour change). */
+    if ((prot & PAL_PROT_WRITECOPY) && (prot & (PAL_PROT_READ | PAL_PROT_WRITE | PAL_PROT_EXEC))
+            && memory_frame_pool_active() && current_address_space() && !handle->file.chunk_hashes
+            && shared_file_has_cache(handle->file.nodeid))
+        return shared_file_map(handle, current_address_space(), addr, prot, offset, size,
+                               /*private=*/true);
 #endif
 
     if (!(prot & PAL_PROT_WRITECOPY) && (prot & PAL_PROT_WRITE)) {

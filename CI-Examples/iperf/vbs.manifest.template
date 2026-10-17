@@ -1,0 +1,52 @@
+# Copyright (C) 2026 The ASTERISC Research Lab
+# SPDX-License-Identifier: BSD-3-Clause
+
+# iperf3 manifest for a Windows VBS enclave (`make VBS=1`, Documentation/vbs.rst): the counterpart of
+# iperf3.manifest.template. iperf3 is built with the vbs gcc against the vbs glibc (vbs-build/iperf3,
+# a dynamic PIE) and packed with the glibc libraries it needs.
+
+loader.entrypoint = "file:/libsysdb.so"
+libos.entrypoint = "/iperf3"
+loader.log_level = "{{ log_level }}"
+
+# The arguments come from the command line (`gramine-vbs iperf3 -s -p 5201 -B 127.0.0.1`, or `-c` for
+# a client in a second enclave of the same image). Use the default mode of iperf3: one process and
+# its threads (no -D: a daemon forks). The enclave's sockets are the Windows host's: listen on the
+# loopback only.
+loader.insecure__use_cmdline_argv = true
+
+loader.env.LD_LIBRARY_PATH = "{{ arch_libdir }}"
+
+fs.root.uri = "file:/"
+# iperf3 keeps the send buffer in a temporary file under /tmp (created and unlinked at once)
+fs.mounts = [
+  { type = "tmpfs", path = "/tmp" },
+]
+# no run-time code generation in a VBS enclave
+sys.rewrite_syscalls = false
+
+vbs.debug = false
+# iperf3 keeps little memory (a few MB with a few streams)
+vbs.enclave_size = "256M"
+# the main thread and one thread per stream (`-P`), plus the helpers: the check uses -P 2
+vbs.max_threads = 8
+
+vbs.packed_files = [
+  { path = "/iperf3", uri = "file:vbs-build/iperf3" },
+  # glibc's pthread_cancel (used when a stream thread ends) loads libgcc_s from the library path
+  { path = "/usr/lib/libgcc_s.so.1", uri = "file:vbs-build/libgcc_s.so.1" },
+{% for lib in [vbs.ldso, "libc.so.6", "libm.so.6"] %}
+  { path = "{{ arch_libdir }}/{{ lib }}", uri = "file:{{ vbs.sysroot }}/usr/lib/{{ lib }}" },
+{% endfor %}
+]
+
+# The host's libgcc_s is not built with -ffixed-x18: four of its quad-precision helpers use x18 (the
+# TEB). Nothing in this image references them (checked with nm -D: not in iperf3, libc or libm), so
+# they are never reached. Remove this entry if the image starts to use _Float128 or long double
+# arithmetic that calls libgcc. The fifth name is the code after __divmodbitint4 (pack.py names
+# code past the end of a symbol SYMBOL+0xSIZE): libgcc's local CPU-feature detection for function
+# multi-versioning (__init_cpu_features_resolver), which uses x18 as a scratch register and is run
+# only by a constructor of libgcc_s; that constructor is skipped (vbs.x18_skip_constructors: it
+# returns at once), and nothing in libgcc_s reads what it would have computed.
+vbs.x18_allow = { "libgcc_s.so.1" = [ "__divmodbitint4@@GCC_14.0.0", "__divtf3@@GCC_3.0", "__mulbitint3@@GCC_14.0.0", "__multf3@@GCC_3.0", "__divmodbitint4@@GCC_14.0.0+0xfc8" ] }
+vbs.x18_skip_constructors = [ "libgcc_s.so.1" ]

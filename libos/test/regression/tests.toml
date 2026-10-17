@@ -92,6 +92,8 @@ manifests = [
   "memfd_rw",
   "memfd_seals",
   "memfd_shared",
+  "mmap_shared_ro",
+  "netlink_ifaces",
   "mremap_misc",
   "perm_checks",
   "prctl_misc",
@@ -182,6 +184,7 @@ manifests = [
 
 manifests = [
   "asm/x86_64/iret_emulation",
+  "attestation_sev_snp",
   "avx",
   "cpuid",
   "debug_regs_x86_64",

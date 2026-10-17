@@ -49,6 +49,25 @@ int graphics_drop_stale_host_handle(int fd);
 /* Set once the application has mapped the comm window at COMM_ADDR (libos_syscall_mmap()). */
 extern bool g_graphics_comm_mapped;
 
+/* Bounce buffers for what the listener reads by physical address (sys/libos_graphics_bounce.c,
+ * Documentation/devel/proton-vm/design-gpu.md). graphics_bounce(slot offset) returns the slot's
+ * bounce, reset, or NULL when user pointers can be passed through (identity-mapped memory). */
+struct gbounce {
+    char* va;
+    uint64_t pa;
+    size_t size;
+    size_t used;
+};
+struct gbounce* graphics_bounce(long offset);
+/* copies `size` bytes in; returns the physical address to hand the host (0: no room) */
+uint64_t graphics_bounce_in(struct gbounce* b, const void* src, size_t size);
+/* reserves `size` bytes for an output (or in-out) argument, seeded with the user's bytes;
+ * returns the LibOS address to copy back from (equal to `user` when passed through), NULL: no
+ * room; `*out_pa` is what the host gets */
+void* graphics_bounce_out(struct gbounce* b, void* user, size_t size, uint64_t* out_pa);
+/* bytes still free in the bounce (SIZE_MAX when passing through) */
+size_t graphics_bounce_room(struct gbounce* b);
+
 static inline comm_page_t* comm_page(long offset) {
     return (comm_page_t*)(uintptr_t)(COMM_ADDR + offset);
 }

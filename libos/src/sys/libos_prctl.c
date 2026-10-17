@@ -80,6 +80,12 @@ static long name_of_thread(struct libos_thread* t, char out[16]) {
     return 0;
 }
 
+#ifndef PR_SET_SYSCALL_USER_DISPATCH
+#define PR_SET_SYSCALL_USER_DISPATCH 59
+#define PR_SYS_DISPATCH_OFF          0
+#define PR_SYS_DISPATCH_ON           1
+#endif
+
 long libos_syscall_prctl(int option, unsigned long arg2, unsigned long arg3, unsigned long arg4,
                          unsigned long arg5) {
     struct libos_thread* cur = get_cur_thread();
@@ -119,6 +125,27 @@ long libos_syscall_prctl(int option, unsigned long arg2, unsigned long arg3, uns
             return 0; /* PR_TIMING_STATISTICAL */
         case PR_SET_TIMING:
             return arg2 == 0 ? 0 : -EINVAL; /* only PR_TIMING_STATISTICAL exists */
+        case PR_SET_SYSCALL_USER_DISPATCH: {
+            /* arg2: PR_SYS_DISPATCH_ON/OFF; arg3, arg4: the range [offset, offset + len) whose
+             * system calls always go through; arg5: the selector byte's address (or NULL) */
+            if (arg2 == PR_SYS_DISPATCH_OFF) {
+                if (arg3 || arg4 || arg5)
+                    return -EINVAL;
+                memset(&cur->syscall_user_dispatch, 0, sizeof(cur->syscall_user_dispatch));
+                return 0;
+            }
+            if (arg2 != PR_SYS_DISPATCH_ON)
+                return -EINVAL;
+            if (arg3 && arg3 + arg4 <= arg3)
+                return -EINVAL;
+            if (arg5 && !is_user_memory_readable((void*)arg5, 1))
+                return -EFAULT;
+            cur->syscall_user_dispatch.start    = arg3;
+            cur->syscall_user_dispatch.len      = arg4;
+            cur->syscall_user_dispatch.selector = (char*)arg5;
+            __atomic_store_n(&cur->syscall_user_dispatch.on, true, __ATOMIC_RELEASE);
+            return 0;
+        }
         case PR_SET_NAME: {
             const char* name = (const char*)arg2;
             char buf[16] = {0};

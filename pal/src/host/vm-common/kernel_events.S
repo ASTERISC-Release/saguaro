@@ -12,6 +12,8 @@
     globl   isr_iret_to_userland
     globl   jump_into_user_mode
     globl   syscall_asm
+    globl   syscall_asm_gs
+    globl   sysret_asm                      // the LibOS enters a handler through it (pal_main.c)
     globl   save_context_and_restore_next
     globl   do_xsave
     globl   do_xrstor
@@ -56,6 +58,22 @@ isr_spurious:
     iretq
 
 isr_iret_to_userland:
+    cmpq    $0, %gs:PAL_TCB_VM_GS_SWAPPED_BY_ISR
+    je      1f
+    // the resumed context ran with the thread's own GS base: load it; a register's home is the
+    // per-CPU scratch slot, reached through swapgs (KERNEL_GS_BASE stays the per-CPU data after
+    // each pair)
+    cli
+    movq    $0, %gs:PAL_TCB_VM_GS_SWAPPED_BY_ISR
+    swapgs
+    mov     %rax, %gs:PER_CPU_DATA_GS_SCRATCH
+    swapgs
+    mov     %gs:PAL_TCB_VM_USER_GSBASE, %rax
+    wrgsbase %rax
+    swapgs
+    mov     %gs:PER_CPU_DATA_GS_SCRATCH, %rax
+    swapgs
+1:
     iretq
 
 _isr_common:
@@ -80,6 +98,27 @@ _isr_common:
     shl     $32, %rdx
     or      %rdx, %rax
 
+    // A context that owns %gs was interrupted with its own GS base (user mode, or a signal handler
+    // that the LibOS runs in ring 0 with the application's GS): put the running thread's TCB
+    // (per-CPU current_tcb) into GS before any %gs use and remember it for the return. The rule
+    // is "GS equals the thread's recorded base": a dummy TCB in GS (thread exit) or another TCB
+    // (a switch in progress) is left alone. Threads without their own %gs skip this at the first
+    // compare.
+    xor     %r8d, %r8d                      // isr_regs.gs_swapped (r8 was saved above)
+    mov     PER_CPU_DATA_CURRENT_TCB(%rax), %rdi
+    test    %rdi, %rdi
+    jz      .Lisr_gs_ok
+    mov     PAL_TCB_VM_USER_GSBASE(%rdi), %rsi
+    test    %rsi, %rsi
+    jz      .Lisr_gs_ok
+    rdgsbase %rdx
+    cmp     %rdx, %rsi
+    jne     .Lisr_gs_ok
+    wrgsbase %rdi
+    mov     $1, %r8d
+.Lisr_gs_ok:
+    push    %r8                             // isr_regs.gs_swapped
+
     mov     PER_CPU_DATA_XSAVE_AREA(%rax), %rdi
     push    %rdi
     callq   do_xsave
@@ -94,6 +133,17 @@ _isr_common:
 
     pop     %rdi
     callq   do_xrstor
+
+    // returning to the context the entry swapped the TCB in over (isr_regs.gs_swapped): its base
+    // goes back in (with interrupts off until iretq restores RFLAGS; the registers below are
+    // popped afterwards)
+    pop     %rdi
+    test    %rdi, %rdi
+    jz      .Lisr_ret_gs_done
+    cli
+    mov     %gs:PAL_TCB_VM_USER_GSBASE, %rdi
+    wrgsbase %rdi
+.Lisr_ret_gs_done:
 
     pop     %r8
     pop     %r9
@@ -135,6 +185,35 @@ jump_into_user_mode:
     sysretq
 
 
+// The syscall entry of a thread that owns %gs (arch_prctl(ARCH_SET_GS)): LSTAR points here while
+// such a thread runs (sched_switch_to_current_thread_root), to syscall_asm otherwise, so threads
+// without their own %gs execute syscall_asm unchanged. On entry GS is the application's; the
+// running thread's TCB comes from the per-CPU data (through swapgs, which leaves KERNEL_GS_BASE
+// as the per-CPU data after each pair), RAX lives in the per-CPU scratch slot meanwhile, the
+// application's base is remembered in the TCB and the TCB goes into GS. Interrupts are off for
+// these few instructions (an interrupt would read KERNEL_GS_BASE for the per-CPU data).
+syscall_asm_gs:
+    cli
+    swapgs
+    mov     %rax, %gs:PER_CPU_DATA_GS_SCRATCH
+    mov     %gs:PER_CPU_DATA_CURRENT_TCB, %rax
+    swapgs
+    mov     %rcx, PAL_TCB_VM_USER_RIP(%rax)
+    rdgsbase %rcx
+    cmp     %rcx, %rax
+    je      1f              // GS already holds the TCB (a syscall from code the LibOS entered
+                            // directly, such as a signal handler): keep the remembered base
+    mov     %rcx, PAL_TCB_VM_USER_GSBASE(%rax)
+    wrgsbase %rax
+1:
+    swapgs
+    mov     %gs:PER_CPU_DATA_GS_SCRATCH, %rax
+    swapgs
+    sti
+    cmp     $SYSCALL_RT_SIGRETURN, %rax
+    je      .Linstall_rt_sigreturn_path
+    jmp     .Linstall_sysret_path
+
 // FIXME: ideally must add swapgs in the very beginning, but GS is not used by ring-3 anyway
 syscall_asm:
     mov     %rcx, %gs:PAL_TCB_VM_USER_RIP
@@ -155,6 +234,22 @@ sysret_asm:
 .Lsysret_now:
     mov     %gs:PAL_TCB_VM_USER_RIP, %rcx
     or      $0x200, %r11                    // userland RFLAGS will contain IF
+    cmpq    $0, %gs:PAL_TCB_VM_USER_GSBASE
+    jne     .Lsysret_gs
+    sysretq
+
+    // the thread owns %gs: its base goes back in (RAX, the return value, waits in the per-CPU
+    // scratch slot; sysretq restores IF from R11)
+.Lsysret_gs:
+    cli
+    swapgs
+    mov     %rax, %gs:PER_CPU_DATA_GS_SCRATCH
+    swapgs
+    mov     %gs:PAL_TCB_VM_USER_GSBASE, %rax
+    wrgsbase %rax
+    swapgs
+    mov     %gs:PER_CPU_DATA_GS_SCRATCH, %rax
+    swapgs
     sysretq
 
     // a timer tick found this thread in kernel mode: with interrupts off, make the timer fire
@@ -194,8 +289,8 @@ sigreturn_asm:
     mov     %rax, %gs:PAL_TCB_VM_SIGRETURN_USER_RAX
 
     mov     %gs:PAL_TCB_VM_SIGRETURN_PSEUDO_RSP, %rsp
-    // push SS: 64-bit user data
-    pushq   $0x23 // SS segment selector: Index=100 (4), GDT, RPL=11
+    // push SS: user data (selector 0x2b after the GDT matches Linux's numbering)
+    pushq   $0x2b // SS segment selector: GDT index 5, RPL=3
     // push user RSP
     mov     %gs:PAL_TCB_VM_SIGRETURN_USER_RSP, %rax
     push    %rax
@@ -204,13 +299,25 @@ sigreturn_asm:
     pop     %rax
     or      $0x200, %rax
     push    %rax
-    // push CS: 64-bit user code
-    pushq   $0x2b // CS segment selector: Index=101 (5), GDT, RPL=11
+    // push CS: 64-bit user code (selector 0x33 after the GDT matches Linux's numbering)
+    pushq   $0x33 // CS segment selector: GDT index 6, RPL=3
     // push user RIP
     mov     %gs:PAL_TCB_VM_USER_RIP, %rax
     push    %rax
     // RSP will be restored by iretq, but RAX we must restore manually
     mov     %gs:PAL_TCB_VM_SIGRETURN_USER_RAX, %rax
+    cmpq    $0, %gs:PAL_TCB_VM_USER_GSBASE
+    je      .Lsigreturn_iret
+    cli
+    swapgs
+    mov     %rax, %gs:PER_CPU_DATA_GS_SCRATCH
+    swapgs
+    mov     %gs:PAL_TCB_VM_USER_GSBASE, %rax
+    wrgsbase %rax
+    swapgs
+    mov     %gs:PER_CPU_DATA_GS_SCRATCH, %rax
+    swapgs
+.Lsigreturn_iret:
     // jump to user context
     iretq
 

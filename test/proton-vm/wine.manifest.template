@@ -14,7 +14,7 @@ loader.insecure__use_cmdline_argv = true
 # shared data at 0x7ffe0000); with ASLR the LibOS puts the stack and the libraries a random
 # distance below the top of guest RAM, sometimes inside that range, and ntdll exits at once
 loader.insecure__disable_aslr = true
-loader.env.LD_LIBRARY_PATH = "{{ proton }}/files/lib:{{ proton }}/files/lib64:/lib:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu"
+loader.env.LD_LIBRARY_PATH = "{{ proton }}/files/lib:{{ proton }}/files/lib64:/lib:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu{{ ':' + ffmpeg if ffmpeg else '' }}"
 loader.env.PATH = "{{ proton }}/files/bin:/usr/bin:/bin"
 loader.env.HOME = "/home/user"
 loader.env.USER = "user"
@@ -27,7 +27,48 @@ loader.env.WINEESYNC = "{{ sync }}"
 loader.env.WINEFSYNC = "{{ sync }}"
 loader.env.WINENTSYNC = "{{ sync }}"
 loader.env.WINEDLLOVERRIDES = "d3d11,d3d10core,d3d9,dxgi,d3d12,d3d12core=n;winemenubuilder.exe=d"
+{% if display|string != "" %}
+# a window: the X server of the host (the container's Xorg dummy server :N for the game runs, see
+# test/proton-vm/xorg-dummy.conf) through gramine-vm's vsock relay (Documentation/devel/graphics/running.md)
+loader.env.DISPLAY = "2:{{ display }}"
+vm.net.direct_vsock_ports = [{{ 6000 + display|int }}]
+# NET=deny: a game's online features fail at once instead of waiting on the relay (Doom's
+# Bethesda.net login dialog froze the game in the guest, FINDINGS.md 2026-10-16)
+vm.net.outbound = "{{ net }}"
+{% else %}
 loader.env.DISPLAY = ""
+{% endif %}
+{% if gpu|string == "1" %}
+# the GPU through the graphics redirection (design-gpu.md): the arenas (GRAMINE_VM_GRAPHICS=1),
+# Mesa's driver in the guest with its DRM ioctls forwarded, the presentation layer
+# VK_LAYER_GRAMINE_present from libgraphics.so (found through XDG_DATA_HOME), Mesa's device
+# discovery through /sys
+{% if gpu_preload|string == "1" %}
+# the session started by the first process (libgraphics.so preloaded everywhere, as the Vulkan
+# tests do); without it the implicit layer starts it in the first process that creates an instance
+loader.env.LD_PRELOAD = "/libgraphics.so"
+{% endif %}
+loader.env.EGL_VULKAN_PRESENT = "1"
+loader.env.NODEVICE_SELECT = "1"
+loader.env.XDG_DATA_HOME = "/gramine-xdg"
+loader.env.EGL_EAGER_SESSION = "{{ gpu_eager }}"
+loader.env.EGL_GRAMINE = "1"
+loader.env.EGL_DISCRETE = "{{ egl_discrete }}"
+loader.env.EGL_SHARED_INPUT = "0"
+loader.env.GBM_BACKEND = "dri"
+loader.env.IVSHMEM_GRAMINE_VM = "1"
+loader.env.GLIBC_TUNABLES = "glibc.pthread.rseq=0"
+{% else %}
+# software rendering first (step 2 of "Next phases"): Mesa's llvmpipe for GLX, lavapipe for Vulkan
+# (DXVK); the X11 WSI presents with XPutImage when the server has no DRI3
+loader.env.LIBGL_ALWAYS_SOFTWARE = "1"
+{% endif %}
+loader.env.VK_ICD_FILENAMES = "{{ vk_icd }}"
+loader.env.DXVK_FILTER_DEVICE_NAME = "{{ dxvk_device }}"
+loader.env.DXVK_HUD = "{{ dxvk_hud }}"
+loader.env.DXVK_CONFIG = "{{ dxvk_config }}"
+# the intake's finding: Unity's FMOD is silent without a device, Wine's audio drivers find none
+loader.env.PULSE_SERVER = "none"
 sys.experimental__multiprocess = true
 sys.insecure__allow_eventfd = true
 sys.stack.size = "8M"
@@ -40,10 +81,32 @@ fs.mounts = [
   { path = "/usr", uri = "file:/usr" },
   { path = "/bin", uri = "file:/bin" },
   { path = "/etc", uri = "file:/etc" },
+  # Wine's server passes an fd of every ancestor directory of a path (Z:\root, Z:\root\...); a
+  # directory that exists in no mount (a synthetic one, like /root was) cannot be passed, so the
+  # checkout's parent is a real mount (FINDINGS.md 2026-10-16)
+  { path = "/root", uri = "file:/root" },
   { path = "{{ proton }}", uri = "file:{{ proton }}" },
   { path = "{{ prefix }}", uri = "file:{{ prefix }}" },
   { path = "{{ tests }}", uri = "file:{{ tests }}" },
+{% if game %}
+  { path = "{{ game }}", uri = "file:{{ game }}" },
+{% endif %}
+{% if gpu|string == "1" %}
+  { path = "/libgraphics.so", uri = "file:{{ gramine.libgraphics }}" },
+  { path = "/gramine-xdg/vulkan", uri = "file:{{ layer_dir }}" },
+  { path = "/sys", type = "chroot", uri = "file:/sys" },
+  { path = "/sys/dev", type = "chroot", uri = "file:/sys/dev" },
+  { path = "/sys/devices", type = "chroot", uri = "file:/sys/devices" },
+  { path = "/sys/bus/pci", type = "chroot", uri = "file:/sys/bus/pci" },
+  { path = "/home/user/.cache", type = "chroot", uri = "file:{{ work }}/home/.cache" },
+{% endif %}
+{% if ffmpeg %}
+  # FFmpeg 8 for GE-Proton's winedmo (the intake, FINDINGS.md 2026-10-16)
+  { path = "{{ ffmpeg }}", uri = "file:{{ ffmpeg }}" },
+{% endif %}
   { path = "/tmp", uri = "file:{{ work }}/tmp" },
   { path = "/home/user", uri = "file:{{ work }}/home" },
-  { path = "/dev/shm", uri = "file:{{ work }}/shm" },
+  # no chroot /dev/shm: memfd_create (the wineserver's shared session block, mapped by every GUI
+  # client) then takes the VM PAL's own shared store, which is coherent between guest processes;
+  # a host-backed /dev/shm gave every process a private copy (FINDINGS.md 2026-10-16)
 ]

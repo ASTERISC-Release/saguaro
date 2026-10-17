@@ -60,7 +60,14 @@ static void switch_to_thread_address_space(struct thread* thread) {
  * still running on the previous thread's stack, which may be private to its process. */
 void sched_switch_to_current_thread_root(void);
 void sched_switch_to_current_thread_root(void) {
-    switch_to_thread_address_space(get_thread_ptr(rdmsr(MSR_IA32_GS_BASE)));
+    struct thread* thread = get_thread_ptr(rdmsr(MSR_IA32_GS_BASE));
+    switch_to_thread_address_space(thread);
+    /* the entries of a thread that owns %gs need its TCB from the per-CPU data, and its system
+     * calls enter through syscall_asm_gs (kernel_events.S); LSTAR is only written when the kind
+     * of thread changes */
+    struct per_cpu_data* cpu = get_per_cpu_data();
+    cpu->current_tcb = (void*)get_gs_base(thread);
+    syscalls_select_entry(cpu, thread->user_gsbase != 0);
 }
 
 static uint64_t get_rflags(void) {
@@ -100,6 +107,8 @@ static void save_userland_context(struct thread* curr_thread, struct isr_regs* u
     curr_thread->irq_pseudo_stack.rflags = userland_regs->rflags;
     curr_thread->irq_pseudo_stack.rsp    = userland_regs->rsp;
     curr_thread->irq_pseudo_stack.ss     = userland_regs->ss;
+    /* the interrupt's own return is skipped: isr_iret_to_userland loads the base back */
+    curr_thread->gs_swapped_by_isr = userland_regs->gs_swapped;
 
     curr_thread->context.rip    = (uint64_t)&isr_iret_to_userland;
     curr_thread->context.rsp    = (uint64_t)&curr_thread->irq_pseudo_stack;
@@ -322,6 +331,89 @@ void sched_thread_wait(int* futex_word, spinlock_t* lock) {
 
     /* now this thread is scheduled back, it means that it was unblocked via wakeup */
     spinlock_lock(lock);
+}
+
+int sched_thread_wait_interruptible(int* futex_word, spinlock_t* lock) {
+    assert(spinlock_is_locked(lock));
+    assert(lock != &g_thread_list_lock);
+
+    spinlock_lock_disable_irq(&g_thread_list_lock); /* unlocked during save_context, or below */
+
+    uint64_t curr_gs_base      = rdmsr(MSR_IA32_GS_BASE);
+    struct thread* curr_thread = get_thread_ptr(curr_gs_base);
+
+    /* an interruption that arrived before this wait (the thread was in user mode or on its way
+     * here): do not sleep, as a system call with a signal pending does not */
+    if (__atomic_exchange_n(&curr_thread->resume_pending, false, __ATOMIC_ACQ_REL)) {
+        spinlock_unlock_enable_irq(&g_thread_list_lock);
+        return -PAL_ERROR_INTERRUPTED;
+    }
+
+    spinlock_unlock(lock);
+
+    curr_thread->state              = THREAD_BLOCKED;
+    curr_thread->blocked_on         = futex_word;
+    curr_thread->wait_interruptible = true;
+
+    struct thread* next_thread = find_next_thread(curr_thread);
+    next_thread->state         = THREAD_RUNNING;
+
+    assert(next_thread != curr_thread);
+
+    wrmsr(MSR_IA32_FS_BASE, next_thread->context.user_fsbase);
+
+    uint64_t next_gs_base = (uint64_t)get_gs_base(next_thread);
+    save_context_and_restore_next(curr_gs_base, next_gs_base, /*lock_to_unlock=*/NULL,
+                                  /*clear_child_tid=*/NULL, &g_thread_list_lock.lock,
+                                  get_per_cpu_data()->scheduling_stack, /*post_switch=*/NULL,
+                                  /*post_switch_arg=*/NULL);
+
+    /* scheduled back: woken by the futex word or by sched_thread_interrupt() (an interruption
+     * that arrives from now on waits for the next interruptible wait or user-mode tick) */
+    spinlock_lock_disable_irq(&g_thread_list_lock);
+    curr_thread->wait_interruptible = false;
+    bool interrupted = curr_thread->woken_by_interrupt;
+    curr_thread->woken_by_interrupt = false;
+    spinlock_unlock_enable_irq(&g_thread_list_lock);
+
+    spinlock_lock(lock);
+    return interrupted ? -PAL_ERROR_INTERRUPTED : 0;
+}
+
+void sched_thread_interrupt(struct thread* thread) {
+    spinlock_lock_disable_irq(&g_thread_list_lock);
+    /* The LibOS may resume a thread whose PAL thread has already exited (its stack and TCB, where
+     * `struct thread` lives, are freed): only a thread still on the list is touched, as the Linux
+     * PAL's tgkill() of a gone tid is harmless. */
+    bool alive = false;
+    struct thread* t;
+    LISTP_FOR_EACH_ENTRY(t, &g_thread_list, list) {
+        if (t == thread) {
+            alive = true;
+            break;
+        }
+    }
+    if (!alive) {
+        spinlock_unlock_enable_irq(&g_thread_list_lock);
+        return;
+    }
+    if (thread->state == THREAD_BLOCKED && thread->wait_interruptible) {
+        /* the wait's -PAL_ERROR_INTERRUPTED return is the delivery; nothing stays pending */
+        thread->state              = THREAD_RUNNABLE;
+        thread->blocked_on         = NULL;
+        thread->woken_by_interrupt = true;
+        __atomic_store_n(&thread->resume_pending, false, __ATOMIC_RELEASE);
+#ifdef __x86_64__
+        if (memory_frame_pool_active() && !thread->is_helper) {
+            LISTP_DEL(thread, &g_thread_list, list);
+            LISTP_ADD(thread, &g_thread_list, list);
+        }
+#endif
+        __atomic_store_n(&g_kick_sched_thread, true, __ATOMIC_RELEASE);
+    } else {
+        __atomic_store_n(&thread->resume_pending, true, __ATOMIC_RELEASE);
+    }
+    spinlock_unlock_enable_irq(&g_thread_list_lock);
 }
 
 static void sched_thread_wakeup_common(int* futex_word) {

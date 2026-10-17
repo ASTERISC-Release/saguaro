@@ -11,10 +11,12 @@ short on purpose; an item that is fixed is removed from the topic list first and
 | Host / PAL | Main open items | Details |
 |---|---|---|
 | `direct` | audit PAL state that a starting child allocates and frees at exit (the shared file cache was one case); sound and the remaining GPU-driver gaps for graphics | `devel/vm-multiproc/TODO.md`, `devel/graphics-direct/TODO.md` |
-| `vm` | robust mutex for the System V shared tables; `/proc/<pid>/stat` of other processes; `PROT_NONE` enforcement; finer timer than the 100 ms tick; async signal resume; UDP/IPv6 relay gaps | `devel/vm-multiproc/TODO.md`, `devel/libos-syscalls/TODO.md`, `devel/syscall-compat/TODO.md`, `devel/vm-network/TODO.md` |
+| `vm` | multi-vCPU performance: check and improve `gramine-vm` at 2 and 4 vCPUs (multi-process fork cost, TLB shootdowns, scheduler lock contention, cross-CPU handoffs); robust mutex for the System V shared tables; `/proc/<pid>/stat` of other processes; `PROT_NONE` enforcement; finer timer than the 100 ms tick; async signal resume; UDP/IPv6 relay gaps | `devel/vm-multiproc/TODO.md`, `devel/libos-syscalls/TODO.md`, `devel/syscall-compat/TODO.md`, `devel/vm-network/TODO.md` |
 | `vm` with graphics (OpenGL, Vulkan) | present events and a non-flipping blit for Vulkan, idle CPU of the listener, two-thread submission cost, SuperTuxKart start hang, sound, Team Fortress 2 | `devel/graphics/TODO.md`, `devel/vulkan/TODO.md` |
 | `tdx` and `sgx` | never run on this tree's hardware; extend the interrupt-before-IDT guard to TDX; the SGX build needs `protobuf-c` (not in `dependencies.sh` or the container); the TDX install needs `td-shim` | `devel/vm-multiproc/TODO.md`, `quickstart/tdx-sgx.rst` |
-| Proton (Wine, DXVK) | phase 1 steps 1 to 3 done 2026-10-15 on `dev-proton-vm-p1` (Unix-socket nodes, fork of reservations, `SCM_RIGHTS`); next: the `%gs` decision (`devel/proton-vm/design-gs.md`), then interruptible blocking calls and exception vectors in the VM PAL | `devel/proton-vm/PLAN.md` |
+| `sev` (AMD64) | planned; no code yet | `README.rst` |
+| `vbs` (x64 Windows 11) | see the VBS section below | `devel/vbs-enclave/TODO.md` |
+| Proton (Wine, DXVK) | phase 1 steps 1 to 3 done 2026-10-15 on `dev-proton-vm-p1` (Unix-socket nodes, fork of reservations, `SCM_RIGHTS`); `dev-proton-vm-p2` (merged, 2026-10-15): `%gs` handed to the application, interruptible waits, exception vectors, the address space to 512 GiB, drive links, syscall user dispatch: `hello.exe` prints all its lines in the VM; next: the end of a run (the wineserver stays), then the graphics tests | `devel/proton-vm/PLAN.md` |
 
 ## AArch64
 
@@ -33,12 +35,13 @@ short on purpose; an item that is fixed is removed from the topic list first and
 | `direct` | validation on hardware (stress under 8-hart load, other example suites); syscall-rewriting stress and the hosted `test_603` timeout; CPU identification in the PAL | `devel/riscv/TODO.md`, `devel/riscv-hardware/TODO.md`, `devel/syscall-interception/TODO.md` |
 | `vm` | not available (planned) | `README.rst` |
 
-## Windows 11 on ARM64: VBS enclaves (`vbs` PAL)
+## Windows 11 (ARM64 and x64): VBS enclaves (`vbs` PAL)
 
 | Item | Details |
 |---|---|
 | **Evaluate the three VBS PAL changes in more detail** (counter-based clock, `CTR_EL0` emulation, skipping the clear of never-used pool memory); the maintainer's first look found them fine | `devel/vbs-enclave/TODO.md` ("Review and x86_64") |
-| **Port VBS to x86_64 Windows 11**: done through phase 3 on an x64 machine (2026-10-15: gate, tests, tools, six application examples); regression subset 72/103 (same failures as ARM64); left: x86_64 variants of the static `CI-Examples/vbs` manifests, the patched-glibc fast path, a review | `devel/vbs-enclave/PLAN-x64.md`, `devel/vbs-enclave/TODO.md` ("Review and x86_64") |
+| **VBS on x64 Windows 11** is done through phase 3 (2026-10-15: gate, tests, tools, six application examples; regression subset 72/103, the same failures as ARM64); left: x86_64 variants of the static `CI-Examples/vbs` manifests, the patched-glibc fast path for system calls, a CI build job, a review | `devel/vbs-enclave/PLAN-x64.md`, `devel/vbs-enclave/TODO.md` ("Review and x86_64") |
+| Application examples written twice (ARM64 files on `main`, x64 files on `dev-vbs-apps2-x64`): reconcile into one architecture-neutral recipe per application; check PyTorch's image with the new `pack.py`; OpenSSL for TLS in the sysroot; AMD CPUs untested | `devel/vbs-enclave/TODO.md` |
 | `fork` (a multi-enclave design), sealing, remote attestation (Azure Attestation, RA-TLS), production signing | `devel/vbs-enclave/TODO.md` |
 | Networking: fewer host calls per request, TLS inside the enclave bound to the attestation report | `devel/vbs-enclave/TODO.md` ("Networking") |
 | A pure-Windows build (no WSL) and a prebuilt sysroot bundle as a GitHub release; verification of the fresh-machine guide with a second WSL distribution | `devel/vbs-enclave/PLAN-windows-build.md`, `devel/vbs-enclave/windows-fresh-machine.md` |

@@ -299,6 +299,10 @@ static void force_signal(siginfo_t* info) {
     current->forced_signal.siginfo = *info;
 }
 
+void libos_force_signal(siginfo_t* info) {
+    force_signal(info);
+}
+
 static bool have_forced_signal(void) {
     struct libos_thread* current = get_cur_thread();
     return current->forced_signal.siginfo.si_signo != 0;

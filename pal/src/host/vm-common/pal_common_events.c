@@ -106,13 +106,9 @@ int pal_common_event_wait(struct pal_handle* handle, uint64_t* timeout_us) {
         }
 
         /* event wasn't yet signalled, need to sleep waiting on this event */
-#ifdef __aarch64__ /* interruptible by _PalThreadResume() */
         ret = sched_thread_wait_interruptible(&handle->event.signaled, &handle->event.lock);
         if (ret < 0)
             goto out;
-#else
-        sched_thread_wait(&handle->event.signaled, &handle->event.lock);
-#endif
     }
 
     ret = 0;

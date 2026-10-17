@@ -257,3 +257,12 @@ int init_reserved_ranges(int fd) {
     g_reserved_ranges_fd = fd;
     return 0;
 }
+
+int _PalVirtualMemoryAllocContiguous(void* addr, size_t size, pal_prot_flags_t prot,
+                                     uint64_t* out_phys) {
+    __UNUSED(addr);
+    __UNUSED(size);
+    __UNUSED(prot);
+    __UNUSED(out_phys);
+    return -PAL_ERROR_NOTIMPLEMENTED;
+}

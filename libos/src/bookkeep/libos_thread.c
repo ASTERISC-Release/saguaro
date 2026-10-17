@@ -303,6 +303,12 @@ struct libos_thread* get_new_thread(void) {
 
     lock(&cur_thread->lock);
 
+    /* syscall user dispatch is not inherited: Linux starts every new task with it off (kernel/fork.c
+     * clears it; "any fork or exec of the existing process resets the mechanism"). Wine relies on
+     * that: a new thread makes its first system calls from libc before it has a TEB and enables
+     * the dispatch for itself afterwards; with the parent's selector inherited those calls raised
+     * SIGSYS in a thread whose handler could not run yet. */
+    memset(&thread->syscall_user_dispatch, 0, sizeof(thread->syscall_user_dispatch));
     thread->uid       = cur_thread->uid;
     thread->gid       = cur_thread->gid;
     thread->euid      = cur_thread->euid;
@@ -667,6 +673,9 @@ BEGIN_RS_FUNC(thread) {
     }
     CP_REBASE(thread->handle_map);
     CP_REBASE(thread->signal_dispositions);
+    /* a forked child starts with syscall user dispatch off, as a new thread does (see
+     * get_new_thread()) */
+    memset(&thread->syscall_user_dispatch, 0, sizeof(thread->syscall_user_dispatch));
 
     if (!create_lock(&thread->lock)) {
         return -ENOMEM;

@@ -60,6 +60,9 @@
 #include <sys/syscall.h>
 #include <sys/time.h>
 #include <sys/wait.h>
+#include <net/if.h>
+#include <ifaddrs.h>
+#include <sys/ioctl.h>
 #include <time.h>
 #include <ucontext.h>
 #include <unistd.h>
@@ -354,16 +357,21 @@ static void probe_huge(void) {
     static const size_t gib = 1ull << 30;
     size_t sizes[] = {4, 16, 64, 256, 1024};
     for (unsigned i = 0; i < sizeof(sizes) / sizeof(sizes[0]); i++) {
+        double t0 = now_s();
         void* p = mmap(NULL, sizes[i] * gib, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
-        P("huge", "%s reserve %zu GiB PROT_NONE: %s", p == MAP_FAILED ? "FAIL" : "PASS", sizes[i], p == MAP_FAILED ? E() : "ok");
+        double t1 = now_s();
         if (p != MAP_FAILED) munmap(p, sizes[i] * gib);
+        double t2 = now_s();
+        P("huge", "%s reserve %zu GiB PROT_NONE: %s (mmap %.3f s, munmap %.3f s)", p == MAP_FAILED ? "FAIL" : "PASS", sizes[i], p == MAP_FAILED ? E() : "ok", t1 - t0, t2 - t1);
     }
     /* commit: 4 GiB RW NORESERVE, touch a byte per 2 MiB; then 1 GiB a byte per 4 KiB */
+    double tm0 = now_s();
     char* p = mmap(NULL, 4 * gib, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
     if (p == MAP_FAILED) {
         P("huge", "FAIL mmap 4 GiB RW: %s", E());
         return;
     }
+    P("huge", "PASS mmap 4 GiB RW NORESERVE in %.3f s", now_s() - tm0);
     long rss0 = rss_kib();
     double t0 = now_s();
     for (size_t off = 0; off < 4 * gib; off += 2 << 20) p[off] = 1;
@@ -377,7 +385,9 @@ static void probe_huge(void) {
     int r = madvise(p, gib, MADV_DONTNEED);
     t1 = now_s();
     P("huge", "%s madvise(MADV_DONTNEED) 1 GiB: %s in %.3f s, RSS %ld KiB, byte now %d", r == 0 ? "PASS" : "FAIL", r == 0 ? "ok" : E(), t1 - t0, rss_kib(), p[0]);
+    t0 = now_s();
     munmap(p, 4 * gib);
+    P("huge", "PASS munmap 4 GiB in %.3f s", now_s() - t0);
 }
 
 /* ------------------------------------------------------------------------------------------- */
@@ -699,6 +709,47 @@ static void sigsys_handler(int sig, siginfo_t* si, void* ucv) {
      * libc's address range when it turns the dispatch on */
     g_sud_selector = SYSCALL_DISPATCH_FILTER_ALLOW;
 }
+static volatile int g_sud_ready, g_sud_go, g_sud_done;
+static void* sud_thread(void* arg) {
+    /* a raw system call from code outside any allowed range while the creator's selector says
+     * BLOCK (the creator flips it only once this thread runs, so its own clone() is not blocked) */
+    g_sud_ready = 1;
+    while (!g_sud_go)
+        __asm__ volatile("pause" ::: "memory");
+    long r;
+    __asm__ volatile("syscall" : "=a"(r) : "0"(SYS_getpid) : "rcx", "r11", "memory");
+    *(long*)arg = r;
+    g_sud_done = 1;
+    return NULL;
+}
+/* interface enumeration as Wine's nsiproxy.sys does it (ndis.c: if_nameindex() without a NULL
+ * check, SIOCGIFFLAGS/SIOCGIFMTU, /proc/net/dev); the game's login dialog calls
+ * GetAdaptersAddresses and its driver thread died on the NULL under Gramine */
+static void probe_ifaces(void) {
+    struct if_nameindex* ix = if_nameindex();
+    int n = 0;
+    if (ix) { for (struct if_nameindex* e = ix; e->if_index; e++) n++; if_freenameindex(ix); }
+    P("ifaces", "%s if_nameindex(): %s, %d interface(s)", ix ? "PASS" : "FAIL", ix ? "ok" : E(), n);
+    struct ifaddrs* ifa = NULL;
+    int r = getifaddrs(&ifa);
+    n = 0;
+    for (struct ifaddrs* a = ifa; a; a = a->ifa_next) n++;
+    if (!r) freeifaddrs(ifa);
+    P("ifaces", "%s getifaddrs(): %s, %d entries", r == 0 ? "PASS" : "FAIL", r == 0 ? "ok" : E(), n);
+    int fd = socket(AF_INET, SOCK_DGRAM, 0);
+    char buf[1024];
+    struct ifconf ifc = { .ifc_len = sizeof(buf), .ifc_buf = buf };
+    r = ioctl(fd, SIOCGIFCONF, &ifc);
+    P("ifaces", "%s SIOCGIFCONF: %s, %d interface(s)", r == 0 ? "PASS" : "FAIL", r == 0 ? "ok" : E(), r == 0 ? (int)(ifc.ifc_len / sizeof(struct ifreq)) : 0);
+    struct ifreq req; memset(&req, 0, sizeof(req)); strcpy(req.ifr_name, "lo");
+    r = ioctl(fd, SIOCGIFFLAGS, &req);
+    P("ifaces", "%s SIOCGIFFLAGS(lo): %s flags %#x", r == 0 ? "PASS" : "FAIL", r == 0 ? "ok" : E(), r == 0 ? req.ifr_flags : 0);
+    close(fd);
+    FILE* f = fopen("/proc/net/dev", "r");
+    n = 0;
+    if (f) { while (fgets(buf, sizeof(buf), f)) n++; fclose(f); }
+    P("ifaces", "%s /proc/net/dev: %s, %d lines", f ? "PASS" : "FAIL", f ? "ok" : E(), n);
+}
 static void probe_sud(void) {
     struct sigaction sa = {0};
     sa.sa_sigaction = sigsys_handler;
@@ -716,8 +767,43 @@ static void probe_sud(void) {
     __asm__ volatile("syscall" : "=a"(ret) : "0"(SYS_getpid) : "rcx", "r11", "memory");
     g_sud_selector = SYSCALL_DISPATCH_FILTER_ALLOW;
     int sigs = g_sigsys;
-    prctl(PR_SET_SYSCALL_USER_DISPATCH, PR_SYS_DISPATCH_OFF, 0, 0, 0);
     P("sud", "%s syscall user dispatch: blocked getpid raised SIGSYS %d time(s), result %ld", sigs == 1 && ret == -ENOSYS ? "PASS" : "FAIL", sigs, ret);
+
+    /* Linux starts every new task with the dispatch off ("any fork or exec of the existing
+     * process resets the mechanism"; kernel/fork.c clears it for threads too). Wine's new threads
+     * make system calls from libc before they set up their own dispatch, while the parent's
+     * selector may say BLOCK. */
+    pthread_t t;
+    long child_ret = 0;
+    int before = g_sigsys;
+    if (pthread_create(&t, NULL, sud_thread, &child_ret) == 0) {
+        while (!g_sud_ready)
+            __asm__ volatile("pause" ::: "memory");
+        g_sud_selector = SYSCALL_DISPATCH_FILTER_BLOCK;
+        g_sud_go = 1;
+        while (!g_sud_done) /* no system call of our own while the selector says BLOCK */
+            __asm__ volatile("pause" ::: "memory");
+        g_sud_selector = SYSCALL_DISPATCH_FILTER_ALLOW;
+        pthread_join(t, NULL);
+    }
+    P("sud", "%s a new thread starts with the dispatch off: its getpid returned %ld, SIGSYS %d time(s)",
+      child_ret > 0 && g_sigsys == before ? "PASS" : "FAIL", child_ret, g_sigsys - before);
+
+    pid_t pid = fork();
+    if (pid == 0) {
+        /* the child's copy of the selector: BLOCK before its first system call */
+        g_sud_selector = SYSCALL_DISPATCH_FILTER_BLOCK;
+        long r2;
+        __asm__ volatile("syscall" : "=a"(r2) : "0"(SYS_getpid) : "rcx", "r11", "memory");
+        g_sud_selector = SYSCALL_DISPATCH_FILTER_ALLOW;
+        _exit(r2 > 0 && g_sigsys == before ? 0 : 1);
+    }
+    int st = -1;
+    if (pid > 0)
+        waitpid(pid, &st, 0);
+    prctl(PR_SET_SYSCALL_USER_DISPATCH, PR_SYS_DISPATCH_OFF, 0, 0, 0);
+    P("sud", "%s a forked child starts with the dispatch off: child exit %d",
+      pid > 0 && WIFEXITED(st) && WEXITSTATUS(st) == 0 ? "PASS" : "FAIL", pid > 0 && WIFEXITED(st) ? WEXITSTATUS(st) : -1);
 }
 
 /* ------------------------------------------------------------------------------------------- */
@@ -1074,7 +1160,7 @@ struct probe { const char* name; void (*fn)(void); };
 static const struct probe probes[] = {
     /* the ones that may take the guest down come last */
     {"fixed", probe_fixed},   {"huge", probe_huge},     {"noreplace", probe_noreplace}, {"futexv", probe_futexv},
-    {"eventfd", probe_eventfd}, {"scm", probe_scm},     {"unixsock", probe_unixsock}, {"unixsock2", probe_unixsock2}, {"sud", probe_sud},       {"signals", probe_signals},
+    {"eventfd", probe_eventfd}, {"scm", probe_scm},     {"unixsock", probe_unixsock}, {"unixsock2", probe_unixsock2}, {"sud", probe_sud}, {"ifaces", probe_ifaces},       {"signals", probe_signals},
     {"sig_chld", probe_sig_chld}, {"sig_spin", probe_sig_spin}, {"sig_block", probe_sig_block}, {"sig_proc", probe_sig_proc},
     {"threads", probe_threads}, {"procs", probe_procs}, {"proc", probe_proc},       {"misc", probe_misc},
     {"gs", probe_gs},         {"fs32", probe_fs32},     {"cs32", probe_cs32},       {"traps", probe_traps},

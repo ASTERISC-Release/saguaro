@@ -7,8 +7,9 @@
  * the swap of the GS base would add in user mode (`rdgsbase` + `wrgsbase`, needs CR4.FSGSBASE) or
  * through the kernel (`arch_prctl(ARCH_SET_GS)` natively; under Gramine it is ENOSYS, so
  * `ARCH_SET_FS` with the current value stands in), and a plain TLS load through `%fs`.
- * Usage: gsbench [iterations] (default 1,000,000). Run natively, under gramine-direct and
- * gramine-vm; the `wrgsbase` row needs FSGSBASE (it is skipped when the instruction faults).
+ * Usage: gsbench [iterations] [-g] (default 1,000,000; -g: own %gs first with
+ * arch_prctl(ARCH_SET_GS), to measure the paths of a thread that owns %gs). Run natively, under
+ * gramine-direct and gramine-vm; the `wrgsbase` row needs FSGSBASE (skipped when it faults).
  */
 
 #define _GNU_SOURCE
@@ -18,6 +19,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/syscall.h>
 #include <time.h>
 #include <unistd.h>
@@ -48,12 +50,22 @@ static __thread uint64_t g_tls_slot = 42;
 
 int main(int argc, char** argv) {
     setvbuf(stdout, NULL, _IONBF, 0); /* the VM guest dies at wrgsbase when FSGSBASE is off */
-    long n = argc > 1 ? atol(argv[1]) : 1000000;
+    long n = 1000000;
+    static uint64_t teb[16];
+    for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "-g")) {
+            long r = syscall(SYS_arch_prctl, ARCH_SET_GS, teb);
+            printf("%-44s %s\n", "arch_prctl(ARCH_SET_GS, own block)", r == 0 ? "ok (the rows below are the %gs-owning paths)" : "failed");
+        } else {
+            n = atol(argv[i]);
+        }
+    }
     volatile uint64_t sink = 0;
 
     ROW("getppid() (glibc fast path or syscall)", n, sink += getppid());
     ROW("raw syscall getppid", n, ({ long r; __asm__ volatile("syscall" : "=a"(r) : "0"(SYS_getppid) : "rcx", "r11", "memory"); sink += r; }));
     ROW("TLS load through %fs", n, sink += g_tls_slot);
+    ROW("clock_gettime (vDSO fast path or syscall)", n, ({ struct timespec ts; clock_gettime(CLOCK_MONOTONIC, &ts); sink += ts.tv_nsec; }));
 
     unsigned long fs = 0;
     syscall(SYS_arch_prctl, ARCH_GET_FS, &fs);

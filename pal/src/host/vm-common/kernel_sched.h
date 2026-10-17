@@ -55,8 +55,8 @@ void sched_thread_wait(int* futex_word, spinlock_t* lock);
 int sched_thread_wait_interruptible(int* futex_word, spinlock_t* lock);
 /* _PalThreadResume(): make `thread` notice a new signal: wake it if it sleeps in an interruptible
  * wait, otherwise let it take the interruption at its next such wait or user-mode timer tick
- * (resume_pending, pal_common_deliver_pending_interrupt()). AArch64: at its next such wait only,
- * nothing is delivered to user mode. */
+ * (resume_pending, pal_common_deliver_pending_interrupt()). x86_64 only: on AArch64 nothing is
+ * delivered to user mode, the thread takes the interruption at its next such wait. */
 void sched_thread_interrupt(struct thread* thread);
 void sched_thread_wakeup_uninterruptable(int* futex_word);
 void sched_thread_wakeup(int* futex_word);

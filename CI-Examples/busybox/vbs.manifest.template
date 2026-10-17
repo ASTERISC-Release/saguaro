@@ -1,0 +1,37 @@
+# Copyright (C) 2026 The ASTERISC Research Lab
+# SPDX-License-Identifier: BSD-3-Clause
+
+# BusyBox manifest for a Windows VBS enclave (`make VBS=1`, Documentation/vbs.rst): the counterpart of
+# busybox.manifest.template. BusyBox is built with the vbs gcc (vbs-build/busybox, a dynamic PIE) and
+# packed with the glibc libraries it needs. One applet per enclave: the arguments come from the command
+# line (`gramine-vbs busybox cat /etc/hosts`); a VBS enclave has one process, so a shell pipeline or an
+# applet that forks (httpd, xargs, find -exec) does not work in it.
+
+loader.entrypoint = "file:/libsysdb.so"
+libos.entrypoint = "/busybox"
+loader.log_level = "{{ log_level }}"
+
+loader.insecure__use_cmdline_argv = true
+
+loader.env.LD_LIBRARY_PATH = "{{ arch_libdir }}"
+loader.env.HOME = "/"
+
+# required by the wget applet
+sys.enable_extra_runtime_domain_names_conf = true
+
+fs.root.uri = "file:/"
+# no run-time code generation in a VBS enclave
+sys.rewrite_syscalls = false
+
+vbs.debug = false
+vbs.enclave_size = "256M"
+# the main thread and the helpers: the applets used by the check are single-threaded
+vbs.max_threads = 4
+
+vbs.packed_files = [
+  { path = "/busybox", uri = "file:vbs-build/busybox" },
+  { path = "/etc/hosts", uri = "file:helper-files/hosts" },
+{% for lib in [vbs.ldso, "libc.so.6", "libm.so.6", "libresolv.so.2"] %}
+  { path = "{{ arch_libdir }}/{{ lib }}", uri = "file:{{ vbs.sysroot }}/usr/lib/{{ lib }}" },
+{% endfor %}
+]

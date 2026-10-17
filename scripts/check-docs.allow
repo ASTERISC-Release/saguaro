@@ -75,3 +75,6 @@ runtime/glibc$
 
 # git-ignored build directories named in the hwcap test results
 ^build/x86-(glibc|none)$
+
+# the SEV tools directory next to the checkout (container/sev/build-sev-tools.sh)
+^sev-tools/

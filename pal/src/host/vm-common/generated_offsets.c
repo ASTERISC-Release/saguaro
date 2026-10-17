@@ -24,6 +24,11 @@ const struct generated_offset generated_offsets[] = {
     DEFINE(AP_STARTUP_PAGE_COUNTER, AP_STARTUP_PAGE_COUNTER),
     DEFINE(AP_STARTUP_PAGE_PML4, AP_STARTUP_PAGE_PML4),
     OFFSET(PER_CPU_DATA_XSAVE_AREA, per_cpu_data, interrupt_xsave_area),
+    OFFSET(PER_CPU_DATA_CURRENT_TCB, per_cpu_data, current_tcb),
+    OFFSET(PER_CPU_DATA_GS_SCRATCH, per_cpu_data, gs_scratch),
+    OFFSET(PAL_TCB_VM_USER_GSBASE, pal_tcb_vm, kernel_thread.user_gsbase),
+    OFFSET(PAL_TCB_VM_GS_SWAPPED_BY_ISR, pal_tcb_vm, kernel_thread.gs_swapped_by_isr),
+    OFFSET(ISR_REGS_CS, isr_regs, cs),
 
     /* struct pal_tcb_vm */
     OFFSET(PAL_TCB_LIBOS, pal_tcb_vm, common.libos_tcb),

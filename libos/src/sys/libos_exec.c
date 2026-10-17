@@ -81,6 +81,7 @@ noreturn static void __libos_syscall_execve_rtld(void* new_argp, elf_auxv_t* new
         goto error;
 
     cur_thread->robust_list = NULL;
+    memset(&cur_thread->syscall_user_dispatch, 0, sizeof(cur_thread->syscall_user_dispatch));
 
     /* We are done with using this handle. */
     put_handle(exec);

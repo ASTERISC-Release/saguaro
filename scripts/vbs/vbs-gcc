@@ -7,6 +7,8 @@
 # with a 4 KiB maximum page size (so the glibc ld.so maps them where they are packed) and the
 # sysroot's /usr/lib/ld-linux-aarch64.so.1 as interpreter. Usable as CC for configure scripts.
 # Kernel UAPI headers (linux/, asm/) and headers of optional libraries come from the build system.
+# -L$SYSROOT/usr/lib comes first: the distribution's multiarch directory (/usr/lib/<triplet>) would
+# otherwise supply the host's libc.so (a newer glibc: configure tests then pass for host-only symbols).
 #
 # Usage: SYSROOT=<repo>/build-vbs-glibc scripts/vbs/vbs-gcc ...
 # Links take the x18-free soft-float routines of the sysroot (libsoftfp-x18.a, build-glibc.sh) ahead
@@ -28,4 +30,4 @@ esac
 exec gcc --sysroot="$SYSROOT" $X18 \
     -idirafter /usr/include/$(gcc -dumpmachine) -idirafter /usr/include \
     -Wl,-z,max-page-size=0x1000 -Wl,-z,common-page-size=0x1000 \
-    -Wl,--dynamic-linker=$LDSO "$@" $SOFTFP
+    -Wl,--dynamic-linker=$LDSO -L"$SYSROOT/usr/lib" "$@" $SOFTFP

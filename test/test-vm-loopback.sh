@@ -13,6 +13,7 @@
 # Usage: test/test-vm-loopback.sh [--prefix DIR]
 #   SEQUENTIAL=100  CONCURRENT=16  SIZE=8192   connection counts and payload size
 #   GRAMINE_CPU_NUM=2                          vCPUs for the VM
+#   GRAMINE_VM_LAUNCHER=gramine-vm             or gramine-sev (Documentation/devel/sev/)
 #
 # Prerequisite: a vm build installed with `scripts/install.sh --vm` (default prefix
 # ~/.local/gramine-vm). Run it where /dev/kvm and /dev/vhost-vsock exist (the container).
@@ -35,8 +36,9 @@ done
 export PATH=$PREFIX/bin:$PATH
 export PYTHONPATH=$(ls -d "$PREFIX"/lib/python3*/site-packages 2>/dev/null | head -1)
 export GRAMINE_CPU_NUM=${GRAMINE_CPU_NUM:-2}
+LAUNCHER=${GRAMINE_VM_LAUNCHER:-gramine-vm}
 
-command -v gramine-vm >/dev/null || { echo "gramine-vm not on PATH (prefix $PREFIX?)" >&2; exit 1; }
+command -v "$LAUNCHER" >/dev/null || { echo "$LAUNCHER not on PATH (prefix $PREFIX?)" >&2; exit 1; }
 [ -e /dev/vhost-vsock ] || { echo "no /dev/vhost-vsock; this test needs it" >&2; exit 1; }
 
 DIR=$HERE/vsock-loopback
@@ -67,7 +69,7 @@ fi
 # vsock_host_client.py uses to find the guest CID of *this* VM
 cd "$DIR"
 env ${EXTRA_ENV[@]+"${EXTRA_ENV[@]}"} GRAMINE_VM_CONSOLE_LOG=$VM_LOG \
-    gramine-vm vsock_echo_server >"$OUT/gramine-vm.out" 2>&1 &
+    "$LAUNCHER" vsock_echo_server >"$OUT/gramine-vm.out" 2>&1 &
 VM_PID=$!
 # cleanup note: killing `gramine-vm` does not kill its QEMU child (the launcher traps and exits),
 # so also kill the QEMU of this test by its fw_cfg args signature; do not kill the process group,

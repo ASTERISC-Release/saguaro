@@ -70,8 +70,42 @@ static inline void frame_pool_unlock(uint64_t flags) {
 /* Software bit of a non-present leaf (ignored by the hardware): a demand-zero page whose access
  * rights are the entry's W and NX bits; see memory_address_space_handle_fault(). */
 #define PTE_LAZY    (1UL << 9)
+/* Software bits of a leaf that maps a frame shared with a file's cache (a MAP_PRIVATE file
+ * mapping, Linux's page-cache semantics): the page is read-only in the hardware bits and a write
+ * must first copy the frame (memory_address_space_map_cow_frame()). PTE_COW_WRITABLE says the
+ * mapping allows writes, so the fault handler copies; without it a write is a genuine fault. */
+#define PTE_COW          (1UL << 10)
+#define PTE_COW_WRITABLE (1UL << 11)
 
 static struct memory_address_space g_boot_address_space;
+#endif
+
+#ifdef PAL_HOST_SEV
+/* AMD SEV (pal/src/host/vm/sev/): the C-bit as a page-table-entry mask, set by vm_bootloader.S.
+ * Private (encrypted) memory has it set; the shared heap and the MMIO hole, which the host must
+ * read and write, have it clear. Guest page tables must be private: hardware walks them with the
+ * guest key whatever the C-bit says. */
+#include "sev.h"
+static uint64_t sev_c_bit_for_phys(uint64_t phys) {
+    if (SHARED_MEM_ADDR <= phys && phys < SHARED_MEM_ADDR + SHARED_MEM_SIZE)
+        return 0;
+    if (PCI_HOLE_ADDR <= phys && phys < PCI_HOLE_ADDR + PCI_HOLE_SIZE)
+        return 0;
+    if (phys == g_sev_extra_shared_page)
+        return 0;
+    return g_sev_c_bit_mask;
+}
+/* the multiprocess support's tables and frame metadata must be private under SEV */
+#define PTE_ENC g_sev_c_bit_mask
+#define KERNEL_META_ALLOC(size) sev_alloc_private(size)
+#define SEV_VALIDATE_FRAME(frame) sev_validate_frame(frame)
+#else
+#define PTE_ENC 0UL
+#define KERNEL_META_ALLOC(size) memory_get_shared_region(size)
+#define SEV_VALIDATE_FRAME(frame) 0
+#endif
+
+#ifdef __x86_64__
 
 void* memory_frame_pointer(uintptr_t frame) {
     if (g_frame_alias_mapped_size && frame < g_frame_alias_mapped_size)
@@ -100,20 +134,23 @@ static int memory_frame_pool_map_alias(size_t memory_size) {
     if (mapped_size > FRAME_POOL_ALIAS_SIZE)
         return -PAL_ERROR_INVAL;
 
-    uint64_t* pdpt = memory_get_shared_region(PAGE_SIZE);
+    uint64_t* pdpt = KERNEL_META_ALLOC(PAGE_SIZE);
     size_t pd_count = UDIV_ROUND_UP(mapped_size, 1024UL * 1024 * 1024);
-    uint64_t* pd_tables = memory_get_shared_region(pd_count * PAGE_SIZE);
+    uint64_t* pd_tables = KERNEL_META_ALLOC(pd_count * PAGE_SIZE);
     if (!pdpt || !pd_tables)
         return -PAL_ERROR_NOMEM;
 
     for (size_t pdpt_idx = 0; pdpt_idx < pd_count; pdpt_idx++) {
         uint64_t* pd = (uint64_t*)((uintptr_t)pd_tables + pdpt_idx * PAGE_SIZE);
-        pdpt[pdpt_idx] = (uintptr_t)pd | PTE_PRESENT | PTE_WRITE;
+        pdpt[pdpt_idx] = (uintptr_t)pd | PTE_PRESENT | PTE_WRITE | PTE_ENC;
         size_t remaining = (mapped_size - pdpt_idx * 1024UL * 1024 * 1024) / PAGE_2M_SIZE;
         size_t pages_in_pd = MIN(512UL, remaining);
         for (size_t i = 0; i < pages_in_pd; i++) {
             uintptr_t physical = pdpt_idx * 1024UL * 1024 * 1024 + i * PAGE_2M_SIZE;
             pd[i] = physical | PTE_PRESENT | PTE_WRITE | PTE_HUGE | PTE_NX;
+#ifdef PAL_HOST_SEV
+            pd[i] |= sev_c_bit_for_phys(physical); /* the shared heap and MMIO stay shared */
+#endif
         }
     }
 
@@ -121,7 +158,7 @@ static int memory_frame_pool_map_alias(size_t memory_size) {
     uint64_t* pml4 = (uint64_t*)g_pml4_table_base;
     if (pml4[pml4_idx] & PTE_PRESENT)
         return -PAL_ERROR_DENIED;
-    pml4[pml4_idx] = (uintptr_t)pdpt | PTE_PRESENT | PTE_WRITE;
+    pml4[pml4_idx] = (uintptr_t)pdpt | PTE_PRESENT | PTE_WRITE | PTE_ENC;
     g_frame_alias_mapped_size = mapped_size;
     g_frame_pool_bitmap = memory_frame_pointer((uintptr_t)g_frame_pool_bitmap);
     g_frame_owner_next = memory_frame_pointer((uintptr_t)g_frame_owner_next);
@@ -141,7 +178,7 @@ int memory_frame_pool_init(uintptr_t addr, size_t size) {
 
     size_t frame_count = size / PAGE_SIZE;
     size_t bitmap_size = UDIV_ROUND_UP(frame_count, 8);
-    uint8_t* bitmap = memory_get_shared_region(bitmap_size);
+    uint8_t* bitmap = KERNEL_META_ALLOC(bitmap_size);
     if (!bitmap)
         return -PAL_ERROR_NOMEM;
 
@@ -156,10 +193,10 @@ int memory_frame_pool_init(uintptr_t addr, size_t size) {
     g_frame_pool_bitmap = bitmap;
     size_t owner_next_size = frame_count * sizeof(*g_frame_owner_next);
     size_t owner_kind_size = frame_count * sizeof(*g_frame_owner_kind);
-    g_frame_owner_next = memory_get_shared_region(owner_next_size);
-    g_frame_owner_kind = memory_get_shared_region(owner_kind_size);
+    g_frame_owner_next = KERNEL_META_ALLOC(owner_next_size);
+    g_frame_owner_kind = KERNEL_META_ALLOC(owner_kind_size);
     size_t refcount_size = frame_count * sizeof(*g_frame_refcount);
-    g_frame_refcount = memory_get_shared_region(refcount_size);
+    g_frame_refcount = KERNEL_META_ALLOC(refcount_size);
     if (!g_frame_owner_next || !g_frame_owner_kind || !g_frame_refcount)
         return -PAL_ERROR_NOMEM;
     memset(g_frame_owner_next, 0, owner_next_size);
@@ -194,6 +231,11 @@ int memory_frame_alloc(uintptr_t* out_frame) {
 #ifdef ASAN
         asan_unpoison_region(frame, PAGE_SIZE);
 #endif
+        if (SEV_VALIDATE_FRAME(frame) < 0) {
+            g_frame_pool_bitmap[i / 8] &= ~mask;
+            frame_pool_unlock(pool_irq_flags);
+            return -PAL_ERROR_DENIED;
+        }
         _real_memset(memory_frame_pointer(frame), 0, PAGE_SIZE);
         *out_frame = frame;
         frame_pool_unlock(pool_irq_flags);
@@ -226,6 +268,48 @@ int memory_frame_free(uintptr_t frame) {
     asan_poison_region(frame, PAGE_SIZE, ASAN_POISON_USER);
 #endif
     frame_pool_unlock(pool_irq_flags);
+    return 0;
+}
+
+/* Allocates `size` bytes of physically contiguous frames and maps them into `space` at `addr`
+ * (read-write, user mode); `*out_phys` is the first frame's guest-physical address. For the
+ * LibOS's graphics bounce buffers: the host listener reads guest RAM by physical address, so what
+ * the LibOS hands it from a demand-paged process must sit in frames it knows the address of
+ * (Documentation/devel/proton-vm/design-gpu.md). Without a frame pool or a process address space
+ * (the single-process VM) memory is identity-mapped and a plain allocation serves. */
+int memory_address_space_alloc_contiguous(struct memory_address_space* space, void* addr,
+                                          size_t size, bool execute, uintptr_t* out_phys) {
+    if (!addr || !size || !out_phys || !IS_ALIGNED_POW2((uintptr_t)addr, PAGE_SIZE) ||
+            !IS_ALIGNED_POW2(size, PAGE_SIZE))
+        return -PAL_ERROR_INVAL;
+    if (!g_frame_pool_bitmap || !space) {
+        int ret = memory_alloc(addr, size, /*read=*/true, /*write=*/true, execute);
+        if (ret < 0)
+            return ret;
+        *out_phys = (uintptr_t)addr;
+        return 0;
+    }
+    void* alias;
+    int ret = memory_frame_alloc_contiguous(size, &alias);
+    if (ret < 0)
+        return ret;
+    uintptr_t frame = g_frame_alias_mapped_size && (uintptr_t)alias >= FRAME_POOL_ALIAS_BASE
+                      ? (uintptr_t)alias - FRAME_POOL_ALIAS_BASE : (uintptr_t)alias;
+    for (size_t done = 0; done < size; done += PAGE_SIZE) {
+        ret = memory_address_space_map_owned(space, (uintptr_t)addr + done, frame + done,
+                                             /*write=*/true, execute, /*usermode=*/true);
+        if (ret < 0) {
+            if (done)
+                (void)memory_address_space_free(space, addr, done);
+            for (size_t rest = done; rest < size; rest += PAGE_SIZE)
+                memory_frame_free(frame + rest);
+            return ret;
+        }
+    }
+    ret = memory_address_space_flush_range((uintptr_t)addr, size);
+    if (ret < 0)
+        return ret;
+    *out_phys = frame;
     return 0;
 }
 
@@ -263,6 +347,10 @@ int memory_frame_alloc_contiguous(size_t size, void** out_alias) {
             g_frame_owner_next[i] = 0;
             g_frame_owner_kind[i] = 0;
             g_frame_refcount[i] = 1;
+            if (SEV_VALIDATE_FRAME(frame + j * PAGE_SIZE) < 0) {
+                frame_pool_unlock(pool_irq_flags);
+                return -PAL_ERROR_DENIED;
+            }
             _real_memset(memory_frame_pointer(frame + j * PAGE_SIZE), 0, PAGE_SIZE);
         }
         g_frame_pool_next = (start + pages) % frame_count;
@@ -406,7 +494,7 @@ static int address_space_track_frame(struct memory_address_space* space, uintptr
 
 static int address_space_alloc_table_page(struct memory_address_space* space, uint64_t** out_page) {
     if (!g_frame_pool_bitmap) {
-        *out_page = memory_get_shared_region(PAGE_SIZE);
+        *out_page = KERNEL_META_ALLOC(PAGE_SIZE);
         return *out_page ? 0 : -PAL_ERROR_NOMEM;
     }
 
@@ -619,69 +707,96 @@ int memory_address_space_copy_private_range(struct memory_address_space* source,
     return memory_address_space_flush_range(addr, size);
 }
 
+/* The table `entry` points to, on a walk of `space`. With `make_private`, a table the base (the
+ * boot tables) still shares is copied first, and a missing one (an address beyond what the boot
+ * tables cover, up to MEMORY_ADDRESS_SPACE_LIMIT: the application's range of pal_main.c) is
+ * created, zeroed; without it, a missing table is -PAL_ERROR_INVAL. `base_entry` is the base's
+ * entry at the same place, 0 when the base has none. */
+static int address_space_get_child(uint64_t* entry, uint64_t base_entry,
+                                   struct memory_address_space* space, bool make_private,
+                                   uint64_t** out_child) {
+    const uint64_t addr_mask = 0x00000ffffffff000UL;
+    if (!(*entry & PTE_PRESENT)) {
+        if (!make_private)
+            return -PAL_ERROR_INVAL;
+        uint64_t* page;
+        int ret = address_space_alloc_table_page(space, &page);
+        if (ret < 0)
+            return ret;
+        memset(page, 0, PAGE_SIZE);
+        *entry = (memory_frame_from_pointer(page) & addr_mask) | PTE_PRESENT | PTE_WRITE | PTE_USER |
+                 PTE_ENC;
+        *out_child = page;
+        return 0;
+    }
+    if (make_private && (base_entry & PTE_PRESENT) &&
+            (*entry & addr_mask) == (base_entry & addr_mask))
+        return address_space_get_private_child(entry, base_entry, space, out_child);
+    *out_child = memory_frame_pointer(*entry & addr_mask);
+    return 0;
+}
+
 static int address_space_get_leaf_entry(struct memory_address_space* space, uintptr_t addr,
                                         bool make_private, uint64_t** out_entry) {
     const uint64_t addr_mask = 0x00000ffffffff000UL;
     if (!space || !space->root || !space->root_phys ||
-            addr >= 512UL * 1024 * 1024 * 1024 || !IS_ALIGNED_POW2(addr, PAGE_SIZE))
+            addr >= MEMORY_ADDRESS_SPACE_LIMIT || !IS_ALIGNED_POW2(addr, PAGE_SIZE))
         return -PAL_ERROR_INVAL;
 
     size_t pml4_idx = (addr >> 39) & 0x1ff;
     size_t pdpt_idx = (addr >> 30) & 0x1ff;
     size_t pd_idx = (addr >> 21) & 0x1ff;
     size_t pt_idx = (addr >> 12) & 0x1ff;
-    uint64_t* base_root = space->base_root;
-    uint64_t* base_pdpt = NULL;
-    uint64_t* base_pd = NULL;
+
+    uint64_t base_entry = space->base_root ? space->base_root[pml4_idx] : 0;
     uint64_t* pdpt;
-    int ret = 0;
-    if (base_root && make_private)
-        ret = address_space_get_private_child(&space->root[pml4_idx], base_root[pml4_idx],
-                                              space, &pdpt);
-    else if (!(space->root[pml4_idx] & PTE_PRESENT))
-        return -PAL_ERROR_INVAL;
-    else
-        pdpt = memory_frame_pointer(space->root[pml4_idx] & addr_mask);
+    int ret = address_space_get_child(&space->root[pml4_idx], base_entry, space, make_private,
+                                      &pdpt);
     if (ret < 0)
         return ret;
+    uint64_t* base_pdpt = (base_entry & PTE_PRESENT) ? memory_frame_pointer(base_entry & addr_mask)
+                                                     : NULL;
 
-    if (base_root) {
-        if (!(base_root[pml4_idx] & PTE_PRESENT))
-            return -PAL_ERROR_INVAL;
-        base_pdpt = memory_frame_pointer(base_root[pml4_idx] & addr_mask);
-    }
-    if ((pdpt[pdpt_idx] | (base_pdpt ? base_pdpt[pdpt_idx] : 0)) & PTE_HUGE)
+    base_entry = base_pdpt ? base_pdpt[pdpt_idx] : 0;
+    if ((pdpt[pdpt_idx] | base_entry) & PTE_HUGE)
         return -PAL_ERROR_INVAL; /* splitting a 1-GiB page is not implemented */
     uint64_t* pd;
-    if (base_root && make_private) {
-        ret = address_space_get_private_child(&pdpt[pdpt_idx], base_pdpt[pdpt_idx], space, &pd);
-    } else {
-        if (!(pdpt[pdpt_idx] & PTE_PRESENT))
-            return -PAL_ERROR_INVAL;
-        pd = memory_frame_pointer(pdpt[pdpt_idx] & addr_mask);
-    }
+    ret = address_space_get_child(&pdpt[pdpt_idx], base_entry, space, make_private, &pd);
     if (ret < 0)
         return ret;
+    uint64_t* base_pd = (base_entry & PTE_PRESENT) ? memory_frame_pointer(base_entry & addr_mask)
+                                                   : NULL;
 
-    if (base_pdpt) {
-        if (!(base_pdpt[pdpt_idx] & PTE_PRESENT))
-            return -PAL_ERROR_INVAL;
-        base_pd = memory_frame_pointer(base_pdpt[pdpt_idx] & addr_mask);
-    }
-    if ((pd[pd_idx] | (base_pd ? base_pd[pd_idx] : 0)) & PTE_HUGE)
+    base_entry = base_pd ? base_pd[pd_idx] : 0;
+    if ((pd[pd_idx] | base_entry) & PTE_HUGE)
         return -PAL_ERROR_INVAL; /* splitting a 2-MiB page is not implemented */
     uint64_t* pt;
-    if (base_root && make_private) {
-        ret = address_space_get_private_child(&pd[pd_idx], base_pd[pd_idx], space, &pt);
-    } else {
-        if (!(pd[pd_idx] & PTE_PRESENT))
-            return -PAL_ERROR_INVAL;
-        pt = memory_frame_pointer(pd[pd_idx] & addr_mask);
-    }
+    ret = address_space_get_child(&pd[pd_idx], base_entry, space, make_private, &pt);
     if (ret < 0)
         return ret;
 
     *out_entry = &pt[pt_idx];
+    return 0;
+}
+
+/* For walks over a range that create nothing: the leaf entry of `va` (returns 0), or 1 when no
+ * table covers it, with `*out_next` the first address past the missing table's reach (a
+ * reservation of many GiB beyond the boot tables is walked in 1-GiB steps). */
+static int address_space_find_leaf_entry(struct memory_address_space* space, uintptr_t va,
+                                         uint64_t** out_entry, uintptr_t* out_next) {
+    const uint64_t addr_mask = 0x00000ffffffff000UL;
+    uint64_t* table = space->root;
+    for (unsigned int shift = 39; shift > 12; shift -= 9) {
+        uint64_t entry = table[(va >> shift) & 0x1ff];
+        if (!(entry & PTE_PRESENT)) {
+            *out_next = ALIGN_DOWN(va, 1UL << shift) + (1UL << shift);
+            return 1;
+        }
+        if (entry & PTE_HUGE)
+            return -PAL_ERROR_INVAL;
+        table = memory_frame_pointer(entry & addr_mask);
+    }
+    *out_entry = &table[(va >> 12) & 0x1ff];
     return 0;
 }
 
@@ -690,7 +805,7 @@ int memory_address_space_map(struct memory_address_space* space, uintptr_t addr,
                              uintptr_t frame, bool write, bool execute, bool usermode) {
     const uint64_t addr_mask = 0x00000ffffffff000UL;
     if (!space || !space->root || !space->root_phys ||
-            addr >= 512UL * 1024 * 1024 * 1024 || !IS_ALIGNED_POW2(addr, PAGE_SIZE) ||
+            addr >= MEMORY_ADDRESS_SPACE_LIMIT || !IS_ALIGNED_POW2(addr, PAGE_SIZE) ||
             !IS_ALIGNED_POW2(frame, PAGE_SIZE) || (frame & ~addr_mask))
         return -PAL_ERROR_INVAL;
 
@@ -701,7 +816,7 @@ int memory_address_space_map(struct memory_address_space* space, uintptr_t addr,
 
     uint64_t flags = 1UL | (write ? 1UL << 1 : 0) | (usermode ? 1UL << 2 : 0) |
                      (execute ? 0 : 1UL << 63);
-    *pte = frame | flags;
+    *pte = frame | flags | PTE_ENC;
 
     uint64_t current_root;
     __asm__ volatile("mov %%cr3, %0" : "=r"(current_root));
@@ -739,6 +854,30 @@ int memory_address_space_map_shared_frame(struct memory_address_space* space, ui
     if (ret < 0)
         memory_frame_put(frame);
     return ret;
+}
+
+/* Copies a frame-pool frame into a fresh one (for copy-on-write). */
+static int cow_copy_frame(uintptr_t frame, uintptr_t* out_copy) {
+    uintptr_t copy;
+    int ret = memory_frame_alloc(&copy);
+    if (ret < 0)
+        return ret;
+    memcpy(memory_frame_pointer(copy), memory_frame_pointer(frame), PAGE_SIZE);
+    *out_copy = copy;
+    return 0;
+}
+
+int memory_address_space_map_cow_frame(struct memory_address_space* space, uintptr_t addr,
+                                       uintptr_t frame, bool writable, bool execute) {
+    int ret = memory_address_space_map_shared_frame(space, addr, frame, /*write=*/false, execute);
+    if (ret < 0)
+        return ret;
+    uint64_t* pte;
+    ret = address_space_get_leaf_entry(space, addr, /*make_private=*/true, &pte);
+    if (ret < 0)
+        return ret;
+    *pte |= PTE_COW | (writable ? PTE_COW_WRITABLE : 0);
+    return 0;
 }
 
 int memory_address_space_share_range(struct memory_address_space* source,
@@ -904,24 +1043,28 @@ int memory_reserve_graphics_arenas(
     return 0;
 }
 
-static inline bool is_egl_redirect_data_region_base(void* addr, size_t size) {
+/* 1: the base of a graphics arena, mapped whole (the arenas are reserved for libgraphics and
+ * mapped as one fixed-size chunk each); 0: not an arena base; -PAL_ERROR_NOMEM: an arena base
+ * with another size, an application's MAP_FIXED over the reservation, refused (Wine reserves a
+ * PE image's preferred base, 0x140000000 inside the default hugepage arena, this way and copes
+ * with the failure; the LibOS refuses such requests first, libos_mmap.c). */
+static inline int is_egl_redirect_data_region_base(void* addr, size_t size) {
     if (addr == DATA_REGION || addr == HUGEPAGE_DATA_REGION) {
         size_t expected_size = addr == DATA_REGION ? DATA_REGION_SIZE : HUGEPAGE_REGION_SIZE;
-        /* In our setup, these bases are reserved exclusively for libgraphics regions and must be
-         * mapped as a single fixed-size chunk. Fail loudly if assumptions are violated. */
         if (size != expected_size) {
-            log_error("Unexpected mapping size at special base %p: got %lu, expected %lu",
-                      addr, (unsigned long)size, (unsigned long)expected_size);
-            BUG();
+            log_warning("Mapping of %lu bytes at the graphics arena base %p refused (the arena is "
+                        "%lu bytes, reserved)", (unsigned long)size, addr,
+                        (unsigned long)expected_size);
+            return -PAL_ERROR_NOMEM;
         }
         if (!IS_ALIGNED_POW2((uintptr_t)addr, PAGE_SIZE) || !IS_ALIGNED_POW2(size, PAGE_SIZE)) {
             log_error("Unexpected alignment for special base %p (size %lu)", addr,
                       (unsigned long)size);
             BUG();
         }
-        return true;
+        return 1;
     }
-    return false;
+    return 0;
 }
 
 static inline bool is_egl_redirect_data_region_range(void* addr, size_t size) {
@@ -1305,10 +1448,21 @@ static int pagetables_init(size_t memory_size, uint64_t page_tables_addr, size_t
 
     uint64_t ptr = page_tables_addr;
 
+#ifdef PAL_HOST_SEV
+    /* SEV: memory that the launch did not write reads as garbage, not zero; the partly used table
+     * pages (PDP, PML4) must not keep stale "present" entries */
+    sev_memory_before_page_tables(page_tables_addr, total_tables_cnt * PAGE_SIZE);
+    _real_memset((void*)page_tables_addr, 0, total_tables_cnt * PAGE_SIZE);
+    tree_flags |= g_sev_c_bit_mask;
+#endif
+
     /* page tables with PTE leaf entries */
     uint64_t page_tables_base = ptr;
     for (size_t i = 0; i < pages_4k_cnt; i++) {
         uint64_t entry = ((ptr - page_tables_base) / 8) * PAGE_SIZE + leaf_flags;
+#ifdef PAL_HOST_SEV
+        entry |= sev_c_bit_for_phys(entry & ~(PAGE_SIZE - 1));
+#endif
         _real_memcpy((void*)ptr, &entry, sizeof(entry));
         ptr += sizeof(entry);
     }
@@ -1378,6 +1532,10 @@ int memory_pagetables_init(void* memory_address_end, bool current_page_tables_co
         if (ret < 0)
             return ret;
     }
+#ifdef PAL_HOST_SEV
+    /* SNP: RAM not in the launch image must be validated before use (the final tables below) */
+    sev_memory_after_temp_tables();
+#endif
 
     /* now set up the new page tables hierarchy to cover range [0x0, memory_address_end) (aligned to
      * the next power of 2); we will use these page tables until the end of execution */
@@ -1408,6 +1566,10 @@ int memory_pagetables_init(void* memory_address_end, bool current_page_tables_co
                     total_tables_cnt);
     if (ret < 0)
         return ret;
+#ifdef PAL_HOST_SEV
+    sev_memory_after_final_tables((uint64_t)memory_address_end,
+                                  PAGE_TABLES_ADDR + total_tables_cnt * PAGE_SIZE);
+#endif
 
     g_pml4_table_base = pml4_table_base;
 #ifdef __x86_64__
@@ -1669,7 +1831,27 @@ int memory_alloc(void* addr, size_t size, bool read, bool write, bool execute) {
         return -PAL_ERROR_DENIED;
     }
 
+    int egl_redirect_region = is_egl_redirect_data_region_base(addr, size);
+    if (egl_redirect_region < 0)
+        return egl_redirect_region;
+
     if (!read && !write && !execute) {
+#ifdef PAL_HOST_SEV
+        /* SEV: memory the guest has not written yet reads as ciphertext, not zero, and a later
+         * protect() makes these pages accessible without zeroing them (glibc maps a thread stack
+         * PROT_NONE and then mprotect()s it), so zero them now (SNP: validate them first) */
+        if (!egl_redirect_region) {
+            /* PVALIDATE needs the pages mapped */
+            int sev_ret = memory_mark_pages_on((uint64_t)addr, size, /*write=*/true,
+                                               /*execute=*/false, /*usermode=*/false);
+            if (sev_ret < 0)
+                return sev_ret;
+            sev_ret = sev_validate_on_demand((uint64_t)addr, size);
+            if (sev_ret < 0)
+                return sev_ret;
+            memset(memory_frame_pointer((uintptr_t)addr), 0, size);
+        }
+#endif
         memory_mark_pages_off((uint64_t)addr, size);
 #ifdef ASAN
         asan_poison_region((uintptr_t)addr, size, ASAN_POISON_USER);
@@ -1684,6 +1866,12 @@ int memory_alloc(void* addr, size_t size, bool read, bool write, bool execute) {
     int ret = memory_mark_pages_on((uint64_t)addr, size, write, execute, /*usermode=*/true);
     if (ret < 0)
         return ret;
+#ifdef PAL_HOST_SEV
+    /* SNP: private RAM is validated when it is first handed out (PVALIDATE needs it mapped) */
+    ret = sev_validate_on_demand((uint64_t)addr, size);
+    if (ret < 0)
+        return ret;
+#endif
 
 #ifdef ASAN
     asan_unpoison_region((uintptr_t)addr, size);
@@ -1696,8 +1884,7 @@ int memory_alloc(void* addr, size_t size, bool read, bool write, bool execute) {
      * which are zero on first touch anyway, and writing the whole arena zero
      * would pin arena_size bytes of physical RAM (and cost a multi-GiB memset
      * at boot) for nothing. GEM buffer mappings replace arena slices outright. */
-    bool is_egl_redirect_region = is_egl_redirect_data_region_base(addr, size);
-    if (is_egl_redirect_region) {
+    if (egl_redirect_region) {
         log_always("Reserved GEM arena %p (size %lu); fresh memfd pages, allocations marked WC on demand",
                    addr, (unsigned long)size);
     } else {
@@ -1778,7 +1965,10 @@ int memory_address_space_alloc(struct memory_address_space* space, void* addr, s
                                bool read, bool write, bool execute) {
     if (!g_frame_pool_bitmap)
         return memory_alloc(addr, size, read, write, execute);
-    if (is_egl_redirect_data_region_base(addr, size) || is_graphics_comm_range(addr, size)
+    int egl_redirect_region = is_egl_redirect_data_region_base(addr, size);
+    if (egl_redirect_region < 0)
+        return egl_redirect_region;
+    if (egl_redirect_region || is_graphics_comm_range(addr, size)
             || (space && space->identity_memory)) {
         int ret = memory_alloc(addr, size, read, write, execute);
         if (ret < 0)
@@ -1797,26 +1987,38 @@ int memory_address_space_alloc(struct memory_address_space* space, void* addr, s
         /* An inaccessible reservation has no backing: a later mprotect() gives it fresh frames
          * (keeping the identity frame here would share it with every other process). A pool frame
          * of a previous mapping stays in the non-present entry until after the flush. */
-        for (uintptr_t va = (uintptr_t)addr; va < (uintptr_t)addr + size; va += PAGE_SIZE) {
+        for (uintptr_t va = (uintptr_t)addr; va < (uintptr_t)addr + size;) {
             uint64_t* entry;
-            int ret = address_space_get_leaf_entry(space, va, /*make_private=*/false, &entry);
+            uintptr_t next;
+            int ret = address_space_find_leaf_entry(space, va, &entry, &next);
             if (ret < 0)
                 return ret;
+            if (ret == 1) {
+                va = next; /* no table: nothing is mapped there */
+                continue;
+            }
             uint64_t physical = *entry & 0x00000ffffffff000UL;
             ret = address_space_restore_pte(space, va, is_frame_pool_frame(physical) ? physical : 0);
             if (ret < 0)
                 return ret;
+            va += PAGE_SIZE;
         }
         int ret = memory_address_space_flush_range((uintptr_t)addr, size);
         if (ret < 0)
             return ret;
-        for (uintptr_t va = (uintptr_t)addr; va < (uintptr_t)addr + size; va += PAGE_SIZE) {
+        for (uintptr_t va = (uintptr_t)addr; va < (uintptr_t)addr + size;) {
             uint64_t* entry;
-            ret = address_space_get_leaf_entry(space, va, /*make_private=*/false, &entry);
+            uintptr_t next;
+            ret = address_space_find_leaf_entry(space, va, &entry, &next);
             if (ret < 0)
                 return ret;
+            if (ret == 1) {
+                va = next;
+                continue;
+            }
             memory_frame_put(*entry & 0x00000ffffffff000UL);
             *entry = 0;
+            va += PAGE_SIZE;
         }
 #ifdef ASAN
         asan_poison_region((uintptr_t)addr, size, ASAN_POISON_USER);
@@ -1880,8 +2082,10 @@ int memory_address_space_alloc(struct memory_address_space* space, void* addr, s
  * for any other fault. Runs in interrupt context, for faults from user and kernel mode alike. */
 bool memory_address_space_handle_fault(uintptr_t addr, uint64_t error_code) {
     const uint64_t addr_mask = 0x00000ffffffff000UL;
-    if (!g_frame_pool_bitmap || (error_code & PTE_PRESENT) || addr >= 512UL * 1024 * 1024 * 1024)
-        return false; /* protection violation on a present page, or not a user address */
+    if (!g_frame_pool_bitmap || addr >= MEMORY_ADDRESS_SPACE_LIMIT)
+        return false; /* not a user address */
+    if ((error_code & PTE_PRESENT) && !(error_code & PTE_WRITE))
+        return false; /* a protection violation other than a write: a genuine fault */
 
     uint64_t root;
     __asm__ volatile("mov %%cr3, %0" : "=r"(root));
@@ -1894,8 +2098,35 @@ bool memory_address_space_handle_fault(uintptr_t addr, uint64_t error_code) {
     }
     uint64_t* pte = &table[(addr >> 12) & 0x1ff];
     uint64_t old = __atomic_load_n(pte, __ATOMIC_ACQUIRE);
-    if (old & PTE_PRESENT)
-        return true; /* another vCPU materialized it meanwhile */
+    if (old & PTE_PRESENT) {
+        if (old & PTE_WRITE)
+            return true; /* another vCPU materialized or copied it meanwhile */
+        if (!(error_code & PTE_WRITE) || !(old & PTE_COW_WRITABLE))
+            return false; /* a write to a page that is read-only for good: a genuine fault */
+        /* copy-on-write: the page maps a frame of a file's cache (a MAP_PRIVATE file mapping
+         * that allows writes); give this address space its own copy. Only this vCPU's TLB is
+         * invalidated here (a shootdown waits for the other vCPUs, which an interrupt handler
+         * cannot do): another vCPU of the process keeps a read-only translation of the old
+         * frame until its next flush and reads the file's content instead of this write there
+         * meanwhile; a write there faults and finds the copy. */
+        uintptr_t old_frame = old & addr_mask;
+        uintptr_t copy;
+        if (cow_copy_frame(old_frame, &copy) < 0) {
+            log_error("Out of frames for a copy-on-write page at 0x%lx", addr);
+            return false;
+        }
+        uint64_t new = copy | PTE_PRESENT | PTE_WRITE | PTE_USER | (old & PTE_NX) | PTE_ENC;
+        if (!__atomic_compare_exchange_n(pte, &old, new, /*weak=*/false, __ATOMIC_ACQ_REL,
+                                         __ATOMIC_ACQUIRE)) {
+            memory_frame_free(copy); /* lost a race; the winner's mapping (or change) stands */
+            return true;
+        }
+        __asm__ volatile("invlpg (%0)" : : "r"(addr) : "memory");
+        memory_frame_put(old_frame); /* the leaf's reference to the shared frame */
+        return true;
+    }
+    if (error_code & PTE_PRESENT)
+        return true; /* the entry changed under the fault (unmapped meanwhile): let it retry */
     if (!(old & PTE_LAZY))
         return false;
     if ((error_code & PTE_WRITE) && !(old & PTE_WRITE))
@@ -1906,7 +2137,7 @@ bool memory_address_space_handle_fault(uintptr_t addr, uint64_t error_code) {
         log_error("Out of frames for a demand-zero page at 0x%lx", addr);
         return false;
     }
-    uint64_t new = frame | PTE_PRESENT | (old & PTE_WRITE) | PTE_USER | (old & PTE_NX);
+    uint64_t new = frame | PTE_PRESENT | (old & PTE_WRITE) | PTE_USER | (old & PTE_NX) | PTE_ENC;
     if (!__atomic_compare_exchange_n(pte, &old, new, /*weak=*/false, __ATOMIC_ACQ_REL,
                                      __ATOMIC_ACQUIRE)) {
         memory_frame_free(frame); /* lost a race; the winner's mapping (or change) stands */
@@ -1916,7 +2147,7 @@ bool memory_address_space_handle_fault(uintptr_t addr, uint64_t error_code) {
 
 int memory_address_space_translate(uintptr_t addr, uintptr_t* out_phys) {
     const uint64_t addr_mask = 0x00000ffffffff000UL;
-    if (!g_frame_pool_bitmap || addr >= 512UL * 1024 * 1024 * 1024)
+    if (!g_frame_pool_bitmap || addr >= MEMORY_ADDRESS_SPACE_LIMIT)
         return -PAL_ERROR_INVAL;
 
     uint64_t root;
@@ -1961,11 +2192,16 @@ int memory_address_space_free(struct memory_address_space* space, void* addr, si
         return -PAL_ERROR_DENIED;
 
     const uint64_t addr_mask = 0x00000ffffffff000UL;
-    for (uintptr_t va = (uintptr_t)addr; va < (uintptr_t)addr + size; va += PAGE_SIZE) {
+    for (uintptr_t va = (uintptr_t)addr; va < (uintptr_t)addr + size;) {
         uint64_t* entry;
-        int ret = address_space_get_leaf_entry(space, va, /*make_private=*/false, &entry);
+        uintptr_t next;
+        int ret = address_space_find_leaf_entry(space, va, &entry, &next);
         if (ret < 0)
             return ret;
+        if (ret == 1) {
+            va = next; /* no table: nothing is mapped there */
+            continue;
+        }
         uintptr_t frame = *entry & addr_mask;
         ret = address_space_get_leaf_entry(space, va, /*make_private=*/true, &entry);
         if (ret < 0)
@@ -1974,8 +2210,9 @@ int memory_address_space_free(struct memory_address_space* space, void* addr, si
 
         uint64_t current_root;
         __asm__ volatile("mov %%cr3, %0" : "=r"(current_root));
-    if ((current_root & addr_mask) == space->root_phys)
+        if ((current_root & addr_mask) == space->root_phys)
             __asm__ volatile("invlpg (%0)" : : "r"(va) : "memory");
+        va += PAGE_SIZE;
     }
     int ret = memory_address_space_flush_range((uintptr_t)addr, size);
     if (ret < 0)
@@ -1983,16 +2220,22 @@ int memory_address_space_free(struct memory_address_space* space, void* addr, si
 
     /* Do not return a physical frame to the pool until remote vCPUs have dropped cached mappings
      * to it. The not-present PTEs keep the frame addresses available for this second pass. */
-    for (uintptr_t va = (uintptr_t)addr; va < (uintptr_t)addr + size; va += PAGE_SIZE) {
+    for (uintptr_t va = (uintptr_t)addr; va < (uintptr_t)addr + size;) {
         uint64_t* entry;
-        ret = address_space_get_leaf_entry(space, va, /*make_private=*/false, &entry);
+        uintptr_t next;
+        ret = address_space_find_leaf_entry(space, va, &entry, &next);
         if (ret < 0)
             return ret;
+        if (ret == 1) {
+            va = next;
+            continue;
+        }
         uintptr_t frame = *entry & addr_mask;
         if (is_frame_pool_frame(frame)) {
             memory_frame_put(frame);
             *entry = 0;
         }
+        va += PAGE_SIZE;
     }
 #ifdef ASAN
     asan_poison_region((uintptr_t)addr, size, ASAN_POISON_USER);
@@ -2021,21 +2264,55 @@ int memory_address_space_protect(struct memory_address_space* space, void* addr,
         return -PAL_ERROR_DENIED;
 
     const uint64_t addr_mask = 0x00000ffffffff000UL;
+    uint64_t lazy = (!read && !write && !execute)
+                    ? 0 : PTE_LAZY | (write ? PTE_WRITE : 0) | (execute ? 0 : PTE_NX);
     for (uintptr_t va = (uintptr_t)addr; va < (uintptr_t)addr + size; va += PAGE_SIZE) {
         uint64_t* entry;
-        int ret = address_space_get_leaf_entry(space, va, /*make_private=*/false, &entry);
+        uintptr_t next;
+        int ret = address_space_find_leaf_entry(space, va, &entry, &next);
         if (ret < 0)
             return ret;
+        if (ret == 1) {
+            /* no table yet (a reservation beyond the boot tables): an unbacked page; a demand-zero
+             * entry is installed if it is to become accessible, otherwise there is nothing to do
+             * up to the missing table's reach */
+            if (!lazy) {
+                va = MIN(next, (uintptr_t)addr + size) - PAGE_SIZE;
+                continue;
+            }
+            ret = address_space_restore_pte(space, va, lazy);
+            if (ret < 0)
+                return ret;
+            continue;
+        }
         uintptr_t frame = *entry & addr_mask;
+        uint64_t cow = *entry & (PTE_COW | PTE_COW_WRITABLE);
         if (!(*entry & PTE_PRESENT) && !leaf_holds_reference(va, *entry)) {
             /* an unbacked page (never touched, or a PROT_NONE reservation) stays demand-zero */
-            uint64_t lazy = (!read && !write && !execute)
-                            ? 0 : PTE_LAZY | (write ? PTE_WRITE : 0) | (execute ? 0 : PTE_NX);
             ret = address_space_restore_pte(space, va, lazy);
         } else if (!read && !write && !execute) {
-            ret = address_space_restore_pte(space, va, frame);
+            ret = address_space_restore_pte(space, va, frame | (cow & PTE_COW) | PTE_ENC);
+        } else if (cow && write) {
+            /* a copy-on-write page (a frame of a file's cache) becomes writable: copy it now;
+             * map_owned drops the leaf's reference to the shared frame */
+            uintptr_t copy;
+            ret = cow_copy_frame(frame, &copy);
+            if (ret < 0)
+                return ret;
+            ret = memory_address_space_map_owned(space, va, copy, write, execute,
+                                                 /*usermode=*/true);
+            if (ret < 0)
+                memory_frame_free(copy);
         } else {
             ret = memory_address_space_map(space, va, frame, write, execute, /*usermode=*/true);
+            if (ret == 0 && cow) {
+                /* still a shared frame, read-only: keep the mark (a later write must copy; it
+                 * is allowed by a fault only while the mapping is writable, which it is not) */
+                uint64_t* leaf;
+                ret = address_space_get_leaf_entry(space, va, /*make_private=*/true, &leaf);
+                if (ret == 0)
+                    *leaf |= PTE_COW;
+            }
         }
         if (ret < 0)
             return ret;

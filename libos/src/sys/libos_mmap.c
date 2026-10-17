@@ -50,6 +50,28 @@
 #include <stdatomic.h>
 #include <stdbool.h>
 
+#ifdef ENABLE_GRAPHICS
+/* [addr, addr + length) meets a graphics arena: the PAL reserved them as the initial ranges
+ * "egl_redirect_data" and "egl_redirect_huge" (kernel_memory.c); a guest without them has none. */
+static bool overlaps_graphics_arena(uintptr_t addr, size_t length) {
+    for (size_t i = 0; i < g_pal_public_state->initial_mem_ranges_len; i++) {
+        const struct pal_initial_mem_range* r = &g_pal_public_state->initial_mem_ranges[i];
+        if (r->is_free || !r->is_user_reserved)
+            continue;
+        if (strcmp(r->comment, "egl_redirect_data") && strcmp(r->comment, "egl_redirect_huge"))
+            continue;
+        /* the whole arena at its base is the graphics library's own mapping of its data region
+         * (libos/src/graphics/gramine.c: setup_syscall_comms), which the PAL serves from the
+         * arena; a mapping of a part of it is an application's (Wine's preloader) and is refused */
+        if (addr == r->start && addr + length == r->end)
+            continue;
+        if (addr < r->end && r->start < addr + length)
+            return true;
+    }
+    return false;
+}
+#endif
+
 
 static int check_prot(int prot) {
     if (prot & ~(PROT_NONE | PROT_READ | PROT_WRITE | PROT_EXEC | PROT_GROWSDOWN | PROT_GROWSUP |
@@ -275,6 +297,17 @@ static void* do_mmap(void* addr, size_t length, int prot, int flags, int fd,
             ret = -EINVAL;
             goto out_handle;
         }
+#ifdef ENABLE_GRAPHICS
+        /* The graphics arenas (the GEM buffers of libgraphics, which the host path above maps)
+         * are not the application's to replace: a fixed mapping there would reach the PAL as a
+         * mapping of a reserved guest-physical range (kernel_memory.c refuses it too). Wine
+         * reserves a PE image's preferred base, 0x140000000 inside the default hugepage arena,
+         * this way and copes with the failure (its preloader warns and the image is relocated). */
+        if (overlaps_graphics_arena((uintptr_t)addr, length)) {
+            ret = (flags & MAP_FIXED_NOREPLACE) ? -EEXIST : -ENOMEM;
+            goto out_handle;
+        }
+#endif
         if (!(flags & MAP_FIXED_NOREPLACE)) {
             /* Flush any file mappings we're about to replace */
             ret = msync_range((uintptr_t)addr, (uintptr_t)addr + length);

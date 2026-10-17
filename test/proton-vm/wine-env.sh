@@ -10,6 +10,11 @@ export WORK=${WORK:-$ROOT/.proton-vm/work}
 export WINEPREFIX=${PFX:-$WORK/compatdata/pfx}
 export WINEDLLPATH=$PROTON/files/lib/wine/x86_64-unix:$PROTON/files/lib/wine/i386-unix
 export LD_LIBRARY_PATH=$PROTON/files/lib:$PROTON/files/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+# GE-Proton's media path (mfmp4srcsnk.dll -> winedmo.so) needs FFmpeg 8 (libavformat.so.62), which
+# Ubuntu 24.04 does not package: a minimal build in the container (Documentation/devel/proton-vm/FINDINGS.md,
+# the game intake) sits in FFMPEG_LIBS; without it the intro videos of a Unity game never end
+export FFMPEG_LIBS=${FFMPEG_LIBS:-/opt/ffmpeg8/lib}
+[ -d "$FFMPEG_LIBS" ] && export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$FFMPEG_LIBS
 export PATH=$PROTON/files/bin:$PATH
 export WINELOADERNOEXEC=1
 export WINEESYNC=${WINEESYNC:-1} WINEFSYNC=${WINEFSYNC:-1} WINENTSYNC=${WINENTSYNC:-1}
@@ -17,3 +22,14 @@ export WINEDEBUG=${WINEDEBUG:--all}
 # what `proton run` sets for DXVK and VKD3D-Proton (the DLLs are in the prefix's system32)
 export WINEDLLOVERRIDES=${WINEDLLOVERRIDES:-"d3d11,d3d10core,d3d9,dxgi,d3d12,d3d12core=n"}
 export WINE64="$PROTON/files/lib/wine/x86_64-unix/wine-preloader $PROTON/files/lib/wine/x86_64-unix/wine"
+# WOW64=1: a 32-bit game in Wine's new WoW64 mode (a 64-bit process running 32-bit code); the
+# prefix is the phase-0 WoW64 prefix (PROTON_USE_WOW64=1). A null ALSA device so a game that
+# refuses to start without a playback device (Psychonauts) finds one (the maintainer approved a
+# dummy audio driver); the sound is silent.
+if [ "${WOW64:-0}" = 1 ]; then
+    export WINEARCH=wow64
+    export WINEPREFIX=${WOW64_PFX:-$ROOT/.proton-vm/work-wow64/compatdata/pfx}
+    [ -f "$HOME/.asoundrc" ] || printf "pcm.!default { type null }
+ctl.!default { type null }
+" > "$HOME/.asoundrc"
+fi
