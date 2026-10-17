@@ -14,7 +14,7 @@ LOADER=${1:-vm}; shift || true
 [ -n "${QEMU_PATH:-}" ] || { [ -x /root/qemu-tirith/build/qemu-system-x86_64 ] && export QEMU_PATH=/root/qemu-tirith/build/qemu-system-x86_64; }
 mkdir -p "$WORK/tmp" && cd "$WORK"
 gcc -O1 -g -pthread -fno-stack-protector -o probes "$HERE/probes.c" 2>&1 | grep -v "Wunused-result\|^ *|\|^ *[0-9]* |\|^ *\^\|In function"
-gramine-manifest -Darch_libdir=/lib/x86_64-linux-gnu -Dentry=/probe/probes -Dprobedir="$WORK" \
+gramine-manifest -Darch_libdir=/lib/$(uname -m)-linux-gnu -Dentry=/probe/probes -Dprobedir="$WORK" \
     -Dlog_level="${LOG_LEVEL:-error}" "$HERE/probes.manifest.template" probes.manifest
 echo "# $(date -u +%Y-%m-%dT%H:%MZ) loader=$LOADER cpus=${GRAMINE_CPU_NUM:-1} ram=${GRAMINE_RAM_SIZE:-default} $(uptime | sed 's/.*load/load/')"
 case $LOADER in

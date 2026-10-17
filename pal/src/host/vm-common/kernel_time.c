@@ -42,7 +42,7 @@ DEFINE_LISTP(pending_timeout);
 static LISTP_TYPE(pending_timeout) g_pending_timeouts_list = LISTP_INIT;
 static spinlock_t g_pending_timeouts_list_lock = INIT_SPINLOCK_UNLOCKED;
 
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
 /* Absolute time (us) CPU0's timer is armed for, protected by g_pending_timeouts_list_lock: the
  * earliest pending deadline when CPU0's timer ISR last ran, at most the 100 ms tick ahead. A
  * registration of an earlier deadline re-arms the timer (register_timeout()). UINT64_MAX until the
@@ -114,12 +114,17 @@ int register_timeout(uint64_t timeout_absolute_us, int* futex, void** timeout_ou
      * notify_about_timeouts_uninterruptable(); temporarily disable interrupts to avoid deadlock */
     spinlock_lock_disable_irq(&g_pending_timeouts_list_lock);
     LISTP_ADD(timeout, &g_pending_timeouts_list, list);
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
     if (timeout_absolute_us < g_cpu0_armed_deadline_us) {
         /* earlier than what CPU0's timer is armed for: without a re-arm this wait would be served
          * only by the next tick, up to 100 ms late */
         uint64_t now_us;
         if (get_time_in_us(&now_us) == 0) {
+#ifdef __aarch64__
+            uint64_t delay_us = next_delay_us_locked(now_us);
+            g_cpu0_armed_deadline_us = now_us + delay_us;
+            lapic_timer_arm_cpu0(delay_us);
+#else
             if (get_per_cpu_data()->cpu_id == 0) {
                 uint64_t delay_us = next_delay_us_locked(now_us);
                 lapic_timer_set_deadline(delay_us);
@@ -130,6 +135,7 @@ int register_timeout(uint64_t timeout_absolute_us, int* futex, void** timeout_ou
                  * one spurious tick, which is harmless) */
                 lapic_timer_kick_cpu0();
             }
+#endif
         }
     }
 #endif
@@ -193,7 +199,7 @@ int notify_about_timeouts_uninterruptable(void) {
     return 0;
 }
 
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
 uint64_t timeouts_next_delay_us(void) {
     uint64_t now_us;
     if (get_time_in_us(&now_us) < 0)
