@@ -772,6 +772,167 @@ static void probe_futexstress(void) {
       (t1.tv_sec - t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec) / 1e9);
 }
 
+/* pipeping: the wait-events path of the VM PAL under contention. Two threads pass one byte back and
+ * forth over two pipes, each side poll()ing its pipe before reading (poll -> PalStreamsWaitEvents
+ * -> the PAL's streams-waiting futex, which a pipe write wakes). A wakeup lost between the
+ * readiness check and the sleep hangs a side for ever; the watchdog reports the round. */
+#define PP_ROUNDS 200000
+static int pp_a[2], pp_b[2];
+static volatile int pp_round;
+static int pp_wait_read(int fd) {
+    struct pollfd pfd = { .fd = fd, .events = POLLIN };
+    for (;;) {
+        int r = poll(&pfd, 1, -1);
+        if (r < 0 && errno == EINTR) continue;
+        if (r < 0) return -1;
+        char c;
+        ssize_t n = read(fd, &c, 1);
+        if (n == 1) return 0;
+        if (n < 0 && errno == EINTR) continue;
+        return -1;
+    }
+}
+static void* pp_peer(void* arg) {
+    (void)arg;
+    for (int r = 0; r < PP_ROUNDS; r++) {
+        if (pp_wait_read(pp_a[0]) < 0) { P("pipeping", "FAIL peer read: %s", strerror(errno)); _exit(4); }
+        if (write(pp_b[1], "b", 1) != 1) { P("pipeping", "FAIL peer write: %s", strerror(errno)); _exit(4); }
+    }
+    return NULL;
+}
+static void* pp_watchdog(void* arg) {
+    (void)arg;
+    sleep(90);
+    P("pipeping", "FAIL hung at round %d of %d (90 s)", pp_round, PP_ROUNDS);
+    _exit(3);
+}
+static void probe_pipeping(void) {
+    if (pipe(pp_a) < 0 || pipe(pp_b) < 0) { P("pipeping", "FAIL pipe: %s", strerror(errno)); return; }
+    pthread_t w, t;
+    pthread_create(&w, NULL, pp_watchdog, NULL);
+    pthread_create(&t, NULL, pp_peer, NULL);
+    struct timespec t0, t1;
+    clock_gettime(CLOCK_MONOTONIC, &t0);
+    for (int r = 0; r < PP_ROUNDS; r++) {
+        pp_round = r;
+        if (write(pp_a[1], "a", 1) != 1) { P("pipeping", "FAIL write: %s", strerror(errno)); return; }
+        if (pp_wait_read(pp_b[0]) < 0) { P("pipeping", "FAIL read: %s", strerror(errno)); return; }
+    }
+    clock_gettime(CLOCK_MONOTONIC, &t1);
+    pthread_join(t, NULL);
+    P("pipeping", "PASS %d rounds in %.1f s", PP_ROUNDS,
+      (t1.tv_sec - t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec) / 1e9);
+}
+
+/* pollmany: one thread poll()s the read ends of many pipes (as the wineserver's epoll spans one
+ * request pipe per Wine thread) and echoes every byte back on the pipe's reply pipe; four writer
+ * threads keep writing to random pipes and wait for their echo with a blocking read. The PAL's
+ * wait-events loop checks every pipe before it sleeps, so a write to an already-checked pipe during
+ * that walk must still wake the poller: if the wakeup is lost, the poller sleeps with data pending,
+ * the writers wait for ever and the watchdog reports. */
+#define PM_PIPES 128
+#define PM_WRITERS 4
+#define PM_ROUNDS 20000
+static int pm_req[PM_PIPES][2], pm_rep[PM_PIPES][2];
+static volatile int pm_done[PM_WRITERS];
+static void* pm_poller(void* arg) {
+    (void)arg;
+    struct pollfd pfd[PM_PIPES];
+    for (int i = 0; i < PM_PIPES; i++) { pfd[i].fd = pm_req[i][0]; pfd[i].events = POLLIN; }
+    for (;;) {
+        int r = poll(pfd, PM_PIPES, -1);
+        if (r < 0 && errno == EINTR) continue;
+        if (r < 0) { P("pollmany", "FAIL poll: %s", strerror(errno)); _exit(4); }
+        for (int i = 0; i < PM_PIPES; i++) {
+            if (!(pfd[i].revents & POLLIN)) continue;
+            char c;
+            if (read(pm_req[i][0], &c, 1) != 1) { P("pollmany", "FAIL read: %s", strerror(errno)); _exit(4); }
+            if (write(pm_rep[i][1], &c, 1) != 1) { P("pollmany", "FAIL echo: %s", strerror(errno)); _exit(4); }
+        }
+    }
+    return NULL;
+}
+static void* pm_writer(void* arg) {
+    int me = (int)(intptr_t)arg;
+    unsigned seed = 12345u + me;
+    for (int r = 0; r < PM_ROUNDS; r++) {
+        int i = (me * (PM_PIPES / PM_WRITERS)) + (rand_r(&seed) % (PM_PIPES / PM_WRITERS));
+        char c = 'a' + me;
+        if (write(pm_req[i][1], &c, 1) != 1) { P("pollmany", "FAIL write: %s", strerror(errno)); _exit(4); }
+        char e;
+        ssize_t n;
+        do { n = read(pm_rep[i][0], &e, 1); } while (n < 0 && errno == EINTR);
+        if (n != 1 || e != c) { P("pollmany", "FAIL reply %zd '%c'", n, e); _exit(4); }
+        pm_done[me] = r + 1;
+    }
+    return NULL;
+}
+static void* pm_watchdog(void* arg) {
+    (void)arg;
+    sleep(90);
+    P("pollmany", "FAIL hung after 90 s: writers at rounds %d %d %d %d of %d", pm_done[0], pm_done[1],
+      pm_done[2], pm_done[3], PM_ROUNDS);
+    _exit(3);
+}
+static void probe_pollmany(void) {
+    for (int i = 0; i < PM_PIPES; i++)
+        if (pipe(pm_req[i]) < 0 || pipe(pm_rep[i]) < 0) { P("pollmany", "FAIL pipe %d: %s", i, strerror(errno)); return; }
+    pthread_t w, po, wr[PM_WRITERS];
+    pthread_create(&w, NULL, pm_watchdog, NULL);
+    pthread_create(&po, NULL, pm_poller, NULL);
+    struct timespec t0, t1;
+    clock_gettime(CLOCK_MONOTONIC, &t0);
+    for (int i = 0; i < PM_WRITERS; i++)
+        pthread_create(&wr[i], NULL, pm_writer, (void*)(intptr_t)i);
+    for (int i = 0; i < PM_WRITERS; i++)
+        pthread_join(wr[i], NULL);
+    clock_gettime(CLOCK_MONOTONIC, &t1);
+    P("pollmany", "PASS %d writers x %d rounds over %d pipes in %.1f s", PM_WRITERS, PM_ROUNDS, PM_PIPES,
+      (t1.tv_sec - t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec) / 1e9);
+}
+
+/* threadlat: what a game's short deadlines are spent on. (a) create a thread that returns at
+ * once and join it; (b) a pipe round trip to a peer thread that sleeps in poll() between messages
+ * (its vCPU idles, as the wineserver's does between requests); 200 samples each, median and max. */
+static int tl_cmp(const void* a, const void* b) { double x = *(const double*)a, y = *(const double*)b; return (x > y) - (x < y); }
+static double tl_now(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return t.tv_sec * 1e3 + t.tv_nsec / 1e6; }
+static void* tl_noop(void* a) { (void)a; return NULL; }
+static int tl_p[2], tl_q[2];
+static void* tl_peer(void* a) {
+    (void)a;
+    struct pollfd pfd = { .fd = tl_p[0], .events = POLLIN };
+    for (int i = 0; i < 200; i++) {
+        while (poll(&pfd, 1, -1) < 0 && errno == EINTR) ;
+        char c; if (read(tl_p[0], &c, 1) != 1) return NULL;
+        if (write(tl_q[1], &c, 1) != 1) return NULL;
+    }
+    return NULL;
+}
+static void tl_report(const char* what, double* v, int n) {
+    qsort(v, n, sizeof(*v), tl_cmp);
+    P("threadlat", "INFO %s: median %.2f ms, p90 %.2f ms, max %.2f ms (%d samples)", what, v[n / 2], v[n * 9 / 10], v[n - 1], n);
+}
+static void probe_threadlat(void) {
+    double v[200];
+    for (int i = 0; i < 200; i++) {
+        double t0 = tl_now(); pthread_t t; pthread_create(&t, NULL, tl_noop, NULL); pthread_join(t, NULL);
+        v[i] = tl_now() - t0;
+        usleep(3000); /* let the CPUs go idle between samples, as between a game's steps */
+    }
+    tl_report("thread create+join, CPUs idle between samples", v, 200);
+    if (pipe(tl_p) < 0 || pipe(tl_q) < 0) { P("threadlat", "FAIL pipe"); return; }
+    pthread_t peer; pthread_create(&peer, NULL, tl_peer, NULL);
+    usleep(20000);
+    for (int i = 0; i < 200; i++) {
+        double t0 = tl_now(); char c = 'x', r;
+        if (write(tl_p[1], &c, 1) != 1 || read(tl_q[0], &r, 1) != 1) { P("threadlat", "FAIL pipe round trip"); return; }
+        v[i] = tl_now() - t0;
+        usleep(3000);
+    }
+    pthread_join(peer, NULL);
+    tl_report("pipe round trip to a sleeping peer", v, 200);
+}
+
 /* ------------------------------------------------------------------------------------------- */
 static void probe_eventfd(void) {
     int fd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK | EFD_SEMAPHORE);
@@ -1483,7 +1644,7 @@ static void probe_misc(void) {
 struct probe { const char* name; void (*fn)(void); };
 static const struct probe probes[] = {
     /* the ones that may take the guest down come last */
-    {"fixed", probe_fixed},   {"huge", probe_huge},     {"noreplace", probe_noreplace}, {"futexv", probe_futexv}, {"futexrt", probe_futexrt}, {"futexstress", probe_futexstress},
+    {"fixed", probe_fixed},   {"huge", probe_huge},     {"noreplace", probe_noreplace}, {"futexv", probe_futexv}, {"futexrt", probe_futexrt}, {"futexstress", probe_futexstress}, {"pipeping", probe_pipeping}, {"pollmany", probe_pollmany}, {"threadlat", probe_threadlat},
     {"eventfd", probe_eventfd}, {"scm", probe_scm},     {"unixsock", probe_unixsock}, {"unixsock2", probe_unixsock2}, {"sud", probe_sud}, {"ifaces", probe_ifaces},       {"signals", probe_signals},
     {"sig_chld", probe_sig_chld}, {"sig_spin", probe_sig_spin}, {"sig_block", probe_sig_block}, {"sig_proc", probe_sig_proc},
     {"threads", probe_threads}, {"procs", probe_procs}, {"proc", probe_proc},       {"misc", probe_misc},
