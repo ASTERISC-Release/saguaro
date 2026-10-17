@@ -668,6 +668,40 @@ static void probe_futexv(void) {
     P("futexv", "%s woken on the second futex: returned %ld (%s)", r == 1 ? "PASS" : "FAIL", r, r < 0 ? strerror(e) : "index");
 }
 
+/* futexrt: timed FUTEX_WAIT_BITSET with an absolute deadline, CLOCK_REALTIME (Wine's fsync waits
+ * use this form) and CLOCK_MONOTONIC: both must return ETIMEDOUT after about the deadline. */
+static int g_frt;
+static void futex_abs_wait(const char* what, clockid_t clk, int flags) {
+    struct timespec ts, t0, t1;
+    clock_gettime(clk, &ts);
+    ts.tv_nsec += 100000000;
+    if (ts.tv_nsec >= 1000000000) { ts.tv_sec++; ts.tv_nsec -= 1000000000; }
+    clock_gettime(CLOCK_MONOTONIC, &t0);
+    long r = syscall(__NR_futex, &g_frt, FUTEX_WAIT_BITSET | FUTEX_PRIVATE_FLAG | flags, 0, &ts, NULL,
+                     0xffffffff);
+    int e = errno;
+    clock_gettime(CLOCK_MONOTONIC, &t1);
+    double ms = (t1.tv_sec - t0.tv_sec) * 1000.0 + (t1.tv_nsec - t0.tv_nsec) / 1e6;
+    P("futexrt", "%s %s deadline now+100 ms: %s after %.0f ms", r < 0 && e == ETIMEDOUT && ms < 1500 ? "PASS" : "FAIL",
+      what, r < 0 ? strerror(e) : "returned", ms);
+}
+static void* futexrt_watchdog(void* arg) {
+    (void)arg;
+    sleep(5);
+    P("futexrt", "FAIL a wait did not return in 5 s");
+    _exit(3);
+}
+static void probe_futexrt(void) {
+    pthread_t w;
+    pthread_create(&w, NULL, futexrt_watchdog, NULL);
+    futex_abs_wait("CLOCK_MONOTONIC", CLOCK_MONOTONIC, 0);
+    futex_abs_wait("CLOCK_REALTIME", CLOCK_REALTIME, FUTEX_CLOCK_REALTIME);
+    struct timespec rt, mono;
+    clock_gettime(CLOCK_REALTIME, &rt);
+    clock_gettime(CLOCK_MONOTONIC, &mono);
+    P("futexrt", "INFO clocks: realtime %ld s, monotonic %ld s", (long)rt.tv_sec, (long)mono.tv_sec);
+}
+
 /* ------------------------------------------------------------------------------------------- */
 static void probe_eventfd(void) {
     int fd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK | EFD_SEMAPHORE);
@@ -1379,7 +1413,7 @@ static void probe_misc(void) {
 struct probe { const char* name; void (*fn)(void); };
 static const struct probe probes[] = {
     /* the ones that may take the guest down come last */
-    {"fixed", probe_fixed},   {"huge", probe_huge},     {"noreplace", probe_noreplace}, {"futexv", probe_futexv},
+    {"fixed", probe_fixed},   {"huge", probe_huge},     {"noreplace", probe_noreplace}, {"futexv", probe_futexv}, {"futexrt", probe_futexrt},
     {"eventfd", probe_eventfd}, {"scm", probe_scm},     {"unixsock", probe_unixsock}, {"unixsock2", probe_unixsock2}, {"sud", probe_sud}, {"ifaces", probe_ifaces},       {"signals", probe_signals},
     {"sig_chld", probe_sig_chld}, {"sig_spin", probe_sig_spin}, {"sig_block", probe_sig_block}, {"sig_proc", probe_sig_proc},
     {"threads", probe_threads}, {"procs", probe_procs}, {"proc", probe_proc},       {"misc", probe_misc},
