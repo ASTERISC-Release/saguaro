@@ -43,6 +43,6 @@ gramine-manifest -Dproton="$PROTON" -Dprefix="$PREFIX" -Dtests="$TESTS" -Dwork="
 echo "# $(date -u +%Y-%m-%dT%H:%MZ) loader=$LOADER args: $* cpus=${GRAMINE_CPU_NUM:-1} ram=${GRAMINE_RAM_SIZE:-default} $(uptime | sed 's/.*load/load/')"
 case $LOADER in
     direct) timeout "${TIMEOUT:-120}" gramine-direct wine "$@" ;;
-    vm)     timeout "${TIMEOUT:-180}" gramine-vm wine "$@" 2>&1 | grep -v "self-check\|Frame-pool\|boot\]\|Physical\|Configuring\|REM_MEM\|vm-relay\|frame pool\|^(qemu)\|^qemu-system" ;;
+    vm)     timeout "${TIMEOUT:-180}" gramine-vm wine "$@" 2>&1 | grep --line-buffered -v "self-check\|Frame-pool\|boot\]\|Physical\|Configuring\|REM_MEM\|vm-relay\|frame pool\|^(qemu)\|^qemu-system" ;;
 esac
 echo "# exit ${PIPESTATUS[0]}"

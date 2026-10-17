@@ -14,6 +14,7 @@
 # .proton-vm/games/runs/<exe name>-<time>. Environment as run-native.sh (WINEDEBUG, WINEDLLOVERRIDES,
 # WINEESYNC...); XDO=... runs `xdotool` commands (a file of lines "sleep N" / "key X" / "mousemove X Y"
 # / "click 1") against the display while the game runs. SHOT_EVERY (default 10) seconds between screenshots.
+# TIMESTAMP=1 stamps every console line of a -l vm run with seconds since the start (ms resolution).
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../.." && pwd)
@@ -65,7 +66,17 @@ if [ "$LOADER" = vm ]; then
     fi
     # the X relay without the GEM arenas unless GPU=1 (run-wine.sh turns them on for the GPU)
     [ "${GPU:-0}" = 1 ] || export GRAMINE_VM_GRAPHICS=${GRAMINE_VM_GRAPHICS:-0}
-    GAME=$(dirname "$EXE") DISPLAY_NUM=${DISP#:} TIMEOUT=$((SECS + 60)) "$HERE/run-wine.sh" vm "$EXE" "$@" >"$OUT/wine.out" 2>"$OUT/wine.err" &
+    if [ "${TIMESTAMP:-0}" = 1 ]; then
+        # each console line stamped with seconds since the start on arrival (the wineserver's
+        # +server trace has no timestamps of its own); ms resolution, arrival order kept
+        GAME=$(dirname "$EXE") DISPLAY_NUM=${DISP#:} TIMEOUT=$((SECS + 60)) "$HERE/run-wine.sh" vm "$EXE" "$@" 2>"$OUT/wine.err" | \
+            python3 -u -c 'import sys,time
+t0=time.monotonic()
+for l in sys.stdin:
+    sys.stdout.write("[+%08.3f] %s" % (time.monotonic()-t0, l))' >"$OUT/wine.out" &
+    else
+        GAME=$(dirname "$EXE") DISPLAY_NUM=${DISP#:} TIMEOUT=$((SECS + 60)) "$HERE/run-wine.sh" vm "$EXE" "$@" >"$OUT/wine.out" 2>"$OUT/wine.err" &
+    fi
 else
     $WINE64 "$(basename "$EXE")" "$@" >"$OUT/wine.out" 2>"$OUT/wine.err" &
 fi

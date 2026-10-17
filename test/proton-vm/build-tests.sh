@@ -20,4 +20,9 @@ x86_64-w64-mingw32-gcc -O2 -I"$OUT/include" -o "$OUT/vkwin.exe" "$HERE/vkwin.c"
 # start-up primitive, FINDINGS.md 2026-10-17), 64-bit and 32-bit
 x86_64-w64-mingw32-gcc -O2 -o "$OUT/threadwait.exe" "$HERE/threadwait.c"
 i686-w64-mingw32-gcc -O2 -o "$OUT/threadwait32.exe" "$HERE/threadwait.c"
+# xlat.exe: X round trips (GetCursorPos) from one or several threads; sleepgran.exe: Sleep and
+# short WaitForSingleObject timeouts (the VM's timer granularity), 64- and 32-bit
+x86_64-w64-mingw32-gcc -O2 -o "$OUT/xlat.exe" "$HERE/xlat.c"
+x86_64-w64-mingw32-gcc -O2 -o "$OUT/sleepgran.exe" "$HERE/sleepgran.c"
+i686-w64-mingw32-gcc -O2 -o "$OUT/sleepgran32.exe" "$HERE/sleepgran.c"
 ls -l "$OUT"

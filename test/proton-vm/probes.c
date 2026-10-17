@@ -933,6 +933,30 @@ static void probe_threadlat(void) {
     tl_report("pipe round trip to a sleeping peer", v, 200);
 }
 
+/* tickgran: the granularity of short timed waits: nanosleep, a futex wait with a timeout, poll and
+ * epoll_wait with 1 ms and 5 ms timeouts, 20 each; median and max. */
+static double tg_now(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return t.tv_sec * 1e3 + t.tv_nsec / 1e6; }
+static void tg_report(const char* what, double* v, int n) {
+    qsort(v, n, sizeof(*v), tl_cmp);
+    P("tickgran", "INFO %-22s median %7.2f ms, max %7.2f ms", what, v[n / 2], v[n - 1]);
+}
+static void probe_tickgran(void) {
+    double v[20]; int w = 0; int fds[2]; pipe(fds);
+    int ep = epoll_create1(0); struct epoll_event ee = { .events = EPOLLIN, .data.fd = fds[0] }; epoll_ctl(ep, EPOLL_CTL_ADD, fds[0], &ee);
+    for (int ms = 1; ms <= 5; ms += 4) {
+        struct timespec ts = { 0, ms * 1000000L };
+        for (int i = 0; i < 20; i++) { double t0 = tg_now(); nanosleep(&ts, NULL); v[i] = tg_now() - t0; }
+        char name[32]; snprintf(name, sizeof(name), "nanosleep %d ms", ms); tg_report(name, v, 20);
+        for (int i = 0; i < 20; i++) { double t0 = tg_now(); struct timespec rel = { 0, ms * 1000000L }; syscall(__NR_futex, &w, FUTEX_WAIT | FUTEX_PRIVATE_FLAG, 0, &rel, NULL, 0); v[i] = tg_now() - t0; }
+        snprintf(name, sizeof(name), "futex wait %d ms", ms); tg_report(name, v, 20);
+        struct pollfd pfd = { .fd = fds[0], .events = POLLIN };
+        for (int i = 0; i < 20; i++) { double t0 = tg_now(); poll(&pfd, 1, ms); v[i] = tg_now() - t0; }
+        snprintf(name, sizeof(name), "poll %d ms", ms); tg_report(name, v, 20);
+        for (int i = 0; i < 20; i++) { double t0 = tg_now(); struct epoll_event out; epoll_wait(ep, &out, 1, ms); v[i] = tg_now() - t0; }
+        snprintf(name, sizeof(name), "epoll_wait %d ms", ms); tg_report(name, v, 20);
+    }
+}
+
 /* ------------------------------------------------------------------------------------------- */
 static void probe_eventfd(void) {
     int fd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK | EFD_SEMAPHORE);
@@ -1644,7 +1668,7 @@ static void probe_misc(void) {
 struct probe { const char* name; void (*fn)(void); };
 static const struct probe probes[] = {
     /* the ones that may take the guest down come last */
-    {"fixed", probe_fixed},   {"huge", probe_huge},     {"noreplace", probe_noreplace}, {"futexv", probe_futexv}, {"futexrt", probe_futexrt}, {"futexstress", probe_futexstress}, {"pipeping", probe_pipeping}, {"pollmany", probe_pollmany}, {"threadlat", probe_threadlat},
+    {"fixed", probe_fixed},   {"huge", probe_huge},     {"noreplace", probe_noreplace}, {"futexv", probe_futexv}, {"futexrt", probe_futexrt}, {"futexstress", probe_futexstress}, {"pipeping", probe_pipeping}, {"pollmany", probe_pollmany}, {"threadlat", probe_threadlat}, {"tickgran", probe_tickgran},
     {"eventfd", probe_eventfd}, {"scm", probe_scm},     {"unixsock", probe_unixsock}, {"unixsock2", probe_unixsock2}, {"sud", probe_sud}, {"ifaces", probe_ifaces},       {"signals", probe_signals},
     {"sig_chld", probe_sig_chld}, {"sig_spin", probe_sig_spin}, {"sig_block", probe_sig_block}, {"sig_proc", probe_sig_proc},
     {"threads", probe_threads}, {"procs", probe_procs}, {"proc", probe_proc},       {"misc", probe_misc},
