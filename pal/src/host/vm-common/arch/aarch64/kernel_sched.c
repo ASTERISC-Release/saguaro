@@ -592,6 +592,25 @@ int sched_thread_wait_interruptible(int* futex_word, spinlock_t* lock) {
     return 0;
 }
 
+uint64_t g_streams_wake_gen;
+
+void sched_streams_wake(void) {
+    __atomic_fetch_add(&g_streams_wake_gen, 1, __ATOMIC_RELEASE);
+    sched_thread_wakeup(&g_streams_waiting_events_futex);
+}
+
+/* aarch64 keeps the compare before the sleep rather than under the thread-list lock (its
+ * sched_thread_wait() has no interruptible variant to extend yet): a waker that runs between
+ * the compare and the sleep is still only rescued by the periodic tick, as before; a waker that
+ * ran between the caller's sampling and here is caught. */
+int sched_thread_wait_interruptible_gen(int* futex_word, spinlock_t* lock, uint64_t* gen,
+                                        uint64_t expected) {
+    if (gen && __atomic_load_n(gen, __ATOMIC_ACQUIRE) != expected)
+        return 1;
+    sched_thread_wait(futex_word, lock);
+    return 0;
+}
+
 void sched_thread_interrupt(struct thread* thread) {
     __UNUSED(thread);
 }

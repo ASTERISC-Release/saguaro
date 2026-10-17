@@ -399,7 +399,19 @@ void sched_thread_wait(int* futex_word, spinlock_t* lock) {
     spinlock_lock(lock);
 }
 
+uint64_t g_streams_wake_gen;
+
+void sched_streams_wake(void) {
+    __atomic_fetch_add(&g_streams_wake_gen, 1, __ATOMIC_RELEASE);
+    sched_thread_wakeup(&g_streams_waiting_events_futex);
+}
+
 int sched_thread_wait_interruptible(int* futex_word, spinlock_t* lock) {
+    return sched_thread_wait_interruptible_gen(futex_word, lock, /*gen=*/NULL, /*expected=*/0);
+}
+
+int sched_thread_wait_interruptible_gen(int* futex_word, spinlock_t* lock, uint64_t* gen,
+                                        uint64_t expected) {
     assert(spinlock_is_locked(lock));
     assert(lock != &g_thread_list_lock);
 
@@ -413,6 +425,12 @@ int sched_thread_wait_interruptible(int* futex_word, spinlock_t* lock) {
     if (__atomic_exchange_n(&curr_thread->resume_pending, false, __ATOMIC_ACQ_REL)) {
         spinlock_unlock_enable_irq(&g_thread_list_lock);
         return -PAL_ERROR_INTERRUPTED;
+    }
+
+    /* a wakeup that ran after the caller sampled the generation: the caller re-checks instead */
+    if (gen && __atomic_load_n(gen, __ATOMIC_ACQUIRE) != expected) {
+        spinlock_unlock_enable_irq(&g_thread_list_lock);
+        return 1;
     }
 
     spinlock_unlock(lock);

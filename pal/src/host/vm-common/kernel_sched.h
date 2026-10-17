@@ -31,6 +31,14 @@ static_assert(MAX_NUM_CPUS % BITS_IN_TYPE(unsigned long) == 0, "");
 extern bool g_kick_sched_thread;
 
 extern int g_streams_waiting_events_futex;
+/* Wake generation of g_streams_waiting_events_futex: every waker bumps it before waking, and
+ * pal_common_streams_wait_events() samples it before checking its handles and refuses to sleep if
+ * it changed since (checked under the thread-list lock, so the ordering with the wakeup is exact).
+ * Without it a write that lands between a handle's check and the waiter being marked BLOCKED wakes
+ * nobody and the waiter sleeps until the next 100 ms tick's periodic kick (FINDINGS.md of
+ * proton-vm, 2026-10-17: a wineserver round trip of 100 ms, The Witcher 1's 100 ms deadline). */
+extern uint64_t g_streams_wake_gen;
+void sched_streams_wake(void);
 
 struct thread;
 #if defined(__x86_64__) || defined(__aarch64__)
@@ -58,6 +66,10 @@ void sched_thread_wait(int* futex_word, spinlock_t* lock);
  * caller returns that to the LibOS, which handles the thread's pending signals). The caller's lock
  * is held again on return either way. */
 int sched_thread_wait_interruptible(int* futex_word, spinlock_t* lock);
+/* The same, but does not sleep (returns 1, lock held again) if *gen != expected when checked under
+ * the thread-list lock, i.e. when a waker ran between the caller's sampling of *gen and now. */
+int sched_thread_wait_interruptible_gen(int* futex_word, spinlock_t* lock, uint64_t* gen,
+                                        uint64_t expected);
 /* _PalThreadResume(): make `thread` notice a new signal: wake it if it sleeps in an interruptible
  * wait, otherwise let it take the interruption at its next such wait or user-mode timer tick
  * (resume_pending, pal_common_deliver_pending_interrupt()). */

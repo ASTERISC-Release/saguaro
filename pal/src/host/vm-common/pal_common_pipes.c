@@ -139,7 +139,7 @@ static void pipe_buf_close_end(struct pal_handle_inner_pipe_buf* pipe_buf,
     ring_wake_all(&pipe_buf->ring[0]);
     ring_wake_all(&pipe_buf->ring[1]);
     if (pipe_buf->poll_waiting)
-        sched_thread_wakeup(&g_streams_waiting_events_futex);
+        sched_streams_wake();
 }
 
 /* Drops the reference of the end of type `type`; the other end, if any, sees the pipe closed. The
@@ -202,7 +202,7 @@ static int pipe_connect(struct pal_handle** handle, const char* name,
     /* notify the other end's waitforclient() and any other waiting events (select/poll) */
     LISTP_ADD(pipe, &g_connecting_pipes_list, list);
     if (found_server_pipe->pipe.connect_poll_waiting)
-        sched_thread_wakeup(&g_streams_waiting_events_futex);
+        sched_streams_wake();
     sched_thread_wakeup(&found_server_pipe->pipe.connect_futex);
 
     *handle = pipe;
@@ -398,7 +398,7 @@ static ssize_t ring_read_locked(struct pal_handle* handle, struct pal_handle_inn
 
 out:
     if (pipe_buf->poll_waiting)
-        sched_thread_wakeup(&g_streams_waiting_events_futex);
+        sched_streams_wake();
     sched_thread_wakeup(&ring->writer_futex);
     return bytes;
 }
@@ -471,7 +471,7 @@ static ssize_t ring_write_locked(struct pal_handle* handle, struct pal_handle_in
             }
 
             if (pipe_buf->poll_waiting)
-                sched_thread_wakeup(&g_streams_waiting_events_futex);
+                sched_streams_wake();
             sched_thread_wakeup(&ring->reader_futex);
             int wret = sched_thread_wait_interruptible(&ring->writer_futex, &pipe_buf->lock);
             if (wret < 0) {
@@ -494,7 +494,7 @@ static ssize_t ring_write_locked(struct pal_handle* handle, struct pal_handle_in
 
 out:
     if (pipe_buf->poll_waiting)
-        sched_thread_wakeup(&g_streams_waiting_events_futex);
+        sched_streams_wake();
     sched_thread_wakeup(&ring->reader_futex);
     return bytes;
 }
@@ -712,7 +712,7 @@ int pal_common_pipe_delete(struct pal_handle* handle, enum pal_delete_mode delet
 
     spinlock_lock(&g_connecting_pipes_lock);
     if (handle->pipe.connect_poll_waiting)
-        sched_thread_wakeup(&g_streams_waiting_events_futex);
+        sched_streams_wake();
     pipe_buf = handle->pipe.pipe_buf;
     spinlock_unlock(&g_connecting_pipes_lock);
 
@@ -725,7 +725,7 @@ int pal_common_pipe_delete(struct pal_handle* handle, enum pal_delete_mode delet
         ring_wake_all(&pipe_buf->ring[0]);
         ring_wake_all(&pipe_buf->ring[1]);
         if (pipe_buf->poll_waiting)
-            sched_thread_wakeup(&g_streams_waiting_events_futex);
+            sched_streams_wake();
         spinlock_unlock(&pipe_buf->lock);
     }
 

@@ -180,6 +180,10 @@ int pal_common_streams_wait_events(size_t count, struct pal_handle** handle_arra
     }
 
     while (!any_event_found) {
+        /* a waker that runs from here on bumps the generation; the wait below refuses to sleep
+         * then (kernel_sched.h, g_streams_wake_gen) */
+        uint64_t wake_gen = __atomic_load_n(&g_streams_wake_gen, __ATOMIC_ACQUIRE);
+
         /* Active event loops poll shared VSOCK rings with notifications masked, avoiding a VM exit
          * per X11 packet. Notifications are rearmed below only if this wait must sleep. */
         (void)virtio_vsock_poll();
@@ -224,10 +228,12 @@ int pal_common_streams_wait_events(size_t count, struct pal_handle** handle_arra
         /* no events found, need to sleep for any new events */
         if (virtio_vsock_rearm_notifications())
             continue;
-        ret = sched_thread_wait_interruptible(&g_streams_waiting_events_futex,
-                                              &g_streams_waiting_events_lock);
+        ret = sched_thread_wait_interruptible_gen(&g_streams_waiting_events_futex,
+                                                  &g_streams_waiting_events_lock,
+                                                  &g_streams_wake_gen, wake_gen);
         if (ret < 0)
             goto out;
+        /* ret == 1: a wakeup raced with the checks above; re-check instead of sleeping */
     }
 
     ret = 0;
