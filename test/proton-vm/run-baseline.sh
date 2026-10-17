@@ -7,8 +7,8 @@
 # window with grim every 20 s and records the load with every capture (TESTING.md "Window size").
 # Usage: run-baseline.sh NAME EXE SECS [native|vm]   (EXE relative to the checkout, e.g.
 # .proton-vm/games/doom/DOOM.exe; EXTRA_ARGS: the game's arguments; the vm loader uses GPU=1,
-# NET=deny, 4 vCPUs and 12 GiB). Output: .proton-vm/games/runs/NAME (run-game.sh's files, plus
-# host.txt and host-T.png).
+# NET=deny, 4 vCPUs and 12 GiB; WOW64=1 for a 32-bit game, as wine-env.sh). Output:
+# .proton-vm/games/runs/NAME (run-game.sh's files, plus host.txt and host-T.png).
 set -u
 NAME=$1; EXE=$2; SECS=$3; LOADER=${4:-native}
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../.." && pwd); cd "$ROOT" || exit 1
@@ -22,9 +22,9 @@ echo "# $NAME $LOADER :0 $(uptime | sed 's/.*load/load/')" > "$O/host.txt"
     [ -n "$G" ] && grim -g "$G" "$O/host-$T.png"
   done ) &
 if [ "$LOADER" = native ]; then
-    container/run.sh "cd /root/gramine-multiarch && DXVK_HUD=fps WINEDEBUG=err+all timeout $((SECS + 60)) test/proton-vm/run-game.sh -d :0 -s $SECS -o /root/gramine-multiarch/$O /root/gramine-multiarch/$EXE ${EXTRA_ARGS:-} >/dev/null 2>&1; tail -1 /root/gramine-multiarch/$O/run.txt"
+    container/run.sh "cd /root/gramine-multiarch && WOW64=${WOW64:-0} DXVK_HUD=fps WINEDEBUG=err+all timeout $((SECS + 60)) test/proton-vm/run-game.sh -d :0 -s $SECS -o /root/gramine-multiarch/$O /root/gramine-multiarch/$EXE ${EXTRA_ARGS:-} >/dev/null 2>&1; tail -1 /root/gramine-multiarch/$O/run.txt"
 else
-    container/run.sh "cd /root/gramine-multiarch && X_TARGET=:0 GPU=1 NET=deny DXVK_HUD=fps EGL_VULKAN_REFRESH=1000 EGL_VULKAN_RATE_LOG=10 GRAMINE_CPU_NUM=4 GRAMINE_RAM_SIZE=12G WINEDEBUG=err+all GRAMINE_PREFIX=/root/.local/gramine-vm timeout $((SECS + 100)) test/proton-vm/run-game.sh -l vm -d :1 -s $SECS -o /root/gramine-multiarch/$O /root/gramine-multiarch/$EXE ${EXTRA_ARGS:-} >/dev/null 2>&1; tail -1 /root/gramine-multiarch/$O/run.txt"
+    container/run.sh "cd /root/gramine-multiarch && WOW64=${WOW64:-0} X_TARGET=:0 GPU=1 NET=deny DXVK_HUD=fps EGL_VULKAN_REFRESH=1000 EGL_VULKAN_RATE_LOG=10 GRAMINE_CPU_NUM=4 GRAMINE_RAM_SIZE=12G WINEDEBUG=err+all GRAMINE_PREFIX=/root/.local/gramine-vm timeout $((SECS + 100)) test/proton-vm/run-game.sh -l vm -d :1 -s $SECS -o /root/gramine-multiarch/$O /root/gramine-multiarch/$EXE ${EXTRA_ARGS:-} >/dev/null 2>&1; tail -1 /root/gramine-multiarch/$O/run.txt"
 fi
 wait; hyprctl reload config-only >/dev/null
 echo "windows left: $(hyprctl clients -j | jq -r '.[].class' | grep -c steam_proton)"
