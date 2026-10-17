@@ -3,7 +3,7 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 """Samples every vCPU of a gramine-vm guest through its QEMU monitor (GRAMINE_VM_MONITOR=<socket>)
 at a fixed interval and prints one line per sample: the time since start, and per CPU its CPL and
-the PAL symbol at RIP (or "user" when CPL=3, "?" outside the PAL) with the low digits of its CR3
+the PAL symbol at RIP (or "user:<rip>" when CPL=3 — the live RIP, exact for a spinning thread; "?" outside the PAL) with the low digits of its CR3
 (the address space it serves: the PAL's boot root for helpers and idle, a process root otherwise). A monitor `info registers -a`
 pauses the vCPUs for microseconds only, so the guest's timing survives, unlike a gdb attach.
 Usage: vm-cpu-sampler.py <monitor-socket> <pal-elf> [--interval-ms 20] [--seconds 120] > samples.txt
@@ -65,7 +65,7 @@ def main():
             if not rip or not cpl:
                 continue
             r = int(rip.group(1), 16); c = int(cpl.group(1))
-            where = 'user' if c == 3 else name(addrs, names, r)
+            where = ('user:%x' % r) if c == 3 else name(addrs, names, r)
             # the address space (CR3) says which process the CPU serves; the PAL's own root is
             # the boot root (helpers, idle), a process root is anything else
             cols.append('%s@%s' % (where, cr3.group(1)[-6:] if cr3 else '?'))
