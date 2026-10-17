@@ -35,15 +35,12 @@
  * send/recv buffer size becomes then 1024 * VSOCK_MAX_PACKETS. */
 #define VSOCK_MAX_PAYLOAD_SIZE 980U
 
-/* Sizes of RX and TX virtio queues. */
-#ifdef PAL_HOST_SEV
-/* vhost-vsock queues hold at most 128 entries; newer QEMUs (11.1.2, which the SEV build needs) refuse
- * a larger size ("virtio: queue 0 size 256 exceeds max size 128") and vhost then rejects descriptors
- * from 128 on. Documentation/devel/sev/FINDINGS.md, 2026-10-16 (phase 1); the vm PAL keeps 256. */
+/* Sizes of RX and TX virtio queues. QEMU's vhost-vsock device offers 128 entries per queue. Older
+ * QEMU (8.2) silently accepted a larger size chosen by the driver; newer QEMU (seen with 11.1)
+ * enforces the limit: it refuses "virtio: queue 0 size 256 exceeds max size 128" and vhost then
+ * rejects descriptors from index 128 on, so no vsock traffic flows. 128 is a power of 2 that every
+ * QEMU accepts (measured: no difference in vsock throughput or connection latency on QEMU 8.2.2). */
 #define VIRTIO_VSOCK_QUEUE_SIZE 128
-#else
-#define VIRTIO_VSOCK_QUEUE_SIZE 256
-#endif
 
 /* Size of the Event virtio queue (currently unused). */
 #define VIRTIO_VSOCK_EVENT_QUEUE_SIZE 32
