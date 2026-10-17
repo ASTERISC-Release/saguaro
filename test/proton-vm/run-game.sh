@@ -14,6 +14,7 @@
 # .proton-vm/games/runs/<exe name>-<time>. Environment as run-native.sh (WINEDEBUG, WINEDLLOVERRIDES,
 # WINEESYNC...); XDO=... runs `xdotool` commands (a file of lines "sleep N" / "key X" / "mousemove X Y"
 # / "click 1") against the display while the game runs. SHOT_EVERY (default 10) seconds between screenshots.
+# TIMESTAMP=1 stamps every console line of a -l vm run with seconds since the start (ms resolution).
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../.." && pwd)
@@ -25,7 +26,11 @@ NAME=$(basename "$EXE" .exe)
 [ -n "$OUT" ] || OUT=$ROOT/.proton-vm/games/runs/$NAME-$LOADER-$(date -u +%H%M%S)
 mkdir -p "$OUT"
 [ -z "${XDO:-}" ] || XDO=$(readlink -f "$XDO") # the run changes into the game's folder below
-export DISPLAY=$DISP
+# X_TARGET=:M shows the guest's display :N (-d) on the host server :M instead: the relay of vsock
+# port 6000+N then connects to :M, and screenshots and window checks use :M (for the real display
+# when another relay already owns port 6000, FINDINGS.md 2026-10-16)
+TARGET=${X_TARGET:-$DISP}
+export DISPLAY=$TARGET
 if ! xdpyinfo >/dev/null 2>&1; then
     Xvfb "$DISP" -screen 0 "${GEOM}x24" -nolisten tcp >"$OUT/xvfb.log" 2>&1 &
     for _ in $(seq 50); do xdpyinfo >/dev/null 2>&1 && break; sleep 0.1; done
@@ -40,16 +45,38 @@ if [ "$LOADER" = vm ]; then
     # gramine-vm relays vsock port 6000+N to /tmp/.X11-unix/XN; in the container that directory is
     # the host's (not writable), so Xvfb/Xorg listen on the abstract socket only: relay to that one
     N=${DISP#:}
-    if [ ! -S "/tmp/.X11-unix/X$N" ]; then
-        ss -H -ln --vsock "sport = :$((6000 + N))" 2>/dev/null | grep -q . || \
-            setsid nohup socat -b 1048576 "VSOCK-LISTEN:$((6000 + N)),fork,reuseaddr,max-children=50" \
-                "ABSTRACT-CONNECT:/tmp/.X11-unix/X$N" </dev/null >"$OUT/socat.log" 2>&1 &
+    if [ ! -S "/tmp/.X11-unix/X$N" ] || [ "$TARGET" != "$DISP" ]; then
+        # (setsid -f: detached, or the script's final wait would block on it; the relay stays for
+        # the next runs of the same display, like a relay started by hand)
+        if ! ss -H -ln --vsock "sport = :$((6000 + N))" 2>/dev/null | grep -q .; then
+            if [ -S "/tmp/.X11-unix/X${TARGET#:}" ]; then
+                # a host server with a filesystem socket (Xwayland): through the filtering relay,
+                # which hides DRI3 and Present from the guest (tools/gramine-vm-xfilter.py; a DRI3
+                # server makes Mesa open the GPU through the X connection with fd passing, which no
+                # vsock relay can carry: the guest hangs in winex11's GL initialisation)
+                setsid -f nohup python3 "$ROOT/tools/gramine-vm-xfilter.py" --port $((6000 + N)) \
+                    --x-socket "/tmp/.X11-unix/X${TARGET#:}" </dev/null >"$OUT/socat.log" 2>&1
+            else
+                setsid -f nohup socat -b 1048576 "VSOCK-LISTEN:$((6000 + N)),fork,reuseaddr,max-children=50" \
+                    "ABSTRACT-CONNECT:/tmp/.X11-unix/X${TARGET#:}" </dev/null >"$OUT/socat.log" 2>&1
+            fi
+        fi
         export GRAMINE_VM_X_PROXY=0
         sleep 0.5
     fi
     # the X relay without the GEM arenas unless GPU=1 (run-wine.sh turns them on for the GPU)
     [ "${GPU:-0}" = 1 ] || export GRAMINE_VM_GRAPHICS=${GRAMINE_VM_GRAPHICS:-0}
-    GAME=$(dirname "$EXE") DISPLAY_NUM=${DISP#:} TIMEOUT=$((SECS + 60)) "$HERE/run-wine.sh" vm "$EXE" "$@" >"$OUT/wine.out" 2>"$OUT/wine.err" &
+    if [ "${TIMESTAMP:-0}" = 1 ]; then
+        # each console line stamped with seconds since the start on arrival (the wineserver's
+        # +server trace has no timestamps of its own); ms resolution, arrival order kept
+        GAME=$(dirname "$EXE") DISPLAY_NUM=${DISP#:} TIMEOUT=$((SECS + 60)) "$HERE/run-wine.sh" vm "$EXE" "$@" 2>"$OUT/wine.err" | \
+            python3 -u -c 'import sys,time
+t0=time.monotonic()
+for l in sys.stdin:
+    sys.stdout.write("[+%08.3f] %s" % (time.monotonic()-t0, l))' >"$OUT/wine.out" &
+    else
+        GAME=$(dirname "$EXE") DISPLAY_NUM=${DISP#:} TIMEOUT=$((SECS + 60)) "$HERE/run-wine.sh" vm "$EXE" "$@" >"$OUT/wine.out" 2>"$OUT/wine.err" &
+    fi
 else
     $WINE64 "$(basename "$EXE")" "$@" >"$OUT/wine.out" 2>"$OUT/wine.err" &
 fi

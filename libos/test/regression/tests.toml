@@ -192,6 +192,7 @@ manifests = [
   "rdtsc",
   "bootstrap_cpp",
   "sighandler_divbyzero",
+  "thread_area_x86_64",
 ]
 
 [arch.aarch64]

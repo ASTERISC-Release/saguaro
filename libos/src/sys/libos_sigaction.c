@@ -94,6 +94,14 @@ long libos_syscall_rt_sigreturn(void) {
         void* user_rip_ptr = (char*)pal_get_tcb() + g_pal_public_state->vm_user_rip_offset;
         memcpy(user_rip_ptr, &restored_rip, sizeof(restored_rip));
         pal_context_set_ip(context, (uintptr_t)orig_rip);
+#ifdef __x86_64__
+        /* the frame's code segment too (x86_64 VM PAL): the sigreturn stub returns to the
+         * frame's CS, 32-bit code under Wine's WoW64 included */
+        if (g_pal_public_state->vm_user_csgsfs_offset) {
+            void* csgsfs_ptr = (char*)pal_get_tcb() + g_pal_public_state->vm_user_csgsfs_offset;
+            memcpy(csgsfs_ptr, &context->csgsfsss, sizeof(context->csgsfsss));
+        }
+#endif
     }
 
     struct libos_thread* current = get_cur_thread();

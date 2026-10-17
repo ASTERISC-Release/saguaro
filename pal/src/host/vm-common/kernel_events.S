@@ -14,6 +14,7 @@
     globl   syscall_asm
     globl   syscall_asm_gs
     globl   sysret_asm                      // the LibOS enters a handler through it (pal_main.c)
+    globl   int80_ret_asm                   // the return of an `int $0x80` (kernel_syscalls.c)
     globl   save_context_and_restore_next
     globl   do_xsave
     globl   do_xrstor
@@ -281,6 +282,47 @@ sysret_asm:
     pop     %rax
     jmp     .Lsysret_now
 
+// The return of an `int $0x80` system call (syscalls_emulate_int80() made the #GP a LibOS entry
+// with this stub as the return address): RAX is the result, which the LibOS restored with the
+// other registers of the entry; every other register goes back to the user's value at the
+// instruction (Linux preserves them all, where `syscall` clobbers RCX and R11), through an iretq
+// frame on the sigreturn pseudo stack with the user's RFLAGS, as sigreturn_asm.
+int80_ret_asm:
+    mov     %rsp, %gs:PAL_TCB_VM_SIGRETURN_USER_RSP
+    mov     %rax, %gs:PAL_TCB_VM_SIGRETURN_USER_RAX
+    mov     %gs:PAL_TCB_VM_SIGRETURN_PSEUDO_RSP, %rsp
+    pushq   $0x2b                               // SS: user data
+    mov     %gs:PAL_TCB_VM_SIGRETURN_USER_RSP, %rax
+    push    %rax                                // user RSP
+    mov     %gs:PAL_TCB_VM_INT80_RFLAGS, %rax
+    or      $0x200, %rax
+    push    %rax                                // user RFLAGS, with IF
+    pushq   $0x33                               // CS: 64-bit user code (`int $0x80` ran there)
+    mov     %gs:PAL_TCB_VM_USER_RIP, %rax
+    push    %rax                                // the instruction after `int $0x80`
+    mov     %gs:PAL_TCB_VM_INT80_REGS + 0, %rdi
+    mov     %gs:PAL_TCB_VM_INT80_REGS + 8, %rsi
+    mov     %gs:PAL_TCB_VM_INT80_REGS + 16, %rdx
+    mov     %gs:PAL_TCB_VM_INT80_REGS + 24, %r10
+    mov     %gs:PAL_TCB_VM_INT80_REGS + 32, %r8
+    mov     %gs:PAL_TCB_VM_INT80_REGS + 40, %r9
+    mov     %gs:PAL_TCB_VM_INT80_REGS + 48, %rcx
+    mov     %gs:PAL_TCB_VM_INT80_REGS + 56, %r11
+    mov     %gs:PAL_TCB_VM_SIGRETURN_USER_RAX, %rax
+    cmpq    $0, %gs:PAL_TCB_VM_USER_GSBASE
+    je      .Lint80_iret
+    cli
+    swapgs
+    mov     %rax, %gs:PER_CPU_DATA_GS_SCRATCH
+    swapgs
+    mov     %gs:PAL_TCB_VM_USER_GSBASE, %rax
+    wrgsbase %rax
+    swapgs
+    mov     %gs:PER_CPU_DATA_GS_SCRATCH, %rax
+    swapgs
+.Lint80_iret:
+    iretq
+
 // FIXME: ideally must add swapgs right-before sysretq, but GS is not used by ring-3 anyway
 sigreturn_asm:
     // memorize user RSP because need to switch to pseudo stack for iretq
@@ -299,8 +341,15 @@ sigreturn_asm:
     pop     %rax
     or      $0x200, %rax
     push    %rax
-    // push CS: 64-bit user code (selector 0x33 after the GDT matches Linux's numbering)
-    pushq   $0x33 // CS segment selector: GDT index 6, RPL=3
+    // push CS: the signal frame's (the LibOS put its csgsfs in the thread context: 0x23 when the
+    // signal interrupted 32-bit code, Wine's WoW64); anything else is the 64-bit user code 0x33
+    mov     %gs:PAL_TCB_VM_CONTEXT_CSGSFSSS, %rax
+    movzwl  %ax, %eax
+    cmp     $0x23, %eax
+    je      1f
+    mov     $0x33, %eax // CS segment selector: GDT index 6, RPL=3
+1:
+    push    %rax
     // push user RIP
     mov     %gs:PAL_TCB_VM_USER_RIP, %rax
     push    %rax

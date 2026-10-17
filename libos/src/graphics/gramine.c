@@ -111,8 +111,10 @@ void setup_syscall_comms(void) {
         HUGEPAGE_DATA_REGION = (void *)((uintptr_t)DATA_REGION + data_size);
     }
 
-    long _offset = acquire_libos_lock();
-    /* Setup the communication region. */
+    /* The communication region first: it is one physical page shared by every process of the
+     * guest, and its guest-private part says whether another process has already set the session
+     * up (graphics_comm_abi.h). Not cleared here: a second process would wipe the first one's
+     * slots and the state. */
     comm_page_t *addr = (comm_page_t*) mmap((void*)SYS_COMMS_ADDR, SYS_COMMS_SIZE,
             PROT_READ | PROT_WRITE,
             (MAP_ANONYMOUS | MAP_FIXED | MAP_PRIVATE), -1, 0);
@@ -120,8 +122,39 @@ void setup_syscall_comms(void) {
         perror("mmap COMMS_REGION");
         assert(0);
     }
-    memset(addr, 0, SYS_COMMS_SIZE);
+    graphics_guest_state_t *state =
+        (graphics_guest_state_t*)((char*)addr + GRAPHICS_GUEST_STATE_OFFSET);
+    uint64_t expected = GRAPHICS_SESSION_NONE;
+    if (!__atomic_compare_exchange_n(&state->session_state, &expected,
+                                     GRAPHICS_SESSION_SETTING_UP, /*weak=*/false,
+                                     __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
+        /* another process owns the session: wait until it is up, take its geometry and map the
+         * arenas (fixed physical ranges, no handshake: the listener knows them already) */
+        while (__atomic_load_n(&state->session_state, __ATOMIC_ACQUIRE) != GRAPHICS_SESSION_UP)
+            usleep(1000);
+        DATA_REGION = (void *)(uintptr_t)state->data_addr;
+        HUGEPAGE_DATA_REGION = (void *)(uintptr_t)state->huge_addr;
+        data_size = state->data_size;
+        void* data = mmap(DATA_REGION, data_size, PROT_READ | PROT_WRITE,
+                          MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+        void* hugepage_data = mmap(HUGEPAGE_DATA_REGION, state->huge_size,
+                                   PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED,
+                                   -1, 0);
+        if (data == MAP_FAILED || hugepage_data == MAP_FAILED) {
+            perror("mmap of the arenas of the running session");
+            assert(0);
+        }
+        fprintf(stderr, "[*] COMMS: joined the guest's graphics session (data 0x%lx, hugepage "
+                "0x%lx)\n========COMMS========\n", (uint64_t)data, (uint64_t)hugepage_data);
+        return;
+    }
 
+    long _offset = acquire_libos_lock();
+    /* the first process: the request slots start clean (the state area keeps its word) */
+    memset(addr, 0, NUM_COMM_PAGES * sizeof(comm_page_t));
+
+    /* the ABI version goes with the magic; the listener answers with its own in p5 */
+    addr[0].p4 = GRAPHICS_COMM_ABI_VERSION;
     addr[0].magic = 0x1234567812345678ULL;
     __sync_synchronize();
 
@@ -129,6 +162,15 @@ void setup_syscall_comms(void) {
         __sync_synchronize();
         usleep(1000);
     }
+    if (addr[0].p5 != GRAPHICS_COMM_ABI_VERSION) {
+        fprintf(stderr, "[!] graphics: the host listener speaks comm ABI version %llu, this guest "
+                "version %llu (graphics_comm_abi.h): rebuild the QEMU fork against this tree "
+                "(qemu-tirith/tirith-build.sh)\n", (unsigned long long)addr[0].p5,
+                (unsigned long long)GRAPHICS_COMM_ABI_VERSION);
+        abort();
+    }
+    addr[0].p4 = 0;
+    addr[0].p5 = 0;
     addr[0].magic = 0x1234567812345678ULL;
     fprintf(stderr, "[*] COMMS: 0x%llx\n", SYS_COMMS_ADDR);
 
@@ -201,6 +243,13 @@ void setup_syscall_comms(void) {
         }
         addr[i].magic = 0x1234567812345678ULL;
     }
+
+    /* the session is up: publish the geometry for the processes that join it */
+    state->data_addr = (uint64_t)(uintptr_t)DATA_REGION;
+    state->data_size = (uint64_t)data_size;
+    state->huge_addr = (uint64_t)hugepage_data;
+    state->huge_size = (uint64_t)HUGE_DATA_SIZE;
+    __atomic_store_n(&state->session_state, GRAPHICS_SESSION_UP, __ATOMIC_RELEASE);
 
     fprintf(stderr, "========COMMS========\n");
     relinquish_libos_lock(_offset);

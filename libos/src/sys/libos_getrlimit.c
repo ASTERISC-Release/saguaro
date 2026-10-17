@@ -8,6 +8,9 @@
 #include "libos_checkpoint.h"
 #include "libos_handle.h"
 #include "libos_internal.h"
+#ifdef ENABLE_GRAPHICS
+#include "libos_graphics.h" /* GRAPHICS_HOST_FD_OFFSET */
+#endif
 #include "libos_lock.h"
 #include "libos_process.h"
 #include "libos_table.h"
@@ -82,7 +85,7 @@ uint64_t fd_table_limit(struct libos_handle* hdl) {
     uint64_t rlim = get_rlimit_cur(RLIMIT_NOFILE);
 #ifdef ENABLE_GRAPHICS
     if (hdl && (hdl->type == TYPE_HOST || hdl->type == TYPE_HOST_IDENTITY))
-        rlim += 4096;
+        rlim += GRAPHICS_HOST_FD_OFFSET;
 #else
     __UNUSED(hdl);
 #endif

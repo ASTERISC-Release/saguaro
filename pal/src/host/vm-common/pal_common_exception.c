@@ -35,8 +35,10 @@ static void isr_regs_to_pal_context(PAL_CONTEXT* context, struct isr_regs* regs,
     context->rip = regs->rip;
     context->efl = regs->rflags;
 
-    /* the interrupted context's code and stack selectors (Linux's layout: cs, gs, fs, ss); Wine
-     * takes a context whose CS is not its 64-bit one for 16-bit code */
+    /* the interrupted context's code and stack selectors (Linux's layout: cs, gs, fs, ss; Linux
+     * stores 0 for fs and gs in a 64-bit frame, setup_sigcontext(), and so does this): CS is
+     * 0x23 when the signal interrupted 32-bit code (Wine's WoW64), which the sigreturn returns
+     * to, and Wine takes a context whose CS is not its 64-bit one for 16-bit code */
     context->csgsfsss = (regs->cs & 0xffff) | ((uint64_t)(regs->ss & 0xffff) << 48);
     /* the exception's vector and error code, as Linux puts them in a signal frame (REG_TRAPNO,
      * REG_ERR): Wine's handler takes a SIGSEGV for a page fault only with trap 14 and reads the
@@ -74,6 +76,13 @@ static void pal_context_to_isr_regs(struct isr_regs* regs, PAL_CONTEXT* context)
     regs->rip = context->rip;
     regs->rflags = context->efl;
 
+    /* the code segment to return to: the LibOS enters a signal handler in 64-bit mode whatever
+     * the interrupted code was (32-bit under Wine's WoW64), and a sigreturn may go back to
+     * 32-bit code; only the two user code selectors are taken, SS stays the user data one */
+    uint16_t cs = context->csgsfsss & 0xffff;
+    if (cs == USER_CS32_SELECTOR || cs == USER_CS64_SELECTOR)
+        regs->cs = cs;
+
     regs->fpregs = context->fpregs;
 }
 
@@ -100,6 +109,8 @@ noreturn void isr_iret_to_userland(void);
 static uint32_t g_upcall_dummy_lock;
 
 static noreturn void run_current_thread_context(struct pal_tcb_vm* tcb) {
+    /* the switch-in below reloads %fs from the thread's record: take the live state first */
+    sched_thread_save_segs(&tcb->kernel_thread);
     save_context_and_restore_next(/*curr_gs_base=*/0, (uint64_t)tcb, /*lock_to_unlock=*/NULL,
                                   /*clear_child_tid=*/NULL, &g_upcall_dummy_lock,
                                   /*scheduling_stack=*/NULL, /*post_switch=*/NULL,

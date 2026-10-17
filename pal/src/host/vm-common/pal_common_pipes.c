@@ -537,7 +537,9 @@ int64_t pal_common_pipe_write(struct pal_handle* handle, uint64_t offset, uint64
 int64_t pal_common_pipe_writehandles(struct pal_handle* handle, const void* buffer, size_t len,
                                      struct pal_handle** cargo, size_t cargo_count,
                                      const void* meta, size_t meta_size) {
-    if (cargo_count == 0)
+    /* a message without handles and without a description is a plain write; a description alone
+     * (the LibOS passes a graphics host handle, which has no PAL handle) travels like handles */
+    if (cargo_count == 0 && meta_size == 0)
         return pal_common_pipe_write(handle, 0, len, buffer);
     if (cargo_count > PAL_STREAM_MAX_HANDLES)
         return -PAL_ERROR_INVAL;
@@ -558,7 +560,7 @@ int64_t pal_common_pipe_writehandles(struct pal_handle* handle, const void* buff
     if (ret < 0)
         return ret;
 
-    struct pal_handle** cargo_copy = malloc(cargo_count * sizeof(*cargo_copy));
+    struct pal_handle** cargo_copy = malloc((cargo_count ? cargo_count : 1) * sizeof(*cargo_copy));
     void* meta_copy = meta_size ? malloc(meta_size) : NULL;
     if (!cargo_copy || (meta_size && !meta_copy)) {
         free(cargo_copy);

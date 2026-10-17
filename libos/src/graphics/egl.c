@@ -43,6 +43,7 @@
 #include <xf86drmMode.h>
 
 #include "common.h"
+#include "graphics_comm_abi.h"
 #include <sys/ioctl.h>
 #include <X11/xshmfence.h>
 
@@ -165,7 +166,7 @@ static EGLImageKHR create_dma_buf_image(EGLint *attrs) {
 
 int offset_fd(int fd) {
     if (in_gramine_vm)
-        return fd - (500*in_gramine_vm);
+        return fd - GRAPHICS_FS_OFFSET;
 
     return fd;
 }
@@ -319,11 +320,11 @@ void setup_egl(void) {
         }
 
         /* The LibOS installs a dma-buf fd returned by a forwarded ioctl as a guest handle at host
-         * fd + 500; this library and the host listener use the raw host fd (registered below and
-         * passed to the listener for the X pixmap), so go back to it. An older LibOS returns the
-         * raw host fd (below 500) itself. */
-        if (in_gramine_vm && bufs[i].bo_fd >= 500)
-            bufs[i].bo_fd -= 500;
+         * fd + GRAPHICS_FS_OFFSET (the shared ABI constant); this library and the host listener use
+         * the raw host fd (registered below and passed to the listener for the X pixmap), so go
+         * back to it. An older LibOS returns the raw host fd (below the offset) itself. */
+        if (in_gramine_vm && bufs[i].bo_fd >= (int)GRAPHICS_FS_OFFSET)
+            bufs[i].bo_fd -= GRAPHICS_FS_OFFSET;
 
         /* Register the bo_fd with Gramine (only needed once, since it remains the same) */
         if (in_gramine_vm) {

@@ -108,6 +108,21 @@ struct tss_64bitmode_segment_descriptor {
     uint32_t _reserved2;
 } __attribute__((packed));
 
+#ifdef __x86_64__
+/* The GDT numbering matches Linux's (kernel_static_structs.S): user selectors 0x23 (32-bit code),
+ * 0x2b (data), 0x33 (64-bit code), and the three TLS slots of set_thread_area at entries 12 to
+ * 14 (selectors 0x63, 0x6b, 0x73). Each CPU has its own GDT copy (kernel_interrupts.c) because
+ * the TLS slots are per thread and rewritten at every switch-in. */
+#define USER_CS32_SELECTOR 0x23
+#define USER_DS_SELECTOR   0x2b
+#define USER_CS64_SELECTOR 0x33
+#define GDT_ENTRY_TLS_MIN  12
+#define GDT_ENTRIES_TLS    3
+/* writes the descriptors into the TLS slots of this CPU's GDT (the caller is, or is switching to,
+ * the thread that owns them) */
+void gdt_load_tls(const uint64_t tls_desc[GDT_ENTRIES_TLS]);
+#endif
+
 static inline void spinlock_lock_disable_irq(spinlock_t* lock) {
     cli();
     spinlock_lock(lock);

@@ -813,10 +813,16 @@ void create_pixmap_from_kbuf(check *bufs, int i,
                             uint32_t size_bytes, uint32_t stride) {
     /* Generate pixmap */
     bufs[i].pixmap = xcb_generate_id(conn);
-    xcb_dri3_pixmap_from_buffer(conn, bufs[i].pixmap, win, size_bytes, 
-                win_width, win_height, stride, 24, 32, bufs[i].bo_fd); 
+    xcb_dri3_pixmap_from_buffer(conn, bufs[i].pixmap, win, size_bytes,
+                win_width, win_height, stride, 24, 32, bufs[i].bo_fd);
     xcb_flush(conn);
-
+    /* xcb closes the connection when it cannot send the fd (an fd number that is not open in
+     * this process, e.g. a guest fd offset that does not match GRAPHICS_FS_OFFSET): every later
+     * request is dropped silently and the frames never reach the display, so say it. */
+    if (xcb_connection_has_error(conn))
+        fprintf(stderr, "[xcb] connection broken after pixmap_from_buffer for buffer %d (bo_fd %d, "
+                "F_GETFD %d): no frame will reach the display\n", i, bufs[i].bo_fd,
+                fcntl(bufs[i].bo_fd, F_GETFD));
     /* Debugging */
     fprintf(stderr, "pixmap %d allocated (buffer = %d)\n", bufs[i].pixmap, i);
 }

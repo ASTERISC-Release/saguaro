@@ -10,6 +10,12 @@
 libos.entrypoint = "{{ proton }}/files/lib/wine/x86_64-unix/wine"
 loader.log_level = "{{ log_level }}"
 loader.insecure__use_cmdline_argv = true
+{% if game %}
+# the game's folder is the working directory, as run-game.sh does natively: Psychonauts looks for its
+# resources relative to the current directory (it never opened its .pkg with "/" as the directory and
+# faulted on the missing object; FINDINGS.md 2026-10-16)
+fs.start_dir = "{{ game }}"
+{% endif %}
 # Wine lays out the low 2 GiB itself (fixed areas at 0x10000, 0x110000, 0x7f000000, the user
 # shared data at 0x7ffe0000); with ASLR the LibOS puts the stack and the libraries a random
 # distance below the top of guest RAM, sometimes inside that range, and ntdll exits at once
@@ -20,9 +26,34 @@ loader.env.HOME = "/home/user"
 loader.env.USER = "user"
 loader.env.TMPDIR = "/tmp"
 loader.env.WINEPREFIX = "{{ prefix }}"
+{% if winearch|string != "" %}
+# WOW64=1 (wine-env.sh): a 32-bit game in the new WoW64 prefix (design-32bit.md)
+loader.env.WINEARCH = "{{ winearch }}"
+{% endif %}
 loader.env.WINEDLLPATH = "{{ proton }}/files/lib/wine/x86_64-unix:{{ proton }}/files/lib/wine/i386-unix"
 loader.env.WINELOADERNOEXEC = "1"
 loader.env.WINEDEBUG = "{{ winedebug }}"
+# DXVK_LOG_LEVEL=debug shows where DXVK stops (its default is info)
+loader.env.DXVK_LOG_LEVEL = "{{ dxvk_log_level }}"
+# EGL_VULKAN_RATE_LOG=<s>: the layer logs its present rate every so many seconds (GPU runs on the
+# dummy server, where the window content is not visible)
+loader.env.EGL_VULKAN_RATE_LOG = "{{ rate_log }}"
+{% for kv in extra_env.split(' ') if '=' in kv %}
+# EXTRA_ENV="A=1 B=2": extra variables for the guest (experiments)
+loader.env.{{ kv.split('=', 1)[0] }} = "{{ kv.split('=', 1)[1] }}"
+{% endfor %}
+{% if mesa_wsi|string != "" %}
+# MESA_VK_WSI_DEBUG=sw: Mesa's X11 WSI without DRI3 (a DRI3 server such as Xwayland makes it open
+# the GPU through the X connection with fd passing, which the vsock relay cannot carry: the guest
+# hangs in winex11's GPU enumeration; FINDINGS.md 2026-10-16). Presents go through the layer anyway.
+loader.env.MESA_VK_WSI_DEBUG = "{{ mesa_wsi }}"
+{% endif %}
+{% if refresh|string != "" %}
+# EGL_VULKAN_REFRESH / EGL_VULKAN_MAX_FPS: the layer's present pacing (FIFO at REFRESH Hz, the
+# other modes at most MAX_FPS per second; vklayer.c): raised for a frame-rate measurement
+loader.env.EGL_VULKAN_REFRESH = "{{ refresh }}"
+loader.env.EGL_VULKAN_MAX_FPS = "{{ refresh }}"
+{% endif %}
 loader.env.WINEESYNC = "{{ sync }}"
 loader.env.WINEFSYNC = "{{ sync }}"
 loader.env.WINENTSYNC = "{{ sync }}"
@@ -49,6 +80,11 @@ loader.env.DISPLAY = ""
 loader.env.LD_PRELOAD = "/libgraphics.so"
 {% endif %}
 loader.env.EGL_VULKAN_PRESENT = "1"
+{% if layer_disable|string == "1" %}
+# LAYER_DISABLE=1: a GPU-mode run without the presentation layer (bisection only: Vulkan presents
+# then need the X11 WSI, i.e. lavapipe with XPutImage on a server without DRI3)
+loader.env.EGL_VULKAN_PRESENT_DISABLE = "1"
+{% endif %}
 loader.env.NODEVICE_SELECT = "1"
 loader.env.XDG_DATA_HOME = "/gramine-xdg"
 loader.env.EGL_EAGER_SESSION = "{{ gpu_eager }}"
@@ -58,10 +94,16 @@ loader.env.EGL_SHARED_INPUT = "0"
 loader.env.GBM_BACKEND = "dri"
 loader.env.IVSHMEM_GRAMINE_VM = "1"
 loader.env.GLIBC_TUNABLES = "glibc.pthread.rseq=0"
-{% else %}
+{% endif %}
+{% if gpu|string != "1" or gl_software|string == "1" %}
 # software rendering first (step 2 of "Next phases"): Mesa's llvmpipe for GLX, lavapipe for Vulkan
-# (DXVK); the X11 WSI presents with XPutImage when the server has no DRI3
+# (DXVK); the X11 WSI presents with XPutImage when the server has no DRI3. GL_SOFTWARE=1 keeps
+# OpenGL on llvmpipe in a GPU run too (a game's start-up GL device next to its D3D9 through DXVK:
+# The Witcher 1, FINDINGS.md 2026-10-17)
 loader.env.LIBGL_ALWAYS_SOFTWARE = "1"
+# no DRI3 for the guest's GL either: on a DRI3 server (Xwayland) Mesa would open the GPU through the
+# X connection with fd passing, which the vsock relay cannot carry (FINDINGS.md 2026-10-16)
+loader.env.LIBGL_DRI3_DISABLE = "1"
 {% endif %}
 loader.env.VK_ICD_FILENAMES = "{{ vk_icd }}"
 loader.env.DXVK_FILTER_DEVICE_NAME = "{{ dxvk_device }}"
