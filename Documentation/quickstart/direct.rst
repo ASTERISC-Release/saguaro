@@ -11,18 +11,23 @@ Symbols as in `README.rst <../../README.rst>`__:
 
 .. list-table::
    :header-rows: 1
-   :widths: 30 70
+   :widths: 32 17 17 17 17
 
-   * - Architecture
-     - ``gramine-direct``
-   * - Intel x86_64
+   * - Configuration
+     - Intel x86_64
+     - AMD64
+     - AArch64
+     - RISC-V (RV64)
+   * - ``gramine-direct``
      - ✅
-   * - AMD64
      - ✅
-   * - AArch64
      - ✅
-   * - RISC-V (RV64)
-     - ✅
+     - ⚠️
+   * - ``gramine-direct`` with redirected graphics
+     - ⚠️
+     - ⚠️
+     - ⚠️
+     - ❌
 
 Requirements
 ------------
