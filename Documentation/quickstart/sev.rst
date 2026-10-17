@@ -12,19 +12,19 @@ Status
 Symbols as in `README.rst <../../README.rst>`__:
 
 .. list-table::
-     :header-rows: 1
-     :widths: 32 17 17 17 17
+   :header-rows: 1
+   :widths: 32 17 17 17 17
 
-     * - Configuration
-         - Intel x86_64
-         - AMD64
-         - AArch64
-         - RISC-V (RV64)
-     * - ``gramine-sev`` (SEV-SNP)
-         - ➖
-         - ⚠️
-         - ➖
-         - ➖
+   * - Configuration
+     - Intel x86_64
+     - AMD64
+     - AArch64
+     - RISC-V (RV64)
+   * - ``gramine-sev`` (SEV-SNP)
+     - ➖
+     - ⚠️
+     - ➖
+     - ➖
 
 Note that plain SEV/SEV-ES is also available with ``GRAMINE_SEV_MODE=sev``. 
 
@@ -86,7 +86,7 @@ Note the following:
 - Mode can be selected with ``GRAMINE_SEV_MODE`` or ``sev.mode`` in the manifest (``snp`` by default, or ``sev``).
 
 - ``GRAMINE_SEV_POLICY`` or ``sev.policy`` sets the guest policy (default ``0x30000`` for SNP, with
-debugging disabled).
+  debugging disabled).
 
 3. Attestation
 ==============
