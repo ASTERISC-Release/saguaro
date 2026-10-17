@@ -11,7 +11,7 @@ short on purpose; an item that is fixed is removed from the topic list first and
 | Host / PAL | Main open items | Details |
 |---|---|---|
 | `direct` | audit PAL state that a starting child allocates and frees at exit (the shared file cache was one case); sound and the remaining GPU-driver gaps for graphics | `devel/vm-multiproc/TODO.md`, `devel/graphics-direct/TODO.md` |
-| `vm` | robust mutex for the System V shared tables; `/proc/<pid>/stat` of other processes; `PROT_NONE` enforcement; finer timer than the 100 ms tick; async signal resume; UDP/IPv6 relay gaps | `devel/vm-multiproc/TODO.md`, `devel/libos-syscalls/TODO.md`, `devel/syscall-compat/TODO.md`, `devel/vm-network/TODO.md` |
+| `vm` | multi-vCPU performance: check and improve `gramine-vm` at 2 and 4 vCPUs (multi-process fork cost, TLB shootdowns, scheduler lock contention, cross-CPU handoffs); robust mutex for the System V shared tables; `/proc/<pid>/stat` of other processes; `PROT_NONE` enforcement; finer timer than the 100 ms tick; async signal resume; UDP/IPv6 relay gaps | `devel/vm-multiproc/TODO.md`, `devel/libos-syscalls/TODO.md`, `devel/syscall-compat/TODO.md`, `devel/vm-network/TODO.md` |
 | `vm` with graphics (OpenGL, Vulkan) | present events and a non-flipping blit for Vulkan, idle CPU of the listener, two-thread submission cost, SuperTuxKart start hang, sound, Team Fortress 2 | `devel/graphics/TODO.md`, `devel/vulkan/TODO.md` |
 | `tdx` and `sgx` | never run on this tree's hardware; extend the interrupt-before-IDT guard to TDX; the SGX build needs `protobuf-c` (not in `dependencies.sh` or the container); the TDX install needs `td-shim` | `devel/vm-multiproc/TODO.md`, `quickstart/tdx-sgx.rst` |
 | `sev` (AMD64) | planned; no code yet | `README.rst` |
