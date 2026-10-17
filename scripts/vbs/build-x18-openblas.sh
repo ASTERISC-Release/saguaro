@@ -15,15 +15,17 @@
 # One fixed kernel set, TARGET=ARMV8 (not DYNAMIC_ARCH): the dynamic build's own tests die with
 # SIGILL (`cntw`, an SVE instruction, in `ssyrk_kernel_U`) on a CPU without SVE, which includes the
 # VBS machine's Snapdragon; ARMV8 runs on every AArch64 CPU. Slower than the tuned kernels.
+# CC is the rebuilt gcc too, so the link takes the soft-float quad routines (__multf3, __divtf3,
+# used for long double) from its libgcc.a, which was built with -ffixed-x18 (the system libgcc.a
+# keeps temporaries in x18).
 # Needs the compiler and gfortran built by scripts/vbs/build-x18-runtime.sh (run it first).
 #
 # Everything is under PREFIX (default ~/.local/share/gramine-vbs/x18-runtime): sources, build,
 # the result in PREFIX/openblas-lib. No root; network for the source tarball only.
-# Usage: scripts/vbs/build-x18-openblas.sh [--test] [PREFIX]    (--test: also run OpenBLAS's tests)
+# The default make target also runs OpenBLAS's own BLAS/LAPACK tests; a failure stops the script.
+# Usage: scripts/vbs/build-x18-openblas.sh [PREFIX]
 set -eu
 
-TEST=
-[ "${1:-}" = --test ] && { TEST=1; shift; }
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 PREFIX=$(realpath -m "${1:-$HOME/.local/share/gramine-vbs/x18-runtime}")
 [ "$(uname -m)" = aarch64 ] || { echo "aarch64 only" >&2; exit 1; }
@@ -85,7 +87,7 @@ PY
 export LD_LIBRARY_PATH="$GCCP/lib64:$PREFIX/deps/usr/lib/aarch64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 s=$(date +%s)
 make -j"$(nproc)" TARGET=ARMV8 USE_OPENMP=0 USE_THREAD=1 NUM_THREADS=8 NO_AFFINITY=1 \
-    BUILD_LAPACK_DEPRECATED=0 NO_STATIC=1 CC=gcc FC="$GCCP/bin/gfortran" LDFLAGS="-L$GCCP/lib64" \
+    BUILD_LAPACK_DEPRECATED=0 NO_STATIC=1 CC="$GCCP/bin/gcc" FC="$GCCP/bin/gfortran" LDFLAGS="-L$GCCP/lib64" \
     COMMON_OPT="-O2 -ffixed-x18" FCOMMON_OPT="-O2 -frecursive -ffixed-x18" \
     FFLAGS="-ffixed-x18" >"$BLD/make.log" 2>&1 \
     || { tail -30 "$BLD/make.log"; exit 1; }
@@ -96,13 +98,6 @@ log "make took $(( $(date +%s) - s )) s"
 grep -q -- '-ffixed-x18' lapack-netlib/make.inc || { echo "LAPACK FFLAGS lack -ffixed-x18" >&2; exit 1; }
 make PREFIX="$BLD/inst" NO_STATIC=1 install >"$BLD/install.log" 2>&1 || { tail -20 "$BLD/install.log"; exit 1; }
 rm -rf "$OUT" && mkdir -p "$OUT" && cp -P "$BLD"/inst/lib/libopenblas* "$OUT/" 2>/dev/null || true
-if [ -n "$TEST" ]; then
-    s=$(date +%s)
-    make TARGET=ARMV8 USE_OPENMP=0 USE_THREAD=1 NUM_THREADS=8 NO_AFFINITY=1 NO_STATIC=1 \
-        CC=gcc FC="$GCCP/bin/gfortran" LDFLAGS="-L$GCCP/lib64" tests >"$BLD/tests.log" 2>&1 \
-        && log "OpenBLAS tests passed in $(( $(date +%s) - s )) s" \
-        || { tail -30 "$BLD/tests.log"; log "OpenBLAS tests FAILED"; exit 1; }
-fi
 
 log "scan (zero x18 instructions required)"
 rm -rf "$BLD/scan" && mkdir -p "$BLD/scan" && cp -L "$OUT"/libopenblas*.so* "$BLD/scan/"
