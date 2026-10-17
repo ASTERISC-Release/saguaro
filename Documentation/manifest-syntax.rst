@@ -14,6 +14,9 @@ Gramine. A |~| manifest file contains key-value pairs (as well as more
 complicated table and array objects) in the TOML syntax. For the details of the
 TOML syntax, see `the official documentation <https://toml.io>`__.
 
+For a key-by-key index of applicability and purpose, see the `manifest key
+catalog <manifest-keys.md>`__.
+
 A typical string entry looks like this::
 
    [Key][.Key][.Key] = "[Value]"
