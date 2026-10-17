@@ -38,10 +38,9 @@ All the requirements from `VM quickstart <vm.rst>`__ apply, and:
   
   - Refer to `AMD's SEV-SNP GitHub repository <https://github.com/AMDESE/AMDSEV>`__ for details on enabling SEV-SNP in the firmware and kernel. 
 
-- ``/dev/sev`` and ``/dev/vhost-vsock`` readable and writable by your user (``/dev/sev``
-  usually through a group such as ``sev``: ask the administrator).
+- ``/dev/sev``readable and writable by your user (Add user to the ``sev`` group).
 
-- ``podman`` for the container of ``container/run.sh``. Root is not needed.
+- ``podman`` for the container of ``container/run.sh``. 
 
 1. Build
 ========
@@ -123,11 +122,3 @@ are currently not measured.
     test/test-sev.sh                          # the same under plain SEV, with the launch measurement
     GRAMINE_VM_LAUNCHER=gramine-sev GRAMINE_SEV_MODE=snp GRAMINE_RAM_SIZE=4G test/test-vm.sh libos
     test/test-sev-all.sh                      # everything above, at 1, 2 and 4 vCPUs, plus examples
-
-5. Troubleshooting
-==================
-
-- ``/dev/kvm``, ``/dev/sev`` or ``/dev/vhost-vsock`` is inaccessible: request user access to the
-    device; ``/dev/sev`` is commonly assigned to a host group such as ``sev``.
-- The SEV PAL refuses to run without memory encryption: verify that the host firmware and kernel
-    enable SEV-SNP and that the launcher uses SNP or SEV mode, not ``native``.
