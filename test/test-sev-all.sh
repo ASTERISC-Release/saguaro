@@ -13,7 +13,8 @@
 #      test_020_cpuinfo on AMD, and at 1 vCPU test_000_spinlock and test_074_eventfd_races, as with
 #      gramine-vm)
 #   4. CI-Examples under SNP: helloworld, the multi-threaded unit test, python
-#   5. the multi-process checks under SNP (test/vm-multiproc/check-probes.sh), unless MP=0
+#   5. the multi-process checks under SNP (test/vm-multiproc/check-probes.sh, MP_RAM default 8G),
+#      unless MP=0
 #
 # Logs go to OUT (default /tmp/test-sev-all); exit status 0 only if every step passed.
 set -u
@@ -64,7 +65,9 @@ grep -q "Hello World" "$OUT/ex-python.log" && echo "python helloworld: ok" || fa
 
 if [ "${MP:-1}" != 0 ]; then
     step "multi-process checks under SNP"
-    GRAMINE_VM_LAUNCHER=gramine-sev WORK=$OUT/mp "$HERE/vm-multiproc/check-probes.sh" \
+    # the frame pool needs a free GB of RAM above 4G: 4G guests have none (as with gramine-vm)
+    GRAMINE_RAM_SIZE=${MP_RAM:-8G} GRAMINE_VM_LAUNCHER=gramine-sev WORK=$OUT/mp \
+        "$HERE/vm-multiproc/check-probes.sh" \
         > "$OUT/multiproc.log" 2>&1 || fail "multi-process checks"
     tail -n 12 "$OUT/multiproc.log"
 fi
