@@ -1,5 +1,5 @@
 Quickstart: Containerized Userspace (``gramine-direct``)
-=====================================================
+========================================================
 
 ``gramine-direct`` runs an unmodified Linux application as a container-like Linux process on top
 of the Gramine LibOS. 

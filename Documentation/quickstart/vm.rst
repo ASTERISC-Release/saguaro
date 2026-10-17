@@ -34,7 +34,11 @@ Requirements
 
 - A **native** Linux machine of the same architecture with hardware virtualisation: ``/dev/kvm``
   readable and writable by your user. Emulation (TCG) is not supported, but it *might* work.
+
 - For guest networking: ``/dev/vhost-vsock`` (module ``vhost_vsock``), also accessible to your user.
+
+  - vsock is available on most recent Linux kernels; you can enable it with ``sudo modprobe vhost_vsock``.
+
 - ``podman`` for the recommended container build route.
 
 1. Build
@@ -42,7 +46,8 @@ Requirements
 
 The container image already has QEMU, ``virtiofsd`` and the toolchain::
 
-    container/run.sh                   # shell in the container; the rest runs inside
+    cd <repo-home>
+    ./container/run.sh                   # shell in the container; the rest runs inside
     ./scripts/install.sh --vm            # build and install into ~/.local/gramine-vm
     . ~/.local/gramine-vm/env.sh
 
@@ -54,8 +59,8 @@ PAL.
 
     sudo apt install qemu-system-x86 virtiofsd lsof python3-psutil       # x86_64
     sudo apt install qemu-system-arm virtiofsd device-tree-compiler      # AArch64
-    scripts/dependencies.sh --build-only
-    scripts/install.sh --vm
+    ./scripts/dependencies.sh --build-only
+    ./scripts/install.sh --vm
     . ~/.local/gramine-vm/env.sh
 
 On x86_64, if ``command -v virtiofsd`` finds nothing, link ``/usr/libexec/virtiofsd`` into
@@ -64,7 +69,6 @@ On x86_64, if ``command -v virtiofsd`` finds nothing, link ``/usr/libexec/virtio
 2. Example: Hello World
 =======================
 
-::
 
     cd CI-Examples/helloworld
     make                               # against the vm install: the manifest names its libsysdb.so
