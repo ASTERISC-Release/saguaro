@@ -22,6 +22,13 @@
 #include "kernel_virtio_vsock.h"
 #include "kernel_vmm_inputs.h"
 
+#ifdef __x86_64__
+/* x86 only: CPU0's timer is armed for the earliest pending deadline (the aarch64 timer keeps the
+ * fixed tick; these headers have aarch64 twins that this shared file must not pick up) */
+#include "kernel_apic.h"
+#include "kernel_multicore.h"
+#endif
+
 DEFINE_LIST(pending_timeout);
 struct pending_timeout {
     uint64_t timeout_absolute_us;
@@ -34,6 +41,29 @@ DEFINE_LISTP(pending_timeout);
  * notify_about_timeouts_uninterruptable() callback for timer interrupt walks through this list */
 static LISTP_TYPE(pending_timeout) g_pending_timeouts_list = LISTP_INIT;
 static spinlock_t g_pending_timeouts_list_lock = INIT_SPINLOCK_UNLOCKED;
+
+#ifdef __x86_64__
+/* Absolute time (us) CPU0's timer is armed for, protected by g_pending_timeouts_list_lock: the
+ * earliest pending deadline when CPU0's timer ISR last ran, at most the 100 ms tick ahead. A
+ * registration of an earlier deadline re-arms the timer (register_timeout()). UINT64_MAX until the
+ * first arm, so that the first registration always re-arms. */
+static uint64_t g_cpu0_armed_deadline_us = UINT64_MAX;
+
+/* Delay from `now_us` until the earliest pending deadline, clamped to [LAPIC_TIMER_MIN_DELAY_US,
+ * LAPIC_TIMER_PERIOD_US]: the tick stays the ceiling (it also kicks the pollers against lost
+ * wakeups), the floor bounds the interrupt rate when a deadline is already due. The lock is held. */
+static uint64_t next_delay_us_locked(uint64_t now_us) {
+    uint64_t delay_us = LAPIC_TIMER_PERIOD_US;
+    struct pending_timeout* timeout;
+    LISTP_FOR_EACH_ENTRY(timeout, &g_pending_timeouts_list, list) {
+        uint64_t d = timeout->timeout_absolute_us > now_us ? timeout->timeout_absolute_us - now_us
+                                                           : 0;
+        if (d < delay_us)
+            delay_us = d;
+    }
+    return MAX(delay_us, (uint64_t)LAPIC_TIMER_MIN_DELAY_US);
+}
+#endif
 
 static uint64_t g_start_tsc = 0;
 static uint64_t g_start_us  = 0;
@@ -84,6 +114,25 @@ int register_timeout(uint64_t timeout_absolute_us, int* futex, void** timeout_ou
      * notify_about_timeouts_uninterruptable(); temporarily disable interrupts to avoid deadlock */
     spinlock_lock_disable_irq(&g_pending_timeouts_list_lock);
     LISTP_ADD(timeout, &g_pending_timeouts_list, list);
+#ifdef __x86_64__
+    if (timeout_absolute_us < g_cpu0_armed_deadline_us) {
+        /* earlier than what CPU0's timer is armed for: without a re-arm this wait would be served
+         * only by the next tick, up to 100 ms late */
+        uint64_t now_us;
+        if (get_time_in_us(&now_us) == 0) {
+            if (get_per_cpu_data()->cpu_id == 0) {
+                uint64_t delay_us = next_delay_us_locked(now_us);
+                lapic_timer_set_deadline(delay_us);
+                g_cpu0_armed_deadline_us = now_us + delay_us;
+            } else {
+                /* CPU0's timer is per-CPU hardware: make CPU0 take a timer interrupt, its ISR
+                 * recomputes the deadline from the list (the stale hardware deadline then fires
+                 * one spurious tick, which is harmless) */
+                lapic_timer_kick_cpu0();
+            }
+        }
+    }
+#endif
     spinlock_unlock_enable_irq(&g_pending_timeouts_list_lock);
 
     *timeout_out = (void*)timeout;
@@ -143,6 +192,21 @@ int notify_about_timeouts_uninterruptable(void) {
     spinlock_unlock(&g_pending_timeouts_list_lock);
     return 0;
 }
+
+#ifdef __x86_64__
+uint64_t timeouts_next_delay_us(void) {
+    uint64_t now_us;
+    if (get_time_in_us(&now_us) < 0)
+        return LAPIC_TIMER_PERIOD_US;
+
+    /* ISR context on CPU0 (interrupts already disabled), see notify_about_timeouts_uninterruptable() */
+    spinlock_lock(&g_pending_timeouts_list_lock);
+    uint64_t delay_us = next_delay_us_locked(now_us);
+    g_cpu0_armed_deadline_us = now_us + delay_us;
+    spinlock_unlock(&g_pending_timeouts_list_lock);
+    return delay_us;
+}
+#endif
 
 int time_init(void) {
     assert(g_tsc_mhz);

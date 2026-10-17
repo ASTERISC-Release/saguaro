@@ -75,6 +75,9 @@ void lapic_enable(void) {
     vm_shared_wrmsr(MSR_INSECURE_IA32_LAPIC_SPURIOUS_INTERRUPT_VECTOR, 39 | 0x100);
 }
 
+/* x2APIC ID of CPU0 (the BSP), the destination of lapic_timer_kick_cpu0(); read in apic_init() */
+static uint32_t g_cpu0_apic_id = 0;
+
 /* note that LAPIC timer is out of scope of e.g. Intel TDX, as TDX doesn't virtualize timer MSRs; in
  * other words, we must consider timer operations as insecure */
 #ifdef PAL_HOST_SEV
@@ -91,6 +94,19 @@ static void lapic_timer_oneshot_arm(uint64_t delay_us) {
 }
 #endif
 
+/* arms this CPU's timer `delay_us` from now; both modes are one-shot, a write replaces the pending
+ * deadline (TSC-deadline mode, or on SEV without TSC-deadline the one-shot count mode) */
+static void lapic_timer_arm(uint64_t delay_us) {
+#ifdef PAL_HOST_SEV
+    if (g_lapic_timer_oneshot) {
+        lapic_timer_oneshot_arm(delay_us);
+        return;
+    }
+#endif
+    uint64_t future_tsc = get_tsc() + delay_us * g_tsc_mhz;
+    vm_shared_wrmsr(MSR_INSECURE_IA32_TSC_DEADLINE, future_tsc);
+}
+
 int lapic_timer_init(void) {
     assert(g_tsc_mhz);
 
@@ -101,7 +117,7 @@ int lapic_timer_init(void) {
         g_lapic_timer_oneshot = true;
         vm_shared_wrmsr(MSR_INSECURE_IA32_LAPIC_TIMER_DCR, 0xb); /* divide by 1 */
         vm_shared_wrmsr(MSR_INSECURE_IA32_LAPIC_LVT_TIMER, 32);  /* one-shot, IRQ 32 */
-        lapic_timer_oneshot_arm(LAPIC_TIMER_PERIOD_US);
+        lapic_timer_arm(LAPIC_TIMER_PERIOD_US);
         return 0;
 #endif
         /* TSC deadline timer is not available */
@@ -112,22 +128,24 @@ int lapic_timer_init(void) {
     vm_shared_wrmsr(MSR_INSECURE_IA32_LAPIC_LVT_TIMER, 32 | 0x40000);
 
     /* arm the timer for the first time */
-    uint64_t future_tsc = get_tsc() + LAPIC_TIMER_PERIOD_US * g_tsc_mhz;
-    vm_shared_wrmsr(MSR_INSECURE_IA32_TSC_DEADLINE, future_tsc);
+    lapic_timer_arm(LAPIC_TIMER_PERIOD_US);
     return 0;
 }
 
-void lapic_timer_rearm(void) {
-#ifdef PAL_HOST_SEV
-    if (g_lapic_timer_oneshot) {
-        lapic_timer_oneshot_arm(LAPIC_TIMER_PERIOD_US);
-        lapic_signal_interrupt_complete();
-        return;
-    }
-#endif
-    uint64_t future_tsc = get_tsc() + LAPIC_TIMER_PERIOD_US * g_tsc_mhz;
-    vm_shared_wrmsr(MSR_INSECURE_IA32_TSC_DEADLINE, future_tsc);
+void lapic_timer_rearm(uint64_t delay_us) {
+    lapic_timer_arm(delay_us);
     lapic_signal_interrupt_complete();
+}
+
+void lapic_timer_set_deadline(uint64_t delay_us) {
+    lapic_timer_arm(delay_us);
+}
+
+void lapic_timer_kick_cpu0(void) {
+    /* ICR: vector 32 (the timer vector, so CPU0's ISR runs unchanged), fixed delivery (bits 8-10
+     * zero), physical destination, level asserted (bit 14), edge triggered, no shorthand,
+     * destination x2APIC ID in the high dword; in x2APIC mode the write does not block */
+    vm_shared_wrmsr(MSR_INSECURE_IA32_LAPIC_ICR, ((uint64_t)g_cpu0_apic_id << 32) | (1 << 14) | 32);
 }
 
 /* Makes the timer interrupt fire as soon as interrupts are enabled (a deadline in the past). */
@@ -160,6 +178,9 @@ int apic_init(void) {
     /* LAPIC initialization (in x2APIC mode); note that LAPIC should be already enabled and in
      * x2APIC mode, so no need to check or modify the IA32_APIC_BASE MSR */
     lapic_enable();
+
+    /* apic_init() runs on the BSP (pal_main), so this is CPU0's ID */
+    g_cpu0_apic_id = (uint32_t)rdmsr(MSR_IA32_LAPIC_ID);
 
     return lapic_timer_init();
 }

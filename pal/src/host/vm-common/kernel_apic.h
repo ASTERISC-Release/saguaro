@@ -28,7 +28,12 @@
 
 void lapic_enable(void);
 int lapic_timer_init(void);
-void lapic_timer_rearm(void);
+/* timer ISR: arm this CPU's one-shot timer `delay_us` from now and signal EOI */
+void lapic_timer_rearm(uint64_t delay_us);
+/* normal context (IRQs disabled): arm this CPU's one-shot timer `delay_us` from now, no EOI */
+void lapic_timer_set_deadline(uint64_t delay_us);
+/* from another CPU: make CPU0 take a timer interrupt now (it recomputes its deadline there) */
+void lapic_timer_kick_cpu0(void);
 void lapic_timer_fire_now(void);
 void lapic_signal_interrupt_complete(void);
 

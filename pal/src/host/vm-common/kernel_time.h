@@ -25,4 +25,13 @@ void deregister_timeout(void* timeout);
 int remove_timeouts_on_futex(int* futex);
 int notify_about_timeouts_uninterruptable(void);
 
+#ifdef __x86_64__
+/* the floor of CPU0's timer delay: bounds the interrupt rate when a deadline is already due */
+#define LAPIC_TIMER_MIN_DELAY_US 50
+/* For CPU0's timer ISR, after notify_about_timeouts_uninterruptable(): the delay to arm the timer
+ * with, from now to the earliest pending deadline, at most LAPIC_TIMER_PERIOD_US (the tick stays
+ * the ceiling). Records what the timer is armed for, so register_timeout() can re-arm early. */
+uint64_t timeouts_next_delay_us(void);
+#endif
+
 int time_init(void);

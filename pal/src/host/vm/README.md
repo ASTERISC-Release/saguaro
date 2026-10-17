@@ -34,7 +34,9 @@ VMSAv8-64 paging) is described in `Documentation/devel/vm.md` and
 - Time source: RDTSC (Invariant TSC) for relative time; absolute time is taken
   from the host on QEMU startup
 
-- Timer interrupts: using TSC deadline mode, fired every 100ms
+- Timer interrupts: using TSC deadline mode; CPU0's timer is armed for the earliest pending
+  timeout, at most 100ms ahead (the tick), the other CPUs tick every 100ms
+  (`Documentation/devel/vm-timer/`)
 
 - Timeouts, alarms, waiting/sleeping with timeouts
 

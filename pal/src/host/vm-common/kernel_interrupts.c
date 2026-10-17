@@ -169,12 +169,17 @@ void isr_c(struct isr_regs* regs) {
                 triple_fault();
             }
             break;
-        case 32:
+        case 32: ;
+            /* the other CPUs keep the 100 ms tick (their preemption quantum); CPU0 also serves the
+             * timeouts, so its timer is armed for the earliest pending deadline, the tick being
+             * the ceiling; a lapic_timer_kick_cpu0() IPI arrives here too */
+            uint64_t timer_delay_us = LAPIC_TIMER_PERIOD_US;
             if (get_per_cpu_data()->cpu_id == 0) {
                 /* only CPU0 handles timeouts and alarms */
                 notify_about_timeouts_uninterruptable();
+                timer_delay_us = timeouts_next_delay_us();
             }
-            lapic_timer_rearm();
+            lapic_timer_rearm(timer_delay_us);
             if (regs->cs != kernel_cs) {
                 /* only reschedule if timer interrupt occurs while in userland (i.e., we use
                  * preemptive userland scheduling but cooperative kernel scheduling); note that we
