@@ -86,9 +86,14 @@ export LD_LIBRARY_PATH="$GCCP/lib64:$PREFIX/deps/usr/lib/aarch64-linux-gnu${LD_L
 s=$(date +%s)
 make -j"$(nproc)" TARGET=ARMV8 USE_OPENMP=0 USE_THREAD=1 NUM_THREADS=8 NO_AFFINITY=1 \
     BUILD_LAPACK_DEPRECATED=0 NO_STATIC=1 CC=gcc FC="$GCCP/bin/gfortran" LDFLAGS="-L$GCCP/lib64" \
-    COMMON_OPT="-O2 -ffixed-x18" FCOMMON_OPT="-O2 -ffixed-x18" >"$BLD/make.log" 2>&1 \
+    COMMON_OPT="-O2 -ffixed-x18" FCOMMON_OPT="-O2 -frecursive -ffixed-x18" \
+    FFLAGS="-ffixed-x18" >"$BLD/make.log" 2>&1 \
     || { tail -30 "$BLD/make.log"; exit 1; }
 log "make took $(( $(date +%s) - s )) s"
+# the LAPACK Fortran sources are compiled with the FFLAGS of lapack-netlib/make.inc, which OpenBLAS
+# writes itself: the first attempt of this script passed only FCOMMON_OPT and LAPACK came out without
+# -ffixed-x18 (4 deprecated routines then used x18)
+grep -q -- '-ffixed-x18' lapack-netlib/make.inc || { echo "LAPACK FFLAGS lack -ffixed-x18" >&2; exit 1; }
 make PREFIX="$BLD/inst" NO_STATIC=1 install >"$BLD/install.log" 2>&1 || { tail -20 "$BLD/install.log"; exit 1; }
 rm -rf "$OUT" && mkdir -p "$OUT" && cp -P "$BLD"/inst/lib/libopenblas* "$OUT/" 2>/dev/null || true
 if [ -n "$TEST" ]; then
