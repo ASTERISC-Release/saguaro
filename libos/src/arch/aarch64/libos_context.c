@@ -172,6 +172,16 @@ void* libos_rt_sigreturn_trampoline_addr(void) {
     return (void*)&rt_sigreturn_trampoline;
 }
 
+/* The PAL's syscall snapshot of the application's registers (struct kernel_thread_context of
+ * the VM PAL: `syscall_scratch[]`, slot k holds x(k+1) for x1..x15 and x18; slot 16 holds x17 and
+ * slot 17 the application's x16). It sits right after `user_rip` and `user_tls`; the PAL checks
+ * that with a static_assert (arch/aarch64/pal_main.c). */
+#define VM_SCRATCH_X17 16
+#define VM_SCRATCH_X16 17
+static uint64_t* vm_syscall_scratch(void) {
+    return (uint64_t*)((char*)pal_get_tcb() + g_pal_public_state->vm_user_rip_offset + 16);
+}
+
 void prepare_sigframe(PAL_CONTEXT* context, siginfo_t* siginfo, void* handler, void* restorer,
                       bool should_use_altstack, __sigset_t* old_mask) {
     struct libos_thread* current = get_cur_thread();
@@ -233,6 +243,16 @@ void prepare_sigframe(PAL_CONTEXT* context, siginfo_t* siginfo, void* handler, v
         if (restart)
             user_rip -= 4;
         sigframe->uc.uc_mcontext.pc = user_rip;
+        if (context->pc != g_pal_public_state->vm_signal_return_trampoline) {
+            /* The PAL entered the LibOS with its own values in x9, x16 and x17 (x9 and x17 held
+             * its scratch, x16 the return trampoline); the application's are in the PAL's
+             * syscall snapshot. Without them a handler that returns would resume the interrupted
+             * code with these three clobbered. */
+            const uint64_t* scratch = vm_syscall_scratch();
+            sigframe->uc.uc_mcontext.regs[9] = scratch[8];
+            sigframe->uc.uc_mcontext.regs[16] = scratch[VM_SCRATCH_X16];
+            sigframe->uc.uc_mcontext.regs[17] = scratch[VM_SCRATCH_X17];
+        }
     }
 
     sigframe->uc.uc_sigmask = *old_mask;
@@ -318,6 +338,14 @@ void restore_sigreturn_context(PAL_CONTEXT* context, __sigset_t* new_mask) {
     libos_xstate_copy(syscall_fpregs_buf, (struct libos_xstate*)context->fpregs);
     context->fpregs = (PAL_XREGS_STATE*)syscall_fpregs_buf;
     context->is_fpregs_used = 1;
+
+    if (!strcmp(g_pal_public_state->host_type, "VM")) {
+        /* The PAL's sigreturn trampoline needs x16 and x17 for itself and takes the
+         * application's values from its syscall snapshot. */
+        uint64_t* scratch = vm_syscall_scratch();
+        scratch[VM_SCRATCH_X16] = context->regs[16];
+        scratch[VM_SCRATCH_X17] = context->regs[17];
+    }
 }
 
 bool maybe_emulate_syscall(PAL_CONTEXT* context) {

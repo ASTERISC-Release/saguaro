@@ -610,7 +610,7 @@ noreturn int pal_start_continue(void* cmdline_) {
     if (ret < 0)
         INIT_FAIL("Cannot parse 'sys.experimental__multiprocess'");
     if (enable_multiprocess) {
-        log_always("'sys.experimental__multiprocess' on AArch64 is work in progress "
+        log_always("'sys.experimental__multiprocess' on AArch64 is experimental "
                    "(Documentation/devel/vm-multiproc-aarch64/)");
         ret = init_multiprocess_frame_pool();
         if (ret < 0)
@@ -641,6 +641,10 @@ noreturn int pal_start_continue(void* cmdline_) {
      * delivery to find "user RIP" of the syscalling thread) */
     g_pal_public_state.vm_user_rip_offset = offsetof(struct pal_tcb_vm,
                                                      kernel_thread.context.user_rip);
+    /* the LibOS finds the syscall snapshot 16 bytes after user_rip (libos_context.c) */
+    static_assert(offsetof(struct pal_tcb_vm, kernel_thread.context.syscall_scratch) ==
+                  offsetof(struct pal_tcb_vm, kernel_thread.context.user_rip) + 16,
+                  "libos_context.c: vm_syscall_scratch()");
     extern void pal_sigreturn_return(void); /* arch/aarch64/kernel_context.S */
     extern void pal_syscall_return(void);
     g_pal_public_state.vm_signal_return_trampoline = (uintptr_t)&pal_sigreturn_return;

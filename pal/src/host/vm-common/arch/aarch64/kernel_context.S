@@ -179,11 +179,16 @@ el0_sync_entry:
      * hangs it in the EL1 sync path (the kernel-address poison crashes). Likewise the
      * readback-after-IRQ would hand the app the IRQ's saved PSTATE instead of its x9. */
     mrs     x16, tpidr_el1
-    add     x16, x16, #PER_CPU_DATA_CUR_TCB
-    msr     tpidrro_el0, x16                       /* EL0's TCB cell again (vm_bootloader.S) */
+    add     x16, x16, #PER_CPU_DATA_CUR_TCB        /* the cell's address; TPIDRRO still has the app's x16 */
     ldr     x16, [x16]                             /* cur_tcb (x86: the %gs base) */
     cbz     x16, hang                           /* svc with no thread context: cannot happen */
     str     x9,  [x16, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 8] /* snapshot the app's x9 early */
+    mrs     x9, tpidrro_el0                     /* the app's x16, parked at entry: Linux keeps it
+                                                   across svc, so it is slot 17 of the snapshot */
+    str     x9,  [x16, #PAL_TCB_VM_SYSCALL_SCRATCH + 8 * 17]
+    mrs     x9, tpidr_el1
+    add     x9, x9, #PER_CPU_DATA_CUR_TCB
+    msr     tpidrro_el0, x9                        /* EL0's TCB cell again (vm_bootloader.S) */
     mrs     x9, elr_el1                         /* address right after the 4-byte `svc` */
     str     x9,  [x16, #PAL_TCB_VM_USER_RIP]
     mrs     x9, tpidr_el1                       /* x9 is the snapshot store base from here */
@@ -193,8 +198,8 @@ el0_sync_entry:
      * in it -- Linux takes a full pt_regs snapshot per svc and hides this; x86 needs no
      * equivalent because the x86 dispatcher never leaves user values in registers the C ABI
      * does not preserve (x0..x15 there are exactly the kernel-clobbered set). x0 is the
-     * result slot (passed through), x16 stays kernel-owned scratch like x86's sysret rcx
-     * clobber that glibc declares dead. Slot layout:
+     * result slot (passed through), x16 (parked in TPIDRRO_EL0 at entry) goes to slot 17.
+     * Slot layout:
      * x1..x15 -> 0..14 (slot 8 = the app's x9), x18 -> 15, x17 -> 16 -- the exact set the
      * Linux syscall ABI preserves across
      * `svc`, which pal_syscall_return's ldp pairs read back. glibc on aarch64 *pins the
@@ -364,8 +369,8 @@ el0_sync_entry:
  * here, because glibc's ptmalloc_init poisons the heap with `svc (getrandom);
  * add x19, sp, x1` -- reusing the preserved length argument -- and storing the
  * tunables output through x19 = sp + <the resume address we put in x1> produced a
- * wild write (permission fault, FAR = stack + <code address>). x16/x17 are the
- * allowed clobbers (x86 sysret rcx/r11 parity).
+ * wild write (permission fault, FAR = stack + <code address>). x16 and x17 are scratch
+ * here but come back from the snapshot, as Linux keeps every register but x0.
  * --------------------------------------------------------------------------- */
     globl pal_syscall_return
 pal_syscall_return:
@@ -377,9 +382,8 @@ pal_syscall_return:
     ldr     x16, [x16, #PER_CPU_DATA_CUR_TCB]
     ldr     x17, [x16, #PAL_TCB_VM_USER_RIP]
     msr     elr_el1, x17                      /* park the resume address in the sysreg: even
-                                                 x17 must come back from the frame (only the
-                                                 user x16 dies here, as the entry path's adrp
-                                                 scratch -- x86 sysret %rcx parity) */
+                                                 x17 must come back from the frame (x16 and x17 come
+                                                 back from the snapshot at the end) */
     msr     spsr_el1, xzr
     /* SP_EL0 is a *per-CPU* sysreg, not per-thread: whenever any thread eret'd to EL0 or was
      * preempted, it left its own user stack in it. With more than one EL0 thread the resumed
@@ -400,6 +404,7 @@ pal_syscall_return:
     ldp     x13, x14, [x17, #8 * 12]
     ldr     x15, [x17, #8 * 14]
     ldr     x18, [x17, #8 * 15]
+    ldr     x16, [x17, #8 * 17]               /* the app's x16 (Linux keeps it across svc) */
     ldr     x17, [x17, #8 * 16]               /* frame base's own slot, restored last */
     eret
 
@@ -420,9 +425,8 @@ pal_syscall_return:
  *   - GPRs/x0:  all live from the same restore (x0 = the app's fault-time x0,
  *               the analog of x86 keeping user rax through the pseudo-stack dance)
  * SPSR = 0: EL0t, DAIF clear (x86: iret frame RFLAGS |= IF).
- * x16/x17 are the only scratch (the app's true values are what the restore put
- * in them -- clobbering x16 to read the TCB is fine, x17 likewise; sigreturn's
- * contract is the saved ucontext, and the syscall ABI declares both dead). */
+ * x16/x17 are the only scratch; the application's values come back from snapshot slots 17 and
+ * 16 (the LibOS copies them there from the signal frame). */
     globl pal_sigreturn_return
 pal_sigreturn_return:
     msr     daifset, #2                       /* see pal_syscall_return */
@@ -435,6 +439,11 @@ pal_sigreturn_return:
                                                   refresh, same requirement as pal_syscall_return) */
     msr     sp_el0, x17
     SET_EL1_SP_FOR_EL0 x17
+    /* x16 and x17 of the application come back from the snapshot slots 17 and 16, which the
+     * LibOS fills from the signal frame (restore_sigreturn_context()). */
+    add     x17, x16, #PAL_TCB_VM_SYSCALL_SCRATCH
+    ldr     x16, [x17, #8 * 17]
+    ldr     x17, [x17, #8 * 16]
     eret
 
 /* ---------------------------------------------------------------------------

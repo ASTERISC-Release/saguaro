@@ -8,10 +8,13 @@
 # takes the build machine's (gcc -dumpmachine) and keeps one log per probe.
 #
 # Usage: test/vm-multiproc-aarch64/probes.sh [--prefix DIR] [--cpus N]
-#            [spawn|sh|forks|signals|forks-mem|eintr|efault|shared|cntvct]...   (default: sh spawn)
+#            [spawn|sh|forks|signals|forks-mem|eintr|efault|shared|cntvct|regs|sysloop|unixsock]...   (default: sh spawn)
 # eintr: test/vm-multiproc-aarch64/eintr.c, a signal against each kind of blocking call.
 # efault: test/vm-multiproc-aarch64/efault.c, LibOS faults on application memory, key on and off.
 # cntvct: test/vm-multiproc-aarch64/cntvct.c, EL0 reads of the virtual counter, key on and off.
+# sysloop: test/vm-multiproc-aarch64/sysloop.c, ns per getpid() and per pipe write+read (timing, no pass/fail).
+# unixsock: test/vm-multiproc-aarch64/unixsock.c, named stream sockets (path, abstract) across fork.
+# regs: test/vm-multiproc-aarch64/regs.c, x6-x17 across svc (blocking, EINTR, fork, signals), key on and off.
 set -u
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 REPO=$(cd "$HERE/../.." && pwd)
@@ -33,11 +36,11 @@ LOGS=${LOGS:-$WORK/logs}
 mkdir -p "$WORK" "$LOGS" "$WORK/tmp" && cd "$WORK"
 SRC=$REPO/test/vm-multiproc
 cp "$SRC"/spawn.c "$SRC"/forks.c "$SRC"/sig.sh "$SRC"/manifest.template \
-   "$SRC"/sysv-fork.manifest.template "$HERE"/eintr.c "$HERE"/efault.c "$HERE"/shared.c "$HERE"/cntvct.c .
+   "$SRC"/sysv-fork.manifest.template "$HERE"/eintr.c "$HERE"/efault.c "$HERE"/shared.c "$HERE"/cntvct.c "$HERE"/regs.c "$HERE"/sysloop.c "$HERE"/unixsock.c .
 gcc -O2 -o spawn spawn.c && gcc -O2 -o forks forks.c && gcc -O2 -o eintr eintr.c -lpthread && \
-    gcc -O2 -o efault efault.c && gcc -O2 -o shared shared.c && gcc -O2 -o cntvct cntvct.c || exit 2
+    gcc -O2 -o efault efault.c && gcc -O2 -o shared shared.c && gcc -O2 -o cntvct cntvct.c && gcc -O2 -o regs regs.c && gcc -O2 -o sysloop sysloop.c && gcc -O2 -o unixsock unixsock.c || exit 2
 LIBDIR=/lib/$(gcc -dumpmachine)
-for entry in /usr/bin/sh /usr/bin/bash "$WORK/spawn" "$WORK/forks" "$WORK/eintr" "$WORK/efault" "$WORK/shared" "$WORK/cntvct"; do
+for entry in /usr/bin/sh /usr/bin/bash "$WORK/spawn" "$WORK/forks" "$WORK/eintr" "$WORK/efault" "$WORK/shared" "$WORK/cntvct" "$WORK/regs" "$WORK/sysloop" "$WORK/unixsock"; do
     name=$(basename "$entry")
     case $entry in "$WORK"/*) e=/probe/$name ;; *) e=$entry ;; esac
     template=manifest.template
@@ -53,7 +56,7 @@ run() {
         > "$LOGS/$tag.log" 2>&1
     local rc=$?
     echo "== $tag: rc=$rc time=$(( ($(date +%s%N) - start) / 1000000 ))ms vcpus=$CPUS load1=$load"
-    grep -v "self-check\|Frame-pool\|frame pool\|vm-relay\|work in progress\|Address-space switch\|child exited" \
+    grep -v "self-check\|Frame-pool\|frame pool\|vm-relay\|is experimental\|Address-space switch\|child exited" \
         "$LOGS/$tag.log" | head -${LINES_SHOWN:-20}
 }
 for what in "${WHAT[@]}"; do
@@ -103,6 +106,18 @@ for what in "${WHAT[@]}"; do
                      grep -q '^cntvct: ok' "$LOGS/cntvct-$k.log" || exit 1
                      grep -q '\[ VM exited with code 0 \]' "$LOGS/cntvct-$k.log" || exit 1
                  done ;;
+        regs)    grep -v experimental__multiprocess regs.manifest > regs-nokey.manifest
+                 ln -sf regs regs-nokey
+                 for k in on off; do
+                     m=regs; arg=; [ $k = off ] && { m=regs-nokey; arg=nofork; }
+                     LINES_SHOWN=${LINES_SHOWN:-12} run regs-$k 120 gramine-vm $m $arg
+                     grep -Eq "^regs: ([0-9]+)/\1 passed" "$LOGS/regs-$k.log" || exit 1
+                     grep -q "\[ VM exited with code 0 \]" "$LOGS/regs-$k.log" || exit 1
+                 done ;;
+        unixsock) LINES_SHOWN=${LINES_SHOWN:-5} run unixsock 60 gramine-vm unixsock
+                 grep -q '^unixsock: 2/2 passed' "$LOGS/unixsock.log" || exit 1 ;;
+        sysloop) LINES_SHOWN=${LINES_SHOWN:-3} run sysloop 300 gramine-vm sysloop
+                 grep -q '^sysloop: getpid' "$LOGS/sysloop.log" || exit 1 ;;
         forks-mem)
             # pool frames in use after each child's exit (log_debug of pal_process.c): the first
             # and the last of N sequential forks, and of N forks in batches of 8
