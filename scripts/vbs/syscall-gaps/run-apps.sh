@@ -15,7 +15,7 @@ APPS=("$@")
 mkdir -p "$OUT"
 # Windows-side load (WSL's own uptime restarts with the VM): boot time and CPU % over 2 s
 winload() {
-    powershell.exe -NoProfile -Command "\$o=Get-CimInstance Win32_OperatingSystem; \$c=(Get-Counter '\\Processor(_Total)\\% Processor Time' -SampleInterval 1 -MaxSamples 2).CounterSamples | % {[math]::Round(\$_.CookedValue,1)}; 'boot='+\$o.LastBootUpTime+' cpu%='+(\$c -join ',')+' freeMB='+[int](\$o.FreePhysicalMemory/1024)" 2>/dev/null | tr -d '\r'
+    powershell.exe -NoProfile -Command "\$o=Get-CimInstance Win32_OperatingSystem; \$c=(Get-Counter '\\Processor(_Total)\\% Processor Time' -SampleInterval 1 -MaxSamples 2).CounterSamples | % {[math]::Round(\$_.CookedValue,1)}; 'boot='+\$o.LastBootUpTime+' cpu%='+(\$c -join ',')+' freeMB='+[int](\$o.FreePhysicalMemory/1024)" 2>/dev/null </dev/null | tr -d '\r'
 }
 { echo "# $(date -Is) host=$(hostname) uptime: $(uptime)"; } > "$OUT/header.txt"
 printf 'app\tstatus\tseconds\tlog\n' > "$OUT/results.tsv"
@@ -33,7 +33,7 @@ for a in "${APPS[@]}"; do
     case $rc in 0) st=pass;; 124) st=timeout;; *) st="fail($rc)";; esac
     echo "$a after:  $(winload)" >> "$OUT/load.txt"
     printf '%s\t%s\t%s\t%s\n' "$a" "$st" "$e" "$log" >> "$OUT/results.tsv"
-    ( cd "$d" && make VBS=1 clean >/dev/null 2>&1 || true )
+    ( cd "$d" && make VBS=1 clean >/dev/null 2>&1 </dev/null || true )
     echo "$a $st ${e}s"
 done
 echo "uptime after: $(uptime)" >> "$OUT/header.txt"
