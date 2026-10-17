@@ -702,6 +702,76 @@ static void probe_futexrt(void) {
     P("futexrt", "INFO clocks: realtime %ld s, monotonic %ld s", (long)rt.tv_sec, (long)mono.tv_sec);
 }
 
+/* futexstress: llvmpipe's rasterizer pattern — N worker threads each wait on their own semaphore
+ * (mutex + condition variable), do a little work, meet at a barrier and signal "done"; the
+ * dispatcher loops this many times. A lost futex wakeup would hang it; a watchdog reports. */
+#define FS_WORKERS 4
+#define FS_ROUNDS 20000
+static pthread_mutex_t fs_mtx[FS_WORKERS];
+static pthread_cond_t fs_cnd[FS_WORKERS];
+static int fs_ready[FS_WORKERS];
+static pthread_barrier_t fs_barrier;
+static pthread_mutex_t fs_done_mtx = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t fs_done_cnd = PTHREAD_COND_INITIALIZER;
+static int fs_done;
+static volatile int fs_round;
+static void* fs_worker(void* arg) {
+    int me = (int)(intptr_t)arg;
+    for (int r = 0; r < FS_ROUNDS; r++) {
+        pthread_mutex_lock(&fs_mtx[me]);
+        while (fs_ready[me] <= 0)
+            pthread_cond_wait(&fs_cnd[me], &fs_mtx[me]);
+        fs_ready[me]--;
+        pthread_mutex_unlock(&fs_mtx[me]);
+        volatile unsigned x = 0;
+        for (int k = 0; k < 200; k++) x += k;      /* a little rasterizing */
+        pthread_barrier_wait(&fs_barrier);
+        if (me == 0) {
+            pthread_mutex_lock(&fs_done_mtx);
+            fs_done++;
+            pthread_cond_signal(&fs_done_cnd);
+            pthread_mutex_unlock(&fs_done_mtx);
+        }
+    }
+    return NULL;
+}
+static void* fs_watchdog(void* arg) {
+    (void)arg;
+    sleep(60);
+    P("futexstress", "FAIL hung at round %d of %d (60 s)", fs_round, FS_ROUNDS);
+    _exit(3);
+}
+static void probe_futexstress(void) {
+    pthread_t w, t[FS_WORKERS];
+    pthread_create(&w, NULL, fs_watchdog, NULL);
+    pthread_barrier_init(&fs_barrier, NULL, FS_WORKERS);
+    for (int i = 0; i < FS_WORKERS; i++) {
+        pthread_mutex_init(&fs_mtx[i], NULL);
+        pthread_cond_init(&fs_cnd[i], NULL);
+        pthread_create(&t[i], NULL, fs_worker, (void*)(intptr_t)i);
+    }
+    struct timespec t0, t1;
+    clock_gettime(CLOCK_MONOTONIC, &t0);
+    for (int r = 0; r < FS_ROUNDS; r++) {
+        fs_round = r;
+        for (int i = 0; i < FS_WORKERS; i++) {
+            pthread_mutex_lock(&fs_mtx[i]);
+            fs_ready[i]++;
+            pthread_cond_signal(&fs_cnd[i]);
+            pthread_mutex_unlock(&fs_mtx[i]);
+        }
+        pthread_mutex_lock(&fs_done_mtx);
+        while (fs_done <= r)
+            pthread_cond_wait(&fs_done_cnd, &fs_done_mtx);
+        pthread_mutex_unlock(&fs_done_mtx);
+    }
+    clock_gettime(CLOCK_MONOTONIC, &t1);
+    for (int i = 0; i < FS_WORKERS; i++)
+        pthread_join(t[i], NULL);
+    P("futexstress", "PASS %d rounds of %d workers in %.1f s", FS_ROUNDS, FS_WORKERS,
+      (t1.tv_sec - t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec) / 1e9);
+}
+
 /* ------------------------------------------------------------------------------------------- */
 static void probe_eventfd(void) {
     int fd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK | EFD_SEMAPHORE);
@@ -1413,7 +1483,7 @@ static void probe_misc(void) {
 struct probe { const char* name; void (*fn)(void); };
 static const struct probe probes[] = {
     /* the ones that may take the guest down come last */
-    {"fixed", probe_fixed},   {"huge", probe_huge},     {"noreplace", probe_noreplace}, {"futexv", probe_futexv}, {"futexrt", probe_futexrt},
+    {"fixed", probe_fixed},   {"huge", probe_huge},     {"noreplace", probe_noreplace}, {"futexv", probe_futexv}, {"futexrt", probe_futexrt}, {"futexstress", probe_futexstress},
     {"eventfd", probe_eventfd}, {"scm", probe_scm},     {"unixsock", probe_unixsock}, {"unixsock2", probe_unixsock2}, {"sud", probe_sud}, {"ifaces", probe_ifaces},       {"signals", probe_signals},
     {"sig_chld", probe_sig_chld}, {"sig_spin", probe_sig_spin}, {"sig_block", probe_sig_block}, {"sig_proc", probe_sig_proc},
     {"threads", probe_threads}, {"procs", probe_procs}, {"proc", probe_proc},       {"misc", probe_misc},
