@@ -16,4 +16,8 @@ x86_64-w64-mingw32-gcc -O2 -o "$OUT/d3d11.exe" "$HERE/d3d11.c" -ld3d11 -ld3dcomp
 # only the Vulkan headers, not the rest of /usr/include (that would shadow mingw's libc headers)
 mkdir -p "$OUT/include" && ln -sfn /usr/include/vulkan "$OUT/include/vulkan" && ln -sfn /usr/include/vk_video "$OUT/include/vk_video"
 x86_64-w64-mingw32-gcc -O2 -I"$OUT/include" -o "$OUT/vkwin.exe" "$HERE/vkwin.c"
+# threadwait.exe: a suspended thread, resumed and waited for with a 100 ms deadline (The Witcher 1's
+# start-up primitive, FINDINGS.md 2026-10-17), 64-bit and 32-bit
+x86_64-w64-mingw32-gcc -O2 -o "$OUT/threadwait.exe" "$HERE/threadwait.c"
+i686-w64-mingw32-gcc -O2 -o "$OUT/threadwait32.exe" "$HERE/threadwait.c"
 ls -l "$OUT"
