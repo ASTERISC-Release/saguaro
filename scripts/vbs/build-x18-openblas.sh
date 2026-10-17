@@ -82,7 +82,7 @@ PY
 export LD_LIBRARY_PATH="$GCCP/lib64:$PREFIX/deps/usr/lib/aarch64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 s=$(date +%s)
 make -j"$(nproc)" DYNAMIC_ARCH=1 USE_OPENMP=0 USE_THREAD=1 NUM_THREADS=8 NO_AFFINITY=1 \
-    BUILD_LAPACK_DEPRECATED=0 NO_STATIC=1 CC=gcc FC="$GCCP/bin/gfortran" \
+    BUILD_LAPACK_DEPRECATED=0 NO_STATIC=1 CC=gcc FC="$GCCP/bin/gfortran" LDFLAGS="-L$GCCP/lib64" \
     COMMON_OPT="-O2 -ffixed-x18" FCOMMON_OPT="-O2 -ffixed-x18" >"$BLD/make.log" 2>&1 \
     || { tail -30 "$BLD/make.log"; exit 1; }
 log "make took $(( $(date +%s) - s )) s"
@@ -91,7 +91,7 @@ rm -rf "$OUT" && mkdir -p "$OUT" && cp -P "$BLD"/inst/lib/libopenblas* "$OUT/" 2
 if [ -n "$TEST" ]; then
     s=$(date +%s)
     make DYNAMIC_ARCH=1 USE_OPENMP=0 USE_THREAD=1 NUM_THREADS=8 NO_AFFINITY=1 NO_STATIC=1 \
-        CC=gcc FC="$GCCP/bin/gfortran" tests >"$BLD/tests.log" 2>&1 \
+        CC=gcc FC="$GCCP/bin/gfortran" LDFLAGS="-L$GCCP/lib64" tests >"$BLD/tests.log" 2>&1 \
         && log "OpenBLAS tests passed in $(( $(date +%s) - s )) s" \
         || { tail -30 "$BLD/tests.log"; log "OpenBLAS tests FAILED"; exit 1; }
 fi
