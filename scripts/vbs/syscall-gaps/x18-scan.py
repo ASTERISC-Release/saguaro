@@ -61,7 +61,7 @@ def scan(path):
     objdump = os.environ.get('OBJDUMP', 'objdump')
     p = subprocess.Popen([objdump, '-d', '--no-show-raw-insn', path], stdout=subprocess.PIPE,
                          stderr=subprocess.DEVNULL, text=True, errors='replace')
-    func, insns, funcs, wr, rd, first = '?', 0, set(), 0, 0, None
+    func, insns, funcs, wr, rd, first = '?', 0, {}, 0, 0, None
     for line in p.stdout:
         m = FUNC_RE.match(line.rstrip('\n'))
         if m:
@@ -72,7 +72,7 @@ def scan(path):
             continue
         insns += 1
         if X18_RE.search(m.group(2)):
-            funcs.add(func)
+            funcs[func] = funcs.get(func, 0) + 1
             c = classify(m.group(2))
             wr += 'W' in c
             rd += 'R' in c and 'W' not in c
@@ -102,6 +102,9 @@ def main():
                              insns, n, len(funcs), wr, rd, ','.join(needed(p)), first or ''))
                 print(f'{rows[-1][0]}: {n} x18 insns in {len(funcs)} functions '
                       f'(write {wr}, read-only {rd}) of {insns}', flush=True)
+                if os.environ.get('X18_LIST'):   # X18_LIST=1: name the functions
+                    for k, v in sorted(funcs.items(), key=lambda kv: -kv[1])[:40]:
+                        print(f'    {v:6d}  {k}')
     with open(out, 'w') as f:
         f.write('path\tsize\tinsns\tx18_insns\tfunctions\twrite\tread_only\tneeded\tfirst\n')
         for r in rows:
