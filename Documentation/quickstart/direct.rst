@@ -94,11 +94,13 @@ Verified
 - x86_64 host (Arch Linux, kernel 7.2) in the Ubuntu 24.04 container: ``scripts/install.sh``
   (1 min 21 s), hello world (``Hello, world``); ``test/test-direct.sh pal libos helloworld python``:
   PAL 32 passed / 4 skipped, LibOS 155 passed / 37 failed / 34 skipped (a startup fault that
-  depended on the length of the install path, fixed on 2026-10-15, see
-  `vm-multiproc/FINDINGS.md <../devel/vm-multiproc/FINDINGS.md>`__; with the fix 192 passed /
-  34 skipped), helloworld and python pass; ``bash`` and ``busybox`` pass. A second install with
-  ``scripts/install.sh --libc none``: LibOS 192 passed / 34 skipped. Without ``env.sh``, ``make``
-  fails as described under Troubleshooting.
+  depended on the length of the install path, not on the libc; fixed the same day and verified
+  since by CI (LibOS 190 passed / 36 skipped) and ``test/direct-prefix-sweep.sh`` at every path
+  length, see `vm-multiproc/TESTING.md <../devel/vm-multiproc/TESTING.md>`__), helloworld and
+  python pass; ``bash`` and ``busybox`` pass. A second install with
+  ``scripts/install.sh --libc none`` (its prefix fell outside the failing length range): LibOS
+  192 passed / 34 skipped. Without ``env.sh``, ``make`` fails as described under
+  Troubleshooting.
 - AArch64 Ubuntu 24.04 host with an NVIDIA GB10, in the container: ``scripts/install.sh``, hello
   world; ``test/test-direct.sh pal libos helloworld python``: PAL 28 / 8 skipped, LibOS 190 passed /
   36 skipped, helloworld and python pass (python reports numpy/scipy as missing in the container).
