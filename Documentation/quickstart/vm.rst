@@ -1,5 +1,5 @@
 Quickstart: Micro-Virtual Machine (``gramine-vm``)
-=================================================
+==================================================
 
 ``gramine-vm`` boots the library OS, a small kernel and the application as a unikernel in a QEMU
 guest (a *microVM*): the application no longer runs on the host's kernel.
@@ -69,6 +69,7 @@ On x86_64, if ``command -v virtiofsd`` finds nothing, link ``/usr/libexec/virtio
 2. Example: Hello World
 =======================
 
+::
 
     cd CI-Examples/helloworld
     make                               # against the vm install: the manifest names its libsysdb.so
