@@ -45,8 +45,29 @@ def raw_counts(lines):
     return counts
 
 
-def main():
+def check_multiprocess_verdicts():
+    """The multi-process blocker of the vm loader: a blocker without --vm-multiprocess, a note with
+    it, on x86_64 and on AArch64 alike; the direct loader never gets it. Needs no strace."""
     failures = 0
+    for arch in ("x86_64", "aarch64"):
+        profile = {"arch": arch, "calls": {}, "paths": {},
+                   "multiprocess": {"tasks": 2, "processes": 2, "fork_like_calls": 1,
+                                    "extra_execs": 1}}
+        for loader, key, want in (("vm", False, "unlikely"), ("vm", True, "likely"),
+                                  ("direct", False, "likely"), ("direct", True, "likely")):
+            result = tool.check_loader(profile, loader, {}, {}, {}, 0.5, key)
+            blocked = any(b["syscall"] == "fork/exec" for b in result["blockers"])
+            noted = any(n["syscall"] == "fork/exec" for n in result["notes"])
+            ok = result["verdict"] == want and blocked == (loader == "vm" and not key) and \
+                noted == (loader == "vm" and key)
+            failures += not ok
+            print(f"{'ok' if ok else 'MISMATCH'}: multi-process verdict {arch} {loader} "
+                  f"key={'on' if key else 'off'}: {result['verdict']}")
+    return failures
+
+
+def main():
+    failures = check_multiprocess_verdicts()
     for command in COMMANDS:
         with tempfile.TemporaryDirectory() as tmp:
             trace = pathlib.Path(tmp) / "trace.txt"

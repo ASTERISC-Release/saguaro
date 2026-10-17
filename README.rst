@@ -59,7 +59,7 @@ What it is for:
 The features added so far, and the planned ones, are listed in
 `Documentation/FEATURES.md <Documentation/FEATURES.md>`__. Not available yet: a RISC-V ``vm`` PAL,
 graphics in the ``vm`` PAL on AArch64, VBS enclaves on x86_64, delivery of asynchronous signals to blocked threads in the ``vm`` PAL, and a
-finer-grained timer. The AArch64 ``vm`` PAL runs single-process applications; TCP and UDP work
+finer-grained timer. The AArch64 ``vm`` PAL runs single-process applications and, with the experimental ``sys.experimental__multiprocess`` manifest key, multi-process ones (fork, exec, wait, signals; not merged yet); TCP and UDP work
 through a vsock relay. See `Documentation/TODO.md <Documentation/TODO.md>`__ for open items.
 
 The RISC-V port covers the ``direct`` PAL only and is **experimental**: it is cross-built, and its

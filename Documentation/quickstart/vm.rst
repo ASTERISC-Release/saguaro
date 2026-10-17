@@ -90,9 +90,10 @@ experimental key ``sys.experimental__multiprocess = true`` enables ``fork``, ``v
     gramine-vm bash -c 'ls / | wc -l'          # prints a number; each child reports its exit
     git checkout manifest.template             # undo the change
 
-On AArch64 the key is newer and prints that it is work in progress: spawn, ``fork``, ``wait``,
-pipes and signals between processes work, but a signal does not yet end a thread's ``pause()``
-or ``poll()`` wait. Status and limits:
+On AArch64 the key is newer and prints that it is experimental: spawn, ``fork``, ``wait``,
+pipes, signals and shared memory between processes work (bash, nginx with workers, redis
+``BGSAVE``); a signal reaches user code only when a system call returns, and console and socket
+waits are not yet interruptible. Status and limits:
 `Documentation/devel/vm-multiproc/ <../devel/vm-multiproc/>`__ (x86_64) and
 `Documentation/devel/vm-multiproc-aarch64/ <../devel/vm-multiproc-aarch64/>`__ (AArch64).
 

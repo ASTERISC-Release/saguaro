@@ -16,7 +16,9 @@ production use.
 - **AArch64 direct PAL** (done). `gramine-direct` runs on AArch64 Linux: LibOS regression 145 passed / 36
   skipped, PAL regression 28 / 8, 12 example suites. `aarch64/direct/`
 - **AArch64 vm PAL** (experimental). `gramine-vm` boots a microVM under stock QEMU `virt` with KVM at 1 to 4
-  vCPUs and runs single-process LibOS applications. `aarch64/vm/`
+  vCPUs and runs LibOS applications; with `sys.experimental__multiprocess` also `fork`, `vfork`, `execve`,
+  pipes, signals and shared memory between processes (bash, nginx workers, redis `BGSAVE`; qualified on
+  the GX10, not yet merged). `aarch64/vm/`, `vm-multiproc-aarch64/`
 - **RISC-V (RV64) direct PAL** (experimental). Cross-built; the regression suites and 11 example suites pass in an
   emulated RISC-V guest, not yet on hardware. `riscv/`
 - **x86_64 vm PAL, extended** (experimental). The inherited `gramine-vm` unikernel got a reworked vsock driver,
