@@ -38,6 +38,10 @@ loader.env.DXVK_LOG_LEVEL = "{{ dxvk_log_level }}"
 # EGL_VULKAN_RATE_LOG=<s>: the layer logs its present rate every so many seconds (GPU runs on the
 # dummy server, where the window content is not visible)
 loader.env.EGL_VULKAN_RATE_LOG = "{{ rate_log }}"
+{% for kv in extra_env.split(' ') if '=' in kv %}
+# EXTRA_ENV="A=1 B=2": extra variables for the guest (experiments)
+loader.env.{{ kv.split('=', 1)[0] }} = "{{ kv.split('=', 1)[1] }}"
+{% endfor %}
 {% if mesa_wsi|string != "" %}
 # MESA_VK_WSI_DEBUG=sw: Mesa's X11 WSI without DRI3 (a DRI3 server such as Xwayland makes it open
 # the GPU through the X connection with fd passing, which the vsock relay cannot carry: the guest
@@ -76,6 +80,11 @@ loader.env.DISPLAY = ""
 loader.env.LD_PRELOAD = "/libgraphics.so"
 {% endif %}
 loader.env.EGL_VULKAN_PRESENT = "1"
+{% if layer_disable|string == "1" %}
+# LAYER_DISABLE=1: a GPU-mode run without the presentation layer (bisection only: Vulkan presents
+# then need the X11 WSI, i.e. lavapipe with XPutImage on a server without DRI3)
+loader.env.EGL_VULKAN_PRESENT_DISABLE = "1"
+{% endif %}
 loader.env.NODEVICE_SELECT = "1"
 loader.env.XDG_DATA_HOME = "/gramine-xdg"
 loader.env.EGL_EAGER_SESSION = "{{ gpu_eager }}"
@@ -85,9 +94,12 @@ loader.env.EGL_SHARED_INPUT = "0"
 loader.env.GBM_BACKEND = "dri"
 loader.env.IVSHMEM_GRAMINE_VM = "1"
 loader.env.GLIBC_TUNABLES = "glibc.pthread.rseq=0"
-{% else %}
+{% endif %}
+{% if gpu|string != "1" or gl_software|string == "1" %}
 # software rendering first (step 2 of "Next phases"): Mesa's llvmpipe for GLX, lavapipe for Vulkan
-# (DXVK); the X11 WSI presents with XPutImage when the server has no DRI3
+# (DXVK); the X11 WSI presents with XPutImage when the server has no DRI3. GL_SOFTWARE=1 keeps
+# OpenGL on llvmpipe in a GPU run too (a game's start-up GL device next to its D3D9 through DXVK:
+# The Witcher 1, FINDINGS.md 2026-10-17)
 loader.env.LIBGL_ALWAYS_SOFTWARE = "1"
 # no DRI3 for the guest's GL either: on a DRI3 server (Xwayland) Mesa would open the GPU through the
 # X connection with fd passing, which the vsock relay cannot carry (FINDINGS.md 2026-10-16)
