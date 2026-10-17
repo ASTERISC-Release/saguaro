@@ -10,6 +10,12 @@
 libos.entrypoint = "{{ proton }}/files/lib/wine/x86_64-unix/wine"
 loader.log_level = "{{ log_level }}"
 loader.insecure__use_cmdline_argv = true
+{% if game %}
+# the game's folder is the working directory, as run-game.sh does natively: Psychonauts looks for its
+# resources relative to the current directory (it never opened its .pkg with "/" as the directory and
+# faulted on the missing object; FINDINGS.md 2026-10-16)
+fs.start_dir = "{{ game }}"
+{% endif %}
 # Wine lays out the low 2 GiB itself (fixed areas at 0x10000, 0x110000, 0x7f000000, the user
 # shared data at 0x7ffe0000); with ASLR the LibOS puts the stack and the libraries a random
 # distance below the top of guest RAM, sometimes inside that range, and ntdll exits at once
