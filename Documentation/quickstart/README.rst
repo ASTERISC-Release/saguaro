@@ -49,6 +49,12 @@ applicable.
      - ⚠️ (Windows 11)
      - ➖
      - `vbs-windows.rst <vbs-windows.rst>`__
+   * - AMD SEV-SNP (``gramine-sev``): hello world, regression tests, attestation
+     - ➖
+     - ⚠️
+     - ➖
+     - ➖
+     - `sev.rst <sev.rst>`__
    * - Intel TDX and SGX (inherited; not verified here)
      - ✅
      - ➖
@@ -72,3 +78,5 @@ Which one do I need?
   `vbs-windows.rst <vbs-windows.rst>`__.
 - **Intel confidential computing**: `tdx-sgx.rst <tdx-sgx.rst>`__, pointers to the inherited
   documents.
+- **AMD confidential computing** (SEV-SNP, with attestation): `sev.rst <sev.rst>`__. It needs an
+  EPYC host with SEV-SNP and access to ``/dev/sev``.

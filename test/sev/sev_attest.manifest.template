@@ -1,0 +1,12 @@
+# test/test-sev.sh attest: the guest side of the SNP attestation check (sev_attest.c)
+
+libos.entrypoint = "/sev_attest"
+loader.log_level = "{{ log_level }}"
+loader.env.LD_LIBRARY_PATH = "/lib"
+loader.insecure__use_cmdline_argv = true
+
+fs.mounts = [
+  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "/sev_attest", uri = "file:sev_attest" },
+  { path = "/tmp", uri = "file:/tmp" },
+]

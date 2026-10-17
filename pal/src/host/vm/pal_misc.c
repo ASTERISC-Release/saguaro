@@ -12,6 +12,9 @@
 #include "pal_internal.h"
 
 #include "kernel_time.h"
+#ifdef PAL_HOST_SEV
+#include "sev.h"
+#endif
 
 /* No CPU accounting in this PAL (the VM PAL's scheduler would have to keep it). */
 int _PalGetCpuTime(bool thread, uint64_t* out_user_us, uint64_t* out_sys_us) {
@@ -63,9 +66,37 @@ int _PalSegmentBaseSet(enum pal_segment_reg reg, uintptr_t addr) {
     return pal_common_segment_base_set(reg, addr);
 }
 
+#ifdef PAL_HOST_SEV
+/* SEV-SNP: the report and the "quote" are both the firmware-signed attestation report (verified
+ * with the chip's VCEK certificate chain from AMD's KDS); target info does not exist (a dummy of
+ * one byte, as the LibOS expects a size). */
+static int sev_attestation_report(const void* user_report_data, size_t* user_report_data_size,
+                                  void* target_info, size_t* target_info_size, void* report,
+                                  size_t* report_size) {
+    if (!user_report_data_size || !target_info_size || !report_size)
+        return -PAL_ERROR_INVAL;
+    if (*user_report_data_size != 64 || *target_info_size != 1 ||
+            *report_size != SEV_SNP_REPORT_SIZE || !user_report_data) {
+        *user_report_data_size = 64;
+        *target_info_size = 1;
+        *report_size = SEV_SNP_REPORT_SIZE;
+        return 0;
+    }
+    if (target_info)
+        memset(target_info, 0, 1);
+    if (!report)
+        return 0;
+    return sev_snp_get_report(user_report_data, report);
+}
+#endif
+
 int _PalAttestationReport(const void* user_report_data, size_t* user_report_data_size,
                           void* target_info, size_t* target_info_size, void* report,
                           size_t* report_size) {
+#ifdef PAL_HOST_SEV
+    return sev_attestation_report(user_report_data, user_report_data_size, target_info,
+                                  target_info_size, report, report_size);
+#endif
     __UNUSED(user_report_data);
     __UNUSED(user_report_data_size);
     __UNUSED(target_info);
@@ -77,6 +108,16 @@ int _PalAttestationReport(const void* user_report_data, size_t* user_report_data
 
 int _PalAttestationQuote(const void* user_report_data, size_t user_report_data_size, void* quote,
                          size_t* quote_size) {
+#ifdef PAL_HOST_SEV
+    if (!quote_size || user_report_data_size != 64)
+        return -PAL_ERROR_INVAL;
+    if (*quote_size < SEV_SNP_REPORT_SIZE || !quote) {
+        *quote_size = SEV_SNP_REPORT_SIZE;
+        return -PAL_ERROR_NOMEM;
+    }
+    *quote_size = SEV_SNP_REPORT_SIZE;
+    return sev_snp_get_report(user_report_data, quote);
+#endif
     __UNUSED(user_report_data);
     __UNUSED(user_report_data_size);
     __UNUSED(quote);

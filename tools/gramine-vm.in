@@ -8,6 +8,9 @@ BIOS_PATH=@BIOS_PATH@
 LIBPAL_PATH=@LIBPAL_PATH@
 HOST_PAL_PATH=@HOST_PAL_PATH@
 TDSHIM_PAL_PATH=@TDSHIM_PAL_PATH@
+# gramine-sev (the AMD SEV build of this launcher): the IGVM boot image, empty for gramine-vm
+SEV_IGVM_PATH=@SEV_IGVM_PATH@
+SEV_QEMU_PATH=@SEV_QEMU_PATH@
 
 # The per-VM vsock relay (Documentation/devel/vm-network/), shared with gramine-vm-aarch64; installed
 # next to the VM PAL. The launcher runs Python snippets and the relay from this installation: a caller
@@ -99,6 +102,9 @@ QEMU_CPU_NUM=${QEMU_CPU_NUM:-"1"}
 
 # QEMU: QEMU_PATH in the environment, else a stock qemu-system-x86_64 from PATH. TDX and the graphics
 # redirection need a QEMU fork built outside this repository (see Documentation/devel/graphics/).
+# gramine-sev: the QEMU configured with -Dsev_qemu, if any (the LibOS tests run it with a stripped
+# environment)
+[ -n "$SEV_QEMU_PATH" ] && QEMU_PATH=${QEMU_PATH:-$SEV_QEMU_PATH}
 QEMU_PATH=${QEMU_PATH:-$(command -v qemu-system-x86_64 || echo qemu-system-x86_64)}
 
 QEMU_VM="-cpu host,host-phys-bits,-kvm-steal-time,pmu=off,+tsc-deadline,+invtsc \
@@ -108,6 +114,8 @@ QEMU_OPTS="-enable-kvm -vga none -display none -no-reboot -monitor none "
 # at from outside (test/vm-multiproc/vm-hang-report.py)
 [ -n "$GRAMINE_VM_MONITOR" ] && \
     QEMU_OPTS="${QEMU_OPTS/-monitor none/-monitor unix:$GRAMINE_VM_MONITOR,server=on,wait=off}"
+# GRAMINE_VM_QMP=<path>: a QMP socket (e.g. for query-sev-launch-measure under gramine-sev)
+[ -n "$GRAMINE_VM_QMP" ] && QEMU_OPTS+="-qmp unix:$GRAMINE_VM_QMP,server=on,wait=off "
 
 RAW_MEM_SIZE=$(echo $QEMU_MEM_SIZE | tr -d 'G')
 REM_MEM_SIZE=$((RAW_MEM_SIZE - 4))
@@ -244,7 +252,62 @@ QEMU_OPTS+="$GRAPHICS_BACKEND_ARGS"
 # guest never sees this one.
 export GRAMINE_RAM_BASES=$RAM_BASES
 
-if [ "$TDSHIM_PAL_PATH" == "" ]; then
+if [ -n "$SEV_IGVM_PATH" ]; then
+    # AMD SEV (Documentation/devel/sev/): the IGVM file holds the PAL and its boot stub, QEMU
+    # encrypts and measures every page of it at launch; no -kernel, no BIOS loader.
+    # GRAMINE_SEV_MODE (or the manifest's `sev.mode`): snp (SEV-SNP, the default), sev (plain SEV)
+    # or native (the same image without encryption, for debugging the boot path; the PAL then
+    # refuses to run). GRAMINE_SEV_POLICY (or `sev.policy`): the guest policy (SNP 0x30000, SEV 0x1). GRAMINE_SEV_SESSION=<prefix>: the
+    # launch session of `sevctl session` (<prefix>_godh.b64, <prefix>_session.b64), whose TIK
+    # verifies the launch measurement.
+    # The manifest may choose them too (`sev.mode`, `sev.policy`); the environment wins.
+    SEV_MANIFEST=$(python3 -c "
+import sys
+try:
+    import tomllib
+except ImportError:
+    import tomli as tomllib
+try:
+    with open(sys.argv[1], 'rb') as f:
+        sev = tomllib.load(f).get('sev', {})
+except Exception:
+    sev = {}
+print(sev.get('mode', ''), sev.get('policy', ''))
+" "$GRAMINE_MANIFEST" 2>/dev/null)
+    read -r SEV_MANIFEST_MODE SEV_MANIFEST_POLICY <<<"$SEV_MANIFEST"
+    SEV_MODE=${GRAMINE_SEV_MODE:-${SEV_MANIFEST_MODE:-snp}}
+    GRAMINE_SEV_POLICY=${GRAMINE_SEV_POLICY:-$SEV_MANIFEST_POLICY}
+    SEV_CBITPOS=${GRAMINE_SEV_CBITPOS:-$(python3 "$HOST_PAL_PATH/gramine-sev-igvm.py" cbitpos)}
+    case "$SEV_MODE" in
+        sev)
+            SEV_OBJECT="sev-guest,id=sev0,cbitpos=$SEV_CBITPOS,reduced-phys-bits=1,policy=${GRAMINE_SEV_POLICY:-0x1}"
+            [ -n "$GRAMINE_SEV_SESSION" ] && \
+                SEV_OBJECT+=",dh-cert-file=${GRAMINE_SEV_SESSION}_godh.b64,session-file=${GRAMINE_SEV_SESSION}_session.b64"
+            QEMU_MACHINE="-M q35,kernel_irqchip=on,confidential-guest-support=sev0,igvm-cfg=igvm0 \
+            -object $SEV_OBJECT" ;;
+        snp)
+            # KVM offers no TSC-deadline timer to SEV-ES/SNP guests (the PAL uses the one-shot
+            # LAPIC timer instead), so do not ask for it
+            QEMU_VM=${QEMU_VM/,+tsc-deadline/}
+            SEV_OBJECT="sev-snp-guest,id=sev0,cbitpos=$SEV_CBITPOS,reduced-phys-bits=1,policy=${GRAMINE_SEV_POLICY:-0x30000}"
+            QEMU_MACHINE="-M q35,kernel_irqchip=on,confidential-guest-support=sev0,igvm-cfg=igvm0 \
+            -object $SEV_OBJECT" ;;
+        native)
+            QEMU_MACHINE="-M q35,kernel_irqchip=on,igvm-cfg=igvm0" ;;
+        *)
+            echo "Error: GRAMINE_SEV_MODE must be sev, snp or native (got '$SEV_MODE')." >&2
+            exit 2 ;;
+    esac
+    QEMU_MACHINE+=" -object igvm-cfg,id=igvm0,file=$SEV_IGVM_PATH"
+    QEMU_BINARIES=""
+    # the launch digest the platform must report for this file and vCPU count (SNP: the
+    # MEASUREMENT of the attestation report; SEV: the digest inside LAUNCH_MEASURE)
+    if [ "$SEV_MODE" != native ]; then
+        SEV_DIGEST=$(python3 "$HOST_PAL_PATH/gramine-sev-igvm.py" measure --mode "$SEV_MODE" \
+                     --vcpus "$QEMU_CPU_NUM" "$SEV_IGVM_PATH")
+        echo "gramine-sev: $SEV_MODE launch digest of $SEV_IGVM_PATH on $QEMU_CPU_NUM vCPUs: $SEV_DIGEST" >&2
+    fi
+elif [ "$TDSHIM_PAL_PATH" == "" ]; then
     QEMU_MACHINE="-M q35,kernel_irqchip=on"
     QEMU_BINARIES="-kernel $LIBPAL_PATH -device loader,file=$BIOS_PATH"
 else
@@ -482,6 +545,7 @@ env "${CMD[@]}"
 QEMU_RC=$?
 
 [ -n "$GRAMINE_VM_CONSOLE_LOG" ] && cp "$CONSOLE_LOG" "$GRAMINE_VM_CONSOLE_LOG" 2>/dev/null
+[ -n "$GRAMINE_VM_SERIAL_LOG" ] && cp "$SERIAL_LOG" "$GRAMINE_VM_SERIAL_LOG" 2>/dev/null
 
 # `_PalProcessExit` logs "[ VM exited with code N ]" just before the guest triple-faults (QEMU then
 # exits 0 because of -no-reboot, whatever the application did).

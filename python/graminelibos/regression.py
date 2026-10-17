@@ -24,6 +24,9 @@ IS_VM = os.environ.get('IS_VM') == '1'
 # Run the tests under the VM PAL (`gramine-vm`) instead of Linux-direct/SGX. Note this is not IS_VM,
 # which says the *test machine* is a VM.
 USE_GRAMINE_VM = os.environ.get('GRAMINE_VM') == '1'
+# the launcher of the VM runs: gramine-vm, or gramine-sev for the AMD SEV build of the vm PAL
+# (Documentation/devel/sev/), whose PAL lives in <pkglibdir>/sev
+VM_LAUNCHER = os.environ.get('GRAMINE_VM_LAUNCHER', 'gramine-vm')
 ON_X86 = os.uname().machine in ['x86_64']
 USES_MUSL = os.environ.get('GRAMINE_MUSL') == '1'
 
@@ -183,7 +186,8 @@ class RegressionTestCase(unittest.TestCase):
     @property
     def pal_path(self):
         # pylint: disable=protected-access
-        host = 'sgx' if HAS_SGX else 'vm' if USE_GRAMINE_VM else 'direct'
+        vm_host = 'sev' if VM_LAUNCHER == 'gramine-sev' else 'vm'
+        host = 'sgx' if HAS_SGX else vm_host if USE_GRAMINE_VM else 'direct'
         return pathlib.Path(graminelibos._CONFIG_PKGLIBDIR) / host
 
     @property
@@ -231,7 +235,7 @@ class RegressionTestCase(unittest.TestCase):
             # console carrying application stdout/stderr and Gramine's log, so both streams
             # are that console.
             # absolute path: tests that pass a custom `env=` may not carry our PATH
-            gramine_vm = shutil.which('gramine-vm') or 'gramine-vm'
+            gramine_vm = shutil.which(VM_LAUNCHER) or VM_LAUNCHER
             try:
                 _returncode, stdout, stderr = run_command([*prefix, gramine_vm, *args],
                                                           timeout=timeout, **kwds)

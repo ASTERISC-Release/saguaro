@@ -394,6 +394,27 @@ static int init_tdx_attestation(struct pseudo_node* attestation) {
     return 0;
 }
 
+/* AMD SEV-SNP (the SEV build of the vm PAL, Documentation/devel/sev/): `report` and `quote` are
+ * both the SNP attestation report that the firmware signs with the chip's VCEK, with the 64 bytes
+ * of `user_report_data` as its REPORT_DATA. Selected by the attestation type, not the host type:
+ * the SEV PAL reports host type "VM". */
+static int init_sev_snp_attestation(struct pseudo_node* attestation) {
+    if (strcmp(g_pal_public_state->host_type, "VM") || !g_pal_public_state->attestation_type
+            || strcmp(g_pal_public_state->attestation_type, "sev-snp"))
+        return 0;
+
+    pseudo_add_str(attestation, "attestation_type", attestation_type_load);
+    pseudo_add_str(attestation, "report", &report_load);
+    pseudo_add_str(attestation, "quote", &quote_load);
+
+    struct pseudo_node* user_report_data = pseudo_add_str(attestation, "user_report_data", NULL);
+    user_report_data->perm = PSEUDO_PERM_FILE_RW;
+    user_report_data->str.save = &user_report_data_save;
+
+    log_debug("host is an SEV-SNP guest, remote attestation type 'sev-snp'");
+    return 0;
+}
+
 #ifdef PAL_HOST_VBS
 /* Windows VBS enclaves: `report` and `quote` are the platform-signed VBS attestation report package
  * (the same bytes), with `user_report_data` as its 64 bytes of enclave data; no target info. */
@@ -432,6 +453,9 @@ int init_attestation(struct pseudo_node* dev) {
         return ret;
 
     ret = init_tdx_attestation(attestation);
+    if (ret < 0)
+        return ret;
+    ret = init_sev_snp_attestation(attestation);
     if (ret < 0)
         return ret;
 #ifdef PAL_HOST_VBS

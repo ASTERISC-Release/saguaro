@@ -49,6 +49,7 @@ direct = get_option('direct') == 'enabled'
 sgx = get_option('sgx') == 'enabled'
 vm = get_option('vm') == 'enabled'
 tdx = get_option('tdx') == 'enabled'
+sev = get_option('sev') == 'enabled'
 skeleton = get_option('skeleton') == 'enabled'
 vbs = get_option('vbs') == 'enabled'
 
@@ -205,6 +206,11 @@ endif
 if tdx and host_machine.cpu_family() != 'x86_64'
     # Intel TDX is x86-only hardware, and the TDX PAL half of vm-common is x86 asm/MSRs.
     error('TDX PAL is available only for x86-64 arch')
+endif
+
+if sev and (not vm or host_machine.cpu_family() != 'x86_64')
+    # the SEV PAL is a second build of the x86-64 vm PAL sources (Documentation/devel/sev/PLAN.md D2)
+    error('SEV PAL (-Dsev=enabled) needs -Dvm=enabled on x86-64')
 endif
 
 gen_symbol_map_cmd = [

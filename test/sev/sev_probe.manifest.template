@@ -1,0 +1,12 @@
+# test/test-sev.sh: the guest side of the SEV memory-encryption check (sev_probe.c)
+
+libos.entrypoint = "/sev_probe"
+loader.log_level = "{{ log_level }}"
+loader.env.LD_LIBRARY_PATH = "/lib"
+loader.insecure__use_cmdline_argv = true
+
+fs.mounts = [
+  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "/sev_probe", uri = "file:sev_probe" },
+  { path = "/tmp", uri = "file:/tmp" },
+]

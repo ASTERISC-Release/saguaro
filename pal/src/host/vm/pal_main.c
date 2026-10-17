@@ -35,6 +35,9 @@
 #include "kernel_virtio.h"
 #include "kernel_vmm_inputs.h"
 #include "kernel_xsave.h"
+#ifdef PAL_HOST_SEV
+#include "sev.h"
+#endif
 
 /* the VMM supplied a graphics-arena layout (graphics redirection configured) */
 static bool g_graphics_configured;
@@ -591,6 +594,11 @@ noreturn void pal_start_c(void) {
     g_pal_public_state.alloc_align = PAGE_SIZE;
     assert(IS_POWER_OF_2(g_pal_public_state.alloc_align));
 
+#ifdef PAL_HOST_SEV
+    /* first: under SEV-ES/SNP every port I/O, MSR and CPUID below needs the GHCB and #VC handler */
+    sev_init_early();
+#endif
+
     uint32_t num_cpus = rdfwcfg(FW_CFG_NB_CPUS, sizeof(uint32_t));
     if (num_cpus < 1 || num_cpus > MAX_NUM_CPUS)
         INIT_FAIL("Detected unsupported number of virtual CPUs: %u (supported: 1..%u)", num_cpus,
@@ -705,6 +713,11 @@ noreturn void pal_start_c(void) {
     ret = init_multicore_prepare(num_cpus);
     if (ret < 0)
         INIT_FAIL("Failed to initialize multicore preparation (per-CPU data and stacks)");
+#ifdef PAL_HOST_SEV
+    ret = sev_percpu_prepare(num_cpus);
+    if (ret < 0)
+        INIT_FAIL("SEV: failed to prepare the per-CPU state (#VC stacks, GHCBs)");
+#endif
 
     /* interrupts must be enabled (via `sti`) after all other parts of the kernel are initialized */
     ret = interrupts_init();
@@ -830,6 +843,10 @@ noreturn int pal_start_continue(void* cmdline_) {
     g_pal_public_state.first_thread = g_first_thread_handle;
 
     g_pal_public_state.attestation_type = "none";
+#ifdef PAL_HOST_SEV
+    if (sev_snp_active())
+        g_pal_public_state.attestation_type = "sev-snp";
+#endif
 
     extern void sysret_asm(void);
     g_pal_public_state.vm_user_return_stub = (void*)&sysret_asm;

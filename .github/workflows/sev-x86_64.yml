@@ -1,0 +1,61 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
+# AMD SEV / SEV-SNP build of the vm PAL (gramine-sev, Documentation/devel/sev/).
+#
+# Hosted runners have no SEV hardware, so this workflow needs a self-hosted runner on an SEV-SNP host
+# (label `amd-sev-snp`) with rootless podman, /dev/kvm, /dev/sev and /dev/vhost-vsock accessible to
+# the runner's user and the SEV tools built next to the checkout (container/sev/build-sev-tools.sh
+# all, sev-tools/ beside the workspace). It runs test/test-sev-all.sh in the repository's container.
+# No such runner is registered today: the same script is run by hand on the development host
+# (Documentation/devel/sev/TESTING.md).
+#
+# Manual trigger only (Actions tab -> "SEV PAL (x86_64, self-hosted)" -> Run workflow).
+name: SEV PAL (x86_64, self-hosted)
+
+on:
+  workflow_dispatch:
+    inputs:
+      cpus:
+        description: "vCPU counts of the LibOS suite under SNP"
+        required: false
+        default: "1 2 4"
+      multiprocess:
+        description: "also run the multi-process checks under SNP"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sev-x86_64-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sev-snp:
+    name: gramine-sev on an SEV-SNP host
+    runs-on: [self-hosted, linux, x64, amd-sev-snp]
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the SEV host
+        run: |
+          ls -l /dev/kvm /dev/sev /dev/vhost-vsock
+          test -d ../sev-tools/prefix/bin || { echo "no ../sev-tools (container/sev/build-sev-tools.sh all)"; exit 1; }
+
+      - name: Build and qualify gramine-sev in the container
+        run: |
+          container/run.sh "CPUS='${{ inputs.cpus }}' MP=${{ inputs.multiprocess && '1' || '0' }} \
+            OUT=/tmp/test-sev-all test/test-sev-all.sh"
+
+      - name: Collect logs
+        if: always()
+        run: container/run.sh "tar -C /tmp -czf /root/gramine-multiarch/test-sev-all-logs.tgz test-sev-all" || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-sev-all-logs
+          path: test-sev-all-logs.tgz
+          if-no-files-found: ignore

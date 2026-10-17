@@ -78,6 +78,34 @@ static inline void frame_pool_unlock(uint64_t flags) {
 #define PTE_COW_WRITABLE (1UL << 11)
 
 static struct memory_address_space g_boot_address_space;
+#endif
+
+#ifdef PAL_HOST_SEV
+/* AMD SEV (pal/src/host/vm/sev/): the C-bit as a page-table-entry mask, set by vm_bootloader.S.
+ * Private (encrypted) memory has it set; the shared heap and the MMIO hole, which the host must
+ * read and write, have it clear. Guest page tables must be private: hardware walks them with the
+ * guest key whatever the C-bit says. */
+#include "sev.h"
+static uint64_t sev_c_bit_for_phys(uint64_t phys) {
+    if (SHARED_MEM_ADDR <= phys && phys < SHARED_MEM_ADDR + SHARED_MEM_SIZE)
+        return 0;
+    if (PCI_HOLE_ADDR <= phys && phys < PCI_HOLE_ADDR + PCI_HOLE_SIZE)
+        return 0;
+    if (phys == g_sev_extra_shared_page)
+        return 0;
+    return g_sev_c_bit_mask;
+}
+/* the multiprocess support's tables and frame metadata must be private under SEV */
+#define PTE_ENC g_sev_c_bit_mask
+#define KERNEL_META_ALLOC(size) sev_alloc_private(size)
+#define SEV_VALIDATE_FRAME(frame) sev_validate_frame(frame)
+#else
+#define PTE_ENC 0UL
+#define KERNEL_META_ALLOC(size) memory_get_shared_region(size)
+#define SEV_VALIDATE_FRAME(frame) 0
+#endif
+
+#ifdef __x86_64__
 
 void* memory_frame_pointer(uintptr_t frame) {
     if (g_frame_alias_mapped_size && frame < g_frame_alias_mapped_size)
@@ -106,20 +134,23 @@ static int memory_frame_pool_map_alias(size_t memory_size) {
     if (mapped_size > FRAME_POOL_ALIAS_SIZE)
         return -PAL_ERROR_INVAL;
 
-    uint64_t* pdpt = memory_get_shared_region(PAGE_SIZE);
+    uint64_t* pdpt = KERNEL_META_ALLOC(PAGE_SIZE);
     size_t pd_count = UDIV_ROUND_UP(mapped_size, 1024UL * 1024 * 1024);
-    uint64_t* pd_tables = memory_get_shared_region(pd_count * PAGE_SIZE);
+    uint64_t* pd_tables = KERNEL_META_ALLOC(pd_count * PAGE_SIZE);
     if (!pdpt || !pd_tables)
         return -PAL_ERROR_NOMEM;
 
     for (size_t pdpt_idx = 0; pdpt_idx < pd_count; pdpt_idx++) {
         uint64_t* pd = (uint64_t*)((uintptr_t)pd_tables + pdpt_idx * PAGE_SIZE);
-        pdpt[pdpt_idx] = (uintptr_t)pd | PTE_PRESENT | PTE_WRITE;
+        pdpt[pdpt_idx] = (uintptr_t)pd | PTE_PRESENT | PTE_WRITE | PTE_ENC;
         size_t remaining = (mapped_size - pdpt_idx * 1024UL * 1024 * 1024) / PAGE_2M_SIZE;
         size_t pages_in_pd = MIN(512UL, remaining);
         for (size_t i = 0; i < pages_in_pd; i++) {
             uintptr_t physical = pdpt_idx * 1024UL * 1024 * 1024 + i * PAGE_2M_SIZE;
             pd[i] = physical | PTE_PRESENT | PTE_WRITE | PTE_HUGE | PTE_NX;
+#ifdef PAL_HOST_SEV
+            pd[i] |= sev_c_bit_for_phys(physical); /* the shared heap and MMIO stay shared */
+#endif
         }
     }
 
@@ -127,7 +158,7 @@ static int memory_frame_pool_map_alias(size_t memory_size) {
     uint64_t* pml4 = (uint64_t*)g_pml4_table_base;
     if (pml4[pml4_idx] & PTE_PRESENT)
         return -PAL_ERROR_DENIED;
-    pml4[pml4_idx] = (uintptr_t)pdpt | PTE_PRESENT | PTE_WRITE;
+    pml4[pml4_idx] = (uintptr_t)pdpt | PTE_PRESENT | PTE_WRITE | PTE_ENC;
     g_frame_alias_mapped_size = mapped_size;
     g_frame_pool_bitmap = memory_frame_pointer((uintptr_t)g_frame_pool_bitmap);
     g_frame_owner_next = memory_frame_pointer((uintptr_t)g_frame_owner_next);
@@ -147,7 +178,7 @@ int memory_frame_pool_init(uintptr_t addr, size_t size) {
 
     size_t frame_count = size / PAGE_SIZE;
     size_t bitmap_size = UDIV_ROUND_UP(frame_count, 8);
-    uint8_t* bitmap = memory_get_shared_region(bitmap_size);
+    uint8_t* bitmap = KERNEL_META_ALLOC(bitmap_size);
     if (!bitmap)
         return -PAL_ERROR_NOMEM;
 
@@ -162,10 +193,10 @@ int memory_frame_pool_init(uintptr_t addr, size_t size) {
     g_frame_pool_bitmap = bitmap;
     size_t owner_next_size = frame_count * sizeof(*g_frame_owner_next);
     size_t owner_kind_size = frame_count * sizeof(*g_frame_owner_kind);
-    g_frame_owner_next = memory_get_shared_region(owner_next_size);
-    g_frame_owner_kind = memory_get_shared_region(owner_kind_size);
+    g_frame_owner_next = KERNEL_META_ALLOC(owner_next_size);
+    g_frame_owner_kind = KERNEL_META_ALLOC(owner_kind_size);
     size_t refcount_size = frame_count * sizeof(*g_frame_refcount);
-    g_frame_refcount = memory_get_shared_region(refcount_size);
+    g_frame_refcount = KERNEL_META_ALLOC(refcount_size);
     if (!g_frame_owner_next || !g_frame_owner_kind || !g_frame_refcount)
         return -PAL_ERROR_NOMEM;
     memset(g_frame_owner_next, 0, owner_next_size);
@@ -200,6 +231,11 @@ int memory_frame_alloc(uintptr_t* out_frame) {
 #ifdef ASAN
         asan_unpoison_region(frame, PAGE_SIZE);
 #endif
+        if (SEV_VALIDATE_FRAME(frame) < 0) {
+            g_frame_pool_bitmap[i / 8] &= ~mask;
+            frame_pool_unlock(pool_irq_flags);
+            return -PAL_ERROR_DENIED;
+        }
         _real_memset(memory_frame_pointer(frame), 0, PAGE_SIZE);
         *out_frame = frame;
         frame_pool_unlock(pool_irq_flags);
@@ -311,6 +347,10 @@ int memory_frame_alloc_contiguous(size_t size, void** out_alias) {
             g_frame_owner_next[i] = 0;
             g_frame_owner_kind[i] = 0;
             g_frame_refcount[i] = 1;
+            if (SEV_VALIDATE_FRAME(frame + j * PAGE_SIZE) < 0) {
+                frame_pool_unlock(pool_irq_flags);
+                return -PAL_ERROR_DENIED;
+            }
             _real_memset(memory_frame_pointer(frame + j * PAGE_SIZE), 0, PAGE_SIZE);
         }
         g_frame_pool_next = (start + pages) % frame_count;
@@ -454,7 +494,7 @@ static int address_space_track_frame(struct memory_address_space* space, uintptr
 
 static int address_space_alloc_table_page(struct memory_address_space* space, uint64_t** out_page) {
     if (!g_frame_pool_bitmap) {
-        *out_page = memory_get_shared_region(PAGE_SIZE);
+        *out_page = KERNEL_META_ALLOC(PAGE_SIZE);
         return *out_page ? 0 : -PAL_ERROR_NOMEM;
     }
 
@@ -684,7 +724,8 @@ static int address_space_get_child(uint64_t* entry, uint64_t base_entry,
         if (ret < 0)
             return ret;
         memset(page, 0, PAGE_SIZE);
-        *entry = (memory_frame_from_pointer(page) & addr_mask) | PTE_PRESENT | PTE_WRITE | PTE_USER;
+        *entry = (memory_frame_from_pointer(page) & addr_mask) | PTE_PRESENT | PTE_WRITE | PTE_USER |
+                 PTE_ENC;
         *out_child = page;
         return 0;
     }
@@ -775,7 +816,7 @@ int memory_address_space_map(struct memory_address_space* space, uintptr_t addr,
 
     uint64_t flags = 1UL | (write ? 1UL << 1 : 0) | (usermode ? 1UL << 2 : 0) |
                      (execute ? 0 : 1UL << 63);
-    *pte = frame | flags;
+    *pte = frame | flags | PTE_ENC;
 
     uint64_t current_root;
     __asm__ volatile("mov %%cr3, %0" : "=r"(current_root));
@@ -1407,10 +1448,21 @@ static int pagetables_init(size_t memory_size, uint64_t page_tables_addr, size_t
 
     uint64_t ptr = page_tables_addr;
 
+#ifdef PAL_HOST_SEV
+    /* SEV: memory that the launch did not write reads as garbage, not zero; the partly used table
+     * pages (PDP, PML4) must not keep stale "present" entries */
+    sev_memory_before_page_tables(page_tables_addr, total_tables_cnt * PAGE_SIZE);
+    _real_memset((void*)page_tables_addr, 0, total_tables_cnt * PAGE_SIZE);
+    tree_flags |= g_sev_c_bit_mask;
+#endif
+
     /* page tables with PTE leaf entries */
     uint64_t page_tables_base = ptr;
     for (size_t i = 0; i < pages_4k_cnt; i++) {
         uint64_t entry = ((ptr - page_tables_base) / 8) * PAGE_SIZE + leaf_flags;
+#ifdef PAL_HOST_SEV
+        entry |= sev_c_bit_for_phys(entry & ~(PAGE_SIZE - 1));
+#endif
         _real_memcpy((void*)ptr, &entry, sizeof(entry));
         ptr += sizeof(entry);
     }
@@ -1480,6 +1532,10 @@ int memory_pagetables_init(void* memory_address_end, bool current_page_tables_co
         if (ret < 0)
             return ret;
     }
+#ifdef PAL_HOST_SEV
+    /* SNP: RAM not in the launch image must be validated before use (the final tables below) */
+    sev_memory_after_temp_tables();
+#endif
 
     /* now set up the new page tables hierarchy to cover range [0x0, memory_address_end) (aligned to
      * the next power of 2); we will use these page tables until the end of execution */
@@ -1510,6 +1566,10 @@ int memory_pagetables_init(void* memory_address_end, bool current_page_tables_co
                     total_tables_cnt);
     if (ret < 0)
         return ret;
+#ifdef PAL_HOST_SEV
+    sev_memory_after_final_tables((uint64_t)memory_address_end,
+                                  PAGE_TABLES_ADDR + total_tables_cnt * PAGE_SIZE);
+#endif
 
     g_pml4_table_base = pml4_table_base;
 #ifdef __x86_64__
@@ -1776,6 +1836,22 @@ int memory_alloc(void* addr, size_t size, bool read, bool write, bool execute) {
         return egl_redirect_region;
 
     if (!read && !write && !execute) {
+#ifdef PAL_HOST_SEV
+        /* SEV: memory the guest has not written yet reads as ciphertext, not zero, and a later
+         * protect() makes these pages accessible without zeroing them (glibc maps a thread stack
+         * PROT_NONE and then mprotect()s it), so zero them now (SNP: validate them first) */
+        if (!egl_redirect_region) {
+            /* PVALIDATE needs the pages mapped */
+            int sev_ret = memory_mark_pages_on((uint64_t)addr, size, /*write=*/true,
+                                               /*execute=*/false, /*usermode=*/false);
+            if (sev_ret < 0)
+                return sev_ret;
+            sev_ret = sev_validate_on_demand((uint64_t)addr, size);
+            if (sev_ret < 0)
+                return sev_ret;
+            memset(memory_frame_pointer((uintptr_t)addr), 0, size);
+        }
+#endif
         memory_mark_pages_off((uint64_t)addr, size);
 #ifdef ASAN
         asan_poison_region((uintptr_t)addr, size, ASAN_POISON_USER);
@@ -1790,6 +1866,12 @@ int memory_alloc(void* addr, size_t size, bool read, bool write, bool execute) {
     int ret = memory_mark_pages_on((uint64_t)addr, size, write, execute, /*usermode=*/true);
     if (ret < 0)
         return ret;
+#ifdef PAL_HOST_SEV
+    /* SNP: private RAM is validated when it is first handed out (PVALIDATE needs it mapped) */
+    ret = sev_validate_on_demand((uint64_t)addr, size);
+    if (ret < 0)
+        return ret;
+#endif
 
 #ifdef ASAN
     asan_unpoison_region((uintptr_t)addr, size);
@@ -2033,7 +2115,7 @@ bool memory_address_space_handle_fault(uintptr_t addr, uint64_t error_code) {
             log_error("Out of frames for a copy-on-write page at 0x%lx", addr);
             return false;
         }
-        uint64_t new = copy | PTE_PRESENT | PTE_WRITE | PTE_USER | (old & PTE_NX);
+        uint64_t new = copy | PTE_PRESENT | PTE_WRITE | PTE_USER | (old & PTE_NX) | PTE_ENC;
         if (!__atomic_compare_exchange_n(pte, &old, new, /*weak=*/false, __ATOMIC_ACQ_REL,
                                          __ATOMIC_ACQUIRE)) {
             memory_frame_free(copy); /* lost a race; the winner's mapping (or change) stands */
@@ -2055,7 +2137,7 @@ bool memory_address_space_handle_fault(uintptr_t addr, uint64_t error_code) {
         log_error("Out of frames for a demand-zero page at 0x%lx", addr);
         return false;
     }
-    uint64_t new = frame | PTE_PRESENT | (old & PTE_WRITE) | PTE_USER | (old & PTE_NX);
+    uint64_t new = frame | PTE_PRESENT | (old & PTE_WRITE) | PTE_USER | (old & PTE_NX) | PTE_ENC;
     if (!__atomic_compare_exchange_n(pte, &old, new, /*weak=*/false, __ATOMIC_ACQ_REL,
                                      __ATOMIC_ACQUIRE)) {
         memory_frame_free(frame); /* lost a race; the winner's mapping (or change) stands */
@@ -2209,7 +2291,7 @@ int memory_address_space_protect(struct memory_address_space* space, void* addr,
             /* an unbacked page (never touched, or a PROT_NONE reservation) stays demand-zero */
             ret = address_space_restore_pte(space, va, lazy);
         } else if (!read && !write && !execute) {
-            ret = address_space_restore_pte(space, va, frame | (cow & PTE_COW));
+            ret = address_space_restore_pte(space, va, frame | (cow & PTE_COW) | PTE_ENC);
         } else if (cow && write) {
             /* a copy-on-write page (a frame of a file's cache) becomes writable: copy it now;
              * map_owned drops the leaf's reference to the shared frame */

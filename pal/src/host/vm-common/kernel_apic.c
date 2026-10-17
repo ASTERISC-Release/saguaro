@@ -77,12 +77,33 @@ void lapic_enable(void) {
 
 /* note that LAPIC timer is out of scope of e.g. Intel TDX, as TDX doesn't virtualize timer MSRs; in
  * other words, we must consider timer operations as insecure */
+#ifdef PAL_HOST_SEV
+/* SEV-ES/SNP guests under KVM have no TSC-deadline timer (KVM does not offer it to guests with
+ * protected state): the SEV build falls back to the one-shot mode of the LAPIC timer, whose count
+ * KVM decrements at the APIC bus frequency of 1 GHz (1 ns per count, divide-by-1) */
+#define MSR_INSECURE_IA32_LAPIC_TIMER_ICR 0x838
+#define MSR_INSECURE_IA32_LAPIC_TIMER_DCR 0x83e
+static bool g_lapic_timer_oneshot;
+
+static void lapic_timer_oneshot_arm(uint64_t delay_us) {
+    uint64_t count = delay_us * 1000;
+    vm_shared_wrmsr(MSR_INSECURE_IA32_LAPIC_TIMER_ICR, count ? MIN(count, UINT32_MAX) : 1);
+}
+#endif
+
 int lapic_timer_init(void) {
     assert(g_tsc_mhz);
 
     uint32_t words[CPUID_WORD_NUM];
     cpuid(FEATURE_FLAGS_LEAF, 0, words);
     if (!(words[CPUID_WORD_ECX] & (1 << 24))) {
+#ifdef PAL_HOST_SEV
+        g_lapic_timer_oneshot = true;
+        vm_shared_wrmsr(MSR_INSECURE_IA32_LAPIC_TIMER_DCR, 0xb); /* divide by 1 */
+        vm_shared_wrmsr(MSR_INSECURE_IA32_LAPIC_LVT_TIMER, 32);  /* one-shot, IRQ 32 */
+        lapic_timer_oneshot_arm(LAPIC_TIMER_PERIOD_US);
+        return 0;
+#endif
         /* TSC deadline timer is not available */
         return -PAL_ERROR_DENIED;
     }
@@ -97,6 +118,13 @@ int lapic_timer_init(void) {
 }
 
 void lapic_timer_rearm(void) {
+#ifdef PAL_HOST_SEV
+    if (g_lapic_timer_oneshot) {
+        lapic_timer_oneshot_arm(LAPIC_TIMER_PERIOD_US);
+        lapic_signal_interrupt_complete();
+        return;
+    }
+#endif
     uint64_t future_tsc = get_tsc() + LAPIC_TIMER_PERIOD_US * g_tsc_mhz;
     vm_shared_wrmsr(MSR_INSECURE_IA32_TSC_DEADLINE, future_tsc);
     lapic_signal_interrupt_complete();
@@ -104,6 +132,12 @@ void lapic_timer_rearm(void) {
 
 /* Makes the timer interrupt fire as soon as interrupts are enabled (a deadline in the past). */
 void lapic_timer_fire_now(void) {
+#ifdef PAL_HOST_SEV
+    if (g_lapic_timer_oneshot) {
+        lapic_timer_oneshot_arm(0);
+        return;
+    }
+#endif
     vm_shared_wrmsr(MSR_INSECURE_IA32_TSC_DEADLINE, get_tsc());
 }
 

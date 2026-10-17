@@ -1,0 +1,41 @@
+QEMU 11.1.2: plain SEV (sev-guest, no SEV-ES) with an IGVM file fails with
+"sev_launch_update_data: LAUNCH_UPDATE ret=-5 fw_error=2 'Guest state is invalid'":
+the machine-done notifier takes LAUNCH_MEASURE (state launch-update -> launch-secret)
+before the IGVM file is processed, which happens in the reset phase (backends/igvm-cfg.c,
+igvm_reset_hold). Measured on the AMD EPYC 7443P host with Gramine's IGVM file and with
+buildigvm's OVMF IGVM (Documentation/devel/sev/FINDINGS.md 2026-10-16, phase 1).
+
+Fix: with an IGVM file, do not register the notifier; take the measurement when the VM
+starts running, right before LAUNCH_FINISH (a no-op when it was taken already). The
+measurement is then available through query-sev-launch-measure once the guest runs; a
+guest owner that wants to inject a secret before the first instruction cannot use IGVM
+with plain SEV this way. SEV-SNP is not affected.
+
+--- a/target/i386/sev.c
++++ b/target/i386/sev.c
+@@ -1663,6 +1663,14 @@
+ 
+     if (running) {
+         if (!sev_check_state(sev_common, SEV_STATE_RUNNING)) {
++            /*
++             * An IGVM file is loaded in the reset phase, after the machine-done
++             * notifier that measures the other SEV guests: measure here, after
++             * its LAUNCH_UPDATE_DATA calls (no-op if already measured).
++             */
++            if (!sev_snp_enabled()) {
++                sev_launch_get_measure(NULL, NULL);
++            }
+             klass->launch_finish(sev_common);
+ 
+             /* add migration blocker */
+@@ -1973,7 +1981,9 @@
+          * be collected without any reliance on the VMM. So skip registering
+          * the notifier for SNP in favor of using guest attestation instead.
+          */
+-        qemu_add_machine_init_done_notifier(&sev_machine_done_notify);
++        if (!X86_MACHINE(qdev_get_machine())->igvm) {
++            qemu_add_machine_init_done_notifier(&sev_machine_done_notify);
++        }
+     }
+     return 0;
+ }

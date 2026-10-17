@@ -22,7 +22,8 @@
 # (default 2), WORK (scratch dir, default <repo>/.mp-probes), LOGDIR (default $WORK/logs),
 # TIMEOUT_SCALE (multiplies every timeout, default 1), RERUN (default 1: rerun a failed check once),
 # MP (default 1; MP=0 renders the probe manifests without the key, as a negative check),
-# REDIS_HOST_PORT (default 16379).
+# REDIS_HOST_PORT (default 16379), GRAMINE_VM_LAUNCHER (default gramine-vm; gramine-sev for AMD SEV,
+# applies to the checks that run through vm()).
 set -u
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 REPO=$(cd "$HERE/../.." && pwd)
@@ -47,6 +48,8 @@ FAILED=()
 vm() {
     local log=$1 t=$(( $2 * SCALE )) mon="$LOGDIR/qemu-monitor.sock" raw="$LOGDIR/vm-output.raw" pid rc i
     shift 2
+    # GRAMINE_VM_LAUNCHER=gramine-sev runs the checks under AMD SEV (Documentation/devel/sev/)
+    [ "$1" = gramine-vm ] && [ -n "${GRAMINE_VM_LAUNCHER:-}" ] && set -- "$GRAMINE_VM_LAUNCHER" "${@:2}"
     echo "+ $* (timeout ${t}s, $GRAMINE_CPU_NUM vCPUs)" >> "$log"
     rm -f "$mon"
     GRAMINE_VM_MONITOR=$mon setsid "$@" > "$raw" 2>&1 < /dev/null &

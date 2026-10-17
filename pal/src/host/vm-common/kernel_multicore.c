@@ -25,6 +25,9 @@
 #include "kernel_time.h"
 #include "kernel_xsave.h"
 #include "vm_callbacks.h"
+#ifdef PAL_HOST_SEV
+#include "sev.h"
+#endif
 
 uint32_t g_num_cpus = 0;
 struct per_cpu_data* g_per_cpu_data = NULL;
@@ -199,6 +202,23 @@ static int init_multicore_init_sipi_sipi(uint32_t num_cpus) {
     return 0;
 }
 
+#ifdef PAL_HOST_SEV
+/* SEV-SNP: the VMSA of an AP enters here in 64-bit mode on its own stack (sev_snp_start_ap()),
+ * where INIT-SIPI would have entered kernel_multicore.S */
+__attribute_no_stack_protector
+noreturn static void sev_snp_ap_entry(uint32_t cpu_idx) {
+    sev_ap_early(cpu_idx);
+    __atomic_add_fetch(&g_started_cpus, 1, __ATOMIC_SEQ_CST);
+    uint32_t unlocked = 0;
+    while (!__atomic_compare_exchange_n(&g_lock_single_ap_cpu, &unlocked, 1, /*weak=*/false,
+                                        __ATOMIC_ACQUIRE, __ATOMIC_RELAXED)) {
+        unlocked = 0;
+        CPU_RELAX();
+    }
+    pal_start_ap_c(cpu_idx);
+}
+#endif
+
 int init_multicore(uint32_t num_cpus, void* hob_list_addr) {
     int ret;
 
@@ -234,6 +254,15 @@ int init_multicore(uint32_t num_cpus, void* hob_list_addr) {
     uint32_t* g_started_cpus_addr = &g_started_cpus;
     memcpy((uint32_t**)AP_STARTUP_PAGE_COUNTER, &g_started_cpus_addr, sizeof(uint32_t*));
 
+#ifdef PAL_HOST_SEV
+    /* SEV: the APs' static page tables (kernel_multicore.S: 2 PT pages, a PD, a PDPT, then the
+     * PML4) map the PAL as private memory only with the C-bit set, like vm_bootloader.S's */
+    extern uint64_t g_sev_c_bit_mask;
+    uint64_t* ap_tables = (uint64_t*)((uintptr_t)&initial_ap_pml4_table_base - 4 * PAGE_SIZE);
+    for (size_t i = 0; i < 4 * PAGE_SIZE / sizeof(uint64_t) + 1; i++)
+        if (ap_tables[i])
+            ap_tables[i] |= g_sev_c_bit_mask;
+#endif
     uint64_t* initial_ap_pml4_table_base_addr = &initial_ap_pml4_table_base;
     memcpy((uint64_t**)AP_STARTUP_PAGE_PML4, &initial_ap_pml4_table_base_addr, sizeof(uint64_t*));
 
@@ -245,6 +274,13 @@ int init_multicore(uint32_t num_cpus, void* hob_list_addr) {
     if (strcmp(XSTRINGIFY(HOST_TYPE), "TDX") == 0) {
         /* in TDX environments, need to use MP Wakeup mailbox */
         ret = init_multicore_mp_wakeup_mailbox(num_cpus, hob_list_addr);
+#ifdef PAL_HOST_SEV
+    } else if (sev_snp_active()) {
+        /* SEV-SNP: no INIT-SIPI; each AP gets a VMSA through the GHCB AP-creation call */
+        ret = 0;
+        for (uint32_t i = 1; i < num_cpus && ret == 0; i++)
+            ret = sev_snp_start_ap(i, sev_snp_ap_entry);
+#endif
     } else {
         /* in non-TDX environments, use classic INIT-SIPI-SIPI AP bootstrap sequence */
         ret = init_multicore_init_sipi_sipi(num_cpus);

@@ -138,7 +138,7 @@ Protected Computing
      - ➖
    * - ``sev`` (AMD SEV)
      - ➖
-     - 🛫
+     - ⚠️
      - ➖
      - ➖
    * - ``vbs`` (Windows VBS enclaves)
@@ -149,6 +149,9 @@ Protected Computing
 
 ``sgx`` and ``tdx`` are inherited from Gramine and gramine-tdx: they are built (``tdx`` in CI), but this
 tree has not run them on hardware, so they are marked experimental.
+``sev`` (``gramine-sev``, the vm PAL as an AMD SEV-SNP or plain SEV guest) runs the LibOS regression
+suite and attestation on an EPYC (Milan) host; it is experimental: no CI runner has SEV, and the
+host-supplied files are not yet checked (Documentation/devel/sev/).
 
 Please refer to per-cell details, build options and verification status: `Documentation/devel/multiarch.md <Documentation/devel/multiarch.md>`__.
 
@@ -166,7 +169,8 @@ on a machine of that platform:
   <Documentation/quickstart/vbs-windows.rst>`__
 - **Intel TDX and SGX** (``tdx``, ``sgx``): `Documentation/quickstart/tdx-sgx.rst
   <Documentation/quickstart/tdx-sgx.rst>`__
-- **AMD SEV**: Planned
+- **AMD SEV-SNP** (``sev``): `Documentation/quickstart/sev.rst
+  <Documentation/quickstart/sev.rst>`__
 
 Guides for graphics and for the RISC-V cross-build are listed in the `quickstart index
 <Documentation/quickstart/README.rst>`__. 

@@ -184,6 +184,7 @@ manifests = [
 
 manifests = [
   "asm/x86_64/iret_emulation",
+  "attestation_sev_snp",
   "avx",
   "cpuid",
   "debug_regs_x86_64",

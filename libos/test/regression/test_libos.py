@@ -20,6 +20,7 @@ from graminelibos.regression import (
     ON_X86,
     USE_GRAMINE_VM,
     USES_MUSL,
+    VM_LAUNCHER,
     RegressionTestCase,
 )
 
@@ -678,6 +679,16 @@ class TC_04_Attestation(RegressionTestCase):
         self.assertIn("Test resource leaks in attestation filesystem... SUCCESS", stdout)
         self.assertIn("Test local attestation... SUCCESS", stdout)
         self.assertIn("Test quote interface... SUCCESS", stdout)
+
+@unittest.skipUnless(USE_GRAMINE_VM and VM_LAUNCHER == 'gramine-sev'
+                     and os.environ.get('GRAMINE_SEV_MODE') == 'snp',
+    'SEV-SNP attestation: only under gramine-sev with GRAMINE_SEV_MODE=snp')
+class TC_04_AttestationSevSnp(RegressionTestCase):
+    def test_000_attestation_sev_snp(self):
+        stdout, _ = self.run_binary(['attestation_sev_snp'], timeout=120)
+        self.assertIn('attestation_type: sev-snp', stdout)
+        self.assertIn('Test resource leaks in attestation filesystem... SUCCESS', stdout)
+        self.assertIn('Test SEV-SNP report interface... SUCCESS', stdout)
 
 class TC_30_Syscall(RegressionTestCase):
     def test_000_getcwd(self):
