@@ -677,3 +677,18 @@ int sched_thread_share_runtime_stacks(struct memory_address_space* target) {
     }
     return 0;
 }
+
+uint64_t g_streams_wake_gen;
+
+void sched_streams_wake(void) {
+    __atomic_fetch_add(&g_streams_wake_gen, 1, __ATOMIC_RELEASE);
+    sched_thread_wakeup(&g_streams_waiting_events_futex);
+}
+
+/* the compare precedes the sleep (not under the thread-list lock, as on x86_64) */
+int sched_thread_wait_interruptible_gen(int* futex_word, spinlock_t* lock, uint64_t* gen,
+                                        uint64_t expected) {
+    if (gen && __atomic_load_n(gen, __ATOMIC_ACQUIRE) != expected)
+        return 1;
+    return sched_thread_wait_interruptible(futex_word, lock);
+}

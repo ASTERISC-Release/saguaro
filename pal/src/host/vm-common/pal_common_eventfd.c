@@ -78,7 +78,7 @@ int64_t pal_common_eventfd_read(struct pal_handle* handle, uint64_t offset, uint
     }
 
     if (handle->eventfd.poll_waiting)
-        sched_thread_wakeup(&g_streams_waiting_events_futex);
+        sched_streams_wake();
     sched_thread_wakeup(&handle->eventfd.writer_futex);
     spinlock_unlock(&handle->eventfd.lock);
     return 8;
@@ -120,7 +120,7 @@ int64_t pal_common_eventfd_write(struct pal_handle* handle, uint64_t offset, uin
     handle->eventfd.val = val;
 
     if (handle->eventfd.poll_waiting)
-        sched_thread_wakeup(&g_streams_waiting_events_futex);
+        sched_streams_wake();
     sched_thread_wakeup(&handle->eventfd.reader_futex);
     spinlock_unlock(&handle->eventfd.lock);
     return 8;
