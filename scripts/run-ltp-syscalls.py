@@ -34,7 +34,7 @@ def ltp_test_command(command):
 
 def build_argv(command, loader, binary):
     """Build an argv for a test, including the occasional LTP shell pipeline."""
-    loader_program = {"direct": "gramine-direct", "vm": "gramine-vm"}.get(loader)
+    loader_program = {"direct": "gramine-direct", "vm": os.environ.get("GRAMINE_VM_LAUNCHER", "gramine-vm")}.get(loader)
     if "|" not in command:
         if loader == "native":
             return [str(binary), *command[1:]]
