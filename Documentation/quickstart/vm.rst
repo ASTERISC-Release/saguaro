@@ -92,24 +92,18 @@ lists the other suites.
 ====================
 
 - Guest CPUs and size can be set using:   
+  
   - ``GRAMINE_CPU_NUM``: vCPUs, default 1.
   - ``GRAMINE_RAM_SIZE``: guest memory. x86_64: default ``8G``, at least ``4G``
+    
     - Note that memory is allocated on-demand, so this is the maximum.
 
-- By default the guest runs one process: ``fork`` fails with ``Function not implemented``. The
-experimental key ``sys.experimental__multiprocess = true`` enables ``fork``, ``vfork``,
-``execve``, pipes, signals and shared memory between processes. 
+- By default the guest runs one process: ``fork`` fails with ``Function not implemented``. The experimental key ``sys.experimental__multiprocess = true`` enables ``fork``, ``vfork``, ``execve``, pipes, signals and shared memory between processes. 
 
-- The guest has no TCP/IP stack of its own: TCP and UDP sockets are carried over vsock to a relay
-that the launcher starts per VM (``vm-relay: cid=... listening ...``) and that opens the real
-sockets on the host side. Outbound connections work by default; a server in the guest is reached
-through an ``inbound`` forward in the manifest's ``[vm.net]`` table or ``GRAMINE_VM_INBOUND``.
+- The guest has no TCP/IP stack of its own: TCP and UDP sockets are carried over vsock to a relay that the launcher starts per VM (``vm-relay: cid=... listening ...``) and that opens the real sockets on the host side. Outbound connections work by default; a server in the guest is reached through an ``inbound`` forward in the manifest's ``[vm.net]`` table or ``GRAMINE_VM_INBOUND``.
 
 5. Troubleshooting
 ==================
 
-- ``vhost-vsock: failed to open vhost device: Permission denied`` (AArch64), or socket calls fail
-  with ``Address family not supported``: give your user access to ``/dev/vhost-vsock`` (as for
-  ``/dev/kvm``) and load ``vhost_vsock``.
-- AArch64 ``Mounting "file:<app>" ... failed: ENOENT``: the binary is missing or not a PIE; rebuild
-  it with ``-fPIE -static-pie``.
+- ``vhost-vsock: failed to open vhost device: Permission denied`` (AArch64), or socket calls fail with ``Address family not supported``: give your user access to ``/dev/vhost-vsock`` (as for ``/dev/kvm``) and load ``vhost_vsock``.
+- AArch64 ``Mounting "file:<app>" ... failed: ENOENT``: the binary is missing or not a PIE; rebuild it with ``-fPIE -static-pie``.
