@@ -23,6 +23,8 @@
 #                          --build-only; done automatically if build tools are missing)
 #   --add-to-profile       also source <prefix>/env.sh from ~/.bashrc, so new shells have Gramine
 #                          on PATH (idempotent)
+#   --vbs                  the Windows VBS enclave tooling, inside WSL on the Windows machine
+#                          (user-level, no sudo; nothing else is built; scripts/vbs/install-vbs.sh)
 #   --sgx | --vm | --tdx   enable extra PAL backends (off by default; "direct" is always built)
 #   --sev                  --vm plus the AMD SEV build of the vm PAL and gramine-sev (x86_64;
 #                          Documentation/devel/sev/)
@@ -104,6 +106,7 @@ while [ $# -gt 0 ]; do
         --deps)           DO_DEPS=1; shift ;;
         --add-to-profile) ADD_TO_PROFILE=1; shift ;;
         --run-tests)      RUN_TESTS=1; shift ;;
+        --vbs)            exec "$script_dir/vbs/install-vbs.sh" ;;
         --sgx)            SGX=enabled; shift ;;
         --vm)             VM=enabled; shift ;;
         --tdx)            TDX=enabled; shift ;;
