@@ -20,7 +20,8 @@ Commands:
   gramine-vbs run    <program|dir> [--threads N] [--root DIR] [-v] [-- args]   the same, explicit
   gramine-vbs check                         check the Windows side (changes nothing there)
   gramine-vbs stop   <program|dir>          stop the running hosts of a package on Windows
-  gramine-vbs verify <program|dir> <report on Windows> [verifier options]
+  gramine-vbs verify <program|dir> <report> [verifier options]   (report: a Windows path, or
+                                            relative to the host root, e.g. data/out/report.bin)
   gramine-vbs manifest [-Dk=v ...] <template> [out]   render a manifest template (Jinja, as
                                             gramine-manifest, with the vbs.* globals)
   gramine-vbs runtime                       build the vbs glibc and the vbs PAL and LibOS when
@@ -864,9 +865,12 @@ def cmd_verify(args):
     host = setting(args, 'windows', 'GRAMINE_VBS_WINDOWS', st.get('windows'))
     windir = setting(args, 'windows_dir', 'GRAMINE_VBS_WINDOWS_DIR', st.get('windows_dir'))
     extra = ' '.join(psq(x) for x in args.checks)
+    report = args.report
+    if ':' not in report and not report.startswith('\\\\'):    # relative: below the host root
+        report = windir + '\\root\\' + report.replace('/', '\\')
     rc, _ = ps(host, f'''
 Set-Location {psq(windir)}
-& .\\pal_vbs_host.exe {psq(b.name + '.dll')} 1 verify {psq(args.report)} {extra} 2>&1 |
+& .\\pal_vbs_host.exe {psq(b.name + '.dll')} 1 verify {psq(report)} {extra} 2>&1 |
     Where-Object {{ $_ -notmatch '^\\[host\\]' }} | ForEach-Object {{ "$_" }}
 exit $LASTEXITCODE
 ''', check=False)

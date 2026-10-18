@@ -39,7 +39,7 @@ sides.)
     gramine-vbs helloworld
 
 `make VBS=1` builds the program for the enclave and packs it, then links and signs the enclave image
-(`helloworld.vbs/helloworld.dll`, next to `helloworld.manifest.vbs`). `gramine-vbs helloworld` runs it,
+(the signed `helloworld.dll` in `helloworld.vbs/`, next to `helloworld.manifest.vbs`). `gramine-vbs helloworld` runs it,
 like `gramine-direct helloworld`; if the package is missing or older than its manifest, it says to run
 `make VBS=1` (it never builds):
 
@@ -68,7 +68,7 @@ data, and `gramine-vbs verify` checks one on the same machine:
     cd CI-Examples/vbs/attestation
     make VBS=1
     gramine-vbs attest <64 hex digits>
-    gramine-vbs verify attest.vbs <report on Windows> --user-data <64 hex digits> --same-image --min-svn 1
+    gramine-vbs verify attest data/out/report.bin --user-data <64 hex digits> --same-image --min-svn 1
 
 The check is local to this machine; what it establishes and what it does not is in
 [vbs.md](../vbs.md), Attestation.

@@ -35,7 +35,7 @@ manifest.
 - **The Linux side** of a build packs the objects and compiles the Windows
   enclave runtime and host with clang; **the Windows side** links, signs and
   runs. There are two ways to drive them: on **one Windows machine**, where
-  the Linux side runs in WSL2 (`gramine-vbs.cmd`, see [Windows only (WSL)](#windows-only-wsl)),
+  the Linux side runs in WSL2 (`make VBS=1` and `gramine-vbs`, see [Windows only (WSL)](#windows-only-wsl)),
   or from a **Linux machine** that reaches the Windows machine over ssh
   (`scripts/vbs/gramine-vbs`).
 
@@ -136,34 +136,32 @@ The design notes are in `Documentation/devel/vbs-enclave/PLAN-x64.md`.
 
 The whole build can run on the Windows machine: its Linux half runs in a
 **WSL2** distribution of the same machine (WSL uses the hypervisor that VBS
-needs anyway). In addition to the Windows steps above (the ssh server is not
-needed):
+needs anyway). The Windows steps above and the WSL distribution are the only
+steps that change Windows, and they are done once (the ssh server is not
+needed). Everything after them runs inside WSL, without sudo:
 
 1.  **WSL2 with an Ubuntu** distribution of the machine's architecture (as
     administrator: `wsl --install -d Ubuntu-24.04`, then a restart; Windows
     installs one of its own architecture: aarch64 on ARM64, x86_64 on x64; tested:
     Ubuntu 24.04 aarch64 and Ubuntu 26.04 x86_64). Another name is given with
-    `-Distro` or `GRAMINE_VBS_DISTRO`.
+    `GRAMINE_VBS_DISTRO` (for `gramine-vbs.cmd`).
 
-2.  **A checkout of the repository on Windows** (any folder; a checkout with
-    Windows line ends, Git's `core.autocrlf=true`, works).
+2.  **A checkout of the repository inside the distribution** (its home, not
+    `/mnt/c`), and in it:
 
-3.  **The build tools inside the distribution**. `gramine-vbs setup` checks
-    the Windows side and the distribution and prints what is missing; then
-    either:
+        scripts/install.sh --vbs
 
-        scripts\vbs\gramine-vbs.cmd setup            # check and install missing packages user-level
-        scripts\vbs\gramine-vbs.cmd setup-system     # install missing packages systemwide (sudo)
+    It installs the missing build packages user-level (`apt-get download`
+    unpacked into `~/.local/share/gramine-vbs/tools`: bison, m4, pkgconf, meson,
+    ninja, clang 18 and four Python modules, about 290 MB, 7 s), links
+    `gramine-vbs` into `~/.local/bin`, builds the vbs glibc (about 2 minutes) and
+    the vbs PAL and LibOS (1 minute), and runs `gramine-vbs check`, which lists
+    what is missing on the Windows side (VBS, Visual Studio, SDK, certificate).
+    It changes nothing on Windows, needs no sudo, and a second run finds
+    everything in place. Nothing else is ever installed or changed by the tools.
 
-    `setup` downloads missing Ubuntu packages with `apt-get download`
-    and unpacks them into a folder of your home (about 290 MB, 7 s): bison, m4,
-    pkgconf, meson, ninja, clang 18 and four Python modules. `setup-system`
-    installs missing packages systemwide with `apt-get`. Nothing else
-    is ever installed or changed by the tools.
-
-The first build copies the SDK and MSVC headers into the distribution (once
-per version, 156 MB), builds the vbs glibc (about 2 minutes) and the vbs PAL
-and LibOS (1 minute); see [Quick start on Windows](#quick-start-on-windows).
+The SDK and MSVC headers are copied into the distribution at the first
+`make VBS=1` (once per version, 156 MB); see [Quick start on Windows](#quick-start-on-windows).
 
 ### Linux side
 
@@ -193,53 +191,46 @@ and LibOS (1 minute); see [Quick start on Windows](#quick-start-on-windows).
 
 ## Quick start on Windows
 
-In PowerShell or `cmd`, in the checkout:
+In WSL, in the checkout, after `scripts/install.sh --vbs` (see above):
 
-    scripts\vbs\gramine-vbs.cmd setup
-    scripts\vbs\gramine-vbs.cmd build
-    scripts\vbs\gramine-vbs.cmd package CI-Examples\vbs\helloworld\helloworld.manifest
-    scripts\vbs\gramine-vbs.cmd run CI-Examples\vbs\helloworld\helloworld.manifest
+    cd CI-Examples/helloworld
+    make VBS=1
+    gramine-vbs helloworld
 
-`setup` installs missing build packages in the WSL user's home. `build` copies the checkout into the
-distribution (`~/.cache/gramine-vbs/checkouts/<name>-<hash>`), then builds the vbs glibc, PAL and
-LibOS. `package` compiles the program (the manifest's `vbs.build`), packs, compiles the Windows
-objects with clang in WSL, then links and signs it. `run` only launches an existing package; it fails
-if the package is missing or stale. The first complete build and package took 3.5 minutes; a later
-package took 11 s, and a plain `run` of the signed image took 0.4 s. The output:
+`make VBS=1` builds the program for the enclave, packs it, compiles the Windows objects with clang,
+and links and signs the image on the Windows side (`helloworld.vbs/helloworld.dll` next to
+`helloworld.manifest.vbs`); `gramine-vbs helloworld` runs it. The first `make VBS=1` of a
+checkout also copies the headers and builds the runtime when `install.sh --vbs` did not. Measured on
+the ARM64 machine: `make VBS=1` of the hello world 9.7 s, `gramine-vbs helloworld` 0.7 s. The output:
 
-    Hello, world from a VBS enclave (pid 1, 0 arguments)
+    Hello, world
 
-The dynamically linked example (`CI-Examples\vbs\dynhello`) packs the
-program with the dynamic loader, `libc.so.6` and `libm.so.6`:
+Python (`CI-Examples/python`): `make VBS=1` builds CPython 3.12.7 for the enclave in the
+distribution the first time (`scripts/vbs/build-python.sh --if-needed`: downloaded from python.org
+and checked against its SHA-256, built against the vbs glibc in 78 s, kept in `build-vbs-python` and
+reused afterwards):
 
-    scripts\vbs\gramine-vbs.cmd run CI-Examples\vbs\dynhello\dynhello.manifest
+    cd CI-Examples/python
+    make VBS=1
+    gramine-vbs python scripts/helloworld.py
 
-Python (`CI-Examples\vbs\python`): the manifest's `vbs.build` builds
-CPython 3.12.7 for the enclave in the distribution the first time
-(`scripts/vbs/build-python.sh --if-needed`: downloaded from python.org and
-checked against its SHA-256, built against the vbs glibc in 78 s, kept in
-`build-vbs-python` of the WSL copy and reused afterwards):
+`gramine-vbs <program> [args]` returns the program's exit code and passes arguments as given (spaces
+and quotes included). It never builds: if the package is missing or older than its manifest it says
+to run `make VBS=1`.
 
-    scripts\vbs\gramine-vbs.cmd run CI-Examples\vbs\python\python.manifest
+The manifest-only examples under `CI-Examples/vbs` (`dynhello`, `tcpserver`, `python`, `helloworld`)
+are built by the same tooling from their manifests (`gramine-vbs build` is the step `make VBS=1`
+calls; `attestation` has a `Makefile`). A TCP server (`CI-Examples/vbs/tcpserver`) listens on 127.0.0.1:18080
+through the host's Winsock sockets and answers three clients (`CI-Examples\vbs\tcpserver\client.ps1 -Count 3`
+in a second window).
 
-The first run took 100 s, a rebuild with the cached CPython 21 s, a run of the
-signed image 1.9 s.
+**Adding an application**: see "Writing the VBS part of an example" in the Makefile flow below.
 
-A TCP server (`CI-Examples\vbs\tcpserver`) listens on 127.0.0.1:18080
-through the host's Winsock sockets and answers three clients:
-
-    scripts\vbs\gramine-vbs.cmd run CI-Examples\vbs\tcpserver\tcpserver.manifest
-    # in a second window:
-    CI-Examples\vbs\tcpserver\client.ps1 -Count 3
-
-**Adding an application** takes a manifest with `vbs.packed_files` (what goes
-into the image) and `vbs.build` (how its files are built in the
-distribution, with the enclave compilers `$VBS_CC_STATIC`,
-`$VBS_CC_DYNAMIC` and `$VBS_GCC` against the vbs glibc), as in the
-examples; see `vbs-syntax`. A manifest outside the checkout works too;
-its folder is copied into the distribution (`~/.cache/gramine-vbs/apps`), so
-its `vbs.packed_files` must stay inside that folder or point into the
-checkout's build folders through `vbs.build`.
+**The Windows runner.** `gramine-vbs` in WSL starts the signed image through
+`powershell.exe -File gramine-vbs.ps1 run` (`scripts/vbs/gramine-vbs.ps1`, copied into the Windows
+package folder by `make VBS=1` and refreshed at each run). The same script has `check` (the Windows
+side), `setup` (Windows and WSL; user-level WSL packages), `sign` and `verify`; `gramine-vbs.cmd` runs
+it from `cmd` or PowerShell. It does not build.
 
 ## Quick start on Linux
 
@@ -255,10 +246,12 @@ program against `build-vbs-glibc`, so run this on the Linux machine of the build
 build the program there first):
 
     cd CI-Examples/vbs/helloworld
-    ../../../scripts/vbs/gramine-vbs run helloworld.manifest
+    ../../../scripts/vbs/gramine-vbs build helloworld.manifest
+    ../../../scripts/vbs/gramine-vbs run helloworld.vbs
 
-The first `run` builds the image (pack, compile, upload, link, sign: 17 s
-measured), later runs start the signed image (0.9 s). The output:
+`build` (the step `make VBS=1` calls; the examples with a Makefile use `make VBS=1`) packs, compiles,
+uploads, links and signs the image (17 s measured); `run` only starts the signed image (0.9 s) and
+never builds. The output:
 
     Hello, world from a VBS enclave (pid 1, 0 arguments)
 
@@ -267,11 +260,12 @@ once with `scripts/vbs/build-python.sh --if-needed` into
 `build-vbs-python`, which needs the Linux machine of the build):
 
     cd CI-Examples/vbs/python
-    ../../../scripts/vbs/gramine-vbs run python.manifest
+    ../../../scripts/vbs/gramine-vbs build python.manifest
+    ../../../scripts/vbs/gramine-vbs run python.vbs
 
 The manifest packs the interpreter, the standard library (58 extension modules
-and 523 other files without tests and Tk) and the vbs glibc; the first run took
-24.6 s including the build, a later one 1.9 s.
+and 523 other files without tests and Tk) and the vbs glibc; the first build took
+24.6 s including the build, a run 1.9 s.
 
 ## Makefile flow: `make VBS=1`
 
@@ -291,7 +285,7 @@ Linux shell):
 1.  **The runtime**, once per checkout: the vbs glibc (`build-vbs-glibc`, about 2 minutes) and
     the vbs PAL and LibOS (`build-vbs`, meson and ninja), then a `ninja` on every `make`
     (`gramine-vbs runtime`). The build tools are those of [Windows only (WSL)](#windows-only-wsl) (`gramine-vbs`
-    uses the user-level ones of `setup -Install` by itself).
+    uses the user-level ones of `scripts/install.sh --vbs` by itself).
 2.  **The application for the enclave**, by the example's own rules, with `$(VBS_GCC)`
     (`scripts/vbs/vbs-gcc`: a dynamic PIE against the vbs glibc, `-ffixed-x18`) or
     `$(VBS_CC_STATIC)`, into a folder of its own (`vbs-build/`), so that the direct build is
@@ -304,21 +298,29 @@ Linux shell):
     image and measured.
 4.  **The image**: `gramine-vbs build` packs and compiles the Windows objects into
     `<app>.vbs/`; then, on the Windows side, `link-sign.cmd` links, `veiid`-processes and
-    signs `<app>.dll` (the counterpart of `<app>.manifest.sgx` and `<app>.sig`).
+    signs `<app>.dll` (the counterpart of `<app>.manifest.sgx` and `<app>.sig`). The signed
+    `<app>.dll` is copied back to `<app>.vbs/`; `make VBS=1` has produced the package:
+    `<app>.manifest.vbs` and `<app>.vbs/<app>.dll`.
 
 **The hand-off to Windows from WSL.** A checkout in the distribution's home is not visible to the
 Windows tools, so `gramine-vbs` works the other way round from `gramine-vbs.cmd`: in WSL with
 interop (and `GRAMINE_VBS_WINDOWS` unset or `local`) it reaches the Windows of the same machine
 through `powershell.exe` and `/mnt/<drive>` paths, copies the objects into a Windows folder
 `%USERPROFILE%\gramine-vbs\wsl\<app>-<hash>` (one per build folder; the base is
-`GRAMINE_VBS_WINDOWS_BASE`), and links, signs and runs there. The Windows SDK headers come from
+`GRAMINE_VBS_WINDOWS_BASE`), and links, signs and runs there. The package is run from that local
+folder, not from the WSL filesystem (`\\wsl.localhost\...`): measured on the ARM64 machine, the
+same program starts 216 ms (hello world) and 800 ms (Python) slower from there
+(`Documentation/devel/vbs-enclave/TESTING.md`), so there is no copy step at run time. The Windows SDK headers come from
 the copy `gramine-vbs.cmd` already left in the distribution, or are fetched once. From another
 Linux machine of the same architecture, `GRAMINE_VBS_WINDOWS=user@host` does the same over ssh;
 `GRAMINE_VBS_WINDOWS=none` builds only the Linux half (`make VBS=1 vbs-sign` later).
 
-**Running.** `gramine-vbs <app> [args]` runs `<app>.manifest.vbs` of the current folder, like
-`gramine-direct <app>`; in the Makefiles `$(GRAMINE)` is `gramine-vbs` when `VBS=1`.
-Arguments reach the application with `loader.insecure__use_cmdline_argv = true`. `SIGTERM` or
+**Running.** `gramine-vbs <program> [args]` runs the package of `<program>` (`<program>.manifest.vbs`
+and `<program>.vbs/` of the current folder, or `<program>.vbs` itself) like `gramine-vm <program>`
+and `gramine-direct <program>`; in the Makefiles `$(GRAMINE)` is `gramine-vbs` when `VBS=1`. It
+returns the program's exit code, never builds, and says to run `make VBS=1` when the package is
+missing or older than its manifest. Arguments reach the application with
+`loader.insecure__use_cmdline_argv = true`. `SIGTERM` or
 `SIGINT` stop the enclave's host process on Windows, so a script stops a server with `kill`;
 `make VBS=1 vbs-stop` stops every host of the image.
 
@@ -354,7 +356,7 @@ These examples have a `vbs.manifest.template` and run with `make VBS=1` and `mak
 | `CI-Examples/helloworld` | a static PIE |
 | `CI-Examples/python` | CPython 3.12.7 (built once), `scripts/` packed as `/app/scripts`;
 the check runs the hello world and an HTTP server and client in two
-enclaves (NumPy and SciPy are not available) |
+enclaves (NumPy and SciPy are not available on ARM64) |
 | `CI-Examples/redis` | Redis 6.0.5: `--save ""`, `--appendonly no` (no fork: no BGSAVE,
 no AOF; data lives as long as the enclave), 127.0.0.1:6379 |
 | `CI-Examples/nginx` | NGINX 1.22.0: `master_process off`, one worker, HTTP only (no
@@ -449,21 +451,29 @@ helper's step (or an equivalent) in addition.
 
 ## `gramine-vbs`
 
-    gramine-vbs build  <manifest> [-o DIR] [--no-sign]
-    gramine-vbs sign   <manifest|DIR>
-    gramine-vbs run    <manifest|DIR> [--threads N] [--root WINDIR] [--rebuild] [-v] [-- ARGS]
-    gramine-vbs verify <manifest|DIR> <report on Windows> [verifier options]
+    gramine-vbs <program> [args]
+    gramine-vbs run    <program|DIR> [--threads N] [--root WINDIR] [-v] [-- ARGS]
+    gramine-vbs verify <program|DIR> <report> [verifier options]
+    gramine-vbs check
+    gramine-vbs stop   <program|DIR>
+    gramine-vbs runtime
     gramine-vbs net    wait|req|redis|bench|serve ...
     gramine-vbs tls-client PORT --verifier DIR [checks] [--message T | --bench N SIZE]
     gramine-vbs setup-headers
 
-- `build` packs the runtime, the manifest and `vbs.packed_files` and
+`make VBS=1` calls the internal steps `build` and `sign`:
+
+- `build <manifest> [-o DIR] [--no-sign]` packs the runtime, the manifest and `vbs.packed_files` and
   compiles the Windows objects into `<name>.vbs/` next to the manifest; with
   a Windows machine configured it also signs.
 - `sign` uploads the objects to the Windows folder and runs
   `link-sign.cmd` there: `<name>.dll` (signed) and `pal_vbs_host.exe`.
-- `run` builds first when the image is missing or the manifest changed, then
-  runs `pal_vbs_host.exe <name>.dll <threads> boot <root> ARGS`; the host root
+
+The commands to use:
+
+- `run` (and `gramine-vbs <program>`) runs a package made by `make VBS=1`, never builds, and says
+  to run `make VBS=1` when it is missing or older than its manifest; it starts, through the
+  Windows runner, `pal_vbs_host.exe <name>.dll <threads> boot <root> ARGS`; the host root
   defaults to `root` in the Windows folder, and the directories of
   `vbs.allowed_files` are created below it. The exit code is the
   application's. Arguments reach the application only with
@@ -474,26 +484,20 @@ Options: `--runtime`, `--headers`, `--windows`, `--windows-dir`,
 `--cert-name` (and the environment variables of the same names, see
 `gramine-vbs --help`).
 
-On Windows, `scripts\vbs\gramine-vbs.cmd` (which runs `gramine-vbs.ps1`
-with Windows PowerShell) has the same commands, with the Linux side in WSL:
+On Windows, `scripts\vbs\gramine-vbs.cmd` (which runs `gramine-vbs.ps1` with Windows PowerShell)
+is the Windows-side runner that `gramine-vbs` in WSL calls; it does not build:
 
+    gramine-vbs.cmd check
     gramine-vbs.cmd setup
-    gramine-vbs.cmd setup-system
-    gramine-vbs.cmd build
-    gramine-vbs.cmd package <manifest> [-Out DIR] [-NoSign]
-    gramine-vbs.cmd sign   <manifest|DIR>
-    gramine-vbs.cmd run    <manifest|DIR> [-Threads N] [-Root DIR] [-ShowHost] [-- ARGS]
-    gramine-vbs.cmd verify <manifest|DIR> -Report FILE [-- verifier options]
+    gramine-vbs.cmd run    <DIR> [-Threads N] [-Root DIR] [-ShowHost] [-- ARGS]
+    gramine-vbs.cmd sign   <DIR>
+    gramine-vbs.cmd verify <DIR> -Report FILE [-- verifier options]
 
-with `-Distro NAME` and `-CertName SUBJECT` for all of them. The build
-folder `<name>.vbs` is next to the manifest and holds the objects, the
-signed `<name>.dll`, `pal_vbs_host.exe`, `objs-info.txt` (the clang,
-gcc and header versions and the object hashes; the objects are
-reproducible), and `root` (the default host root). `run` requires the signed image and host executable
-to exist and fails if the package is missing or if its recorded inputs changed; it never rebuilds.
-Use `build` and `package <manifest>` explicitly to prepare or refresh a package. Files deleted on
-Windows are deleted from the WSL copy on the next `build` or `package`. Inputs reach WSL in
-environment variables, so folders with spaces or non-ASCII names work.
+`check` lists what is missing on the Windows side and changes nothing; `setup` also checks WSL and
+installs missing WSL packages user-level (no sudo); with `-Distro NAME` and `-CertName SUBJECT` for
+all of them. `DIR` is a package folder `<name>.vbs` holding the signed `<name>.dll` and
+`pal_vbs_host.exe` (`-Name` when the folder is not called `<name>.vbs`), also a `\\wsl.localhost\...`
+path; `<DIR>\root` is the default host root. Objects prepared elsewhere:
 
 Objects that `gramine-vbs build --no-sign` prepared on Linux (copy
 `<name>.vbs/obj` with `link-sign.cmd` and `pal_vbs_enclave.def`) are
@@ -544,15 +548,14 @@ It prints the report's fields and exits with 0 when every check passed. The
 example `CI-Examples/vbs/attestation` gets a report with user data from the
 command line:
 
-    gramine-vbs run attest.manifest -- <64 hex digits>
-    gramine-vbs verify attest.vbs <windows folder>\root\data\out\report.bin \
-        --user-data <64 hex digits> --same-image --min-svn 1
+    cd CI-Examples/vbs/attestation
+    make VBS=1
+    gramine-vbs attest <64 hex digits>
+    gramine-vbs verify attest data/out/report.bin --user-data <64 hex digits> --same-image --min-svn 1
 
-and on Windows alone:
-
-    gramine-vbs.cmd run attest.manifest -- <64 hex digits>
-    gramine-vbs.cmd verify attest.vbs -Report attest.vbs\root\data\out\report.bin -- ^
-        --user-data <64 hex digits> --same-image --min-svn 1
+(the report path is relative to the host root, `<package folder on Windows>\root`; a Windows path
+works too). Measured on the ARM64 machine: the report is 1216 bytes and the right user data is
+`VERIFIED`, other user data `REJECTED` (exit 1).
 
 **What this establishes, and what it does not.** A successful local check
 shows that the report was produced on *this* machine by a VBS enclave with
