@@ -72,3 +72,18 @@ the same database file concurrently.
 Note that in a production setup, the database should be either mounted as a
 protected file, or from tmpfs, which would make it impossible to access from
 multiple Gramine instances anyway.
+
+# Running under each backend
+
+Run the commands in this directory after the build (`make`, or `make VBS=1`), with the install of the backend active (`Documentation/quickstart/`). The matrix in `CI-Examples/README.md` gives the result and the date for each backend. "Not verified" means that no result is recorded.
+
+- **direct:** `gramine-direct sqlite3 < scripts/create.sql`. Verified on x86_64 and aarch64.
+- **vm:** `gramine-vm sqlite3 < scripts/create.sql`. Verified on x86_64 and aarch64.
+- **sev:** not verified.¹
+- **tdx:** not verified.²
+- **sgx:** not verified.³ Upstream command: `gramine-sgx sqlite3 < scripts/create.sql`.
+- **vbs:** `make VBS=1 check`. Verified on ARM64 and x64.
+
+¹ Not verified: no result is recorded for this backend (matrix in `CI-Examples/README.md`).  
+² TDX was tested offline by the maintainer, with the same result as SEV. No TDX log is in the repository, so the result is reported and not verified here. The TDX install needs `td-shim` (`Documentation/TODO.md`).  
+³ SGX has not run on this tree's hardware. The SGX build needs `protobuf-c` (`Documentation/TODO.md`).

@@ -47,3 +47,18 @@ libevent is not in the vbs sysroot, so `make VBS=1` downloads libevent 2.1.12-st
 GitHub release (SHA-256 checked) and links it statically. memcached runs with its defaults (4
 worker threads, 64 MiB cache) on 127.0.0.1:11211, TCP only (`-U 0`), as uid 1000 (as in the SGX
 manifest); clients run on Windows.
+
+# Running under each backend
+
+Run the commands in this directory after the build (`make`, or `make VBS=1`), with the install of the backend active (`Documentation/quickstart/`). The matrix in `CI-Examples/README.md` gives the result and the date for each backend. "Not verified" means that no result is recorded.
+
+- **direct:** `gramine-direct memcached`. Verified on x86_64 and aarch64.
+- **vm:** `GRAMINE_RUNNER=gramine-vm test/test-direct.sh memcached`, from the repository root (the VM forwards the server's port through its relay). Verified on x86_64 and aarch64.
+- **sev:** not verified.¹
+- **tdx:** not verified.²
+- **sgx:** not verified.³ Upstream command: `gramine-sgx memcached`.
+- **vbs:** `make VBS=1 check`. Verified on ARM64 and x64.
+
+¹ Not verified: no result is recorded for this backend (matrix in `CI-Examples/README.md`).  
+² TDX was tested offline by the maintainer, with the same result as SEV. No TDX log is in the repository, so the result is reported and not verified here. The TDX install needs `td-shim` (`Documentation/TODO.md`).  
+³ SGX has not run on this tree's hardware. The SGX build needs `protobuf-c` (`Documentation/TODO.md`).

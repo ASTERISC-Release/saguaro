@@ -72,3 +72,18 @@ master would fork the workers), `worker_processes 1`, `daemon off`; HTTP only on
 modules). NGINX's prefix is `/nginx` in the enclave, everything below it (binary, configuration,
 `html/` with the test files) is packed into the signed image and read-only; the pid file and
 temporary files go to `/tmp`, an in-enclave tmpfs, and the error log to stderr.
+
+# Running under each backend
+
+Run the commands in this directory after the build (`make`, or `make VBS=1`), with the install of the backend active (`Documentation/quickstart/`). The matrix in `CI-Examples/README.md` gives the result and the date for each backend. "Not verified" means that no result is recorded.
+
+- **direct:** `gramine-direct ./nginx`. Verified on x86_64 and aarch64.
+- **vm:** `GRAMINE_RUNNER=gramine-vm test/test-direct.sh nginx`, from the repository root (the VM forwards the server's port through its relay; nginx runs with `master_process off`). Verified on x86_64 and aarch64.
+- **sev:** not verified.¹
+- **tdx:** not verified.²
+- **sgx:** not verified.³ Upstream command: `gramine-sgx ./nginx`.
+- **vbs:** `make VBS=1 check`. Verified on ARM64 and x64.
+
+¹ Not verified: no result is recorded for this backend (matrix in `CI-Examples/README.md`).  
+² TDX was tested offline by the maintainer, with the same result as SEV. No TDX log is in the repository, so the result is reported and not verified here. The TDX install needs `td-shim` (`Documentation/TODO.md`).  
+³ SGX has not run on this tree's hardware. The SGX build needs `protobuf-c` (`Documentation/TODO.md`).

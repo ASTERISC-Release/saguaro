@@ -57,3 +57,18 @@ lighttpd runs in the foreground (`-D`) as one process on 127.0.0.1:8003 with
 `lighttpd-vbs.conf.template` (no mod_deflate: the vbs build has no zlib, OpenSSL, PCRE or bzip2).
 Its modules are loaded with `dlopen` from `/lighttpd/lib`; they are packed into the signed image
 like the binary.
+
+# Running under each backend
+
+Run the commands in this directory after the build (`make`, or `make VBS=1`), with the install of the backend active (`Documentation/quickstart/`). The matrix in `CI-Examples/README.md` gives the result and the date for each backend. "Not verified" means that no result is recorded.
+
+- **direct:** `make start-gramine-server`. Verified on x86_64 and aarch64.
+- **vm:** `GRAMINE_RUNNER=gramine-vm test/test-direct.sh lighttpd`, from the repository root (the VM forwards the server's port through its relay). Verified on x86_64 and aarch64.
+- **sev:** not verified.¹
+- **tdx:** not verified.²
+- **sgx:** not verified.³ Upstream command: `SGX=1 make start-gramine-server`.
+- **vbs:** `make VBS=1 check`. Verified on ARM64 and x64.
+
+¹ Not verified: no result is recorded for this backend (matrix in `CI-Examples/README.md`).  
+² TDX was tested offline by the maintainer, with the same result as SEV. No TDX log is in the repository, so the result is reported and not verified here. The TDX install needs `td-shim` (`Documentation/TODO.md`).  
+³ SGX has not run on this tree's hardware. The SGX build needs `protobuf-c` (`Documentation/TODO.md`).

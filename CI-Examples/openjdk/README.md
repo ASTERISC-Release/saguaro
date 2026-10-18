@@ -29,3 +29,18 @@ With SGX:
     gramine-sgx java -Xmx8G MultiThreadMain
 
 Note: If using 64G or greater enclave sizes, the JVM flag `-Xmx8G` can be omitted in gramine-sgx.
+
+## Running under each backend
+
+Run the commands in this directory after the build (`make`, or `make VBS=1`), with the install of the backend active (`Documentation/quickstart/`). The matrix in `CI-Examples/README.md` gives the result and the date for each backend. "Not verified" means that no result is recorded.
+
+- **direct:** not verified.¹ Command: `gramine-direct java MultiThreadMain`.
+- **vm:** not verified.¹
+- **sev:** not verified.¹
+- **tdx:** not verified.²
+- **sgx:** not verified.³ Upstream command: `gramine-sgx java -Xmx8G MultiThreadMain`.
+- **vbs:** not verified.¹ No VBS recipe. The JVM needs executable memory.
+
+¹ Not verified: no result is recorded for this backend (matrix in `CI-Examples/README.md`).  
+² TDX was tested offline by the maintainer, with the same result as SEV. No TDX log is in the repository, so the result is reported and not verified here. The TDX install needs `td-shim` (`Documentation/TODO.md`).  
+³ SGX has not run on this tree's hardware. The SGX build needs `protobuf-c` (`Documentation/TODO.md`).

@@ -69,3 +69,10 @@ key generation 0.3 ms, report 4 ms, certificate 0.3 ms at start; first connectio
 handshake 7.5 ms plus 107 ms for the verifier (it starts a verifying enclave); later handshakes
 3.2 ms; echo round trips of 64 bytes 0.056 ms with TLS against 0.039 ms plain, 16 KiB 114 MB/s
 against 349 MB/s, 256 KiB 135 MB/s against 754 MB/s each way.
+
+## Running under each backend
+
+Run the commands in this directory after the build (`make`, or `make VBS=1`), with the install of the backend active (`Documentation/quickstart/`). The matrix in `CI-Examples/README.md` gives the result and the date for each backend. "Not verified" means that no result is recorded.
+
+- **direct, vm, sev, tdx, sgx:** not applicable. The example is for the VBS backend only (`make` without `VBS=1` says so).
+- **vbs:** `make check`. Verified on ARM64 and x64.
