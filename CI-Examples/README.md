@@ -8,35 +8,45 @@ are not secure (e.g., they mount whole host directories into the application).
 If you take these examples as templates for your own workloads, please inspect
 and harden the configurations.
 
-| Example | Direct x86_64 | VM x86_64 | Direct aarch64 | VM aarch64 | SEV | VBS |
-|---|---|---|---|---|---|---|
-| `bash` | - | - | - | - | - | not run: no VBS recipe |
-| `blender` | - | - | - | - | - | not run: no VBS recipe |
-| `busybox` | - | - | - | - | - | pass (ARM64, x64) |
-| `curl` | - | - | - | - | - | pass (ARM64, x64) |
-| `gcc` | - | - | - | - | - | not run: no VBS recipe |
-| `graphics` | - | - | - | - | - | not run: no VBS recipe |
-| `helloworld` | - | - | - | - | - | pass (ARM64, x64) |
-| `iperf` | - | - | - | - | - | pass (ARM64, x64) |
-| `lighttpd` | - | - | - | - | - | pass (ARM64, x64) |
-| `memcached` | - | - | - | - | - | pass (ARM64, x64) |
-| `mongodb` | - | - | - | - | - | not run: no VBS recipe (x18 in mongod) |
-| `nginx` | - | - | - | - | - | pass (ARM64, x64) |
-| `nodejs` | - | - | - | - | - | fail on ARM64 (x18 in the node binary and libstdc++); not run on x64 (the recipe packs the linux-arm64 node) |
-| `openjdk` | - | - | - | - | - | not run: no VBS recipe (the JVM needs executable memory) |
-| `python` | - | - | - | - | - | ARM64: pass (hello and HTTP tests; NumPy/SciPy not packed); x64: fail at NumPy/SciPy (tests 3/4, 4/4), tests 1/4 and 2/4 pass |
-| `pytorch` | - | - | - | - | - | not run: no VBS recipe |
-| `r` | - | - | - | - | - | not run: no VBS recipe |
-| `ra-tls-mbedtls` | - | - | - | - | - | not run: SGX attestation example |
-| `ra-tls-nginx` | - | - | - | - | - | not run: SGX attestation example |
-| `ra-tls-secret-prov` | - | - | - | - | - | not run: SGX attestation example |
-| `redis` | - | - | - | - | - | pass (ARM64, x64) |
-| `rust` | - | - | - | - | - | pass (ARM64, x64; needs rustup stable with rust-src) |
-| `sqlite` | - | - | - | - | - | pass (ARM64, x64) |
-| `unit_tests` | - | - | - | - | - | not run: LibOS/PAL test programs, no VBS recipe |
-| `vbs/attestation` | - | - | - | - | - | pass (ARM64, x64) |
-| `vbs/dynhello` | - | - | - | - | - | pass (ARM64, x64) |
-| `vbs/helloworld` | - | - | - | - | - | pass (ARM64, x64) |
-| `vbs/python` | - | - | - | - | - | pass (ARM64, x64) |
-| `vbs/tcpserver` | - | - | - | - | - | pass (ARM64, x64) |
-| `vbs/tls-echo` | - | - | - | - | - | pass (ARM64, x64) |
+| Example | Direct x86_64 | VM x86_64 | Direct aarch64 | VM aarch64 | SEV | TDX | SGX | VBS |
+|---|---|---|---|---|---|---|---|---|
+| `bash` |  |  |  |  |  |  |  | –¹ |
+| `blender` |  |  |  |  |  |  |  | –¹ |
+| `busybox` |  |  |  |  |  |  |  | ✓ |
+| `curl` |  |  |  |  |  |  |  | ✓ |
+| `gcc` |  |  |  |  |  |  |  | –¹ |
+| `graphics` |  |  |  |  |  |  |  | –¹ |
+| `helloworld` |  |  |  |  |  |  |  | ✓ |
+| `iperf` |  |  |  |  |  |  |  | ✓ |
+| `lighttpd` |  |  |  |  |  |  |  | ✓ |
+| `memcached` |  |  |  |  |  |  |  | ✓ |
+| `mongodb` |  |  |  |  |  |  |  | –² |
+| `nginx` |  |  |  |  |  |  |  | ✓ |
+| `nodejs` |  |  |  |  |  |  |  | ✗ ARM64, – x64⁴ |
+| `openjdk` |  |  |  |  |  |  |  | –⁵ |
+| `python` |  |  |  |  |  |  |  | ✓ ARM64, ✗ x64⁶ |
+| `pytorch` |  |  |  |  |  |  |  | –¹ |
+| `r` |  |  |  |  |  |  |  | –¹ |
+| `ra-tls-mbedtls` |  |  |  |  |  |  |  | –³ |
+| `ra-tls-nginx` |  |  |  |  |  |  |  | –³ |
+| `ra-tls-secret-prov` |  |  |  |  |  |  |  | –³ |
+| `redis` |  |  |  |  |  |  |  | ✓ |
+| `rust` |  |  |  |  |  |  |  | ✓⁷ |
+| `sqlite` |  |  |  |  |  |  |  | ✓ |
+| `unit_tests` |  |  |  |  |  |  |  | –¹ |
+| `vbs/attestation` |  |  |  |  |  |  |  | ✓ |
+| `vbs/dynhello` |  |  |  |  |  |  |  | ✓ |
+| `vbs/helloworld` |  |  |  |  |  |  |  | ✓ |
+| `vbs/python` |  |  |  |  |  |  |  | ✓ |
+| `vbs/tcpserver` |  |  |  |  |  |  |  | ✓ |
+| `vbs/tls-echo` |  |  |  |  |  |  |  | ✓ |
+
+Symbols: ✓ pass, ✗ fail, – not run or not applicable, blank no record. A result is a record in a `TESTING.md` under `Documentation/devel/`; the date and the source of every cell are in `Documentation/devel/example-doc-refactor/FINDINGS.md`. VBS: ✓ means pass on ARM64 and x64 unless a footnote says otherwise. SGX: not run on this tree's hardware (needs `protobuf-c` and `td-shim`).
+
+¹ No VBS recipe.  
+² No VBS recipe; `mongod` uses the x18 register (known x18 blocker, ARM64).  
+³ Example for SGX attestation only.  
+⁴ ARM64: fails (x18 in the node binary and in libstdc++). x64: not run (the recipe packs the linux-arm64 node).  
+⁵ No VBS recipe; the JVM needs executable memory.  
+⁶ ARM64: passes (hello and HTTP tests; NumPy and SciPy are not packed). x64: tests 1/4 and 2/4 pass; tests 3/4 and 4/4 (NumPy, SciPy) fail.  
+⁷ Needs rustup stable with `rust-src`.  
