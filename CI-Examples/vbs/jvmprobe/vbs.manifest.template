@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
+#
+# Research probe (PLAN-rwx.md): the Temurin 21 JRE, interpreter only, in a VBS enclave (x64).
+
+loader.entrypoint = "file:/libsysdb.so"
+libos.entrypoint = "/opt/jre/bin/java"
+loader.argv = ["/opt/jre/bin/java", "-Xint", "-Xshare:off", "-XX:+UseSerialGC", "-XX:-UsePerfData", "-XX:ReservedCodeCacheSize=16m", "-version"]
+loader.log_level = "{{ log_level }}"
+loader.env.LD_LIBRARY_PATH = "/usr/lib:/opt/jre/lib/server:/opt/jre/lib"
+loader.env.JAVA_HOME = "/opt/jre"
+
+fs.root.uri = "file:/"
+sys.rewrite_syscalls = false
+sys.stack.size = "2M"
+
+vbs.debug = false
+vbs.enclave_size = "2G"
+vbs.max_threads = 32
+
+vbs.packed_files = [
+  { path = "/opt/jre", uri = "file:vbs-build/jre", exclude = [ "legal/", "man/", "*.diz", "*.debuginfo" ] },
+{% for lib in [vbs.ldso, "libc.so.6", "libm.so.6", "libdl.so.2", "libpthread.so.0", "librt.so.1"] %}
+  { path = "/usr/lib/{{ lib }}", uri = "file:{{ vbs.sysroot }}/usr/lib/{{ lib }}" },
+{% endfor %}
+  { path = "/lib64/{{ vbs.ldso }}", uri = "file:{{ vbs.sysroot }}/usr/lib/{{ vbs.ldso }}" },
+  { path = "/usr/lib/libstdc++.so.6", uri = "file:vbs-build/lib/libstdc++.so.6" },
+  { path = "/usr/lib/libgcc_s.so.1", uri = "file:vbs-build/lib/libgcc_s.so.1" },
+]

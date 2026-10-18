@@ -1,0 +1,14 @@
+# Research probe (Documentation/devel/vbs-enclave/PLAN-rwx.md): what a VBS enclave answers to the memory
+# requests of a JIT (executable anonymous memory, adding execute, changing the program's own code).
+#   make VBS=1; gramine-vbs jitprobe
+loader.entrypoint = "file:/libsysdb.so"
+libos.entrypoint = "/jitprobe"
+loader.log_level = "error"
+fs.root.uri = "file:/"
+sys.rewrite_syscalls = false
+vbs.debug = false
+vbs.max_threads = 4
+vbs.build = "$VBS_CC_STATIC -o jitprobe jitprobe.c"
+vbs.packed_files = [
+  { path = "/jitprobe", uri = "file:jitprobe" },
+]
