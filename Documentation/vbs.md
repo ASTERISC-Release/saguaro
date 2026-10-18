@@ -218,9 +218,8 @@ reused afterwards):
 and quotes included). It never builds: if the package is missing or older than its manifest it says
 to run `make VBS=1`.
 
-The manifest-only examples under `CI-Examples/vbs` (`dynhello`, `tcpserver`, `python`, `helloworld`)
-are built by the same tooling from their manifests (`gramine-vbs build` is the step `make VBS=1`
-calls; `attestation` has a `Makefile`). A TCP server (`CI-Examples/vbs/tcpserver`) listens on 127.0.0.1:18080
+The examples under `CI-Examples/vbs` (`helloworld`, `dynhello`, `python`, `tcpserver`, `attestation`)
+have a `Makefile` too: `make VBS=1`, `gramine-vbs <name>`, `make VBS=1 check`. A TCP server (`CI-Examples/vbs/tcpserver`) listens on 127.0.0.1:18080
 through the host's Winsock sockets and answers three clients (`CI-Examples\vbs\tcpserver\client.ps1 -Count 3`
 in a second window).
 
@@ -366,6 +365,11 @@ OpenSSL, zlib or PCRE in the vbs sysroot), static files packed,
 127.0.0.1:11211 |
 | `CI-Examples/lighttpd` | lighttpd 1.4.59 in the foreground, modules loaded with `dlopen` from
 the image, 127.0.0.1:8003 |
+
+Also with `make VBS=1 check` (passing on both the ARM64 and the x64 machine, `TESTING.md`): `busybox`, `curl`,
+`iperf`, `sqlite`, `rust` (needs rustup stable with `rust-src`) and, under `CI-Examples/vbs`, `helloworld`,
+`dynhello`, `python`, `tcpserver`, `attestation`, `tls-echo`. Known failures: `nodejs` (x18 in the node
+binary and libstdc++ on ARM64; no x64 recipe) and NumPy/SciPy in `python` on x64 (tests 3/4 and 4/4).
 
 For example:
 

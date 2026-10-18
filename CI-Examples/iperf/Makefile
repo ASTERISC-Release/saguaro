@@ -97,7 +97,8 @@ vbs-build/src/configure: $(IPERF_SRC)
 	touch $@
 
 vbs-build/src/Makefile: vbs-build/src/configure | $(VBS_RUNTIME_STAMP)
-	cd vbs-build/src && ./configure CC=$(VBS_GCC) --disable-shared --without-openssl
+	# (-Wno-error=incompatible-pointer-types: iperf 3.16 does not build with the default errors of GCC 14 and later)
+	cd vbs-build/src && ./configure CC=$(VBS_GCC) CFLAGS="-g -O2 -Wno-error=incompatible-pointer-types" --disable-shared --without-openssl
 
 vbs-build/iperf3: vbs-build/src/Makefile
 	$(MAKE) -C vbs-build/src CC=$(VBS_GCC)
