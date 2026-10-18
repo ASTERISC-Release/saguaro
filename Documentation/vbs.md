@@ -369,7 +369,7 @@ the image, 127.0.0.1:8003 |
 Also with `make VBS=1 check` (passing on both the ARM64 and the x64 machine, `TESTING.md`): `busybox`, `curl`,
 `iperf`, `sqlite`, `rust` (needs rustup stable with `rust-src`) and, under `CI-Examples/vbs`, `helloworld`,
 `dynhello`, `python`, `tcpserver`, `attestation`, `tls-echo`. Known failures: `nodejs` (x18 in the node
-binary and libstdc++ on ARM64; no x64 recipe) and NumPy/SciPy in `python` on x64 (tests 3/4 and 4/4).
+binary and libstdc++ on ARM64; no x64 recipe) (NumPy and SciPy in `python` run on x64 since the data-only protection change; its HTTP test is intermittent).
 
 For example:
 

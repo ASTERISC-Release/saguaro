@@ -4,8 +4,8 @@
 #
 # Build CPython for a VBS enclave image (phase 3e): with scripts/vbs/vbs-gcc against the vbs glibc
 # sysroot, installed into DESTDIR (default <repo>/build-vbs-python). Optional modules whose
-# libraries are not in the sysroot (zlib, OpenSSL, libffi, ...) are left out; on x86_64 the zlib module is
-# built and the ctypes module (zlib 1.3.1 and libffi 3.4.6 from source, linked statically): the SciPy wheels of
+# libraries are not in the sysroot (zlib, OpenSSL, libffi, ...) are left out; on x86_64 the zlib and
+# ctypes modules are built (zlib 1.3.1 and libffi 3.4.6 from source, linked statically): the SciPy wheels of
 # the python example import both.
 #
 # Usage (aarch64 Linux, the build container or WSL):

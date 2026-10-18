@@ -24,7 +24,7 @@ and harden the configurations.
 | `nginx` | - | - | - | - | - | pass (ARM64, x64) |
 | `nodejs` | - | - | - | - | - | fail on ARM64 (x18 in the node binary and libstdc++); not run on x64 (the recipe packs the linux-arm64 node) |
 | `openjdk` | - | - | - | - | - | not run: no VBS recipe (the JVM needs executable memory) |
-| `python` | - | - | - | - | - | ARM64: pass (hello and HTTP tests; NumPy/SciPy not packed); x64: fail at NumPy/SciPy (tests 3/4, 4/4), tests 1/4 and 2/4 pass |
+| `python` | - | - | - | - | - | ARM64: pass (hello and HTTP tests; NumPy/SciPy not packed); x64: pass (4/4 with NumPy and SciPy; the HTTP test 2/4 fails in about one run in five) |
 | `pytorch` | - | - | - | - | - | not run: no VBS recipe |
 | `r` | - | - | - | - | - | not run: no VBS recipe |
 | `ra-tls-mbedtls` | - | - | - | - | - | not run: SGX attestation example |
