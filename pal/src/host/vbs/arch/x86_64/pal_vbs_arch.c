@@ -54,6 +54,19 @@ int _PalSegmentBaseSet(enum pal_segment_reg reg, uintptr_t addr) {
     }
 }
 
+/* GDT/LDT entries for set_thread_area (32-bit code, Wine): not supported in a VBS enclave */
+int _PalSegmentDescriptorSet(unsigned int entry, uint64_t descriptor) {
+    __UNUSED(entry);
+    __UNUSED(descriptor);
+    return -PAL_ERROR_NOTIMPLEMENTED;
+}
+
+int _PalSegmentDescriptorGet(unsigned int entry, uint64_t* descriptor) {
+    __UNUSED(entry);
+    __UNUSED(descriptor);
+    return -PAL_ERROR_NOTIMPLEMENTED;
+}
+
 int _PalCpuIdRetrieve(uint32_t leaf, uint32_t subleaf, uint32_t values[4]) {
     __asm__ volatile("cpuid"
                      : "=a"(values[0]), "=b"(values[1]), "=c"(values[2]), "=d"(values[3])

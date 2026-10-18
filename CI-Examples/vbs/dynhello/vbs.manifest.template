@@ -1,6 +1,6 @@
 # A dynamically linked program in a Windows VBS enclave (Documentation/vbs.md): the program, the
 # dynamic loader and libc are packed, and libm.so.6 for its run-time dlopen. The source is the
-# vbs PAL's test pal/src/host/vbs/test/dynhello/dynhello.c. gramine-vbs run dynhello.manifest
+# vbs PAL's test pal/src/host/vbs/test/dynhello/dynhello.c. make VBS=1; gramine-vbs dynhello
 loader.entrypoint = "file:/libsysdb.so"
 libos.entrypoint = "/dynhello"
 loader.log_level = "error"
@@ -13,7 +13,7 @@ vbs.max_threads = 4
 vbs.build = "$VBS_CC_DYNAMIC -o dynhello $GRAMINE_REPO/pal/src/host/vbs/test/dynhello/dynhello.c"
 vbs.packed_files = [
   { path = "/dynhello", uri = "file:dynhello" },
-  { path = "/usr/lib/ld-linux-aarch64.so.1", uri = "file:../../../build-vbs-glibc/usr/lib/ld-linux-aarch64.so.1" },
-  { path = "/usr/lib/libc.so.6", uri = "file:../../../build-vbs-glibc/usr/lib/libc.so.6" },
-  { path = "/usr/lib/libm.so.6", uri = "file:../../../build-vbs-glibc/usr/lib/libm.so.6" },
+  { path = "/usr/lib/{{ vbs.ldso }}", uri = "file:{{ vbs.sysroot }}/usr/lib/{{ vbs.ldso }}" },
+  { path = "/usr/lib/libc.so.6", uri = "file:{{ vbs.sysroot }}/usr/lib/libc.so.6" },
+  { path = "/usr/lib/libm.so.6", uri = "file:{{ vbs.sysroot }}/usr/lib/libm.so.6" },
 ]

@@ -6,6 +6,7 @@
 # template of attest.manifest.vbs; its vbs.build compiles attest.c for the enclave.
 #   make VBS=1
 #   gramine-vbs attest <64 hex digits>
+#   make VBS=1 check        runs it and verifies the report
 
 .PHONY: all
 ifeq ($(VBS),1)
@@ -20,6 +21,10 @@ all:
 	@echo "this example is for the VBS backend only: make VBS=1"
 endif
 
+.PHONY: check
+check: all
+	GRAMINE="$(GRAMINE)" ./vbs-check.sh
+
 .PHONY: clean
 clean:
-	$(RM) -r attest attest.vbs attest.manifest.vbs
+	$(RM) -r attest attest.vbs attest.manifest.vbs OUTPUT
