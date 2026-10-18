@@ -4,12 +4,12 @@
 #
 # Build CPython for a VBS enclave image (phase 3e): with scripts/vbs/vbs-gcc against the vbs glibc
 # sysroot, installed into DESTDIR (default <repo>/build-vbs-python). Optional modules whose
-# libraries are not in the sysroot (zlib, OpenSSL, libffi, ...) are left out; on x86_64 the zlib and
+# libraries are not in the sysroot (zlib, OpenSSL, libffi, ...) are left out; with --sci (the python example on x64, into build-vbs-python-sci) the zlib and
 # ctypes modules are built (zlib 1.3.1 and libffi 3.4.6 from source, linked statically): the SciPy wheels of
 # the python example import both.
 #
 # Usage (aarch64 Linux, the build container or WSL):
-#   scripts/vbs/build-python.sh [--if-needed] [Python-X.Y.Z.tgz] [DESTDIR]
+#   scripts/vbs/build-python.sh [--if-needed] [--sci] [Python-X.Y.Z.tgz] [DESTDIR]
 # Without a tarball, Python 3.12.7 is downloaded from python.org into ~/.cache/gramine-vbs/dist
 # and checked against its SHA-256. With --if-needed nothing is done when DESTDIR already holds a
 # build of the same tarball against the same sysroot (the stamp file DESTDIR/.vbs-python); the
@@ -18,6 +18,8 @@ set -e
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 IF_NEEDED=
 [ "$1" = --if-needed ] && { IF_NEEDED=1; shift; }
+SCI=
+[ "$1" = --sci ] && { SCI=1; shift; }
 VERSION=3.12.7
 SHA256=73ac8fe780227bf371add8373c3079f42a0dc62deff8d612cd15a618082ab623
 TARBALL=$1
@@ -36,9 +38,8 @@ ZLIB_VERSION=1.3.1
 FFI_VERSION=3.4.6
 FFI_SHA256=b0dea9df23c863a7a50e825440f3ebffabd65df1497108e5d437747843895a4e
 ZLIB_SHA256=9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23
-WITH_ZLIB=
-[ "$(uname -m)" = x86_64 ] && WITH_ZLIB=1
-DEST=$(realpath -m "${2:-$ROOT/build-vbs-python}")
+WITH_ZLIB=$SCI
+DEST=$(realpath -m "${2:-$ROOT/build-vbs-python${SCI:+-sci}}")
 SYSROOT=${SYSROOT:-$ROOT/build-vbs-glibc}
 STAMP="$(sha256sum < "$TARBALL" | cut -c1-64) $(sha256sum < "$SYSROOT/usr/lib/libc.so.6" | cut -c1-64)${WITH_ZLIB:+ zlib-$ZLIB_VERSION libffi-$FFI_VERSION}"
 if [ -n "$IF_NEEDED" ] && [ "$(cat "$DEST/.vbs-python" 2>/dev/null)" = "$STAMP" ]; then

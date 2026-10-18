@@ -20,13 +20,25 @@ VBS_DEPS = $(wildcard scripts/*.py) helper-files/hosts $(VBS_PYTHON_STAMP)
 # host's aarch64 libstdc++ is refused by pack.py: it uses x18)
 ifeq ($(shell uname -m),x86_64)
 VBS_DEPS += vbs-build/site/.stamp
-VBS_DEFINES = -Dnumpy=1
+# the CPython of this example has the zlib and ctypes modules that SciPy imports (zlib and libffi
+# built statically, build-python.sh --sci): a folder of its own, so that the CPython of the other
+# examples is the same as ever
+VBS_PYTHON_DIR = $(abspath ../../build-vbs-python-sci)
+VBS_PYTHON_STAMP = $(VBS_PYTHON_DIR)/.vbs-python
+VBS_PYTHON_OPT = --sci
+VBS_DEFINES = -Dnumpy=1 -Dpython_dir=$(VBS_PYTHON_DIR)
+# NumPy's libraries need the PAL to accept a protection change over packed code and data pages; the
+# manifest key vbs.__insecure_skip_code_mprotect says so (make VBS=1 VBS_SKIP_CODE_MPROTECT=0: key off)
+VBS_SKIP_CODE_MPROTECT ?= 1
+ifeq ($(VBS_SKIP_CODE_MPROTECT),1)
+VBS_DEFINES += -Dskip_code_mprotect=1
+endif
 endif
 include ../../scripts/vbs/Makefile.vbs
 all: vbs-all
 
 $(VBS_PYTHON_STAMP): $(VBS_DIR)/build-python.sh | $(VBS_RUNTIME_STAMP)
-	sh $(VBS_DIR)/build-python.sh --if-needed
+	sh $(VBS_DIR)/build-python.sh --if-needed $(VBS_PYTHON_OPT)
 
 # NumPy and SciPy: the manylinux wheels for CPython 3.12 (PyPI, checked by SHA-256), unpacked into
 # vbs-build/site/ and packed with the host's copies of the runtime they need (libstdc++, libgcc_s,

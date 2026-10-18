@@ -22,6 +22,7 @@
 #include "pal.h"
 #include "pal_error.h"
 #include "pal_internal.h"
+#include "toml_utils.h"
 #include "pal_vbs.h"
 
 /* ---- packed objects ---- */
@@ -251,6 +252,17 @@ int _PalVirtualMemoryFree(void* addr, size_t size) {
     return 0;
 }
 
+/* vbs.__insecure_skip_code_mprotect (manifest, default false): a protection change over a range that
+ * holds packed code and other pages is applied to the other pages only (below) instead of being
+ * refused. Research mode: with the key off the PAL behaves as it always did. */
+static bool skip_code_mprotect_enabled(void) {
+    toml_table_t* vbs = toml_table_in(g_pal_public_state.manifest_root, "vbs");
+    bool v = false;
+    if (vbs && toml_bool_in(vbs, "__insecure_skip_code_mprotect", false, &v) < 0)
+        return false;
+    return v;
+}
+
 /* A range that holds packed code and other pages (glibc's ld.so asks for PROT_NONE over the whole
  * reservation of a shared object, the code segment included, before it maps the segments): the
  * protection goes to the pages outside the packed code only, and the code pages stay execute-read
@@ -314,8 +326,12 @@ int _PalVirtualMemoryProtect(void* addr, size_t size, pal_prot_flags_t prot) {
             log_error("vbs: refusing to make packed code writable (%p, %#lx)", addr, size);
             return -PAL_ERROR_DENIED;
         }
-        if (!vbs_inside_packed_code(a, size))
-            return protect_around_packed_code(a, size, prot);
+        if (!vbs_inside_packed_code(a, size)) {
+            if (skip_code_mprotect_enabled())
+                return protect_around_packed_code(a, size, prot);
+            log_error("vbs: protection change across packed code and data (%p, %#lx)", addr, size);
+            return -PAL_ERROR_DENIED;
+        }
         return 0;
     }
     if (prot & PAL_PROT_EXEC) {

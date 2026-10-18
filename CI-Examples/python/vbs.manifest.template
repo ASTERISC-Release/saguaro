@@ -27,13 +27,18 @@ sys.rewrite_syscalls = false
 sys.stack.size = "2M"
 
 vbs.debug = false
+{% if skip_code_mprotect is defined %}
+# research mode: a protection change over a range of packed code and data is applied to the data pages
+# only (NumPy's libraries; PLAN-rwx.md). Off: the PAL refuses such a change, as in the other examples.
+vbs.__insecure_skip_code_mprotect = true
+{% endif %}
 vbs.enclave_size = "2G"
 vbs.max_threads = 16
 
 vbs.packed_files = [
-  { path = "/usr/bin/python3.12", uri = "file:{{ vbs.python }}/usr/bin/python3.12" },
+  { path = "/usr/bin/python3.12", uri = "file:{{ python_dir | default(vbs.python) }}/usr/bin/python3.12" },
   # the standard library without its tests, the IDE and Tk parts, and the static library
-  { path = "/usr/lib/python3.12", uri = "file:{{ vbs.python }}/usr/lib/python3.12", exclude = [ "config-3.12-*/", "__pycache__/", "test/", "tests/", "idlelib/", "tkinter/", "turtledemo/", "lib2to3/", "ensurepip/", "pydoc_data/", "*.a" ] },
+  { path = "/usr/lib/python3.12", uri = "file:{{ python_dir | default(vbs.python) }}/usr/lib/python3.12", exclude = [ "config-3.12-*/", "__pycache__/", "test/", "tests/", "idlelib/", "tkinter/", "turtledemo/", "lib2to3/", "ensurepip/", "pydoc_data/", "*.a" ] },
 {% for lib in [vbs.ldso, "libc.so.6", "libm.so.6"] %}
   { path = "{{ arch_libdir }}/{{ lib }}", uri = "file:{{ vbs.sysroot }}/usr/lib/{{ lib }}" },
 {% endfor %}
