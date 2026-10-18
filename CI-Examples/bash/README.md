@@ -28,7 +28,7 @@ Build first and activate the install of the backend (`Documentation/quickstart/`
 are in the matrix of `CI-Examples/README.md`.
 
 - **direct:** verified on x86_64 and aarch64.
-- **vm:** verified on x86_64 and aarch64. On x86_64 the example's 7 script checks pass (7/7) only with `sys.experimental__multiprocess` in the manifest.
+- **vm:** verified on x86_64 and aarch64. On x86_64 the example's 7 script checks pass (7/7) with `sys.experimental__multiprocess`, which `manifest.template` sets.
 - **sev:** not verified.¹
 - **tdx:** not verified.²
 - **sgx:** not verified.³ The commands are given above.
