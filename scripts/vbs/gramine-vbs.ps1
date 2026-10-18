@@ -197,18 +197,29 @@ function Do-Run($b) {
     $psi.StandardErrorEncoding = [Text.Encoding]::UTF8
     $proc = New-Object Diagnostics.Process
     $proc.StartInfo = $psi
-    $act = { if ($null -ne $Event.SourceEventArgs.Data) {
-                 $l = $Event.SourceEventArgs.Data
-                 if ($Event.MessageData -or $l -notmatch '^\[(vbs-w|host)\]') { [Console]::Out.WriteLine($l); [Console]::Out.Flush() } } }
-    $e1 = Register-ObjectEvent -InputObject $proc -EventName OutputDataReceived -Action $act -MessageData ([bool]$ShowHost)
-    $e2 = Register-ObjectEvent -InputObject $proc -EventName ErrorDataReceived -Action $act -MessageData ([bool]$ShowHost)
     try { [void]$proc.Start() } catch { Fail "cannot start $($psi.FileName): $($_.Exception.Message)" }
-    $proc.BeginOutputReadLine()
-    $proc.BeginErrorReadLine()
-    while (-not $proc.HasExited) { Start-Sleep -Milliseconds 20 }
+    # Lines are read in order, on this thread (the OutputDataReceived events of .NET may be handled
+    # out of order, which scrambled the output of programs that write many lines).
+    $ot = $proc.StandardOutput.ReadLineAsync()
+    $et = $proc.StandardError.ReadLineAsync()
+    while ($ot -or $et) {
+        $idle = $true
+        if ($ot -and $ot.IsCompleted) {
+            $l = $ot.Result; $idle = $false
+            if ($null -eq $l) { $ot = $null } else {
+                if ($ShowHost -or $l -notmatch '^\[(vbs-w|host)\]') { [Console]::Out.WriteLine($l) }
+                $ot = $proc.StandardOutput.ReadLineAsync() }
+        }
+        if ($et -and $et.IsCompleted) {
+            $l = $et.Result; $idle = $false
+            if ($null -eq $l) { $et = $null } else {
+                if ($ShowHost -or $l -notmatch '^\[(vbs-w|host)\]') { [Console]::Out.WriteLine($l) }
+                $et = $proc.StandardError.ReadLineAsync() }
+        }
+        if ($idle) { Start-Sleep -Milliseconds 2 }
+    }
+    [Console]::Out.Flush()
     $proc.WaitForExit()
-    Start-Sleep -Milliseconds 150     # (lets the last events print)
-    Unregister-Event -SourceIdentifier $e1.Name; Unregister-Event -SourceIdentifier $e2.Name
     $rc = $proc.ExitCode
     exit $rc
 }
