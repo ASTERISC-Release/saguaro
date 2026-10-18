@@ -407,16 +407,23 @@ static VKAPI_ATTR VkResult VKAPI_CALL layer_GetPhysicalDeviceSurfaceSupportKHR(
 
 static void fill_caps(struct layer_surface* s, VkSurfaceCapabilitiesKHR* caps) {
     uint32_t w = 0, h = 0;
-    if (!window_geometry(s, &w, &h)) {
-        w = 1920;
-        h = 1080;
-    }
+    bool known = window_geometry(s, &w, &h);
     memset(caps, 0, sizeof(*caps));
     caps->minImageCount = 2;
     caps->maxImageCount = MAX_IMAGES;
-    caps->currentExtent = (VkExtent2D){w, h};
-    caps->minImageExtent = (VkExtent2D){1, 1};
-    caps->maxImageExtent = (VkExtent2D){16384, 16384};
+    if (known) {
+        /* as Mesa's X11 WSI: the window's size is the only extent. Proton's full-screen hack
+         * (win32u's vkCreateSwapchainKHR) sizes its host swapchain from minImageExtent, so a
+         * minimum of 1x1 gave The Witcher 1 a 1x1 swapchain on a display larger than its mode
+         * (proton-vm/FINDINGS.md 2026-10-18) */
+        caps->currentExtent = (VkExtent2D){w, h};
+        caps->minImageExtent = caps->currentExtent;
+        caps->maxImageExtent = caps->currentExtent;
+    } else {
+        caps->currentExtent = (VkExtent2D){1920, 1080};
+        caps->minImageExtent = (VkExtent2D){1, 1};
+        caps->maxImageExtent = (VkExtent2D){16384, 16384};
+    }
     caps->maxImageArrayLayers = 1;
     caps->supportedTransforms = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
     caps->currentTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
