@@ -13,6 +13,9 @@ mkdir -p "$OUT"
 x86_64-w64-mingw32-gcc -O2 -o "$OUT/hello.exe" "$HERE/hello.c"
 i686-w64-mingw32-gcc -O2 -o "$OUT/hello32.exe" "$HERE/hello.c"
 x86_64-w64-mingw32-gcc -O2 -o "$OUT/d3d11.exe" "$HERE/d3d11.c" -ld3d11 -ld3dcompiler -ldxgi -ldxguid -luuid
+# d3d9.exe / d3d9_32.exe: Direct3D 9 clears through DXVK, 64- and 32-bit (The Witcher 1's API)
+x86_64-w64-mingw32-gcc -O2 -o "$OUT/d3d9.exe" "$HERE/d3d9.c" -ld3d9
+i686-w64-mingw32-gcc -O2 -o "$OUT/d3d9_32.exe" "$HERE/d3d9.c" -ld3d9
 # only the Vulkan headers, not the rest of /usr/include (that would shadow mingw's libc headers)
 mkdir -p "$OUT/include" && ln -sfn /usr/include/vulkan "$OUT/include/vulkan" && ln -sfn /usr/include/vk_video "$OUT/include/vk_video"
 x86_64-w64-mingw32-gcc -O2 -I"$OUT/include" -o "$OUT/vkwin.exe" "$HERE/vkwin.c"
