@@ -45,6 +45,19 @@ if ($pos.Count -ge 1) { $Command = $pos[0] }
 if ($pos.Count -ge 2) { $Target = $pos[1] }
 if ($pos.Count -ge 3) { $Rest = @($pos[2..($pos.Count - 1)]) + $Rest }
 $Threads = [int]$Threads
+# the application's arguments of `run`, from gramine-vbs in WSL: JSON in base64 in the environment
+# (no quoting layer in between), each one quoted for CommandLineToArgvW; Windows PowerShell 5.1
+# passes a native command's arguments without escaping embedded quotes
+if ($env:GRAMINE_VBS_ARGS) {
+    $json = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($env:GRAMINE_VBS_ARGS))
+    $Rest = @()
+    $items = ConvertFrom-Json $json
+    foreach ($x in $items) {
+        $s = [string]$x -replace '(\\*)"', '$1$1\"'
+        if ($s -eq '' -or $s -match '\s') { $s = '"' + ($s -replace '(\\+)$', '$1$1') + '"' }
+        $Rest += $s
+    }
+}
 
 $ErrorActionPreference = 'Continue'
 $ProgressPreference = 'SilentlyContinue'
@@ -168,16 +181,35 @@ function Do-Run($b) {
             New-Item -ItemType Directory -Force -Path (Join-Path $root $_) | Out-Null }
     }
     if ($PidLine) { Write-Output "[gramine-vbs-pid] $PID" }   # (gramine-vbs in WSL stops the host through it)
-    Push-Location $b.out
-    try {
-        if ($ShowHost) {
-            & .\pal_vbs_host.exe "$($b.name).dll" $Threads boot $root @Rest 2>&1 | ForEach-Object { "$_" }
-        } else {
-            & .\pal_vbs_host.exe "$($b.name).dll" $Threads boot $root @Rest 2>&1 |
-                Where-Object { $_ -notmatch '^\[(vbs-w|host)\]' } | ForEach-Object { "$_" }
-        }
-        $rc = $LASTEXITCODE
-    } finally { Pop-Location }
+    # The host is started with one command-line string, so that the arguments reach it exactly as
+    # quoted at the top (Windows PowerShell 5.1 re-quotes a native command's arguments). Its
+    # standard output and error are printed as they arrive.
+    $line = '"{0}.dll" {1} boot "{2}"' -f $b.name, $Threads, $root
+    foreach ($x in $Rest) { $line += ' ' + $x }
+    $psi = New-Object Diagnostics.ProcessStartInfo
+    $psi.FileName = Join-Path $b.out 'pal_vbs_host.exe'
+    $psi.Arguments = $line
+    $psi.WorkingDirectory = $b.out
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.StandardOutputEncoding = [Text.Encoding]::UTF8
+    $psi.StandardErrorEncoding = [Text.Encoding]::UTF8
+    $proc = New-Object Diagnostics.Process
+    $proc.StartInfo = $psi
+    $act = { if ($null -ne $Event.SourceEventArgs.Data) {
+                 $l = $Event.SourceEventArgs.Data
+                 if ($Event.MessageData -or $l -notmatch '^\[(vbs-w|host)\]') { [Console]::Out.WriteLine($l); [Console]::Out.Flush() } } }
+    $e1 = Register-ObjectEvent -InputObject $proc -EventName OutputDataReceived -Action $act -MessageData ([bool]$ShowHost)
+    $e2 = Register-ObjectEvent -InputObject $proc -EventName ErrorDataReceived -Action $act -MessageData ([bool]$ShowHost)
+    [void]$proc.Start()
+    $proc.BeginOutputReadLine()
+    $proc.BeginErrorReadLine()
+    while (-not $proc.HasExited) { Start-Sleep -Milliseconds 20 }
+    $proc.WaitForExit()
+    Start-Sleep -Milliseconds 150     # (lets the last events print)
+    Unregister-Event -SourceIdentifier $e1.Name; Unregister-Event -SourceIdentifier $e2.Name
+    $rc = $proc.ExitCode
     exit $rc
 }
 

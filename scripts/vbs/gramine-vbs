@@ -209,7 +209,9 @@ def runner_popen(host, windir, argv):
                                  'Bypass', '-File', script, *argv], stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, text=True,
                                 errors='replace', cwd=os.path.dirname(exe))
-    return ps_popen(host, '& powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass '
+    env = f"$env:GRAMINE_VBS_ARGS = {psq(os.environ['GRAMINE_VBS_ARGS'])}\n" \
+        if os.environ.get('GRAMINE_VBS_ARGS') else ''
+    return ps_popen(host, env + '& powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass '
                           f'-File {psq(script)} ' + ' '.join(psq(a) for a in argv) +
                     '\nexit $LASTEXITCODE')
 
@@ -571,7 +573,14 @@ def cmd_run(args):
         argv += ['-Root', args.root]
     if args.verbose:
         argv.append('-ShowHost')
-    argv += ['--', *args.args]
+    # the application's arguments travel in an environment variable (JSON, base64), not on the
+    # command line: powershell.exe -File and the native-command rules of Windows PowerShell 5.1
+    # would otherwise split and unquote them
+    if args.args:
+        os.environ['GRAMINE_VBS_ARGS'] = base64.b64encode(json.dumps(args.args).encode()).decode()
+        if host == LOCAL:
+            os.environ['WSLENV'] = ':'.join(filter(None, [os.environ.get('WSLENV'),
+                                                          'GRAMINE_VBS_ARGS']))
     # The runner names its own process first: SIGTERM or SIGINT here stops the host process (its
     # child) on Windows, so that scripts can stop a server with `kill` as with gramine-direct.
     pspid = []
@@ -596,6 +605,13 @@ def cmd_run(args):
     for k in ('GRAMINE_VBS_HOSTCALL_STATS', 'GRAMINE_VBS_TIMER_RES'):
         if os.environ.get(k) and host == LOCAL:
             os.environ['WSLENV'] = ':'.join(filter(None, [os.environ.get('WSLENV'), k]))
+    if host == LOCAL:    # the runner of this checkout (a package signed earlier may hold an older one)
+        dst = os.path.join(wslpath(windir), 'gramine-vbs.ps1')
+        src = os.path.join(HERE, 'gramine-vbs.ps1')
+        with open(src, 'rb') as f1, open(dst, 'rb') as f2:
+            same = f1.read() == f2.read()
+        if not same:
+            shutil.copyfile(src, dst)
     rc, _ = consume(runner_popen(host, windir, argv), host, check=False, on_line=on_line)
     sys.exit(128 + stopped[0] if stopped else rc)
 
@@ -617,7 +633,7 @@ def find_package(target):
         if not os.path.isfile(stem + '.manifest.vbs') and not os.path.isdir(pkg):
             die(f"no VBS package '{target}' in {os.getcwd()}: build it first with `make VBS=1` "
                 f"(in the example's folder)")
-    if not os.path.isdir(pkg):
+    if not os.path.isfile(os.path.join(pkg, 'build.json')):
         die(f"'{target}' is not built: run `make VBS=1` in its folder")
     b = Build(pkg)
     st = b.load()
