@@ -46,6 +46,7 @@ vbs.packed_files = [
   { path = "/usr/lib/libstdc++.so.6", uri = "file:vbs-build/lib/libstdc++.so.6" },
   { path = "/usr/lib/libgcc_s.so.1", uri = "file:vbs-build/lib/libgcc_s.so.1" },
   { path = "/usr/lib/libz.so.1", uri = "file:vbs-build/lib/libz.so.1" },
+  { path = "/usr/lib/libpthread.so.0", uri = "file:{{ vbs.sysroot }}/usr/lib/libpthread.so.0" },
 {% endif %}
   { path = "/app/scripts", uri = "file:scripts" },
   { path = "/etc/hosts", uri = "file:helper-files/hosts" },

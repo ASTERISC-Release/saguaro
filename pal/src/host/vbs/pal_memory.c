@@ -251,6 +251,59 @@ int _PalVirtualMemoryFree(void* addr, size_t size) {
     return 0;
 }
 
+/* A range that holds packed code and other pages (glibc's ld.so asks for PROT_NONE over the whole
+ * reservation of a shared object, the code segment included, before it maps the segments): the
+ * protection goes to the pages outside the packed code only, and the code pages stay execute-read
+ * (never writable, never executable-and-writable; the platform allows no way back for them). A request
+ * that would make code writable is refused before anything is changed. */
+static int protect_around_packed_code(uintptr_t a, size_t size, pal_prot_flags_t prot) {
+    uintptr_t end = a + size;
+    for (int pass = 0; pass < 2; pass++) { /* pass 0 checks, pass 1 applies */
+        uintptr_t cur = a;
+        while (cur < end) {
+            uintptr_t code_hi = 0, next_lo = end;
+            for (uint64_t i = 0; i < g_vbs->nobjs; i++) {
+                uintptr_t lo[8], hi[8];
+                size_t n = packed_code_ranges(&g_vbs->objs[i], lo, hi, ARRAY_SIZE(lo));
+                for (size_t j = 0; j < n; j++) {
+                    if (lo[j] <= cur && cur < hi[j] && hi[j] > code_hi)
+                        code_hi = hi[j];
+                    else if (lo[j] > cur && lo[j] < next_lo)
+                        next_lo = lo[j];
+                }
+            }
+            if (code_hi) { /* packed code: stays as it is */
+                if (prot & PAL_PROT_WRITE) {
+                    log_error("vbs: refusing to make packed code writable (%p, %#lx)", (void*)a,
+                              size);
+                    return -PAL_ERROR_DENIED;
+                }
+                cur = MIN(code_hi, end);
+                continue;
+            }
+            uintptr_t hi = MIN(next_lo, end);
+            /* PROT_NONE over packed pages is the loader's placeholder for the reservation of the
+             * object, before it maps the segments (a read-only segment is "mapped" without a
+             * protection change, so pages made inaccessible here would stay so): left as they are */
+            if (pass == 1 && !(prot == 0 && vbs_in_pack(cur, hi - cur))) {
+                if (prot & PAL_PROT_EXEC) {
+                    log_error("vbs: memory cannot become executable in a VBS enclave (%p, %#lx)",
+                              (void*)cur, hi - cur);
+                    return -PAL_ERROR_DENIED;
+                }
+                int64_t ret = vbs_protect(cur, hi - cur, prot);
+                if (ret < 0) {
+                    log_error("vbs: protect(%p, %#lx, %#x) failed: %ld", (void*)cur, hi - cur, prot,
+                              ret);
+                    return -PAL_ERROR_DENIED;
+                }
+            }
+            cur = hi;
+        }
+    }
+    return 0;
+}
+
 int _PalVirtualMemoryProtect(void* addr, size_t size, pal_prot_flags_t prot) {
     uintptr_t a = (uintptr_t)addr;
     if (vbs_overlaps_packed_code(a, size)) {
@@ -261,10 +314,8 @@ int _PalVirtualMemoryProtect(void* addr, size_t size, pal_prot_flags_t prot) {
             log_error("vbs: refusing to make packed code writable (%p, %#lx)", addr, size);
             return -PAL_ERROR_DENIED;
         }
-        if (!vbs_inside_packed_code(a, size)) {
-            log_error("vbs: protection change across packed code and data (%p, %#lx)", addr, size);
-            return -PAL_ERROR_DENIED;
-        }
+        if (!vbs_inside_packed_code(a, size))
+            return protect_around_packed_code(a, size, prot);
         return 0;
     }
     if (prot & PAL_PROT_EXEC) {

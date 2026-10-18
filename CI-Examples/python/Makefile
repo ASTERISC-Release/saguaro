@@ -25,7 +25,7 @@ endif
 include ../../scripts/vbs/Makefile.vbs
 all: vbs-all
 
-$(VBS_PYTHON_STAMP): | $(VBS_RUNTIME_STAMP)
+$(VBS_PYTHON_STAMP): $(VBS_DIR)/build-python.sh | $(VBS_RUNTIME_STAMP)
 	sh $(VBS_DIR)/build-python.sh --if-needed
 
 # NumPy and SciPy: the manylinux wheels for CPython 3.12 (PyPI, checked by SHA-256), unpacked into
