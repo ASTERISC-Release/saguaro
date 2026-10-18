@@ -3,14 +3,13 @@
 This directory contains the Makefile and the template manifest for the most
 recent version of Nginx web server (as of this writing, version 1.16.1).
 
-We build Nginx from the source code instead of using an existing installation.
-On Ubuntu 20.04, please make sure that the following packages are installed:
+This example builds Nginx from source and does not use an existing installation. On Ubuntu 20.04,
+install the following packages:
 ```sh
 sudo apt-get install -y build-essential libssl-dev zlib1g-dev
 ```
 
-NOTE: The "benchmark-http.sh" script uses the wrk benchmark (wrk2) under the
-hood. Please refer to https://github.com/giltene/wrk2.
+NOTE: The `benchmark-http.sh` script uses the wrk benchmark (wrk2). See https://github.com/giltene/wrk2.
 
 # Quick Start
 

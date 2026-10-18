@@ -3,12 +3,10 @@
 This directory contains the Makefile and the template manifest for the most
 recent version of Redis (as of this writing, version 6.0.5).
 
-The Makefile and the template manifest contain extensive comments and are made
-self-explanatory. Please review them to gain understanding of Gramine and
-requirements for applications running under Gramine. If you want to contribute a
-new example to Gramine and you take this Redis example as a template, we
-recommend to remove the comments from your copies as they only add noise (see
-e.g. Memcached for a "stripped-down" example).
+The Makefile and the template manifest contain extensive comments. Review them to understand
+Gramine and the requirements for applications that run under it. A new example that takes this
+Redis example as a template should drop the comments, which only add noise (see Memcached for a
+stripped-down example).
 
 
 # Quick Start

@@ -1,12 +1,13 @@
 # Example Integrations
 
-This folder contains application integration examples. For instructions how to build and 
-run each application under Gramine, please see the README.md in each subdirectory.
+This folder contains application integration examples. Each subdirectory has a `README.md` with
+instructions to build and run the application under Gramine.
 
-Note that most of the examples use oversimplified configurations which
-are not secure (e.g., they mount whole host directories into the application).
-If you take these examples as templates for your own workloads, please inspect
-and harden the configurations.
+Most examples use oversimplified configurations that are not secure (for example, they mount whole
+host directories into the application). Inspect and harden the configuration before using an
+example as a template for your own workload.
+
+The table lists the recorded result of each example for each backend.
 
 | Example | Direct x86_64 | VM x86_64 | Direct aarch64 | VM aarch64 | SEV⁹ | TDX | SGX | VBS |
 |---|---|---|---|---|---|---|---|---|

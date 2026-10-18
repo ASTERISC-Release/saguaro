@@ -1,8 +1,7 @@
 # Hello World
 
-This directory contains a Makefile and a manifest template for running a simple
-"Hello World" program in Gramine. It can be used as a sanity test for your
-Gramine installation.
+This directory contains a Makefile and a manifest template for running a simple "Hello World"
+program in Gramine. It serves as a sanity test of a Gramine installation.
 
 # Building
 

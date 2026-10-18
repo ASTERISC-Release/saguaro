@@ -5,8 +5,7 @@ recent version of Memcached as of this writing (v1.6.21).
 
 # Prerequisites
 
-Please install `libevent-dev` package. If you want to benchmark with memcslap,
-also install `libmemcached-tools`.
+Install the `libevent-dev` package. To benchmark with memcslap, also install `libmemcached-tools`.
 
 # Quick Start
 

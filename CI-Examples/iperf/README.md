@@ -10,16 +10,14 @@ recent version of `iperf` as of this writing (3.16).
 
 # Building instructions
 
-We build `iperf` from source because Ubuntu 22.04 has `iperf3` v3.9 in its
-package repositories which is built with `TCP_CONGESTION` requirement (i.e.,
-with `iperf3_cv_header_tcp_congestion="yes"` config option). Using the Ubuntu
-package would fail with the following error:
+`iperf` is built from source because the Ubuntu 22.04 package `iperf3` v3.9 requires
+`TCP_CONGESTION` (it is built with the `iperf3_cv_header_tcp_congestion="yes"` configuration
+option). Using the Ubuntu package fails with the following error:
 ```
 iperf3: error - unable to set TCP_CONGESTION: ...
 ```
 
-Thus we build `iperf` manually. In this case, it is built without
-`TCP_CONGESTION`, and can successfully execute under Gramine[^1].
+The manual build omits `TCP_CONGESTION` and runs under Gramine[^1].
 
 [^1]: Starting from version 3.10, `iperf` supports environments that do not
 implement congestion control algorithm. Thus, iperf 3.10+ prebuilt packages
@@ -82,8 +80,7 @@ LD_LIBRARY_PATH=./install ./install/iperf3 -c localhost -p 5201
 
 # Notes
 - Tested on Ubuntu 22.04.
-- In the execution instructions, we use port `5201` for the client.
-  This is the default port used by `iperf`.
+- The execution instructions use port `5201` for the client. This is the default port of `iperf`.
 
 # Running under each backend
 

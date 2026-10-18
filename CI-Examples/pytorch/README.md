@@ -1,8 +1,7 @@
 # PyTorch
 
-This directory contains steps and artifacts to run a PyTorch sample workload on
-Gramine. Specifically, this example uses a pre-trained model for image
-classification.
+This directory contains steps and artifacts to run a PyTorch sample workload on Gramine. The
+example uses a pre-trained model for image classification.
 
 The workload reads an image from a file on disk `input.jpg` and runs the
 classifier to detect what object is present in the image. For the image shipping

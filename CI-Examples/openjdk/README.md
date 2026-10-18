@@ -1,7 +1,7 @@
 # Java example
 
-This directory contains an example for running a OpenJDK example in Gramine,
-including the Makefile and a template for generating the manifest.
+This directory contains an example for running OpenJDK in Gramine, including the Makefile and a
+template for generating the manifest.
 
 ## Installing prerequisites
 

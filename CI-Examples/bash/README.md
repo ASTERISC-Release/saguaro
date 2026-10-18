@@ -15,7 +15,7 @@ Run `make SGX=1` (non-debug) or `make SGX=1 DEBUG=1` (debug) in the directory.
 
 # Running Bash with Gramine
 
-Here's an example of running Bash scripts under Gramine:
+Examples of running Bash scripts under Gramine:
 
 Without SGX:
 ```

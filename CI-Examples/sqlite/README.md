@@ -21,8 +21,8 @@ Run `make SGX=1` (non-debug) or `make SGX=1 DEBUG=1` (debug) in the directory.
 
 # Running SQLite with Gramine
 
-Here's an example of running SQLite under Gramine (note that command-line options are hardcoded in
-the manifest file):
+Examples of running SQLite under Gramine (the command-line options are hardcoded in the manifest
+file):
 
 Without SGX:
 ```

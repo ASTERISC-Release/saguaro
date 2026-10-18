@@ -25,9 +25,9 @@ make R_HOME=<install path>/lib/R SGX=1
 
 # Run R with Gramine
 
-When running R with Gramine, please use the `--vanilla` or `--no-save` option.
+When running R with Gramine, use the `--vanilla` or `--no-save` option.
 
-Here's an example of running an R script under Gramine:
+Examples of running an R script under Gramine:
 
 Without SGX:
 ```

@@ -5,9 +5,8 @@ the Makefile and a template for generating the manifest.
 
 # Building lighttpd source
 
-For this example, we build lighttpd from source instead of using an existing
-binary. To build lighttpd on Ubuntu 20.04, please make sure that the following
-packages are installed:
+This example builds lighttpd from source and does not use an existing binary. To build lighttpd on
+Ubuntu 20.04, install the following packages:
 
     sudo apt-get install -y build-essential libssl-dev zlib1g-dev
 
@@ -22,23 +21,21 @@ prepare lighttpd to run on SGX.
 
 # Running lighttpd
 
-Execute one of the following commands to start lighttpd either natively
-(non-Gramine), on Gramine or Gramine-SGX, respectively.
+Execute one of the following commands to start lighttpd natively (without Gramine), on Gramine or
+on Gramine-SGX, respectively.
 
     make start-native-server
     make start-gramine-server
     SGX=1 make start-gramine-server
 
-Because these commands will start the lighttpd server in the foreground, you
-will need to open another console to run the client.
+These commands start the lighttpd server in the foreground. Run the client in another console.
 
-Once the server has started, you can test it with `wget` or `curl`
+Once the server has started, test it with `wget` or `curl`:
 
     wget http://127.0.0.1:8003/random/10K.1.html
     curl --compressed http://127.0.0.1:8003/random/10K.1.html -o 10K.1.html
 
-You may also run the benchmark script using `wrk` (wrk2). Please refer to
-https://github.com/giltene/wrk2 for more information.
+The benchmark script uses `wrk` (wrk2) and can be run as well. See https://github.com/giltene/wrk2.
 
     ../common_tools/benchmark-http.sh http://127.0.0.1:8003
 

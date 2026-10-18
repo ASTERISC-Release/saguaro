@@ -7,8 +7,8 @@ the Makefile and a template for generating the manifest.
 
 ## Installing prerequisites
 
-For generating the manifest and running the test scripts, please run the following
-command to install the required packages (Ubuntu-specific):
+To generate the manifest and run the test scripts, install the required packages with the
+following command (Ubuntu-specific):
 
     sudo apt-get install libnss-mdns python3-numpy python3-scipy
 
@@ -59,7 +59,7 @@ enclaves; the page is also fetched with Windows' `curl.exe`) and skips 3/4 and 4
 
 # Run Python with Gramine
 
-Here's an example of running Python scripts under Gramine:
+Examples of running Python scripts under Gramine:
 ```
 gramine-sgx ./python scripts/helloworld.py
 gramine-sgx ./python scripts/test-numpy.py

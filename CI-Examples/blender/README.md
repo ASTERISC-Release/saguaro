@@ -5,8 +5,7 @@ Gramine.
 
 # Quick Start
 
-To run the test execute ```make check```. To do the same for SGX, execute
-```make SGX=1 check```.
+To run the test, execute `make check`. For SGX, execute `make SGX=1 check`.
 
 # Running under each backend
 
