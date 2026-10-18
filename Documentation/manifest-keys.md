@@ -66,7 +66,7 @@ the relay for x86_64 and AArch64.
 
 | Key | Applies to | Purpose | Details |
 |---|---|---|---|
-| `sys.experimental__multiprocess` | VM PAL; experimental, with architecture-specific limits | Enable process creation and related multi-process support in the guest. | [VM process support](quickstart/vm.md#processes-behind-a-key) |
+| `sys.experimental__multiprocess` | VM PAL; experimental, with architecture-specific limits | Process creation and related multi-process support in the guest. Default `true` on the x86_64 and AArch64 VM PAL (needs guest RAM above 4G on x86_64); `false` gives the single-process guest. | [VM process support](quickstart/vm.md#processes-behind-a-key) |
 | `sys.experimental__assume_external_processes_alive` | Common LibOS option; used by VM/TDX integrations | Make `kill(pid, 0)` succeed when the target is outside Gramine and would otherwise be reported as absent. | [Implementation](../libos/src/sys/libos_sigaction.c) |
 | `sys.experimental__shared_input_ring` | VM and TDX PALs; graphics use | Make the VM vsock driver use interrupt-driven polling when the graphics shared input ring is active. | [Graphics input](devel/graphics/running.md) |
 | `sys.experimental__enable_host_sysv_semaphores` | VM/TDX with graphics enabled and a host agent | Forward System V semaphore operations to the host agent. | [Graphics example](../CI-Examples/graphics/tf2/README.md) |

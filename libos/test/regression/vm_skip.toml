@@ -8,51 +8,14 @@
 [[group]]
 kind = "skip"
 category = "fork-exec"
-reason = "The VM PAL is single-process (no PalProcessCreate / IPC): the test needs fork, vfork, execve, clone without CLONE_VM, a child process, or a pipe/socket/eventfd/futex shared with one."
+reason = "Still failing with sys.experimental__multiprocess on (the default): the test needs something the VM PAL processes do not provide yet (see Documentation/devel/vm-multiproc/TESTING.md, 2026-10-18)."
 tests = [
-  "TC_01_Bootstrap::test_010_console",
-  "TC_01_Bootstrap::test_202_fork_and_exec",
-  "TC_01_Bootstrap::test_2025_fork_reservation",
   "TC_30_Syscall::test_075b_mmap_shared_ro",
-  "TC_01_Bootstrap::test_2045_fork_pacret",
-  "TC_01_Bootstrap::test_204_vfork_and_exec",
-  "TC_01_Bootstrap::test_205_exec_fork",
-  "TC_01_Bootstrap::test_206_double_fork",
-  "TC_01_Bootstrap::test_220_send_handle",
-  "TC_01_Bootstrap::test_221_send_handle_pf",
-  "TC_01_Bootstrap::test_222_send_handle_enc",
-  "TC_01_Bootstrap::test_223_send_handle_tmpfs",
-  "TC_01_Bootstrap::test_401_exit_group",
-  "TC_01_Bootstrap::test_405_sigprocmask_pending",
-  "TC_30_Syscall::test_020_getdents",
-  "TC_30_Syscall::test_050_mmap",
   "TC_30_Syscall::test_051_mmap_sgx",
-  "TC_30_Syscall::test_057_mprotect_file_fork",
-  "TC_30_Syscall::test_071_eventfd_fork",
-  "TC_30_Syscall::test_073_eventfd_fork_allowed_failing",
-  "TC_30_Syscall::test_090_sighandler_reset",
-  "TC_30_Syscall::test_095_kill_all",
-  "TC_30_Syscall::test_100_get_set_groups",
-  "TC_30_Syscall::test_140_flock_lock",
-  "TC_30_Syscall::test_110_fcntl_lock",
-  "TC_30_Syscall::test_111_fcntl_lock_child_only",
-  "TC_30_Syscall::test_120_gethostname_default",
-  "TC_30_Syscall::test_130_sid",
-  "TC_31_Syscall::test_010_syscall_restart",
-  "TC_40_FileSystem::test_000_proc",
-  "TC_40_FileSystem::test_011_open_opath",
   "TC_40_FileSystem::test_070_shm",
   "TC_50_GDB::test_000_gdb_backtrace",
   "TC_80_Socket::test_010_epoll",
-  "TC_80_Socket::test_022_poll_closed_fd",
-  "TC_80_Socket::test_090_pipe",
-  "TC_80_Socket::test_092_pipe_ocloexec",
-  "TC_80_Socket::test_095_mkfifo",
-  "TC_80_Socket::test_100_socket_unix",
-  "TC_80_Socket::test_101_socket_unix_fdpass",
   "TC_80_Socket::test_200_socket_udp",
-  "TC_80_Socket::test_300_socket_tcp_msg_peek",
-  "TC_80_Socket::test_301_socket_tcp_ancillary",
 ]
 
 [[group]]
@@ -88,14 +51,6 @@ tests = [
 
 [[group]]
 kind = "skip"
-category = "no-attestation"
-reason = "/dev/attestation is not provided by the VM PAL (SGX/TDX only)."
-tests = [
-  "TC_01_Bootstrap::test_230_keys",
-]
-
-[[group]]
-kind = "skip"
 category = "no-thread-resume"
 reason = "_PalThreadResume() is not implemented in the VM PAL (shared with x86), so a thread blocked in a syscall cannot be interrupted by an asynchronous signal (alarm/itimer/kill from another thread/host)."
 tests = [
@@ -118,14 +73,6 @@ category = "slow-timer"
 reason = "Timed waits are serviced only by CPU0's 100 ms tick (~0.5 s per iteration here), so the test exceeds any sensible timeout. A finer timer would fix it."
 tests = [
   "TC_00_Unittests::test_001_rwlock",
-]
-
-[[group]]
-kind = "skip"
-category = "no-shared-host-file-mappings"
-reason = "The VM PAL cannot map a host (virtio-fs) file MAP_SHARED and writable; it does so only on its own tmpfs, where the tmpfs variant of the test runs."
-tests = [
-  "TC_40_FileSystem::test_076a_mremap_misc_chroot",
 ]
 
 [[group]]

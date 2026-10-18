@@ -218,9 +218,15 @@ bool sysv_shared_sem_enabled(void) {
 }
 
 int init_sysv_shared(void) {
-    bool multiprocess = false;
-    int ret = toml_bool_in(g_manifest_root, "sys.experimental__multiprocess", /*defaultval=*/false,
-                           &multiprocess);
+    /* on by default where the VM PAL has the frame pool (x86_64, aarch64); see pal_main.c */
+#if defined(__x86_64__) || defined(__aarch64__)
+    const bool default_multiprocess = true;
+#else
+    const bool default_multiprocess = false;
+#endif
+    bool multiprocess = default_multiprocess;
+    int ret = toml_bool_in(g_manifest_root, "sys.experimental__multiprocess",
+                           /*defaultval=*/default_multiprocess, &multiprocess);
     if (ret < 0)
         return 0; /* the PAL rejects a malformed value */
     g_enabled = multiprocess && !strcmp(g_pal_public_state->host_type, "VM");
@@ -615,7 +621,22 @@ long sysv_shared_shmat(int shmid, const void* shmaddr, int shmflg) {
     memcpy(path, seg->path, sizeof(path));
     /* the attach counts from now on, so that IPC_RMID meanwhile keeps the file */
     seg->nattach++;
+    /* this process's earlier attaches of the segment: a mapping of a LibOS file system that
+     * emulates mmap (a `tmpfs` /dev/shm) is a copy, so its stores are written back to the file
+     * before the new mapping reads it */
+    struct { uintptr_t addr; size_t len; } earlier[SHM_ATTACH];
+    size_t earlier_count = 0;
+    for (size_t i = 0; i < SHM_ATTACH_ALL && earlier_count < SHM_ATTACH; i++) {
+        struct shm_attach* a = &g_area->attach[i];
+        if (a->pid == g_process.pid && a->shmid == shmid) {
+            earlier[earlier_count].addr = a->addr;
+            earlier[earlier_count].len = a->len;
+            earlier_count++;
+        }
+    }
     area_unlock();
+    for (size_t i = 0; i < earlier_count; i++)
+        (void)libos_syscall_msync(earlier[i].addr, earlier[i].len, MS_SYNC);
 
     int prot = PROT_READ | ((shmflg & LINUX_SHM_RDONLY) ? 0 : PROT_WRITE)
                | ((shmflg & LINUX_SHM_EXEC) ? PROT_EXEC : 0);

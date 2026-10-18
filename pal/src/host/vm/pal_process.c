@@ -28,6 +28,13 @@ static int vm_process_copy_runtime(const struct memory_address_space* source,
 #define PROC_STREAM_CAPACITY 1984
 #define PROC_HANDLE_CAPACITY 8
 
+/* `sys.experimental__multiprocess` defaults to on where the frame pool exists (pal_main.c) */
+#if defined(__x86_64__) || defined(__aarch64__)
+#define VM_MULTIPROCESS_DEFAULT true
+#else
+#define VM_MULTIPROCESS_DEFAULT false
+#endif
+
 /* The stream state lives in a frame-pool page that every root maps at the same supervisor address,
  * so its lock and futex words are the same objects for both processes. A reader waits on
  * `reader_futex` while the ring is empty, a writer on `writer_futex` while it is full; each side
@@ -639,9 +646,9 @@ noreturn void _PalProcessExit(int exitcode) {
 
 int _PalProcessCreate(const char** args, uintptr_t (*reserved_mem_ranges)[2],
                       size_t reserved_mem_ranges_len, PAL_HANDLE* out_handle) {
-    bool enabled = false;
+    bool enabled = VM_MULTIPROCESS_DEFAULT;
     int ret = toml_bool_in(g_pal_public_state.manifest_root,
-                           "sys.experimental__multiprocess", false, &enabled);
+                           "sys.experimental__multiprocess", VM_MULTIPROCESS_DEFAULT, &enabled);
     if (ret < 0)
         return ret;
     if (!enabled)
@@ -904,9 +911,9 @@ int vm_process_runtime_copy_selfcheck(void) {
                           g_pal_common_state.raw_manifest_data &&
                           !memcmp(g_pal_common_state.raw_manifest_data, manifest_prefix,
                                   MIN(manifest_size, sizeof(manifest_prefix) - 1));
-    bool multiprocess_enabled = false;
+    bool multiprocess_enabled = VM_MULTIPROCESS_DEFAULT;
     if (isolated_state && toml_bool_in(g_pal_public_state.manifest_root,
-                                      "sys.experimental__multiprocess", false,
+                                      "sys.experimental__multiprocess", VM_MULTIPROCESS_DEFAULT,
                                       &multiprocess_enabled) < 0)
         isolated_state = false;
     isolated_state &= multiprocess_enabled;

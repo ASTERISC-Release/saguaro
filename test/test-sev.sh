@@ -25,7 +25,8 @@
 #
 # Usage: test/test-sev.sh [--prefix DIR] [suite...]   (default: hello memory vsock)
 #   GRAMINE_SEV_MODE=sev     the gramine-sev mode: sev or snp (measure: sev only)
-#   GRAMINE_RAM_SIZE=4G      guest RAM (SEV pins all of it at launch, so smaller boots faster)
+#   GRAMINE_RAM_SIZE=8G      guest RAM (SEV pins all of it at launch, so smaller boots faster; the
+#                            multiprocess frame pool, on by default, needs more than 4G)
 #   COMPARE=1                memory: also run the probe under gramine-vm as the control
 set -u
 set -o pipefail
@@ -50,7 +51,7 @@ fi
 export PATH=$PREFIX/bin:$PATH
 export PYTHONPATH=$(ls -d "$PREFIX"/lib/python3*/site-packages 2>/dev/null | head -1)
 export QEMU_PATH=${QEMU_PATH:-/root/sev-tools/prefix/bin/qemu-system-x86_64}
-export GRAMINE_RAM_SIZE=${GRAMINE_RAM_SIZE:-4G}
+export GRAMINE_RAM_SIZE=${GRAMINE_RAM_SIZE:-8G}
 export GRAMINE_SEV_MODE=${GRAMINE_SEV_MODE:-sev}
 RAM_GIB=${GRAMINE_RAM_SIZE%G}
 OUT=${OUT:-/tmp/test-sev}

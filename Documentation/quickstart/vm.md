@@ -70,7 +70,7 @@ lists the other suites.
   - `GRAMINE_CPU_NUM`: vCPUs, default 1.
   - `GRAMINE_RAM_SIZE`: guest memory. x86_64: default `8G`, at least `4G`
     - Note that memory is allocated on-demand, so this is the maximum.
-- By default the guest runs one process: `fork` fails with `Function not implemented`. The experimental key `sys.experimental__multiprocess = true` enables `fork`, `vfork`, `execve`, pipes, signals and shared memory between processes.
+- By default the guest runs several processes (x86_64 and AArch64; the key `sys.experimental__multiprocess` defaults to `true`). It needs guest RAM above 4G on x86_64 (a 4G guest has no free GiB for the frame pool and fails to boot). `sys.experimental__multiprocess = false` gives the single-process guest, where `fork` fails with `Function not implemented`. The key enables `fork`, `vfork`, `execve`, pipes, signals and shared memory between processes.
 - The guest has no TCP/IP stack of its own: TCP and UDP sockets are carried over vsock to a relay that the launcher starts per VM (`vm-relay: cid=... listening ...`) and that opens the real sockets on the host side. Outbound connections work by default; a server in the guest is reached through an `inbound` forward in the manifest's `[vm.net]` table or `GRAMINE_VM_INBOUND`.
 
 # 5. Troubleshooting
