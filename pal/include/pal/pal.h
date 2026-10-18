@@ -290,6 +290,24 @@ int PalVirtualMemoryAllocContiguous(void* addr, size_t size, pal_prot_flags_t pr
                                     uint64_t* out_phys);
 
 /*!
+ * \brief Map the device memory that `[src, src+size)` maps at `addr` as well.
+ *
+ * \param addr  Virtual address, page-aligned (a range the caller bookkept; what it mapped is
+ *              replaced).
+ * \param src   Virtual address of device memory outside guest RAM, page-aligned (a slice of the
+ *              VM PAL's graphics arenas that the host listener mapped a GPU buffer into).
+ * \param size  Size, page-aligned.
+ * \param prot  See #PalVirtualMemoryAlloc.
+ *
+ * For the VM PAL's graphics redirection: a mapping of a host GPU buffer at an address the
+ * application chose (MAP_FIXED; Wine's WoW64 places host-visible Vulkan memory below 4 GiB with
+ * VK_EXT_map_memory_placed, and the arenas lie above). Both ranges then show the same memory, with
+ * the same cache attributes. Freed with #PalVirtualMemoryFree, which leaves the device memory
+ * alone. Other PALs return -PAL_ERROR_NOTIMPLEMENTED.
+ */
+int PalVirtualMemoryAlias(void* addr, void* src, size_t size, pal_prot_flags_t prot);
+
+/*!
  * \brief Deallocate a previously allocated memory mapping.
  *
  * \param addr  The address.

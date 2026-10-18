@@ -800,6 +800,17 @@ static int address_space_find_leaf_entry(struct memory_address_space* space, uin
     return 0;
 }
 
+static int address_space_present_leaf(struct memory_address_space* space, uintptr_t va,
+                                      uint64_t* out_entry) {
+    uint64_t* entry;
+    uintptr_t next;
+    int ret = address_space_find_leaf_entry(space, va, &entry, &next);
+    if (ret != 0 || !(*entry & PTE_PRESENT))
+        return -PAL_ERROR_INVAL;
+    *out_entry = *entry;
+    return 0;
+}
+
 __attribute_no_sanitize_address
 int memory_address_space_map(struct memory_address_space* space, uintptr_t addr,
                              uintptr_t frame, bool write, bool execute, bool usermode) {
@@ -854,6 +865,44 @@ int memory_address_space_map_shared_frame(struct memory_address_space* space, ui
     if (ret < 0)
         memory_frame_put(frame);
     return ret;
+}
+
+int memory_address_space_alias_device(struct memory_address_space* space, uintptr_t dst,
+                                      uintptr_t src, size_t size, bool write, bool execute) {
+    const uint64_t addr_mask = 0x00000ffffffff000UL;
+    const uint64_t cache_bits = (1UL << 3) | (1UL << 4) | (1UL << 7); /* PWT, PCD, PAT */
+    if (!g_frame_pool_bitmap || !space || !size || !IS_ALIGNED_POW2(dst, PAGE_SIZE) ||
+            !IS_ALIGNED_POW2(src, PAGE_SIZE) || !IS_ALIGNED_POW2(size, PAGE_SIZE) ||
+            dst + size < dst || src + size < src || (dst < src + size && src < dst + size))
+        return -PAL_ERROR_INVAL;
+    if (dst < SHARED_MEM_ADDR + SHARED_MEM_SIZE && SHARED_MEM_ADDR < dst + size)
+        return -PAL_ERROR_DENIED;
+    /* the source must be present device memory throughout: pool frames carry reference counts
+     * that this mapping does not take, so they are refused */
+    for (size_t off = 0; off < size; off += PAGE_SIZE) {
+        uint64_t entry;
+        int ret = address_space_present_leaf(space, src + off, &entry);
+        if (ret < 0)
+            return ret;
+        if (is_frame_pool_frame(entry & addr_mask))
+            return -PAL_ERROR_INVAL;
+    }
+    for (size_t off = 0; off < size; off += PAGE_SIZE) {
+        uint64_t src_entry;
+        int ret = address_space_present_leaf(space, src + off, &src_entry);
+        if (ret < 0)
+            return ret;
+        ret = memory_address_space_map_owned(space, dst + off, src_entry & addr_mask, write,
+                                             execute, /*usermode=*/true);
+        if (ret < 0)
+            return ret;
+        uint64_t* dst_entry;
+        ret = address_space_get_leaf_entry(space, dst + off, /*make_private=*/false, &dst_entry);
+        if (ret < 0)
+            return ret;
+        *dst_entry = (*dst_entry & ~cache_bits) | (src_entry & cache_bits);
+    }
+    return memory_address_space_flush_range(dst, size);
 }
 
 /* Copies a frame-pool frame into a fresh one (for copy-on-write). */

@@ -1,5 +1,6 @@
 PalVirtualMemoryAlloc
 PalVirtualMemoryAllocContiguous
+PalVirtualMemoryAlias
 PalVirtualMemoryFree
 PalVirtualMemoryProtect
 PalSetMemoryBookkeepingUpcalls

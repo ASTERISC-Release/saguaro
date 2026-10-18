@@ -58,6 +58,15 @@ int _PalVirtualMemoryAllocContiguous(void* addr, size_t size, pal_prot_flags_t p
     return 0;
 }
 
+int _PalVirtualMemoryAlias(void* addr, void* src, size_t size, pal_prot_flags_t prot) {
+    assert(WITHIN_MASK(prot, PAL_PROT_MASK));
+    struct memory_address_space* address_space = current_address_space();
+    if (!address_space)
+        return -PAL_ERROR_NOTIMPLEMENTED;
+    return memory_address_space_alias_device(address_space, (uintptr_t)addr, (uintptr_t)src, size,
+                                             !!(prot & PAL_PROT_WRITE), !!(prot & PAL_PROT_EXEC));
+}
+
 int _PalVirtualMemoryFree(void* addr, size_t size) {
     assert(addr);
     struct memory_address_space* address_space = current_address_space();
