@@ -140,11 +140,3 @@ reason = "The VM PAL has no CPU-time accounting (PalGetCpuTime is not implemente
 tests = [
   "TC_30_Syscall::test_09f_cputime",
 ]
-
-[[group]]
-kind = "xfail"
-category = "investigate"
-reason = "[VM:investigate] With sys.experimental__multiprocess on (the default) System V segments are mapped from files; with this test's LibOS tmpfs /dev/shm a second shmat() in the same process does not see the first mapping's stores (two MAP_SHARED maps of a tmpfs file are not coherent on the VM PAL, also without the key). Passes with sys.experimental__multiprocess = false (GRAMINE_VM_MULTIPROCESS=0)."
-tests = [
-  "TC_30_Syscall::test_096_sysv_shm",
-]

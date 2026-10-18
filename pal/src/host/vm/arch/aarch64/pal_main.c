@@ -610,8 +610,6 @@ noreturn int pal_start_continue(void* cmdline_) {
     if (ret < 0)
         INIT_FAIL("Cannot parse 'sys.experimental__multiprocess'");
     if (enable_multiprocess) {
-        log_always("'sys.experimental__multiprocess' on AArch64 is experimental "
-                   "(Documentation/devel/vm-multiproc-aarch64/)");
         ret = init_multiprocess_frame_pool();
         if (ret < 0)
             INIT_FAIL("Cannot initialize the multiprocess frame pool: %s", pal_strerror(ret));
