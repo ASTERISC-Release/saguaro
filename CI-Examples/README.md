@@ -56,7 +56,7 @@ Symbols: ✓ pass, ✗ fail, – not run or not applicable, blank no record. A r
 ¹⁰ Python: only `scripts/helloworld.py` was run.  
 ¹¹ Blender: the example downloads an x86_64-only binary, so it cannot run on aarch64. VM x86_64: skipped, no reason recorded.  
 ¹² The VM runs servers through the vsock relay (`GRAMINE_VM_INBOUND`); nginx runs with `master_process off`.  
-¹³ Bash: `echo` and `ls` pass. The example's own 7 checks give 1/7, and 7/7 with `sys.experimental__multiprocess`.  
+¹³ Bash: the example's 7 checks pass (7/7) only with `sys.experimental__multiprocess` in the manifest; without it 1/7. The multiprocess key is supported on x86_64 only.  
 ¹⁴ Python: 4/4 checks on 2026-10-12. An earlier run (2026-10-10) passed 3/4; the HTTP check was not possible then.  
 ¹⁵ Direct x86_64: `multi-thread` and `mremap` pass; `networks` not applicable; `align_test` is not a test (it prints a pointer and waits).  
 ¹⁶ `multi-thread`, `mremap` and `networks` pass; `align_test` is not a test (it prints a pointer and waits).  

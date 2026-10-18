@@ -75,15 +75,15 @@ multiple Gramine instances anyway.
 
 # Running under each backend
 
-Run the commands in this directory after the build (`make`, or `make VBS=1`), with the install of the backend active (`Documentation/quickstart/`). The matrix in `CI-Examples/README.md` gives the result and the date for each backend. "Not verified" means that no result is recorded.
+Build first (`make`, or `make VBS=1` for vbs) and activate the install of the backend (`Documentation/quickstart/`). Results and dates are in the matrix of `CI-Examples/README.md`.
 
 - **direct:** `gramine-direct sqlite3 < scripts/create.sql`. Verified on x86_64 and aarch64.
 - **vm:** `gramine-vm sqlite3 < scripts/create.sql`. Verified on x86_64 and aarch64.
 - **sev:** not verified.¹
 - **tdx:** not verified.²
-- **sgx:** not verified.³ Upstream command: `gramine-sgx sqlite3 < scripts/create.sql`.
+- **sgx:** not verified.³ The commands are given above.
 - **vbs:** `make VBS=1 check`. Verified on ARM64 and x64.
 
-¹ Not verified: no result is recorded for this backend (matrix in `CI-Examples/README.md`).  
+¹ No result is recorded for this backend (matrix in `CI-Examples/README.md`).  
 ² TDX was tested offline by the maintainer, with the same result as SEV. No TDX log is in the repository, so the result is reported and not verified here. The TDX install needs `td-shim` (`Documentation/TODO.md`).  
 ³ SGX has not run on this tree's hardware. The SGX build needs `protobuf-c` (`Documentation/TODO.md`).

@@ -31,15 +31,16 @@ gramine-sgx ./bash -c "cd scripts && bash bash_test.sh 2"
 
 # Running under each backend
 
-Run the commands in this directory after the build (`make`, or `make VBS=1`), with the install of the backend active (`Documentation/quickstart/`). The matrix in `CI-Examples/README.md` gives the result and the date for each backend. "Not verified" means that no result is recorded.
+Build first (`make`, or `make VBS=1` for vbs) and activate the install of the backend (`Documentation/quickstart/`). Results and dates are in the matrix of `CI-Examples/README.md`.
 
 - **direct:** `gramine-direct ./bash -c "ls"`. Verified on x86_64 and aarch64.
-- **vm:** `gramine-vm bash -c "ls"`. Verified on x86_64 and aarch64. The example's own script checks run only with `sys.experimental__multiprocess` (x86_64).
+- **vm:** `gramine-vm bash -c "ls"`. Verified on x86_64 and aarch64. On x86_64 the example's 7 script checks pass (7/7) only with `sys.experimental__multiprocess` in the manifest.
 - **sev:** not verified.¹
 - **tdx:** not verified.²
-- **sgx:** not verified.³ Upstream command: `make SGX=1` and `gramine-sgx ./bash -c "ls"`.
-- **vbs:** not verified.¹ No VBS recipe.
+- **sgx:** not verified.³ The commands are given above.
+- **vbs:** not verified.⁴
 
-¹ Not verified: no result is recorded for this backend (matrix in `CI-Examples/README.md`).  
+¹ No result is recorded for this backend (matrix in `CI-Examples/README.md`).  
 ² TDX was tested offline by the maintainer, with the same result as SEV. No TDX log is in the repository, so the result is reported and not verified here. The TDX install needs `td-shim` (`Documentation/TODO.md`).  
-³ SGX has not run on this tree's hardware. The SGX build needs `protobuf-c` (`Documentation/TODO.md`).
+³ SGX has not run on this tree's hardware. The SGX build needs `protobuf-c` (`Documentation/TODO.md`).  
+⁴ No VBS recipe.

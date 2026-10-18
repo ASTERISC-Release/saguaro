@@ -72,7 +72,7 @@ against 349 MB/s, 256 KiB 135 MB/s against 754 MB/s each way.
 
 ## Running under each backend
 
-Run the commands in this directory after the build (`make`, or `make VBS=1`), with the install of the backend active (`Documentation/quickstart/`). The matrix in `CI-Examples/README.md` gives the result and the date for each backend. "Not verified" means that no result is recorded.
+Build first (`make`, or `make VBS=1` for vbs) and activate the install of the backend (`Documentation/quickstart/`). Results and dates are in the matrix of `CI-Examples/README.md`.
 
 - **direct, vm, sev, tdx, sgx:** not applicable. The example is for the VBS backend only (`make` without `VBS=1` says so).
 - **vbs:** `make check`. Verified on ARM64 and x64.
