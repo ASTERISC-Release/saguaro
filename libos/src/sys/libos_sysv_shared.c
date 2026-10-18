@@ -218,9 +218,15 @@ bool sysv_shared_sem_enabled(void) {
 }
 
 int init_sysv_shared(void) {
-    bool multiprocess = false;
-    int ret = toml_bool_in(g_manifest_root, "sys.experimental__multiprocess", /*defaultval=*/false,
-                           &multiprocess);
+    /* on by default where the VM PAL has the frame pool (x86_64, aarch64); see pal_main.c */
+#if defined(__x86_64__) || defined(__aarch64__)
+    const bool default_multiprocess = true;
+#else
+    const bool default_multiprocess = false;
+#endif
+    bool multiprocess = default_multiprocess;
+    int ret = toml_bool_in(g_manifest_root, "sys.experimental__multiprocess",
+                           /*defaultval=*/default_multiprocess, &multiprocess);
     if (ret < 0)
         return 0; /* the PAL rejects a malformed value */
     g_enabled = multiprocess && !strcmp(g_pal_public_state->host_type, "VM");

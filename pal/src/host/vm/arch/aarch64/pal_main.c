@@ -606,7 +606,7 @@ noreturn int pal_start_continue(void* cmdline_) {
 
     bool enable_multiprocess;
     ret = toml_bool_in(g_pal_public_state.manifest_root, "sys.experimental__multiprocess",
-                       /*defaultval=*/false, &enable_multiprocess);
+                       /*defaultval=*/true, &enable_multiprocess);
     if (ret < 0)
         INIT_FAIL("Cannot parse 'sys.experimental__multiprocess'");
     if (enable_multiprocess) {

@@ -23,7 +23,7 @@ REPO=$(dirname "$HERE")
 PREFIX=${GRAMINE_PREFIX:-$HOME/.local/gramine-vm}
 OUT=${OUT:-/tmp/test-sev-all}
 CPUS=${CPUS-"1 2 4"}   # CPUS= (empty) skips the suite
-export GRAMINE_RAM_SIZE=${GRAMINE_RAM_SIZE:-4G}
+export GRAMINE_RAM_SIZE=${GRAMINE_RAM_SIZE:-8G}
 mkdir -p "$OUT"
 rc=0
 step() { echo "=== $* ($(date -u +%H:%M:%S), $(cut -d' ' -f1-3 /proc/loadavg))"; }
