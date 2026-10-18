@@ -33,6 +33,7 @@ Several people or agents can work at once, each on their own branch. What makes 
   `Documentation/devel/README.md`.
 - **Keep documents true.** After editing documents, run `scripts/check-docs.py`: it reports paths and links
   that name no file of the repository (names that are legitimately external go in `scripts/check-docs.allow`).
+- **Writing documents.** Follow `Documentation/devel/doc-style.md`.
 - **Commit small, verified steps** on your own branch, with a message that says what changed and
   why.
 - **Ask first** before destructive git actions (`reset --hard`, deleting branches, anything on a
