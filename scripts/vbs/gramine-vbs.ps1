@@ -146,7 +146,7 @@ function Wsl-Home {
 function Resolve-Build([string]$t, [switch]$MustExist) {
     if (-not $t) { Fail 'give a package folder' 2 }
     if (-not (Test-Path -PathType Container $t)) { Fail "no package folder $t" }
-    $b = @{ out = (Resolve-Path $t).Path }
+    $b = @{ out = (Convert-Path $t) }   # (Resolve-Path would prefix a \\wsl$ path with the provider name)
     $b.name = if ($Name) { $Name } else { (Split-Path -Leaf $b.out) -replace '\.vbs$', '' }
     if ($MustExist -and -not (Test-Path (Join-Path $b.out "$($b.name).dll"))) {
         Fail "$($b.out) holds no signed $($b.name).dll (run make VBS=1 in WSL)"
@@ -202,7 +202,7 @@ function Do-Run($b) {
                  if ($Event.MessageData -or $l -notmatch '^\[(vbs-w|host)\]') { [Console]::Out.WriteLine($l); [Console]::Out.Flush() } } }
     $e1 = Register-ObjectEvent -InputObject $proc -EventName OutputDataReceived -Action $act -MessageData ([bool]$ShowHost)
     $e2 = Register-ObjectEvent -InputObject $proc -EventName ErrorDataReceived -Action $act -MessageData ([bool]$ShowHost)
-    [void]$proc.Start()
+    try { [void]$proc.Start() } catch { Fail "cannot start $($psi.FileName): $($_.Exception.Message)" }
     $proc.BeginOutputReadLine()
     $proc.BeginErrorReadLine()
     while (-not $proc.HasExited) { Start-Sleep -Milliseconds 20 }
