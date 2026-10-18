@@ -338,7 +338,7 @@ except Exception:
 used_cids = set()
 for process in qemu_processes:
     pid = process.info['pid']
-    cmdline = ' '.join(process.info['cmdline'])
+    cmdline = ' '.join(process.info['cmdline'] or [])
     match = re.search(r'guest-cid=(\d+)', cmdline)
     guest_cid = int(match.group(1)) if match else None
     if guest_cid is not None:
