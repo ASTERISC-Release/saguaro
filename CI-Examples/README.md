@@ -8,32 +8,32 @@ are not secure (e.g., they mount whole host directories into the application).
 If you take these examples as templates for your own workloads, please inspect
 and harden the configurations.
 
-| Example | Direct x86_64 | VM x86_64 | Direct aarch64 | VM aarch64 | SEV | TDX | SGX | VBS |
+| Example | Direct x86_64 | VM x86_64 | Direct aarch64 | VM aarch64 | SEV⁹ | TDX | SGX | VBS |
 |---|---|---|---|---|---|---|---|---|
-| `bash` |  |  |  |  |  |  |  | –¹ |
-| `blender` |  |  |  |  |  |  |  | –¹ |
-| `busybox` |  |  |  |  |  |  |  | ✓ |
-| `curl` |  |  |  |  |  |  |  | ✓ |
-| `gcc` |  |  |  |  |  |  |  | –¹ |
-| `graphics` |  |  |  |  |  |  |  | –¹ |
-| `helloworld` |  |  |  |  |  |  |  | ✓ |
-| `iperf` |  |  |  |  |  |  |  | ✓ |
-| `lighttpd` |  |  |  |  |  |  |  | ✓ |
-| `memcached` |  |  |  |  |  |  |  | ✓ |
-| `mongodb` |  |  |  |  |  |  |  | –² |
-| `nginx` |  |  |  |  |  |  |  | ✓ |
-| `nodejs` |  |  |  |  |  |  |  | ✗ ARM64, – x64⁴ |
-| `openjdk` |  |  |  |  |  |  |  | –⁵ |
-| `python` |  |  |  |  |  |  |  | ✓ ARM64, ✗ x64⁶ |
-| `pytorch` |  |  |  |  |  |  |  | –¹ |
-| `r` |  |  |  |  |  |  |  | –¹ |
-| `ra-tls-mbedtls` |  |  |  |  |  |  |  | –³ |
-| `ra-tls-nginx` |  |  |  |  |  |  |  | –³ |
-| `ra-tls-secret-prov` |  |  |  |  |  |  |  | –³ |
-| `redis` |  |  |  |  |  |  |  | ✓ |
-| `rust` |  |  |  |  |  |  |  | ✓⁷ |
-| `sqlite` |  |  |  |  |  |  |  | ✓ |
-| `unit_tests` |  |  |  |  |  |  |  | –¹ |
+| `bash` | ✓ | ✓¹³ | ✓ | ✓ | – |  |  | –¹ |
+| `blender` | ✓ | –¹¹ | –¹¹ | –¹¹ | – |  |  | –¹ |
+| `busybox` | ✓ | ✓ | ✓ | ✓ | – |  |  | ✓ |
+| `curl` |  |  |  |  | – |  |  | ✓ |
+| `gcc` |  |  |  |  | – |  |  | –¹ |
+| `graphics` | ✓¹⁷ | ✓¹⁹ | ✓¹⁸ |  | – |  |  | –¹ |
+| `helloworld` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓⁸ |  | ✓ |
+| `iperf` |  |  |  |  | – |  |  | ✓ |
+| `lighttpd` | ✓ | ✓¹² | ✓ | ✓¹² | – |  |  | ✓ |
+| `memcached` | ✓ | ✓¹² | ✓ | ✓¹² | – |  |  | ✓ |
+| `mongodb` |  |  |  |  | – |  |  | –² |
+| `nginx` | ✓ | ✓¹² | ✓ | ✓¹² | – |  |  | ✓ |
+| `nodejs` |  |  |  |  | – |  |  | ✗ ARM64, – x64⁴ |
+| `openjdk` |  |  |  |  | – |  |  | –⁵ |
+| `python` | ✓ | ✓¹⁴ | ✓²¹ | –²² | ✓¹⁰ | ✓⁸,¹⁰ |  | ✓ ARM64, ✗ x64⁶ |
+| `pytorch` |  |  |  |  | – |  |  | –¹ |
+| `r` |  |  |  |  | – |  |  | –¹ |
+| `ra-tls-mbedtls` | –³ | –³ | –³ | –³ | – |  |  | –³ |
+| `ra-tls-nginx` | –³ | –³ | –³ | –³ | – |  |  | –³ |
+| `ra-tls-secret-prov` | –³ | –³ | –³ | –³ | – |  |  | –³ |
+| `redis` | ✓ | ✓¹² | ✓ | ✓¹² | – |  |  | ✓ |
+| `rust` | ✓ | ✓¹² | ✓ | ✓¹² | – |  |  | ✓⁷ |
+| `sqlite` | ✓ | ✓ | ✓ | ✓ | – |  |  | ✓ |
+| `unit_tests` | ✓¹⁵ | ✓¹⁶ | ✓¹⁶ | ✓¹⁶ | ✓²⁰ | ✓⁸,²⁰ |  | –¹ |
 | `vbs/attestation` |  |  |  |  |  |  |  | ✓ |
 | `vbs/dynhello` |  |  |  |  |  |  |  | ✓ |
 | `vbs/helloworld` |  |  |  |  |  |  |  | ✓ |
@@ -50,3 +50,18 @@ Symbols: ✓ pass, ✗ fail, – not run or not applicable, blank no record. A r
 ⁵ No VBS recipe; the JVM needs executable memory.  
 ⁶ ARM64: passes (hello and HTTP tests; NumPy and SciPy are not packed). x64: tests 1/4 and 2/4 pass; tests 3/4 and 4/4 (NumPy, SciPy) fail.  
 ⁷ Needs rustup stable with `rust-src`.  
+⁸ Reported by the maintainer, offline, identical to the SEV result. No TDX log is in the repository.  
+⁹ Only `helloworld`, `thread-tls` (in `unit_tests/multi-thread`) and python `scripts/helloworld.py` were run under SEV. Every other example is not run.  
+¹⁰ Python: only `scripts/helloworld.py` was run.  
+¹¹ Blender: the example downloads an x86_64-only binary, so it cannot run on aarch64. VM x86_64: skipped, no reason recorded.  
+¹² The VM runs servers through the vsock relay (`GRAMINE_VM_INBOUND`); nginx runs with `master_process off`.  
+¹³ Bash: `echo` and `ls` pass. The example's own 7 checks give 1/7, and 7/7 with `sys.experimental__multiprocess`.  
+¹⁴ Python: 4/4 checks on 2026-10-12. An earlier run (2026-10-10) passed 3/4; the HTTP check was not possible then.  
+¹⁵ Direct x86_64: `multi-thread` and `mremap` pass; `networks` not applicable; `align_test` is not a test (it prints a pointer and waits).  
+¹⁶ `multi-thread`, `mremap` and `networks` pass; `align_test` is not a test (it prints a pointer and waits).  
+¹⁷ Direct x86_64: `direct-tests`, glxgears, Quake II and SuperTuxKart ran; Minetest was not run.  
+¹⁸ Direct aarch64: glxgears, Quake II, SuperTuxKart and Minetest ran on the NVIDIA GB10.  
+¹⁹ VM x86_64: glxgears and Quake II ran.  
+²⁰ Only `thread-tls` (in `unit_tests/multi-thread`) ran.  
+²¹ Python on 2026-10-08: 4/4. On 2026-10-15 the run in another container was partial (numpy and scipy missing).  
+²² Python: skipped, the host python is not PIE.  
