@@ -369,7 +369,7 @@ the image, 127.0.0.1:8003 |
 Also with `make VBS=1 check` (passing on both the ARM64 and the x64 machine, `TESTING.md`): `busybox`, `curl`,
 `iperf`, `sqlite`, `rust` (needs rustup stable with `rust-src`) and, under `CI-Examples/vbs`, `helloworld`,
 `dynhello`, `python`, `tcpserver`, `attestation`, `tls-echo`. Known failures: `nodejs` (x18 in the node
-binary and libstdc++ on ARM64; no x64 recipe) (NumPy and SciPy in `python` run on x64 since the data-only protection change; its HTTP test is intermittent).
+binary and libstdc++ on ARM64; no x64 recipe) (NumPy and SciPy in `python` run on x64 with the research key `vbs.__insecure_skip_code_mprotect = true`, which makes the PAL apply a protection change over packed code and data to the data pages only; code pages stay execute-read; its HTTP test is intermittent).
 
 For example:
 
