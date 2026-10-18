@@ -39,7 +39,7 @@ sides.)
     gramine-vbs helloworld
 
 `make VBS=1` builds the program for the enclave and packs it, then links and signs the enclave image
-(the signed `helloworld.dll` in `helloworld.vbs/`, next to `helloworld.manifest.vbs`). `gramine-vbs helloworld` runs it,
+(the signed `helloworld.dll` in the folder `helloworld.vbs`, next to `helloworld.manifest.vbs`). `gramine-vbs helloworld` runs it,
 like `gramine-direct helloworld`; if the package is missing or older than its manifest, it says to run
 `make VBS=1` (it never builds):
 
