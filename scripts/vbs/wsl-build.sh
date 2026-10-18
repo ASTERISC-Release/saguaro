@@ -89,7 +89,14 @@ PY
     exit 0
 fi
 
-case "$MODE" in objs|manifest) ;; *) echo "usage: wsl-build.sh sync|objs|manifest"; exit 2 ;; esac
+case "$MODE" in runtime)
+    sh "$HERE/wsl-setup.sh" check || { sh "$HERE/wsl-setup.sh" check; exit 11; }
+    GRAMINE_VBS_LOG_PREFIX=[wsl] sh "$HERE/build-runtime.sh"
+    exit 0
+    ;;
+    objs|manifest) ;;
+    *) echo "usage: wsl-build.sh sync|runtime|objs|manifest"; exit 2 ;;
+esac
 : "${GV_OUT:?}" "${GV_HDRID:?}"
 sh "$HERE/wsl-setup.sh" check clang >/dev/null || { sh "$HERE/wsl-setup.sh" check clang; exit 11; }
 

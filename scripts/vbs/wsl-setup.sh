@@ -104,7 +104,7 @@ env)
     echo "$TOOLS/env.sh"
     ;;
 missing)
-    # the missing packages, into /tmp/gramine-vbs-missing (read by gramine-vbs.ps1 setup -Apt)
+    # the missing packages, into /tmp/gramine-vbs-missing (read by gramine-vbs.ps1 setup-system)
     missing | tee /tmp/gramine-vbs-missing; echo
     ;;
 *)

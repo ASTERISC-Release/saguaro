@@ -51,9 +51,11 @@ hand (the commands used for the phase-2 hello world):
    `pal_vbs_host.exe pal_vbs_enclave.dll 1` runs the PAL-level self-test.
 
 **On one Windows machine** (no second Linux machine; `Documentation/devel/vbs-enclave/PLAN-windows-build.md`):
-steps 1 and 2 run inside a WSL2 Ubuntu 24.04 aarch64 distribution (`wsl-setup.sh` checks and installs
-its tools, with apt or, without sudo, into a user prefix). `gramine-vbs.cmd` (`gramine-vbs.ps1`) is
-`gramine-vbs` for that machine: it copies the checkout into WSL, runs the Linux side there
-(`wsl-build.sh manifest`) and links, signs and runs on Windows. `build-enclave.ps1` does steps 3 to
+steps 1 and 2 run inside a WSL2 Ubuntu distribution of the machine's architecture. `gramine-vbs.cmd`
+(`gramine-vbs.ps1`) is `gramine-vbs` for that machine: `setup` installs missing tools in the WSL
+user prefix, `setup-system` installs missing tools systemwide, `build` copies the checkout into WSL and
+builds glibc, PAL and LibOS, and `package <manifest>` builds and packs an application before linking
+and signing on Windows. `run` only launches an existing package and fails if it is missing or stale.
+`build-enclave.ps1` does steps 3 to
 5 for a pack made by hand in WSL (`wsl-build.sh objs`: the objects with clang inside WSL, against
 this machine's SDK and MSVC headers).

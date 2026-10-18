@@ -152,13 +152,13 @@ needed):
     the Windows side and the distribution and prints what is missing; then
     either:
 
-        scripts\vbs\gramine-vbs.cmd setup -Install   # no sudo: into ~/.local/share/gramine-vbs
-        scripts\vbs\gramine-vbs.cmd setup -Apt       # sudo apt-get install (asks for the password)
+        scripts\vbs\gramine-vbs.cmd setup            # check and install missing packages user-level
+        scripts\vbs\gramine-vbs.cmd setup-system     # install missing packages systemwide (sudo)
 
-    `-Install` downloads the same Ubuntu packages with `apt-get download`
+    `setup` downloads missing Ubuntu packages with `apt-get download`
     and unpacks them into a folder of your home (about 290 MB, 7 s): bison, m4,
-    pkgconf, meson, ninja, clang 18 and four Python modules. `-Apt` installs
-    them system-wide: `bison m4 pkgconf meson ninja-build python3-tomli python3-tomli-w python3-voluptuous python3-pyelftools clang`. Nothing else
+    pkgconf, meson, ninja, clang 18 and four Python modules. `setup-system`
+    installs missing packages systemwide with `apt-get`. Nothing else
     is ever installed or changed by the tools.
 
 The first build copies the SDK and MSVC headers into the distribution (once
@@ -196,14 +196,16 @@ and LibOS (1 minute); see [Quick start on Windows](#quick-start-on-windows).
 In PowerShell or `cmd`, in the checkout:
 
     scripts\vbs\gramine-vbs.cmd setup
+    scripts\vbs\gramine-vbs.cmd build
+    scripts\vbs\gramine-vbs.cmd package CI-Examples\vbs\helloworld\helloworld.manifest
     scripts\vbs\gramine-vbs.cmd run CI-Examples\vbs\helloworld\helloworld.manifest
 
-The first `run` copies the checkout into the distribution
-(`~/.cache/gramine-vbs/checkouts/<name>-<hash>`), builds the vbs glibc, the
-PAL and LibOS, compiles the program (the manifest's `vbs.build`), packs,
-compiles the Windows objects with clang in WSL, then links, signs and runs it
-here: 3.5 minutes measured; a `-Rebuild` later takes 11 s, a plain `run`
-of the signed image 0.4 s. The output:
+`setup` installs missing build packages in the WSL user's home. `build` copies the checkout into the
+distribution (`~/.cache/gramine-vbs/checkouts/<name>-<hash>`), then builds the vbs glibc, PAL and
+LibOS. `package` compiles the program (the manifest's `vbs.build`), packs, compiles the Windows
+objects with clang in WSL, then links and signs it. `run` only launches an existing package; it fails
+if the package is missing or stale. The first complete build and package took 3.5 minutes; a later
+package took 11 s, and a plain `run` of the signed image took 0.4 s. The output:
 
     Hello, world from a VBS enclave (pid 1, 0 arguments)
 
@@ -475,20 +477,22 @@ Options: `--runtime`, `--headers`, `--windows`, `--windows-dir`,
 On Windows, `scripts\vbs\gramine-vbs.cmd` (which runs `gramine-vbs.ps1`
 with Windows PowerShell) has the same commands, with the Linux side in WSL:
 
-    gramine-vbs.cmd setup  [-Install | -Apt]
-    gramine-vbs.cmd build  <manifest> [-Out DIR] [-NoSign]
+    gramine-vbs.cmd setup
+    gramine-vbs.cmd setup-system
+    gramine-vbs.cmd build
+    gramine-vbs.cmd package <manifest> [-Out DIR] [-NoSign]
     gramine-vbs.cmd sign   <manifest|DIR>
-    gramine-vbs.cmd run    <manifest|DIR> [-Threads N] [-Root DIR] [-Rebuild] [-ShowHost] [-- ARGS]
+    gramine-vbs.cmd run    <manifest|DIR> [-Threads N] [-Root DIR] [-ShowHost] [-- ARGS]
     gramine-vbs.cmd verify <manifest|DIR> -Report FILE [-- verifier options]
 
 with `-Distro NAME` and `-CertName SUBJECT` for all of them. The build
 folder `<name>.vbs` is next to the manifest and holds the objects, the
 signed `<name>.dll`, `pal_vbs_host.exe`, `objs-info.txt` (the clang,
 gcc and header versions and the object hashes; the objects are
-reproducible), and `root` (the default host root). `run` rebuilds when a
-file of the checkout (or of the manifest's folder outside it) changed since the
-image was built, by name, size and modification time, or with `-Rebuild`;
-files deleted on Windows are deleted from the WSL copy too. Inputs reach WSL in
+reproducible), and `root` (the default host root). `run` requires the signed image and host executable
+to exist and fails if the package is missing or if its recorded inputs changed; it never rebuilds.
+Use `build` and `package <manifest>` explicitly to prepare or refresh a package. Files deleted on
+Windows are deleted from the WSL copy on the next `build` or `package`. Inputs reach WSL in
 environment variables, so folders with spaces or non-ASCII names work.
 
 Objects that `gramine-vbs build --no-sign` prepared on Linux (copy

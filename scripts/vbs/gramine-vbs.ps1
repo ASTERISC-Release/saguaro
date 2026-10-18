@@ -6,13 +6,13 @@
 # pack.py and the clang-compiled Windows objects) runs inside a WSL2 distribution of this machine;
 # linking, veiid, signing and running happen here. gramine-vbs.cmd next to this file runs it.
 #
-#   gramine-vbs setup  [-Install | -Apt]              check the machine; -Install puts the build
-#                                                     tools into the WSL distribution (no sudo),
-#                                                     -Apt installs them with sudo apt-get
-#   gramine-vbs build  <manifest> [-Out DIR] [-NoSign]
+#   gramine-vbs setup                              check and install missing WSL tools user-level
+#   gramine-vbs setup-system                       check and install missing WSL tools system-wide
+#   gramine-vbs build                              copy checkout to WSL; build glibc, PAL and LibOS
+#   gramine-vbs package <manifest> [-Out DIR] [-NoSign]
 #   gramine-vbs sign   <manifest|DIR>
-#   gramine-vbs run    <manifest|DIR> [-Threads N] [-Root DIR] [-Rebuild] [-ShowHost] [-- ARGS]
-#                      (builds first when the image is missing or a source file changed)
+#   gramine-vbs run    <manifest|DIR> [-Threads N] [-Root DIR] [-ShowHost] [-- ARGS]
+#                      (runs an existing package; use build and package explicitly)
 #   gramine-vbs verify <manifest|DIR> -Report FILE [-- verifier options]
 #
 # Options for all commands: -Distro NAME (default $env:GRAMINE_VBS_DISTRO or Ubuntu-24.04),
@@ -29,10 +29,9 @@
 # powershell -File (gramine-vbs.cmd), where a param block would refuse it.
 $Command = 'help'; $Target = ''; $Out = ''; $Distro = ''; $CertName = ''; $Threads = 0; $Root = ''
 $Report = ''; $Dir = ''; $Name = ''; $NoSign = $false; $Rebuild = $false; $ShowHost = $false
-$Install = $false; $Apt = $false
 $Rest = @()
 $valueOpts = 'Out', 'Distro', 'CertName', 'Threads', 'Root', 'Report', 'Dir', 'Name'
-$switchOpts = 'NoSign', 'Rebuild', 'ShowHost', 'Install', 'Apt'
+$switchOpts = 'NoSign', 'Rebuild', 'ShowHost'
 $pos = @()
 for ($i = 0; $i -lt $args.Count; $i++) {
     $a = [string]$args[$i]
@@ -215,19 +214,36 @@ function Resolve-Build([string]$t, [switch]$MustExist) {
             Join-Path (Split-Path -Parent $b.manifest) "$($b.name).vbs" }
     }
     if ($MustExist -and -not (Test-Path (Join-Path $b.out "$($b.name).dll"))) {
-        Fail "$($b.out) holds no signed $($b.name).dll (gramine-vbs build)"
+        Fail "$($b.out) holds no signed $($b.name).dll (gramine-vbs package)"
     }
     return $b
 }
 
-function Do-Build($b) {
-    $t = Need-Toolchain
-    $stamp = Sources-Stamp $b
+function Sync-Checkout {
     $home_ = Wsl-Home
     $mirror = "$home_/.cache/gramine-vbs/checkouts/$(Safe-Leaf $RepoWin)-$(Short-Hash $RepoWin)"
-    $t0 = Get-Date
     Say "copy $RepoWin into WSL (${Distro}: $mirror)"
     Sync-Folder $RepoWin $mirror
+    return @{ home = $home_; mirror = $mirror }
+}
+
+function Do-Build {
+    $ctx = Sync-Checkout
+    $t0 = Get-Date
+    $script = "$($ctx.mirror)/scripts/vbs/wsl-build.sh"
+    $rc = Invoke-WslScript $script 'runtime'
+    if ($rc -eq 11) { Fail "the WSL distribution lacks build tools: run 'gramine-vbs setup'" }
+    if ($rc -ne 0) { Fail "the WSL runtime build failed (exit $rc)" }
+    Say ("glibc, PAL and LibOS built in {0:N1} s" -f ((Get-Date) - $t0).TotalSeconds)
+}
+
+function Do-Package($b) {
+    $ctx = Sync-Checkout
+    $t = Need-Toolchain
+    $stamp = Sources-Stamp $b
+    $home_ = $ctx.home
+    $mirror = $ctx.mirror
+    $t0 = Get-Date
     $mdir = Split-Path -Parent $b.manifest
     $rel = $null
     if ($b.manifest.StartsWith($RepoWin + '\', [StringComparison]::OrdinalIgnoreCase)) {
@@ -302,9 +318,9 @@ function Do-Run($b) {
     exit $rc
 }
 
-# ---- setup: check, print what is missing, install into WSL only when asked ----
+# ---- setup: check and install missing WSL packages ----
 
-function Do-Setup {
+function Do-Setup([switch]$System) {
     $script:bad = 0
     function Check($ok, $what, $fix) {
         if ($ok) { Write-Host "  ok       $what" } else { Write-Host "  MISSING  $what"; Write-Host "           -> $fix"; $script:bad++ }
@@ -336,20 +352,22 @@ function Do-Setup {
     $text = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'wsl-setup.sh')) -replace "`r`n", "`n"
     [IO.File]::WriteAllText($self, $text, (New-Object Text.UTF8Encoding($false)))
     try {
-        if ($Install) {
-            $rc = Invoke-WslScript $self 'user' 'clang' -IsWinPath
-        } elseif ($Apt) {
+        if ($System) {
             $pkgs = @()
             Invoke-WslScript $self 'missing' 'clang' -IsWinPath | Out-Null
             $pkgs = @((& wsl.exe -d $Distro -e cat /tmp/gramine-vbs-missing) -split ' ' | Where-Object { $_ })
             if ($pkgs.Count) {
                 Write-Host "sudo apt-get install in ${Distro}: $($pkgs -join ' ')"
                 & wsl.exe -d $Distro -e sudo apt-get update
+                if ($LASTEXITCODE -ne 0) { Fail 'sudo apt-get update failed' }
                 & wsl.exe -d $Distro -e sudo apt-get install -y --no-install-recommends @pkgs
+                if ($LASTEXITCODE -ne 0) { Fail 'system package installation failed' }
             }
+        } else {
+            $rc = Invoke-WslScript $self 'user' 'clang' -IsWinPath
         }
         $rc = Invoke-WslScript $self 'check' 'clang' -IsWinPath
-        Check ($rc -eq 0) "build tools in $Distro" "gramine-vbs setup -Install (no sudo: into ~/.local/share/gramine-vbs) or -Apt (sudo apt-get)"
+        Check ($rc -eq 0) "build tools in $Distro" "gramine-vbs setup (user-level) or gramine-vbs setup-system (sudo apt-get)"
     } finally { Remove-Item -Force $self -ErrorAction SilentlyContinue }
     if ($script:bad) { Write-Host "$($script:bad) item(s) missing"; exit 1 }
     Write-Host 'everything needed is present'
@@ -370,24 +388,31 @@ if ($Dir) {
 
 switch ($Command) {
     'setup' { Do-Setup }
+    'setup-system' { Do-Setup -System }
     'build' {
+        if ($Target) { Fail 'build takes no manifest; use package <manifest>' 2 }
+        Do-Build
+    }
+    'package' {
         $b = Resolve-Build $Target
-        if (-not $b.manifest) { Fail 'build needs a manifest' }
-        Do-Build $b
+        if (-not $b.manifest) { Fail 'package needs a manifest' 2 }
+        Do-Package $b
     }
     'sign' { Do-Sign (Resolve-Build $Target) }
     'run' {
         $b = Resolve-Build $Target
         $dll = Join-Path $b.out "$($b.name).dll"
-        # rebuild when asked, when unsigned, or when a file of the checkout (or of the manifest's
-        # folder, if it is outside) changed since the build: names, sizes and times
-        $old = Join-Path $b.out 'sources.stamp'
-        if ($b.manifest -and ($Rebuild -or -not (Test-Path $dll) -or -not (Test-Path $old) -or
-                (Get-Content -Raw $old).Trim() -ne (Sources-Stamp $b))) {
-            $NoSign = $false
-            Do-Build $b
+        $hostExe = Join-Path $b.out 'pal_vbs_host.exe'
+        if ($Rebuild) { Fail "run does not build packages; run 'gramine-vbs package $Target' first" 2 }
+        if (-not (Test-Path $dll) -or -not (Test-Path $hostExe)) {
+            Fail "package is not available at $($b.out); run 'gramine-vbs build' and 'gramine-vbs package $Target' first"
         }
-        if (-not (Test-Path $dll)) { Fail "$dll does not exist (gramine-vbs build)" }
+        # Refuse a package made from older checkout or manifest-folder inputs; run never rebuilds it.
+        $old = Join-Path $b.out 'sources.stamp'
+        if ($b.manifest -and (Test-Path $old) -and
+                (Get-Content -Raw $old).Trim() -ne (Sources-Stamp $b)) {
+            Fail "package at $($b.out) is stale; run 'gramine-vbs package $Target' to rebuild it"
+        }
         Do-Run $b
     }
     'verify' {
