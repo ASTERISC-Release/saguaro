@@ -1,0 +1,17 @@
+# Research probe (Documentation/devel/vbs-enclave/PLAN-rwx.md, "Runtime executable memory: options"):
+# every way found to get executable memory at run time, one by one, with what the enclave answers.
+#   make VBS=1; gramine-vbs rxprobe
+loader.entrypoint = "file:/libsysdb.so"
+libos.entrypoint = "/rxprobe"
+loader.log_level = "error"
+fs.root.uri = "file:/"
+fs.mounts = [
+  { type = "tmpfs", path = "/tmp" },
+]
+sys.rewrite_syscalls = false
+vbs.debug = false
+vbs.max_threads = 4
+vbs.build = "$VBS_CC_STATIC -o rxprobe rxprobe.c"
+vbs.packed_files = [
+  { path = "/rxprobe", uri = "file:rxprobe" },
+]
