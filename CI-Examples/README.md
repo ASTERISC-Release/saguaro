@@ -1,48 +1,12 @@
 # Example Integrations
 
-This folder contains application integration examples. They are tested on
-Ubuntu 24.04 (aarch64 and x86_64) with `gramine-direct`; on aarch64 a subset also runs under
-`gramine-vm` (see `tools/run-vm-aarch64-examples.sh`).
+This folder contains application integration examples. For instructions how to build and 
+run each application under Gramine, please see the README.md in each subdirectory.
 
-For instructions how to build and run each application under Gramine, please
-see the README.md in each subdirectory.
-
-Please note that most of the examples use oversimplified configurations which
+Note that most of the examples use oversimplified configurations which
 are not secure (e.g., they mount whole host directories into the application).
 If you take these examples as templates for your own workloads, please inspect
 and harden the configurations.
-
-## Prerequisites
-
-Install and enable Gramine first (`scripts/dependencies.sh`, `scripts/install.sh`
-and `. ~/.local/gramine/env.sh`, see `INSTALL.md` in the repository root). Some examples need
-extra host packages: each has an `install-prereqs.sh`, and
-`install-all-prereqs.sh` runs all of them.
-
-## Building Examples
-
-All examples use simple Makefiles to build the application and generate its
-Gramine manifest. Use one of these commands:
-- `make`: create a no-debug-log manifest
-- `make DEBUG=1`: create a debug-log manifest
-
-Then run the application with `gramine-direct <application>`.
-
-Use `make clean` to remove Gramine-generated artifacts and `make distclean` to
-remove all build artifacts (if applicable).
-
-## Testing
-
-`test/test-direct.sh` (in the top-level `test/` directory) builds and runs most
-of the examples as part of the test battery; `test/test-direct.sh --list` shows the
-suites. `test/test-vm.sh examples` runs the aarch64 subset under `gramine-vm`. `unit_tests/` holds small test programs for LibOS and PAL behavior.
-
-## Where the examples run
-
-One row per example. The columns say where it was run; "-" means not filled in (not yet recorded
-here). Only the VBS column has results so far: `make VBS=1` and `make VBS=1 check` on ARM64 and x64
-Windows 11 on 2026-10-18, with the details in `Documentation/devel/vbs-enclave/TESTING.md`. "not run"
-gives the reason (most examples have no VBS recipe).
 
 | Example | Direct x86_64 | VM x86_64 | Direct aarch64 | VM aarch64 | SEV | VBS |
 |---|---|---|---|---|---|---|
