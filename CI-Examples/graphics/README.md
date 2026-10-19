@@ -4,9 +4,17 @@ Games and benchmarks that run under `gramine-vm` with the graphics host redirect
 under `gramine-direct` on the host GPU (x86_64, and AArch64 with the NVIDIA proprietary driver). This page gives the general procedure for the VM;
 details, caveats and results are in `Documentation/devel/graphics/` (`running.md`, `PLAN.md`,
 `FINDINGS.md`, `TODO.md`, `TESTING.md`). For `gramine-direct` see the section at the end and
-`Documentation/devel/graphics-direct/running.md`.
+`Documentation/devel/graphics-direct/running.md`. Pass or fail status per backend: matrix in
+[`CI-Examples/README.md`](../README.md). The examples have no SEV or VBS recipe.
 
-## Once per machine
+# Building
+
+The installs of the backends are in `Documentation/quickstart/`; run the example commands in the
+directory of the example.
+
+## VM
+
+### Once per machine
 
 Everything runs unprivileged inside the container (`container/run.sh` opens a shell in it).
 
@@ -17,7 +25,7 @@ scripts/install.sh --vm --graphics enabled    # Gramine; also builds libgraphics
 
 `qemu-tirith` has to be checked out next to this repository before the container is created.
 
-## Once per shell
+### Once per shell
 
 ```sh
 . ~/.local/gramine-vm/env.sh
@@ -28,15 +36,27 @@ export QEMU_PATH=/root/qemu-tirith/build/qemu-system-x86_64
 `socat` for the run and stops it afterwards), so `DISPLAY` has to name a local X display in the
 shell that runs it.
 
-## Running an example
+### Each application
 
-Each directory follows the same pattern:
+An application with a setup script is fetched and built once, in its directory:
 
 ```sh
 cd CI-Examples/graphics/<example>
-./setup-*.sh  (or ./install-*.sh)   # once: fetch and build the application, if it has one
-make run-native                     # the application with the preload library, without Gramine
-make run                            # the same under gramine-vm
+./setup-*.sh  (or ./install-*.sh)
+```
+
+## Direct
+
+Use an install made with `scripts/install.sh` (direct PAL, bundled glibc). The `-direct` manifests
+mount `~/.cache`: create it first (`mkdir -p ~/.cache`) in a fresh container. The applications are
+set up as for the VM.
+
+# Testing
+
+```sh
+make run-native    # the application with the preload library, without Gramine
+make run           # the same under gramine-vm
+make run-direct    # under gramine-direct on the host GPU (glxgears, quake2, minetest, supertuxkart, bastion)
 ```
 
 Run `make run-native` first. It exercises the same preload library and GPU path without the VM,
@@ -85,7 +105,7 @@ Copy the Makefile and manifest template of the closest example. The manifest has
 preload library at `/libgraphics.so` (`{{ gramine.libgraphics }}`) and preload it, set
 `EGL_GRAMINE=1` and `DISPLAY=2:0` (which is also what makes `gramine-vm` start the X relay), and mount `/usr`, `/sys` and `/root/.cache` as the examples do.
 
-## Under gramine-direct
+## Running under gramine-direct
 
 `glxgears`, `quake2`, `minetest`, `supertuxkart` and `bastion` also have a `<name>-direct.manifest.template` and a
 `make run-direct` target (Quake II: `make run-direct-timedemo`; SuperTuxKart:
@@ -93,20 +113,9 @@ preload library at `/libgraphics.so` (`{{ gramine.libgraphics }}`) and preload i
 server, with the host's Mesa (DRI3), no QEMU and no preload library; `PRELOAD=1` uses the preload
 library instead. The manifests enable three insecure options (raw GPU ioctls, the X server's Unix
 socket, host symbolic links under `/sys`): `gramine-direct` is not a sandbox, see
-`Documentation/devel/graphics-direct/running.md`. Use an install made with `scripts/install.sh`
-(direct PAL, bundled glibc). The `-direct` manifests mount `~/.cache`: create it first (`mkdir -p
-~/.cache`) in a fresh container. `direct-tests/` has test programs (`make check`).
-
+`Documentation/devel/graphics-direct/running.md`. `direct-tests/` has test programs (`make check`).
 
 On AArch64 with the NVIDIA proprietary driver (`Documentation/devel/graphics-aarch64/`), the same
 `-direct` targets of `glxgears`, `quake2`, `minetest` and `supertuxkart` run on the GPU; the manifests
 then also mount the NVIDIA device nodes (automatic when `/dev/nvidiactl` exists). The games are built
 from source in the container. `bastion` and `tf2` are x86_64 binaries and do not apply there.
-
-## Running under each backend
-
-Build and run in this directory, with the install of the backend active (`Documentation/quickstart/`). Pass or fail status: matrix in [`CI-Examples/README.md`](../README.md).
-
-- **direct:** `make run-direct`, in the directory of an application (section "Under gramine-direct").
-- **vm:** `make run`, in the directory of an application (x86_64; needs the install of "Once per machine").
-- **sev, vbs:** no recipe.

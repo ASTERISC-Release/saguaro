@@ -5,7 +5,7 @@ VBS does not encrypt network traffic: the enclave's sockets are the Windows host
 on the network adds TLS itself. This example shows how, and how a client can know that the TLS peer
 is the attested enclave. Nothing here changes Gramine or the other examples: TLS is the
 application's choice, and the helper `../common/vbs-ratls.c` is compiled only by applications that
-include it.
+include it. Pass or fail status: matrix in [`CI-Examples/README.md`](../../README.md).
 
 What happens:
 
@@ -26,22 +26,41 @@ What happens:
   no debug enclave unless `--allow-debug`. Any failure closes the connection without sending
   anything.
 
-Build and check (WSL on the Windows machine, as the other examples):
+# Building
 
-    make                  # mbedtls and the server for the enclave, the signed image tls-echo.vbs
-    make check            # also builds tls-echo-debug.vbs (vbs.debug = true), then the tests below
-    make clean
+Install the VBS backend first (`Documentation/vbs.md`) and run all commands in this directory, in
+WSL on the Windows machine.
 
-    ../../../scripts/vbs/gramine-vbs tls-echo --port 4433 &
-    ../../../scripts/vbs/gramine-vbs tls-client 4433 --verifier tls-echo.vbs \
-        --family-id 6772616d696e652d7662732d746c7300 --image-id 746c732d6563686f0000000000000001 \
-        --min-svn 1 --message hello [-v]
+## VBS
+
+```sh
+make
+```
+
+This builds mbedtls and the server for the enclave and the signed image `tls-echo.vbs`. Here `make`
+means `make VBS=1`. The example does not run under direct, VM, SEV or SGX.
+
+# Testing
+
+```sh
+make check
+```
+
+`make check` also builds `tls-echo-debug.vbs` (`vbs.debug = true`), then runs the genuine case and
+the negative cases below. To run the server and the client by hand:
+
+```sh
+../../../scripts/vbs/gramine-vbs tls-echo --port 4433 &
+../../../scripts/vbs/gramine-vbs tls-client 4433 --verifier tls-echo.vbs \
+    --family-id 6772616d696e652d7662732d746c7300 --image-id 746c732d6563686f0000000000000001 \
+    --min-svn 1 --message hello [-v]
+```
 
 The server takes at least one argument (`--port`), because its manifest passes the host's
 arguments (`loader.insecure__use_cmdline_argv`, for the ports and the test options): they are
 untrusted, and the client's checks do not depend on them.
 
-`make check` runs the genuine case and these negative cases, each refused:
+Each negative case is refused:
 
 | Case | Refused by |
 |---|---|
@@ -69,7 +88,3 @@ key generation 0.3 ms, report 4 ms, certificate 0.3 ms at start; first connectio
 handshake 7.5 ms plus 107 ms for the verifier (it starts a verifying enclave); later handshakes
 3.2 ms; echo round trips of 64 bytes 0.056 ms with TLS against 0.039 ms plain, 16 KiB 114 MB/s
 against 349 MB/s, 256 KiB 135 MB/s against 754 MB/s each way.
-
-## Running under each backend
-
-VBS only: `make` builds, `make check` runs it with the Windows client. The other backends do not apply (`make` here means `make VBS=1`). Status: matrix in [`CI-Examples/README.md`](../../README.md).
