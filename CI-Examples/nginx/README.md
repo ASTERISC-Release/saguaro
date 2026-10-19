@@ -40,7 +40,7 @@ make start-gramine-server GRAMINE=<backend> GRAMINE_VM_INBOUND=8002:8002,8444:84
 # `backend` can be gramine-vm, gramine-sev, or gramine-tdx
 ```
 
-
+Note that for **VBS:** `make VBS=1 check` starts Nginx in an enclave and fetches the pages from Windows (HTTP only, on 8002; no SSL).
 
 Fetch a test page from another terminal. The page is 10 KiB of random data, so the expected output
 is the byte count:
@@ -53,6 +53,4 @@ curl -sk https://127.0.0.1:8444/random/10K.1.html | wc -c      # HTTPS, self-sig
 Stop the server with Ctrl-C. `../common_tools/benchmark-http.sh http://127.0.0.1:8002` runs a
 benchmark (needs wrk2).
 
-Other backends:
 
-Note that for **VBS:** `make VBS=1 check` starts Nginx in an enclave and fetches the pages from Windows (HTTP only, on 8002; no SSL).
