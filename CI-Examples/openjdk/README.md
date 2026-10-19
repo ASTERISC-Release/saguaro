@@ -33,8 +33,8 @@ The program `MultiThreadMain` starts several threads:
 
 ```sh
 gramine-direct java MultiThreadMain
-gramine-vm java MultiThreadMain             # VM; not verified
-gramine-sev java MultiThreadMain            # SEV; not verified
+gramine-vm java MultiThreadMain             # VM
+gramine-sev java MultiThreadMain            # SEV
 gramine-sgx java -Xmx8G MultiThreadMain     # SGX; not verified
 ```
 

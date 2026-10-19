@@ -40,8 +40,8 @@ Start the server in one terminal. It listens on port 5201 (the iperf default):
 
 ```sh
 gramine-direct iperf3                                                     # direct
-GRAMINE_VM_INBOUND=5201:5201 gramine-vm iperf3                            # VM; not verified
-GRAMINE_VM_INBOUND=5201:5201 gramine-sev iperf3                           # SEV; not verified
+GRAMINE_VM_INBOUND=5201:5201 gramine-vm iperf3                            # VM
+GRAMINE_VM_INBOUND=5201:5201 gramine-sev iperf3                           # SEV
 gramine-sgx iperf3                                                        # SGX; not verified
 ```
 
@@ -51,7 +51,7 @@ the server mode.
 Measure from another terminal with the client of the same build (the native client is enough):
 
 ```sh
-LD_LIBRARY_PATH=./install ./install/iperf3 -c localhost -p 5201
+LD_LIBRARY_PATH=./install ./install/iperf3 -c 127.0.0.1 -p 5201
 ```
 
 The output is the bandwidth per second and a summary at the end. Useful options: `-t #` (seconds),

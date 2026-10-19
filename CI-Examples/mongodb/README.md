@@ -44,8 +44,8 @@ the relay:
 
 ```sh
 gramine-direct mongod
-GRAMINE_VM_INBOUND=27017:27017 gramine-vm mongod     # VM; not verified
-GRAMINE_VM_INBOUND=27017:27017 gramine-sev mongod    # SEV; not verified
+GRAMINE_VM_INBOUND=27017:27017 gramine-vm mongod     # VM
+GRAMINE_VM_INBOUND=27017:27017 gramine-sev mongod    # SEV
 gramine-sgx mongod                                   # SGX; not verified
 ```
 

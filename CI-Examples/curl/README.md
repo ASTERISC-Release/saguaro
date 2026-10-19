@@ -36,8 +36,11 @@ backend from `GRAMINE`:
 
 ```sh
 make check                          # direct
-make check GRAMINE=gramine-vm       # VM; not verified
-make check GRAMINE=gramine-sev      # SEV; not verified
 make SGX=1 check                    # SGX; not verified
 make VBS=1 check                    # VBS
 ```
+
+`make check` does not work under the VM and SEV: the test server listens on the host's loopback
+address, and in the guest `127.0.0.1` is the guest itself (`curl: (7) Failed to connect to
+127.0.0.1 port 19111`). A server on another address that the guest can reach would work (not
+verified).

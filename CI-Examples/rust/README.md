@@ -39,7 +39,7 @@ Start the server in one terminal. The bind address and port are hardcoded in `sr
 ```sh
 make start-gramine-server                                                    # direct
 make start-gramine-server GRAMINE=gramine-vm GRAMINE_VM_INBOUND=3000:3000     # VM
-make start-gramine-server GRAMINE=gramine-sev GRAMINE_VM_INBOUND=3000:3000    # SEV; not verified
+make start-gramine-server GRAMINE=gramine-sev GRAMINE_VM_INBOUND=3000:3000    # SEV
 make SGX=1 start-gramine-server                                              # SGX; not verified
 ```
 

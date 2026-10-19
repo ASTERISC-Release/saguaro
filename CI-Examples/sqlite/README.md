@@ -38,11 +38,14 @@ backend from `GRAMINE`:
 
 ```sh
 make regression                          # direct
-make regression GRAMINE=gramine-vm       # VM
-make regression GRAMINE=gramine-sev      # SEV; not verified
 make SGX=1 regression                    # SGX; not verified
 make VBS=1 check                         # VBS
 ```
+
+Under the VM and SEV, `make regression` fails at its final `diff`: the launcher prints its console
+lines (`Configuring Gramine VM ...`, `[boot] ...`, `[ VM exited with code 0 ]`) to stdout and so
+into `OUTPUT`. Run the scripts by hand and compare the filtered output of the last one with
+`scripts/select.txt`, as `test/vm-multiproc/vm-examples.sh` does.
 
 To run one script by hand (the command-line options are hardcoded in the manifest):
 

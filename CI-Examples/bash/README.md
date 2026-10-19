@@ -36,7 +36,7 @@ Other backends use the same target with `GRAMINE` set:
 
 ```sh
 make regression GRAMINE=gramine-vm    # VM
-make regression GRAMINE=gramine-sev   # SEV; not verified
+make regression GRAMINE=gramine-sev   # SEV
 make SGX=1 regression                 # SGX; not verified
 ```
 

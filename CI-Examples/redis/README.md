@@ -38,7 +38,7 @@ Start the server in one terminal. It listens on port 6379:
 ```sh
 make start-gramine-server                                                    # direct
 make start-gramine-server GRAMINE=gramine-vm GRAMINE_VM_INBOUND=6379:6379     # VM
-make start-gramine-server GRAMINE=gramine-sev GRAMINE_VM_INBOUND=6379:6379    # SEV; not verified
+make start-gramine-server GRAMINE=gramine-sev GRAMINE_VM_INBOUND=6379:6379    # SEV
 make SGX=1 start-gramine-server                                              # SGX; not verified
 ```
 

@@ -37,7 +37,7 @@ Start the server in one terminal. It listens on `127.0.0.1:8003`:
 ```sh
 make start-gramine-server                                                     # direct
 make start-gramine-server GRAMINE=gramine-vm GRAMINE_VM_INBOUND=8003:8003     # VM
-make start-gramine-server GRAMINE=gramine-sev GRAMINE_VM_INBOUND=8003:8003    # SEV; not verified
+make start-gramine-server GRAMINE=gramine-sev GRAMINE_VM_INBOUND=8003:8003    # SEV
 make SGX=1 start-gramine-server                                               # SGX; not verified
 ```
 

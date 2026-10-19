@@ -31,8 +31,8 @@ The example has no VBS recipe.
 
 ```sh
 make check                          # direct
-make check GRAMINE=gramine-vm       # VM; not verified
-make check GRAMINE=gramine-sev      # SEV; not verified
+make check GRAMINE=gramine-vm       # VM
+make check GRAMINE=gramine-sev      # SEV
 make SGX=1 check                    # SGX; not verified
 ```
 
