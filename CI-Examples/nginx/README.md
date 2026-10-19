@@ -16,7 +16,7 @@ Install `build-essential`, `libssl-dev` and `zlib1g-dev` (Ubuntu).
 make
 ```
 
-## TDX and SGX
+## SGX
 
 ```sh
 make SGX=1
