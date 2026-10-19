@@ -1,11 +1,13 @@
 # test/: map
 
-Written 2026-10-18 from file headers and the runners' usage text; the helper scripts were not
+Written 2026-10-18 (paths updated for phase 2) from file headers and the runners' usage text; the helper scripts were not
 read in full and nothing here was run for this map. "Not confirmed" marks a mapping taken from a
 header alone or not found in any runner, workflow or document. The refactor plan is
 `Documentation/devel/test-layout/PLAN.md`.
 
 ## Commands that work today
+
+Since phase 2 the files sit in backend folders. `test/test-direct.sh`, `test/test-vm.sh`, `test/test-sev.sh` and `test/test-sev-all.sh` are two-line forwarders that exec the new file with the same arguments; phase 4 removes them.
 
 Run from the repository root. `test/run.sh` forwards to the runners with the arguments unchanged; `test/run.sh list` prints the backends and suites; `RUN_DRY=1` prints the command instead of running it.
 
