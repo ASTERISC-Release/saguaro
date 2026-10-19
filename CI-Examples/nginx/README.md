@@ -52,12 +52,12 @@ benchmark (needs wrk2).
 
 Other backends:
 
-- **VM:** Nginx must run as one process. From the repository root, `GRAMINE_RUNNER=gramine-vm
-  test/test-direct.sh nginx` adds `master_process off;` to `install/conf/nginx-gramine.conf`,
-  forwards ports 8002 and 8444 (`GRAMINE_VM_INBOUND`) and starts the server. The curl commands are
-  the same.
-- **SEV:** not verified. The same, with `make start-gramine-server GRAMINE=gramine-sev
-  GRAMINE_VM_INBOUND=8002:8002,8444:8444` after adding `master_process off;` to the configuration.
+- **VM:** the same commands as direct, with the ports forwarded through the relay:
+  `make start-gramine-server GRAMINE=gramine-vm GRAMINE_VM_INBOUND=8002:8002,8444:8444`. Nginx
+  starts its worker processes: the VM PAL enables multi-process support by default
+  (`sys.experimental__multiprocess`, default `true`; the manifest does not set it). From the
+  repository root, `GRAMINE_RUNNER=gramine-vm test/test-direct.sh nginx` runs the same.
+- **SEV:** not verified. The same with `GRAMINE=gramine-sev`.
 - **SGX:** not verified. `make SGX=1 start-gramine-server`.
 - **VBS:** `make VBS=1 check` starts Nginx in an enclave and fetches the pages from Windows
   (HTTP only, on 8002; no SSL).
