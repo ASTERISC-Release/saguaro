@@ -74,15 +74,9 @@ temporary files go to `/tmp`, an in-enclave tmpfs, and the error log to stderr.
 
 # Running under each backend
 
-Build first (`make`, or `make VBS=1` for vbs) and activate the install of the backend (`Documentation/quickstart/`). Results and dates are in the matrix of `CI-Examples/README.md`.
+Build and run in this directory, with the install of the backend active (`Documentation/quickstart/`). Pass or fail status: matrix in [`CI-Examples/README.md`](../README.md).
 
-- **direct:** `gramine-direct ./nginx`. Verified on x86_64 and aarch64.
-- **vm:** `GRAMINE_RUNNER=gramine-vm test/test-direct.sh nginx`, from the repository root (the VM forwards the server's port through its relay; nginx runs with `master_process off`). Verified on x86_64 and aarch64.
-- **sev:** not verified.¹
-- **tdx:** not verified.²
-- **sgx:** not verified.³ The commands are given above.
-- **vbs:** `make VBS=1 check`. Verified on ARM64 and x64.
-
-¹ No result is recorded for this backend (matrix in `CI-Examples/README.md`).  
-² TDX was tested offline by the maintainer, with the same result as SEV. No TDX log is in the repository, so the result is reported and not verified here. The TDX install needs `td-shim` (`Documentation/TODO.md`).  
-³ SGX has not run on this tree's hardware. The SGX build needs `protobuf-c` (`Documentation/TODO.md`).
+- **direct:** `make`, then `make start-gramine-server`; start the client in another terminal (see above).
+- **vm:** `GRAMINE_RUNNER=gramine-vm test/test-direct.sh nginx`, from the repository root. The script forwards the server port through the relay (`GRAMINE_VM_INBOUND`); the script sets `master_process off` for nginx.
+- **sev:** `make start-gramine-server GRAMINE=gramine-sev GRAMINE_VM_INBOUND=8002:8002,8444:8444`; nginx also needs `master_process off`. Not verified.
+- **vbs:** `make VBS=1 check` (builds, then runs).

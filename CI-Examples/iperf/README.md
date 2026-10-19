@@ -84,15 +84,9 @@ LD_LIBRARY_PATH=./install ./install/iperf3 -c localhost -p 5201
 
 # Running under each backend
 
-Build first (`make`, or `make VBS=1` for vbs) and activate the install of the backend (`Documentation/quickstart/`). Results and dates are in the matrix of `CI-Examples/README.md`.
+Build and run in this directory, with the install of the backend active (`Documentation/quickstart/`). Pass or fail status: matrix in [`CI-Examples/README.md`](../README.md).
 
-- **direct:** not verified.¹
-- **vm:** not verified.¹
-- **sev:** not verified.¹
-- **tdx:** not verified.²
-- **sgx:** not verified.³ The commands are given above.
-- **vbs:** `make VBS=1 check`. Verified on ARM64 and x64.
-
-¹ No result is recorded for this backend (matrix in `CI-Examples/README.md`).  
-² TDX was tested offline by the maintainer, with the same result as SEV. No TDX log is in the repository, so the result is reported and not verified here. The TDX install needs `td-shim` (`Documentation/TODO.md`).  
-³ SGX has not run on this tree's hardware. The SGX build needs `protobuf-c` (`Documentation/TODO.md`).
+- **direct:** `make`, then `gramine-direct iperf3` (server; client as above).
+- **vm:** `GRAMINE_VM_INBOUND=5201:5201 gramine-vm iperf3`, for the client to reach the server through the relay. Not verified.
+- **sev:** `GRAMINE_VM_INBOUND=5201:5201 gramine-sev iperf3`. Not verified.
+- **vbs:** `make VBS=1 check` (builds, then runs).
