@@ -28,7 +28,7 @@ To test with non-SGX Gramine instead, omit `SGX=1` in both commands.
 Build first (`make`, or `make VBS=1` for vbs) and activate the install of the backend (`Documentation/quickstart/`). Results and dates are in the matrix of `CI-Examples/README.md`.
 
 - **direct:** `make start-gramine-server`. Verified on x86_64 and aarch64.
-- **vm:** `GRAMINE_RUNNER=gramine-vm test/test-direct.sh rust`, from the repository root (the VM forwards the server's port through its relay). Verified on x86_64 and aarch64.
+- **vm:** `GRAMINE_RUNNER=gramine-vm test/direct/test-direct.sh rust`, from the repository root (the VM forwards the server's port through its relay). Verified on x86_64 and aarch64.
 - **sev:** not verified.¹
 - **tdx:** not verified.²
 - **sgx:** not verified.³ The commands are given above.

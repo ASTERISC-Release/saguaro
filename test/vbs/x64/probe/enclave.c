@@ -13,7 +13,7 @@
 // Microsoft's VbsEnclave sample (MIT); the probes are new. Every export takes a PROBE_IO pointer in
 // host memory and writes its results there.
 //
-// x64 version (test/vbs-enclave-x64/): the AArch64 probe of test/vbs-enclave/probe/ with the
+// x64 version (test/vbs/x64/): the AArch64 probe of test/vbs/arm64/probe/ with the
 // architecture-specific probes replaced by their x86_64 counterparts (probe.asm, ml64).
 // The x64 changes: Copyright (C) 2026 The ASTERISC Research Lab
 

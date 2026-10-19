@@ -5,12 +5,12 @@
 # test-vm-loopback.sh -- regression test for host-initiated connections into a guest AF_INET TCP
 # server under the VM PAL (Documentation/devel/vm-network/PLAN.md, phase 1).
 #
-# The guest runs test/vsock-loopback/vsock_echo_server (an AF_INET TCP echo server); this script
+# The guest runs test/vm/vsock-loopback/vsock_echo_server (an AF_INET TCP echo server); this script
 # connects *into* it from the container with AF_VSOCK sockets: `SEQUENTIAL` sequential connections,
 # then `CONCURRENT` connections established at the same time, then one more to show the listener
 # survived them all; every payload must come back unchanged.
 #
-# Usage: test/test-vm-loopback.sh [--prefix DIR]
+# Usage: test/vm/network/test-vm-loopback.sh [--prefix DIR]
 #   SEQUENTIAL=100  CONCURRENT=16  SIZE=8192   connection counts and payload size
 #   GRAMINE_CPU_NUM=2                          vCPUs for the VM
 #   GRAMINE_VM_LAUNCHER=gramine-vm             or gramine-sev (Documentation/devel/sev/)

@@ -5,7 +5,7 @@
 # Hosted runners have no SEV hardware, so this workflow needs a self-hosted runner on an SEV-SNP host
 # (label `amd-sev-snp`) with rootless podman, /dev/kvm, /dev/sev and /dev/vhost-vsock accessible to
 # the runner's user and the SEV tools built next to the checkout (container/sev/build-sev-tools.sh
-# all, sev-tools/ beside the workspace). It runs test/test-sev-all.sh in the repository's container.
+# all, sev-tools/ beside the workspace). It runs test/sev/test-sev-all.sh in the repository's container.
 # No such runner is registered today: the same script is run by hand on the development host
 # (Documentation/devel/sev/TESTING.md).
 #
@@ -47,7 +47,7 @@ jobs:
       - name: Build and qualify gramine-sev in the container
         run: |
           container/run.sh "CPUS='${{ inputs.cpus }}' MP=${{ inputs.multiprocess && '1' || '0' }} \
-            OUT=/tmp/test-sev-all test/test-sev-all.sh"
+            OUT=/tmp/test-sev-all test/sev/test-sev-all.sh"
 
       - name: Collect logs
         if: always()

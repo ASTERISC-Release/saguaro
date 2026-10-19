@@ -12,7 +12,7 @@
 // Gramine phase-0 spike: host of the probe enclave. The enclave creation sequence follows
 // Microsoft's VbsEnclave sample (MIT). Usage: host.exe <test> [args]; see main().
 //
-// x64 version (test/vbs-enclave-x64/): tests for the x86_64 probes and a host-only survey (hostcpu).
+// x64 version (test/vbs/x64/): tests for the x86_64 probes and a host-only survey (hostcpu).
 // The x64 changes: Copyright (C) 2026 The ASTERISC Research Lab
 
 #include <windows.h>

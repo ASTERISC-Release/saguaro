@@ -77,7 +77,7 @@ temporary files go to `/tmp`, an in-enclave tmpfs, and the error log to stderr.
 Build first (`make`, or `make VBS=1` for vbs) and activate the install of the backend (`Documentation/quickstart/`). Results and dates are in the matrix of `CI-Examples/README.md`.
 
 - **direct:** `gramine-direct ./nginx`. Verified on x86_64 and aarch64.
-- **vm:** `GRAMINE_RUNNER=gramine-vm test/test-direct.sh nginx`, from the repository root (the VM forwards the server's port through its relay; nginx runs with `master_process off`). Verified on x86_64 and aarch64.
+- **vm:** `GRAMINE_RUNNER=gramine-vm test/direct/test-direct.sh nginx`, from the repository root (the VM forwards the server's port through its relay; nginx runs with `master_process off`). Verified on x86_64 and aarch64.
 - **sev:** not verified.¹
 - **tdx:** not verified.²
 - **sgx:** not verified.³ The commands are given above.

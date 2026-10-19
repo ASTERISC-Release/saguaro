@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 
-"""Host side of the SEV memory check of test/test-sev.sh: reads guest memory through the QEMU
+"""Host side of the SEV memory check of test/sev/test-sev.sh: reads guest memory through the QEMU
 monitor (HMP `pmemsave`) while sev_probe waits, and reports what the host can see.
 
 Prints one `key=value` line per result:

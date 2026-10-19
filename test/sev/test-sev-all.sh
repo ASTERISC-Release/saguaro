@@ -7,13 +7,13 @@
 # in the container of container/run.sh, after container/sev/build-sev-tools.sh all.
 #
 #   1. scripts/install.sh --sev (unless NO_BUILD=1)
-#   2. test/test-sev.sh under plain SEV and under SNP (hello, memory, vsock, measure / attest)
+#   2. test/sev/test-sev.sh under plain SEV and under SNP (hello, memory, vsock, measure / attest)
 #   3. the LibOS regression suite under SNP at the vCPU counts of CPUS (default "1 2 4"); reported,
 #      not judged: compare with gramine-vm on the same host (known failures on the development host:
 #      test_020_cpuinfo on AMD, and at 1 vCPU test_000_spinlock and test_074_eventfd_races, as with
 #      gramine-vm)
 #   4. CI-Examples under SNP: helloworld, the multi-threaded unit test, python
-#   5. the multi-process checks under SNP (test/vm-multiproc/check-probes.sh, MP_RAM default 8G),
+#   5. the multi-process checks under SNP (test/vm/multiproc/check-probes.sh, MP_RAM default 8G),
 #      unless MP=0
 #
 # Logs go to OUT (default /tmp/test-sev-all); exit status 0 only if every step passed.

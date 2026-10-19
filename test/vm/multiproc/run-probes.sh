@@ -5,7 +5,7 @@
 # processes (bash), fork stress, then nginx with workers and redis BGSAVE (both use host ports
 # 8002/8444 and 6379: check that nobody else uses them), and `misc`: the dev-libos-misc calls
 # (SysV IPC, memfd, file links and times, timers, inotify) used from a forked child.
-# Usage: test/vm-multiproc/run-probes.sh [spawn|signals|forks|nginx|redis|misc]...
+# Usage: test/vm/multiproc/run-probes.sh [spawn|signals|forks|nginx|redis|misc]...
 #        (no argument: spawn signals forks)
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)

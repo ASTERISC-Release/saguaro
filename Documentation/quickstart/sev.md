@@ -90,7 +90,7 @@ are currently not measured.
 
 # 4. Regression Tests
 
-    GRAMINE_SEV_MODE=snp test/test-sev.sh     # hello (1, 4 vCPUs), host-side memory check, vsock, attest
-    test/test-sev.sh                          # the same under plain SEV, with the launch measurement
-    GRAMINE_VM_LAUNCHER=gramine-sev GRAMINE_SEV_MODE=snp GRAMINE_RAM_SIZE=4G test/test-vm.sh libos
-    test/test-sev-all.sh                      # everything above, at 1, 2 and 4 vCPUs, plus examples
+    GRAMINE_SEV_MODE=snp test/sev/test-sev.sh     # hello (1, 4 vCPUs), host-side memory check, vsock, attest
+    test/sev/test-sev.sh                          # the same under plain SEV, with the launch measurement
+    GRAMINE_VM_LAUNCHER=gramine-sev GRAMINE_SEV_MODE=snp GRAMINE_RAM_SIZE=4G test/vm/test-vm.sh libos
+    test/sev/test-sev-all.sh                      # everything above, at 1, 2 and 4 vCPUs, plus examples

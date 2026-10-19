@@ -2,7 +2,7 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
 # Manifest for the vsock-loopback regression server (an AF_INET TCP echo server inside the VM that
-# the host connects *into*; see test/test-vm.sh suite `loopback`).
+# the host connects *into*; see test/vm/test-vm.sh suite `loopback`).
 
 loader.entrypoint = "file:{{ gramine.libos }}"
 libos.entrypoint = "/vsock_echo_server"

@@ -10,7 +10,7 @@
  * an SEH exception hook, console/time/exit via OCALLs, an RW memory allocator and random.
  *
  * The enclave configuration and DLL skeleton follow Microsoft's VbsEnclave sample (MIT); see
- * test/vbs-enclave/step0-sample/.
+ * test/vbs/arm64/step0-sample/.
  */
 
 #include <winenclave.h>

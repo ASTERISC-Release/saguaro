@@ -3,7 +3,7 @@
 # Runs the signals probe (sig.sh under bash, multi-process key on) N times back to back and counts
 # the runs that miss a line or hang. Run in the container after `scripts/install.sh --vm`.
 #
-# Usage: test/vm-multiproc/sig-loop.sh [N]   (default 100)
+# Usage: test/vm/multiproc/sig-loop.sh [N]   (default 100)
 # Environment: GRAMINE_CPU_NUM (default 2), LOAD=<k> runs k busy loops on the host meanwhile,
 # RUN_TIMEOUT (seconds per run, default 60), ON_HANG (a shell command run when a guest is still
 # running at the timeout, after vm-hang-report.py and before the guest is stopped; the output of

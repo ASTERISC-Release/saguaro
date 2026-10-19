@@ -4,7 +4,7 @@
 #
 # catch-hang.sh -- run one LTP test (ltp-one.sh) up to N times and, the moment its console shows
 # PATTERN, sample every vCPU with vm-hang-report.py (for stalls that do not last).
-# Usage: test/vm-multiproc-aarch64/catch-hang.sh --prefix DIR --tag NAME --cpus N --runs R
+# Usage: test/vm/multiproc-aarch64/catch-hang.sh --prefix DIR --tag NAME --cpus N --runs R
 #            --pattern REGEX test
 set -u
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)

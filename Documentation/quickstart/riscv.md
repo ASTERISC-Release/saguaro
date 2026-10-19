@@ -43,7 +43,7 @@ The PAL and LibOS suites need their test manifests rendered first:
 
     scripts/riscv64/guest.sh stop
 
-`run-examples.sh` takes the suite names of `test/test-direct.sh` (`bash`, `python`,
+`run-examples.sh` takes the suite names of `test/direct/test-direct.sh` (`bash`, `python`,
 `sqlite`, `redis`, ...); several need more packages in the guest (the `direct-riscv64-emulated`
 workflow in `.github/workflows/` lists the ones it installs).
 

@@ -13,7 +13,7 @@
 #            the probe holds a random marker: under SEV the marker and the PAL's ELF header must not
 #            be visible anywhere in guest RAM, while the console text in the shared region must be;
 #            the same run under gramine-vm (COMPARE=1, the default) must see all three
-#   vsock    test/test-vm-loopback.sh under gramine-sev (host-initiated vsock connections into the
+#   vsock    test/vm/network/test-vm-loopback.sh under gramine-sev (host-initiated vsock connections into the
 #            guest, through the shared region)
 #   attest   SNP: test/sev/sev_attest gets an attestation report through /dev/attestation with
 #            random report data; the host checks the report data, verifies the report against
@@ -23,7 +23,7 @@
 #            QEMU reports (QMP query-sev-launch-measure) checked against the launch digest that
 #            gramine-sev-igvm.py computes from the IGVM file, with the session's TIK
 #
-# Usage: test/test-sev.sh [--prefix DIR] [suite...]   (default: hello memory vsock)
+# Usage: test/sev/test-sev.sh [--prefix DIR] [suite...]   (default: hello memory vsock)
 #   GRAMINE_SEV_MODE=sev     the gramine-sev mode: sev or snp (measure: sev only)
 #   GRAMINE_RAM_SIZE=8G      guest RAM (SEV pins all of it at launch, so smaller boots faster; the
 #                            multiprocess frame pool, on by default, needs more than 4G)

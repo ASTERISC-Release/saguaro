@@ -6,7 +6,7 @@
  * attestation_type is "sev-snp", `report` and `quote` are SNP attestation reports (1184 bytes)
  * that carry the 64 bytes written to `user_report_data`, the files can be opened and read many
  * times (no resource leak), and two reads with different report data give different reports.
- * The signature is checked on the host (test/test-sev.sh attest), not here.
+ * The signature is checked on the host (test/sev/test-sev.sh attest), not here.
  */
 
 #include <fcntl.h>

@@ -13,7 +13,7 @@
 #                                    in PERIOD_MS steps
 #
 # The tree is the checkout this script is run from; TREE=<dir> overrides (the baseline tree has no
-# test/vm-timer/ files, so the same script and idle.c are run against its install). Needs
+# test/vm/timer/ files, so the same script and idle.c are run against its install). Needs
 # QEMU_PATH (default /root/sev-tools/prefix/bin/qemu-system-x86_64) and /dev/sev. Output files:
 # OUTDIR/{libos,probes}-N.* and idle-N-pPERIOD.* . One run at a time: the host CPUs are shared.
 set -u

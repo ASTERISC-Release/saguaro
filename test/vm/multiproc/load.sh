@@ -6,7 +6,7 @@
 #   redis   C clients write keys while BGSAVE forks a saving child R times; checks every save
 #   bash    a pipeline of child processes over a large input, compared with the container's result
 # Ports 8002/8444 (nginx) and 6379 (redis) must be free. CPUS sets the vCPUs (default 2).
-# Usage: test/vm-multiproc/load.sh [nginx|redis|bash]...   (no argument: all three)
+# Usage: test/vm/multiproc/load.sh [nginx|redis|bash]...   (no argument: all three)
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
 REPO=${REPO:-$(cd "$HERE/../../.." && pwd)}

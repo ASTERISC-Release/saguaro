@@ -4,7 +4,7 @@
 #
 # ltp-one.sh -- one LTP test of a harness directory made by ltp-groups.sh, under gramine-vm, with
 # an optional log level, keeping the console and serial logs (for debugging one failure).
-# Usage: test/vm-multiproc-aarch64/ltp-one.sh --prefix DIR --tag NAME [--log LEVEL] [--cpus N]
+# Usage: test/vm/multiproc-aarch64/ltp-one.sh --prefix DIR --tag NAME [--log LEVEL] [--cpus N]
 #            [--monitor SOCKET] test [args...]
 set -u
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)

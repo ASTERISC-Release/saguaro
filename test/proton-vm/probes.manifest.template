@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 # The probes of the Proton feasibility study (test/proton-vm/probes.c) under gramine-direct and
-# gramine-vm, after test/vm-multiproc/misc-fork.manifest.template: the experimental multi-process
+# gramine-vm, after test/vm/multiproc/misc-fork.manifest.template: the experimental multi-process
 # key of the VM PAL, the host-backed eventfd (shared with children), a host /tmp for memfd and shm.
 libos.entrypoint = "{{ entry }}"
 loader.log_level = "{{ log_level }}"

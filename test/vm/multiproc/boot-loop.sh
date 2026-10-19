@@ -7,7 +7,7 @@
 # serial output. Run in the container after `scripts/install.sh --vm`. LOAD=32 at 2 vCPUs is what
 # reproduced the boot crash of Documentation/devel/vm-multiproc/FINDINGS.md (2026-10-15).
 #
-# Usage: test/vm-multiproc/boot-loop.sh [N]   (default 200)
+# Usage: test/vm/multiproc/boot-loop.sh [N]   (default 200)
 # Environment: GRAMINE_CPU_NUM (default 2), LOAD=<k> runs k busy loops on the host meanwhile,
 # GAP=<seconds> sleeps between guests, WORK (default <repo>/.mp-probes/boot-loop), GRAMINE_PREFIX.
 # Each failing run's output goes to $WORK/fail-<i>.log. Exit status 0 only if every guest printed.

@@ -2,19 +2,19 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
-# probes.sh -- the multi-process probes of test/vm-multiproc/ (spawn.c, forks.c, sig.sh and
+# probes.sh -- the multi-process probes of test/vm/multiproc/ (spawn.c, forks.c, sig.sh and
 # manifest.template, sys.experimental__multiprocess on) under the AArch64 gramine-vm. The
-# x86_64 runner (test/vm-multiproc/run-probes.sh) hardcodes the x86_64 library directory; this one
+# x86_64 runner (test/vm/multiproc/run-probes.sh) hardcodes the x86_64 library directory; this one
 # takes the build machine's (gcc -dumpmachine) and keeps one log per probe.
 #
-# Usage: test/vm-multiproc-aarch64/probes.sh [--prefix DIR] [--cpus N]
+# Usage: test/vm/multiproc-aarch64/probes.sh [--prefix DIR] [--cpus N]
 #            [spawn|sh|forks|signals|forks-mem|eintr|efault|shared|cntvct|regs|sysloop|unixsock]...   (default: sh spawn)
-# eintr: test/vm-multiproc-aarch64/eintr.c, a signal against each kind of blocking call.
-# efault: test/vm-multiproc-aarch64/efault.c, LibOS faults on application memory, key on and off.
-# cntvct: test/vm-multiproc-aarch64/cntvct.c, EL0 reads of the virtual counter, key on and off.
-# sysloop: test/vm-multiproc-aarch64/sysloop.c, ns per getpid() and per pipe write+read (timing, no pass/fail).
-# unixsock: test/vm-multiproc-aarch64/unixsock.c, named stream sockets (path, abstract) across fork.
-# regs: test/vm-multiproc-aarch64/regs.c, x6-x17 across svc (blocking, EINTR, fork, signals), key on and off.
+# eintr: test/vm/multiproc-aarch64/eintr.c, a signal against each kind of blocking call.
+# efault: test/vm/multiproc-aarch64/efault.c, LibOS faults on application memory, key on and off.
+# cntvct: test/vm/multiproc-aarch64/cntvct.c, EL0 reads of the virtual counter, key on and off.
+# sysloop: test/vm/multiproc-aarch64/sysloop.c, ns per getpid() and per pipe write+read (timing, no pass/fail).
+# unixsock: test/vm/multiproc-aarch64/unixsock.c, named stream sockets (path, abstract) across fork.
+# regs: test/vm/multiproc-aarch64/regs.c, x6-x17 across svc (blocking, EINTR, fork, signals), key on and off.
 set -u
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 REPO=$(cd "$HERE/../../.." && pwd)
@@ -34,7 +34,7 @@ export GRAMINE_PREFIX=$PREFIX
 WORK=${WORK:-$REPO/.mp-probes-aarch64}
 LOGS=${LOGS:-$WORK/logs}
 mkdir -p "$WORK" "$LOGS" "$WORK/tmp" && cd "$WORK"
-SRC=$REPO/test/vm-multiproc
+SRC=$REPO/test/vm/multiproc
 cp "$SRC"/spawn.c "$SRC"/forks.c "$SRC"/sig.sh "$SRC"/manifest.template \
    "$SRC"/sysv-fork.manifest.template "$HERE"/eintr.c "$HERE"/efault.c "$HERE"/shared.c "$HERE"/cntvct.c "$HERE"/regs.c "$HERE"/sysloop.c "$HERE"/unixsock.c .
 gcc -O2 -o spawn spawn.c && gcc -O2 -o forks forks.c && gcc -O2 -o eintr eintr.c -lpthread && \

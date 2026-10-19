@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
-# Installs the host packages for building Gramine and running test/test-direct.sh
+# Installs the host packages for building Gramine and running test/direct/test-direct.sh
 # (Debian/Ubuntu). Idempotent: only missing packages are installed; sudo may prompt for a password.
 #   scripts/dependencies.sh               # build + test dependencies
 #   scripts/dependencies.sh --build-only  # only what scripts/install.sh needs to build

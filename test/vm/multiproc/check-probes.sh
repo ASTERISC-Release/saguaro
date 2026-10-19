@@ -17,7 +17,7 @@
 #             key added to their generated manifests (restored afterwards)
 #   redis     redis BGSAVE (a forked child writes dump.rdb); needs CI-Examples/redis built
 #
-# Usage: test/vm-multiproc/check-probes.sh [check...]   (default: spawn signals forks misc sysv)
+# Usage: test/vm/multiproc/check-probes.sh [check...]   (default: spawn signals forks misc sysv)
 # Environment: GRAMINE_PREFIX (install prefix, default ~/.local/gramine-vm), GRAMINE_CPU_NUM
 # (default 2), WORK (scratch dir, default <repo>/.mp-probes), LOGDIR (default $WORK/logs),
 # TIMEOUT_SCALE (multiplies every timeout, default 1), RERUN (default 1: rerun a failed check once),

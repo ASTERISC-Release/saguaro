@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # AArch64 VM process qualification, in this checkout's container after a --vm install.
-# Usage: GRAMINE_PREFIX=... GRAMINE_CPU_NUM=1|2|4 test/vm-multiproc-aarch64/load.sh bash|nginx|redis
+# Usage: GRAMINE_PREFIX=... GRAMINE_CPU_NUM=1|2|4 test/vm/multiproc-aarch64/load.sh bash|nginx|redis
 # MP=0 (nginx only): without the multiprocess key, as one process (`master_process off`), the same
-# fetches and no worker check -- the key-off reference (test/test-direct.sh needs curl).
+# fetches and no worker check -- the key-off reference (test/direct/test-direct.sh needs curl).
 # Nginx and Redis must first be built in CI-Examples; host ports are checked before use.
 set -euo pipefail
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
@@ -19,7 +19,7 @@ case ${1:-} in
     bash)
         cd "$WORK"
         mkdir -p tmp
-        cp "$REPO/test/vm-multiproc/manifest.template" .
+        cp "$REPO/test/vm/multiproc/manifest.template" .
         gramine-manifest -Darch_libdir="/lib/$(gcc -dumpmachine)" -Dentry=/usr/bin/bash \
             -Dprobedir="$WORK" manifest.template bash.manifest
         cat > pipeline.sh <<'SH'
@@ -37,7 +37,7 @@ SH
         }
         GRAMINE_PREFIX=$PREFIX GRAMINE_CPU_NUM=$CPUS WORK=$WORK/redis-$CPUS \
             REDIS_HOST_PORT=${REDIS_HOST_PORT:-16379} RERUN=0 \
-            "$REPO/test/vm-multiproc/check-probes.sh" redis ;;
+            "$REPO/test/vm/multiproc/check-probes.sh" redis ;;
     nginx)
         D=$REPO/CI-Examples/nginx
         [ -x "$D/install/sbin/nginx" ] && [ -f "$D/nginx.manifest" ] || {
@@ -72,7 +72,7 @@ PY
             fi
         }
         trap cleanup EXIT
-        # test/test-direct.sh leaves `master_process off;` in the installed configuration
+        # test/direct/test-direct.sh leaves `master_process off;` in the installed configuration
         sed -i '/^master_process off;$/d' "$D/install/conf/nginx-gramine.conf"
         if [ "${MP:-1}" = 0 ]; then
             sed -i '1i master_process off;' "$D/install/conf/nginx-gramine.conf"

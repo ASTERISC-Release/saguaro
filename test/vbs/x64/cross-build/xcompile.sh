@@ -7,7 +7,7 @@
 # Usage: HDR=<scratch folder> [XFLAGS="/I dir ..."] xcompile.sh <source.c> <output.obj>
 # The headers include each other with mixed case; missing names are linked to the existing file.
 # Link, veiid and sign on Windows (see link-clang-obj.cmd). The x64 copy of
-# test/vbs-enclave/cross-build/xcompile.sh: only the target differs.
+# test/vbs/arm64/cross-build/xcompile.sh: only the target differs.
 set -e
 src=$1; out=$2
 CL="clang --driver-mode=cl --target=x86_64-pc-windows-msvc -fms-compatibility-version=19.50 \

@@ -3,7 +3,7 @@
 
 /* The timer probes of test/proton-vm/probes.c (tickgran, threadlat, pipeping), verbatim, as a
  * program of their own: probes.c includes x86-only headers and code and does not compile on
- * aarch64. Used by test/vm-timer/measure.sh through test/proton-vm/run-probes.sh (PROBES_SRC).
+ * aarch64. Used by test/vm/timer/measure.sh through test/proton-vm/run-probes.sh (PROBES_SRC).
  * Usage: timerprobes PROBE... (the output lines are those of probes.c). */
 #define _GNU_SOURCE
 #include <errno.h>

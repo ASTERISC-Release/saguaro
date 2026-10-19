@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
-# Builds the DIRECT PAL natively on a hosted x86_64 runner and runs test/test-direct.sh. The other
+# Builds the DIRECT PAL natively on a hosted x86_64 runner and runs test/direct/test-direct.sh. The other
 # platforms have workflows of their own: direct-aarch64.yml, direct-riscv64-emulated.yml (cross-built,
 # tested in an emulated guest) and vm-x86_64.yml (the vm PAL).
 #
@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       suites:
-        description: "test/test-direct.sh suites (default: PAL and LibOS regression and the python example; see test/test-direct.sh --list for the other application suites)"
+        description: "test/direct/test-direct.sh suites (default: PAL and LibOS regression and the python example; see test/direct/test-direct.sh --list for the other application suites)"
         required: false
         default: "pal libos python"
       tdx_build:
@@ -58,7 +58,7 @@ jobs:
           SUITES: ${{ inputs.suites || 'pal libos python' }}   # via env, never interpolated into the script text
         run: |
           export PATH="$HOME/.cargo/bin:$PATH"
-          test/test-direct.sh $SUITES
+          test/direct/test-direct.sh $SUITES
 
       - name: Upload logs
         if: always()

@@ -97,7 +97,7 @@ production use.
   `--graphics`, `--libc`, `--target riscv64`) and can run the tests. `INSTALL.md`
 - **Containers and workspaces** (done). `container/run.sh` gives each checkout its own rootless container,
   guest CIDs and ports, so several branches and agents work side by side. `AGENTS.md`
-- **Test batteries** (done). `test/test-direct.sh` (PAL, LibOS, 12 example suites; `GRAMINE_RUNNER=gramine-vm`
+- **Test batteries** (done). `test/direct/test-direct.sh` (PAL, LibOS, 12 example suites; `GRAMINE_RUNNER=gramine-vm`
   runs the server examples under the VM), the `test/test-vm*.sh` scripts and the VM skip list.
   `devel/multiarch.md`
 - **CI workflows** (done). Manual workflows for direct x86_64, direct AArch64, emulated RISC-V and the x86_64

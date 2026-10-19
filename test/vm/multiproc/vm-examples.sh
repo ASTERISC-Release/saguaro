@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Run the CI examples under gramine-vm, optionally with sys.experimental__multiprocess = true
 # (MP=1) added to their generated manifests (restored afterwards). Run in the container after
-# `. <prefix>/env.sh`. Servers go through test/test-direct.sh with GRAMINE_RUNNER=gramine-vm; the
+# `. <prefix>/env.sh`. Servers go through test/direct/test-direct.sh with GRAMINE_RUNNER=gramine-vm; the
 # other examples (which test-direct.sh runs with gramine-direct) are run here with gramine-vm.
-# Usage: [MP=1] [CPUS=2] [REPO=...] test/vm-multiproc/vm-examples.sh
+# Usage: [MP=1] [CPUS=2] [REPO=...] test/vm/multiproc/vm-examples.sh
 set -u
 REPO=${REPO:-$(cd "$(dirname "$0")/../../.." && pwd)}
 MP=${MP:-0}
@@ -75,6 +75,6 @@ n=$(grep -ac '^\[ Success [0-9]*/7 \]' "$OUT/bash.log"); [ "$n" = 7 ] && res PAS
 n=$(grep -ac '^\[ Success [0-9]*/4 \]' "$E/python/TEST_STDOUT" 2>/dev/null); [ "$n" = 4 ] && res PASS python "$n/4" || res FAIL python "$n/4"
 
 [ "${SERVERS:-1}" = 1 ] || exit 0
-( cd "$REPO" && GRAMINE_RUNNER=gramine-vm test/test-direct.sh redis memcached lighttpd nginx rust networks ) \
+( cd "$REPO" && GRAMINE_RUNNER=gramine-vm test/direct/test-direct.sh redis memcached lighttpd nginx rust networks ) \
     > "$OUT/servers.log" 2>&1
 sed -n '/SUMMARY/,/====/p' "$OUT/servers.log" | grep -E "^(PASS|FAIL)"

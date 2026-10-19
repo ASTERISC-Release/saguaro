@@ -8,10 +8,10 @@
 #   lighttpd, nginx, rust, networks).
 #
 # Usage:
-#   test/test-direct.sh                 # everything
-#   test/test-direct.sh libos redis     # only the named suites
-#   test/test-direct.sh --list          # list suite names
-#   test/test-direct.sh --no-build      # skip manifest rebuilds of the pytest suites
+#   test/direct/test-direct.sh                 # everything
+#   test/direct/test-direct.sh libos redis     # only the named suites
+#   test/direct/test-direct.sh --list          # list suite names
+#   test/direct/test-direct.sh --no-build      # skip manifest rebuilds of the pytest suites
 #
 # Environment overrides:
 #   GRAMINE_PREFIX   install prefix (default: ~/.local/gramine)
@@ -63,10 +63,10 @@
 #
 #   # 3. Run the battery (GRAMINE_PREFIX/PYTHONPATH are set by the script
 #   #    itself; export them manually only if you installed elsewhere):
-#   test/test-direct.sh
+#   test/direct/test-direct.sh
 #
 #   # Iterating on a code change afterwards:
-#   ninja -C build-$(uname -m) install && test/test-direct.sh --no-build
+#   ninja -C build-$(uname -m) install && test/direct/test-direct.sh --no-build
 #
 # nasm is only needed with -Dtests=enabled on x86_64 (the asm/x86_64 regression
 # module); busybox/redis/memcached fetch their upstream tarballs on their

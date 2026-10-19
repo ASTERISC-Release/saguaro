@@ -8,7 +8,7 @@
 # manifests point at this prefix's LibOS. With --key on the manifests get
 # sys.experimental__multiprocess (scripts/build-ltp-manifests.sh, LTP_VM_MULTIPROCESS=1).
 #
-# Usage: test/vm-multiproc-aarch64/ltp-groups.sh --prefix DIR --tag NAME [--key on|off]
+# Usage: test/vm/multiproc-aarch64/ltp-groups.sh --prefix DIR --tag NAME [--key on|off]
 #            [--rebuild] [--cpus N] [group...]
 #   groups default: vfork execve fork wait4 waitid clone (names as in mapping.toml)
 # Results: .ltp-results/<group>-<tag>-cpu<N>.json and one summary line per group.

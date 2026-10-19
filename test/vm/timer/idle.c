@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
 /* Copyright (C) 2026 The ASTERISC Research Lab */
-/* An idle guest process for counting timer interrupts (test/vm-timer/measure-sev.sh): prints READY,
+/* An idle guest process for counting timer interrupts (test/vm/timer/measure-sev.sh): prints READY,
  * then sleeps for argv[1] seconds either in one nanosleep (argv[2] = 0, the default) or in steps of
  * argv[2] ms (a periodic timeout every step), prints DONE and exits. */
 #include <stdio.h>

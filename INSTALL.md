@@ -41,12 +41,12 @@ From the repository root:
 | `--deps` | run `scripts/dependencies.sh --build-only` first |
 | `--add-to-profile` | source `<prefix>/env.sh` from `~/.bashrc` |
 | `-j N` | parallel build jobs (default: all cores) |
-| `--run-tests [suite...]` | run `test/test-direct.sh` afterwards (naming suites implies it) |
+| `--run-tests [suite...]` | run `test/direct/test-direct.sh` afterwards (naming suites implies it) |
 
 Check the install and run an example:
 
-    test/test-direct.sh               # PAL + LibOS regression tests and the example applications
-    test/test-direct.sh libos         # only the named suites (``--list`` shows them)
+    test/direct/test-direct.sh               # PAL + LibOS regression tests and the example applications
+    test/direct/test-direct.sh libos         # only the named suites (``--list`` shows them)
 
     cd CI-Examples/helloworld
     make
@@ -62,7 +62,7 @@ aarch64:
     scripts/dependencies.sh --build-only
     scripts/install.sh --vm           # into ~/.local/gramine-vm, build dir build-vm-aarch64
     . ~/.local/gramine-vm/env.sh
-    test/test-vm.sh                   # LibOS suite under gramine-vm, example apps, hello soak test
+    test/vm/test-vm.sh                   # LibOS suite under gramine-vm, example apps, hello soak test
 
 On aarch64 `--vm` builds *only* the vm PAL (no direct PAL, SGX or TDX), builds without graphics (the
 redirection needs the QEMU fork's host agent, which does not exist for aarch64) and builds the test
@@ -121,10 +121,10 @@ Typical session (on x86_64 the container is `gramine-vm-x86_64`):
     container/run.sh                              # shell inside
     scripts/install.sh pal libos                  # direct PAL: build, install, run the PAL + LibOS suites
     scripts/install.sh --vm libos examples hello  # aarch64 vm PAL: build, install, run the vm test battery
-    scripts/install.sh --vm && test/test-vm.sh libos   # x86_64 vm PAL: build, install, LibOS suite in the VM
+    scripts/install.sh --vm && test/vm/test-vm.sh libos   # x86_64 vm PAL: build, install, LibOS suite in the VM
 
 or as a one-shot command from the host: `container/run.sh 'scripts/install.sh --vm libos examples hello'`.
-(On x86_64, test suites named after `--vm` go to `test/test-direct.sh`, which has no `examples` or
+(On x86_64, test suites named after `--vm` go to `test/direct/test-direct.sh`, which has no `examples` or
 `hello` suite.)
 
 Notes:

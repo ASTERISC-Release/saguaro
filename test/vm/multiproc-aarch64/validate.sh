@@ -6,7 +6,7 @@
 # self-checks (hello.sh, key on and off, 1/2/4 vCPUs), the probes (key on) at 1, 2 and 4 vCPUs,
 # the process LTP groups (key on) at 1, 2 and 4 vCPUs, then key off: the VM LibOS suite and the
 # examples runner at 2 vCPUs. Prints one summary line per item.
-# Usage: test/vm-multiproc-aarch64/validate.sh --prefix DIR [--build-dir DIR] [--skip-ltp]
+# Usage: test/vm/multiproc-aarch64/validate.sh --prefix DIR [--build-dir DIR] [--skip-ltp]
 set -u
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 REPO=$(cd "$HERE/../../.." && pwd)
@@ -33,7 +33,7 @@ if [ $SKIP_LTP = 0 ]; then
     done
 fi
 echo "### VM LibOS suite, key off, 2 vCPUs ($(cut -d' ' -f1 /proc/loadavg))"
-test/test-vm.sh --prefix "$PREFIX" --build-dir "$BUILD" libos 2>&1 | grep -E "passed|failed|FAILED" | tail -5
+test/vm/test-vm.sh --prefix "$PREFIX" --build-dir "$BUILD" libos 2>&1 | grep -E "passed|failed|FAILED" | tail -5
 echo "### examples, key off, 2 vCPUs ($(cut -d' ' -f1 /proc/loadavg))"
 VM_PREFIX=$PREFIX tools/run-vm-aarch64-examples.sh 2>&1 | grep -E "pass=|FAIL|HANG|PANIC"
 echo "### done $(date -u +%FT%TZ)"

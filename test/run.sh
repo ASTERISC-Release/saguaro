@@ -9,10 +9,10 @@
 #   test/run.sh <backend> [args...]       # run the runner of the backend; args pass through unchanged
 #
 # Backends:
-#   direct    test/test-direct.sh
-#   vm        test/test-vm.sh
-#   sev       test/test-sev.sh
-#   sev-all   test/test-sev-all.sh   (the SEV qualification run; it takes no suite)
+#   direct    test/direct/test-direct.sh
+#   vm        test/vm/test-vm.sh
+#   sev       test/sev/test-sev.sh
+#   sev-all   test/sev/test-sev-all.sh   (the SEV qualification run; it takes no suite)
 #
 # The dispatcher changes no default and no existing script. Set RUN_DRY=1 to print the command
 # instead of running it.

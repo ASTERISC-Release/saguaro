@@ -13,9 +13,9 @@
 #
 # The copies are hard links (cp -al; plain copies when SWEEP_DIR is on another file system) under
 # SWEEP_DIR; each is removed after its run. Needs the rendered manifest
-# libos/test/regression/fork_and_exec.manifest (run `test/test-direct.sh libos` once first).
+# libos/test/regression/fork_and_exec.manifest (run `test/direct/test-direct.sh libos` once first).
 #
-# Usage: test/direct-prefix-sweep.sh
+# Usage: test/direct/direct-prefix-sweep.sh
 # Environment: GRAMINE_PREFIX (default ~/.local/gramine), SWEEP_DIR (default /tmp/gps), MAX (longest
 # path, default 72).
 set -euo pipefail
@@ -27,9 +27,9 @@ MAX=${MAX:-72}
 REG=$REPO/libos/test/regression
 MAN=$REG/fork_and_exec.manifest
 
-[ -f "$MAN" ] || { echo "no $MAN: run test/test-direct.sh libos first" >&2; exit 2; }
+[ -f "$MAN" ] || { echo "no $MAN: run test/direct/test-direct.sh libos first" >&2; exit 2; }
 grep -q "file:$PREFIX/" "$MAN" \
-    || { echo "$MAN is rendered for another install: run test/test-direct.sh libos" >&2; exit 2; }
+    || { echo "$MAN is rendered for another install: run test/direct/test-direct.sh libos" >&2; exit 2; }
 LIBDIR=$(cd "$PREFIX" && ls -d lib/*/gramine/direct | head -n 1)
 LIBDIR=${LIBDIR%/direct}
 [ -n "$LIBDIR" ] || { echo "no direct PAL under $PREFIX" >&2; exit 2; }

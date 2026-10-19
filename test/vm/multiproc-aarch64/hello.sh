@@ -7,7 +7,7 @@
 # address-space and scheduler self-checks (arch/aarch64/pal_main.c). Prints one line per run and
 # keeps every console log (and the PL011 serial log) in $OUT.
 #
-# Usage: test/vm-multiproc-aarch64/hello.sh [--prefix DIR] [--key on|off|both] [vcpus...]
+# Usage: test/vm/multiproc-aarch64/hello.sh [--prefix DIR] [--key on|off|both] [vcpus...]
 set -u
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 REPO=$(cd "$HERE/../../.." && pwd)
