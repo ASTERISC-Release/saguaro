@@ -9,7 +9,7 @@
 #   examples  CI-Examples applications (tools/run-vm-aarch64-examples.sh)
 #   hello     the bring-up soak test (tools/vm-aarch64-stage/hello.c, SMP=2 and SMP=4)
 #   loopback  host-initiated connections into a guest AF_INET TCP server (test/vm/network/test-vm-loopback.sh,
-#             Documentation/devel/vm-network/ phase 1)
+#             Documentation/devel/CHANGELOG.md phase 1)
 #   epoll     many small synchronous requests through an epoll-driven guest TCP server
 #   outbound  guest-initiated TCP through the relay, policy denial, and direct graphics ports
 #   udp       guest getaddrinfo and a host-side UDP echo through the relay

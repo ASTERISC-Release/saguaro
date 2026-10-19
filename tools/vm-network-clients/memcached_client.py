@@ -4,7 +4,7 @@
 
 """
 memcached_client.py -- a small benchmark client for the memcached text protocol, for the
-vm-network phase-2 example runs (tools/run-vm-network-examples.sh). The container has no memtier
+phase-2 example runs of the VM relay (tools/run-vm-network-examples.sh). The container has no memtier
 or libmemcached, and the protocol is trivial:
 
     set <key> <flags> <exptime> <bytes>\\r\\n<data>\\r\\n   -> STORED\\r\\n

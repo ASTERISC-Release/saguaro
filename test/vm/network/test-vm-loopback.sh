@@ -3,7 +3,7 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
 # test-vm-loopback.sh -- regression test for host-initiated connections into a guest AF_INET TCP
-# server under the VM PAL (Documentation/devel/vm-network/PLAN.md, phase 1).
+# server under the VM PAL (Documentation/devel/CHANGELOG.md, phase 1).
 #
 # The guest runs test/vm/vsock-loopback/vsock_echo_server (an AF_INET TCP echo server); this script
 # connects *into* it from the container with AF_VSOCK sockets: `SEQUENTIAL` sequential connections,

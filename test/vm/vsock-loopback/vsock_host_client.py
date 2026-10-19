@@ -4,7 +4,7 @@
 
 """
 vsock_host_client.py -- host side of the `vsock-loopback` regression test
-(see the C file next to it and Documentation/devel/vm-network/, phase 1).
+(see the C file next to it and Documentation/devel/CHANGELOG.md, phase 1).
 
 Runs in the container (the guest's "host") against an AF_INET TCP server inside the VM, over the
 guest's vsock: connects to (guest CID, port). Checks that host-initiated connections work

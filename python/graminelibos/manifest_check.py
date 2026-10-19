@@ -139,7 +139,7 @@ GramineManifestSchema = Schema({
         'stack': {'size': _size},
     },
 
-    # The VM PAL (`gramine-vm`); see Documentation/devel/vm-network/PLAN.md. Only `vm.net` is read
+    # The VM PAL (`gramine-vm`); see Documentation/devel/CHANGELOG.md. Only `vm.net` is read
     # today, by the launcher and its per-VM vsock relay. The `vm` table is shared with the VM
     # memory plan (Documentation/devel/vm-memory/PLAN.md): whichever topic lands first adds its
     # keys here; keep the other's keys when editing.

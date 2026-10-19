@@ -6,7 +6,7 @@
 # vm-PAL unikernel (@LIBPAL_PATH@) under QEMU `virt` + KVM and runs <application>.manifest in it.
 # Usage is the same as on x86:   gramine-vm <application> [args...]
 #
-# Differences from the x86 launcher (see Documentation/devel/aarch64/vm/PLAN.md):
+# Differences from the x86 launcher (see Documentation/devel/CHANGELOG.md):
 #   * machine `virt,gic-version=3`, no BIOS blob; the kernel image is loaded with `-kernel`
 #   * QEMU does not hand an ELF `-kernel` a device tree, so the machine DTB is dumped with the
 #     *same* -smp/-m/-accel/-cpu, repacked with dtc and loaded as a RAM blob at the DRAM base
@@ -49,7 +49,7 @@ if [ "$1" == "" ]; then
 fi
 APPLICATION=$1
 
-# the per-VM vsock relay (Documentation/devel/vm-network/); installed next to the VM PAL
+# the per-VM vsock relay (Documentation/devel/CHANGELOG.md); installed next to the VM PAL
 . "$HOST_PAL_PATH/vm-relay.sh"
 vm_relay_find_python "${BASH_SOURCE[0]}"
 shift

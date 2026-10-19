@@ -43,7 +43,7 @@
 #define SC_INSN_RET       0x00008067u /* jalr zero, ra, 0 */
 #elif defined(__x86_64__)
 /* No syscall-site rewriting on x86_64 (the bundled glibc is patched instead; see
- * Documentation/devel/syscall-interception/PLAN.md), and test_603 is skipped on this
+ * Documentation/devel/CHANGELOG.md), and test_603 is skipped on this
  * architecture. These encodings exist to keep the binary building on x86_64, as before:
  * x86's 2-byte `syscall` does not fit the one-instruction-per-word layout. `mov al, 39;
  * syscall` is exactly 4 bytes, so the NR word performs the whole call, the CALL word is a
