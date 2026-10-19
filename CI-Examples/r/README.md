@@ -1,51 +1,45 @@
 # R example
 
-This directory contains an example for running R in Gramine, including the
-Makefile and a template for generating the manifest.
+This directory contains an example for running R in Gramine, including the Makefile and a template
+for generating the manifest. Pass or fail status per backend: matrix in
+[`CI-Examples/README.md`](../README.md).
 
-# Generating the manifest
+# Building
 
-## Building for Linux
+Install the backend first (`Documentation/quickstart/`) and run all commands in this directory.
+By default the manifest is made for the system R binary (`/usr/lib/R/bin/exec/R`). For a local R
+installation, set `R_HOME`, for example `make R_HOME=<install path>/lib/R`.
 
-Run `make` (non-debug) or `make DEBUG=1` (debug) in the directory.
+## Direct, VM, and SEV
 
-## Building for SGX
-
-Run `make SGX=1` (non-debug) or `make SGX=1 DEBUG=1` (debug) in the directory.
-
-## Building with a local R installation
-
-By default, the `make` command creates the manifest for the system R binary
-(`/usr/lib/R/bin/exec/R`). If you have a local R installation, you may create
-the manifest with the `R_HOME` variable set accordingly. For example:
-
-```
-make R_HOME=<install path>/lib/R SGX=1
+```sh
+make
 ```
 
-# Run R with Gramine
+## SGX
 
-When running R with Gramine, use the `--vanilla` or `--no-save` option.
-
-Examples of running an R script under Gramine:
-
-Without SGX:
+```sh
+make SGX=1
 ```
-gramine-direct ./R --slave --vanilla -f scripts/sample.r
+
+The example has no VBS recipe.
+
+# Testing
+
+`make check` runs `scripts/sample.r` and prints `[ Success 1/1 ]` if the output contains
+`success`. It takes the backend from `GRAMINE`:
+
+```sh
+make check                          # direct
+make check GRAMINE=gramine-vm       # VM; not verified
+make check GRAMINE=gramine-sev      # SEV; not verified
+make SGX=1 check                    # SGX; not verified
+```
+
+R needs the `--vanilla` or `--no-save` option under Gramine. To run a script by hand:
+
+```sh
 gramine-direct ./R --slave --vanilla -f scripts/R-benchmark-25.R
 ```
 
-With SGX:
-```
-gramine-sgx ./R --slave --vanilla -f scripts/sample.r
-gramine-sgx ./R --slave --vanilla -f scripts/R-benchmark-25.R
-```
-
-# Running under each backend
-
-Build and run in this directory, with the install of the backend active (`Documentation/quickstart/`). Pass or fail status: matrix in [`CI-Examples/README.md`](../README.md).
-
-- **direct:** `make`, then `make check`.
-- **vm:** `make check GRAMINE=gramine-vm`. Not verified.
-- **sev:** `make check GRAMINE=gramine-sev`. Not verified.
-- **vbs:** no recipe.
+For another backend, replace `gramine-direct` by `gramine-vm`, `gramine-sev` or `gramine-sgx`.

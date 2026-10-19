@@ -1,83 +1,64 @@
 # SQLite example
 
-This directory contains an example for running SQLite in Gramine, including the
-Makefile and a template for generating the manifest.
+This directory contains an example for running SQLite in Gramine, including the Makefile and a
+template for generating the manifest. Pass or fail status per backend: matrix in
+[`CI-Examples/README.md`](../README.md).
 
-# Generating the manifest
+# Building
 
-## Installing prerequisite:
+Install the backend first (`Documentation/quickstart/`) and run all commands in this directory.
+Install SQLite (Ubuntu): `sudo apt-get install sqlite3`.
 
-Please run the following command to install SQLite (Ubuntu-specific):
+## Direct, VM, and SEV
 
-    sudo apt-get install sqlite3
-
-## Building for Linux
-
-Run `make` (non-debug) or `make DEBUG=1` (debug) in the directory.
-
-## Building for SGX
-
-Run `make SGX=1` (non-debug) or `make SGX=1 DEBUG=1` (debug) in the directory.
-
-# Running SQLite with Gramine
-
-Examples of running SQLite under Gramine (the command-line options are hardcoded in the manifest
-file):
-
-Without SGX:
+```sh
+make
 ```
+
+## SGX
+
+```sh
+make SGX=1
+```
+
+## VBS
+
+In WSL on a Windows machine with VBS (`Documentation/vbs.md`, "Makefile flow"). The shell is built
+from the SQLite amalgamation, without readline and zlib:
+
+```sh
+make VBS=1
+```
+
+# Testing
+
+`make regression` creates, updates and reads the database in `db/` with the scripts in `scripts/`,
+compares the last output with `scripts/select.txt` and prints `[ Success N/3 ]`. It takes the
+backend from `GRAMINE`:
+
+```sh
+make regression                          # direct
+make regression GRAMINE=gramine-vm       # VM
+make regression GRAMINE=gramine-sev      # SEV; not verified
+make SGX=1 regression                    # SGX; not verified
+make VBS=1 check                         # VBS
+```
+
+To run one script by hand (the command-line options are hardcoded in the manifest):
+
+```sh
 gramine-direct sqlite3 < scripts/create.sql
-gramine-direct sqlite3 < scripts/update.sql
-gramine-direct sqlite3 < scripts/select.sql
 ```
 
-With SGX:
-```
-gramine-sgx sqlite3 < scripts/create.sql
-gramine-sgx sqlite3 < scripts/update.sql
-gramine-sgx sqlite3 < scripts/select.sql
-```
+No backend needs another setting.
 
-# Note about security of database files
+# Notes
 
-In this example, SQLite stores the database files under the directory `db/`. The
-files are encrypted by Gramine using the "encrypted" FS mount point (see the
-manifest file). However, the key with which the `db/` files are encrypted is
-hardcoded in the manifest. This renders this example deployment **insecure**.
+The database files in `db/` are encrypted by Gramine, but the key is hardcoded in the manifest, so
+the example is **insecure**. A secure version sets `key_name = "_sgx_mrenclave"` or
+`"_sgx_mrsigner"` (sealed to the SGX platform), or a provisioned key (`key_name = "<provisioned key
+name>"` with remote attestation; see `ra-tls-secret-prov`).
 
-A secure version will require to replace this hardcoded key with one of the
-following options:
-
-- `key_name = "_sgx_mrenclave"` or `key_name = "_sgx_mrsigner"` in the FS mount
-  point in the manifest. This way, the database files will be sealed to the
-  particular SGX platform and cannot be decrypted on other platforms.
-
-- `key_name = "<provisioned key name>"` in the FS mount point in the manifest,
-  plus using a key provisioning flow with SGX remote attestation (see e.g.
-  `ra-tls-secret-prov` example). This way, the database files will be encrypted
-  with the provisioned key and can be later decrypted on other platforms that
-  possess the same key.
-
-# Note about concurrency
-
-SQLite uses POSIX record locks (`fcntl`) to guard concurrent accesses to the
-database file. These locks are emulated within Gramine, and not translated to
-host-level locks, even if you are mounting a file from the host.
-
-That means it is safe to access the same database file from multiple processes,
-but only within a **single Gramine instance**. In other words, a multi-process
-Gramine application is OK, but multiple Gramine instances should not access
-the same database file concurrently.
-
-Note that in a production setup, the database should be either mounted as a
-protected file, or from tmpfs, which would make it impossible to access from
-multiple Gramine instances anyway.
-
-# Running under each backend
-
-Build and run in this directory, with the install of the backend active (`Documentation/quickstart/`). Pass or fail status: matrix in [`CI-Examples/README.md`](../README.md).
-
-- **direct:** `make`, then `make regression`.
-- **vm:** `make regression GRAMINE=gramine-vm`.
-- **sev:** `make regression GRAMINE=gramine-sev`. Not verified.
-- **vbs:** `make VBS=1 check` (builds, then runs).
+SQLite guards concurrent access with POSIX record locks (`fcntl`). Gramine emulates them and does
+not translate them to host locks, so access from several processes is safe only within a single
+Gramine instance. In production, mount the database as a protected file or from tmpfs.

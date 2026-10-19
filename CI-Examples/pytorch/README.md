@@ -1,46 +1,58 @@
 # PyTorch
 
 This directory contains steps and artifacts to run a PyTorch sample workload on Gramine. The
-example uses a pre-trained model for image classification.
+example uses a pre-trained model for image classification. Pass or fail status per backend: matrix
+in [`CI-Examples/README.md`](../README.md).
 
-The workload reads an image from a file on disk `input.jpg` and runs the
-classifier to detect what object is present in the image. For the image shipping
-with the workload, the output should be
+# Building
+
+Install the backend first (`Documentation/quickstart/`) and run all commands in this directory.
+
+## Pre-requisites
+
+On a standard Ubuntu distribution:
+
+```sh
+sudo apt install libnss-mdns libnss-myhostname python3-pip lsb-release
+```
+
+The first two packages are DNS-resolver libraries. `pip` installs the Python packages, and the
+Makefile uses `lsb_release`.
+
+## Direct, VM, and SEV
+
+```sh
+make
+```
+
+## SGX
+
+```sh
+make SGX=1
+```
+
+The example has no VBS recipe.
+
+# Testing
+
+The workload reads `input.jpg` and prints what the classifier detects:
+
+```sh
+gramine-direct ./pytorch ./pytorchexample.py
+```
+
+For the image that ships with the example, the output is:
 
 ```
 [('Labrador retriever', 41.58518600463867), ('golden retriever', 16.59165382385254), ('Saluki, gazelle hound', 16.286855697631836), ('whippet', 2.853914976119995), ('Ibizan hound, Ibizan Podenco', 2.3924756050109863)]
 ```
 
-With high probability (41%) the classifier detected the image to contain a
-Labrador retriever.
+The other backends use the same arguments (not verified):
 
-# Pre-requisites
-The following steps should suffice to run the workload on a standard Ubuntu distribution.
+```sh
+gramine-vm ./pytorch ./pytorchexample.py
+gramine-sev ./pytorch ./pytorchexample.py
+gramine-sgx ./pytorch ./pytorchexample.py
+```
 
-- `sudo apt install libnss-mdns libnss-myhostname` to install additional
-  DNS-resolver libraries.
-- `sudo apt install python3-pip lsb-release` to install `pip` and `lsb_release`.
-  The former is required to install additional Python packages while the latter
-  is used by the Makefile.
-
-# Build
-
-Run `make` to build the non-SGX version and `make SGX=1` to build the SGX
-version.
-
-# Run
-
-Execute any one of the following commands to run the workload:
-
-- natively: `python3 pytorchexample.py`
-- Gramine w/o SGX: `gramine-direct ./pytorch ./pytorchexample.py`
-- Gramine with SGX: `gramine-sgx ./pytorch ./pytorchexample.py`
-
-# Running under each backend
-
-Build and run in this directory, with the install of the backend active (`Documentation/quickstart/`). Pass or fail status: matrix in [`CI-Examples/README.md`](../README.md).
-
-- **direct:** `make`, then `gramine-direct ./pytorch ./pytorchexample.py`.
-- **vm:** `gramine-vm ./pytorch ./pytorchexample.py`. Not verified.
-- **sev:** `gramine-sev ./pytorch ./pytorchexample.py`. Not verified.
-- **vbs:** no recipe.
+`python3 pytorchexample.py` runs the workload without Gramine.
