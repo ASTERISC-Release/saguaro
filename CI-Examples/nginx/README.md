@@ -1,82 +1,63 @@
 # Nginx
 
-This directory contains the Makefile and the template manifest for the most
-recent version of Nginx web server (as of this writing, version 1.16.1).
+This directory contains the Makefile and the template manifest for Nginx 1.22.0, built from source
+(the Makefile downloads it). Pass or fail status per backend: matrix in
+[`CI-Examples/README.md`](../README.md).
 
-This example builds Nginx from source and does not use an existing installation. On Ubuntu 20.04,
-install the following packages:
+# Building
+
+Install `build-essential`, `libssl-dev` and `zlib1g-dev` (Ubuntu). Activate the install of the
+backend first (`Documentation/quickstart/`): the manifest names that install's files. Run the
+commands in this directory.
+
+## Direct, VM and SEV
+
 ```sh
-sudo apt-get install -y build-essential libssl-dev zlib1g-dev
+make
 ```
 
-NOTE: The `benchmark-http.sh` script uses the wrk benchmark (wrk2). See https://github.com/giltene/wrk2.
-
-# Quick Start
+## SGX
 
 ```sh
-# build Nginx and the final manifest
 make SGX=1
-
-# run original Nginx against HTTP and HTTPS benchmarks (benchmark-http.sh, uses wrk2)
-./install/sbin/nginx -c conf/nginx-gramine.conf &
-../common_tools/benchmark-http.sh http://127.0.0.1:8002
-../common_tools/benchmark-http.sh https://127.0.0.1:8444
-kill -SIGINT %%
-
-# Run Nginx in non-SGX Gramine against HTTP and HTTPS benchmarks.
-# Note: The command-line arguments are passed using `loader.argv_src_file`
-# manifest option.
-gramine-direct ./nginx &
-../common_tools/benchmark-http.sh http://127.0.0.1:8002
-../common_tools/benchmark-http.sh https://127.0.0.1:8444
-kill -SIGINT %%
-
-# Run Nginx in Gramine-SGX against HTTP and HTTPS benchmarks.
-# Note: The command-line arguments are securely passed using
-# `loader.argv_src_file` manifest option.
-gramine-sgx ./nginx &
-../common_tools/benchmark-http.sh http://127.0.0.1:8002
-../common_tools/benchmark-http.sh https://127.0.0.1:8444
-kill -SIGINT %%
-
-# you can also test the server using other utilities like wget
-wget http://127.0.0.1:8002/random/10K.1.html
-wget https://127.0.0.1:8444/random/10K.1.html
 ```
 
-Alternatively, to run the Nginx server, use one of the following commands:
+## VBS
 
-```
-make start-native-server
-make start-gramine-server
-make SGX=1 start-gramine-server
-```
-
-# NGINX in a Windows VBS enclave
-
-In WSL on an ARM64 Windows machine with VBS (`Documentation/vbs.md`, "Makefile flow"):
+In WSL on an ARM64 or x64 Windows machine with VBS (`Documentation/vbs.md`, "Makefile flow"):
 
 ```sh
-make VBS=1          # NGINX built with the vbs gcc, installed into vbs-build/root, packed, signed
-make VBS=1 check    # start it in an enclave; fetch pages with Windows' curl.exe (vbs-check.sh)
-../../scripts/vbs/gramine-vbs nginx &
-../../scripts/vbs/gramine-vbs win curl.exe -s http://127.0.0.1:8002/random/10K.1.html | wc -c
-../../scripts/vbs/gramine-vbs net bench http 8002 -c 8 -n 40000 -p /random/2K.1.html
-kill %%
+make VBS=1
 ```
 
-The configuration (`nginx-vbs.conf.template`) runs one process: `master_process off` (the
-master would fork the workers), `worker_processes 1`, `daemon off`; HTTP only on 127.0.0.1:8002
-(the vbs sysroot has no OpenSSL, zlib or PCRE: no SSL, gzip, rewrite or basic authentication
-modules). NGINX's prefix is `/nginx` in the enclave, everything below it (binary, configuration,
-`html/` with the test files) is packed into the signed image and read-only; the pid file and
-temporary files go to `/tmp`, an in-enclave tmpfs, and the error log to stderr.
+# Testing
 
-# Running under each backend
+Start the server under `gramine-direct` in one terminal. It listens on `127.0.0.1:8002` (HTTP) and
+`8444` (HTTPS):
 
-Build and run in this directory, with the install of the backend active (`Documentation/quickstart/`). Pass or fail status: matrix in [`CI-Examples/README.md`](../README.md).
+```sh
+make start-gramine-server
+```
 
-- **direct:** `make`, then `make start-gramine-server`; start the client in another terminal (see above).
-- **vm:** `GRAMINE_RUNNER=gramine-vm test/test-direct.sh nginx`, from the repository root. The script forwards the server port through the relay (`GRAMINE_VM_INBOUND`); the script sets `master_process off` for nginx.
-- **sev:** `make start-gramine-server GRAMINE=gramine-sev GRAMINE_VM_INBOUND=8002:8002,8444:8444`; nginx also needs `master_process off`. Not verified.
-- **vbs:** `make VBS=1 check` (builds, then runs).
+Fetch a test page from another terminal. The page is 10 KiB of random data, so the expected output
+is the byte count:
+
+```sh
+curl -s http://127.0.0.1:8002/random/10K.1.html | wc -c        # expected: 10240
+curl -sk https://127.0.0.1:8444/random/10K.1.html | wc -c      # HTTPS, self-signed certificate
+```
+
+Stop the server with Ctrl-C. `../common_tools/benchmark-http.sh http://127.0.0.1:8002` runs a
+benchmark (needs wrk2).
+
+Other backends:
+
+- **VM:** Nginx must run as one process. From the repository root, `GRAMINE_RUNNER=gramine-vm
+  test/test-direct.sh nginx` adds `master_process off;` to `install/conf/nginx-gramine.conf`,
+  forwards ports 8002 and 8444 (`GRAMINE_VM_INBOUND`) and starts the server. The curl commands are
+  the same.
+- **SEV:** not verified. The same, with `make start-gramine-server GRAMINE=gramine-sev
+  GRAMINE_VM_INBOUND=8002:8002,8444:8444` after adding `master_process off;` to the configuration.
+- **SGX:** not verified. `make SGX=1 start-gramine-server`.
+- **VBS:** `make VBS=1 check` starts Nginx in an enclave and fetches the pages from Windows
+  (HTTP only, on 8002; no SSL).
