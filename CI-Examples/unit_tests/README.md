@@ -17,15 +17,9 @@ variant.
 
 ## Running under each backend
 
-Build first (`make`, or `make VBS=1` for vbs) and activate the install of the backend (`Documentation/quickstart/`). Results and dates are in the matrix of `CI-Examples/README.md`.
+Build and run in this directory, with the install of the backend active (`Documentation/quickstart/`). Pass or fail status: matrix in [`CI-Examples/README.md`](../README.md).
 
-- **direct:** the commands in the table above. Verified on aarch64 for `multi-thread`, `networks` and `mremap`, and on x86_64 for `multi-thread` and `mremap` (`networks` is not applicable there). `align_test` is not a test.
-- **vm:** `gramine-vm thread-tls` in `multi-thread/`, `gramine-vm helloworld` in `mremap/`, and `GRAMINE_RUNNER=gramine-vm test/test-direct.sh networks` from the repository root. Verified on x86_64 and aarch64.
-- **sev:** `gramine-sev thread-tls`, in `multi-thread/`. Verified. Only `thread-tls` was run.
-- **tdx:** reported by the maintainer to pass, offline, as under SEV.¹
-- **sgx:** not verified.²
-- **vbs:** not verified.³
-
-¹ TDX was tested offline by the maintainer, with the same result as SEV. No TDX log is in the repository, so the result is reported and not verified here. The TDX install needs `td-shim` (`Documentation/TODO.md`).  
-² SGX has not run on this tree's hardware. The SGX build needs `protobuf-c` (`Documentation/TODO.md`).  
-³ No VBS recipe.
+- **direct:** `make`, then the command of the table (`make check` in `mremap/` runs `gramine-direct helloworld`).
+- **vm:** `gramine-vm thread-tls` in `multi-thread/`; `make check GRAMINE=gramine-vm` in `mremap/`; `GRAMINE_RUNNER=gramine-vm test/test-direct.sh networks` from the repository root.
+- **sev:** `gramine-sev thread-tls` in `multi-thread/`. Other tests: not verified.
+- **vbs:** no recipe.

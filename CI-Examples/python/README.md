@@ -83,14 +83,9 @@ VBS=1 GRAMINE=$(realpath ../../scripts/vbs/gramine-vbs) ./run-tests.sh
 
 # Running under each backend
 
-Build first (`make`, or `make VBS=1` for vbs) and activate the install of the backend (`Documentation/quickstart/`). Results and dates are in the matrix of `CI-Examples/README.md`.
+Build and run in this directory, with the install of the backend active (`Documentation/quickstart/`). Pass or fail status: matrix in [`CI-Examples/README.md`](../README.md).
 
-- **direct:** `gramine-direct ./python scripts/helloworld.py`. Verified on x86_64 and aarch64.
-- **vm:** `gramine-vm python scripts/helloworld.py`. Verified on x86_64. Skipped on aarch64: the host python is not PIE.
-- **sev:** `gramine-sev python scripts/helloworld.py`. Verified. Only `scripts/helloworld.py` was run.
-- **tdx:** reported by the maintainer to pass, offline, as under SEV.¹
-- **sgx:** not verified.² The commands are given above.
-- **vbs:** `make VBS=1 check`. Tests 1/4 and 2/4 pass on ARM64 and x64. Tests 3/4 and 4/4 (NumPy, SciPy) are not packed on ARM64 and fail on x64.
-
-¹ TDX was tested offline by the maintainer, with the same result as SEV. No TDX log is in the repository, so the result is reported and not verified here. The TDX install needs `td-shim` (`Documentation/TODO.md`).  
-² SGX has not run on this tree's hardware. The SGX build needs `protobuf-c` (`Documentation/TODO.md`).
+- **direct:** `make`, then `make check` (the four checks of `run-tests.sh`).
+- **vm:** `GRAMINE=gramine-vm GRAMINE_VM=1 GRAMINE_VM_INBOUND=8005:8005 ./run-tests.sh`: `run-tests.sh` reads these variables, and `make check` passes `GRAMINE` on.
+- **sev:** `gramine-sev python scripts/helloworld.py` (only this script was run).
+- **vbs:** `make VBS=1 check` (tests 1/4 and 2/4; the Makefile skips 3/4 and 4/4 on ARM64).

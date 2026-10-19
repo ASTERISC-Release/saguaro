@@ -39,14 +39,9 @@ gramine-vbs helloworld
 
 # Running under each backend
 
-Build first (`make`, or `make VBS=1` for vbs) and activate the install of the backend (`Documentation/quickstart/`). Results and dates are in the matrix of `CI-Examples/README.md`.
+Build and run in this directory, with the install of the backend active (`Documentation/quickstart/`). Pass or fail status: matrix in [`CI-Examples/README.md`](../README.md).
 
-- **direct:** `gramine-direct helloworld`. Verified on x86_64 and aarch64.
-- **vm:** `gramine-vm helloworld`. Verified on x86_64 and aarch64.
-- **sev:** `GRAMINE_RAM_SIZE=4G gramine-sev helloworld`. Verified.
-- **tdx:** reported by the maintainer to pass, offline, as under SEV.¹
-- **sgx:** not verified.² The commands are given above.
-- **vbs:** `gramine-vbs helloworld`. Verified on ARM64 and x64.
-
-¹ TDX was tested offline by the maintainer, with the same result as SEV. No TDX log is in the repository, so the result is reported and not verified here. The TDX install needs `td-shim` (`Documentation/TODO.md`).  
-² SGX has not run on this tree's hardware. The SGX build needs `protobuf-c` (`Documentation/TODO.md`).
+- **direct:** `make`, then `make check` (or `gramine-direct helloworld`).
+- **vm:** `make check GRAMINE=gramine-vm` (or `gramine-vm helloworld`).
+- **sev:** `GRAMINE_RAM_SIZE=4G gramine-sev helloworld` (`Documentation/quickstart/sev.md`).
+- **vbs:** `make VBS=1 check` (builds, then runs).
