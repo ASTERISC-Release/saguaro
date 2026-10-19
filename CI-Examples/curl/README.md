@@ -42,5 +42,15 @@ make VBS=1 check                    # VBS
 
 `make check` does not work under the VM and SEV: the test server listens on the host's loopback
 address, and in the guest `127.0.0.1` is the guest itself (`curl: (7) Failed to connect to
-127.0.0.1 port 19111`). A server on another address that the guest can reach would work (not
-verified).
+127.0.0.1 port 19111`). Serve the page on the address of the container instead, and give that
+address to curl:
+
+```sh
+IP=$(hostname -I | awk '{print $1}')
+(cd test-docroot && python3 -m http.server -b $IP 19111) &
+gramine-vm ./curl http://$IP:19111/      # VM
+gramine-sev ./curl http://$IP:19111/     # SEV
+kill %%
+```
+
+Each curl command exits with 0 and prints the page (`Hello World!`).
