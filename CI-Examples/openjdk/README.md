@@ -32,16 +32,9 @@ Note: If using 64G or greater enclave sizes, the JVM flag `-Xmx8G` can be omitte
 
 ## Running under each backend
 
-Build first (`make`, or `make VBS=1` for vbs) and activate the install of the backend (`Documentation/quickstart/`). Results and dates are in the matrix of `CI-Examples/README.md`.
+Build and run in this directory, with the install of the backend active (`Documentation/quickstart/`). Pass or fail status: matrix in [`CI-Examples/README.md`](../README.md).
 
-- **direct:** not verified.¹
-- **vm:** not verified.¹
-- **sev:** not verified.¹
-- **tdx:** not verified.²
-- **sgx:** not verified.³ The commands are given above.
-- **vbs:** not verified.⁴
-
-¹ No result is recorded for this backend (matrix in `CI-Examples/README.md`).  
-² TDX was tested offline by the maintainer, with the same result as SEV. No TDX log is in the repository, so the result is reported and not verified here. The TDX install needs `td-shim` (`Documentation/TODO.md`).  
-³ SGX has not run on this tree's hardware. The SGX build needs `protobuf-c` (`Documentation/TODO.md`).  
-⁴ No VBS recipe; the JVM needs executable memory.
+- **direct:** `make`, then `gramine-direct java MultiThreadMain`.
+- **vm:** `gramine-vm java MultiThreadMain`. Not verified.
+- **sev:** `gramine-sev java MultiThreadMain`. Not verified.
+- **vbs:** no recipe.
