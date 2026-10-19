@@ -1,65 +1,59 @@
-# Lighttpd Example
+# Lighttpd
 
-This directory contains an example for running lighttpd in Gramine, including
-the Makefile and a template for generating the manifest.
+This directory contains an example for running lighttpd in Gramine, including the Makefile and a
+template for generating the manifest. Pass or fail status per backend: matrix in
+[`CI-Examples/README.md`](../README.md).
 
-# Building lighttpd source
+# Building
 
-This example builds lighttpd from source and does not use an existing binary. To build lighttpd on
-Ubuntu 20.04, install the following packages:
+Install the backend first (`Documentation/quickstart/`) and run all commands in this directory.
+The example builds lighttpd from source. On Ubuntu, install `build-essential`, `libssl-dev` and
+`zlib1g-dev`.
 
-    sudo apt-get install -y build-essential libssl-dev zlib1g-dev
+## Direct, VM, and SEV
 
-## Linux
-
-Run `make` (non-debug) or `make DEBUG=1` (debug) in the directory.
+```sh
+make
+```
 
 ## SGX
 
-Run `make SGX=1` (non-debug) or `make SGX=1 DEBUG=1` (debug) in the directory to
-prepare lighttpd to run on SGX.
-
-# Running lighttpd
-
-Execute one of the following commands to start lighttpd natively (without Gramine), on Gramine or
-on Gramine-SGX, respectively.
-
-    make start-native-server
-    make start-gramine-server
-    SGX=1 make start-gramine-server
-
-These commands start the lighttpd server in the foreground. Run the client in another console.
-
-Once the server has started, test it with `wget` or `curl`:
-
-    wget http://127.0.0.1:8003/random/10K.1.html
-    curl --compressed http://127.0.0.1:8003/random/10K.1.html -o 10K.1.html
-
-The benchmark script uses `wrk` (wrk2) and can be run as well. See https://github.com/giltene/wrk2.
-
-    ../common_tools/benchmark-http.sh http://127.0.0.1:8003
-
-Use Ctrl-C to terminate the server once you are finished testing lighttpd.
-
-# lighttpd in a Windows VBS enclave
-
-In WSL on an ARM64 Windows machine with VBS (`Documentation/vbs.md`, "Makefile flow"):
-
 ```sh
-make VBS=1          # lighttpd built with the vbs gcc, installed into vbs-build/root, packed, signed
-make VBS=1 check    # start it in an enclave; fetch pages with Windows' curl.exe (vbs-check.sh)
+make SGX=1
 ```
 
-lighttpd runs in the foreground (`-D`) as one process on 127.0.0.1:8003 with
-`lighttpd-vbs.conf.template` (no mod_deflate: the vbs build has no zlib, OpenSSL, PCRE or bzip2).
-Its modules are loaded with `dlopen` from `/lighttpd/lib`; they are packed into the signed image
-like the binary.
+## VBS
 
-# Running under each backend
+In WSL on a Windows machine with VBS (`Documentation/vbs.md`, "Makefile flow"):
 
-Build and run in this directory, with the install of the backend active (`Documentation/quickstart/`). Pass or fail status: matrix in [`CI-Examples/README.md`](../README.md).
+```sh
+make VBS=1
+```
 
-- **direct:** `make`, then `make start-gramine-server`; start the client in another terminal (see above).
-- **vm:** `GRAMINE_RUNNER=gramine-vm test/test-direct.sh lighttpd`, from the repository root. The script forwards the server port through the relay (`GRAMINE_VM_INBOUND`).
-- **sev:** `make start-gramine-server GRAMINE=gramine-sev GRAMINE_VM_INBOUND=8003:8003`. Not verified.
-- **vbs:** `make VBS=1 check` (builds, then runs).
+# Testing
+
+Start the server in one terminal. It listens on `127.0.0.1:8003`:
+
+```sh
+make start-gramine-server                                                     # direct
+make start-gramine-server GRAMINE=gramine-vm GRAMINE_VM_INBOUND=8003:8003     # VM
+make start-gramine-server GRAMINE=gramine-sev GRAMINE_VM_INBOUND=8003:8003    # SEV; not verified
+make SGX=1 start-gramine-server                                               # SGX; not verified
+```
+
+Under the VM and SEV, the guest has no network of its own: `GRAMINE_VM_INBOUND` forwards the port
+through the relay. No other setting is needed. `GRAMINE_RUNNER=gramine-vm test/test-direct.sh
+lighttpd`, from the repository root, runs the VM case.
+
+Fetch a test page from another terminal. The page is 10 KiB of random data, so the expected output
+is the byte count:
+
+```sh
+curl -s http://127.0.0.1:8003/random/10K.1.html | wc -c    # expected: 10240
+```
+
+Stop the server with Ctrl-C. `../common_tools/benchmark-http.sh http://127.0.0.1:8003` runs a
+benchmark (needs wrk2).
+
+For VBS, `make VBS=1 check` starts lighttpd in an enclave and fetches pages from Windows. The VBS
+build has no zlib, OpenSSL, PCRE or bzip2, so there is no `mod_deflate`.

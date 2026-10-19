@@ -1,57 +1,58 @@
 # Memcached
 
-This directory contains the Makefile and the template manifest for the most
-recent version of Memcached as of this writing (v1.6.21).
+This directory contains the Makefile and the template manifest for Memcached 1.6.21. Pass or fail
+status per backend: matrix in [`CI-Examples/README.md`](../README.md).
 
-# Prerequisites
+# Building
 
-Install the `libevent-dev` package. To benchmark with memcslap, also install `libmemcached-tools`.
+Install the backend first (`Documentation/quickstart/`) and run all commands in this directory.
+Install the `libevent-dev` package. To benchmark with `memcslap`, also install
+`libmemcached-tools`.
 
-# Quick Start
+## Direct, VM, and SEV
 
 ```sh
-# build Memcached and the final manifest
+make
+```
+
+## SGX
+
+```sh
 make SGX=1
-
-# run original Memcached against a benchmark (memtier_benchmark,
-# install the benchmark on your host OS first)
-./memcached &
-memtier_benchmark --port=11211 --protocol=memcache_binary --hide-histogram
-kill %%
-
-# run Memcached in non-SGX Gramine against a benchmark
-gramine-direct memcached &
-memtier_benchmark --port=11211 --protocol=memcache_binary --hide-histogram
-kill %%
-
-# run Memcached in Gramine-SGX against a benchmark
-gramine-sgx memcached &
-memtier_benchmark --port=11211 --protocol=memcache_binary --hide-histogram
-kill %%
 ```
 
-# Memcached in a Windows VBS enclave
+## VBS
 
-In WSL on an ARM64 Windows machine with VBS (`Documentation/vbs.md`, "Makefile flow"):
+In WSL on a Windows machine with VBS (`Documentation/vbs.md`, "Makefile flow"):
 
 ```sh
-make VBS=1          # libevent 2.1.12 (static) and memcached built with the vbs gcc, packed, signed
-make VBS=1 check    # start it in an enclave and check it from Windows (vbs-check.sh)
-../../scripts/vbs/gramine-vbs memcached &
-../../scripts/vbs/gramine-vbs net bench memcached-get 11211 -c 8 -n 100000
-kill %%
+make VBS=1
 ```
 
-libevent is not in the vbs sysroot, so `make VBS=1` downloads libevent 2.1.12-stable from its
-GitHub release (SHA-256 checked) and links it statically. memcached runs with its defaults (4
-worker threads, 64 MiB cache) on 127.0.0.1:11211, TCP only (`-U 0`), as uid 1000 (as in the SGX
-manifest); clients run on Windows.
+The build downloads libevent 2.1.12 (SHA-256 checked) and links it statically.
 
-# Running under each backend
+# Testing
 
-Build and run in this directory, with the install of the backend active (`Documentation/quickstart/`). Pass or fail status: matrix in [`CI-Examples/README.md`](../README.md).
+Start the server in one terminal. It listens on port 11211:
 
-- **direct:** `make`, then `make start-gramine-server`; start the client in another terminal (see above).
-- **vm:** `GRAMINE_RUNNER=gramine-vm test/test-direct.sh memcached`, from the repository root. The script forwards the server port through the relay (`GRAMINE_VM_INBOUND`).
-- **sev:** `make start-gramine-server GRAMINE=gramine-sev GRAMINE_VM_INBOUND=11211:11211`. Not verified.
-- **vbs:** `make VBS=1 check` (builds, then runs).
+```sh
+make start-gramine-server                                                       # direct
+make start-gramine-server GRAMINE=gramine-vm GRAMINE_VM_INBOUND=11211:11211     # VM
+make start-gramine-server GRAMINE=gramine-sev GRAMINE_VM_INBOUND=11211:11211    # SEV; not verified
+make SGX=1 start-gramine-server                                                 # SGX; not verified
+```
+
+Under the VM and SEV, `GRAMINE_VM_INBOUND` forwards the port through the relay. No other setting is
+needed. `GRAMINE_RUNNER=gramine-vm test/test-direct.sh memcached`, from the repository root, runs
+the VM case.
+
+Run a benchmark from another terminal (install `memtier_benchmark` on the host first):
+
+```sh
+memtier_benchmark --port=11211 --protocol=memcache_binary --hide-histogram
+```
+
+Stop the server with Ctrl-C. `make start-native-server` runs Memcached without Gramine.
+
+For VBS, `make VBS=1 check` starts Memcached in an enclave and checks it from Windows. It runs with
+its defaults on `127.0.0.1:11211`, TCP only.

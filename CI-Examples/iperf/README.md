@@ -1,92 +1,61 @@
 # iperf
 
-This directory contains the Makefile and the template manifest for the most
-recent version of `iperf` as of this writing (3.16).
+This directory contains the Makefile and the template manifest for iperf 3.16. Pass or fail status
+per backend: matrix in [`CI-Examples/README.md`](../README.md).
 
-# Prerequisites
+# Building
 
-`iperf` has no prerequisites
-([source](https://github.com/esnet/iperf/tree/3.16?tab=readme-ov-file#prerequisites)).
+Install the backend first (`Documentation/quickstart/`) and run all commands in this directory.
+iperf has no prerequisites besides a compiler and `wget` (`./install-prereqs.sh` installs them on
+Debian or Ubuntu).
 
-# Building instructions
+iperf is built from source because the Ubuntu 22.04 package `iperf3` 3.9 needs `TCP_CONGESTION`
+and fails with `iperf3: error - unable to set TCP_CONGESTION`. The manual build omits it. Since
+3.10, prebuilt packages should also work under Gramine (see the [release
+notes](https://github.com/esnet/iperf/blob/3.16/RELNOTES.md#iperf-310-2021-05-26)).
 
-`iperf` is built from source because the Ubuntu 22.04 package `iperf3` v3.9 requires
-`TCP_CONGESTION` (it is built with the `iperf3_cv_header_tcp_congestion="yes"` configuration
-option). Using the Ubuntu package fails with the following error:
-```
-iperf3: error - unable to set TCP_CONGESTION: ...
-```
+## Direct, VM, and SEV
 
-The manual build omits `TCP_CONGESTION` and runs under Gramine[^1].
-
-[^1]: Starting from version 3.10, `iperf` supports environments that do not
-implement congestion control algorithm. Thus, iperf 3.10+ prebuilt packages
-should work under Gramine without problems. See [release
-notes](https://github.com/esnet/iperf/blob/3.16/RELNOTES.md#iperf-310-2021-05-26)
-for details.
-
-
-## Building for Linux
-
-Run `make` in the current directory.
-
-## Building for SGX
-
-Run `make SGX=1` (non-debug) or `make SGX=1 DEBUG=1` (debug) in the current
-directory.
-
-# Execution instructions
-
-Run `iperf` server natively:
-```
-LD_LIBRARY_PATH=./install ./install/iperf3 -s
+```sh
+make
 ```
 
-Run `iperf` server in Gramine without SGX:
-```
-gramine-direct iperf3
+## SGX
+
+```sh
+make SGX=1
 ```
 
-Run `iperf` server in Gramine with SGX:
-```
-gramine-sgx iperf3
+## VBS
+
+In WSL on a Windows machine with VBS (`Documentation/vbs.md`, "Makefile flow"):
+
+```sh
+make VBS=1
 ```
 
-To get measurements with the `iperf` client, run in another terminal:
+# Testing
+
+Start the server in one terminal. It listens on port 5201 (the iperf default):
+
+```sh
+gramine-direct iperf3                                                     # direct
+GRAMINE_VM_INBOUND=5201:5201 gramine-vm iperf3                            # VM; not verified
+GRAMINE_VM_INBOUND=5201:5201 gramine-sev iperf3                           # SEV; not verified
+gramine-sgx iperf3                                                        # SGX; not verified
 ```
+
+Under the VM and SEV, `GRAMINE_VM_INBOUND` forwards the port through the relay. The manifest sets
+the server mode.
+
+Measure from another terminal with the client of the same build (the native client is enough):
+
+```sh
 LD_LIBRARY_PATH=./install ./install/iperf3 -c localhost -p 5201
 ```
 
-# Useful iperf options
+The output is the bandwidth per second and a summary at the end. Useful options: `-t #` (seconds),
+`-n #[KMG]` (bytes), `-P #` (parallel streams), `-N` (no delay), `-1` (server: one client, then
+exit). To compare with the native server, run `LD_LIBRARY_PATH=./install ./install/iperf3 -s`.
 
-(The options may be version-dependent. Below are the options for v3.16.)
-
-## Generic options (both for server and client):
-- `-p, --port`: server port to listen on/connect to
-- `--forceflush`: force flushing output at every interval
-- `-d, --debug[=#]`: emit debugging output (optional "=" and debug level: 1-4)
-
-## Server-specific options:
-- `-s, --server`: run in server mode
-- `-1, --one-off`: handle one client connection then exit
-- `--idle-timeout #`: restart idle server after # seconds in case it got stuck
-
-## Client-specific options:
-- `-c, --client <host>`: run in client mode, connecting to `<host>`
-- `-t, --time #`: time in seconds to transmit for (default 10 secs)
-- `-n, --bytes #[KMG]`: number of bytes to transmit (instead of -t)
-- `-P, --parallel #`: number of parallel client streams to run
-- `-N, --no-delay`: set TCP/SCTP no delay, disabling Nagle's Algorithm
-
-# Notes
-- Tested on Ubuntu 22.04.
-- The execution instructions use port `5201` for the client. This is the default port of `iperf`.
-
-# Running under each backend
-
-Build and run in this directory, with the install of the backend active (`Documentation/quickstart/`). Pass or fail status: matrix in [`CI-Examples/README.md`](../README.md).
-
-- **direct:** `make`, then `gramine-direct iperf3` (server; client as above).
-- **vm:** `GRAMINE_VM_INBOUND=5201:5201 gramine-vm iperf3`, for the client to reach the server through the relay. Not verified.
-- **sev:** `GRAMINE_VM_INBOUND=5201:5201 gramine-sev iperf3`. Not verified.
-- **vbs:** `make VBS=1 check` (builds, then runs).
+For VBS, `make VBS=1 check` runs the server and the client, each in its own enclave.
