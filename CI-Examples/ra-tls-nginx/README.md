@@ -1,42 +1,46 @@
 # RA-TLS with Nginx
 
-**NOTE:** This example requires SGX. It does not work with `gramine-direct`.
+This example demonstrates how to attest a generic TLS server using RA-TLS. The certificate and key
+files are saved to a tmpfs inside Gramine with the `gramine-ratls` tool, and Nginx is configured to
+use them. This works because tmpfs is not shared between Gramine processes, but Nginx is
+`execve()`'d from `gramine-ratls`, so the tmpfs stays intact. Pass or fail status per backend:
+matrix in [`CI-Examples/README.md`](../README.md).
 
-This example demonstrates how to attest a generic TLS server using RA-TLS. The
-certificate and key files are saved to a tmpfs system inside Gramine using
-`gramine-ratls` tool. Nginx is configured to use those files. This works because
-while tmpfs is not shared between Gramine processes, Nginx is execve()'d from
-`gramine-ratls`, so the tmpfs is kept intact.
+The example needs SGX. It does not run under direct, VM, SEV or VBS.
+
+# Building
+
+Install Gramine with SGX first (`Documentation/quickstart/`) and run all commands in this
+directory.
+
+## SGX
 
 ```sh
 make
+```
+
+For EPID attestation, give an SPID and say whether it is set up for linkable quotes. The dummy SPID
+below suffices for simple experiments:
+
+```sh
+make RA_TYPE=epid RA_CLIENT_SPID=12345678901234567890123456789012 RA_CLIENT_LINKABLE=0
+```
+
+# Testing
+
+Start the server (not verified; SGX has not run on this tree's hardware):
+
+```sh
 gramine-sgx nginx
 ```
 
-Then in another terminal:
+Then, in another terminal:
+
 ```sh
 curl --insecure https://localhost:8000
 ```
 
-In this simplified example, `--insecure` argument to curl means that curl will
-not check the TLS certificate. The `curl` command-line tool can't check it at
-all, because RA-TLS certificate is self-signed and does not chain to any WebPKI
-roots, so `curl` is currently unsuitable for production deployments. In
-production, another HTTPS client performing remote attestation should be used.
-
-See also `run.sh` script, which starts the enclave, performs a request, then
-kills it and reports the status.
-
-## EPID remote attestation
-
-If you use EPID attestation, add those arguments to `make` invocation above:
-
-```sh
-make RA_TYPE=epid RA_CLIENT_SPID=... RA_CLIENT_LINKABLE=[0|1]
-```
-
-## Running under each backend
-
-Build and run in this directory, with the install of the backend active (`Documentation/quickstart/`). Pass or fail status: matrix in [`CI-Examples/README.md`](../README.md).
-
-- **direct, vm, sev, vbs:** not applicable. The example needs SGX (`make`, then `gramine-sgx`, as above).
+`--insecure` makes curl skip the certificate check. curl cannot check an RA-TLS certificate, because
+it is self-signed and does not chain to a WebPKI root, so curl is unsuitable for production; use an
+HTTPS client that performs remote attestation. `make check` runs `run.sh`, which starts the
+enclave, performs a request, kills it and reports the status.

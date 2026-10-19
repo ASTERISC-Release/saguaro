@@ -62,7 +62,28 @@ addressed (for example, when the microcode or architectural enclaves aren't
 fully up-to-date). Note that in production environments, you must carefully
 analyze whether to use these options!
 
-# Quick Start
+The example needs SGX. It does not run under direct, VM, SEV or VBS. Pass or fail status per
+backend: matrix in [`CI-Examples/README.md`](../README.md).
+
+# Building
+
+Install Gramine with SGX first (`Documentation/quickstart/`) and run all commands in this
+directory.
+
+## SGX
+
+```sh
+make app epid RA_TYPE=epid RA_CLIENT_SPID=12345678901234567890123456789012 RA_CLIENT_LINKABLE=0
+make app dcap RA_TYPE=dcap
+```
+
+The first command builds the EPID variant, the second the DCAP variant (it needs the DCAP
+infrastructure). The dummy SPID suffices for simple experiments; a real quote needs an SPID
+recognized by Intel. Run `make clean` between the two builds.
+
+# Testing
+
+The commands below have not been verified (SGX has not run on this tree's hardware).
 
 In most of the examples below, you need to tell the client what values it should
 expect for `MRENCLAVE`, `MRSIGNER`, `ISV_PROD_ID` and `ISV_SVN`. One way to
@@ -196,9 +217,3 @@ gramine-sgx ./client_dcap dcap \
 # client will successfully connect to the server via RA-TLS/DCAP flows
 kill %%
 ```
-
-# Running under each backend
-
-Build and run in this directory, with the install of the backend active (`Documentation/quickstart/`). Pass or fail status: matrix in [`CI-Examples/README.md`](../README.md).
-
-- **direct, vm, sev, vbs:** not applicable. The example needs SGX (`make`, then `gramine-sgx`, as above).
