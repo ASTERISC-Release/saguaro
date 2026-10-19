@@ -1,40 +1,41 @@
 # Java example
 
 This directory contains an example for running OpenJDK in Gramine, including the Makefile and a
-template for generating the manifest.
+template for generating the manifest. Pass or fail status per backend: matrix in
+[`CI-Examples/README.md`](../README.md).
 
-## Installing prerequisites
+# Building
 
-For generating the manifest and running the OpenJDK example, run the
-following command to install the required packages (Ubuntu-specific):
+Install the backend first (`Documentation/quickstart/`) and run all commands in this directory.
+Install OpenJDK (Ubuntu):
 
-    sudo apt-get install openjdk-11-jdk
+```sh
+sudo apt-get install openjdk-11-jdk
+```
 
-## Building for gramine-direct
+## Direct, VM, and SEV
 
-Run `make` (non-debug) or `make DEBUG=1` (debug) in the directory.
+```sh
+make
+```
 
-## Building for gramine-sgx
+## SGX
 
-Run `make SGX=1` (non-debug) or `make SGX=1 DEBUG=1` (debug) in the directory.
+```sh
+make SGX=1
+```
 
-## Run OpenJDK example with Gramine
+The example has no VBS recipe.
 
-Without SGX:
+# Testing
 
-    gramine-direct java MultiThreadMain
+The program `MultiThreadMain` starts several threads:
 
-With SGX:
+```sh
+gramine-direct java MultiThreadMain
+gramine-vm java MultiThreadMain             # VM; not verified
+gramine-sev java MultiThreadMain            # SEV; not verified
+gramine-sgx java -Xmx8G MultiThreadMain     # SGX; not verified
+```
 
-    gramine-sgx java -Xmx8G MultiThreadMain
-
-Note: If using 64G or greater enclave sizes, the JVM flag `-Xmx8G` can be omitted in gramine-sgx.
-
-## Running under each backend
-
-Build and run in this directory, with the install of the backend active (`Documentation/quickstart/`). Pass or fail status: matrix in [`CI-Examples/README.md`](../README.md).
-
-- **direct:** `make`, then `gramine-direct java MultiThreadMain`.
-- **vm:** `gramine-vm java MultiThreadMain`. Not verified.
-- **sev:** `gramine-sev java MultiThreadMain`. Not verified.
-- **vbs:** no recipe.
+Under SGX, `-Xmx8G` is needed unless the enclave size is 64G or more.

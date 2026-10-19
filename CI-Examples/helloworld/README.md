@@ -1,47 +1,53 @@
 # Hello World
 
 This directory contains a Makefile and a manifest template for running a simple "Hello World"
-program in Gramine. It serves as a sanity test of a Gramine installation.
+program in Gramine. It serves as a sanity test of a Gramine installation. Pass or fail status per
+backend: matrix in [`CI-Examples/README.md`](../README.md).
 
 # Building
 
-## Building for Linux
+Install the backend first (`Documentation/quickstart/`) and run all commands in this directory.
+`make DEBUG=1` builds with debug logging.
 
-Run `make` (non-debug) or `make DEBUG=1` (debug) in the directory.
+## Direct, VM, and SEV
 
-## Building for SGX
+```sh
+make
+```
 
-Run `make SGX=1` (non-debug) or `make SGX=1 DEBUG=1` (debug) in the directory.
+## SGX
 
-## Building for a Windows VBS enclave
+```sh
+make SGX=1
+```
 
-In WSL on an ARM64 Windows machine with VBS (see `Documentation/vbs.md`, "Makefile flow"), run
-`make VBS=1` in the directory: it builds the program as a static PIE against the vbs glibc (in
-`vbs-build/`), renders `vbs.manifest.template` into `helloworld.manifest.vbs`, packs it into
-`helloworld.vbs/` and links and signs `helloworld.dll` on Windows. `make VBS=1 check` runs it.
+## VBS
 
-# Run Hello World with Gramine
+In WSL on a Windows machine with VBS (`Documentation/vbs.md`, "Makefile flow"). The command builds
+the program as a static PIE against the vbs glibc (in `vbs-build/`), packs it into
+`helloworld.vbs/` and links and signs `helloworld.dll` on Windows:
 
-Without SGX:
+```sh
+make VBS=1
+```
+
+# Testing
+
+The program prints `Hello, world`:
+
 ```sh
 gramine-direct helloworld
 ```
 
-With SGX:
+The other backends run the same program with their own command:
+
 ```sh
-gramine-sgx helloworld
+gramine-vm helloworld                            # VM
+GRAMINE_RAM_SIZE=4G gramine-sev helloworld       # SEV (Documentation/quickstart/sev.md)
+gramine-sgx helloworld                           # SGX; not verified
+gramine-vbs helloworld                           # VBS (scripts/vbs/gramine-vbs)
 ```
 
-In a VBS enclave (`scripts/vbs/gramine-vbs` of the repository):
-```sh
-gramine-vbs helloworld
-```
-
-# Running under each backend
-
-Build and run in this directory, with the install of the backend active (`Documentation/quickstart/`). Pass or fail status: matrix in [`CI-Examples/README.md`](../README.md).
-
-- **direct:** `make`, then `make check` (or `gramine-direct helloworld`).
-- **vm:** `make check GRAMINE=gramine-vm` (or `gramine-vm helloworld`).
-- **sev:** `GRAMINE_RAM_SIZE=4G gramine-sev helloworld` (`Documentation/quickstart/sev.md`).
-- **vbs:** `make VBS=1 check` (builds, then runs).
+`make check` runs the program with the backend in `GRAMINE` and compares its output
+(`make check GRAMINE=gramine-vm` for the VM; `make VBS=1 check` for VBS). SEV needs
+`GRAMINE_RAM_SIZE=4G` as shown. No backend needs another setting.

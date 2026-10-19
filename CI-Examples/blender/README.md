@@ -1,16 +1,34 @@
 # Blender
 
-This directory contains a Makefile and template manifest to run Blender v2.82 on
-Gramine.
+This directory contains a Makefile and a template manifest to run Blender 2.82 on Gramine. Pass or
+fail status per backend: matrix in [`CI-Examples/README.md`](../README.md).
 
-# Quick Start
+# Building
 
-To run the test, execute `make check`. For SGX, execute `make SGX=1 check`.
+Install the backend first (`Documentation/quickstart/`) and run all commands in this directory.
+The Makefile downloads an x86_64 Blender binary, so the example runs on x86_64 only.
 
-# Running under each backend
+## Direct
 
-Build and run in this directory, with the install of the backend active (`Documentation/quickstart/`). Pass or fail status: matrix in [`CI-Examples/README.md`](../README.md).
+```sh
+make
+```
 
-- **direct:** `make check` (x86_64 only: the example downloads an x86_64 binary).
-- **vm, sev:** no `make` target: `test_all_scenes.sh` runs only `gramine-direct` (or `gramine-sgx`).
-- **vbs:** no recipe.
+## SGX
+
+```sh
+make SGX=1
+```
+
+The example has no VBS recipe. VM and SEV: the Makefile has no VM or SEV target.
+
+# Testing
+
+```sh
+make check
+```
+
+This renders every scene in `data/scenes/` with `gramine-direct` (`SGX=1 make check` uses
+`gramine-sgx`) and checks that the image `data/images/<scene>0001.png` exists. The script
+`test_all_scenes.sh` hardcodes `gramine-direct` and `gramine-sgx`, so `make check` does not take
+`GRAMINE=gramine-vm` or `GRAMINE=gramine-sev`.
