@@ -12,7 +12,7 @@ short on purpose; an item that is fixed is removed from the topic list first and
 | Host / PAL | Main open items | Details |
 |---|---|---|
 | `direct` | audit PAL state that a starting child allocates and frees at exit (the shared file cache was one case); sound and the remaining GPU-driver gaps for graphics | `devel/vm-multiproc/TODO.md`, `devel/graphics-direct/TODO.md` |
-| `vm` | multi-vCPU performance: check and improve `gramine-vm` at 2 and 4 vCPUs (multi-process fork cost, TLB shootdowns, scheduler lock contention, cross-CPU handoffs); robust mutex for the System V shared tables; `/proc/<pid>/stat` of other processes; `PROT_NONE` enforcement; finer timer than the 100 ms tick; async signal resume; UDP/IPv6 relay gaps | `devel/vm-multiproc/TODO.md`, `devel/libos-syscalls/TODO.md`, `devel/syscall-compat/TODO.md`, `devel/vm-network/TODO.md` |
+| `vm` | multi-vCPU performance: check and improve `gramine-vm` at 2 and 4 vCPUs (multi-process fork cost, TLB shootdowns, scheduler lock contention, cross-CPU handoffs); robust mutex for the System V shared tables; `/proc/<pid>/stat` of other processes; `PROT_NONE` enforcement; finer timer than the 100 ms tick; async signal resume; UDP/IPv6 relay gaps | `devel/vm-multiproc/TODO.md`, `devel/libos-syscalls/TODO.md`, `devel/syscall-compat/TODO.md`, and below (VM networking) |
 | `vm` with graphics (OpenGL, Vulkan) | present events and a non-flipping blit for Vulkan, idle CPU of the listener, two-thread submission cost, SuperTuxKart start hang, sound, Team Fortress 2 | `devel/graphics/TODO.md`, `devel/vulkan/TODO.md` |
 | `tdx` and `sgx` | never run on this tree's hardware; extend the interrupt-before-IDT guard to TDX; the SGX build needs `protobuf-c` (not in `dependencies.sh` or the container); the TDX install needs `td-shim` | `devel/vm-multiproc/TODO.md`, `quickstart/tdx-sgx.md` |
 | `sev` (AMD64) | planned; no code yet | `README.md` |
@@ -24,7 +24,7 @@ short on purpose; an item that is fixed is removed from the topic list first and
 | Host / PAL | Main open items | Details |
 |---|---|---|
 | `direct` | `kill11` hang; longer soak runs and real applications (openssh, dropbear); ABI-conformance tests | `devel/syscall-compat/TODO.md`, `devel/aarch64/direct/TODO.md` |
-| `vm` | multi-process (phases 0 to 3 merged; phases 4 and 5 on `dev-aarch64-multiproc-fp`: interruptible PAL waits, EL1 LibOS faults end the process instead of the guest, 4-vCPU forks as fast as 2; the AArch64 FP/SIMD-at-syscall-return and full-sigaltstack bugs fixed 2026-10-16; phase 5 qualification done 2026-10-16 (`devel/vm-multiproc-aarch64/MATRIX-MULTIPROCESS.md`), merge pending; open: the pool's identity range; `devel/vm-multiproc-aarch64/`); console and socket waits not interruptible yet; timer granularity; `dev:`/`/sys`/attestation streams; 2 MiB pages | `devel/aarch64/vm/TODO.md`, `devel/syscall-compat/TODO.md`, `devel/vm-multiproc-aarch64/TODO.md` |
+| `vm` | multi-process (phases 0 to 3 merged; phases 4 and 5 on `dev-aarch64-multiproc-fp`: interruptible PAL waits, EL1 LibOS faults end the process instead of the guest, 4-vCPU forks as fast as 2; the AArch64 FP/SIMD-at-syscall-return and full-sigaltstack bugs fixed 2026-10-16; phase 5 qualification done 2026-10-16 (`devel/vm-multiproc-aarch64/MATRIX-MULTIPROCESS.md`), merge pending; open: the pool's identity range; `devel/vm-multiproc-aarch64/`); console and socket waits not interruptible yet; timer granularity; `dev:`/`/sys`/attestation streams; 2 MiB pages | below (AArch64 and the VM PAL), `devel/syscall-compat/TODO.md`, `devel/vm-multiproc-aarch64/TODO.md` |
 | `direct` with graphics (NVIDIA proprietary driver) | remaining NVIDIA fd-bearing ioctls; several GPU nodes; Vulkan and CUDA untested; `SCM_RIGHTS` on plain socketpairs; syscall cost of Minetest | `devel/graphics-aarch64/TODO.md` |
 | `vm` with graphics | not available: the QEMU fork's listener and the comm-page address are x86-only; redesign deferred (`virtio-gpu` as one option) | `devel/graphics-aarch64/PLAN.md` |
 | all AArch64 PALs: CPU feature words | `AT_HWCAP`/`AT_HWCAP2` passed (allowlist); SVE, PAC, BTI, MTE stay masked until the LibOS supports them; EL0 ID-register reads not emulated under vm; VBS features without a `PF_ARM_*` number not advertised | `devel/aarch64/hwcap/TODO.md` |
@@ -33,7 +33,7 @@ short on purpose; an item that is fixed is removed from the topic list first and
 
 | Host / PAL | Main open items | Details |
 |---|---|---|
-| `direct` | validation on hardware (stress under 8-hart load, other example suites); syscall-rewriting stress and the hosted `test_603` timeout; CPU identification in the PAL | `devel/riscv/TODO.md`, `devel/riscv-hardware/TODO.md`, `devel/syscall-interception/TODO.md` |
+| `direct` | validation on hardware (stress under 8-hart load, other example suites); syscall-rewriting stress and the hosted `test_603` timeout; CPU identification in the PAL | `devel/riscv/TODO.md` and below (RISC-V rewriting and hardware) |
 | `vm` | not available (planned) | `README.md` |
 
 ## Windows 11 (ARM64 and x64): VBS enclaves (`vbs` PAL)

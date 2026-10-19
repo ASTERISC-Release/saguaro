@@ -17,7 +17,7 @@ python_src = [
     'gen_jinja_env.py',
     'manifest.py',
     'manifest_check.py',
-    # the per-VM vsock relay started by gramine-vm (Documentation/devel/vm-network/)
+    # the per-VM vsock relay started by gramine-vm (Documentation/devel/CHANGELOG.md)
     'vsock_relay.py',
 ]
 

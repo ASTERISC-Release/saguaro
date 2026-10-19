@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
-# The per-VM vsock relay of the VM PAL, for the launchers (Documentation/devel/vm-network/PLAN.md).
+# The per-VM vsock relay of the VM PAL, for the launchers (Documentation/devel/CHANGELOG.md).
 # This file is sourced by `gramine-vm-aarch64` (and, once the x86_64 launcher is switched over, by
 # `gramine-vm`); it only defines functions. It is installed next to the VM PAL, as
 # $HOST_PAL_PATH/vm-relay.sh.

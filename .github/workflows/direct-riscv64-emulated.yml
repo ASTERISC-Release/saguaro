@@ -76,7 +76,7 @@ jobs:
             # calls cannot be met here (every call is a seccomp trap; see the port's plan), and
             # test_603_rewrite_stress, whose `threads` scenario ran into its own 240 s alarm on
             # both hosted runs (about 2 s locally; cause not established, probably the runner:
-            # Documentation/devel/syscall-interception/TESTING.md). It still runs locally.
+            # Documentation/TODO.md). It still runs locally.
             container/run.sh --target riscv64 \
               "scripts/riscv64/render-test-manifests.sh $suite >/dev/null && GRAMINE_TEST_TIMEOUT=600 scripts/riscv64/run-suite.sh $suite -rfs --durations=10 -k 'not test_103_gettimeofday and not test_603_rewrite_stress'" \
               2>&1 | tee "test-logs/$suite.log" || rc=1
