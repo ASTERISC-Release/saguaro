@@ -13,7 +13,7 @@
 # Exit status 0 only if every run passed.
 set -u
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
-REPO=$(cd "$HERE/../.." && pwd)
+REPO=$(cd "$HERE/../../.." && pwd)
 PREFIX=${GRAMINE_PREFIX:-$HOME/.local/gramine-vm}
 . "$PREFIX/env.sh"
 export GRAMINE_CPU_NUM=${GRAMINE_CPU_NUM:-2}

@@ -8,7 +8,7 @@
 #            --pattern REGEX test
 set -u
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
-REPO=$(cd "$HERE/../.." && pwd)
+REPO=$(cd "$HERE/../../.." && pwd)
 PREFIX=; TAG=; CPUS=4; RUNS=10; PAT=shootdown
 while [ $# -gt 0 ]; do
     case $1 in

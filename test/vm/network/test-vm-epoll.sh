@@ -6,7 +6,7 @@
 set -u
 set -o pipefail
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
-REPO=$(dirname "$HERE")
+REPO=$(cd "$HERE/../../.." && pwd)
 PREFIX=${GRAMINE_PREFIX:-$HOME/.local/gramine-vm}
 REQUESTS=${EPOLL_REQUESTS:-50000}
 SERVER_MODE=${EPOLL_SERVER_MODE:-epoll}
@@ -42,7 +42,7 @@ elif [ "$TRANSPORT" != vsock ]; then
     exit 2
 fi
 
-DIR=$HERE/vsock-loopback
+DIR=$(cd "$HERE/../vsock-loopback" && pwd)
 echo "== vsock-epoll: building guest echo server"
 make -C "$DIR" -s || exit 1
 (cd "$DIR" && GRAMINE_VM=1 gramine-test build -f vsock_echo_server) >"$OUT/manifest.log" 2>&1 || {

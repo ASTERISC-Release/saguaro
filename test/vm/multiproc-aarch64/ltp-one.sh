@@ -8,7 +8,7 @@
 #            [--monitor SOCKET] test [args...]
 set -u
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
-REPO=$(cd "$HERE/../.." && pwd)
+REPO=$(cd "$HERE/../../.." && pwd)
 PREFIX=; TAG=; LEVEL=; CPUS=1; MON=
 while [ $# -gt 0 ]; do
     case $1 in

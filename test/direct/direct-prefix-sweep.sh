@@ -20,7 +20,7 @@
 # path, default 72).
 set -euo pipefail
 
-REPO=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
+REPO=$(cd "$(dirname "$(readlink -f "$0")")/../.." && pwd)
 PREFIX=$(readlink -f "${GRAMINE_PREFIX:-$HOME/.local/gramine}")
 SWEEP_DIR=${SWEEP_DIR:-/tmp/gps}
 MAX=${MAX:-72}

@@ -6,7 +6,7 @@
 # other examples (which test-direct.sh runs with gramine-direct) are run here with gramine-vm.
 # Usage: [MP=1] [CPUS=2] [REPO=...] test/vm-multiproc/vm-examples.sh
 set -u
-REPO=${REPO:-$(cd "$(dirname "$0")/../.." && pwd)}
+REPO=${REPO:-$(cd "$(dirname "$0")/../../.." && pwd)}
 MP=${MP:-0}
 export GRAMINE_CPU_NUM=${CPUS:-2}
 OUT=${OUT:-/tmp/vm-examples-mp$MP}

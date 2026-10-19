@@ -6,7 +6,7 @@
 set -u
 set -o pipefail
 
-REPO=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
+REPO=$(cd "$(dirname "$(readlink -f "$0")")/../../.." && pwd)
 PREFIX=${GRAMINE_PREFIX:-$HOME/.local/gramine-vm}
 GUEST_PORT=${REDIS_GUEST_PORT:-6379}
 HOST_PORT=${REDIS_HOST_PORT:-16379}

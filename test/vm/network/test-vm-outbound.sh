@@ -7,7 +7,7 @@
 set -u
 set -o pipefail
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
-REPO=$(dirname "$HERE")
+REPO=$(cd "$HERE/../../.." && pwd)
 PREFIX=${GRAMINE_PREFIX:-$HOME/.local/gramine-vm}
 REQUESTS=${REQUESTS:-5000}
 CPU_NUM=${GRAMINE_CPU_NUM:-2}
@@ -31,7 +31,7 @@ test_host_ip() {
 HOST_IP=${GRAMINE_VM_TEST_HOST_IP:-$(test_host_ip)}
 case $HOST_IP in 127.*|0.0.0.0) echo "not a routable container address: $HOST_IP" >&2; exit 1 ;; esac
 
-DIR=$HERE/vsock-loopback
+DIR=$(cd "$HERE/../vsock-loopback" && pwd)
 mkdir -p "$OUT"
 make -C "$DIR" -s || exit 1
 

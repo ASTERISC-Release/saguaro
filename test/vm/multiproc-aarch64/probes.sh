@@ -17,7 +17,7 @@
 # regs: test/vm-multiproc-aarch64/regs.c, x6-x17 across svc (blocking, EINTR, fork, signals), key on and off.
 set -u
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
-REPO=$(cd "$HERE/../.." && pwd)
+REPO=$(cd "$HERE/../../.." && pwd)
 PREFIX=${GRAMINE_PREFIX:-$HOME/.local/gramine-vm}
 CPUS=2
 WHAT=()

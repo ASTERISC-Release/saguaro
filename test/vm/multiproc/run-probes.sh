@@ -9,7 +9,7 @@
 #        (no argument: spawn signals forks)
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
-REPO=$(cd "$HERE/../.." && pwd); export REPO
+REPO=$(cd "$HERE/../../.." && pwd); export REPO
 WORK=${WORK:-$REPO/.mp-probes}
 . "${GRAMINE_PREFIX:-$HOME/.local/gramine-vm}/env.sh"
 mkdir -p "$WORK" && cd "$WORK"

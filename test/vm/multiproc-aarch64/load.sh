@@ -7,7 +7,7 @@
 # Nginx and Redis must first be built in CI-Examples; host ports are checked before use.
 set -euo pipefail
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
-REPO=$(cd "$HERE/../.." && pwd)
+REPO=$(cd "$HERE/../../.." && pwd)
 PREFIX=${GRAMINE_PREFIX:-$HOME/.local/gramine-vm}
 CPUS=${GRAMINE_CPU_NUM:-2}
 WORK=${WORK:-$REPO/.mp-load-aarch64}

@@ -21,10 +21,10 @@ HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 
 runner_of() {
     case $1 in
-        direct)  echo "$HERE/test-direct.sh" ;;
-        vm)      echo "$HERE/test-vm.sh" ;;
-        sev)     echo "$HERE/test-sev.sh" ;;
-        sev-all) echo "$HERE/test-sev-all.sh" ;;
+        direct)  echo "$HERE/direct/test-direct.sh" ;;
+        vm)      echo "$HERE/vm/test-vm.sh" ;;
+        sev)     echo "$HERE/sev/test-sev.sh" ;;
+        sev-all) echo "$HERE/sev/test-sev-all.sh" ;;
         *)       return 1 ;;
     esac
 }
@@ -33,7 +33,7 @@ runner_of() {
 # header of their --help, as lines "  <name>   <description>" before the "Usage:" line.
 suites_of() {
     case $1 in
-        direct)  "$HERE/test-direct.sh" --list 2>/dev/null | tr '\n' ' ' ;;
+        direct)  "$HERE/direct/test-direct.sh" --list 2>/dev/null | tr '\n' ' ' ;;
         vm|sev)  "$(runner_of "$1")" --help 2>/dev/null \
                      | sed -n '/^Usage:/q; s/^  \([a-z][a-z-]*\) \{1,\}[^ ].*/\1/p' | tr '\n' ' ' ;;
         sev-all) printf '(none: one qualification run) ' ;;

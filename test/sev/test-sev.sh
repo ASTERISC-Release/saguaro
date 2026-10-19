@@ -31,7 +31,7 @@
 set -u
 set -o pipefail
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
-REPO=$(dirname "$HERE")
+REPO=$(cd "$HERE/../.." && pwd)
 PREFIX=${GRAMINE_PREFIX:-$HOME/.local/gramine-vm}
 SUITES=()
 while [ $# -gt 0 ]; do
@@ -95,7 +95,7 @@ s = 0
 for b in open(sys.argv[1], "rb").read():
     s = (s * 31 + b) & 0xffffffffffffffff
 print(f"len={len(open(sys.argv[1], "rb").read())} sum={s:016x}")' "$input")
-    (cd "$HERE/sev" && GRAMINE_VM_MONITOR=$mon GRAMINE_CPU_NUM=1 \
+    (cd "$HERE" && GRAMINE_VM_MONITOR=$mon GRAMINE_CPU_NUM=1 \
         timeout 300 "$launcher" sev_probe "$input" "$done" >"$log" 2>&1) &
     local pid=$!
     for _ in $(seq 600); do
@@ -116,7 +116,7 @@ print(f"len={len(open(sys.argv[1], "rb").read())} sum={s:016x}")' "$input")
     addr=$(sed -n 's/.*SECRET addr=\(0x[0-9a-f]*\).*/\1/p' "$log")
     xor=$(sed -n 's/.*xor5a=\([0-9a-f]*\).*/\1/p' "$log")
     local res
-    res=$(python3 "$HERE/sev/sev_memcheck.py" --monitor "$mon" --addr "$addr" --xor5a "$xor" \
+    res=$(python3 "$HERE/sev_memcheck.py" --monitor "$mon" --addr "$addr" --xor5a "$xor" \
           --ram-gib "$RAM_GIB" 2>&1)
     echo "memory/$tag: $(tr '\n' ' ' <<<"$res")"
     touch "$done"
@@ -142,14 +142,14 @@ print(f"len={len(open(sys.argv[1], "rb").read())} sum={s:016x}")' "$input")
 }
 
 test_memory() {
-    make -C "$HERE/sev" -s >/dev/null || { fail "building sev_probe"; return; }
+    make -C "$HERE" -s >/dev/null || { fail "building sev_probe"; return; }
     probe_run gramine-sev sev
     [ "${COMPARE:-1}" = 1 ] && probe_run gramine-vm plain
 }
 
 test_vsock() {
     GRAMINE_VM_LAUNCHER=gramine-sev SEQUENTIAL=${SEQUENTIAL:-20} CONCURRENT=${CONCURRENT:-4} \
-        OUT=$OUT/vsock "$HERE/test-vm-loopback.sh" --prefix "$PREFIX" 2>&1 | tail -n 3 \
+        OUT=$OUT/vsock "$HERE/../vm/network/test-vm-loopback.sh" --prefix "$PREFIX" 2>&1 | tail -n 3 \
         || fail "vsock loopback under gramine-sev"
 }
 
@@ -163,11 +163,11 @@ test_measure() {
     "$sevctl" export --full "$OUT/pdh.cert" >/dev/null || { fail "measure: sevctl export"; return; }
     (cd "$OUT" && rm -f gsev_* && "$sevctl" session --name gsev pdh.cert 1 >/dev/null) \
         || { fail "measure: sevctl session"; return; }
-    make -C "$HERE/sev" -s >/dev/null || { fail "building sev_probe"; return; }
+    make -C "$HERE" -s >/dev/null || { fail "building sev_probe"; return; }
     local qmp=$OUT/measure.qmp done=$OUT/measure.done log=$OUT/measure.out
     rm -f "$qmp" "$done"
     echo x > "$OUT/measure.input"
-    (cd "$HERE/sev" && GRAMINE_SEV_SESSION=$OUT/gsev GRAMINE_VM_QMP=$qmp GRAMINE_CPU_NUM=1 \
+    (cd "$HERE" && GRAMINE_SEV_SESSION=$OUT/gsev GRAMINE_VM_QMP=$qmp GRAMINE_CPU_NUM=1 \
         timeout 300 gramine-sev sev_probe "$OUT/measure.input" "$done" >"$log" 2>&1) &
     local pid=$!
     for _ in $(seq 600); do
@@ -176,7 +176,7 @@ test_measure() {
         sleep 0.1
     done
     local res
-    res=$(python3 "$HERE/sev/qmp.py" "$qmp" query-sev query-sev-launch-measure 2>&1)
+    res=$(python3 "$HERE/qmp.py" "$qmp" query-sev query-sev-launch-measure 2>&1)
     touch "$done"
     wait $pid || fail "measure: the probe failed: $(tail -n 3 "$log")"
     local info meas
@@ -199,11 +199,11 @@ test_measure() {
 
 test_attest() {
     local snpguest=${SNPGUEST:-/root/sev-tools/prefix/bin/snpguest}
-    make -C "$HERE/sev" -s >/dev/null || { fail "building sev_attest"; return; }
+    make -C "$HERE" -s >/dev/null || { fail "building sev_attest"; return; }
     local data report=$OUT/attest-report.bin log=$OUT/attest.out
     data=$(head -c 64 /dev/urandom | od -An -tx1 | tr -d ' \n')
     rm -f "$report"
-    (cd "$HERE/sev" && GRAMINE_CPU_NUM=1 timeout 300 gramine-sev sev_attest "$data" "$report" \
+    (cd "$HERE" && GRAMINE_CPU_NUM=1 timeout 300 gramine-sev sev_attest "$data" "$report" \
         >"$log" 2>&1) || { fail "attest: the guest failed: $(tail -n 5 "$log")"; return; }
     grep -q "attestation_type=sev-snp" "$log" || fail "attest: attestation_type is not sev-snp"
     [ -s "$report" ] || { fail "attest: no report"; return; }

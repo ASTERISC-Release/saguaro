@@ -14,7 +14,7 @@
 # Results: .ltp-results/<group>-<tag>-cpu<N>.json and one summary line per group.
 set -u
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
-REPO=$(cd "$HERE/../.." && pwd)
+REPO=$(cd "$HERE/../../.." && pwd)
 PREFIX=; TAG=; KEY=off; REBUILD=0; CPUS=1; GROUPS_=()
 while [ $# -gt 0 ]; do
     case $1 in

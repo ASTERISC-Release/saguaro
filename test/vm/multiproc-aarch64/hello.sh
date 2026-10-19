@@ -10,7 +10,7 @@
 # Usage: test/vm-multiproc-aarch64/hello.sh [--prefix DIR] [--key on|off|both] [vcpus...]
 set -u
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
-REPO=$(cd "$HERE/../.." && pwd)
+REPO=$(cd "$HERE/../../.." && pwd)
 PREFIX=${GRAMINE_PREFIX:-$HOME/.local/gramine-vm}
 KEY=both
 CPUS=()

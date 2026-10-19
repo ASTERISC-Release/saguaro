@@ -20,7 +20,7 @@
 set -u
 set -o pipefail
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
-REPO=$(dirname "$HERE")
+REPO=$(cd "$HERE/../../.." && pwd)
 PREFIX=${GRAMINE_PREFIX:-$HOME/.local/gramine-vm}
 SEQUENTIAL=${SEQUENTIAL:-100}
 CONCURRENT=${CONCURRENT:-16}
@@ -41,7 +41,7 @@ LAUNCHER=${GRAMINE_VM_LAUNCHER:-gramine-vm}
 command -v "$LAUNCHER" >/dev/null || { echo "$LAUNCHER not on PATH (prefix $PREFIX?)" >&2; exit 1; }
 [ -e /dev/vhost-vsock ] || { echo "no /dev/vhost-vsock; this test needs it" >&2; exit 1; }
 
-DIR=$HERE/vsock-loopback
+DIR=$(cd "$HERE/../vsock-loopback" && pwd)
 OUT=${OUT:-/tmp/vsock-loopback}
 mkdir -p "$OUT"
 

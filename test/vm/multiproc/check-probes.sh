@@ -26,7 +26,7 @@
 # applies to the checks that run through vm()).
 set -u
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
-REPO=$(cd "$HERE/../.." && pwd)
+REPO=$(cd "$HERE/../../.." && pwd)
 PREFIX=${GRAMINE_PREFIX:-$HOME/.local/gramine-vm}
 [ -f "$PREFIX/env.sh" ] || { echo "no $PREFIX/env.sh: set GRAMINE_PREFIX to the install prefix" >&2; exit 2; }
 . "$PREFIX/env.sh"

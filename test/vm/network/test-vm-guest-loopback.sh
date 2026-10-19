@@ -23,7 +23,7 @@ export PYTHONPATH=$(ls -d "$PREFIX"/lib/python3*/site-packages 2>/dev/null | hea
 command -v gramine-vm >/dev/null || { echo "gramine-vm not on PATH (prefix $PREFIX?)" >&2; exit 1; }
 [ -e /dev/vhost-vsock ] || { echo "no /dev/vhost-vsock; this test needs it" >&2; exit 1; }
 
-DIR=$HERE/vsock-loopback
+DIR=$(cd "$HERE/../vsock-loopback" && pwd)
 mkdir -p "$OUT"
 make -C "$DIR" -s || exit 1
 (cd "$DIR" && GRAMINE_VM=1 gramine-test build -f vsock_guest_loopback) \

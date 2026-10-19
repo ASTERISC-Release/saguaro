@@ -19,7 +19,7 @@
 # Logs go to OUT (default /tmp/test-sev-all); exit status 0 only if every step passed.
 set -u
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
-REPO=$(dirname "$HERE")
+REPO=$(cd "$HERE/../.." && pwd)
 PREFIX=${GRAMINE_PREFIX:-$HOME/.local/gramine-vm}
 OUT=${OUT:-/tmp/test-sev-all}
 CPUS=${CPUS-"1 2 4"}   # CPUS= (empty) skips the suite
@@ -47,7 +47,7 @@ done
 for n in $CPUS; do
     step "LibOS suite under SNP, $n vCPUs"
     GRAMINE_CPU_NUM=$n GRAMINE_VM_LAUNCHER=gramine-sev GRAMINE_SEV_MODE=snp \
-        "$HERE/test-vm.sh" --prefix "$PREFIX" libos > "$OUT/libos-snp-$n.log" 2>&1
+        "$HERE/../vm/test-vm.sh" --prefix "$PREFIX" libos > "$OUT/libos-snp-$n.log" 2>&1
     grep -E "^FAILED|[0-9]+ (passed|failed)" "$OUT/libos-snp-$n.log" | tail -n 20
 done
 
@@ -67,7 +67,7 @@ if [ "${MP:-1}" != 0 ]; then
     step "multi-process checks under SNP"
     # the frame pool needs a free GB of RAM above 4G: 4G guests have none (as with gramine-vm)
     GRAMINE_RAM_SIZE=${MP_RAM:-8G} GRAMINE_VM_LAUNCHER=gramine-sev WORK=$OUT/mp \
-        "$HERE/vm-multiproc/check-probes.sh" \
+        "$HERE/../vm/multiproc/check-probes.sh" \
         > "$OUT/multiproc.log" 2>&1 || fail "multi-process checks"
     tail -n 12 "$OUT/multiproc.log"
 fi

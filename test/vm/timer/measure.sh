@@ -9,7 +9,7 @@
 # run separately (Documentation/devel/aarch64/vm/TESTING.md). GRAMINE_PREFIX selects the install,
 # RUNS the number of repetitions (default 3), TICK_VCPUS (default "1 2") and LAT_VCPUS (default 2) the vCPU counts. One timing run at a time: the host CPUs are shared.
 set -u
-ROOT=$(cd "$(dirname "$0")/../.." && pwd)
+ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 cd "$ROOT"
 export GRAMINE_PREFIX=${GRAMINE_PREFIX:-$HOME/.local/gramine-vm}
 # probes.c is x86-only; on aarch64 the three timer probes alone build

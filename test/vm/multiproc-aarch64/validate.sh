@@ -9,7 +9,7 @@
 # Usage: test/vm-multiproc-aarch64/validate.sh --prefix DIR [--build-dir DIR] [--skip-ltp]
 set -u
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
-REPO=$(cd "$HERE/../.." && pwd)
+REPO=$(cd "$HERE/../../.." && pwd)
 PREFIX=; BUILD=build-vm-$(uname -m); SKIP_LTP=0
 while [ $# -gt 0 ]; do
     case $1 in

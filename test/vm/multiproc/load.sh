@@ -9,7 +9,7 @@
 # Usage: test/vm-multiproc/load.sh [nginx|redis|bash]...   (no argument: all three)
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
-REPO=${REPO:-$(cd "$HERE/../.." && pwd)}
+REPO=${REPO:-$(cd "$HERE/../../.." && pwd)}
 . ~/.local/gramine-vm/env.sh
 CPUS=${CPUS:-2}
 [ $# -gt 0 ] || set -- nginx redis bash

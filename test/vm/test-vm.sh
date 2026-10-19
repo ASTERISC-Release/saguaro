@@ -20,7 +20,7 @@
 # build dir build-vm-<arch>; it builds the PIE test binaries the libos suite needs).
 set -u
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
-REPO=$(dirname "$HERE")
+REPO=$(cd "$HERE/../.." && pwd)
 PREFIX=${GRAMINE_PREFIX:-$HOME/.local/gramine-vm}
 BUILD=build-vm-$(uname -m)
 SUITES=()

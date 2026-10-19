@@ -92,7 +92,7 @@
 
 set -u
 
-REPO="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+REPO="$(cd "$(dirname "$(readlink -f "$0")")/../.." && pwd)"
 . "$REPO/scripts/gramine-env.sh"   # GRAMINE_PREFIX, PATH, PYTHONPATH, LOGDIR
 mkdir -p "$LOGDIR"
 

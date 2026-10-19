@@ -18,7 +18,7 @@
 # OUTDIR/{libos,probes}-N.* and idle-N-pPERIOD.* . One run at a time: the host CPUs are shared.
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
-TREE=${TREE:-$(cd "$HERE/../.." && pwd)}
+TREE=${TREE:-$(cd "$HERE/../../.." && pwd)}
 KIND=${1:?kind}; N=${2:?vcpus}; OUT=${3:?outdir}; PERIOD=${4:-0}
 mkdir -p "$OUT"
 . "${GRAMINE_PREFIX:-$HOME/.local/gramine-vm}/env.sh"
