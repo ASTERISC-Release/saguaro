@@ -7,15 +7,15 @@ header alone or not found in any runner, workflow or document. The refactor plan
 
 ## Commands that work today
 
-Run from the repository root.
+Run from the repository root. `test/run.sh` forwards to the runners with the arguments unchanged; `test/run.sh list` prints the backends and suites; `RUN_DRY=1` prints the command instead of running it.
 
 | Backend | Command | Needs | Suites |
 |---|---|---|---|
-| direct | `test/test-direct.sh [suite...]` | a direct install (`scripts/install.sh`) | `test/test-direct.sh --list` |
-| vm | `test/test-vm.sh [suite...]` | `/dev/kvm`, a vm install (`scripts/install.sh --vm`) | libos examples hello loopback epoll outbound udp guest-loopback |
+| direct | `test/test-direct.sh [suite...]` or `test/run.sh direct [suite...]` | a direct install (`scripts/install.sh`) | `test/test-direct.sh --list` |
+| vm | `test/test-vm.sh [suite...]` or `test/run.sh vm [suite...]` | `/dev/kvm`, a vm install (`scripts/install.sh --vm`) | libos examples hello loopback epoll outbound udp guest-loopback |
 | vm, servers via the direct runner | `GRAMINE_RUNNER=gramine-vm test/test-direct.sh redis` | a vm install | server suites and `networks` |
-| sev | `test/test-sev.sh [suite...]` | SEV host, container of `container/run.sh` | hello memory vsock measure attest |
-| sev, qualification | `test/test-sev-all.sh` | SEV-SNP host; builds with `scripts/install.sh --sev` | none (one run) |
+| sev | `test/test-sev.sh [suite...]` or `test/run.sh sev [suite...]` | SEV host, container of `container/run.sh` | hello memory vsock measure attest |
+| sev, qualification | `test/test-sev-all.sh` or `test/run.sh sev-all` | SEV-SNP host; builds with `scripts/install.sh --sev` | none (one run) |
 | vbs | none | Windows machine; steps are `.cmd` files in the folders | not confirmed |
 | unit tests | `test/unit/` (pytest) | none | how CI or a developer runs it: not confirmed |
 
