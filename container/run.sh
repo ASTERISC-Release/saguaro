@@ -150,6 +150,15 @@ if ! podman container exists "$CONTAINER"; then
         DEVICES+=(--device /dev/sev:/dev/sev)
         [ -r /dev/sev ] && [ -w /dev/sev ] && DEVICES+=(--group-add keep-groups)
     fi
+    # Intel SGX: the enclave device of the in-kernel driver, and /dev/sgx_provision (quotes). The nodes belong
+    # to the group `sgx` (mode 0660, provision usually root-only), so keep-groups carries the user's
+    # supplementary groups into the rootless container (needs the crun runtime), as for /dev/sev.
+    for d in /dev/sgx_enclave /dev/sgx_provision; do
+        [ -e "$d" ] && DEVICES+=(--device "$d:$d")
+    done
+    if [ -r /dev/sgx_enclave ] && [ -w /dev/sgx_enclave ] && [[ " ${DEVICES[*]} " != *" keep-groups "* ]]; then
+        DEVICES+=(--group-add keep-groups)
+    fi
     # Graphics (x86_64, see Documentation/devel/graphics/): the host X socket and DISPLAY for the
     # QEMU listener's window, and the QEMU fork when it is checked out next to this repository.
     GRAPHICS=()
@@ -162,6 +171,8 @@ if ! podman container exists "$CONTAINER"; then
     # kept next to this repository as sev-tools/ (or at SEV_TOOLS_DIR) so it survives recreation.
     SEV_TOOLS=${SEV_TOOLS_DIR:-$(dirname "$REPO_ROOT")/sev-tools}
     [ -d "$SEV_TOOLS" ] && GRAPHICS+=(-v "$SEV_TOOLS:/root/sev-tools:rw")
+    # Intel SGX: the socket of the host's AESM service (remote attestation), when it runs
+    [ -S /var/run/aesmd/aesm.socket ] && GRAPHICS+=(-v /var/run/aesmd:/var/run/aesmd)
     # Opt-in (GRAMINE_CONTAINER_NVIDIA=1, see Documentation/devel/graphics-aarch64/): the NVIDIA
     # proprietary driver's device nodes and the host's matching userspace (GLX/EGL vendor libraries,
     # libnvidia-*, GBM backend, vendor configuration files), read-only. The libraries must match the

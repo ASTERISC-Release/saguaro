@@ -29,6 +29,13 @@ RUN apt-get update && \
       python3-tomli python3-tomli-w python3-voluptuous \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# SGX layer: the protobuf-c tools of the SGX PAL (scripts/install.sh --sgx), which scripts/dependencies.sh does
+# not install.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      protobuf-c-compiler libprotobuf-c-dev protobuf-compiler python3-protobuf \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
 # Test layer: regression suites and example applications.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
