@@ -194,7 +194,7 @@ application are packed into a signed enclave image at build time. The tool build
 - **Supported.** Threads, signals, host files, sockets, Python, servers (Redis, NGINX, memcached, lighttpd),
   SQLite, curl, a Rust server, `iperf3` and BusyBox applets, with a local attestation report and verifier. An
   opt-in TLS example binds its key to the report.
-- **Validation.** On ARM64, 11 of 12 example directories and all 8 static VBS examples pass. The LibOS regression
+- **Validation.** On ARM64 and on x64 (Ubuntu 26.04 in WSL), 11 of 12 example directories and all 8 static VBS examples pass. The LibOS regression
   subset passes 71 of 102 cases; every failure is classified (`fork`, platform limits).
 - **Performance.** An enclave call costs about 7 us. Counting host calls and removing staging buffers improved
   throughput 1.8 times for Redis, 1.6 times for memcached and 5 to 7 times for NGINX with 1 MiB bodies.

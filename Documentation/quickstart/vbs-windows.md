@@ -121,7 +121,10 @@ when its 512 MiB `mmap` fails): 1 of 6 rebuild-and-check cycles, 0 of 13 checks 
 been run; it is the failure that `vbs-enclave/TODO.md` already records, and a re-run passes.
 
 `CI-Examples/vbs/` has its own `exec.sh`, which runs `helloworld`, `dynhello`, `python`, `tcpserver`,
-`attestation`, `tls-echo`, `jitprobe` and `rxprobe`; all eight pass on ARM64 (`jvmprobe`, an x64-only
+`attestation`, `tls-echo`, `jitprobe` and `rxprobe`; all eight pass on ARM64 and on x64 (`jvmprobe`, an x64-only
 research probe, is not run).
 
-Not verified: the x64 Windows machine.
+Verified on 2026-10-20 on an x64 Windows 11 machine (Pro, build 26200; WSL with Ubuntu 26.04, which needed no
+change): `scripts/install.sh --vbs` took 147 s and reported the Windows side ready; 11 of 12 examples of section 3
+pass with `./exec.sh --vbs` and all eight of `CI-Examples/vbs/` pass. `nodejs` fails there at build time, because its
+Makefile and manifest still use the arm64 Node download and loader (a missing x64 recipe, not the x18 rule of ARM64).

@@ -124,9 +124,9 @@ architecture from the machine (`PROCESSOR_ARCHITECTURE` on Windows, `uname -m` i
   loader as `{{ vbs.ldso }}`. System calls of the packed code are found at
   pack time and served through the enclave runtime's exception handler, so any
   glibc works, also an unmodified one.
-- The static manifests under `CI-Examples/vbs` that pack
-  `ld-linux-aarch64.so.1` by name (`dynhello`, `python`) are AArch64-only
-  for now; the `make VBS=1` examples work on both.
+- The static manifests under `CI-Examples/vbs` (`dynhello`, `python`) name the loader through
+  `{{ vbs.ldso }}`, so they build and run on both architectures, like the `make VBS=1` examples
+  (all eight examples of `CI-Examples/vbs` passed on x64 Windows 11 on 2026-10-20).
 - Debug enclaves (`vbs.debug = true`) can be read by the host with
   `ReadProcessMemory` on x64; production images must not be debuggable.
 
@@ -371,7 +371,7 @@ the image, 127.0.0.1:8003 |
 Also with `make VBS=1 check` (passing on both the ARM64 and the x64 machine, `TESTING.md`): `busybox`, `curl`,
 `iperf`, `sqlite`, `rust` (needs rustup stable with `rust-src`) and, under `CI-Examples/vbs`, `helloworld`,
 `dynhello`, `python`, `tcpserver`, `attestation`, `tls-echo`. Known failures: `nodejs` (x18 in the node
-binary and libstdc++ on ARM64; no x64 recipe) (NumPy and SciPy in `python` run on x64 with the research key `vbs.__insecure_skip_code_mprotect = true`, which makes the PAL apply a protection change over packed code and data to the data pages only; code pages stay execute-read; its HTTP test is intermittent).
+binary and libstdc++ on ARM64; on x64 its Makefile and manifest still use the arm64 download and loader, so no x64 recipe) (NumPy and SciPy in `python` run on x64 with the research key `vbs.__insecure_skip_code_mprotect = true`, which makes the PAL apply a protection change over packed code and data to the data pages only; code pages stay execute-read; its HTTP test is intermittent).
 
 For example:
 

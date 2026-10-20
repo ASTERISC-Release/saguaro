@@ -24,9 +24,9 @@ the example and runs it under one backend. Run it in the directory of the exampl
 
 # Results
 
-The table lists the recorded result of each example for each backend. The last run of `exec.sh` on all backends (x86_64, aarch64, SEV, SEV-SNP, SGX and VBS on ARM64) is in [RESULTS.md](RESULTS.md) (2026-10-20).
+The table lists the recorded result of each example for each backend. The last run of `exec.sh` on all backends (x86_64, aarch64, SEV, SEV-SNP, SGX, and VBS on ARM64 and x64) is in [RESULTS.md](RESULTS.md) (2026-10-20).
 
-**Symbols:** ✓ pass, ✗ fail, – not run or not applicable, blank not measured. 
+**Symbols:** in the VBS column a plain ✓ was measured on ARM64 and on x64 Windows 11. ✓ pass, ✗ fail, – not run or not applicable, blank not measured. 
 
 | Example | Direct x86_64 | VM x86_64 | Direct aarch64 | VM aarch64 | SEV | SEV-SNP | TDX | SGX | VBS |
 |---|---|---|---|---|---|---|---|---|---|
@@ -42,7 +42,7 @@ The table lists the recorded result of each example for each backend. The last r
 | `memcached` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓ |
 | `mongodb` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ¹ |
 | `nginx` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓ |
-| `nodejs` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✗ ARM64, – x64 |
+| `nodejs` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✗ ARM64 (x18), ✗ x64 (no x64 recipe) |
 | `openjdk` | ✓ | ✓ | ✓ | ✗⁶ | ✓ | ✓ |  | ✓ | – |
 | `python` | ✓ | ✓ | ✓ | ✗⁶ | ✓ | ✓ | ✓⁵ | ✓¹⁰ | ✓ ARM64, ✓⁹ x64 |
 | `pytorch` | ✓ | ✓ | ✓ | ✗⁶ | ✓ | ✓ |  | ✓ | ¹ |
