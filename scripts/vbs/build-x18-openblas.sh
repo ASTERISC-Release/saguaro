@@ -1,0 +1,107 @@
+#!/bin/sh
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
+#
+# Rebuild OpenBLAS 0.3.26 (the version of Ubuntu 24.04; it includes the reference LAPACK and
+# CBLAS/LAPACKE) so that no instruction names x18 (the enclave TEB on Windows ARM64; pack.py refuses
+# it; Documentation/devel/vbs-enclave/X18-SCAN.md). C and Fortran code get -ffixed-x18. The AArch64
+# kernels written in assembly ignore that flag, so they are patched first:
+#  - `stp x18, x19, [...]` / `ldp x18, x19, [...]` (the prologue and epilogue of 48 kernels) become
+#    `stp xzr, x19, ...` / `ldp xzr, x19, ...` (same stack layout, x18 untouched);
+#  - a kernel that uses x18 as a working register has x18/w18 replaced by a register the file does
+#    not mention (comments ignored): a caller-saved one (x16, x17, x15..x9) if free, else x29, which
+#    the kernel's own save slot of x18 (the stp/ldp pair above) then saves and restores. If none is
+#    free the script stops and names the file (in OpenBLAS 0.3.26 x29 is free in all 12 such files).
+# One fixed kernel set, TARGET=ARMV8 (not DYNAMIC_ARCH): the dynamic build's own tests die with
+# SIGILL (`cntw`, an SVE instruction, in `ssyrk_kernel_U`) on a CPU without SVE, which includes the
+# VBS machine's Snapdragon; ARMV8 runs on every AArch64 CPU. Slower than the tuned kernels.
+# CC is the rebuilt gcc too, so the link takes the soft-float quad routines (__multf3, __divtf3,
+# used for long double) from its libgcc.a, which was built with -ffixed-x18 (the system libgcc.a
+# keeps temporaries in x18).
+# Needs the compiler and gfortran built by scripts/vbs/build-x18-runtime.sh (run it first).
+#
+# Everything is under PREFIX (default ~/.local/share/gramine-vbs/x18-runtime): sources, build,
+# the result in PREFIX/openblas-lib. No root; network for the source tarball only.
+# The default make target also runs OpenBLAS's own BLAS/LAPACK tests; a failure stops the script.
+# Usage: scripts/vbs/build-x18-openblas.sh [PREFIX]
+set -eu
+
+ROOT=$(cd "$(dirname "$0")/../.." && pwd)
+PREFIX=$(realpath -m "${1:-$HOME/.local/share/gramine-vbs/x18-runtime}")
+[ "$(uname -m)" = aarch64 ] || { echo "aarch64 only" >&2; exit 1; }
+case "$PREFIX" in "$HOME"/*) ;; *) echo "PREFIX must be under \$HOME" >&2; exit 1;; esac
+GCCP=$PREFIX/gcc
+[ -x "$GCCP/bin/gfortran" ] || { echo "run build-x18-runtime.sh first (no $GCCP/bin/gfortran)" >&2; exit 1; }
+
+VERSION=0.3.26
+SHA256=4e6e4f5cb14c209262e33e6816d70221a2fe49eb69eaf0a06f065598ac602c68
+URL=https://github.com/OpenMathLib/OpenBLAS/releases/download/v$VERSION/OpenBLAS-$VERSION.tar.gz
+SRC=$PREFIX/src; BLD=$PREFIX/build/openblas; OUT=$PREFIX/openblas-lib
+mkdir -p "$SRC" "$BLD" "$OUT"
+log() { echo "[x18-openblas] $*"; }
+
+[ -f "$SRC/OpenBLAS-$VERSION.tar.gz" ] || "$ROOT/CI-Examples/common_tools/download" \
+    --output "$SRC/OpenBLAS-$VERSION.tar.gz" --sha256 "$SHA256" --url "$URL"
+echo "$SHA256  $SRC/OpenBLAS-$VERSION.tar.gz" | sha256sum -c - >/dev/null
+rm -rf "$BLD" && mkdir -p "$BLD" && tar -C "$BLD" -xzf "$SRC/OpenBLAS-$VERSION.tar.gz"
+cd "$BLD/OpenBLAS-$VERSION"
+
+python3 - <<'PY'
+import glob, re, sys
+def strip(t):
+    t = re.sub(r'/\*.*?\*/', '', t, flags=re.S)
+    return re.sub(r'//.*', '', t)
+PAIR = r'\b(stp|ldp)(\s+)x18,(\s*)x19,'
+bad = []
+for f in sorted(glob.glob('kernel/arm64/*.S')):
+    t = open(f).read()
+    code = re.sub(PAIR, r'\1\2xzr,\3x19,', strip(t))
+    if not re.search(r'\b[xw]18\b', strip(t)):
+        continue
+    if not re.search(r'\b[xw]18\b', code):
+        # x18 only saved and restored: keep the stack layout, never touch x18
+        t = re.sub(PAIR, r'\1\2xzr,\3x19,', t)
+        print(f'{f}: save/restore of x18 -> xzr')
+    else:
+        used = set(re.findall(r'\b[xw](\d+)\b', code))
+        for n in (16, 17, 15, 14, 13, 12, 11, 10, 9, 29):
+            if str(n) not in used:
+                break
+        else:
+            bad.append(f)
+            continue
+        if n == 29:
+            # x29 is callee-saved: the kernel's own save slot for x18 now saves x29
+            t = re.sub(r'\bx18\b', 'x29', t)
+            t = re.sub(r'\bw18\b', 'w29', t)
+        else:
+            t = re.sub(PAIR, r'\1\2xzr,\3x19,', t)
+            t = re.sub(r'\bx18\b', f'x{n}', t)
+            t = re.sub(r'\bw18\b', f'w{n}', t)
+        print(f'{f}: x18 -> x{n}')
+    open(f, 'w').write(t)
+if bad:
+    sys.exit('no free register in: ' + ' '.join(bad))
+PY
+
+export LD_LIBRARY_PATH="$GCCP/lib64:$PREFIX/deps/usr/lib/aarch64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+s=$(date +%s)
+make -j"$(nproc)" TARGET=ARMV8 USE_OPENMP=0 USE_THREAD=1 NUM_THREADS=8 NO_AFFINITY=1 \
+    BUILD_LAPACK_DEPRECATED=0 NO_STATIC=1 CC="$GCCP/bin/gcc" FC="$GCCP/bin/gfortran" LDFLAGS="-L$GCCP/lib64" \
+    COMMON_OPT="-O2 -ffixed-x18" FCOMMON_OPT="-O2 -frecursive -ffixed-x18" \
+    FFLAGS="-ffixed-x18" >"$BLD/make.log" 2>&1 \
+    || { tail -30 "$BLD/make.log"; exit 1; }
+log "make took $(( $(date +%s) - s )) s"
+# the LAPACK Fortran sources are compiled with the FFLAGS of lapack-netlib/make.inc, which OpenBLAS
+# writes itself: the first attempt of this script passed only FCOMMON_OPT and LAPACK came out without
+# -ffixed-x18 (4 deprecated routines then used x18)
+grep -q -- '-ffixed-x18' lapack-netlib/make.inc || { echo "LAPACK FFLAGS lack -ffixed-x18" >&2; exit 1; }
+make PREFIX="$BLD/inst" NO_STATIC=1 install >"$BLD/install.log" 2>&1 || { tail -20 "$BLD/install.log"; exit 1; }
+rm -rf "$OUT" && mkdir -p "$OUT" && cp -P "$BLD"/inst/lib/libopenblas* "$OUT/" 2>/dev/null || true
+
+log "scan (zero x18 instructions required)"
+rm -rf "$BLD/scan" && mkdir -p "$BLD/scan" && cp -L "$OUT"/libopenblas*.so* "$BLD/scan/"
+python3 "$ROOT/scripts/vbs/syscall-gaps/x18-scan.py" "$PREFIX/x18-openblas-scan.tsv" "$BLD/scan" \
+    | tee "$PREFIX/x18-openblas-scan.log"
+awk -F'\t' 'NR>1 && $4>0 {bad=1} END {exit bad}' "$PREFIX/x18-openblas-scan.tsv" \
+    && log "OK: no library names x18" || { log "FAILED: see $PREFIX/x18-openblas-scan.tsv"; exit 1; }

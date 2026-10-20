@@ -43,12 +43,27 @@ $(VBS_PYTHON_STAMP): $(VBS_DIR)/build-python.sh | $(VBS_RUNTIME_STAMP)
 # NumPy and SciPy: the manylinux wheels for CPython 3.12 (PyPI, checked by SHA-256), unpacked into
 # vbs-build/site/ and packed with the host's copies of the runtime they need (libstdc++, libgcc_s,
 # libz: not in the vbs sysroot; their GLIBC symbols are within the sysroot's 2.39)
+# The runtime libraries from build-x18-runtime.sh (used when present; the host's copies name x18
+# and do not pack)
+VBS_X18_RUNTIME ?= $(HOME)/.local/share/gramine-vbs/x18-runtime/lib
+
+# The wheel files are those of the machine's architecture (the x86_64 wheels do not run, and do not
+# pack, on AArch64).
+ifeq ($(shell uname -m),aarch64)
+NUMPY_WHEEL = numpy-2.5.4-cp312-cp312-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl
+NUMPY_SHA256 = fe4d21ab149f15e4e6043dfb0de87e6e5f34ac176cde83060e9802981fca2ac2
+NUMPY_URL = https://files.pythonhosted.org/packages/dc/96/8319e2457ae4333c62c815c7006b869a4f60985c1e01024c2f8c6c040fe5/$(NUMPY_WHEEL)
+SCIPY_WHEEL = scipy-1.18.1-cp312-cp312-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl
+SCIPY_SHA256 = 3c085faa2cfa879c5141df483f836f4d691045a078224a670fa570fa01612d89
+SCIPY_URL = https://files.pythonhosted.org/packages/75/9a/2e71719f31eaefe0e3a1706c4a1ded94e664bfd95ffca2b219a671faee01/$(SCIPY_WHEEL)
+else
 NUMPY_WHEEL = numpy-2.5.4-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
 NUMPY_SHA256 = fbde6962867ee75b48b0ee29b2b9372ec5d617799dbaf38e82dc0596f2f7738a
 NUMPY_URL = https://files.pythonhosted.org/packages/43/a3/c799c62e19c337e6d3770b08e475887fb30ce8477d3c09efca6b2f0228a6/$(NUMPY_WHEEL)
 SCIPY_WHEEL = scipy-1.18.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
 SCIPY_SHA256 = f55fa87b6c612ecd6b058f167c53231b1d14e412efe361d3d6e38b3631c73218
 SCIPY_URL = https://files.pythonhosted.org/packages/df/64/ff35eb9e54894cf471ff4716abd3c81eb0a0626869217ce3e6ba4ccf17d7/$(SCIPY_WHEEL)
+endif
 
 $(NUMPY_WHEEL):
 	../common_tools/download --output $@ --sha256 $(NUMPY_SHA256) --url $(NUMPY_URL)
@@ -59,9 +74,15 @@ vbs-build/site/.stamp: $(NUMPY_WHEEL) $(SCIPY_WHEEL) | $(VBS_RUNTIME_STAMP)
 	rm -rf vbs-build/site vbs-build/lib && mkdir -p vbs-build/site vbs-build/lib
 	unzip -q $(NUMPY_WHEEL) -d vbs-build/site
 	unzip -q $(SCIPY_WHEEL) -d vbs-build/site
+ifneq ($(wildcard $(VBS_X18_RUNTIME)/libstdc++.so.6),)
+	# the runtime libraries rebuilt with -ffixed-x18 (scripts/vbs/build-x18-runtime.sh)
+	cp -L $(VBS_X18_RUNTIME)/libstdc++.so.6 $(VBS_X18_RUNTIME)/libgcc_s.so.1 \
+		$(VBS_X18_RUNTIME)/libz.so.1 vbs-build/lib/
+else
 	cp -L "$(shell $(CC) -print-file-name=libstdc++.so.6)" vbs-build/lib/
 	cp -L "$(shell $(CC) -print-file-name=libgcc_s.so.1)" vbs-build/lib/
 	cp -L /usr/lib/$(shell $(CC) -dumpmachine)/libz.so.1 vbs-build/lib/
+endif
 	touch $@
 else
 all: python.manifest
