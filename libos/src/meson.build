@@ -200,7 +200,7 @@ libos = shared_library('sysdb',
         # (x86_64 needs nothing of the sort: %gs-relative addressing works at ring-3.)
         vm and host_machine.cpu_family() == 'aarch64' ? ['-DHOST_TYPE=VM', '-DPAL_HOST_VM=1'] : [],
 
-        # VBS-enclave PAL (Documentation/devel/vbs-enclave/): the LibOS maps packed objects where
+        # VBS-enclave PAL (dev docs: vbs-enclave/): the LibOS maps packed objects where
         # they lie in the signed enclave image (libos_rtld.c); x18 is the enclave TEB.
         vbs ? ['-DPAL_HOST_VBS=1'] + cflags_vbs_arch : [],
 

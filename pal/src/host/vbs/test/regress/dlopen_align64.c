@@ -3,7 +3,7 @@
 
 /* dlopen of a packed shared object whose PT_LOAD alignment is 64 KiB (libalign64.so, packed at
  * /tests/libalign64.so): glibc's ld.so maps such an object into an aligned reservation with
- * MAP_FIXED unless the packer lowered the alignment (Documentation/devel/vbs-enclave/
+ * MAP_FIXED unless the packer lowered the alignment (dev docs: vbs-enclave/
  * PLAN-packer-align.md). Calls into it from the main thread and from a second thread (its TLS). */
 
 #include <dlfcn.h>

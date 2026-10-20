@@ -124,7 +124,7 @@ GramineManifestSchema = Schema({
         'experimental__enable_host_sysv_semaphores': bool,
         'experimental__enable_flock': bool,
         'experimental__shared_input_ring': bool,
-        # x86_64 VM PAL: processes in separate address spaces (Documentation/devel/vm-multiproc/)
+        # x86_64 VM PAL: processes in separate address spaces (dev docs: vm-multiproc/)
         'experimental__multiprocess': bool,
         'insecure__allow_eventfd': bool,
         'insecure__allow_raw_device_ioctl': bool,
@@ -139,9 +139,9 @@ GramineManifestSchema = Schema({
         'stack': {'size': _size},
     },
 
-    # The VM PAL (`gramine-vm`); see Documentation/devel/CHANGELOG.md. Only `vm.net` is read
+    # The VM PAL (`gramine-vm`); see dev docs: CHANGELOG.md. Only `vm.net` is read
     # today, by the launcher and its per-VM vsock relay. The `vm` table is shared with the VM
-    # memory plan (Documentation/devel/vm-memory/PLAN.md): whichever topic lands first adds its
+    # memory plan (dev docs: vm-memory/PLAN.md): whichever topic lands first adds its
     # keys here; keep the other's keys when editing.
     'vm': {
         'net': {

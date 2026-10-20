@@ -7,7 +7,7 @@ gramine-vm relays the application's X connection (vsock port 6000+N for DISPLAY 
 host's X socket with socat, which carries bytes only. A DRI3 server (Xwayland) makes Mesa's GLX
 and Vulkan WSI open the GPU through that connection (DRI3Open), whose reply carries a file
 descriptor: it never arrives through the relay and the guest hangs waiting for it (winex11's
-OpenGL initialisation under Wine, Documentation/devel/proton-vm/FINDINGS.md 2026-10-16). This relay
+OpenGL initialisation under Wine, dev docs: proton-vm/FINDINGS.md 2026-10-16). This relay
 answers the guest's QueryExtension for the named extensions (default: DRI3 and Present) with
 "absent", so Mesa takes its paths without them; everything else passes through unchanged.
 

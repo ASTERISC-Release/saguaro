@@ -2,7 +2,7 @@
 /* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /*
- * AT_HWCAP / AT_HWCAP2 on AArch64 (Documentation/devel/aarch64/hwcap/PLAN.md): reads both words
+ * AT_HWCAP / AT_HWCAP2 on AArch64 (dev docs: aarch64/hwcap/PLAN.md): reads both words
  * with getauxval() and, for every advertised feature that has a probe, executes one instruction
  * of that class under a SIGILL handler, checking the result where it is cheap to know. Fails if
  * a probe faults or computes a wrong result, if FP or ASIMD is missing (the LibOS gave no words at

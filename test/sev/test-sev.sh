@@ -3,7 +3,7 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
 # test-sev.sh -- regression tests of the AMD SEV build of the vm PAL (gramine-sev,
-# Documentation/devel/sev/). Run it on an SEV host in the container of container/run.sh, with the
+# dev docs: sev/). Run it on an SEV host in the container of container/run.sh, with the
 # QEMU of container/sev/build-sev-tools.sh (QEMU_PATH, default /root/sev-tools/prefix/bin/...).
 #
 #   hello    CI-Examples/helloworld under gramine-sev at 1 and 4 vCPUs; the guest must report

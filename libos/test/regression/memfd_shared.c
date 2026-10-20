@@ -2,7 +2,7 @@
 /* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /*
- * memfd used the way Mesa's Vulkan drivers use it (Documentation/devel/vulkan/): a large sparse
+ * memfd used the way Mesa's Vulkan drivers use it (dev docs: vulkan/): a large sparse
  * size set with ftruncate, a MAP_SHARED mapping at the start, another one far into the file,
  * zero-filled unwritten pages, pwrite() seen by the mappings, and munmap/close.
  *

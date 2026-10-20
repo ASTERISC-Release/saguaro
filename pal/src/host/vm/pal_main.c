@@ -559,7 +559,7 @@ noreturn int pal_start_continue(void* cmdline_);
 /* Boot-time instrumentation: relative stamps against the first instruction of the
  * kernel, in TSC ticks and (once the TSC frequency is known) milliseconds. Also routed
  * through the debug serial port: the console (virtio) only carries output written after
- * its driver is up, so everything before that is invisible there (see Documentation/devel/graphics/FINDINGS.md). */
+ * its driver is up, so everything before that is invisible there (see dev docs: graphics/FINDINGS.md). */
 static uint64_t boot_tsc0;
 static void boot_stamp(const char* what) {
     uint64_t t = get_tsc() - boot_tsc0;
@@ -870,7 +870,7 @@ noreturn int pal_start_continue(void* cmdline_) {
          * ranges and map into any process at those addresses (memory_address_space_alloc() shares
          * the boot root's entries there); the addresses the LibOS hands the host (ioctl arguments
          * and the pointers inside them) are translated by the LibOS, no longer by an identity
-         * mapping of the whole process (Documentation/devel/proton-vm/design-gpu.md, option B). */
+         * mapping of the whole process (dev docs: proton-vm/design-gpu.md, option B). */
         g_initial_process_address_space.identity_memory = false;
         struct pal_tcb_vm* current_tcb = (struct pal_tcb_vm*)pal_get_tcb();
         if (!current_tcb)
@@ -886,7 +886,7 @@ noreturn int pal_start_continue(void* cmdline_) {
              * reaches the page tables' limit. The kernel's own uses of the RAM end (the frame
              * pool, the arenas, the shared range, the free-memory walk) took their values above;
              * the LibOS places everything beyond RAM lazily. Wine reserves and probes tens of
-             * GiB (Documentation/devel/proton-vm/PLAN.md, blocker 6). With graphics the arenas
+             * GiB (dev docs: proton-vm/PLAN.md, blocker 6). With graphics the arenas
              * are reserved physical ranges inside the RAM part (the LibOS refuses fixed mappings
              * there), which does not shorten the range. */
             g_pal_public_state.memory_address_end = (void*)MEMORY_ADDRESS_SPACE_LIMIT;

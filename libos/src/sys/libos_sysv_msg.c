@@ -7,7 +7,7 @@
  * The queue table is process-local, like the System V shared memory and semaphore tables
  * (`libos_sysv_shm.c`, `libos_sem.c`): threads of one Gramine process share every queue, but a
  * child process (direct PAL `fork`) starts with an empty table, so a queue cannot carry messages
- * between processes. This limit is recorded in Documentation/devel/libos-syscalls/TODO.md.
+ * between processes. This limit is recorded in dev docs: libos-syscalls/TODO.md.
  *
  * Within the process the semantics follow the kernel (`ipc/msg.c`): identifiers are
  * `seq << 15 | index` so a removed queue's identifier stays invalid after the slot is reused,

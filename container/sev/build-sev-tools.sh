@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
-# build-sev-tools.sh: build the AMD SEV tooling of Documentation/devel/sev/ inside the x86_64
+# build-sev-tools.sh: build the AMD SEV tooling of dev docs: sev/ inside the x86_64
 # development container (container/run.sh), without root and without changing the image:
 #
 #   qemu    QEMU with `sev-snp-guest` and IGVM support (stock Ubuntu 24.04 QEMU 8.2 has only
@@ -29,7 +29,7 @@
 # release key vendored next to this script (fingerprint below) and with the SHA-256 recorded when
 # the version was pinned; the GitHub tarballs (igvm, the Rust tools) have no upstream signature
 # and are checked against SHA-256 values recorded on first download (trust on first use, see
-# Documentation/devel/sev/FINDINGS.md). Rust dependencies come from crates.io through each
+# dev docs: sev/FINDINGS.md). Rust dependencies come from crates.io through each
 # project's Cargo.lock (`--locked`), which cargo checks by checksum.
 set -euo pipefail
 
@@ -62,7 +62,7 @@ RUSTUP_INIT_SHA256=dda7234360b7f578ca8b0ddcb80145646fa61a67c1720a5abc7051b35c9fc
 RUST_TOOLCHAIN=1.95.0
 # Firmware: Ubuntu 26.04 (resolute-updates) edk2 packages; the SHA-256 values are those of the
 # signed archive index (InRelease checked with gpgv against ubuntu-archive-keyring.gpg on
-# 2026-10-16, Documentation/devel/sev/FINDINGS.md).
+# 2026-10-16, dev docs: sev/FINDINGS.md).
 OVMF_VERSION=2025.11-3ubuntu7.3
 OVMF_DEBS=(
     "ovmf-amdsev f2a54db678d98ce1a5ac27155cb037cbf6e3efc918d11a35af1ca4606a290d29"

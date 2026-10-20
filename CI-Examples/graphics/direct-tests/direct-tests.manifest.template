@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (C) 2026 The ASTERISC Research Lab
 
-# Test programs for graphics under gramine-direct (Documentation/devel/graphics-direct/): the
+# Test programs for graphics under gramine-direct (dev docs: graphics-direct/): the
 # render node, sysfs and the raw ioctl passthrough. One manifest per program (-Dentrypoint=...);
 # an entrypoint with an absolute path (e.g. /usr/bin/eglinfo) is taken from the host's /usr.
 
@@ -27,7 +27,7 @@ fs.mounts = [
   { path = "/etc/ld.so.cache", uri = "file:/etc/ld.so.cache" },
   { path = "/dev/dri", type = "chroot", uri = "file:/dev/dri" },
 {% if nvidia|string == "1" %}
-  # the NVIDIA proprietary driver (Documentation/devel/graphics-aarch64/)
+  # the NVIDIA proprietary driver (dev docs: graphics-aarch64/)
   { path = "/dev/nvidiactl", uri = "dev:/dev/nvidiactl" },
   { path = "/dev/nvidia0", uri = "dev:/dev/nvidia0" },
   { path = "/dev/nvidia-modeset", uri = "dev:/dev/nvidia-modeset" },

@@ -80,7 +80,7 @@ SECTIONS
      * .sdata2 for gp-relative addressing; the aarch64/x86_64 siblings have no such classes and
      * the `*(.data .data.*)` glob above does not match ".sdata*"). Neither libpal.so nor
      * libsysdb.so is ever gp-relaxed (both are ET_DYN with all data preemptible -- see
-     * Documentation/devel/riscv/PLAN.md "Linker relaxation"), so these are plain .data-adjacent
+     * dev docs: riscv/PLAN.md "Linker relaxation"), so these are plain .data-adjacent
      * storage here, but they must be *placed*: an orphan section's location is ld's choice. */
     *(.sdata .sdata.*)
   }

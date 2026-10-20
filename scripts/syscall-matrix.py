@@ -17,13 +17,17 @@ import argparse
 import collections
 import csv
 import json
+import os
 import pathlib
 import re
 import tomllib
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-TOPIC = ROOT / "Documentation/devel/syscall-compat"
+# The syscall-compat and syscall-profile data live in the private development-documents repository, checked out
+# next to this one (GRAMINE_DEV_DOCS names another place).
+DEV_DOCS = pathlib.Path(os.environ.get("GRAMINE_DEV_DOCS", ROOT.parent / "gramine-multiarch-docs"))
+TOPIC = DEV_DOCS / "syscall-compat"
 RESULTS = ROOT / ".ltp-results"
 STATUSES = ("pass", "fail", "conf", "broken", "timeout", "guest_panic", "runner_error")
 REASONS = ("by design", "LibOS gap", "behaviour difference", "test environment", "crash or hang")

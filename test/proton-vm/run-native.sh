@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 # Runs a Windows program through GE-Proton's `proton run` without a Steam client (the feasibility
-# study, Documentation/devel/proton-vm/): the compat data (Wine prefix) and an empty "Steam client
+# study, dev docs: proton-vm/): the compat data (Wine prefix) and an empty "Steam client
 # install" are scratch folders under .proton-vm/. Usage: run-native.sh [-t trace.txt] [-p] EXE [ARGS]
 # (-t: strace -f the run into the file; -p: use the proton script; the default calls the wine
 # binary directly with the same environment the script would set up, after the prefix exists).

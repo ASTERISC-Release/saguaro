@@ -5,10 +5,10 @@
 # Build the glibc that applications packed into a VBS enclave link against: glibc 2.39 (the
 # version of the bundled glibc subproject, same tarball) compiled with -ffixed-x18, installed into
 # a sysroot. x18 is the enclave TEB and the kernel resets it on preemption, so packed code must
-# never use it (Documentation/devel/vbs-enclave/FINDINGS.md). No Gramine syscall patch is needed:
+# never use it (dev docs: vbs-enclave/FINDINGS.md). No Gramine syscall patch is needed:
 # pack.py rewrites the `svc #0` instructions at pack time.
 #
-# On x86_64 (Documentation/devel/vbs-enclave/PLAN-x64.md) no special compiler flag is needed: the
+# On x86_64 (dev docs: vbs-enclave/PLAN-x64.md) no special compiler flag is needed: the
 # same glibc is built as it is (no -ffixed-x18, no setcontext change, no soft-float routines), so
 # that the applications, their libraries and the loader come from one known glibc in the same
 # sysroot layout (/usr/lib) as on AArch64.

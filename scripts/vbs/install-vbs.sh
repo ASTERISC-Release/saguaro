@@ -60,7 +60,7 @@ else
 
 The Windows side above is not ready. These steps change the machine and are done once on Windows
 (install.sh does not do them); see Documentation/vbs.md, Installation, and
-Documentation/devel/vbs-enclave/windows-fresh-machine.md:
+dev docs: vbs-enclave/windows-fresh-machine.md:
   - VBS running: Windows Security > Device security > Core isolation > Memory integrity, restart
   - Visual Studio (C++ desktop workload, build tools of this architecture) and the Windows SDK
   - the enclave test-signing certificate (CN=TheDefaultTestEnclaveCertName) and test signing on

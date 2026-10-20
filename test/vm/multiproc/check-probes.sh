@@ -48,7 +48,7 @@ FAILED=()
 vm() {
     local log=$1 t=$(( $2 * SCALE )) mon="$LOGDIR/qemu-monitor.sock" raw="$LOGDIR/vm-output.raw" pid rc i
     shift 2
-    # GRAMINE_VM_LAUNCHER=gramine-sev runs the checks under AMD SEV (Documentation/devel/sev/)
+    # GRAMINE_VM_LAUNCHER=gramine-sev runs the checks under AMD SEV (dev docs: sev/)
     [ "$1" = gramine-vm ] && [ -n "${GRAMINE_VM_LAUNCHER:-}" ] && set -- "$GRAMINE_VM_LAUNCHER" "${@:2}"
     echo "+ $* (timeout ${t}s, $GRAMINE_CPU_NUM vCPUs)" >> "$log"
     rm -f "$mon"

@@ -27,7 +27,7 @@ _start32:
     mov     %eax, %ss
 
 #ifdef PAL_HOST_SEV
-    // AMD SEV (Documentation/devel/sev/PLAN.md): paging is still off, so every data access is
+    // AMD SEV (dev docs: sev/PLAN.md): paging is still off, so every data access is
     // private (encrypted). If CPUID 0x8000001F reports SEV and SEV_STATUS (MSR 0xC0010131) bit 0
     // says it is active, remember the C-bit (CPUID 0x8000001F EBX[5:0]) and set it in the static
     // page tables below, so that the PAL's memory stays private once paging is on.

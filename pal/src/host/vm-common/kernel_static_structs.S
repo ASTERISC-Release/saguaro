@@ -73,7 +73,7 @@ gdt_entry_kernel_cs:
     .long   0xffff, 0xaf9300                    // 64-bit kernel data
     // One padding descriptor so the user selectors match Linux's numbering (0x23 = 32-bit user
     // code, 0x2b = user data, 0x33 = 64-bit user code), which Wine's new WoW64 hard-codes
-    // (Documentation/devel/proton-vm/design-32bit.md). The structure (32-code, data, 64-code with
+    // (dev docs: proton-vm/design-32bit.md). The structure (32-code, data, 64-code with
     // the STAR base at the 32-bit entry) is unchanged, so SYSRET and the symbolic STAR/TSS
     // computations still hold; only user CS/SS become 0x33/0x2b (were 0x2b/0x23).
     .quad   0                                   // padding: shift the user block up one GDT slot

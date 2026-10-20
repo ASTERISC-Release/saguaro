@@ -2,7 +2,7 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 
 """
-vsock_relay -- the per-VM network relay of the VM PAL (Documentation/devel/CHANGELOG.md).
+vsock_relay -- the per-VM network relay of the VM PAL (dev docs: CHANGELOG.md).
 
 One relay process per VM, started by `gramine-vm` in the container and stopped with the VM. It
 listens on AF_VSOCK port 65536 + <CID> (RELAY_PORT_BASE + CID; the guest knows its own CID, so the

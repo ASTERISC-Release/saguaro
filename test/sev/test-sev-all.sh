@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
-# test-sev-all.sh -- the qualification run of the AMD SEV build of the vm PAL (Documentation/devel/
+# test-sev-all.sh -- the qualification run of the AMD SEV build of the vm PAL (dev docs
 # sev/PLAN.md, phase 5), for a machine with SEV-SNP (there are no hosted CI runners with SEV). Run it
 # in the container of container/run.sh, after container/sev/build-sev-tools.sh all.
 #

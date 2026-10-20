@@ -2,11 +2,11 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
-# The timer-granularity measurement set of Documentation/devel/vm-timer/TESTING.md, for the
+# The timer-granularity measurement set of dev docs: vm-timer/TESTING.md, for the
 # aarch64 VM PAL, run inside the development container after scripts/install.sh --vm (for
 # example container/run.sh test/vm/timer/measure.sh): tickgran (1 ms and 5 ms nanosleep, futex,
 # poll and epoll_wait waits) at 1 and 2 vCPUs, threadlat and pipeping at 2. The LibOS suite is
-# run separately (Documentation/devel/CHANGELOG.md). GRAMINE_PREFIX selects the install,
+# run separately (dev docs: CHANGELOG.md). GRAMINE_PREFIX selects the install,
 # RUNS the number of repetitions (default 3), TICK_VCPUS (default "1 2") and LAT_VCPUS (default 2) the vCPU counts. One timing run at a time: the host CPUs are shared.
 set -u
 ROOT=$(cd "$(dirname "$0")/../../.." && pwd)

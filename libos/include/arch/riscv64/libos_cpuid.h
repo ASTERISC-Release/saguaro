@@ -17,7 +17,7 @@
  * AT_HWCAP2 from /proc/self/auxv (see libos_cpuid.c) and maps the COMPAT_*-free single-word
  * feature bits (the `zbb`/`zba`/`v`-style extension bits of riscv_hwcap) onto the same lowercase
  * flag names Linux's own riscv64 /proc/cpuinfo "isa" line spells. The vector bit must be masked
- * out of anything this reports for now (Documentation/devel/riscv/PLAN.md decisions: handle F/D
+ * out of anything this reports for now (dev docs: riscv/PLAN.md decisions: handle F/D
  * only and hide V from applications); the test guest's ISA has no V anyway.
  */
 int libos_get_cpu_flags(char** out_cpu_flags);

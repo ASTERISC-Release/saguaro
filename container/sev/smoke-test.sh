@@ -4,7 +4,7 @@
 #
 # smoke-test.sh: boot a stock Linux guest (OVMF + kernel + the tiny initrd of
 # make-smoke-initrd.py) as a plain, SEV, SEV-ES or SEV-SNP guest, to check the confidential-VM
-# launch path of the host, QEMU and firmware without any Gramine code (Documentation/devel/sev/).
+# launch path of the host, QEMU and firmware without any Gramine code (dev docs: sev/).
 #
 # Usage: container/sev/smoke-test.sh none|sev|sev-es|snp
 #

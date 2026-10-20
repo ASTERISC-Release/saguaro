@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 # The regression check of the VM graphics redirection's ioctl path from demand-paged processes
-# (Documentation/devel/proton-vm/design-gpu.md: the bounce buffers and the pointer table, option
+# (dev docs: proton-vm/design-gpu.md: the bounce buffers and the pointer table, option
 # B; the shared session, option S): vk-headless alone, then N vk-headless processes at once
 # through vk-two, under gramine-vm with the multiprocess key on. Needs the GPU (EGL_DISCRETE=1
 # for renderD129, the AMD GPU; 0 for the first render node) and the QEMU fork with the listener.

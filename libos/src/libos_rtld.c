@@ -1253,7 +1253,7 @@ noreturn void execute_elf_object(struct link_map* exec_map, void* argp, elf_auxv
 
 #ifdef __aarch64__
     /* CPU feature words from the PAL, already masked to what the PAL supports
-     * (Documentation/devel/aarch64/hwcap/PLAN.md); without them glibc, libgcc's outline atomics,
+     * (dev docs: aarch64/hwcap/PLAN.md); without them glibc, libgcc's outline atomics,
      * mbedtls and OpenSSL see no AES/SHA/PMULL/CRC32/LSE and take their portable paths */
     static_assert(REQUIRED_ELF_AUXV >= 16, "not enough space on stack for auxv");
     const struct pal_cpu_info* cpu_info = &g_pal_public_state->cpu_info;

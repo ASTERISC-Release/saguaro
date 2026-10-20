@@ -43,7 +43,7 @@ case $(uname -m) in
 esac
 # `--target riscv64` (first argument) selects the cross-development container of the RISC-V port
 # instead of the native one: an x86_64 image with the riscv64 cross toolchain and
-# qemu-system-riscv64 (Documentation/devel/riscv/PLAN.md).
+# qemu-system-riscv64 (dev docs: riscv/PLAN.md).
 TARGET=
 if [ "${1:-}" = "--target" ]; then TARGET=${2:-}; shift 2; fi
 case $TARGET in
@@ -142,7 +142,7 @@ if ! podman container exists "$CONTAINER"; then
     for d in /dev/kvm /dev/vhost-vsock /dev/vhost-net /dev/net/tun /dev/dri/renderD*; do
         [ -e "$d" ] && DEVICES+=(--device "$d:$d")
     done
-    # AMD SEV (Documentation/devel/sev/): QEMU opens /dev/sev for the launch commands of an SEV,
+    # AMD SEV (dev docs: sev/): QEMU opens /dev/sev for the launch commands of an SEV,
     # SEV-ES or SEV-SNP guest. The node is usually root-only; where the host gives it to a group
     # (e.g. `sev`, mode 0660), keep-groups carries the user's supplementary groups into the
     # rootless container so the device stays accessible (needs the crun runtime).
@@ -162,7 +162,7 @@ if ! podman container exists "$CONTAINER"; then
     if [ -r /dev/sgx_enclave ] && [ -w /dev/sgx_enclave ] && [[ " ${DEVICES[*]} " != *" keep-groups "* ]]; then
         DEVICES+=(--group-add keep-groups)
     fi
-    # Graphics (x86_64, see Documentation/devel/graphics/): the host X socket and DISPLAY for the
+    # Graphics (x86_64, see dev docs: graphics/): the host X socket and DISPLAY for the
     # QEMU listener's window, and the QEMU fork when it is checked out next to this repository.
     GRAPHICS=()
     if [ -d /tmp/.X11-unix ] && [ -n "${DISPLAY:-}" ]; then
@@ -176,7 +176,7 @@ if ! podman container exists "$CONTAINER"; then
     [ -d "$SEV_TOOLS" ] && GRAPHICS+=(-v "$SEV_TOOLS:/root/sev-tools:rw")
     # Intel SGX: the socket of the host's AESM service (remote attestation), when it runs
     [ -S /var/run/aesmd/aesm.socket ] && GRAPHICS+=(-v /var/run/aesmd:/var/run/aesmd)
-    # Opt-in (GRAMINE_CONTAINER_NVIDIA=1, see Documentation/devel/graphics-aarch64/): the NVIDIA
+    # Opt-in (GRAMINE_CONTAINER_NVIDIA=1, see dev docs: graphics-aarch64/): the NVIDIA
     # proprietary driver's device nodes and the host's matching userspace (GLX/EGL vendor libraries,
     # libnvidia-*, GBM backend, vendor configuration files), read-only. The libraries must match the
     # host's kernel module, so they are taken from the host instead of being installed in the image.

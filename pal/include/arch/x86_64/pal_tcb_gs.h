@@ -6,7 +6,7 @@
  *
  * Every PAL keeps the PAL_TCB at %gs:0 -- except the VBS-enclave PAL: inside a VBS enclave %gs is
  * the Windows TEB of the thread, which Windows code needs, so the PAL_TCB lives in a part of the TEB
- * that an enclave never uses (Documentation/devel/vbs-enclave/PLAN-x64.md, X2; the enclave TEB is
+ * that an enclave never uses (dev docs: vbs-enclave/PLAN-x64.md, X2; the enclave TEB is
  * 8 KiB and nearly empty, FINDINGS-x64.md). The Windows enclave runtime uses the same value
  * (PAL_VBS_TEB_TCB_OFFSET in pal/src/host/vbs/enclave/pal_vbs_boot.c).
  */

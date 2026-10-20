@@ -6,7 +6,7 @@
 /*
  * aarch64 has no CPUID instruction/leaf scheme. The "Features" line of /proc/cpuinfo is made from
  * the AT_HWCAP/AT_HWCAP2 words the PAL computed for applications (pal_cpu_info.cpu_hwcap/
- * cpu_hwcap2, already masked; Documentation/devel/aarch64/hwcap/PLAN.md), so what an
+ * cpu_hwcap2, already masked; dev docs: aarch64/hwcap/PLAN.md), so what an
  * application reads there matches what getauxval() tells it, mapped onto the same lowercase
  * names Linux's own arch/arm64/kernel/cpuinfo.c uses.
  */

@@ -394,7 +394,7 @@ static int init_tdx_attestation(struct pseudo_node* attestation) {
     return 0;
 }
 
-/* AMD SEV-SNP (the SEV build of the vm PAL, Documentation/devel/sev/): `report` and `quote` are
+/* AMD SEV-SNP (the SEV build of the vm PAL, dev docs: sev/): `report` and `quote` are
  * both the SNP attestation report that the firmware signs with the chip's VCEK, with the 64 bytes
  * of `user_report_data` as its REPORT_DATA. Selected by the attestation type, not the host type:
  * the SEV PAL reports host type "VM". */

@@ -314,7 +314,7 @@ def set_manifest_shm(manifests, kind):
     forked test process through /dev/shm; a LibOS tmpfs is private to one process, so the counts
     of a forking test would be lost). "vm" picks per manifest: "host" when the manifest enables
     the VM PAL's experimental multiprocess support (`sys.experimental__multiprocess`, see
-    Documentation/devel/vm-multiproc/; the x86_64 VM PAL then opens `dev:/dev/shm` as a host file
+    dev docs: vm-multiproc/; the x86_64 VM PAL then opens `dev:/dev/shm` as a host file
     shared between guest processes), "tmpfs" otherwise. Returns the number of manifests changed."""
     changed = 0
     for manifest in manifests:

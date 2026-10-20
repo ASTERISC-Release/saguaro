@@ -3,7 +3,7 @@
 
 /*
  * PAL handle definition of the Windows VBS-enclave PAL (the "vbs PAL proper", an AArch64 Linux ELF
- * packed into the signed enclave image; see Documentation/devel/vbs-enclave/PLAN.md).
+ * packed into the signed enclave image; see dev docs: vbs-enclave/PLAN.md).
  */
 
 #pragma once

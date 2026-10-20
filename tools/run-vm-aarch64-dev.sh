@@ -2,13 +2,13 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
-# Development bring-up runner for the aarch64 vm-PAL kernel (Documentation/devel/vm.md).
+# Development bring-up runner for the aarch64 vm-PAL kernel (dev docs: vm.md).
 # Not the final launcher: tools/gramine-vm.in's arm counterpart will replace it.
 #
 # Usage: run-vm-aarch64-dev.sh [extra qemu args]
 #
 # Target is **KVM on a native aarch64 host** (QEMU virt + in-kernel vGIC/VHE); TCG is
-# out of scope (see Documentation/devel/CHANGELOG.md): -cpu host is required (max is TCG-only) and
+# out of scope (see dev docs: CHANGELOG.md): -cpu host is required (max is TCG-only) and
 # the container must expose --device /dev/kvm. Override with ACCEL=tcg/CPU=max only as
 # a debugging fallback, not a supported configuration.
 set -e

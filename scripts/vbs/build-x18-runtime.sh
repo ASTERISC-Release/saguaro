@@ -5,7 +5,7 @@
 # Rebuild the runtime libraries that applications packed into a VBS enclave link against, with
 # -ffixed-x18, as build-glibc.sh does for glibc: libgcc_s.so.1, libstdc++.so.6, libgfortran.so.5
 # (from GCC) and libz.so.1 (zlib). x18 is the enclave TEB on Windows ARM64, so packed code must
-# never use it (pack.py refuses it; Documentation/devel/vbs-enclave/X18-SCAN.md).
+# never use it (pack.py refuses it; dev docs: vbs-enclave/X18-SCAN.md).
 #
 # Everything goes under PREFIX (default ~/.local/share/gramine-vbs/x18-runtime): the sources, the
 # build trees, the GCC that builds the libraries and the result in PREFIX/lib. Nothing is installed

@@ -38,7 +38,7 @@ bool libos_arch_repair_illegal_insn(PAL_CONTEXT* context);
 /* Lazy rewriting of trapped `ecall` sites (sys.rewrite_syscalls); see
  * arch/riscv64/libos_syscall_patch.c. The first tries to rewrite the site at \p pc; the second
  * recognizes a site that another thread rewrote between this thread's trap and its handler.
- * Deliberately never enabled on riscv64 for now (Documentation/devel/riscv/PLAN.md decisions:
+ * Deliberately never enabled on riscv64 for now (dev docs: riscv/PLAN.md decisions:
  * seccomp-trap only, no syscall-site rewriting -- a far jump needs 8 bytes over an `ecall`'s 4). */
 bool libos_try_patch_syscall_site(uintptr_t pc);
 bool libos_syscall_site_was_patched(uintptr_t pc);

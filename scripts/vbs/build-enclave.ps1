@@ -5,7 +5,7 @@
 # sources to a signed enclave image, and optionally run it. The Windows enclave runtime and host are
 # compiled with clang inside the WSL distribution (wsl-build.sh objs, build-objs.sh) against this
 # machine's Windows SDK and MSVC headers; link /ENCLAVE, veiid and signtool run here
-# (link-sign.cmd). Documentation/devel/vbs-enclave/PLAN-windows-build.md, phase W1.
+# (link-sign.cmd). dev docs: vbs-enclave/PLAN-windows-build.md, phase W1.
 #
 #   build-enclave.ps1 -Repo <repo in WSL> -Pack <pack dir in WSL> -Out <Windows folder>
 #                     [-Name hello] [-Distro Ubuntu-24.04] [-CertName <subject>]

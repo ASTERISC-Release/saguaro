@@ -7,7 +7,7 @@
  * entry), a raw RTM_GETLINK dump must carry the request's sequence number and the socket's port
  * id and end with NLMSG_DONE, an unknown request must get NLMSG_ERROR, and other netlink
  * protocols must be refused. Wine's nsiproxy.sys dereferences if_nameindex()'s result without a
- * NULL check (Documentation/devel/proton-vm/FINDINGS.md, 2026-10-16).
+ * NULL check (dev docs: proton-vm/FINDINGS.md, 2026-10-16).
  */
 
 #define _GNU_SOURCE
@@ -44,7 +44,7 @@ int main(void) {
         errx(1, "if_nameindex: no lo with index 1 (%d entries)", count);
     printf("if_nameindex: %d interface(s), lo is index 1\n", count);
     /* not checked: if_nametoindex()/if_indextoname() use SIOCGIFINDEX/SIOCGIFNAME on an inet
-     * socket, which the LibOS does not emulate (Documentation/devel/proton-vm/TODO.md) */
+     * socket, which the LibOS does not emulate (dev docs: proton-vm/TODO.md) */
 
     /* getifaddrs */
     struct ifaddrs* ifa = NULL;

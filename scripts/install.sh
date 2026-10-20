@@ -11,7 +11,7 @@
 # Options:
 #   --prefix DIR           install prefix (default: $HOME/.local/gramine; no root needed)
 #   --target ARCH          cross-build for ARCH instead of the build machine's own
-#                          architecture (riscv64; see Documentation/devel/riscv/PLAN.md).
+#                          architecture (riscv64; see dev docs: riscv/PLAN.md).
 #                          Requires the matching cross toolchain to be installed -- for
 #                          riscv64 that is the `container/run.sh --target riscv64` container
 #                          (or the same packages on a native-capable distro). The default
@@ -27,7 +27,7 @@
 #                          (user-level, no sudo; nothing else is built; scripts/vbs/install-vbs.sh)
 #   --sgx | --vm | --tdx   enable extra PAL backends (off by default; "direct" is always built)
 #   --sev                  --vm plus the AMD SEV build of the vm PAL and gramine-sev (x86_64;
-#                          Documentation/devel/sev/)
+#                          dev docs: sev/)
 #   --graphics enabled|disabled
 #                          compile the Tirith graphics host-redirection paths into the LibOS
 #                          (default: enabled)
@@ -50,7 +50,7 @@
 #
 # --vm builds the vm-PAL unikernel ("the correct vm version for this machine"): the default build
 # dir becomes build-vm-<arch> so it never reconfigures a direct-PAL build dir, and on aarch64 the
-# option set is fixed to the Documentation/devel/vm.md recipe (-Dvm=enabled, direct/sgx/tdx/tests all disabled --
+# option set is fixed to the dev docs: vm.md recipe (-Dvm=enabled, direct/sgx/tdx/tests all disabled --
 # the aarch64 vm kernel replaces the direct PAL entirely, so a direct-PAL test battery does not
 # apply). On x86_64 your --sgx/--tdx choices are kept.
 #
@@ -121,7 +121,7 @@ while [ $# -gt 0 ]; do
 done
 
 # --target: cross-build. Only riscv64 (the direct PAL port,
-# Documentation/devel/riscv/PLAN.md) is supported here.
+# dev docs: riscv/PLAN.md) is supported here.
 CROSS_ARGS=()
 if [ -n "$TARGET_ARCH" ]; then
     if [ "$TARGET_ARCH" != riscv64 ]; then
@@ -163,7 +163,7 @@ if [ "$VM" = enabled ]; then
         PREFIX="$HOME/.local/gramine-vm"
     fi
     if [ "$ARCH" = aarch64 ]; then
-        # aarch64 recipe (Documentation/devel/vm.md): the vm kernel *is* the PAL here; the direct PAL and
+        # aarch64 recipe (dev docs: vm.md): the vm kernel *is* the PAL here; the direct PAL and
         # SGX/TDX hosts do not exist in this build. The PAL regression battery is built against
         # the direct PAL and is not built; the LibOS regression suite runs under gramine-vm
         # (test/vm/test-vm.sh), which needs PIE test binaries (the guest maps DRAM at 0x40000000).
@@ -292,7 +292,7 @@ fi
 if [ "$RUN_TESTS" = 1 ] && [ -n "$TARGET_ARCH" ]; then
     echo "note: skipping --run-tests: $TARGET_ARCH binaries cannot run on this build machine;"
     echo "      run the battery inside the RISC-V guest instead (scripts/riscv64/guest.sh,"
-    echo "      then test/direct/test-direct.sh there -- see Documentation/devel/riscv/PLAN.md Phase 0)"
+    echo "      then test/direct/test-direct.sh there -- see dev docs: riscv/PLAN.md Phase 0)"
     RUN_TESTS=0
 fi
 

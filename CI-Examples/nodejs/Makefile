@@ -24,7 +24,7 @@ endif
 .PHONY: all
 ifeq ($(VBS),1)
 # Windows VBS enclave (scripts/vbs/Makefile.vbs): the official node binary (not built with the vbs
-# glibc: packed as it is, see Documentation/devel/vbs-enclave/apps-trials-arm64.md), --jitless
+# glibc: packed as it is, see dev docs: vbs-enclave/apps-trials-arm64.md), --jitless
 VBS_APP = nodejs
 VBS_DEPS = vbs-build/node vbs-build/lib/libstdc++.so.6 vbs-build/lib/libgcc_s.so.1 helloworld.js heavy.js
 VBS_CLEAN = vbs-build OUTPUT

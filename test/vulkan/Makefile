@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
-# Vulkan feasibility tests (Documentation/devel/vulkan/). `make` builds vk-headless; the SPIR-V
+# Vulkan feasibility tests (dev docs: vulkan/). `make` builds vk-headless; the SPIR-V
 # headers are committed and only regenerated when a shader changes and glslangValidator exists.
 
 CFLAGS ?= -O2 -g -Wall -Wextra

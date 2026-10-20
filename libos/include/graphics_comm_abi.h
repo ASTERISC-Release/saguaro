@@ -57,7 +57,7 @@ _Static_assert(sizeof(comm_page_t) == 64,
  * Guest-private state of the graphics session, in the comm page between the request slots and
  * the input ring (offset 512): the listener never reads this range. The comm page is one
  * physical page that every process of the guest maps, so this is what makes one session serve
- * several processes (Documentation/devel/proton-vm/design-gpu.md, "Several graphics processes"):
+ * several processes (dev docs: proton-vm/design-gpu.md, "Several graphics processes"):
  * the first process to turn `session_state` from 0 to 1 runs the setup handshake and publishes
  * the arena geometry it used, then stores 2; the others wait for 2 and only map the arenas. The
  * slot-busy flags are the request-slot locks of the LibOS (libos_graphics_lock.c), shared by the
@@ -127,7 +127,7 @@ typedef enum graphics_request {
  * the guest installs host fds at (host fd + GRAPHICS_FS_OFFSET) and the host
  * listener translates request fd payloads back with the same constant. The
  * application's own fds must stay below it: 500 was too low for a Wine server
- * with a Unity game (Documentation/devel/proton-vm/TESTING.md, 2026-10-16). */
+ * with a Unity game (dev docs: proton-vm/TESTING.md, 2026-10-16). */
 #define GRAPHICS_FS_OFFSET 4096ULL
 
 /* The version of this ABI as the two sides compiled it. The guest writes it to slot 0's p4

@@ -2,7 +2,7 @@
 /* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /*
- * Research probe (Documentation/devel/vbs-enclave/PLAN-rwx.md, "Runtime executable memory: options"):
+ * Research probe (dev docs: vbs-enclave/PLAN-rwx.md, "Runtime executable memory: options"):
  * each way to get executable memory at run time, one call at a time, with the errno and the line of
  * /proc/self/maps for the region afterwards. Generated code is called only when the call that should
  * have made it executable returned success. It reports; it makes no verdict and no claim of security.

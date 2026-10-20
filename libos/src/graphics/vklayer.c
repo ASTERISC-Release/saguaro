@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
 /* Copyright (C) 2026 The ASTERISC Research Lab */
 /*
- * VK_LAYER_GRAMINE_present: Vulkan presentation under gramine-vm (Documentation/devel/vulkan/,
+ * VK_LAYER_GRAMINE_present: Vulkan presentation under gramine-vm (dev docs: vulkan/,
  * "Phase 2 design").
  *
  * An implicit Vulkan layer that implements the X11 window-system extensions (VK_KHR_surface,

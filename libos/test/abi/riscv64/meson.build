@@ -4,6 +4,6 @@
 # (all GPRs zero but sp and the jump target, fcsr cleared, 16-byte-aligned SP, and -- open
 # question -- `gp` zero vs __global_pointer$; see the comment in
 # libos/src/arch/riscv64/libos_elf_entry.S) and it deserves an AAPCS-FP/riscv entry-state
-# counterpart test in Phase 5+ of Documentation/devel/riscv/PLAN.md, not a rushed translation.
+# counterpart test in Phase 5+ of dev docs: riscv/PLAN.md, not a rushed translation.
 # This file exists only to satisfy the unconditional `subdir(host_machine.cpu_family())` in
 # libos/test/abi/meson.build; it intentionally defines no test targets.

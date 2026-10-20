@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
 /*
- * vk-mt: Vulkan from several threads (Documentation/devel/vulkan/, blocker 7). Under gramine-vm
+ * vk-mt: Vulkan from several threads (dev docs: vulkan/, blocker 7). Under gramine-vm
  * every device call goes through the comm page; if a thread blocked in a long wait holds it, the
  * other threads' calls stall. Steps (one "STEP" line each, exit status = failed steps):
  *

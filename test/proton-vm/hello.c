@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
 /* Copyright (C) 2026 The ASTERISC Research Lab */
 
-/* A Windows console program for the Proton feasibility study (Documentation/devel/proton-vm/):
+/* A Windows console program for the Proton feasibility study (dev docs: proton-vm/):
  * prints, creates a thread, uses a critical section and an event, writes and reads a file, sleeps,
  * raises and catches a structured exception (Wine implements SEH with SIGSEGV), and exits with
  * code 42. Built with mingw-w64 for x86_64 and i686 (test/proton-vm/build-tests.sh). */

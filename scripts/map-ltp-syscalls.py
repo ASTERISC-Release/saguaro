@@ -5,11 +5,15 @@
 import argparse
 import csv
 import json
+import os
 import pathlib
 import re
 import shlex
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+# The syscall-compat and syscall-profile data live in the private development-documents repository, checked out
+# next to this one (GRAMINE_DEV_DOCS names another place).
+DEV_DOCS = pathlib.Path(os.environ.get("GRAMINE_DEV_DOCS", ROOT.parent / "gramine-multiarch-docs"))
 OVERRIDES = {
     "execl": ["execve"], "execle": ["execve"], "execlp": ["execve"],
     "execv": ["execve"], "execvp": ["execve"], "wait": ["wait4"],
@@ -46,8 +50,8 @@ def match_suffix(test_binary, name):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--scenario", type=pathlib.Path, default=ROOT / ".ltp-src/runtest/syscalls")
-    parser.add_argument("--inventory", type=pathlib.Path, default=ROOT / "Documentation/devel/syscall-compat/inventory.csv")
-    parser.add_argument("--output", type=pathlib.Path, default=ROOT / "Documentation/devel/syscall-compat/mapping.toml")
+    parser.add_argument("--inventory", type=pathlib.Path, default=DEV_DOCS / "syscall-compat/inventory.csv")
+    parser.add_argument("--output", type=pathlib.Path, default=DEV_DOCS / "syscall-compat/mapping.toml")
     args = parser.parse_args()
     syscall_names = {row["syscall"] for row in csv.DictReader(args.inventory.open())}
     candidates = sorted({n for n in syscall_names if n != "misc"} | set(OVERRIDES), key=len, reverse=True)

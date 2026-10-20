@@ -30,7 +30,7 @@ all: vbs-all
 # (x18 reserved, against the vbs glibc) as static libraries for the application; its default
 # configuration (TLS 1.2 and 1.3, X.509 writing, entropy from getrandom()); mbedtls takes the AES and
 # PMULL instructions when AT_HWCAP advertises them, which the LibOS passes on AArch64
-# (Documentation/devel/aarch64/hwcap/: the same throughput as forcing them with
+# (dev docs: aarch64/hwcap/: the same throughput as forcing them with
 # MBEDTLS_AES_USE_HARDWARE_ONLY, about 3 times the software fallback's)
 MBEDTLS_VERSION = 3.6.0
 MBEDTLS_SHA256 = 3ecf94fcfdaacafb757786a01b7538a61750ebd85c4b024f56ff8ba1490fcd38

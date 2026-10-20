@@ -5,7 +5,7 @@ level `warning` and compare the syscalls the LibOS reports as unsupported ("Unsu
 call X") with the syscalls the profile says are ENOSYS in the LibOS.
 
 Run in the container with an install of the direct PAL (`. ~/.local/gramine-vm/env.sh`); needs
-strace, gcc and busybox-static. See Documentation/devel/syscall-profile/TESTING.md.
+strace, gcc and busybox-static. See dev docs: syscall-profile/TESTING.md.
 """
 
 import importlib.util

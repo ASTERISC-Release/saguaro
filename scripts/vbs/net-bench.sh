@@ -2,7 +2,7 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 # SPDX-License-Identifier: LGPL-3.0-or-later
 #
-# The network loads of Documentation/devel/vbs-enclave/TESTING.md ("networking study"), from WSL on
+# The network loads of dev docs: vbs-enclave/TESTING.md ("networking study"), from WSL on
 # the Windows machine, against the examples built with `make VBS=1`: for each application of SUITE
 # (redis nginx memcached lighttpd) the server is started in its enclave and each load is run with
 # `gramine-vbs net bench`. With STATS=1 the host process counts its host calls

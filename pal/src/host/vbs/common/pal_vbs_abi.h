@@ -14,7 +14,7 @@
  *                             CallEnclave() from inside the enclave, demultiplexed by an OCALL
  *                             number. This mirrors the SGX PAL's OCALL table.
  *
- * Boundary conventions (decided in Documentation/devel/vbs-enclave/PLAN.md, D4; measured in
+ * Boundary conventions (decided in dev docs: vbs-enclave/PLAN.md, D4; measured in
  * phase 0):
  *   - EVERY value that crosses the boundary is a fixed-width type (uint64_t / int64_t / pointers).
  *     Never `long`: Windows ARM64 is LLP64 (long = 32 bits), Linux AArch64 is LP64 (long = 64).
@@ -281,7 +281,7 @@ struct pal_vbs_services {
 
     /* CPU features (version 7): IsProcessorFeaturePresent(n) called inside the enclave by W,
      * for n = 0..127, as bit (n % 64) of arm_pf[n / 64] (PF_ARM_* numbers of winnt.h). The PAL
-     * turns them into AT_HWCAP/AT_HWCAP2 (Documentation/devel/aarch64/hwcap/PLAN.md). */
+     * turns them into AT_HWCAP/AT_HWCAP2 (dev docs: aarch64/hwcap/PLAN.md). */
     uint64_t arm_pf[2];
 };
 

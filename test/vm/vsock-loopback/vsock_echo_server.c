@@ -3,7 +3,7 @@
 
 /*
  * vsock_echo_server -- regression driver for host-initiated connections to a guest AF_INET TCP
- * server under the VM PAL (Documentation/devel/CHANGELOG.md, phase 1 of the plan).
+ * server under the VM PAL (dev docs: CHANGELOG.md, phase 1 of the plan).
  *
  * The host side (vsock_host_client.py) opens connections from the container into this server and
  * checks that they work repeatedly and that the listener survives them. Protocol per connection:

@@ -278,7 +278,7 @@ int memory_frame_free(uintptr_t frame) {
  * (read-write, user mode); `*out_phys` is the first frame's guest-physical address. For the
  * LibOS's graphics bounce buffers: the host listener reads guest RAM by physical address, so what
  * the LibOS hands it from a demand-paged process must sit in frames it knows the address of
- * (Documentation/devel/proton-vm/design-gpu.md). Without a frame pool or a process address space
+ * (dev docs: proton-vm/design-gpu.md). Without a frame pool or a process address space
  * (the single-process VM) memory is identity-mapped and a plain allocation serves. */
 int memory_address_space_alloc_contiguous(struct memory_address_space* space, void* addr,
                                           size_t size, bool execute, uintptr_t* out_phys) {

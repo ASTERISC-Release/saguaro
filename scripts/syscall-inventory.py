@@ -4,10 +4,14 @@
 
 import argparse
 import collections
+import os
 import pathlib
 import re
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+# The syscall-compat and syscall-profile data live in the private development-documents repository, checked out
+# next to this one (GRAMINE_DEV_DOCS names another place).
+DEV_DOCS = pathlib.Path(os.environ.get("GRAMINE_DEV_DOCS", ROOT.parent / "gramine-multiarch-docs"))
 GROUPS = {
     "file": "read write open close stat fstat lstat newfstatat statx access faccessat faccessat2 lseek readlink readlinkat getdents getdents64 chdir fchdir getcwd mkdir mkdirat rmdir rename renameat renameat2 link linkat unlink unlinkat symlink symlinkat chmod fchmod fchmodat chown fchown fchownat lchown umask mknod mknodat truncate ftruncate fallocate fsync fdatasync sync syncfs flock fcntl ioctl dup dup2 dup3 pipe pipe2 sendfile copy_file_range splice tee vmsplice".split(),
     "memory": "brk mmap munmap mremap mprotect madvise mincore msync mlock munlock mlockall munlockall remap_file_pages pkey_mprotect pkey_alloc pkey_free process_madvise memfd_create memfd_secret".split(),
@@ -74,7 +78,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--x86-header", type=pathlib.Path, default=pathlib.Path("/usr/include/x86_64-linux-gnu/asm/unistd_64.h"))
     parser.add_argument("--arm64-header", type=pathlib.Path, default=pathlib.Path("/usr/include/asm-generic/unistd.h"))
-    parser.add_argument("--output", type=pathlib.Path, default=ROOT / "Documentation/devel/syscall-compat/inventory.csv")
+    parser.add_argument("--output", type=pathlib.Path, default=DEV_DOCS / "syscall-compat/inventory.csv")
     args = parser.parse_args()
     arch_data = {
         "x86_64": (numbers(args.x86_header), table_entries(ROOT / "libos/src/arch/x86_64/libos_table.c")),

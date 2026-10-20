@@ -11,7 +11,7 @@
  *
  * Why: Wine's nsiproxy.sys enumerates the interfaces for GetAdaptersAddresses() with
  * if_nameindex() and dereferences its result without a NULL check; without netlink it crashed the
- * driver thread and the calling program waited for ever (Documentation/devel/proton-vm/FINDINGS.md,
+ * driver thread and the calling program waited for ever (dev docs: proton-vm/FINDINGS.md,
  * 2026-10-16). Programs that need the real interfaces of the host are not served by this.
  */
 

@@ -17,7 +17,7 @@
 # too. Without PACK the image carries no packed objects and no loader (the phase-1 build).
 #
 # VBS_ARCH selects the target: aarch64 (ARM64 Windows) or x86_64 (x64 Windows,
-# Documentation/devel/vbs-enclave/PLAN-x64.md); the default is the machine's (uname -m), the
+# dev docs: vbs-enclave/PLAN-x64.md); the default is the machine's (uname -m), the
 # architecture of the Linux objects built next to these.
 #
 # Usage: HDR=<scratch> [OUT=<dir>] [PACK=<pack.py output>] [VBS_ARCH=x86_64] scripts/vbs/build-objs.sh

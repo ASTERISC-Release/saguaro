@@ -3,7 +3,7 @@
 
 /*
  * AArch64 AT_HWCAP / AT_HWCAP2 bits (values of Linux's uapi <asm/hwcap.h>) and the allowlist of
- * bits the PALs may pass to applications (Documentation/devel/aarch64/hwcap/PLAN.md).
+ * bits the PALs may pass to applications (dev docs: aarch64/hwcap/PLAN.md).
  *
  * A bit is allowed only if its feature is plain user-space instructions on general registers,
  * FP/SIMD registers V0-V31 and memory: no state beyond what the PALs and the LibOS save (X

@@ -9,7 +9,7 @@ sys.stack.size = "32M"
 {% if shared_input|string != "0" %}
 # Key, button and pointer events come through the shared-memory ring in the comm page; build with
 # SHARED_INPUT=0 to receive them over the X connection instead (see
-# Documentation/devel/graphics/running.md).
+# dev docs: graphics/running.md).
 sys.experimental__shared_input_ring = true
 {% endif %}
 libos.check_invalid_pointers = false

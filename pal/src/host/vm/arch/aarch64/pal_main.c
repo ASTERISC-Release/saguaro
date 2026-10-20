@@ -54,7 +54,7 @@ static struct pal_handle* g_first_thread_handle = NULL;
 static const char* g_vm_envp[MAX_ENVS_CNT];
 
 /*
- * Multiprocess support (`sys.experimental__multiprocess`, Documentation/devel/vm-multiproc-aarch64/):
+ * Multiprocess support (`sys.experimental__multiprocess`, dev docs: vm-multiproc-aarch64/):
  * the frame pool, the first process's own root and the boot self-checks, as in the x86_64
  * pal_main.c. The checks prove the address-space invariants on every boot with the key: two roots
  * map one address to different frames, private PAL process data, a root cloned from a process

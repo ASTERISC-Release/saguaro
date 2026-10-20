@@ -4,7 +4,7 @@
 #
 # Rebuild OpenBLAS 0.3.26 (the version of Ubuntu 24.04; it includes the reference LAPACK and
 # CBLAS/LAPACKE) so that no instruction names x18 (the enclave TEB on Windows ARM64; pack.py refuses
-# it; Documentation/devel/vbs-enclave/X18-SCAN.md). C and Fortran code get -ffixed-x18. The AArch64
+# it; dev docs: vbs-enclave/X18-SCAN.md). C and Fortran code get -ffixed-x18. The AArch64
 # kernels written in assembly ignore that flag, so they are patched first:
 #  - `stp x18, x19, [...]` / `ldp x18, x19, [...]` (the prologue and epilogue of 48 kernels) become
 #    `stp xzr, x19, ...` / `ldp xzr, x19, ...` (same stack layout, x18 untouched);

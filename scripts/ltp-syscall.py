@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 """Run every LTP test of one syscall under one loader (native, direct or vm).
 
-The test list comes from Documentation/devel/syscall-compat/mapping.toml; the runs are done by
+The test list comes from dev docs: syscall-compat/mapping.toml; the runs are done by
 scripts/run-ltp-syscalls.py. Use it inside the container with the install's env.sh sourced (see
-Documentation/devel/syscall-compat/RERUN.md). Extra arguments after `--` go to the runner.
+dev docs: syscall-compat/RERUN.md). Extra arguments after `--` go to the runner.
 """
 
 import argparse
@@ -14,7 +14,10 @@ import sys
 import tomllib
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-MAPPING = ROOT / "Documentation/devel/syscall-compat/mapping.toml"
+# The syscall-compat and syscall-profile data live in the private development-documents repository, checked out
+# next to this one (GRAMINE_DEV_DOCS names another place).
+DEV_DOCS = pathlib.Path(os.environ.get("GRAMINE_DEV_DOCS", ROOT.parent / "gramine-multiarch-docs"))
+MAPPING = DEV_DOCS / "syscall-compat/mapping.toml"
 
 
 def main():

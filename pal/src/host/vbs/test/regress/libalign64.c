@@ -4,7 +4,7 @@
 /* The shared object that dlopen_align64 loads: linked with 64 KiB PT_LOAD alignment (build.sh), as
  * the AArch64 libraries of the distributions are (libgcc_s, libstdc++). It has what libgcc_s has at
  * load time: a constructor that calls libc through a lazily bound PLT entry, and thread-local data
- * (TLS descriptors of a library loaded after startup). Documentation/devel/vbs-enclave/
+ * (TLS descriptors of a library loaded after startup). dev docs: vbs-enclave/
  * PLAN-packer-align.md. */
 
 #include <stdlib.h>

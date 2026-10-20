@@ -8,7 +8,7 @@
 [[group]]
 kind = "skip"
 category = "fork-exec"
-reason = "Still failing with sys.experimental__multiprocess on (the default): the test needs something the VM PAL processes do not provide yet (see Documentation/devel/vm-multiproc/TESTING.md, 2026-10-18)."
+reason = "Still failing with sys.experimental__multiprocess on (the default): the test needs something the VM PAL processes do not provide yet (see dev docs: vm-multiproc/TESTING.md, 2026-10-18)."
 tests = [
   "TC_30_Syscall::test_075b_mmap_shared_ro",
   "TC_30_Syscall::test_051_mmap_sgx",

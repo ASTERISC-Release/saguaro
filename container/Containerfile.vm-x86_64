@@ -47,7 +47,7 @@ RUN apt-get update && \
 # The rust example's dependencies need a cargo newer than noble's default 1.75 (edition2024).
 ENV PATH="/usr/lib/rust-1.85/bin:${PATH}"
 
-# Graphics layer (see Documentation/devel/graphics/): stock Mesa and the X/GL/SDL2 headers for the
+# Graphics layer (see dev docs: graphics/): stock Mesa and the X/GL/SDL2 headers for the
 # graphics preload library (libos/src/graphics) and CI-Examples/graphics, socat for the
 # vsock-to-X proxy, and the packages needed to build the QEMU fork (qemu-tirith, kept outside this repository)
 # with its graphics listener.
@@ -71,7 +71,7 @@ RUN apt-get update && \
       unzip libxi-dev libxxf86vm-dev libgmp-dev libjsoncpp-dev libzstd-dev libluajit-5.1-dev \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Vulkan (Documentation/devel/vulkan/): Mesa's Vulkan drivers (anv, radv, lavapipe), the loader
+# Vulkan (dev docs: vulkan/): Mesa's Vulkan drivers (anv, radv, lavapipe), the loader
 # headers, vulkaninfo/vkcube, vkmark, the validation layers, the GLSL compiler for test/vulkan's
 # shaders, and strace for the ioctl traces.
 RUN apt-get update && \

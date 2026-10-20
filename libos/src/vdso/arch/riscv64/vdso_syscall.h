@@ -20,7 +20,7 @@
  * own tiny, dependency-free shared object (`-Wl,--no-undefined`, no link against libpal.so,
  * exactly like a real vDSO) that this macro structurally cannot reach into. Falling back to a
  * real `ecall` here is not a loss: with no libc patched to use GRAMINE_SYSCALL in the first
- * place (riscv64 decision: seccomp-trap only, see Documentation/devel/riscv/PLAN.md), every
+ * place (riscv64 decision: seccomp-trap only, see dev docs: riscv/PLAN.md), every
  * syscall already goes through the seccomp-trap path (maybe_emulate_syscall() in
  * libos_context.c), which is exactly what a raw `ecall` here will hit too -- so this is the
  * *consistent* choice, not a workaround bolted on top of a broken fast path.

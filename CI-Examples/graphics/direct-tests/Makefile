@@ -2,7 +2,7 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 
 # Test programs for graphics under gramine-direct (x86_64), see
-# Documentation/devel/graphics-direct/. `make check` runs each natively and under gramine-direct.
+# dev docs: graphics-direct/. `make check` runs each natively and under gramine-direct.
 
 PROGRAMS = drm_info gbm_map egl_readback ioctl_bench x_roundtrip gl_bench egl_surfaceless x_input
 NODE ?= /dev/dri/renderD128

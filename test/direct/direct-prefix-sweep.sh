@@ -7,7 +7,7 @@
 #
 # What the PAL allocates at startup (paths, the manifest, the environment) decides where its heap
 # runs out of free slots. A LibOS that allocates PAL handles at the wrong moment of its start then
-# fails only for some lengths of the install path (Documentation/devel/vm-multiproc/FINDINGS.md,
+# fails only for some lengths of the install path (dev docs: vm-multiproc/FINDINGS.md,
 # 2026-10-15: 036a982b faulted with the default prefix ~/.local/gramine, 20 characters, and not with
 # the CI prefix). This sweep makes such a fault show up whatever prefix the developer or CI uses.
 #

@@ -3,7 +3,7 @@
 
 /*
  * set_thread_area()/get_thread_area() and 32-bit code, as Wine's new WoW64 uses them (VM PAL;
- * Documentation/devel/proton-vm/design-32bit.md): a per-thread GDT TLS slot through the 64-bit
+ * dev docs: proton-vm/design-32bit.md): a per-thread GDT TLS slot through the 64-bit
  * system call and through `int $0x80` (the i386 ABI Wine issues it with); the same entry with a
  * different base in two threads, kept across context switches while %fs holds the selector; a
  * far jump to Linux's 32-bit code selector 0x23 and back; and a signal that interrupts the 32-bit

@@ -212,7 +212,7 @@ struct thread {
      * the thread's raw descriptors, written into the CPU's GDT at every switch-in, and the user's
      * %fs selector as saved at switch-out (0: the base is user_fsbase alone; otherwise the
      * selector is reloaded first, then user_fsbase, which holds the live base). See
-     * kernel_sched.c and Documentation/devel/proton-vm/design-32bit.md. */
+     * kernel_sched.c and dev docs: proton-vm/design-32bit.md. */
     uint64_t tls_desc[GDT_ENTRIES_TLS];
     uint16_t user_fs_sel;
     /* the user's %ds and %es too (0 for 64-bit code; the user data selector while Wine runs

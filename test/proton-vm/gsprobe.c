@@ -5,7 +5,7 @@
  * A program that owns %gs, as 64-bit Windows code under Wine does (`NtCurrentTeb()` is
  * `mov %gs:0x30`): it sets a TEB-like block with arch_prctl(ARCH_SET_GS) and checks that
  * `%gs:0x30` stays the block's address across everything the VM PAL's hand-over must survive
- * (Documentation/devel/proton-vm/design-gs.md, stage S1): raw system calls, a blocking read, a
+ * (dev docs: proton-vm/design-gs.md, stage S1): raw system calls, a blocking read, a
  * spin long enough for timer preemption, a page fault, a signal (inside the handler and after it),
  * a new thread (inherits, then sets its own), a fork (inherits), ARCH_GET_GS, and a
  * clock_gettime through glibc and through the vDSO's entry point. Every other system call here is

@@ -21,7 +21,7 @@ With --serial-rerun every test that did not pass (and was not skipped by --skip-
 again by one serial runner process (one test at a time, one guest, no namespaces). The merged
 file then holds the serial row of each rerun test, with the parallel result kept under
 `parallel`; the tests whose status differs are listed under `serial_rerun.changed` and printed.
-See Documentation/devel/syscall-compat/RERUN.md.
+See dev docs: syscall-compat/RERUN.md.
 """
 
 import argparse

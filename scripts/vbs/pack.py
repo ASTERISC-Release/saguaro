@@ -56,12 +56,12 @@ bytes in a read-only data section (`.gxfile`), from which the PAL serves file re
 Segment alignment. A user object's PT_LOAD p_align above 4 KiB (64 KiB in the AArch64 libraries of
 the distributions: libgcc_s, libstdc++) makes glibc's ld.so reserve an aligned anonymous span and
 map the object into it with MAP_FIXED, at an address that is not the packed one, which the PAL then
-refuses (Documentation/devel/vbs-enclave/PLAN-packer-align.md). The packed image fixes the address
+refuses (dev docs: vbs-enclave/PLAN-packer-align.md). The packed image fixes the address
 anyway, so p_align of such segments is lowered to 4 KiB, in the load image and in the kept file
 bytes (from which ld.so reads the program headers); this is legal when p_offset and p_vaddr are
 congruent modulo 4 KiB, and an object where they are not is refused.
 
-x86_64 (Documentation/devel/vbs-enclave/PLAN-x64.md). The objects' machine decides; all must agree.
+x86_64 (dev docs: vbs-enclave/PLAN-x64.md). The objects' machine decides; all must agree.
 A `syscall` returns an error in a VBS enclave instead of trapping (FINDINGS-x64.md), so every
 `syscall` (found by disassembling the executable sections) becomes `ud2` -- the same two bytes, so
 nothing moves -- and its offset in the blob goes into a sorted table (g_pal_vbs_syscall_sites in

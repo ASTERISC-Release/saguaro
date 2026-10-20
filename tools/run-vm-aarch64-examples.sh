@@ -3,7 +3,7 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
 # Run CI-Examples applications under `gramine-vm` on aarch64 (inside the gramine-vm-aarch64 container,
-# with the VM build installed; see Documentation/devel/vm.md) and check their output.
+# with the VM build installed; see dev docs: vm.md) and check their output.
 #
 # Usage: tools/run-vm-aarch64-examples.sh [example ...]        (default: all below)
 #   GRAMINE_CPU_NUM=2   vCPUs per run          RUN_TIMEOUT=120   per-run timeout (s)

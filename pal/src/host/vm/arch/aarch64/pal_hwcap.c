@@ -8,7 +8,7 @@
  * those of Linux's arm64_elf_hwcaps[] (arch/arm64/kernel/cpufeature.c), for the bits of the
  * allowlist in pal_hwcap.h only (pal_cpuid.c masks again). EVTSTRM and CPUID are never set: this
  * kernel neither enables the timer event stream nor emulates EL0 reads of the ID registers.
- * See Documentation/devel/aarch64/hwcap/PLAN.md.
+ * See dev docs: aarch64/hwcap/PLAN.md.
  */
 
 #include <stdint.h>

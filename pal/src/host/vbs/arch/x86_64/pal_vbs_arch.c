@@ -2,7 +2,7 @@
 /* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /*
- * x86_64 parts of the vbs PAL proper (Documentation/devel/vbs-enclave/PLAN-x64.md).
+ * x86_64 parts of the vbs PAL proper (dev docs: vbs-enclave/PLAN-x64.md).
  *
  * The thread pointer of the Linux code is the FS base (FSGSBASE works in a VBS enclave). The kernel
  * does not keep it reliably for enclave threads -- preemption resets it to 0, an OCALL can leave a

@@ -299,7 +299,7 @@ static long do_clone_new_vm(IDTYPE child_vmid, unsigned long flags, struct libos
 #if defined(__aarch64__) || defined(__riscv)
 /* riscv64 has the identical trap: its generic-ABI clone syscall also places tls in the 4th
  * raw-argument slot (a3) and child_tidptr in the 5th (a4) -- verified against the running
- * kernel in Phase 0 (Documentation/devel/riscv/PLAN.md) -- while the C-level
+ * kernel in Phase 0 (dev docs: riscv/PLAN.md) -- while the C-level
  * libos_syscall_clone() above (and the whole LibOS-internal caller set) keeps x86_64's
  * historical slot order. Same swap-only wrapper, same "guest-side table registers *this* at
  * __NR_clone" scheme (see libos_table.c; the PAL's *host*-side clone in

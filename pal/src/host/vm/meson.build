@@ -176,7 +176,7 @@ if debug
     )
 endif
 
-# AMD SEV / SEV-SNP: a second build of these sources (Documentation/devel/sev/PLAN.md D2)
+# AMD SEV / SEV-SNP: a second build of these sources (dev docs: sev/PLAN.md D2)
 if sev
     subdir('sev')
 endif

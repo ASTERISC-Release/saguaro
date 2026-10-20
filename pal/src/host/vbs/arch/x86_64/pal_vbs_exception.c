@@ -2,7 +2,7 @@
 /* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /*
- * Exceptions of the vbs PAL proper on x86_64 (Documentation/devel/vbs-enclave/PLAN-x64.md); the
+ * Exceptions of the vbs PAL proper on x86_64 (dev docs: vbs-enclave/PLAN-x64.md); the
  * x86_64 counterpart of pal/src/host/vbs/pal_exception.c (see there for the two-step design).
  */
 
@@ -13,7 +13,7 @@
 #include "pal_vbs.h"
 
 /*
- * x86_64 (Documentation/devel/vbs-enclave/PLAN-x64.md). The same two steps as on AArch64; the
+ * x86_64 (dev docs: vbs-enclave/PLAN-x64.md). The same two steps as on AArch64; the
  * exact-context restore is a `ud2` at pal_vbs_restore_insn with rdi = the PAL_CONTEXT to resume
  * (W's handler forwards it here like any illegal instruction). System calls and lost FS bases never
  * get here: W's handler serves them (pack.py's `ud2` sites, the FS shadow in the TEB).

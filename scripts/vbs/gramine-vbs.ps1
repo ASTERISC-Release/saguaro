@@ -71,7 +71,7 @@ if (-not $CertName) {
 function Full-Path([string]$p) { return $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($p) }
 
 # the architecture of this Windows machine and of the enclave images built for it: ARM64 or x64
-# (Documentation/devel/vbs-enclave/PLAN-x64.md); the WSL distribution must match it
+# (dev docs: vbs-enclave/PLAN-x64.md); the WSL distribution must match it
 $VbsArch = if ($env:PROCESSOR_ARCHITECTURE -eq 'AMD64') { 'x64' } else { 'arm64' }
 $LinuxArch = if ($VbsArch -eq 'x64') { 'x86_64' } else { 'aarch64' }
 

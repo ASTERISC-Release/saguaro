@@ -56,7 +56,7 @@ elif host_machine.cpu_family() == 'aarch64'
 elif host_machine.cpu_family() == 'riscv64'
     # The loader (same find_interp()/runtime-chroot reasoning as the other two branches;
     # glibc's riscv64 loader carries the ABI in its soname -- lp64d, the only ABI Gramine
-    # targets, see Documentation/devel/riscv/plan.md decisions).
+    # targets, see dev docs: riscv/plan.md decisions).
     #
     # No mathvec/ entries, unlike both other branches: glibc 2.39 only builds libmvec on
     # x86_64 and aarch64 (`SUBDIRS-maths` in sysdeps/meson configure machinery); riscv64
@@ -84,7 +84,7 @@ else
     compile_prog = find_program('compile.sh')
 endif
 
-# Cross-building (riscv64 port, see Documentation/devel/riscv/plan.md): custom targets
+# Cross-building (riscv64 port, see dev docs: riscv/plan.md): custom targets
 # always run on the *build* machine, so compile.sh would default to the native x86_64 gcc
 # and build an x86_64 glibc. Pass the cross C/C++ compilers (from the cross file's
 # [binaries]) and a --host triple through the environment; compile.sh's `CC=gcc` etc. are

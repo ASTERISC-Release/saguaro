@@ -5,7 +5,7 @@
 """IGVM boot image and launch measurements of the AMD SEV build of the vm PAL.
 
 Subcommands:
-  build    write the IGVM file that QEMU loads with `-object igvm-cfg` (Documentation/devel/sev/
+  build    write the IGVM file that QEMU loads with `-object igvm-cfg` (dev docs: sev/
            PLAN.md D4): the PAL ELF at its link address; for plain SEV the reset-vector stub
            (bios) at 4 GB with the PAL's entry point patched in; for SEV-SNP a VMSA that enters
            the PAL in 32-bit protected mode, the CPUID and secrets pages and pre-validated zero
@@ -255,7 +255,7 @@ def kvm_vmsa(vmsa):
     """The VMSA as KVM measures it at SNP_LAUNCH_FINISH: QEMU loads the IGVM VMSA into the vCPU
     and KVM writes it back from the vCPU state (sev_es_sync_vmsa()), which adds CR4.MCE (and
     EFER.SVME, which the file has already); checked against attestation reports on the
-    development host (Documentation/devel/sev/FINDINGS.md)"""
+    development host (dev docs: sev/FINDINGS.md)"""
     v = bytearray(vmsa)
     efer, = struct.unpack_from('<Q', v, 0xd0)
     struct.pack_into('<Q', v, 0xd0, efer | 0x1000)

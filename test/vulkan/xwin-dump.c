@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
 /*
  * xwin-dump: writes the contents of one X window, found by a substring of its WM_NAME, to a PPM
- * file (Documentation/devel/vulkan/, phase 2: checks what the presentation layer put on screen,
+ * file (dev docs: vulkan/, phase 2: checks what the presentation layer put on screen,
  * reading only that window from the X server, not the desktop).
  *
  * Usage: xwin-dump NAME_SUBSTRING OUT.ppm   (exit 1 if no such window is found)

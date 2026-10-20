@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 """Classify an installed Windows game for the Proton-under-gramine-vm work
-(Documentation/devel/proton-vm/PLAN.md, "Next phases", step 0).
+(dev docs: proton-vm/PLAN.md, "Next phases", step 0).
 
 Walks a game folder, parses every .exe and .dll (PE headers only, no third-party module), and
 prints: the machine type (i386 / x86-64 / ARM64) of each module, the subsystem of each .exe, the

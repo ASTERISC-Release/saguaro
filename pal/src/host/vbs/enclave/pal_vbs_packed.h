@@ -3,7 +3,7 @@
 
 /*
  * Loader for the packed objects of this enclave image (phase 2 of
- * Documentation/devel/vbs-enclave/PLAN.md, refinement (a') of decision D2).
+ * dev docs: vbs-enclave/PLAN.md, refinement (a') of decision D2).
  *
  * At build time scripts/vbs/pack.py places the load image of each AArch64 Linux shared object
  * (the LibOS, the patched glibc, the application, its listed libraries) verbatim into the `.gxpack`

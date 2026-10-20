@@ -13,7 +13,7 @@
  * cross preprocessor: identical to the aarch64 table -- both architectures use the generic-ABI
  * error numbers -- including the EWOULDBLOCK=EAGAIN and EDEADLOCK=EDEADLK symbolic aliases.
  * (This is also why the two architectures can share one syscall *dispatch* table wholesale; see
- * Documentation/devel/riscv/PLAN.md decisions.) */
+ * dev docs: riscv/PLAN.md decisions.) */
 
 #define EPERM             1  /* Operation not permitted */
 #define ENOENT            2  /* No such file or directory */

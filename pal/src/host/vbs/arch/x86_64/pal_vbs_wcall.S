@@ -5,7 +5,7 @@
  * uint64_t pal_vbs_wcall(void* fn, uint64_t a0, uint64_t a1, uint64_t a2);
  *
  * Calls a service of the Windows enclave runtime (Windows x64 code) from the vbs PAL proper
- * (Documentation/devel/vbs-enclave/PLAN-x64.md, X4). The callee-saved registers of System V (rbx,
+ * (dev docs: vbs-enclave/PLAN-x64.md, X4). The callee-saved registers of System V (rbx,
  * rbp, r12-r15) are callee-saved in Windows x64 too, and System V treats every other register as
  * clobbered, so the thunk only moves the arguments (rcx, rdx, r8), reserves the 32-byte shadow space
  * and aligns the stack. GS is the TEB, which the Windows code needs and no packed code writes.

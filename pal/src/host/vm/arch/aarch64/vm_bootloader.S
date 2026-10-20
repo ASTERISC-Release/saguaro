@@ -146,7 +146,7 @@ _start:
      * value later): the generic timer is armed in gic_init(), before syscalls_init(), and any
      * spinlock_unlock_enable_irq() of the early boot unmasks IRQs, so a tick in that window would
      * otherwise be taken through the reset VBAR (0, the flash alias) and hang the boot (the x86_64
-     * boot flake of Documentation/devel/vm-multiproc/FINDINGS.md had the same shape with the IDT) */
+     * boot flake of dev docs: vm-multiproc/FINDINGS.md had the same shape with the IDT) */
     adrp    x1, vectors
     add     x1, x1, :lo12:vectors
     msr     vbar_el1, x1

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
 /* Copyright (C) 2026 The ASTERISC Research Lab */
 
-/* Phase 2 check of the riscv64 port (Documentation/devel/riscv/PLAN.md): the hand-written
+/* Phase 2 check of the riscv64 port (dev docs: riscv/PLAN.md): the hand-written
  * assembly and inline-asm helpers of the `common/` layer, exercised directly (no Gramine
  * runtime):
  *

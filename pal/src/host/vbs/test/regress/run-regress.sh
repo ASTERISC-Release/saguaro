@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 #
 # The LibOS regression subset in a VBS enclave, from WSL on the Windows machine (TESTING.md of
-# Documentation/devel/vbs-enclave): builds the programs (build.sh), packs them into one image
+# dev docs: vbs-enclave): builds the programs (build.sh), packs them into one image
 # (vbs.manifest.template), signs it on Windows, and runs every case of cases.txt in its own host
 # process with a 60 s watchdog (run-regress.ps1). Pass = exit code 0 and "TEST OK" in the output.
 # Usage: run-regress.sh OUTDIR [CASE-FILTER-REGEX]   (GRAMINE_REPO: another checkout to test)

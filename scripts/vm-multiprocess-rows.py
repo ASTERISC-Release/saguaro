@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 """Rows of the syscall matrix with the VM's experimental multiprocess support.
 
-Reads the published per-test matrix (`Documentation/devel/syscall-compat/matrix.csv`, which gives
+Reads the published per-test matrix (`dev docs: syscall-compat/matrix.csv`, which gives
 the native, direct and VM columns of `MATRIX.md`) and one LTP run of the stock install under
 `gramine-vm` with `sys.experimental__multiprocess = true` (`scripts/run-ltp-syscalls.py --loader
 vm` on manifests built with `LTP_VM_MULTIPROCESS=1`), and writes a Markdown table: the loader
@@ -15,10 +15,14 @@ import argparse
 import collections
 import csv
 import json
+import os
 import pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-COMPAT = ROOT / "Documentation/devel/syscall-compat"
+# The syscall-compat and syscall-profile data live in the private development-documents repository, checked out
+# next to this one (GRAMINE_DEV_DOCS names another place).
+DEV_DOCS = pathlib.Path(os.environ.get("GRAMINE_DEV_DOCS", ROOT.parent / "gramine-multiarch-docs"))
+COMPAT = DEV_DOCS / "syscall-compat"
 STATUSES = ("pass", "fail", "conf", "broken", "timeout", "guest_panic", "runner_error")
 LETTERS = dict(zip(STATUSES, "PFCBTXE"))
 GROUPS = ("process", "signal", "ipc")

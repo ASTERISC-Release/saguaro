@@ -4,7 +4,7 @@
 # guest under qemu-system-riscv64 (full-system emulation, no KVM). User-mode emulation cannot be
 # used: it has no seccomp, which the direct PAL depends on. Everything runs in the cross container
 # (container/run.sh --target riscv64), exactly as on a development machine; see
-# Documentation/devel/riscv/PLAN.md.
+# dev docs: riscv/PLAN.md.
 #
 # The guest is emulated, so this is slow (the first boot installs packages) and timing-sensitive
 # tests have less headroom than on real hardware.

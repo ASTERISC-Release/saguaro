@@ -2,7 +2,7 @@
 /*
  * xsend-key: sends a key press and release to ONE window, the parent of the window named NAME
  * (the gramine-vm listener's presentation child is reparented into the application's window), with
- * XSendEvent; nothing else on the desktop receives it (Documentation/devel/vulkan/, phase 2: input
+ * XSendEvent; nothing else on the desktop receives it (dev docs: vulkan/, phase 2: input
  * check for vkcube, which quits on Escape).
  *
  * Usage: xsend-key NAME KEYSYM_NAME   (for example: xsend-key "XCB Demo Window" Escape)

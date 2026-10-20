@@ -2,7 +2,7 @@
 /* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /* A small Vulkan program for Windows, for the Proton feasibility study
- * (Documentation/devel/proton-vm/): loads vulkan-1.dll (Wine's winevulkan), creates an instance
+ * (dev docs: proton-vm/): loads vulkan-1.dll (Wine's winevulkan), creates an instance
  * with VK_KHR_win32_surface, a swap chain on a Win32 window, clears each image to a cycling colour
  * and presents in the immediate mode when available (otherwise FIFO), printing the frame rate every
  * second. Exits after -s seconds (default 10). Usage: vkwin.exe [-s SEC] [-w W -h H] [-g GPU].

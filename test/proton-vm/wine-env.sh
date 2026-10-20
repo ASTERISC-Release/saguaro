@@ -11,7 +11,7 @@ export WINEPREFIX=${PFX:-$WORK/compatdata/pfx}
 export WINEDLLPATH=$PROTON/files/lib/wine/x86_64-unix:$PROTON/files/lib/wine/i386-unix
 export LD_LIBRARY_PATH=$PROTON/files/lib:$PROTON/files/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
 # GE-Proton's media path (mfmp4srcsnk.dll -> winedmo.so) needs FFmpeg 8 (libavformat.so.62), which
-# Ubuntu 24.04 does not package: a minimal build in the container (Documentation/devel/proton-vm/FINDINGS.md,
+# Ubuntu 24.04 does not package: a minimal build in the container (dev docs: proton-vm/FINDINGS.md,
 # the game intake) sits in FFMPEG_LIBS; without it the intro videos of a Unity game never end
 export FFMPEG_LIBS=${FFMPEG_LIBS:-/opt/ffmpeg8/lib}
 [ -d "$FFMPEG_LIBS" ] && export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$FFMPEG_LIBS

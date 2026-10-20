@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
-# run.sh -- one entry point for the test runners of test/ (Documentation/devel/test-layout/).
+# run.sh -- one entry point for the test runners of test/ (dev docs: test-layout/).
 #
 # Usage:
 #   test/run.sh list                      # the backends and the suites each accepts

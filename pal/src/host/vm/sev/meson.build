@@ -1,4 +1,4 @@
-# AMD SEV / SEV-SNP build of the x86-64 vm PAL (Documentation/devel/sev/PLAN.md D2): the same
+# AMD SEV / SEV-SNP build of the x86-64 vm PAL (dev docs: sev/PLAN.md D2): the same
 # sources as ../meson.build, compiled again with PAL_HOST_SEV, plus the SEV files of this directory,
 # installed into <pkglibdir>/sev next to the IGVM file that boots it. HOST_TYPE stays VM: the LibOS
 # treats this PAL exactly like the vm PAL. The vm PAL of ../meson.build is not affected by this file.

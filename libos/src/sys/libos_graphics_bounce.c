@@ -2,7 +2,7 @@
 /* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /*
- * Bounce buffers for the graphics redirection (Documentation/devel/proton-vm/design-gpu.md,
+ * Bounce buffers for the graphics redirection (dev docs: proton-vm/design-gpu.md,
  * option B). The host listener reads what the guest hands it (a path, an ioctl argument, a
  * buffer to fill) at the address in the comm page, taken as a guest-physical address. A process
  * with its own page tables has user addresses that are not physical, so each request copies its

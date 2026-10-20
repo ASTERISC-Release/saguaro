@@ -660,7 +660,7 @@ int memory_preload_ranges(e820_table_entry* e820_entries, size_t e820_entries_si
  * =============================================================================================
  * Multiprocess support (`sys.experimental__multiprocess`): the AArch64 implementation of the
  * frame pool and of the per-process address spaces declared in kernel_memory.h. The design is
- * the x86_64 one (vm-common/kernel_memory.c, Documentation/devel/vm-multiproc/FINDINGS.md):
+ * the x86_64 one (vm-common/kernel_memory.c, dev docs: vm-multiproc/FINDINGS.md):
  *
  *   - application frames come from a pool, a reserved interval of DRAM that the boot root maps
  *     EL1-only; every frame and every page table is reached through the TTBR1 alias above, never

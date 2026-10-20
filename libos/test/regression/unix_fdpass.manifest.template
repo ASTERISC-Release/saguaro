@@ -9,7 +9,7 @@ loader.insecure__use_cmdline_argv = true
 
 {% if env.get('REWRITE') %}sys.rewrite_syscalls = {{ env.get('REWRITE') }}{% endif %}
 
-# The VM PAL's processes (x86_64 and aarch64 gramine-vm; see Documentation/devel/vm-multiproc/) are
+# The VM PAL's processes (x86_64 and aarch64 gramine-vm; see dev docs: vm-multiproc/) are
 # on by default. GRAMINE_VM_MULTIPROCESS=0 turns them off for a control run. gramine-test keeps
 # up-to-date manifests, so change it with `gramine-test build --force`.
 {% if env.get('GRAMINE_VM_MULTIPROCESS') == '0' %}sys.experimental__multiprocess = false{% endif %}

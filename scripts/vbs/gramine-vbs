@@ -74,7 +74,7 @@ import tomllib
 HERE = os.path.dirname(os.path.realpath(__file__))   # (gramine-vbs on PATH is a symlink)
 ROOT = os.path.dirname(os.path.dirname(HERE))
 # the architecture of the Linux side and of the enclave image: aarch64 (ARM64 Windows) or x86_64
-# (x64 Windows, Documentation/devel/vbs-enclave/PLAN-x64.md); GRAMINE_VBS_ARCH overrides
+# (x64 Windows, dev docs: vbs-enclave/PLAN-x64.md); GRAMINE_VBS_ARCH overrides
 ARCH = os.environ.get('GRAMINE_VBS_ARCH') or ('x86_64' if platform.machine() in ('x86_64', 'AMD64')
                                               else 'aarch64')
 ELF_MACHINE = 62 if ARCH == 'x86_64' else 183
@@ -86,7 +86,7 @@ RUNTIME = [
     ('vdso', 'user', 'vdso.so', [f'libos/src/vdso/arch/{ARCH}/vdso.so'], '/gramine/vdso.so'),
 ]
 # functions of the vbs glibc (scripts/vbs/build-glibc.sh) that may use x18: they save and restore
-# it or run only where the TEB is not needed (see FINDINGS.md of Documentation/devel/vbs-enclave)
+# it or run only where the TEB is not needed (see FINDINGS.md of dev docs: vbs-enclave)
 X18_DEFAULTS = {
     'libsysdb.so': ['libos_syscall_entry', '_return_from_syscall'],
     'ld-linux-aarch64.so.1': ['_dl_tlsdesc_dynamic'],

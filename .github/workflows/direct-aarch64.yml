@@ -8,7 +8,7 @@
 # (gramine-vm) and renders and checks the helloworld manifest with it. Build only: the hosted aarch64
 # runners have no usable KVM (run it on an aarch64 machine with /dev/kvm: test/vm/test-vm.sh). It exists
 # because main once stopped building the aarch64 VM PAL unnoticed (the x86_64-only multiprocess work,
-# Documentation/devel/syscall-compat/TODO.md).
+# dev docs: syscall-compat/TODO.md).
 #
 # Manual trigger only (Actions tab -> "Direct PAL (aarch64)" -> Run workflow).
 name: Direct PAL (aarch64)

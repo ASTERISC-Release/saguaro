@@ -14,7 +14,7 @@
 #               With the `multiprocess` input on, it then also runs the checks of the VM PAL's
 #               experimental processes (sys.experimental__multiprocess = true) with assertions:
 #               test/vm/multiproc/check-probes.sh, one step per check (see
-#               Documentation/devel/vm-multiproc/TESTING.md, "CI").
+#               dev docs: vm-multiproc/TESTING.md, "CI").
 #
 # Manual trigger only (Actions tab -> "VM PAL (x86_64)" -> Run workflow).
 name: VM PAL (x86_64)

@@ -65,7 +65,7 @@ cc = meson.get_compiler('c')
 host_has_glibc = cc.get_define('__GLIBC__', prefix: '#include <features.h>') != ''
 objcopy = find_program('objcopy')
 
-# Cross builds (riscv64 port, Documentation/devel/riscv/PLAN.md Phase 1): some build steps
+# Cross builds (riscv64 port, dev docs: riscv/PLAN.md Phase 1): some build steps
 # *execute* binaries compiled for the target machine -- notably the generated-offsets
 # printers, whose stdout is captured into `asm_offsets.h`. Meson's `custom_target()` runs
 # its command on the build machine *without* applying the cross file's `exe_wrapper`
@@ -209,7 +209,7 @@ if tdx and host_machine.cpu_family() != 'x86_64'
 endif
 
 if sev and (not vm or host_machine.cpu_family() != 'x86_64')
-    # the SEV PAL is a second build of the x86-64 vm PAL sources (Documentation/devel/sev/PLAN.md D2)
+    # the SEV PAL is a second build of the x86-64 vm PAL sources (dev docs: sev/PLAN.md D2)
     error('SEV PAL (-Dsev=enabled) needs -Dvm=enabled on x86-64')
 endif
 
@@ -301,7 +301,7 @@ tomlc99_src = tomlc99_proj.get_variable('tomlc99_src')
 uthash_dep = subproject('uthash-2.1.0').get_variable('uthash_dep')
 
 # VBS-enclave PAL: every object packed into the enclave image must leave x18 (the enclave TEB)
-# alone, including mbedtls (Documentation/devel/vbs-enclave/FINDINGS.md); x86_64 needs no such flag
+# alone, including mbedtls (dev docs: vbs-enclave/FINDINGS.md); x86_64 needs no such flag
 # (PLAN-x64.md)
 cflags_vbs_arch = host_machine.cpu_family() == 'x86_64' ? [] : ['-ffixed-x18']
 mbedtls_proj = subproject('mbedtls-3.6.0',

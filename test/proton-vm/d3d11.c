@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
 /* Copyright (C) 2026 The ASTERISC Research Lab */
 
-/* A small Direct3D 11 program for the Proton feasibility study (Documentation/devel/proton-vm/):
+/* A small Direct3D 11 program for the Proton feasibility study (dev docs: proton-vm/):
  * opens a window, creates a D3D11 device and swap chain (DXVK under Proton translates it to
  * Vulkan), draws a triangle whose colour cycles (the shaders are compiled at run time with
  * d3dcompiler_47, which Wine provides), presents without vsync, and prints the frame rate every

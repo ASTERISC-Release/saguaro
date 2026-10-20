@@ -238,7 +238,7 @@ static int64_t pal_try_brk_resume(void) {
      * We caught an in-enclave synchronous fault and resumed past it (returning here at all proves
      * the resume worked). The fault code is STATUS_BREAKPOINT (0x80000003) when a debugger is
      * attached, but on this machine with no debugger `brk #0` surfaces as STATUS_ILLEGAL_INSTRUCTION
-     * (0xC000001D) -- see Documentation/devel/vbs-enclave/FINDINGS.md. Accept either trap.
+     * (0xC000001D) -- see dev docs: vbs-enclave/FINDINGS.md. Accept either trap.
      */
     if (code == (int64_t)0x80000003 || code == (int64_t)0xC000001D)
         return 0;

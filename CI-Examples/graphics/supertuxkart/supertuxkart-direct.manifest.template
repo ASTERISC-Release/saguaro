@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (C) 2026 The ASTERISC Research Lab
 
-# SuperTuxKart under gramine-direct on the host GPU (Documentation/devel/graphics-direct/).
+# SuperTuxKart under gramine-direct on the host GPU (dev docs: graphics-direct/).
 # Insecure by design: the application can submit work to the GPU and talk to the X server directly
 # (see the insecure__ keys below and Documentation/manifest-syntax.md).
 
@@ -58,7 +58,7 @@ fs.mounts = [
   { path = "/etc/localtime", uri = "file:/etc/localtime" },
   { path = "/dev/dri", type = "chroot", uri = "file:/dev/dri" },
 {% if nvidia|string == "1" %}
-  # the NVIDIA proprietary driver (Documentation/devel/graphics-aarch64/)
+  # the NVIDIA proprietary driver (dev docs: graphics-aarch64/)
   { path = "/dev/nvidiactl", uri = "dev:/dev/nvidiactl" },
   { path = "/dev/nvidia0", uri = "dev:/dev/nvidia0" },
   { path = "/dev/nvidia-modeset", uri = "dev:/dev/nvidia-modeset" },

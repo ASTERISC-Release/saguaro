@@ -299,7 +299,7 @@ struct pal_cpu_info {
     double cpu_bogomips;
     /* AT_HWCAP / AT_HWCAP2 that the LibOS gives applications: the PAL's view of the CPU
      * (_PalGetHwcaps() of each host PAL), masked to PAL_HWCAP_ALLOWED / PAL_HWCAP2_ALLOWED
-     * (pal_hwcap.h) in pal_cpuid.c; see Documentation/devel/aarch64/hwcap/PLAN.md */
+     * (pal_hwcap.h) in pal_cpuid.c; see dev docs: aarch64/hwcap/PLAN.md */
     uint64_t cpu_hwcap;
     uint64_t cpu_hwcap2;
 };

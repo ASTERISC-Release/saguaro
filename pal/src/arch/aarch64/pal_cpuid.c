@@ -25,7 +25,7 @@
 static uint64_t read_midr_el1(void) {
 #ifdef PAL_HOST_VBS
     /* Inside a VBS enclave an ID-register read raises an exception (phase 0, step d of
-     * Documentation/devel/vbs-enclave/): report an unknown implementer instead. */
+     * dev docs: vbs-enclave/): report an unknown implementer instead. */
     return 0;
 #else
     uint64_t midr;

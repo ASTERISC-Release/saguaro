@@ -50,7 +50,7 @@ static ssize_t dev_zero_read(struct libos_handle* hdl, void* buf, size_t count) 
 
 /* /dev/full: reads as /dev/zero, every write fails with ENOSPC (Linux's drivers/char/mem.c).
  * ALSA's null PCM plugin opens it for playback, which Wine's audio under gramine-vm needs with a
- * `type null` default device (Documentation/devel/proton-vm/FINDINGS.md, 2026-10-16). */
+ * `type null` default device (dev docs: proton-vm/FINDINGS.md, 2026-10-16). */
 static ssize_t dev_full_write(struct libos_handle* hdl, const void* buf, size_t count) {
     __UNUSED(hdl);
     __UNUSED(buf);

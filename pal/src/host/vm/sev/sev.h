@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
 /* Copyright (C) 2026 The ASTERISC Research Lab */
 
-/* AMD SEV / SEV-SNP support of the vm PAL (Documentation/devel/sev/PLAN.md). Included by assembly
+/* AMD SEV / SEV-SNP support of the vm PAL (dev docs: sev/PLAN.md). Included by assembly
  * too: the constants have no C suffixes. */
 
 #pragma once

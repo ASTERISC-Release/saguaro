@@ -25,7 +25,7 @@ IS_VM = os.environ.get('IS_VM') == '1'
 # which says the *test machine* is a VM.
 USE_GRAMINE_VM = os.environ.get('GRAMINE_VM') == '1'
 # the launcher of the VM runs: gramine-vm, or gramine-sev for the AMD SEV build of the vm PAL
-# (Documentation/devel/sev/), whose PAL lives in <pkglibdir>/sev
+# (dev docs: sev/), whose PAL lives in <pkglibdir>/sev
 VM_LAUNCHER = os.environ.get('GRAMINE_VM_LAUNCHER', 'gramine-vm')
 ON_X86 = os.uname().machine in ['x86_64']
 USES_MUSL = os.environ.get('GRAMINE_MUSL') == '1'

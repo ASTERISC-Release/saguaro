@@ -23,7 +23,7 @@
  * the aliasing below V-transparent: the F/D block (264 bytes) never reaches the overlay's `hdr`
  * (at offset 520), so a V record present in a frame is neither parsed nor clobbered here.
  * (Vector support is out of scope for the riscv64 port for now, and the test guest's ISA does not
- * include V; see Documentation/devel/riscv/PLAN.md decisions.) */
+ * include V; see dev docs: riscv/PLAN.md decisions.) */
 
 #define RISCV_V_MAGIC 0x53465457 /* "SFTW" -- vector-extension state record magic */
 #define END_MAGIC     0x0        /* terminator of the extension chain */
@@ -266,7 +266,7 @@ static inline void ucontext_revert_syscall(ucontext_t* uc, unsigned int arch, in
      * instruction", which is not true - it points to the next instruction past "ecall". The
      * RISC-V `ecall` instruction is always 4 bytes (0x00000073) even when the compressed
      * extension is present, unlike x86_64's variable-length encoding; verified against the
-     * running kernel in Phase 0 (Documentation/devel/riscv/PLAN.md log). */
+     * running kernel in Phase 0 (dev docs: riscv/PLAN.md log). */
     uc->uc_mcontext.sc_regs.pc = (uint64_t)_si_call_addr - 4;
     /* A7 carries the syscall number on riscv64 (distinct from A0, the return-value/first-arg
      * register that x86_64's single RAX conflates); the kernel never overwrites it, but we set it

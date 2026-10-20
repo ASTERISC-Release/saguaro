@@ -12,7 +12,7 @@ TDSHIM_PAL_PATH=@TDSHIM_PAL_PATH@
 SEV_IGVM_PATH=@SEV_IGVM_PATH@
 SEV_QEMU_PATH=@SEV_QEMU_PATH@
 
-# The per-VM vsock relay (Documentation/devel/CHANGELOG.md), shared with gramine-vm-aarch64; installed
+# The per-VM vsock relay (dev docs: CHANGELOG.md), shared with gramine-vm-aarch64; installed
 # next to the VM PAL. The launcher runs Python snippets and the relay from this installation: a caller
 # with a stripped environment (the LibOS regression tests pass `env=`) has no PYTHONPATH, so the library
 # finds the package next to the launcher.
@@ -101,7 +101,7 @@ QEMU_CPU_NUM=${QEMU_CPU_NUM:-"1"}
 # QEMU_CPU_NUM=$GRAMINE_CPU_NUM
 
 # QEMU: QEMU_PATH in the environment, else a stock qemu-system-x86_64 from PATH. TDX and the graphics
-# redirection need a QEMU fork built outside this repository (see Documentation/devel/graphics/).
+# redirection need a QEMU fork built outside this repository (see dev docs: graphics/).
 # gramine-sev: the QEMU configured with -Dsev_qemu, if any (the LibOS tests run it with a stripped
 # environment)
 [ -n "$SEV_QEMU_PATH" ] && QEMU_PATH=${QEMU_PATH:-$SEV_QEMU_PATH}
@@ -120,7 +120,7 @@ QEMU_OPTS="-enable-kvm -vga none -display none -no-reboot -monitor none "
 RAW_MEM_SIZE=$(echo $QEMU_MEM_SIZE | tr -d 'G')
 REM_MEM_SIZE=$((RAW_MEM_SIZE - 4))
 
-# Graphics applications (see Documentation/devel/graphics/): a manifest with loader.env.DISPLAY
+# Graphics applications (see dev docs: graphics/): a manifest with loader.env.DISPLAY
 # set to the host ("2:N") marks one. The GEM arenas -- the data arena (size from
 # GRAMINE_DATA_SIZE, default 1G) plus the fixed 1G hugepage arena -- start at guest physical 4G
 # and must fit inside guest RAM: data + 1G <= 2G (ram1) + REM, i.e. RAM >= 3G + data, and at
@@ -128,7 +128,7 @@ REM_MEM_SIZE=$((RAW_MEM_SIZE - 4))
 # the environment keys inside the [loader.env] table, hence the bare DISPLAY match.)
 # GRAMINE_VM_GRAPHICS=0 keeps the X relay (below) but configures no arenas: for an X11 application
 # that renders in software and needs the demand-paged address space instead of the identity-mapped
-# first process the arenas imply (Wine, Documentation/devel/proton-vm/).
+# first process the arenas imply (Wine, dev docs: proton-vm/).
 if [ "${GRAMINE_VM_GRAPHICS:-1}" != 0 ] && grep -Eq '^DISPLAY[^=]*=[[:space:]]*"2:' "$GRAMINE_MANIFEST" 2>/dev/null; then
     GRAPHICS_DATA_SIZE=${GRAMINE_DATA_SIZE:-1G}
     # Where the data arena starts. 4G is the anchor today; an explicit override relocates it
@@ -253,7 +253,7 @@ QEMU_OPTS+="$GRAPHICS_BACKEND_ARGS"
 export GRAMINE_RAM_BASES=$RAM_BASES
 
 if [ -n "$SEV_IGVM_PATH" ]; then
-    # AMD SEV (Documentation/devel/sev/): the IGVM file holds the PAL and its boot stub, QEMU
+    # AMD SEV (dev docs: sev/): the IGVM file holds the PAL and its boot stub, QEMU
     # encrypts and measures every page of it at launch; no -kernel, no BIOS loader.
     # GRAMINE_SEV_MODE (or the manifest's `sev.mode`): snp (SEV-SNP, the default), sev (plain SEV)
     # or native (the same image without encryption, for debugging the boot path; the PAL then
@@ -499,7 +499,7 @@ if [ -n "$X_DISPLAY_NUM" ] && [ "${GRAMINE_VM_X_PROXY:-1}" != "0" ]; then
     fi
 fi
 
-# The vsock relay (Documentation/devel/CHANGELOG.md): one relay process per VM, listening on vsock
+# The vsock relay (dev docs: CHANGELOG.md): one relay process per VM, listening on vsock
 # port 65536+CID, started here (after the guest CID is known) and stopped with the VM. It handles
 # outbound destination handshakes and static inbound forwarding. Every `vm.net.inbound` rule of the
 # manifest (or every rule in the colon-separated GRAMINE_VM_INBOUND="guest:host,..." convenience

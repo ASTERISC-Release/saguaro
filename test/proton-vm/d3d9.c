@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
 /* Copyright (C) 2026 The ASTERISC Research Lab */
 
-/* A small Direct3D 9 program for the Proton study (Documentation/devel/proton-vm/): opens a
+/* A small Direct3D 9 program for the Proton study (dev docs: proton-vm/): opens a
  * window, creates a D3D9 device (DXVK under Proton), clears the back buffer to a colour that
  * changes every second (red, green, blue), presents without vsync and prints the frame rate every
  * second. -f creates a full-screen device at the window's size instead of a windowed one (as The

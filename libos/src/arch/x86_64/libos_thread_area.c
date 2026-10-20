@@ -7,7 +7,7 @@
  * PAL implements them, the others answer NOTIMPLEMENTED, reported as ENOSYS as before). The
  * `user_desc` is encoded into a raw descriptor exactly as Linux's fill_ldt() does. Wine's new
  * WoW64 allocates its 32-bit %fs selector here, through `int $0x80`, which the VM kernel turns
- * into this system call (Documentation/devel/proton-vm/design-32bit.md). A new thread starts
+ * into this system call (dev docs: proton-vm/design-32bit.md). A new thread starts
  * with empty slots (Linux copies the parent's); modify_ldt() stays unimplemented.
  */
 

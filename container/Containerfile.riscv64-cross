@@ -3,7 +3,7 @@
 
 # Development container for the RISC-V (riscv64) port: an x86_64 image with the riscv64 cross
 # toolchain and qemu-system-riscv64. Gramine is cross-compiled here and tested in a RISC-V Linux
-# guest under full-system emulation (see Documentation/devel/riscv/PLAN.md). No KVM is involved:
+# guest under full-system emulation (see dev docs: riscv/PLAN.md). No KVM is involved:
 # an x86_64 host cannot accelerate a RISC-V guest.
 #
 # Build + start with `container/run.sh --target riscv64`.

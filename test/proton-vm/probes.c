@@ -3,7 +3,7 @@
 
 /*
  * Probes for the facts that decide whether Wine can run under gramine-vm (phase 0 of
- * Documentation/devel/proton-vm/PLAN.md). Each probe prints `PROBE <name>: <result>` lines and
+ * dev docs: proton-vm/PLAN.md). Each probe prints `PROBE <name>: <result>` lines and
  * exits; `probes all` runs every probe in a forked child (a crash or hang in one probe does not
  * stop the others; without fork they run inline). Run natively first (every probe passes on Linux),
  * then under gramine-direct and gramine-vm (test/proton-vm/run-probes.sh).
@@ -301,7 +301,7 @@ static void probe_fs32(void) {
     l.entry_number = 0;
     if (syscall(SYS_modify_ldt, 0x11, &l, sizeof(l)) < 0)
         /* Wine's new WoW64 only falls back to modify_ldt when set_thread_area failed
-         * (Documentation/devel/proton-vm/design-32bit.md), so the VM leaves it out */
+         * (dev docs: proton-vm/design-32bit.md), so the VM leaves it out */
         P("fs32", "INFO modify_ldt: %s (not needed: set_thread_area works)", E());
     else
         try_fs_selector((0 << 3) | 7, base, "modify_ldt");

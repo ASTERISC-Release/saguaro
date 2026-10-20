@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
 /* Prints CLOCK_MONOTONIC, CLOCK_BOOTTIME and CLOCK_REALTIME (seconds), to compare a guest's clocks
- * with the host's (Documentation/devel/vulkan/, blocker 4: DRM waits take absolute
+ * with the host's (dev docs: vulkan/, blocker 4: DRM waits take absolute
  * CLOCK_MONOTONIC deadlines). */
 #include <stdio.h>
 #include <time.h>

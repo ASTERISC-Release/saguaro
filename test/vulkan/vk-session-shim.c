@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
 /*
- * vk-session-shim: a phase-0 test aid for Vulkan under gramine-vm (Documentation/devel/vulkan/).
+ * vk-session-shim: a phase-0 test aid for Vulkan under gramine-vm (dev docs: vulkan/).
  *
  * The graphics preload library (libgraphics.so) starts the guest's graphics session -- the comm-page
  * handshake with the host listener, after which the LibOS forwards opens of /dev/dri and /sys to the

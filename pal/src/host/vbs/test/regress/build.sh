@@ -30,7 +30,7 @@ for c in "$HERE"/*.c; do
     case "$t" in
         runner) continue ;;
         # a shared object with the 64 KiB PT_LOAD alignment of the distribution libraries
-        # (dlopen_align64 loads it; Documentation/devel/vbs-enclave/PLAN-packer-align.md)
+        # (dlopen_align64 loads it; dev docs: vbs-enclave/PLAN-packer-align.md)
         lib*) $CC -O2 -fPIC -shared -Wl,-z,max-page-size=0x10000 -Wl,-z,common-page-size=0x10000 \
                   -o "$OUT/tests/$t.so" "$c" ;;
         *) $CC -O2 -pthread -o "$OUT/tests/$t" "$c" ;;

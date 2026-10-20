@@ -7,7 +7,7 @@
  * The calls are raw syscalls with the kernel's argument layout, (fd, vec, vlen, pos_l, pos_h,
  * flags) on every architecture, and the offset split as libc splits it (pos_h = offset >> 32).
  * Until 2026-10 the LibOS read the flags from pos_h on aarch64 and riscv64, so offset -1 failed
- * with EOPNOTSUPP and real flags were ignored (Documentation/devel/syscall-compat/TODO.md).
+ * with EOPNOTSUPP and real flags were ignored (dev docs: syscall-compat/TODO.md).
  *
  * Usage: preadv2_pwritev2 <base-dir>
  */

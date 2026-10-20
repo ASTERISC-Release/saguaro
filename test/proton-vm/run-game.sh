@@ -3,7 +3,7 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 # Runs an installed Windows game natively through GE-Proton's Wine (the prefix of run-native.sh -p)
 # on a virtual X server (Xvfb), so that nothing appears on the real screen, and records what the
-# game-intake step of Documentation/devel/proton-vm/PLAN.md asks for: whether it starts, the
+# game-intake step of dev docs: proton-vm/PLAN.md asks for: whether it starts, the
 # processes and threads, the resident memory, a screenshot every few seconds, and the Wine
 # output. Usage (in the container):
 #   run-game.sh [-l native|vm] [-d :N] [-s SECONDS] [-o OUTDIR] [-g WxH] EXE [ARGS...]

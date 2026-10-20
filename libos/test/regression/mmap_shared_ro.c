@@ -7,7 +7,7 @@
  * Wine's clients read the wineserver's session block (a memfd mapped PAGE_READONLY in every GUI
  * process, written by the server). Under the VM PAL with multiprocess support, writable shared
  * mappings of a host file share one cache of frames; a read-only one used to be a copy of the host
- * file taken at mmap() time, so it never saw the writer (Documentation/devel/proton-vm/FINDINGS.md,
+ * file taken at mmap() time, so it never saw the writer (dev docs: proton-vm/FINDINGS.md,
  * 2026-10-16).
  *
  * Checked, each with a fork and a pipe ordering the two processes: the reader maps before the
@@ -18,7 +18,7 @@
  * so they see the writer too; a store through the private mapping then stays private
  * (copy-on-write) and the writer does not see it. The private forms are checked with the writer
  * mapping first, as the wineserver does (under the VM PAL a private mapping made before any
- * writer exists is still a copy, Documentation/devel/proton-vm/TODO.md).
+ * writer exists is still a copy, dev docs: proton-vm/TODO.md).
  */
 
 #define _GNU_SOURCE

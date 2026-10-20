@@ -2,7 +2,7 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 
 # SuperTuxKart under gramine-vm with the Tirith graphics redirection (x86_64). Build the game first
-# with ./install-stk.sh; see Documentation/devel/graphics/ for the host setup.
+# with ./install-stk.sh; see dev docs: graphics/ for the host setup.
 
 # The graphics preload library is built and installed with Gramine (-Dgraphics=enabled and a
 # VM-type PAL); the manifest refers to it as gramine.libgraphics.
@@ -70,7 +70,7 @@ run: all dirs
 run-startup: all dirs
 	gramine-vm supertuxkart-startup
 
-# gramine-direct on the host GPU (Documentation/devel/graphics-direct/): stock Mesa with DRI3 by
+# gramine-direct on the host GPU (dev docs: graphics-direct/): stock Mesa with DRI3 by
 # default; PRELOAD=1 uses the preload library instead (needs an install built with a VM-type PAL).
 # The X server is the one of $(DISPLAY), reached through its Unix socket.
 PRELOAD ?= 0

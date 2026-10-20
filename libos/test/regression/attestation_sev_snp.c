@@ -2,7 +2,7 @@
 /* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /*
- * /dev/attestation under AMD SEV-SNP (the SEV build of the vm PAL, Documentation/devel/sev/):
+ * /dev/attestation under AMD SEV-SNP (the SEV build of the vm PAL, dev docs: sev/):
  * attestation_type is "sev-snp", `report` and `quote` are SNP attestation reports (1184 bytes)
  * that carry the 64 bytes written to `user_report_data`, the files can be opened and read many
  * times (no resource leak), and two reads with different report data give different reports.

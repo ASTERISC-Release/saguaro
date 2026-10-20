@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
-# The Linux side of the Windows-only VBS build (Documentation/devel/vbs-enclave/PLAN-windows-build.md)
+# The Linux side of the Windows-only VBS build (dev docs: vbs-enclave/PLAN-windows-build.md)
 # runs in a WSL2 Ubuntu distribution of the machine's architecture (aarch64 on ARM64 Windows, x86_64
 # on x64 Windows; tested: Ubuntu 24.04 aarch64, Ubuntu 26.04 x86_64). This script checks it for the
 # tools the build needs and installs what is missing, only when asked:

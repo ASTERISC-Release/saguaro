@@ -2,7 +2,7 @@
 /* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /*
- * sev_probe: the guest side of test/sev/test-sev.sh (Documentation/devel/sev/).
+ * sev_probe: the guest side of test/sev/test-sev.sh (dev docs: sev/).
  *
  * 1. Reads the file named by argv[1] (through virtiofs, i.e. the bounce buffers of the shared
  *    region) and prints its length and a checksum, so the host can compare.

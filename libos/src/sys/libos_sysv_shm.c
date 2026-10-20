@@ -12,7 +12,7 @@
  * (the id table) is process-local: a separate Gramine process starts with an empty table, so the
  * key namespace and the permissions of `shmctl` are only enforced within one process tree. This
  * matches how the System V semaphores are emulated (`libos_sem.c`) and is recorded in
- * Documentation/devel/libos-syscalls/TODO.md.
+ * dev docs: libos-syscalls/TODO.md.
  */
 
 #include "libos_handle.h"
@@ -93,7 +93,7 @@ static bool shm_may_attach(const struct sysv_shm_seg* seg, bool rdonly) {
  * PAL cannot map host files `MAP_SHARED` and must fall back to the LibOS tmpfs (`/dev/shm`),
  * whose `mmap` is emulated (contents are copied into the new mapping — hence the flush of the
  * existing mappings in `shmat()`, so a new attach at least sees the current data, though not
- * later live writes; recorded in Documentation/devel/libos-syscalls/TODO.md). Probe once.
+ * later live writes; recorded in dev docs: libos-syscalls/TODO.md). Probe once.
  */
 static const char* const g_backing_dirs[] = {"/tmp", "/dev/shm"};
 static int g_backing_dir = -1; /* index into g_backing_dirs once the probe succeeded */

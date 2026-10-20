@@ -3,7 +3,7 @@
 
 # Bastion (GOG.com Linux build) under gramine-vm with the Tirith graphics redirection (x86_64).
 # The game is commercial: buy it on GOG.com and unpack it with ./setup-bastion.sh first. See
-# README.md here and Documentation/devel/graphics/ for the host setup.
+# README.md here and dev docs: graphics/ for the host setup.
 
 # The graphics preload library is built and installed with Gramine (-Dgraphics=enabled and a
 # VM-type PAL); the manifest refers to it as gramine.libgraphics.
@@ -64,7 +64,7 @@ run-native: $(GAME_BIN) dirs
 run: all dirs
 	gramine-vm bastion
 
-# gramine-direct on the host GPU (Documentation/devel/graphics-direct/): stock Mesa with DRI3 by
+# gramine-direct on the host GPU (dev docs: graphics-direct/): stock Mesa with DRI3 by
 # default; PRELOAD=1 uses the preload library instead (needs an install built with a VM-type PAL).
 # The X server is the one of $(DISPLAY), reached through its Unix socket. Arguments come from the
 # command line (BASTION_ARGS).

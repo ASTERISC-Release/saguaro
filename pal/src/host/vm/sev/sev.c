@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
 /* Copyright (C) 2026 The ASTERISC Research Lab */
 
-/* AMD SEV / SEV-SNP support of the vm PAL (Documentation/devel/sev/PLAN.md). */
+/* AMD SEV / SEV-SNP support of the vm PAL (dev docs: sev/PLAN.md). */
 
 #include "api.h"
 #include "pal_internal.h"

@@ -38,7 +38,7 @@ const size_t g_page_size = PRESET_PAGESIZE;
 
 #ifdef __aarch64__
 /* AT_HWCAP / AT_HWCAP2 of the host kernel for this process: the application runs natively, so
- * these are the truth (pal_cpuid.c masks them; Documentation/devel/aarch64/hwcap/PLAN.md) */
+ * these are the truth (pal_cpuid.c masks them; dev docs: aarch64/hwcap/PLAN.md) */
 static uint64_t g_host_hwcap;
 static uint64_t g_host_hwcap2;
 

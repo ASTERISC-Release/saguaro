@@ -4,7 +4,7 @@
 /*
  * x86_64 boundary thunks of the VBS-enclave PAL: the x64 twin of pal_vbs_boundary.S (AArch64).
  * GAS (AT&T) syntax, assembled on Linux by clang's integrated assembler
- * (--target=x86_64-pc-windows-msvc). See Documentation/devel/vbs-enclave/PLAN-x64.md, X4.
+ * (--target=x86_64-pc-windows-msvc). See dev docs: vbs-enclave/PLAN-x64.md, X4.
  *
  * Windows x64 passes arguments in rcx, rdx, r8, r9 (then the stack, above 32 bytes of shadow space)
  * and treats rbx, rbp, rdi, rsi, r12-r15 and xmm6-xmm15 as callee-saved; System V passes them in

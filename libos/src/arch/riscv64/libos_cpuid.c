@@ -16,7 +16,7 @@
  * renders verbatim (vector-masked) from the host kernel's own cpuinfo (see
  * pal/src/arch/riscv64/pal_cpuid.c).
  *
- * The vector bit must be masked out of anything reported (Documentation/devel/riscv/PLAN.md
+ * The vector bit must be masked out of anything reported (dev docs: riscv/PLAN.md
  * decisions: F/D only, V hidden from applications; the PAL side masks V from the `isa` string
  * identically, and the riscv_v_ext state in the signal-context ABI is never parsed or
  * synthesized). It is simply absent from the table below, which is the most direct way to

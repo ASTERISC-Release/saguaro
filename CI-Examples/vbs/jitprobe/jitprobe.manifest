@@ -1,4 +1,4 @@
-# Research probe (Documentation/devel/vbs-enclave/PLAN-rwx.md): what a VBS enclave answers to the memory
+# Research probe (dev docs: vbs-enclave/PLAN-rwx.md): what a VBS enclave answers to the memory
 # requests of a JIT (executable anonymous memory, adding execute, changing the program's own code).
 #   make VBS=1; gramine-vbs jitprobe
 loader.entrypoint = "file:/libsysdb.so"

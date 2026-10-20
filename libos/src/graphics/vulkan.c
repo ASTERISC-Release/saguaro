@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
 /* Copyright (C) 2026 The ASTERISC Research Lab */
 /*
- * Vulkan programs under gramine-vm (Documentation/devel/vulkan/).
+ * Vulkan programs under gramine-vm (dev docs: vulkan/).
  *
  * The graphics session (the comm-page handshake with the host listener, after which the LibOS
  * forwards the opens of /dev/dri and /sys to the host) starts at the first GLX or EGL call. A

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 """Summarise a `strace -f -ttt -y` trace of a Wine/Proton run for the feasibility study
-(Documentation/devel/proton-vm/): processes and threads (clone flags, execve), syscall counts,
+(dev docs: proton-vm/): processes and threads (clone flags, execve), syscall counts,
 ioctls by request, fixed-address and large mmaps, signals delivered, prctl/arch_prctl/modify_ldt,
 futex_waitv/eventfd/SCM_RIGHTS use, files opened under /proc, /sys and /dev, and the result of
 the calls Wine relies on. Usage: analyze-trace.py TRACE.strace [--top N]"""

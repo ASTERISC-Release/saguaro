@@ -3,7 +3,7 @@ project('mbedtls', 'c', version: '3.6.0')
 cc = meson.get_compiler('c')
 host_has_glibc = cc.get_define('__GLIBC__', prefix: '#include <features.h>') != ''
 
-# Cross builds (riscv64 port, Documentation/devel/riscv/plan.md): all three targets below
+# Cross builds (riscv64 port, dev docs: riscv/plan.md): all three targets below
 # run compile*.sh -> mbedTLS's own Makefiles on the *build* machine, and those Makefiles
 # compile with $(CC), whose default is the native cc. Same scheme as the glibc subproject:
 # pass the cross C compiler through the custom target's env (make gives environment

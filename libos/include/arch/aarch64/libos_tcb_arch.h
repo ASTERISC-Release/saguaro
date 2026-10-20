@@ -78,7 +78,7 @@ static inline uintptr_t get_tls(void) {
  *
  * On aarch64 the guest owns TPIDR_EL0, so a thread's PAL_TCB is reached through a TLS-keyed
  * registry plus a one-shot snapshot (see pal_arch.h and findings #9, #12 and #13 in
- * Documentation/devel/aarch64/direct/FINDINGS.md).
+ * dev docs: aarch64/direct/FINDINGS.md).
  */
 
 /*

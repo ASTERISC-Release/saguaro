@@ -170,7 +170,7 @@ static const struct {
 };
 
 /* AT_HWCAP/AT_HWCAP2 from IsProcessorFeaturePresent() as W saw it inside the enclave (ID
- * registers cannot be read here: phase 0 (d)); Documentation/devel/aarch64/hwcap/PLAN.md */
+ * registers cannot be read here: phase 0 (d)); dev docs: aarch64/hwcap/PLAN.md */
 void _PalGetHwcaps(uint64_t* out_hwcap, uint64_t* out_hwcap2) {
     uint64_t hwcap = 0, hwcap2 = 0;
     for (size_t i = 0; i < ARRAY_SIZE(g_pf_to_hwcap); i++) {

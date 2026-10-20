@@ -58,7 +58,7 @@ long graphics_host_dup_request(int fd, int type);
 extern bool g_graphics_comm_mapped;
 
 /* Bounce buffers for what the listener reads by physical address (sys/libos_graphics_bounce.c,
- * Documentation/devel/proton-vm/design-gpu.md). graphics_bounce(slot offset) returns the slot's
+ * dev docs: proton-vm/design-gpu.md). graphics_bounce(slot offset) returns the slot's
  * bounce, reset, or NULL when user pointers can be passed through (identity-mapped memory). */
 struct gbounce {
     char* va;

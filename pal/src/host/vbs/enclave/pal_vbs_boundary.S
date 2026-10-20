@@ -4,7 +4,7 @@
 /*
  * AArch64 boundary thunks for the VBS-enclave PAL (phase 1 skeleton). GAS syntax; assembled on
  * Linux by clang's integrated assembler (--target=aarch64-pc-windows-msvc) or on Windows by
- * armasm64 from the .asm twin. See Documentation/devel/vbs-enclave/PLAN.md D4.
+ * armasm64 from the .asm twin. See dev docs: vbs-enclave/PLAN.md D4.
  *
  * x18 is the enclave TEB on Windows ARM64 (phase 0, step d). Linux System V/AAPCS64 code treats
  * x18 as a scratch register and will clobber it, which breaks the enclave runtime and SEH dispatch.

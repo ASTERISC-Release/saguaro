@@ -3,7 +3,7 @@
 
 # libgraphics: the library preloaded (LD_PRELOAD) into a graphics application that runs under a
 # VM-type PAL with the Tirith graphics redirection. It replaces the application's GLX setup with
-# EGL on GBM and asks the host listener to present; see Documentation/devel/graphics/.
+# EGL on GBM and asks the host listener to present; see dev docs: graphics/.
 #
 # Unlike the rest of this directory it is an ordinary hosted library: it links against the host's
 # libc, Mesa and X libraries and is not part of libsysdb.so. It is built only where it can be used
@@ -25,7 +25,7 @@ foreach name : ['egl', 'gl', 'gbm', 'libdrm', 'x11', 'xcb', 'xcb-dri3', 'xcb-pre
     graphics_deps += dep
 endforeach
 
-# The Vulkan presentation layer (vklayer.c, Documentation/devel/vulkan/) needs the Vulkan headers;
+# The Vulkan presentation layer (vklayer.c, dev docs: vulkan/) needs the Vulkan headers;
 # without them the library is built without it.
 graphics_sources = []
 graphics_c_args = []

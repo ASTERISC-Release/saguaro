@@ -4,7 +4,7 @@
 compare the verdicts with the outcomes known from the test documents.
 
 Run it in the container (needs strace, gcc, curl, nc and the application packages; see
-Documentation/devel/syscall-profile/TESTING.md). Profiles go to .syscall-profiles/ (ignored).
+dev docs: syscall-profile/TESTING.md). Profiles go to .syscall-profiles/ (ignored).
 The applications are the distro's, not the example directories' builds, so versions differ.
 """
 

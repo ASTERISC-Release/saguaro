@@ -2,7 +2,7 @@
 /* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /*
- * x86_64 host-arch definitions of the Windows VBS-enclave PAL (Documentation/devel/vbs-enclave/
+ * x86_64 host-arch definitions of the Windows VBS-enclave PAL (dev docs: vbs-enclave/
  * PLAN-x64.md, X2). %gs is the Windows TEB of the enclave thread and is never written by packed
  * code; the PAL_TCB of a thread lives inside its TEB at PAL_TCB_GS_OFFSET (pal_tcb_gs.h), where the
  * vbs PAL places it (vbs_arch_place_tcb() in pal/src/host/vbs/pal_vbs.h). Setting the TCB is

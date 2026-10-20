@@ -6,7 +6,7 @@
 # the segment offsets and addresses are congruent modulo 4 KiB, so the file stays valid). The vbs
 # sysroot is linked with 4 KiB pages; a distribution library linked with 64 KiB pages (libgcc_s,
 # libstdc++ on Ubuntu) makes glibc reserve and map the object at an aligned address the enclave's
-# loader does not expect (Documentation/devel/vbs-enclave/apps-trials-arm64.md, libgcc_s).
+# loader does not expect (dev docs: vbs-enclave/apps-trials-arm64.md, libgcc_s).
 import struct, sys
 
 src, dst = sys.argv[1], sys.argv[2]

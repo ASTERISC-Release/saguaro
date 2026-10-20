@@ -6,9 +6,9 @@
   syscall-profile.py check FILE [--loader L] [--json]   verdict for direct and/or vm from a profile
   syscall-profile.py run -- CMD ARGS...                 profile, then check
 
-The matrix is Documentation/devel/syscall-compat/syscalls.csv (made by scripts/syscall-matrix.py).
+The matrix is dev docs: syscall-compat/syscalls.csv (made by scripts/syscall-matrix.py).
 A dynamic profile covers only the code paths the traced run exercised. See
-Documentation/devel/syscall-profile/PLAN.md.
+dev docs: syscall-profile/PLAN.md.
 """
 
 import argparse
@@ -28,8 +28,11 @@ import time
 import tomllib
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-COMPAT = ROOT / "Documentation/devel/syscall-compat"
-PROFILE_DIR = ROOT / "Documentation/devel/syscall-profile"
+# The syscall-compat and syscall-profile data live in the private development-documents repository, checked out
+# next to this one (GRAMINE_DEV_DOCS names another place).
+DEV_DOCS = pathlib.Path(os.environ.get("GRAMINE_DEV_DOCS", ROOT.parent / "gramine-multiarch-docs"))
+COMPAT = DEV_DOCS / "syscall-compat"
+PROFILE_DIR = DEV_DOCS / "syscall-profile"
 
 # strace name -> matrix name, where the matrix uses another spelling
 ALIASES = {

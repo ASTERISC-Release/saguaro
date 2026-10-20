@@ -155,7 +155,7 @@ size_t get_total_memory_usage(void);
  * VBS-enclave PAL: the first mapping of a packed shared object that libos_mmap.c places at the
  * object's packed address. On AArch64 that is its first, executable mapping. On x86_64 ld.so's first
  * mapping of an object linked with -z separate-code is its read-only first segment, which spans the
- * whole object (Documentation/devel/vbs-enclave/PLAN-x64.md), so a mapping of the object's full
+ * whole object (dev docs: vbs-enclave/PLAN-x64.md), so a mapping of the object's full
  * extent qualifies too.
  */
 #if defined(__x86_64__)

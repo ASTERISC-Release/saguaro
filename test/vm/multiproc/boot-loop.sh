@@ -5,7 +5,7 @@
 # the launcher lines ("Configuring Gramine VM ...", "vm-relay: ... listening ...") and, since the
 # launcher checks for that, "Error: the guest ended without reporting an exit code" with the guest's
 # serial output. Run in the container after `scripts/install.sh --vm`. LOAD=32 at 2 vCPUs is what
-# reproduced the boot crash of Documentation/devel/vm-multiproc/FINDINGS.md (2026-10-15).
+# reproduced the boot crash of dev docs: vm-multiproc/FINDINGS.md (2026-10-15).
 #
 # Usage: test/vm/multiproc/boot-loop.sh [N]   (default 200)
 # Environment: GRAMINE_CPU_NUM (default 2), LOAD=<k> runs k busy loops on the host meanwhile,

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
-# Research probe (Documentation/devel/vbs-enclave/PLAN-rwx.md): Temurin 21 (OpenJDK) on an x64 VBS
+# Research probe (dev docs: vbs-enclave/PLAN-rwx.md): Temurin 21 (OpenJDK) on an x64 VBS
 # enclave, to see which memory requests the JVM makes that a VBS enclave refuses. Not an example that is
 # expected to work. x86_64 only (the tarball is the x64 JRE).
 #   make VBS=1; gramine-vbs jvmprobe

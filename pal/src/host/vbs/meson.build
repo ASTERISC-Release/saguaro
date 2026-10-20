@@ -1,4 +1,4 @@
-# The Windows VBS-enclave PAL has two parts (Documentation/devel/vbs-enclave/PLAN.md, D1-D3 and the
+# The Windows VBS-enclave PAL has two parts (dev docs: vbs-enclave/PLAN.md, D1-D3 and the
 # design of the hello-world path):
 #
 #  - the Windows enclave runtime and host (enclave/, host/, common/): Windows ARM64 code, built with

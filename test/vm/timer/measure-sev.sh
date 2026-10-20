@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
-# One measurement of the SEV-SNP timing set of Documentation/devel/vm-timer/TESTING.md, run in the
+# One measurement of the SEV-SNP timing set of dev docs: vm-timer/TESTING.md, run in the
 # development container after scripts/install.sh --sev (gramine-sev, SNP mode):
 #
 #   measure-sev.sh libos  N OUTDIR   LibOS suite at N vCPUs, pytest --durations=0 and --junitxml

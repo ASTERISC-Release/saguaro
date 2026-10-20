@@ -2,7 +2,7 @@
 # Boot-time and physical-commit probe for graphics VMs: boots glxgears under gramine-vm,
 # samples the host's shmem/hugetlb commit while the guest renders, and prints the [boot]
 # stamps (QEMU backend placement, PAL phases, guest library phases). Not a pass/fail
-# test: its numbers feed the memory-reservation experiments in Documentation/devel/graphics/.
+# test: its numbers feed the memory-reservation experiments in dev docs: graphics/.
 #
 # Usage: test/boot-probe.sh [RAM_SIZE]
 #   GRAMINE_HUGEPAGES=1 GRAMINE_DATA_SIZE=3G test/boot-probe.sh 8G

@@ -6,7 +6,7 @@
 # vm-PAL unikernel (@LIBPAL_PATH@) under QEMU `virt` + KVM and runs <application>.manifest in it.
 # Usage is the same as on x86:   gramine-vm <application> [args...]
 #
-# Differences from the x86 launcher (see Documentation/devel/CHANGELOG.md):
+# Differences from the x86 launcher (see dev docs: CHANGELOG.md):
 #   * machine `virt,gic-version=3`, no BIOS blob; the kernel image is loaded with `-kernel`
 #   * QEMU does not hand an ELF `-kernel` a device tree, so the machine DTB is dumped with the
 #     *same* -smp/-m/-accel/-cpu, repacked with dtc and loaded as a RAM blob at the DRAM base
@@ -49,7 +49,7 @@ if [ "$1" == "" ]; then
 fi
 APPLICATION=$1
 
-# the per-VM vsock relay (Documentation/devel/CHANGELOG.md); installed next to the VM PAL
+# the per-VM vsock relay (dev docs: CHANGELOG.md); installed next to the VM PAL
 . "$HOST_PAL_PATH/vm-relay.sh"
 vm_relay_find_python "${BASH_SOURCE[0]}"
 shift
@@ -82,7 +82,7 @@ print(size_str if unit * size > (1 << 30) else '1G')
 " 2>/dev/null)
 QEMU_MEM_SIZE=${QEMU_MEM_SIZE:-$GRAMINE_RAM_SIZE}
 # With the multiprocess key the default is 4G: the frame pool takes half of the free guest RAM out
-# of the application address space (Documentation/devel/vm-multiproc-aarch64/FINDINGS.md), which
+# of the application address space (dev docs: vm-multiproc-aarch64/FINDINGS.md), which
 # in 2G left too little room for a large mmap now and then. Guest RAM costs host memory only when
 # the guest touches it.
 if [ -z "$QEMU_MEM_SIZE" ] && python3 -c "

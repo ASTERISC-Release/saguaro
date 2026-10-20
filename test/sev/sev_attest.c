@@ -2,7 +2,7 @@
 /* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /*
- * sev_attest: the guest side of `test/sev/test-sev.sh attest` (Documentation/devel/sev/). Writes the
+ * sev_attest: the guest side of `test/sev/test-sev.sh attest` (dev docs: sev/). Writes the
  * 64 bytes given as 128 hex digits in argv[1] to /dev/attestation/user_report_data, reads
  * /dev/attestation/quote (under SEV-SNP the firmware-signed attestation report) and writes it to
  * the file argv[2] (on the host, through virtiofs), which the host then verifies.
