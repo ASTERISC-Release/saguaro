@@ -40,9 +40,9 @@ The tests have no VBS recipe.
 - **direct:** the commands in the table above. Verified on aarch64 for `multi-thread`, `networks` and `mremap`, and on x86_64 for `multi-thread` and `mremap` (`networks` is not applicable there). `align_test` is not a test.
 - **vm:** `gramine-vm thread-tls` in `multi-thread/`, `gramine-vm helloworld` in `mremap/`, and `GRAMINE_RUNNER=gramine-vm test/direct/test-direct.sh networks` from the repository root. Verified on x86_64 and aarch64.
 - **sev:** `gramine-sev thread-tls`, in `multi-thread/`. Verified. Only `thread-tls` was run.
-- **tdx:** reported by the maintainer to pass, offline, as under SEV.¹
-- **sgx:** not verified.²
-- **vbs:** not verified.³
+- **tdx:** reported by the maintainer to pass, offline, as under SEV.⁵
+- **sgx:** not verified.
+- **vbs:** not verified.¹
 
 Run the program of a directory with the backend's command. The program is `thread-tls`,
 `thread-rwlock` or `thread-stress` in `multi-thread/`, `helloworld` in `mremap/`, and
@@ -67,3 +67,6 @@ GRAMINE_RUNNER=gramine-vm test/test-direct.sh networks # VM
 `GRAMINE` is `gramine-direct` (`gramine-sgx` with `SGX=1`) and can be set on the command line.
 The `check` targets of `multi-thread/` and `align_test/` run the same comparison, which does not
 match their programs; use the commands above. No backend needs another setting.
+
+¹ No VBS recipe.  
+⁵ TDX run offline; no log in the repository.

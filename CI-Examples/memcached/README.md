@@ -44,9 +44,9 @@ make SGX=1 start-gramine-server                                                 
 
 - **direct:** `gramine-direct memcached`. Verified on x86_64 and aarch64.
 - **vm:** `GRAMINE_RUNNER=gramine-vm test/direct/test-direct.sh memcached`, from the repository root (the VM forwards the server's port through its relay). Verified on x86_64 and aarch64.
-- **sev:** not verified.¹
-- **tdx:** not verified.²
-- **sgx:** not verified.³ The commands are given above.
+- **sev:** not verified.
+- **tdx:** not verified.
+- **sgx:** not verified. The commands are given above.
 - **vbs:** `make VBS=1 check`. Verified on ARM64 and x64.
 
 Under the VM and SEV, `GRAMINE_VM_INBOUND` forwards the port through the relay. No other setting is

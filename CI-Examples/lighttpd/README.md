@@ -34,9 +34,9 @@ make VBS=1
 
 - **direct:** `make start-gramine-server`. Verified on x86_64 and aarch64.
 - **vm:** `GRAMINE_RUNNER=gramine-vm test/direct/test-direct.sh lighttpd`, from the repository root (the VM forwards the server's port through its relay). Verified on x86_64 and aarch64.
-- **sev:** not verified.¹
-- **tdx:** not verified.²
-- **sgx:** not verified.³ The commands are given above.
+- **sev:** not verified.
+- **tdx:** not verified.
+- **sgx:** not verified. The commands are given above.
 - **vbs:** `make VBS=1 check`. Verified on ARM64 and x64.
 
 Start the server in one terminal. It listens on `127.0.0.1:8003`:

@@ -67,13 +67,11 @@ Build first (`make`, or `make VBS=1` for vbs) and activate the install of the ba
 
 - **direct:** `gramine-direct sqlite3 < scripts/create.sql`. Verified on x86_64 and aarch64.
 - **vm:** `gramine-vm sqlite3 < scripts/create.sql`. Verified on x86_64 and aarch64.
-- **sev:** not verified.¹
-- **tdx:** not verified.²
-- **sgx:** not verified.³ The commands are given above.
+- **sev:** not verified. No result is recorded for this backend (matrix in `CI-Examples/README.md`).
+- **tdx:** not verified.⁵
+- **sgx:** not verified. SGX has not run on this tree's hardware. The SGX build needs `protobuf-c` (`Documentation/TODO.md`). The commands are given above.
 - **vbs:** `make VBS=1 check`. Verified on ARM64 and x64.
 
 With `GRAMINE=gramine-vm` or `GRAMINE=gramine-sev`, `make regression` ignores the launcher's console lines when it compares the output.
 
-¹ No result is recorded for this backend (matrix in `CI-Examples/README.md`).  
-² TDX was tested offline by the maintainer, with the same result as SEV. No TDX log is in the repository, so the result is reported and not verified here. The TDX install needs `td-shim` (`Documentation/TODO.md`).  
-³ SGX has not run on this tree's hardware. The SGX build needs `protobuf-c` (`Documentation/TODO.md`).
+⁵ TDX run offline; no log in the repository.
