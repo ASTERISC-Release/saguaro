@@ -4,7 +4,7 @@ The record behind the matrix in [README.md](README.md). Run on 2026-10-20 with `
 directory of each example, in the container of `container/run.sh` (Ubuntu 24.04), except `--vbs` (WSL on Windows).
 A pass means the exit status of `exec.sh` is 0 and the check of the example printed its success line.
 
-The runs used a fresh container: in a fresh container, `blender`, `mongodb`, `nodejs`, `openjdk` and `r` first stop with "cannot run here: missing on the host"; run `CI-Examples/install-all-prereqs.sh` once (or the `install-prereqs.sh` of that example, which the message names) and repeat the command.
+In a fresh container, `blender`, `mongodb`, `nodejs`, `openjdk` and `r` first stop with "cannot run here: missing on the host"; run `CI-Examples/install-all-prereqs.sh` once (or the `install-prereqs.sh` of that example, which the message names) and repeat the command.
 
 | Backend | Platform | Result |
 |---|---|---|
