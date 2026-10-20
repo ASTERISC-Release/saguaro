@@ -28,31 +28,37 @@ The table lists the recorded result of each example for each backend. The last r
 
 **Symbols:** in the VBS column a plain ✓ was measured on ARM64 and on x64 Windows 11. ✓ pass, ✗ fail, – not run or not applicable, blank not measured. 
 
-| Example | Direct x86_64 | VM x86_64 | Direct aarch64 | VM aarch64 | Direct riscv64 | SEV | SEV-SNP | TDX | SGX | VBS |
-|---|---|---|---|---|---|---|---|---|---|---|
-| `bash` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ¹ |
-| `blender` | ✓ | ✓ | –² | –² |  | ✓ | ✓ |  | ✓ | ¹ |
-| `busybox` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓ |
-| `curl` | ✓ | ✓³ | ✓ | ✓³ |  | ✓³ | ✓³ |  | ✓ | ✓ |
-| `gcc` | ✓ | ✓ | ✓ | ✗⁶ |  | ✓ | ✓ |  | ✓ | ¹ |
-| `graphics` | ✓⁴ | ✓⁴ | ✓⁴ | – | – | – | – | – | – | – |
-| `helloworld` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓⁵ | ✓ | ✓ |
-| `iperf` | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓ |  | ✓ | ✓ |
-| `lighttpd` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓ |
-| `memcached` | ✓ | ✓ | ✓ | ✓ | ✓¹² | ✓ | ✓ |  | ✓ | ✓ |
-| `mongodb` | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓ |  | ✓ | ¹ |
-| `nginx` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓ |
-| `nodejs` | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓ |  | ✓ | ✗ ARM64 (x18), ✗ x64 (no x64 recipe) |
-| `openjdk` | ✓ | ✓ | ✓ | ✗⁶ |  | ✓ | ✓ |  | ✓ | – |
-| `python` | ✓ | ✓ | ✓ | ✗⁶ | ✓ | ✓ | ✓ | ✓⁵ | ✓¹⁰ | ✓ ARM64, ✓⁹ x64 |
-| `pytorch` | ✓ | ✓ | ✓ | ✗⁶ |  | ✓ | ✓ |  | ✓ | ¹ |
-| `r` | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓ |  | ✓ | ¹ |
-| `ra-tls/*` | –⁷ | –⁷ | –⁷ | –⁷ | – | –⁷ | –⁷ |  |  | –⁷ |
-| `redis` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓ |
-| `rust` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓⁸ |
-| `sqlite` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓ |
-| `unit_tests` | ✓ | ✓ | ✓ | ✓ | ✓¹³ | ✓ | ✓ | ✓⁵ | – | ¹ |
-| `vbs/*` | – | – | – | – | – | – | – | – | – | ✓ |
+<table>
+<thead>
+<tr><th rowspan="2">Example</th><th colspan="5">Sandboxed Environments</th><th colspan="5">Protected Environments</th></tr>
+<tr><th>Direct x86_64</th><th>Direct aarch64</th><th>Direct riscv64</th><th>VM x86_64</th><th>VM aarch64</th><th>SEV</th><th>SEV-SNP</th><th>TDX</th><th>SGX</th><th>VBS</th></tr>
+</thead>
+<tbody>
+<tr><td><code>bash</code></td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>¹</td></tr>
+<tr><td><code>blender</code></td><td>✓</td><td>–²</td><td>–</td><td>✓</td><td>–²</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>¹</td></tr>
+<tr><td><code>busybox</code></td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>✓</td></tr>
+<tr><td><code>curl</code></td><td>✓</td><td>✓</td><td>–</td><td>✓³</td><td>✓³</td><td>✓³</td><td>✓³</td><td></td><td>✓</td><td>✓</td></tr>
+<tr><td><code>gcc</code></td><td>✓</td><td>✓</td><td>–</td><td>✓</td><td>✗⁶</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>¹</td></tr>
+<tr><td><code>graphics</code></td><td>✓⁴</td><td>✓⁴</td><td>–</td><td>✓⁴</td><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td></tr>
+<tr><td><code>helloworld</code></td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓⁵</td><td>✓</td><td>✓</td></tr>
+<tr><td><code>iperf</code></td><td>✓</td><td>✓</td><td>–</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>✓</td></tr>
+<tr><td><code>lighttpd</code></td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>✓</td></tr>
+<tr><td><code>memcached</code></td><td>✓</td><td>✓</td><td>✓¹²</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>✓</td></tr>
+<tr><td><code>mongodb</code></td><td>✓</td><td>✓</td><td>–</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>¹</td></tr>
+<tr><td><code>nginx</code></td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>✓</td></tr>
+<tr><td><code>nodejs</code></td><td>✓</td><td>✓</td><td>–</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>✗ ARM64 (x18), ✗ x64 (no x64 recipe)</td></tr>
+<tr><td><code>openjdk</code></td><td>✓</td><td>✓</td><td>–</td><td>✓</td><td>✗⁶</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>–</td></tr>
+<tr><td><code>python</code></td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✗⁶</td><td>✓</td><td>✓</td><td>✓⁵</td><td>✓¹⁰</td><td>✓ ARM64, ✓⁹ x64</td></tr>
+<tr><td><code>pytorch</code></td><td>✓</td><td>✓</td><td>–</td><td>✓</td><td>✗⁶</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>¹</td></tr>
+<tr><td><code>r</code></td><td>✓</td><td>✓</td><td>–</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>¹</td></tr>
+<tr><td><code>ra-tls/*</code></td><td>–⁷</td><td>–⁷</td><td>–</td><td>–⁷</td><td>–⁷</td><td>–⁷</td><td>–⁷</td><td></td><td></td><td>–⁷</td></tr>
+<tr><td><code>redis</code></td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>✓</td></tr>
+<tr><td><code>rust</code></td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>✓⁸</td></tr>
+<tr><td><code>sqlite</code></td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>✓</td></tr>
+<tr><td><code>unit_tests</code></td><td>✓</td><td>✓</td><td>✓¹³</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓⁵</td><td>–</td><td>¹</td></tr>
+<tr><td><code>vbs/*</code></td><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td><td>✓</td></tr>
+</tbody>
+</table>
 
 ¹ No VBS recipe.  
 ² Not run on aarch64: the example downloads an x86_64-only binary.  
@@ -64,6 +70,6 @@ The table lists the recorded result of each example for each backend. The last r
 ⁸ Needs `rustup` stable with `rust-src`.  
 ⁹ x64 needs the research key `vbs.__insecure_skip_code_mprotect` (protection changes over packed code and data go to the data pages only). `CI-Examples/python/Makefile` sets it by default on x86_64; the HTTP test is intermittent (`dev docs: vbs-enclave/TESTING.md`).  
 ¹⁰ SGX: without the quote step of the check, which needs remote attestation (`RA_TYPE=dcap`, the AESM service and a PCCS).  
-¹¹ Direct riscv64: native run on an Orange Pi RV2 board (Ky X1, 8 harts, 3.7 GiB) with `test/direct/test-direct.sh`, not `exec.sh`; 2026-10-20. Examples not named in that script were not run (blank).  
+¹¹ Direct riscv64: native run on an Orange Pi RV2 board (Ky X1, 8 harts, 3.7 GiB) with `test/direct/test-direct.sh`, not `exec.sh`; 2026-10-20. Examples not named in that script were not run (–).  
 ¹² Needs `libevent-dev`; the board had none and no `sudo`, so libevent 2.1.12 was built by hand.  
 ¹³ The `multi-thread` and `networks` suites of `test-direct.sh`.  
