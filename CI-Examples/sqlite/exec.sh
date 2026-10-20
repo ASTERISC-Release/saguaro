@@ -7,6 +7,7 @@ EXAMPLE_CHECK_TARGET=regression
 EXAMPLE_MANIFEST=sqlite3.manifest
 EXAMPLE_BACKENDS="direct vm sev"
 EXAMPLE_REQUIRES="sqlite3"
+EXAMPLE_REQUIRES_VBS="unzip"
 EXAMPLE_ARCHES="x86_64 aarch64"
 
 . "$(dirname "$(readlink -f "$0")")/../common_tools/exec-common.sh"

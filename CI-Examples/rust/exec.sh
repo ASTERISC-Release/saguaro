@@ -6,6 +6,7 @@ EXAMPLE_MODE=check
 EXAMPLE_MANIFEST=rust-hyper-http-server.manifest
 EXAMPLE_BACKENDS="direct vm sev"
 EXAMPLE_REQUIRES="cargo curl"
+EXAMPLE_REQUIRES_VBS="rustup cargo"
 
 # the VBS build needs the rustup toolchain (stable with rust-src) of ~/.cargo/bin, not the distribution's rustc
 PATH=$HOME/.cargo/bin:$PATH

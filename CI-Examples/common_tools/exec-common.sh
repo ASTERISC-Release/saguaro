@@ -20,6 +20,8 @@
 #   EXAMPLE_CHECK_TARGET  make target of mode "check" (default: check)
 #   EXAMPLE_REQUIRES   programs the example needs on the host (checked with `command -v` before the run;
 #                      a missing one is reported with the install-prereqs.sh that provides it)
+#   EXAMPLE_REQUIRES_VBS  the same for the vbs backend, which builds the application from source with its own
+#                      toolchain (default: none)
 #   example_check_args  optional function: prints extra make variables for `make check` given the backend
 #   EXAMPLE_NOTE       why it is skipped on this host when no backend applies (printed with the SKIP)
 #
@@ -276,12 +278,11 @@ exec_main() {
             failed=1
             continue
         fi
-        # EXAMPLE_REQUIRES are the host programs of the direct, vm and sev builds; a VBS image is built from
-        # source with its own toolchain (scripts/install.sh --vbs)
-        local missing=
-        if [ "$(backend_base "$backend")" != vbs ]; then
-            for prog in ${EXAMPLE_REQUIRES:-}; do command -v "$prog" >/dev/null || missing+=" $prog"; done
-        fi
+        # the host programs of this backend: EXAMPLE_REQUIRES for direct, vm and sev; a VBS image is built from
+        # source with its own toolchain (scripts/install.sh --vbs), so it has EXAMPLE_REQUIRES_VBS
+        local missing= required=${EXAMPLE_REQUIRES:-}
+        [ "$(backend_base "$backend")" != vbs ] || required=${EXAMPLE_REQUIRES_VBS:-}
+        for prog in $required; do command -v "$prog" >/dev/null || missing+=" $prog"; done
         if [ -n "$missing" ]; then
             echo "[FAIL] $EXAMPLE_NAME $backend on $arch: cannot run here: missing on the host:$missing" \
                  "(run ./install-prereqs.sh in $EXEC_DIR)"
