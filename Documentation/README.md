@@ -27,8 +27,6 @@ the RISC-V cross-build). `vbs.md` is the manual for Windows VBS enclaves.
 | Document | Content | Note |
 |---|---|---|
 | `manifest-syntax.md` | detailed syntax, defaults, constraints and examples for manifest keys | inherited, with tree-specific additions; indexed by `manifest-keys.md` |
-| `pal/host-abi.md` | the PAL interface | the function list needs Doxygen; see `pal/include/pal/pal.h` |
 | `manpages/` | the command-line tools | not built into man pages here |
-| `python/api.md` | the `graminelibos` Python API | the class list needs Sphinx; see `python/graminelibos/` |
 | `glossary.md` | terms | |
-| `attestation.md`, `sgx-intro.md`, `sgx-setup.md`, `performance.md`, `python/writing-sgx-sign-plugins.md` | Intel SGX | the SGX backend is built but not tested here |
+| `attestation.md`, `sgx-intro.md`, `sgx-setup.md`, `performance.md` | Intel SGX | the SGX backend is built but not tested here |
