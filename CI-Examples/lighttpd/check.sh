@@ -15,5 +15,6 @@ if [ $rc = 0 ]; then
 fi
 rm -f fetched.html
 server_stop
+[ $rc = 0 ] && rm -f server.log
 [ $rc = 0 ] && echo "lighttpd: 10240 bytes, identical to the file" && echo "[ Success 1/1 ]"
 exit $rc

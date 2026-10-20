@@ -47,5 +47,6 @@ print("memcached: counter semantics + 100 set/get round trips OK")
 PYEOF
 rc=$?
 server_stop
+[ $rc = 0 ] && rm -f server.log
 [ $rc = 0 ] && echo "[ Success 1/1 ]"
 exit $rc
