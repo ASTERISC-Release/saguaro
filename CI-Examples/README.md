@@ -35,7 +35,7 @@ The table lists the recorded result of each example for each backend.
 | `busybox` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  | ✓ |
 | `curl` | ✓ | ✓³ | ✓ | ✓³ | ✓³ |  |  | ✓ |
 | `gcc` | ✓ | ✓ | ✓ | ✗ | ✓ |  |  | ¹ |
-| `graphics` | ✓⁴ | ✓⁴ | ✓⁴ |  | – |  |  | ¹ |
+| `graphics` | ✓⁴ | ✓⁴ | ✓⁴ | – | – | – | – | – |
 | `helloworld` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓⁵ |  | ✓ |
 | `iperf` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  | ✓ |
 | `lighttpd` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  | ✓ |
@@ -52,7 +52,7 @@ The table lists the recorded result of each example for each backend.
 | `rust` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  | ✓⁸ |
 | `sqlite` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  | ✓ |
 | `unit_tests` | ✓ | ✓ | ✓ | ✓ | ✓⁶ | ✓⁵ |  | ¹ |
-| `vbs/*` |  |  |  |  |  |  |  | ✓ |
+| `vbs/*` | – | – | – | – | – | – | – | ✓ |
 
 ¹ No VBS recipe.  
 ² Not run on aarch64: the example downloads an x86_64-only binary. Not run on VM x86_64: no recorded reason.  
