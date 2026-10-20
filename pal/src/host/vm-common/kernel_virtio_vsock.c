@@ -916,7 +916,9 @@ static struct virtio_vsock_connection* create_connection(uint64_t host_port, uin
     conn->guest_port = guest_port;
 
     conn->fwd_cnt   = 0;
-    conn->buf_alloc = VSOCK_MAX_PACKETS * VSOCK_MAX_PAYLOAD_SIZE;
+    /* One packet's worth less than the ring holds: the oldest queued packet may be partly consumed
+     * (smaller than a full payload), see recv_rw_packet(). */
+    conn->buf_alloc = (VSOCK_MAX_PACKETS - 1) * VSOCK_MAX_PAYLOAD_SIZE;
 
     if (attach_connection(conn) < 0) {
         free(conn);
@@ -1107,6 +1109,34 @@ static int recv_rw_packet(struct virtio_vsock_connection* conn,
     assert(spinlock_is_locked(&g_vsock_connections_lock));
 
     uint32_t in_flight_packets_cnt = conn->prepared_for_user - conn->consumed_by_user;
+
+    /* The peer's credit is counted in bytes, but the ring below has a fixed number of slots, and
+     * the peer sends packets of any size up to VSOCK_MAX_PAYLOAD_SIZE (a 64 KB write of the host
+     * relay arrives as full packets plus a shorter last one). With one slot per packet the slots
+     * run out while credit is left, a packet is dropped and the byte stream is corrupted. So fill
+     * up the newest queued packet first: all queued packets but the oldest (partly consumed) and
+     * the newest are then full, and the slots in use never exceed the credit (buf_alloc) divided by
+     * the payload size, plus one. The consumer in virtio_vsock_read() keeps the payload at the start
+     * of a packet, so appending is safe also when the newest packet is the one being consumed. */
+    uint32_t size = packet->header.size;
+    if (in_flight_packets_cnt > 0 && size > 0) {
+        struct virtio_vsock_packet* last =
+            conn->packets_for_user[(conn->prepared_for_user - 1) % VSOCK_MAX_PACKETS];
+        uint32_t room = VSOCK_MAX_PAYLOAD_SIZE - last->header.size;
+        uint32_t take = MIN(room, size);
+        if (take > 0) {
+            memcpy(last->payload + last->header.size, packet->payload, take);
+            last->header.size += take;
+            if (take == size) {
+                /* everything fitted: the incoming packet is not needed any more */
+                free(packet);
+                return 0;
+            }
+            memmove(packet->payload, packet->payload + take, size - take);
+            packet->header.size = size - take;
+        }
+    }
+
     if (in_flight_packets_cnt >= VSOCK_MAX_PACKETS) {
         log_warning("RX vsock queue is full, dropping incoming RW packet (payload size %u)",
                      packet->header.size);
