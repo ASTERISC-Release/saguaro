@@ -22,12 +22,18 @@
 #   sev      $GRAMINE_VM_PREFIX     (same install as vm, --sev)     gramine-sev, x86_64 with SEV
 #
 # Usage of exec.sh:
-#   exec.sh                  every backend the example supports that this host can run
-#   exec.sh --backend B      only backend B (a missing backend is a FAIL, not a skip)
+#   exec.sh --vm             build and run the example under backend vm; likewise --direct and --sev.
+#   exec.sh --backend B      the same as --B (B is direct, vm or sev). Repeat either form for several
+#                            backends. A backend is required: without one the script lists the
+#                            backends and whether this host can run each, and exits with status 2.
 #   exec.sh --keep           keep the program output; logs are always written to $EXEC_LOG_DIR
 #
-# Exit status: 0 when nothing failed, 1 when a backend failed. A backend that this host cannot run
-# is reported as SKIP with the reason and does not change the exit status.
+# The script prints each command it runs (lines starting with "+ "), including the command under
+# test, and shows the build and program output on screen as it is produced (it is also written to the
+# log in $EXEC_LOG_DIR).
+#
+# Exit status: 0 when nothing failed, 1 when a backend failed or cannot run here (the reason is
+# printed), 2 for a usage error.
 # Environment: EXEC_TIMEOUT (seconds per run, default 300), EXEC_LOG_DIR (default /tmp/gramine-exec),
 # GRAMINE_SEV_MODE (sev or snp, default sev).
 
@@ -92,27 +98,34 @@ exec_one() {
     if [ "$mode" = check ]; then
         # the example's own `make check`, with this backend as its GRAMINE
         { echo "== $EXAMPLE_NAME $b on $(exec_host_arch), $(date -Is), mode check"
-          make -B "$manifest"; } >"$log" 2>&1 \
+          echo "+ make -B $manifest"
+          make -B "$manifest"; } 2>&1 | tee "$log"
+        [ "${PIPESTATUS[0]}" = 0 ] \
             || { echo "[FAIL] $EXAMPLE_NAME $b $(exec_host_arch): manifest failed (see $log)"; return 1; }
-        timeout -s KILL "$EXEC_TIMEOUT" make check GRAMINE="$runner" >"$out" 2>&1 </dev/null
-        rc=$?
+        echo "+ make check GRAMINE=$runner" | tee -a "$log"
+        timeout -s KILL "$EXEC_TIMEOUT" make check GRAMINE="$runner" 2>&1 </dev/null | tee "$out"
+        rc=${PIPESTATUS[0]}
         cat "$out" >>"$log"
     else
         # EXAMPLE_BUILD (set empty when make has no rule for the program) is the make target for the program
         local build=${EXAMPLE_BUILD-$binary}
         {
             echo "== $EXAMPLE_NAME $b on $(exec_host_arch), $(date -Is), mode run"
-            if [ -n "$build" ]; then make "$build" || exit 1; fi
+            if [ -n "$build" ]; then echo "+ make $build"; make "$build" || exit 1; fi
+            echo "+ make -B $manifest"
             make -B "$manifest"
-        } >"$log" 2>&1 || { echo "[FAIL] $EXAMPLE_NAME $b $(exec_host_arch): build failed (see $log)"; return 1; }
+        } 2>&1 | tee "$log"
+        [ "${PIPESTATUS[0]}" = 0 ] \
+            || { echo "[FAIL] $EXAMPLE_NAME $b $(exec_host_arch): build failed (see $log)"; return 1; }
 
         if [ "$(exec_host_arch)" = aarch64 ] && [ -e "$binary" ] && ! file -L "$binary" | grep -q "pie executable\|shared object"; then
             echo "[FAIL] $EXAMPLE_NAME $b aarch64: $binary is not PIE (the guest DRAM starts at 0x40000000)"
             return 1
         fi
 
-        timeout -s KILL "$EXEC_TIMEOUT" "$runner" "./$binary" "${EXAMPLE_ARGS[@]}" >"$out" 2>>"$log" </dev/null
-        rc=$?
+        echo "+ $runner ./$binary ${EXAMPLE_ARGS[*]}" | tee -a "$log"
+        timeout -s KILL "$EXEC_TIMEOUT" "$runner" "./$binary" "${EXAMPLE_ARGS[@]}" 2>&1 </dev/null | tee "$out"
+        rc=${PIPESTATUS[0]}
         cat "$out" >>"$log"
     fi
     if [ $rc = 137 ]; then verdict="TIMEOUT"
@@ -135,14 +148,16 @@ exec_main() {
     KEEP=0
     while [ $# -gt 0 ]; do
         case $1 in
-            --backend) requested+=("$2"); shift 2 ;;
+            --backend) [ $# -ge 2 ] || { echo "--backend needs a value (direct, vm or sev)" >&2; exit 2; }
+                       requested+=("$2"); shift 2 ;;
+            --direct|--vm|--sev) requested+=("${1#--}"); shift ;;
             --keep)    KEEP=1; shift ;;
-            -h|--help) sed -n '2,20p' "$EXEC_DIR/../common_tools/exec-common.sh" | sed 's/^# \{0,1\}//'; exit 0 ;;
+            -h|--help) sed -n '2,/^[^#]/p' "$EXEC_DIR/../common_tools/exec-common.sh" | sed '$d; s/^# \{0,1\}//'; exit 0 ;;
             *) echo "unknown option: $1" >&2; exit 2 ;;
         esac
     done
 
-    local arch backend reason failed=0 ran=0
+    local arch backend reason failed=0
     arch=$(exec_host_arch)
     if ! [[ " ${EXAMPLE_ARCHES:-x86_64 aarch64} " == *" $arch "* ]]; then
         echo "[SKIP] $EXAMPLE_NAME: host $arch is not in '${EXAMPLE_ARCHES:-x86_64 aarch64}'"
@@ -152,33 +167,34 @@ exec_main() {
     # EXAMPLE_BACKENDS="" (set, empty) means the example has no backend here; only unset gets the default
     local supported=${EXAMPLE_BACKENDS-direct vm sev}
     local -a backends=()
-    if [ ${#requested[@]} -gt 0 ]; then
-        backends=("${requested[@]}")
-    else
-        backends=($supported)
+    if [ ${#requested[@]} -eq 0 ]; then
+        echo "usage: $0 --direct|--vm|--sev [--keep]" >&2
+        echo "$EXAMPLE_NAME supports these backends; this host ($arch) can run:" >&2
+        for backend in $supported; do
+            if reason=$(backend_unavailable "$backend"); then
+                echo "  $backend: no, $reason" >&2
+            else
+                echo "  $backend: yes" >&2
+            fi
+        done
+        [ -n "$supported" ] || echo "  (none${EXAMPLE_NOTE:+: $EXAMPLE_NOTE})" >&2
+        exit 2
     fi
+    backends=("${requested[@]}")
 
     for backend in "${backends[@]}"; do
         if ! [[ " $supported " == *" $backend "* ]]; then
-            if [ ${#requested[@]} -gt 0 ]; then
-                echo "[FAIL] $EXAMPLE_NAME $backend: not supported by this example"; failed=1
-            else
-                echo "[SKIP] $EXAMPLE_NAME $backend: not supported by this example"
-            fi
+            echo "[FAIL] $EXAMPLE_NAME $backend: this example does not support the backend" \
+                 "(supported: ${supported:-none}${EXAMPLE_NOTE:+; $EXAMPLE_NOTE})"
+            failed=1
             continue
         fi
         if reason=$(backend_unavailable "$backend"); then
-            if [ ${#requested[@]} -gt 0 ]; then
-                echo "[FAIL] $EXAMPLE_NAME $backend on $arch: $reason"; failed=1
-            else
-                echo "[SKIP] $EXAMPLE_NAME $backend on $arch: $reason"
-            fi
+            echo "[FAIL] $EXAMPLE_NAME $backend on $arch: cannot run here: $reason"
+            failed=1
             continue
         fi
-        ran=$((ran + 1))
         exec_one "$backend" || failed=1
     done
-
-    [ $ran -gt 0 ] || [ $failed = 1 ] || echo "[SKIP] $EXAMPLE_NAME: no backend to run on $arch${EXAMPLE_NOTE:+ ($EXAMPLE_NOTE)}"
     exit $failed
 }
