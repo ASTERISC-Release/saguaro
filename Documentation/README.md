@@ -29,4 +29,4 @@ the RISC-V cross-build). `vbs.md` is the manual for Windows VBS enclaves.
 | `manifest-syntax.md` | detailed syntax, defaults, constraints and examples for manifest keys | inherited, with tree-specific additions; indexed by `manifest-keys.md` |
 | `manpages/` | the command-line tools | not built into man pages here |
 | `glossary.md` | terms | |
-| `attestation.md`, `sgx-intro.md`, `sgx-setup.md`, `performance.md` | Intel SGX | the SGX backend is built but not tested here |
+| `attestation.md`, `sgx-intro.md`, `sgx-setup.md` | Intel SGX | inherited; the SGX backend is tested on one machine only (see the SGX quickstart) |
