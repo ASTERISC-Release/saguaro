@@ -2,9 +2,9 @@
 
 Games and benchmarks that run under `gramine-vm` with the graphics host redirection (x86_64), and
 under `gramine-direct` on the host GPU (x86_64, and AArch64 with the NVIDIA proprietary driver). This page gives the general procedure for the VM;
-details, caveats and results are in `Documentation/devel/graphics/` (`running.md`, `PLAN.md`,
+details, caveats and results are in `dev docs: graphics/` (`running.md`, `PLAN.md`,
 `FINDINGS.md`, `TODO.md`, `TESTING.md`). For `gramine-direct` see the section at the end and
-`Documentation/devel/graphics-direct/running.md`. Pass or fail status per backend: matrix in
+`dev docs: graphics-direct/running.md`. Pass or fail status per backend: matrix in
 [`CI-Examples/README.md`](../README.md). The examples have no SEV or VBS recipe.
 
 # Building
@@ -113,9 +113,9 @@ preload library at `/libgraphics.so` (`{{ gramine.libgraphics }}`) and preload i
 server, with the host's Mesa (DRI3), no QEMU and no preload library; `PRELOAD=1` uses the preload
 library instead. The manifests enable three insecure options (raw GPU ioctls, the X server's Unix
 socket, host symbolic links under `/sys`): `gramine-direct` is not a sandbox, see
-`Documentation/devel/graphics-direct/running.md`. `direct-tests/` has test programs (`make check`).
+`dev docs: graphics-direct/running.md`. `direct-tests/` has test programs (`make check`).
 
-On AArch64 with the NVIDIA proprietary driver (`Documentation/devel/graphics-aarch64/`), the same
+On AArch64 with the NVIDIA proprietary driver (`dev docs: graphics-aarch64/`), the same
 `-direct` targets of `glxgears`, `quake2`, `minetest` and `supertuxkart` run on the GPU; the manifests
 then also mount the NVIDIA device nodes (automatic when `/dev/nvidiactl` exists). The games are built
 from source in the container. `bastion` and `tf2` are x86_64 binaries and do not apply there.

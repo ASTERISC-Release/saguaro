@@ -3,8 +3,8 @@
 Under `gramine-direct` an OpenGL (and, on x86_64, Vulkan) application uses the host's GPU
 directly: its render node or the NVIDIA driver's device nodes, the host's X server, and the
 host's Mesa or NVIDIA libraries. No QEMU and no preload library are involved. Details:
-[Documentation/devel/graphics-direct/running.md](../devel/graphics-direct/running.md) and
-[Documentation/devel/graphics-aarch64/](../devel/graphics-aarch64/).
+`dev docs: graphics-direct/running.md` and
+`dev docs: graphics-aarch64/`.
 
 Status (as in [README.md](../../README.md)): Intel x86_64 ⚠️, AMD64 ⚠️, AArch64 ⚠️
 (experimental); RISC-V ❌.

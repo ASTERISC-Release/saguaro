@@ -69,7 +69,7 @@ is rendered from its template, and `gramine-direct` runs the program on the LibO
 
 The output is `Hello, world`. The other examples run the same way (`./exec.sh --direct` in their
 directory); the recorded results are in
-[results-exec.md](../devel/ci-matrix/results-exec.md) (2026-10-20: every example passes under
+[RESULTS.md](../../CI-Examples/RESULTS.md) (2026-10-20: every example passes under
 `direct` on Intel x86_64 and on AArch64; `blender` runs on x86_64 only).
 
 # 3. Regression Tests

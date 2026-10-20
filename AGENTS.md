@@ -14,7 +14,7 @@ Several people or agents can work at once, each on their own branch. What makes 
   `container/run.sh` names the container after the folder, gives it its own guest-CID base, and
   refuses a container that mounts a different checkout. Without such a folder it falls back to the
   default shared names, which suit one checkout only. `GRAMINE_WORKSPACE` sets the name by hand.
-- **A QEMU fork** that a branch needs (see `Documentation/devel/graphics/`) sits next to the
+- **A QEMU fork** that a branch needs (see dev docs: `graphics/`) sits next to the
   checkout as `qemu-tirith/`, or wherever `QEMU_TIRITH_DIR` points.
 - **Push only your own branch.** Do not force-push or rewrite history that is already pushed. Leave
   the integration branch to whoever integrates.
@@ -24,16 +24,19 @@ Several people or agents can work at once, each on their own branch. What makes 
 
 ## How to work
 
-- **Plan first.** Before a development task, write `Documentation/devel/<topic>/PLAN.md` (scope,
-  phases with exit criteria, decisions with a recommendation, risks) and get it agreed.
-- **Documents of a topic**, in `Documentation/devel/<topic>/`: `PLAN.md` (the current plan, edited
-  in place), `FINDINGS.md` (the dated log, appended), `TODO.md` (future tasks) and `TESTING.md`
-  (test results, with dates and conditions). More files are fine for how-tos. Keep
-  `Documentation/devel/README.md` and `summary.md` current. Details in
-  `Documentation/devel/README.md`.
+- **Development documents are in a separate private repository**, `gramine-multiarch-docs`, checked out
+  next to this one (`../gramine-multiarch-docs`; `GRAMINE_DEV_DOCS` names another place for the tools that read it).
+  Comments in the code that say "dev docs: <topic>/<file>" mean that checkout.
+- **Plan first.** Before a development task, write `<topic>/PLAN.md` there (scope, phases with exit criteria,
+  decisions with a recommendation, risks) and get it agreed. A topic also has `FINDINGS.md` (the dated log,
+  appended), `TODO.md` (future tasks) and `TESTING.md` (test results, with dates and conditions). Keep
+  `README.md` and `summary.md` of that repository current.
+- **This repository keeps two short files**: `CHANGELOG.md` (what was added, by date) and `TODO.md` (open items by
+  architecture). Update them when a topic finishes. Do not put commit hashes, machine names, user names or
+  addresses in anything committed here.
 - **Keep documents true.** After editing documents, run `scripts/check-docs.py`: it reports paths and links
   that name no file of the repository (names that are legitimately external go in `scripts/check-docs.allow`).
-- **Writing documents.** Follow `Documentation/devel/doc-style.md`.
+- **Writing documents.** Follow `doc-style.md` of the development documents.
 - **Commit small, verified steps** on your own branch, with a message that says what changed and
   why.
 - **Ask first** before destructive git actions (`reset --hard`, deleting branches, anything on a
@@ -52,6 +55,6 @@ not check. If a test fails, give the output. When something is done and verified
 ## Where things are
 
 - Building, containers and the RISC-V test guest: `INSTALL.md`.
-- Platform matrix, build options, how to test: `Documentation/devel/multiarch.md`.
-- Development documents of every topic: `Documentation/devel/`.
-- Implementing or fixing a system call, and measuring it: `Documentation/devel/syscall-workflow.md`.
+- Platform matrix: `README.md`; results of the examples: `CI-Examples/RESULTS.md`; open items: `TODO.md`.
+- Development documents of every topic, build options, how to test, implementing a system call: the
+  `gramine-multiarch-docs` checkout (`multiarch.md`, `syscall-workflow.md`).

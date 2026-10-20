@@ -8,8 +8,7 @@ gramine-sgx-sigstruct-view
 
 > [!NOTE]
 > This page is inherited from upstream Gramine and describes the Intel SGX backend. This tree
-> still builds that backend but does not test it; see `README.md` and
-> `Documentation/devel/multiarch.md` for what is validated here.
+> still builds that backend but does not test it; see `README.md` for what is validated here.
 
 ## Synopsis
 

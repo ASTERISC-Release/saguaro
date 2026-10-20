@@ -77,7 +77,7 @@ on x86_64, AArch64 and RISC-V, so that the architecture-specific parts can be co
 | `sev` (AMD SEV)                 | ➖           | ⚠️    | ➖      | ➖            |
 | `vbs` (Windows VBS enclaves)    | ⚠️           | ⚠️    | ⚠️      | ➖            |
 
-Please refer to per-cell details, build options and verification status: [Documentation/devel/multiarch.md](Documentation/devel/multiarch.md).
+Per-cell details, build options and verification status are in the development notes (a private repository; see [CHANGELOG.md](CHANGELOG.md) and [TODO.md](TODO.md) for the public summary).
 
 ## Getting Started
 
@@ -108,17 +108,15 @@ Using this tree:
   tolerance check.
 - [Windows VBS enclaves](Documentation/vbs.md): the manual (installation on Windows, the
   `gramine-vbs` tool, attestation, limits).
-- Graphics: in `gramine-direct` on [x86_64](Documentation/devel/graphics-direct/) and
-  [AArch64](Documentation/devel/graphics-aarch64/), in the `vm` PAL on
-  [x86_64](Documentation/devel/graphics/); examples in [CI-Examples/graphics/](CI-Examples/graphics/).
+- Graphics: in `gramine-direct` (x86_64, AArch64) and in the `vm` PAL (x86_64); the guides are
+  [direct](Documentation/quickstart/graphics-direct.md) and [vm](Documentation/quickstart/graphics-vm.md),
+  the examples [CI-Examples/graphics/](CI-Examples/graphics/).
 
 Reference:
 
 - [Features](Documentation/FEATURES.md): what this tree adds to gramine-tdx, and what is planned.
-- [Multi-architecture notes](Documentation/devel/multiarch.md): configurations, build options,
-  tests, benchmarks and CI workflows.
-- [Syscall compatibility matrix](Documentation/devel/syscall-compat/MATRIX.md).
-- [Differences from upstream gramine-tdx](Documentation/devel/graphics/tirith-delta.md).
+- [Changelog](CHANGELOG.md) and [open items](TODO.md) of this tree.
+- [Results of the examples](CI-Examples/RESULTS.md).
 - [Upstream documentation](https://gramine.readthedocs.io) for features shared with Gramine
   (manifest syntax and others); details may differ in this tree.
 
@@ -126,9 +124,7 @@ Development:
 
 - [Documentation index](Documentation/README.md): what each document is, and which are inherited
   from upstream.
-- [Development documents](Documentation/devel/): one directory per port or feature, with its
-  plan, log, open items and test results; the [summary](Documentation/devel/summary.md) gives
-  the outcome of each on one page.
+- Development documents (plans, logs, test results of every port) are kept in a separate private repository.
 
 ## Contributing
 

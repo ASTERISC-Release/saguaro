@@ -34,7 +34,7 @@ applicable.
 - **Examples run through `./exec.sh`** in the directory of the example under `CI-Examples/`:
   `./exec.sh --direct | --vm | --sev | --sev-snp | --vbs`. A backend is required. See the
   "Testing" section of [CI-Examples/README.md](../../CI-Examples/README.md) and the recorded results
-  in [results-exec.md](../devel/ci-matrix/results-exec.md) (2026-10-20).
+  in [RESULTS.md](../../CI-Examples/RESULTS.md) (2026-10-20).
 
 ## Which one do I need?
 

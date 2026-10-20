@@ -4,8 +4,8 @@ With the graphics host redirection ([Tirith](https://arxiv.org/abs/2609.17525)) 
 Vulkan application runs inside the `gramine-vm` microVM and draws on the host's GPU: a preload
 library in the guest (`libgraphics.so`) forwards the GPU work to a listener in a QEMU fork on the
 host, and the application's own X connection is relayed over vsock. Details:
-[Documentation/devel/graphics/running.md](../devel/graphics/running.md) and
-[Documentation/devel/vulkan/](../devel/vulkan/).
+`dev docs: graphics/running.md` and
+`dev docs: vulkan/`.
 
 Status (as in [README.md](../../README.md)): Intel x86_64 ⚠️, AMD64 ⚠️ (experimental);
 AArch64 🛫 (not available: the QEMU fork does not build for AArch64); RISC-V ❌.
@@ -80,7 +80,7 @@ prints `vm intel gl3 run 1: 633 frames, N seconds: N fps`.
 
 - x86_64 only; graphics-enabled builds have only been run on `qemu-tirith`.
 - Input arrives through a shared ring by default; applications that read input without the Xlib
-  calls the ring covers need `SHARED_INPUT=0` ([running.md](../devel/graphics/running.md)).
+  calls the ring covers need `SHARED_INPUT=0` (`running.md`).
 - Two graphics VMs at once share one X relay; the second loses its display when the first exits.
 
 ## Verified

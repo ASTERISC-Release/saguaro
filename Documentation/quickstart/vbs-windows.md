@@ -79,7 +79,7 @@ interpreter with its standard library; `hello.py` prints the Python version, a S
 results of three threads.
 
 Other examples with a `vbs.manifest.template`: `CI-Examples/redis`, `memcached`, `lighttpd`, `nginx`
-and more (listed in [vbs.md](../vbs.md)); `./exec.sh --vbs` in their directory (or the same two commands by hand) builds and runs them. On ARM64 `busybox`, `sqlite`, `redis`, `memcached`, `iperf`, `curl`, `lighttpd`, `nginx` and `rust` pass; `nodejs` fails because `libstdc++` uses the reserved register x18 (results: [results-exec.md](../devel/ci-matrix/results-exec.md), 2026-10-20).
+and more (listed in [vbs.md](../vbs.md)); `./exec.sh --vbs` in their directory (or the same two commands by hand) builds and runs them. On ARM64 `busybox`, `sqlite`, `redis`, `memcached`, `iperf`, `curl`, `lighttpd`, `nginx` and `rust` pass; `nodejs` fails because `libstdc++` uses the reserved register x18 (results: [RESULTS.md](../../CI-Examples/RESULTS.md), 2026-10-20).
 
 # 4. Attestation
 
@@ -112,7 +112,7 @@ The check is local to this machine; what it establishes and what it does not is 
 
 Verified on 2026-10-20 on a Windows 11 ARM64 machine, in WSL (Ubuntu 24.04), with the runtime in
 the checkout: `./exec.sh --vbs` for `helloworld`, `python` and the nine other examples listed in
-section 3 (results and conditions in [results-exec.md](../devel/ci-matrix/results-exec.md)), and that
+section 3 (results and conditions in [RESULTS.md](../../CI-Examples/RESULTS.md)), and that
 `make VBS=1` stops with the install message when the runtime is missing and builds nothing itself.
 `scripts/install.sh --vbs` on a fresh clone (no `build-vbs`, no `build-vbs-glibc`) took 225 s, built the
 runtime, and reported the Windows side ready. `helloworld` fails in its check now and then right after its

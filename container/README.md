@@ -37,13 +37,13 @@ Each needs a **native** host of the same architecture (no emulation) with workin
 the container's `/` as the guest's `/`) and `seccomp=unconfined` (the direct PAL calls `personality()`,
 which the default profile blocks).
 
-QEMU: the images contain stock distribution QEMU only (see `Documentation/devel/vm.md`). TDX and the graphics
+QEMU: the images contain stock distribution QEMU only (see `dev docs: vm.md`). TDX and the graphics
 redirection need a QEMU fork kept outside this repository. For graphics on x86_64, `run.sh` mounts a
 `qemu-tirith` checkout found next to this repository (or at `QEMU_TIRITH_DIR`) at `/root/qemu-tirith`, and
 passes the DRM render nodes, the host X socket and `DISPLAY` into the container; the image has the packages
-to build it. See `Documentation/devel/graphics/running.md`.
+to build it. See `dev docs: graphics/running.md`.
 
-AMD SEV (see `Documentation/devel/sev/`): when the host has `/dev/sev`, `run.sh` passes it into the
+AMD SEV (see `dev docs: sev/`): when the host has `/dev/sev`, `run.sh` passes it into the
 container, with `--group-add keep-groups` when the user can open it through a group (for example
 `sev`, mode 0660). The SEV-SNP and IGVM capable QEMU, firmware and tools are not in the image:
 `container/sev/build-sev-tools.sh` builds them into a `sev-tools/` directory next to the checkout,

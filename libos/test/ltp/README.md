@@ -9,7 +9,7 @@ work on Linux-SGX PAL.
 - Clone the LTP sources into `src` (`git clone https://github.com/linux-test-project/ltp src`, run
   in `libos/test/ltp/`). `scripts/fetch-ltp.sh` builds the same pinned revision (`da2f3402`) outside
   this directory, under `.ltp-src` and `.ltp-install`; that install is the one the syscall
-  compatibility runs use (see `Documentation/devel/syscall-compat/RERUN.md`).
+  compatibility runs use (see `dev docs: syscall-compat/RERUN.md`).
 - Run `make`. This will compile LTP, then build all the manifests.
 
 ## Running tests

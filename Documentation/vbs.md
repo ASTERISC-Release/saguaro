@@ -5,7 +5,7 @@
 > (Windows 11 Pro 25H2, build 26200: one ARM64, one x64) with a test-signing
 > certificate.
 > The development notes, measurements and open items are in
-> `Documentation/devel/vbs-enclave/`.
+> `dev docs: vbs-enclave/`.
 
 The `vbs` PAL runs unmodified Linux applications inside a Windows
 *virtualization-based security* (VBS) enclave: AArch64 applications on ARM64
@@ -49,7 +49,7 @@ manifest.
   of the signed and measured image.
 - One process per enclave: `fork`, `vfork` and `execve` into a new
   process are not supported (a design is sketched in
-  `Documentation/devel/vbs-enclave/PLAN.md`). `execve` within the process
+  `dev docs: vbs-enclave/PLAN.md`). `execve` within the process
   works.
 - An enclave thread cannot be interrupted: a signal reaches it at its next
   system call (a busy loop without system calls does not see timer signals).
@@ -57,7 +57,7 @@ manifest.
   VBS enclave profile of Azure Trusted Signing (not tried).
 - Behaviour of the platform that affects the port (a register not preserved,
   an 8 KiB enclave thread stack, faults that hang) is described with
-  reproducers in `Documentation/devel/vbs-enclave/platform-issues.md`.
+  reproducers in `dev docs: vbs-enclave/platform-issues.md`.
 
 ## Installation
 
@@ -130,7 +130,7 @@ architecture from the machine (`PROCESSOR_ARCHITECTURE` on Windows, `uname -m` i
 - Debug enclaves (`vbs.debug = true`) can be read by the host with
   `ReadProcessMemory` on x64; production images must not be debuggable.
 
-The design notes are in `Documentation/devel/vbs-enclave/PLAN-x64.md`.
+The design notes are in `dev docs: vbs-enclave/PLAN-x64.md`.
 
 ### Windows only (WSL)
 
@@ -311,7 +311,7 @@ through `powershell.exe` and `/mnt/<drive>` paths, copies the objects into a Win
 `GRAMINE_VBS_WINDOWS_BASE`), and links, signs and runs there. The package is run from that local
 folder, not from the WSL filesystem (`\\wsl.localhost\...`): measured on the ARM64 machine, the
 same program starts 216 ms (hello world) and 800 ms (Python) slower from there
-(`Documentation/devel/vbs-enclave/TESTING.md`), so there is no copy step at run time. The Windows SDK headers come from
+(`dev docs: vbs-enclave/TESTING.md`), so there is no copy step at run time. The Windows SDK headers come from
 the copy `gramine-vbs.cmd` already left in the distribution, or are fetched once. From another
 Linux machine of the same architecture, `GRAMINE_VBS_WINDOWS=user@host` does the same over ssh;
 `GRAMINE_VBS_WINDOWS=none` builds only the Linux half (`make VBS=1 vbs-sign` later).
@@ -350,7 +350,7 @@ old `all` in the `else` branch. `CI-Examples/helloworld` is the smallest example
 
 ## Applications
 
-These examples have a `vbs.manifest.template` and run with `make VBS=1` and `make VBS=1 check` in WSL (measurements in `Documentation/devel/vbs-enclave/TESTING.md`):
+These examples have a `vbs.manifest.template` and run with `make VBS=1` and `make VBS=1 check` in WSL (measurements in `dev docs: vbs-enclave/TESTING.md`):
 
 |  |  |
 |----|----|
@@ -400,7 +400,7 @@ What applications have to give up in a VBS enclave, and how the examples do it:
   firewall rule); clients run on Windows (`gramine-vbs net`), since WSL2 in NAT mode cannot
   reach Windows' loopback.
 
-Measured on the test machine with eight connections (`Documentation/devel/vbs-enclave/TESTING.md`,
+Measured on the test machine with eight connections (`dev docs: vbs-enclave/TESTING.md`,
 networking section): Redis serves 21,000 GETs per second in the enclave, NGINX 11,700 and
 lighttpd 18,800 small responses, memcached with its four threads 53,000; pipelined Redis 275,000
 per second; NGINX sends a 1 MiB file at about 1 GB/s on one connection (1,100 responses per second

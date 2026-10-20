@@ -70,7 +70,7 @@ programs as PIE, because the guest maps RAM at `0x40000000`. Use stock distribut
 repository's QEMU fork is not needed and does not build for aarch64. The VM PAL runs single-process
 applications (no `fork`/`exec`). Guest TCP and UDP go through a vsock relay that the launcher starts,
 which needs `/dev/vhost-vsock` (module `vhost_vsock`) to be readable and writable by your user, as
-`/dev/kvm` is. See `Documentation/devel/vm.md` for the exact limits.
+`/dev/kvm` is. See `dev docs: vm.md` for the exact limits.
 
 x86_64:
 
@@ -81,11 +81,11 @@ x86_64:
 The x86_64 vm PAL is inherited from upstream gramine-tdx. `gramine-vm` runs the QEMU named by
 `QEMU_PATH`, otherwise a stock `qemu-system-x86_64` from `PATH`. TDX and the graphics redirection
 need a QEMU fork kept outside this repository; for graphics see
-`Documentation/devel/graphics/running.md`. With graphics enabled (the default), `--vm` also builds
+`dev docs: graphics/running.md`. With graphics enabled (the default), `--vm` also builds
 `libgraphics.so` and needs the Mesa, X and SDL2 development packages; `--graphics disabled` builds
 without them.
 
-Running an application under the VM PAL is described in `Documentation/devel/vm.md`: the manifest's
+Running an application under the VM PAL is described in `dev docs: vm.md`: the manifest's
 loader entrypoint must name the VM `libsysdb.so` (`make` against the VM install does this), the
 binary must be a PIE on aarch64, and you start it with `gramine-vm <application>`. A kernel panic or
 guest exit is reported as `[ VM exited with code N ]`.
@@ -161,7 +161,7 @@ cannot run it, because it has no seccomp). Everything runs unprivileged, in a co
 The guest sees the repository at the same path as the container, so it runs the cross-built binaries
 directly; this is why the prefix above lies inside the repository. The suites run from the guest's own
 disk. The guest image has no compiler; examples other than `helloworld` need more packages (the list
-installed by `.github/workflows/direct-riscv64-emulated.yml`). Design, status and limits: `Documentation/devel/riscv/PLAN.md`.
+installed by `.github/workflows/direct-riscv64-emulated.yml`). Design, status and limits: `dev docs: riscv/PLAN.md`.
 
 ## Building by hand
 
@@ -171,7 +171,7 @@ installed by `.github/workflows/direct-riscv64-emulated.yml`). Design, status an
         -Dtests=enabled -Dlibc=glibc --prefix="$HOME/.local/gramine"
     ninja -C build install
 
-The aarch64 vm PAL recipe is in `Documentation/devel/vm.md`. All options are in `meson_options.txt`. Called directly, meson defaults to `-Dlibc=glibc`; the
+The aarch64 vm PAL recipe is in `dev docs: vm.md`. All options are in `meson_options.txt`. Called directly, meson defaults to `-Dlibc=glibc`; the
 defaults in [Which libc](#which-libc) are set by `scripts/install.sh`.
 
 ## Troubleshooting

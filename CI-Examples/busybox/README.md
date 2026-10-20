@@ -8,7 +8,7 @@ Busybox (as of this writing, commit ac78f2ac96). Pass or fail status per backend
 
 Install the backend first (`Documentation/quickstart/`) and run all commands in this directory.
 
-The example builds and runs on Ubuntu 24.04 (`Documentation/devel/aarch64/direct/TESTING.md`,
+The example builds and runs on Ubuntu 24.04 (`dev docs: aarch64/direct/TESTING.md`,
 2026-10-08). With recent kernel headers, Busybox needs `CONFIG_TC`, `CONFIG_ARP` and
 `CONFIG_ARPING` disabled in its `.config` (upstream bug:
 https://github.com/gramineproject/gramine/issues/1909). CentOS Stream 9: not verified.

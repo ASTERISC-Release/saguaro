@@ -9,5 +9,5 @@ trace its system calls and compare them with the syscall matrix built from the L
 
 The results are heuristic and cover only the code paths of the traced run. How it works, how to
 run it and how well it did on ten applications:
-[devel/syscall-profile/README.md](devel/syscall-profile/README.md); the matrix itself:
-[devel/syscall-compat/MATRIX.md](devel/syscall-compat/MATRIX.md).
+`dev docs: syscall-profile/README.md`; the matrix itself:
+`dev docs: syscall-compat/MATRIX.md`.

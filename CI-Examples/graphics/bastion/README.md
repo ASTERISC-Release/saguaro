@@ -3,7 +3,7 @@
 Supergiant Games' Bastion, the Linux build sold on GOG.com (MonoKickstart: a bundled Mono runtime,
 FNA on SDL2 and OpenGL, FMOD for audio), under `gramine-vm` with the graphics host redirection
 (x86_64), and under `gramine-direct` on the host GPU. General setup, host requirements and caveats:
-`../README.md`, `Documentation/devel/graphics/` and `Documentation/devel/graphics-direct/`.
+`../README.md`, `dev docs: graphics/` and `dev docs: graphics-direct/`.
 
 **Status under `gramine-direct`:** runs (2026-10-14, see "Under gramine-direct" below).
 
@@ -63,13 +63,13 @@ options, default `-windowed`) and `PRELOAD=1` (the preload library instead of st
 
 The game started under `gramine-direct` on the Intel GPU and drew its title screen,
 cropped to a corner as in the native run below
-(`Documentation/devel/graphics-direct/FINDINGS.md`). `SDL_VIDEO_X11_WMCLASS` sets the window's
+(`dev docs: graphics-direct/FINDINGS.md`). `SDL_VIDEO_X11_WMCLASS` sets the window's
 class for a window rule.
 
 ## What is known
 
 A native trace with `scripts/syscall-profile.py` (virtual display, software rendering, about a
-minute, no input; `Documentation/devel/syscall-profile/TESTING.md`) shows:
+minute, no input; `dev docs: syscall-profile/TESTING.md`) shows:
 
 - The game uses `memfd_create` and SysV shared memory (from Mesa and the X11 shared-memory path of the
   trace's virtual display), which the LibOS does not implement; the game ran unchanged with those
@@ -85,7 +85,7 @@ bundled SDL2 (`SYSTEM_SDL=0`).
 ## Native run, 2026-10-12 (`make run-native`, Hyprland, 3840x2160 desktop)
 
 The game started with the graphics preload library, opened a window and (per the user) worked. With a
-floating 1920x1080 window rule (see `Documentation/devel/graphics/TESTING.md`, "Window size") the picture
+floating 1920x1080 window rule (see `dev docs: graphics/TESTING.md`, "Window size") the picture
 was **cropped to one corner**: the game asks for an 800x480 window, then sets a 3840x2160 drawable (its
 default is the desktop resolution), which the rule squeezes to 1920x1080. Quake II had the same problem;
 the fix there was the game's own windowed resolution. For Bastion that is Options, Display, Resolution
@@ -97,7 +97,7 @@ removes the cropping. `EGL_SDL_LOG=1` prints the window sizes the game requests.
 
 `bastion-direct.manifest.template` follows the other `-direct` manifests (raw GPU ioctls, the X
 server's Unix socket, `/dev/dri`, `/dev/shm`, `/sys` with `host_symlinks`; see
-`Documentation/devel/graphics-direct/running.md` for what these allow) and adds the game's `lib64`
+`dev docs: graphics-direct/running.md` for what these allow) and adds the game's `lib64`
 to the library path, `/bin` (FMOD runs `sh -c "pulseaudio --check"`) and the save directories of `DATA_DIR`. Build with `scripts/install.sh`
 (direct PAL, bundled glibc).
 

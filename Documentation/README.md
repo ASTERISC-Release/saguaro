@@ -21,13 +21,6 @@ the RISC-V cross-build). `vbs.md` is the manual for Windows VBS enclaves.
 | `quickstart/graphics-direct.md`, `quickstart/graphics-vm.md` | graphics under `gramine-direct` (x86_64, AArch64 with NVIDIA) and under `gramine-vm` (x86_64) |
 | `quickstart/riscv.md`, `quickstart/vbs-windows.md`, `quickstart/tdx-sgx.md` | the RISC-V cross-build and test guest; Windows VBS enclaves; pointers for the inherited TDX and SGX back ends |
 | `vbs.md` | `gramine-vbs` manual: Windows installation (ARM64 and x64), quick start, the tool, attestation, limits |
-| `devel/multiarch.md` | platform matrix in detail, build options, how to test, CI workflows |
-| `devel/vm.md` | building and running the vm PAL (`gramine-vm`) |
-| `devel/graphics/tirith-delta.md` | changes against upstream gramine-tdx |
-| `devel/summary.md` | outcome of each port in one page, with pointers into the logs |
-| `devel/README.md` | the layout of the development documents: `PLAN.md`, `FINDINGS.md`, `TODO.md`, `TESTING.md` per topic |
-| `devel/<topic>/` (`aarch64/direct`, `aarch64/hwcap`, `riscv`, `graphics`, `graphics-direct`, `graphics-aarch64`, `vulkan`, `proton-vm`, `libos-syscalls`, `vm-multiproc`, `vm-multiproc-aarch64`, `runtime-libc`, `syscall-compat`, `syscall-profile`, `vbs-enclave`, `docs-refactor`, `quickstart`) | plan, findings, open items and test results of each topic |
-| `TODO.md` | index of the per-topic open items |
 
 ## Inherited from upstream
 
@@ -37,6 +30,5 @@ the RISC-V cross-build). `vbs.md` is the manual for Windows VBS enclaves.
 | `pal/host-abi.md` | the PAL interface | the function list needs Doxygen; see `pal/include/pal/pal.h` |
 | `manpages/` | the command-line tools | not built into man pages here |
 | `python/api.md` | the `graminelibos` Python API | the class list needs Sphinx; see `python/graminelibos/` |
-| `devel/coding-style.md`, `devel/new-syscall.md`, `devel/debugging.md` | conventions, adding a syscall, debugging with GDB | |
 | `glossary.md` | terms | |
 | `attestation.md`, `sgx-intro.md`, `sgx-setup.md`, `performance.md`, `python/writing-sgx-sign-plugins.md` | Intel SGX | the SGX backend is built but not tested here |

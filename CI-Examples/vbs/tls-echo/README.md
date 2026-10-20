@@ -83,7 +83,7 @@ leaves the enclave makes replay useless, but the client cannot tell how old the 
 certificate's validity dates (the enclave's clock is the host's); revocation. The owner ID in the
 report is chosen by the host and proves nothing.
 
-Costs (2026-10-15, same machine, single runs; see `Documentation/devel/vbs-enclave/TESTING.md`):
+Costs (2026-10-15, same machine, single runs; see `dev docs: vbs-enclave/TESTING.md`):
 key generation 0.3 ms, report 4 ms, certificate 0.3 ms at start; first connection: TLS 1.2
 handshake 7.5 ms plus 107 ms for the verifier (it starts a verifying enclave); later handshakes
 3.2 ms; echo round trips of 64 bytes 0.056 ms with TLS against 0.039 ms plain, 16 KiB 114 MB/s

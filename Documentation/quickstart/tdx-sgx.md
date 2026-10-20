@@ -91,7 +91,7 @@ enclave size is 256M.
 ### 4. The other examples
 
 Every example whose Makefile has an `SGX=1` build runs with `./exec.sh --sgx` in its directory. On the
-tested machine (results and conditions: [results-exec.md](../devel/ci-matrix/results-exec.md), 2026-10-20)
+tested machine (results and conditions: [RESULTS.md](../../CI-Examples/RESULTS.md), 2026-10-20)
 `bash`, `busybox`, `curl`, `gcc`, `iperf`, `lighttpd`, `memcached`, `mongodb`, `nginx`, `nodejs`,
 `openjdk`, `python`, `r`, `redis`, `rust`, `sqlite`, `blender` and `pytorch` pass. `python` passes
 without the quote step (it needs remote attestation, `RA_TYPE=dcap`). `unit_tests` has an SGX build for

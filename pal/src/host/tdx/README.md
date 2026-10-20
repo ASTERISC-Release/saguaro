@@ -31,7 +31,7 @@
 
 - Timer interrupts: using TSC deadline mode; CPU0's timer is armed for the earliest pending
   timeout, at most 100ms ahead (the tick), the other CPUs tick every 100ms (shared with the vm
-  PAL, `Documentation/devel/vm-timer/`; not yet run on TDX hardware)
+  PAL, `dev docs: vm-timer/`; not yet run on TDX hardware)
 
 - Timeouts, alarms, waiting/sleeping with timeouts
 

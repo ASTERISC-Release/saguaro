@@ -4,7 +4,7 @@ The RISC-V port covers the direct PAL and is **experimental**: it is cross-built
 machine and run in an Ubuntu 24.04 riscv64 guest under `qemu-system-riscv64` (full-system
 emulation; user-mode emulation cannot run it, because it has no seccomp). It has not been run on
 RISC-V hardware. Details: the RISC-V section of [INSTALL.md](../../INSTALL.md) and
-[Documentation/devel/riscv/PLAN.md](../devel/riscv/PLAN.md).
+`dev docs: riscv/PLAN.md`.
 
 Status (as in [README.md](../../README.md)): `direct` ⚠️; `vm` 🛫; graphics ❌.
 

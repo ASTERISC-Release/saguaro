@@ -59,7 +59,7 @@ The steps by hand:
     gramine-vm helloworld
 
 Every other example runs the same way (`./exec.sh --vm` in its directory). The recorded results of
-2026-10-20 are in [results-exec.md](../devel/ci-matrix/results-exec.md): all examples pass on Intel
+2026-10-20 are in [RESULTS.md](../../CI-Examples/RESULTS.md): all examples pass on Intel
 x86_64; on AArch64 `gcc`, `openjdk`, `pytorch` and `python` fail in the guest (`Failed to map
 file:/usr/bin/<program>`). Refer to each example folder for further per-application instructions.
 

@@ -1,6 +1,6 @@
 # Building the Windows VBS-enclave PAL
 
-The `vbs` PAL targets AArch64 Windows (see `Documentation/devel/vbs-enclave/PLAN.md`, decisions D1-D3
+The `vbs` PAL targets AArch64 Windows (see `dev docs: vbs-enclave/PLAN.md`, decisions D1-D3
 and the design of the hello-world path). An enclave image holds two kinds of code:
 
 - the **Windows enclave runtime** (`pal/src/host/vbs/enclave/`) and the **host** executable
@@ -50,7 +50,7 @@ hand (the commands used for the phase-2 hello world):
 5. **Run** on Windows: `pal_vbs_host.exe pal_vbs_enclave.dll 1 boot` runs the application;
    `pal_vbs_host.exe pal_vbs_enclave.dll 1` runs the PAL-level self-test.
 
-**On one Windows machine** (no second Linux machine; `Documentation/devel/vbs-enclave/PLAN-windows-build.md`,
+**On one Windows machine** (no second Linux machine; `dev docs: vbs-enclave/PLAN-windows-build.md`,
 `PLAN-make-vbs.md`): everything runs in a WSL2 Ubuntu distribution of the machine's architecture,
 except linking, signing and running, which `gramine-vbs` reaches through `powershell.exe`:
 

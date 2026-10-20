@@ -24,18 +24,10 @@ os.chdir(ROOT)
 
 # Dated logs (kept as written) and the historical plan are not checked: they name things as they were.
 DEFAULT_GLOBS = [
-    'README.md', 'INSTALL.md', 'AGENTS.md',
+    'README.md', 'INSTALL.md', 'AGENTS.md', 'CHANGELOG.md', 'TODO.md',
+    'CI-Examples/README.md', 'CI-Examples/RESULTS.md',
     'Documentation/quickstart/*.md',
-    'Documentation/README.md', 'Documentation/TODO.md', 'Documentation/FEATURES.md',
-    'Documentation/devel/README.md', 'Documentation/devel/summary.md', 'Documentation/devel/CHANGELOG.md', 'Documentation/devel/syscall-workflow.md',
-    'Documentation/devel/multiarch.md', 'Documentation/devel/vm.md',
-    'Documentation/devel/*/PLAN.md', 'Documentation/devel/*/TODO.md', 'Documentation/devel/*/TESTING.md',
-    'Documentation/devel/aarch64/*/PLAN.md', 'Documentation/devel/aarch64/*/TODO.md',
-    'Documentation/devel/aarch64/*/TESTING.md',
-    'Documentation/devel/graphics/running.md', 'Documentation/devel/graphics/tirith-delta.md',
-    'Documentation/devel/syscall-compat/MATRIX.md',
-    'Documentation/devel/syscall-compat/README.md',
-    'Documentation/devel/syscall-compat/RERUN.md',
+    'Documentation/README.md', 'Documentation/FEATURES.md',
 ]
 DOC_EXT = ('.md', '.sh', '.py', '.toml', '.yml')
 # tokens that are not paths at all: placeholders, options, urls, absolute system paths, code
@@ -62,7 +54,7 @@ def load_allow():
 def exists(token, base, files, basenames):
     token = token.rstrip('.,:;)')
     stripped = token.lstrip('./')
-    for prefix in ('', 'Documentation/', 'Documentation/devel/', os.path.dirname(base) + '/'):
+    for prefix in ('', 'Documentation/', os.path.dirname(base) + '/'):
         path = os.path.normpath(os.path.join(ROOT, prefix, token))
         if os.path.exists(path) or glob.glob(path):
             return True

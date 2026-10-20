@@ -2,8 +2,8 @@
 
 What this tree adds to [gramine-tdx](https://github.com/gramineproject/gramine-tdx) (Intel's Gramine
 with TDX and virtual-machine backends), and what is planned. One or two lines each; the plan, log,
-open items and test results of every feature are in the directory named at its end, under
-`Documentation/devel/`. `devel/summary.md` gives the outcome of each on one page.
+open items and test results of every feature are in the development notes (a private repository),
+under the topic named at its end.
 
 Status words: **done** (works and is tested here), **experimental** (works in the tested setups, with
 known gaps), **planned** (not started or not usable yet). The whole tree is experimental and not for
@@ -23,7 +23,7 @@ production use.
   emulated RISC-V guest, not yet on hardware. `riscv/`
 - **x86_64 vm PAL, extended** (experimental). The inherited `gramine-vm` unikernel got a reworked vsock driver,
   PCI/ivshmem support and uncacheable shared mappings; it is the base of the graphics and network work.
-  `devel/vm.md`
+  `vm.md`
 
 - **Windows VBS enclaves** (experimental, ARM64 and x64 Windows 11). The `vbs` PAL runs an application inside a
   signed VBS enclave: the library OS, a glibc and the application are packed into the enclave image at build
@@ -50,10 +50,10 @@ production use.
   AArch64 PAL, masked to an allowlist, so libraries pick hardware AES, CRC and atomics. `aarch64/hwcap/`
 - **VM syscall compatibility matrix** (measured on x86_64 and AArch64). LTP results for native, direct and VM
   loaders, with per-test reasons and rerun instructions; the AArch64 runs are sharded over parallel runners
-  (`scripts/ltp-sharded.py`). `devel/syscall-compat/MATRIX.md`, `devel/syscall-compat/MATRIX-aarch64.md`
+  (`scripts/ltp-sharded.py`). `syscall-compat/MATRIX.md`, `syscall-compat/MATRIX-aarch64.md`
 - **Application syscall profile** (experimental). `scripts/syscall-profile.py` traces an application with
   `strace` and reports which of its syscalls the direct and vm loaders support, with a likely/may run/unlikely
-  verdict; calibrated on ten applications. `devel/syscall-profile/`
+  verdict; calibrated on ten applications. `syscall-profile/`
 
 ### The VM PAL (`gramine-vm`)
 
@@ -98,14 +98,14 @@ production use.
   guest CIDs and ports, so several branches and agents work side by side. `AGENTS.md`
 - **Test batteries** (done). `test/direct/test-direct.sh` (PAL, LibOS, 12 example suites; `GRAMINE_RUNNER=gramine-vm`
   runs the server examples under the VM), the `test/test-vm*.sh` scripts and the VM skip list.
-  `devel/multiarch.md`
+  `multiarch.md`
 - **CI workflows** (done). Manual workflows for direct x86_64, direct AArch64, emulated RISC-V and the x86_64
-  VM PAL under `.github/workflows/`. `devel/multiarch.md`
+  VM PAL under `.github/workflows/`. `multiarch.md`
 - **RISC-V test guest** (done). `scripts/riscv64/` boots an Ubuntu guest in QEMU for the cross-built tests.
   `riscv/`
 - **Quickstart guides** (done). One guide per platform, with the commands run on a machine of that platform.
   `Documentation/quickstart/`
-- **Development documents** (done). Plan, findings, open items and test results per topic. `devel/README.md`
+- **Development documents** (done). Plan, findings, open items and test results per topic, in a private repository.
 
 ### Inherited
 

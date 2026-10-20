@@ -3,7 +3,7 @@
 `gramine-sev` runs a Gramine micro-VM as an AMD SEV-SNP guest. SEV-SNP protects guest
 memory and registers from the host and supports hardware-signed attestation. The guest kernel is
 loaded from an IGVM file measured at launch. See the [VM quickstart](vm.md) and the
-[SEV development record](../devel/sev/PLAN.md).
+dev docs: `sev/PLAN.md`.
 
 ## Status
 
@@ -70,7 +70,7 @@ The digest depends on the PAL build and vCPU count; the attestation report must 
 The guest's serial log (`GRAMINE_VM_SERIAL_LOG=<file>`) starts with `SEV: memory encryption active: SEV SEV-ES SEV-SNP (SEV_STATUS 0x7), C-bit 51`. The SEV PAL refuses to run without
 encryption.
 
-Results of 2026-10-20 on an AMD EPYC 7443P ([results-exec.md](../devel/ci-matrix/results-exec.md)):
+Results of 2026-10-20 on an AMD EPYC 7443P ([RESULTS.md](../../CI-Examples/RESULTS.md)):
 `./exec.sh --sev` and `./exec.sh --sev-snp` pass for every example that supports them.
 
 Note the following:
@@ -115,7 +115,7 @@ are currently not measured.
 
 `GRAMINE_SEV_MODE=snp test/sev/test-sev.sh` runs under SNP, `test/sev/test-sev.sh` under plain SEV
 (see the header of the script for the suites). On 2026-10-20 `test/sev/test-sev.sh` passed in both
-modes ([results-exec.md](../devel/ci-matrix/results-exec.md)).
+modes ([RESULTS.md](../../CI-Examples/RESULTS.md)).
 
 # 5. Troubleshooting
 

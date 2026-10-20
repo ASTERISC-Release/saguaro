@@ -5,4 +5,4 @@ The mini-kernel shared by the `vm` and `tdx` PALs.
 - `arch/aarch64/` holds the aarch64 counterparts (exception vectors, GICv3, PSCI SMP bring-up, device-tree
   parsing, VMSAv8-64 paging, scheduler/context switch) for QEMU's `virt` machine; only the `vm` PAL uses
   them (there is no aarch64 TDX). Files common to both architectures (virtio drivers, `pal_common_*`)
-  stay in this directory. See `Documentation/devel/vm.md`.
+  stay in this directory. See `dev docs: vm.md`.
