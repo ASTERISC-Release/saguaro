@@ -99,8 +99,8 @@ exec_one() {
     if [ "$mode" = check ]; then
         # the example's own `make check`, with this backend as its GRAMINE
         { echo "== $EXAMPLE_NAME $b on $(exec_host_arch), $(date -Is), mode check"
-          echo "+ make -B $manifest"
-          make -B "$manifest"; } 2>&1 | tee "$log"
+          echo "+ rm -f $manifest; make $manifest"
+          rm -f "$manifest"; make "$manifest"; } 2>&1 | tee "$log"
         [ "${PIPESTATUS[0]}" = 0 ] \
             || { echo "[FAIL] $EXAMPLE_NAME $b $(exec_host_arch): manifest failed (see $log)"; return 1; }
         # exec.sh may define example_check_args <backend>: extra make variables for `make check`
@@ -116,8 +116,9 @@ exec_one() {
         {
             echo "== $EXAMPLE_NAME $b on $(exec_host_arch), $(date -Is), mode run"
             if [ -n "$build" ]; then echo "+ make $build"; make "$build" || exit 1; fi
-            echo "+ make -B $manifest"
-            make -B "$manifest"
+            # re-render the manifest for this backend (make -B would also rebuild the program)
+            echo "+ rm -f $manifest; make $manifest"
+            rm -f "$manifest"; make "$manifest"
         } 2>&1 | tee "$log"
         [ "${PIPESTATUS[0]}" = 0 ] \
             || { echo "[FAIL] $EXAMPLE_NAME $b $(exec_host_arch): build failed (see $log)"; return 1; }
