@@ -13,7 +13,7 @@ the RISC-V cross-build). `vbs.md` is the manual for Windows VBS enclaves.
 
 | Document | Content |
 |---|---|
-| `FEATURES.md` | what this tree adds to gramine-tdx, and what is planned, in one or two lines each |
+| `FEATURES.md` | what this tree adds to gramine-tdx, in one or two lines each |
 | `quickstart/README.md` | index of the quickstart guides: platform and architecture to guide, "which one do I need" |
 | `will-it-run.md` | checking whether an application is likely to run: the syscall profiler and the tolerance check |
 | `manifest-keys.md` | index of documented manifest keys, their applicability and purpose |

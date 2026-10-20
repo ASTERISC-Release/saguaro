@@ -1,12 +1,12 @@
 # Features
 
 What this tree adds to [gramine-tdx](https://github.com/gramineproject/gramine-tdx) (Intel's Gramine
-with TDX and virtual-machine backends), and what is planned. One or two lines each; the plan, log,
+with TDX and virtual-machine backends). One or two lines each; the plan, log,
 open items and test results of every feature are in the development notes (a private repository),
 under the topic named at its end.
 
 Status words: **done** (works and is tested here), **experimental** (works in the tested setups, with
-known gaps), **planned** (not started or not usable yet). The whole tree is experimental and not for
+known gaps). The whole tree is experimental and not for
 production use.
 
 ## Added so far
@@ -133,31 +133,3 @@ production use.
 
 - The Intel TDX and VM backends of gramine-tdx; the SGX backend builds and is tested on one Intel machine (see above) but not otherwise. The `tdx` PAL is
   compiled in CI only and has never run on TDX hardware here.
-
-## Planned
-
-- **Proton, next.** The per-process graphics channel for Wine on the GPU, 32-bit games (a per-process LDT),
-  Intel's driver tables, faster synchronisation. `proton-vm/TODO.md`
-- **VM memory size from the manifest.** The guest RAM of `gramine-vm` chosen by a manifest key instead of a
-  launcher default (proposed).
-- **RISC-V on hardware, and a RISC-V vm PAL.** Validate the direct PAL and the rewriting on a board, then make
-  rewriting the default; the vm PAL is not started.
-- **Graphics in the vm PAL on AArch64.** Deferred until the QEMU listener is redesigned. `graphics-aarch64/`
-- **Graphics fixes.** Faster Quake II mouse look and Minetest, a discrete GPU, Team Fortress 2, huge pages, more
-  vCPUs. `graphics/TODO.md`
-- **SEV: more.** Trusted files, Secure TSC, upstreaming one QEMU patch and two VM-PAL fixes. `sev/`
-- **SGX: remote attestation.** AESM and PCCS, the `ra-tls` examples, and `unit_tests-mremap` (a shrunk mapping stays readable).
-- **TDX route.** The `tdx` PAL needs a TDX host, `td-shim` and a TDX QEMU; `exec.sh --tdx` does not exist yet.
-- **VBS: more.** An x64 recipe for `nodejs`, `fork`, sealing, production signing, a Windows-only build without WSL.
-  `vbs-enclave/TODO.md`
-- **VM on AArch64.** The guest cannot map some distribution programs (`gcc`, `openjdk`, `pytorch`, `python`), and pipe
-  round trips at 4 vCPUs are slow. `vm-timer/`, `vm-multiproc-aarch64/`
-- **VM networking.** IPv6 destinations, reaching guest servers from the real host, a faster relay, UDP policy,
-  `SO_SNDTIMEO`. `TODO.md`
-- **Syscall interception.** An x86_64 evaluation (it keeps the patched glibc for now), one shared rewriting
-  implementation for AArch64 and RISC-V, hardening of the stub pages. `TODO.md`
-- **Host libc.** Another distribution (Debian, Fedora), the debugger's library listing, TDX.
-  `runtime-libc/TODO.md`
-- **Enhanced system call support** such as [uFork](https://arxiv.org/pdf/2509.09439).
-- **Cleanup for upstreaming.** One graphics module with a hook table instead of the fd-based special cases.
-  `graphics/tirith-delta.md`

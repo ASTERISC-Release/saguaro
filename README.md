@@ -114,7 +114,7 @@ Using this tree:
 
 Reference:
 
-- [Features](Documentation/FEATURES.md): what this tree adds to gramine-tdx, and what is planned.
+- [Features](Documentation/FEATURES.md): what this tree adds to gramine-tdx; open items are in [TODO.md](TODO.md).
 - [Changelog](CHANGELOG.md) and [open items](TODO.md) of this tree.
 - [Results of the examples](CI-Examples/RESULTS.md).
 - [Upstream documentation](https://gramine.readthedocs.io) for features shared with Gramine
