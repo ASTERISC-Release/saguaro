@@ -191,7 +191,7 @@ fi
 GRAPHICS_BACKEND_ARGS=""
 
 if [ "$GRAMINE_HUGEPAGES" == "1" ]; then
-    echo "Configuring Gramine VM with hugepages support."
+    # echo "Configuring Gramine VM with hugepages support."
     if [ "$RAW_MEM_SIZE" -lt 5 ]; then
         echo "Error: hugepages deployments need at least 5G of guest RAM (2G hugetlb below" \
              "4G for kernel+app, 2G normal pages at 4-6G for the data arena, and the 1G" \
@@ -214,7 +214,7 @@ if [ "$GRAMINE_HUGEPAGES" == "1" ]; then
     [ "$REM_MEM_SIZE" -gt 0 ] && HAVE_APP_BACKEND=1
     if [ "$HAVE_APP_BACKEND" = 1 ]; then
         REM_MEM_SIZE="${REM_MEM_SIZE}G"
-        echo "REM_MEM_SIZE = $REM_MEM_SIZE (only touched when used)"
+        # echo "REM_MEM_SIZE = $REM_MEM_SIZE (only touched when used)"
         GRAPHICS_BACKEND_ARGS+="-object memory-backend-memfd,id=ram2,size=$REM_MEM_SIZE "
         RAM_BASES+=",$((7 * 1073741824))"
     else
@@ -225,7 +225,7 @@ if [ "$GRAMINE_HUGEPAGES" == "1" ]; then
     -numa node,memdev=huge_bucket,nodeid=2 "
     [ "$HAVE_APP_BACKEND" = 1 ] && GRAPHICS_BACKEND_ARGS+="-numa node,memdev=ram2,nodeid=3 "
 else
-    echo "Configuring Gramine VM without hugepages."
+    # echo "Configuring Gramine VM without hugepages."
 
     # 2G below 4G for kernel+app, 2G normal at 4-6G (the GEM arenas; at RAM=4G they fill it
     # entirely), and normal pages for the rest. 4 guests get no third backend.
@@ -237,7 +237,7 @@ else
     [ "$REM_MEM_SIZE" -gt 0 ] && HAVE_APP_BACKEND=1
     if [ "$HAVE_APP_BACKEND" = 1 ]; then
         REM_MEM_SIZE="${REM_MEM_SIZE}G"
-        echo "REM_MEM_SIZE = $REM_MEM_SIZE (only touched when used)"
+        # echo "REM_MEM_SIZE = $REM_MEM_SIZE (only touched when used)"
         GRAPHICS_BACKEND_ARGS+="-object memory-backend-memfd,id=huge2,size=$REM_MEM_SIZE "
         RAM_BASES+=",$((6 * 1073741824))"
     else

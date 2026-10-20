@@ -208,8 +208,8 @@ int memory_frame_pool_init(uintptr_t addr, size_t size) {
     ret = memory_frame_pool_map_alias((uintptr_t)g_pal_public_state.memory_address_end);
     if (ret < 0)
         return ret;
-    log_always("Private frame pool: [%p, %p), %zu frames", (void*)addr, (void*)(addr + size),
-               frame_count);
+    // log_always("Private frame pool: [%p, %p), %zu frames", (void*)addr, (void*)(addr + size),
+    //            frame_count);
     return 0;
 }
 
@@ -1806,7 +1806,7 @@ int memory_tighten_permissions(void) {
     }
 
     // TODO: check why this returns incorrect values..
-    log_always("(PAL) Physical Memory Range (%p -- %p)", g_memory_address_start, g_memory_address_end);
+    // log_always("(PAL) Physical Memory Range (%p -- %p)", g_memory_address_start, g_memory_address_end);
 
     return 0;
 }
