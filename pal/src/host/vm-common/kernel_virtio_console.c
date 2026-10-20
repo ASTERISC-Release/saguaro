@@ -180,6 +180,15 @@ int64_t virtio_console_read(char* buffer, size_t size) {
     spinlock_lock(&g_console_receive_lock);
     if (g_console->rq_buf_pos == 0) {
         if (!__atomic_load_n(&g_console_trigger_bottomhalf, __ATOMIC_ACQUIRE)) {
+            /* No interrupt has announced input. Before reporting end of input, look at the RX used
+             * ring itself: the console's interrupt may not have been delivered (on AArch64 the
+             * INTx of a PCI device is routed with a guess, see kernel_pci.c) while the VMM has
+             * already put the input there. */
+            if (vm_shared_readw(&g_console->rq->used->idx) != g_console->rq->seen_used) {
+                __atomic_store_n(&g_console_trigger_bottomhalf, true, __ATOMIC_RELEASE);
+                ret = -PAL_ERROR_TRYAGAIN;
+                goto out;
+            }
             /* there is nothing in the RQ buffer and VMM stopped sending us any new input */
             bytes_read = 0;
             ret = 0;
