@@ -13,7 +13,7 @@ Symbols as in [README.md](../../README.md):
 |-------------------------|--------------|-------|---------|---------------|
 | `gramine-sev` (SEV-SNP) | ➖           | ⚠️    | ➖      | ➖            |
 
-Note that plain SEV/SEV-ES is also available with `GRAMINE_SEV_MODE=sev`.
+Plain SEV/SEV-ES is also available: `./exec.sh --sev`, or `GRAMINE_SEV_MODE=sev` by hand.
 
 ## Requirements
 
@@ -22,46 +22,62 @@ All the requirements from [VM quickstart](vm.md) apply, and:
 - An AMD EPYC host (Milan or later) with SEV-SNP enabled in the firmware and a host kernel with
   SNP support (`cat /sys/module/kvm_amd/parameters/sev_snp` prints `Y`).
   - Refer to [AMD's SEV-SNP GitHub repository](https://github.com/AMDESE/AMDSEV) for details on enabling SEV-SNP in the firmware and kernel.
-- `/dev/sev`readable and writable by your user (Add user to the `sev` group).
-- `podman` for the container of `container/run.sh`.
+- `/dev/sev` readable and writable by the user (add the user to the `sev` group on the host).
+- `podman` for the container of `container/run.sh`. The SEV tools are built inside the container;
+  nothing is installed on the host.
 
-# 1. Build
+# 1. Build and install
 
-Build the SEV tools and Gramine in the container. QEMU 11.1.2 with `sev-snp-guest` and IGVM
-(including a local patch for plain SEV), `snpguest`, `sevctl` and `sev-snp-measure` are built
-in `sev-tools/` next to the checkout:
+The container is opened as in [direct.md](direct.md), section 1. Two steps build the SEV tools and
+Gramine. QEMU 11.1.2 with `sev-snp-guest` and IGVM (including a local patch for plain SEV),
+`snpguest`, `sevctl` and `sev-snp-measure` are built once into `sev-tools/`, next to the checkout
+(it survives the recreation of the container):
 
     cd <repo-home>
-    ./container/run.sh "container/sev/build-sev-tools.sh all"
-    ./container/run.sh                                            # shell in the container
-    ./scripts/install.sh --sev --graphics disabled                # vm PAL + SEV PAL + gramine-sev
-    . ~/.local/gramine-vm/env.sh
+    container/run.sh "container/sev/build-sev-tools.sh all"
+    container/run.sh "scripts/install.sh --sev --graphics disabled"   # vm PAL + SEV PAL + gramine-sev
 
-`--sev` builds the normal vm PAL as well; `gramine-sev` uses the QEMU of `sev-tools/` when
-`QEMU_PATH` is not set.
+`--sev` builds the normal vm PAL as well, into `~/.local/gramine-vm` (the same prefix as
+`--vm`); `gramine-sev` uses the QEMU of `sev-tools/` when `QEMU_PATH` is not set.
+`--graphics disabled` leaves out the graphics paths, which the SEV guest does not use.
+`container/run.sh` loads `~/.local/gramine-vm/env.sh` by itself, so the commands below need no
+environment step.
 
 # 2. Example: Hello World
 
-    cd CI-Examples/helloworld
-    make
-    GRAMINE_RAM_SIZE=8G gramine-sev helloworld
+In the container shell, `exec.sh` runs the example under SEV-SNP (`--sev-snp`) or under plain SEV
+(`--sev`):
 
+    cd CI-Examples/helloworld
+    ./exec.sh --sev-snp
+    ./exec.sh --sev
+
+The script builds the example, sets `GRAMINE_SEV_MODE` to `snp` or `sev` and runs `gramine-sev`.
 The output contains:
 
     gramine-sev: snp launch digest of .../sev/gramine-sev.igvm on 1 vCPUs: <96 hex digits>
     Hello, world
     [ VM exited with code 0 ]
 
+The steps by hand:
+
+    cd CI-Examples/helloworld
+    make
+    GRAMINE_SEV_MODE=snp gramine-sev helloworld
+
 The digest depends on the PAL build and vCPU count; the attestation report must contain this value.
 
 The guest's serial log (`GRAMINE_VM_SERIAL_LOG=<file>`) starts with `SEV: memory encryption active: SEV SEV-ES SEV-SNP (SEV_STATUS 0x7), C-bit 51`. The SEV PAL refuses to run without
 encryption.
 
+Results of 2026-10-20 on an AMD EPYC 7443P ([results-exec.md](../devel/ci-matrix/results-exec.md)):
+`./exec.sh --sev` and `./exec.sh --sev-snp` pass for every example that supports them.
+
 Note the following:
 
-- Set `GRAMINE_CPU_NUM` and `GRAMINE_RAM_SIZE` as for `gramine-vm`. Use at least 6G (the scripts of
-  `test/sev/` use 8G, which SEV pins at launch): with 4G the guest stops with `Cannot initialize the
-  multiprocess frame pool: Not enough memory`.
+- Set `GRAMINE_CPU_NUM` and `GRAMINE_RAM_SIZE` as for `gramine-vm`. The guest needs at least 6G
+  (the launcher default and the scripts of `test/sev/` use 8G, which SEV pins at launch): `4G`
+  no longer works, the guest stops with `Cannot initialize the multiprocess frame pool: Not enough memory`.
 - Mode can be selected with `GRAMINE_SEV_MODE` or `sev.mode` in the manifest (`snp` by default, or `sev`).
 - `GRAMINE_SEV_POLICY` or `sev.policy` sets the guest policy (default `0x30000` for SNP, with
   debugging disabled).
@@ -74,9 +90,9 @@ Inside the guest, `/dev/attestation/attestation_type` reads `sev-snp`; write 64 
 this and writes the report to a host file:
 
     cd test/sev && make
-    gramine-sev sev_attest $(head -c 64 /dev/urandom | od -An -tx1 | tr -d ' \n') /tmp/report.bin
+    GRAMINE_SEV_MODE=snp gramine-sev sev_attest $(head -c 64 /dev/urandom | od -An -tx1 | tr -d ' \n') /tmp/report.bin
 
-Check the report on the host: its signature against AMD's certificate chain (fetched from AMD's key
+Check the report (in the container, where the SEV tools are): its signature against AMD's certificate chain (fetched from AMD's key
 server) and its measurement against the IGVM file:
 
     export PATH=/root/sev-tools/prefix/bin:$PATH
@@ -96,3 +112,20 @@ are currently not measured.
     test/sev/test-sev.sh                          # the same under plain SEV, with the launch measurement
     GRAMINE_VM_LAUNCHER=gramine-sev GRAMINE_SEV_MODE=snp GRAMINE_RAM_SIZE=8G test/vm/test-vm.sh libos
     test/sev/test-sev-all.sh                      # everything above, at 1, 2 and 4 vCPUs, plus examples
+
+`GRAMINE_SEV_MODE=snp test/sev/test-sev.sh` runs under SNP, `test/sev/test-sev.sh` under plain SEV
+(see the header of the script for the suites). On 2026-10-20 `test/sev/test-sev.sh` passed in both
+modes ([results-exec.md](../devel/ci-matrix/results-exec.md)).
+
+# 5. Troubleshooting
+
+- `exec.sh` reports that `sev` cannot run: it names the reason. No `/dev/sev`: add the user to the
+  `sev` group on the host, log in again; the container may have to be recreated to see the device (`container/run.sh down`
+  discards the install inside it, then repeat section 1; not verified).
+- `sev_snp` in `/sys/module/kvm_amd/parameters` is not `Y`: SNP is off in the firmware or the host
+  kernel; plain SEV (`--sev`) may still work.
+- `gramine-sev` cannot find QEMU: `container/sev/build-sev-tools.sh all` has not run, or
+  `sev-tools/` is not next to the checkout. Set `SEV_TOOLS_DIR` or `QEMU_PATH`.
+- `Cannot initialize the multiprocess frame pool: Not enough memory`: `GRAMINE_RAM_SIZE` is below
+  6G; unset it or use `8G`.
+- The signature check of an attestation report needs network access to AMD's key server.

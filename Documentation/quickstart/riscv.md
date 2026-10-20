@@ -9,12 +9,18 @@ RISC-V hardware. Details: the RISC-V section of [INSTALL.md](../../INSTALL.md) a
 Status (as in [README.md](../../README.md)): `direct` ⚠️; `vm` 🛫; graphics ❌.
 
 Requirements: an x86_64 Linux machine with `podman` and about 2 GB of free disk for the guest; no
-root and no KVM. Everything below runs in the cross-development container.
+root and no KVM. Everything below runs in the cross-development container, `container/run.sh --target riscv64` (a
+shell) or `container/run.sh --target riscv64 '<command>'` (one command; it exists for x86_64 hosts
+only). The examples are run by `scripts/riscv64/run-examples.sh` in the guest, not by `./exec.sh`
+(no riscv64 backend there).
 
 ## 1. Cross-build
 
     container/run.sh --target riscv64            # shell in the cross container; the rest runs inside
     scripts/install.sh --target riscv64 --prefix "$PWD/build-riscv64/prefix"
+
+`--target riscv64` is the cross-build option of `scripts/install.sh`; the build directory defaults to
+`build-riscv64` and no native install is overwritten.
 
 The prefix lies inside the repository on purpose: the guest sees the repository at the same path,
 so it runs the cross-built binaries directly.

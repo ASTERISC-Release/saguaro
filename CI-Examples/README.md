@@ -25,7 +25,7 @@ the example and runs it under one backend. Run it in the directory of the exampl
 # Results
 
 The table lists the recorded result of each example for each backend. The last run of `exec.sh` on the
-backends x86_64, aarch64, SEV and SEV-SNP is in
+backends x86_64, aarch64, SEV, SEV-SNP and VBS (ARM64) is in
 [`Documentation/devel/ci-matrix/results-exec.md`](../Documentation/devel/ci-matrix/results-exec.md) (2026-10-20).
 
 **Symbols:** ✓ pass, ✗ fail, – not run or not applicable, blank not measured. 

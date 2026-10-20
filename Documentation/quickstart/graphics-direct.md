@@ -22,12 +22,12 @@ example manifests turn on three opt-in keys, each off by default and documented 
 - `host_symlinks = true` on the `/sys` mount: it reads the host's symbolic links under
   `/sys`.
 
-Use them for running games and tests on your own desktop, never for untrusted code or in
+Use them for running games and tests on a desktop with trusted code, never for untrusted code or in
 production.
 
 ## Requirements
 
-- **x86_64**: an Intel or AMD GPU with Mesa, a render node (`/dev/dri/renderD128`) your user can
+- **x86_64**: an Intel or AMD GPU with Mesa, a render node (`/dev/dri/renderD128`) that the user can
   open, and an X server (Xwayland counts) with `DISPLAY` set.
 - **AArch64**: an NVIDIA GPU with the proprietary driver (`/dev/nvidiactl`), and an X server on
   that driver, for example the display of the desktop session (`:1` on a GDM login). The
@@ -54,6 +54,9 @@ On AArch64 the container image lacks the games' build dependencies; inside the c
 root user) install at least:
 
     apt-get update && apt-get install -y libsdl2-dev libopenal-dev libcurl4-openssl-dev
+
+The graphics examples are started by hand (their `exec.sh` lists no backend and prints "needs a
+display; run by hand"), so `./exec.sh` does not apply to them.
 
 ## 2. glxgears
 

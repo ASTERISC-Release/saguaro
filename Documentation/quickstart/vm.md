@@ -15,46 +15,53 @@ Symbols as in [README.md](../../README.md):
 ## Requirements
 
 - A **native** Linux machine of the same architecture with hardware virtualisation: `/dev/kvm`
-  readable and writable by your user. Emulation (TCG) is not supported, but it *might* work.
-- For guest networking: `/dev/vhost-vsock` (module `vhost_vsock`), also accessible to your user.
-  - vsock is available on most recent Linux kernels; you can enable it with `sudo modprobe vhost_vsock`.
-- `podman` for the recommended container build route.
+  readable and writable by the user. Emulation (TCG) is not supported, but it *might* work.
+- For guest networking: `/dev/vhost-vsock` (module `vhost_vsock`), also accessible to the user.
+  - vsock is available on most recent Linux kernels; it is enabled with `sudo modprobe vhost_vsock`
+    on the host.
+- `podman`. The container image already has QEMU, `virtiofsd` and the toolchain; nothing else is
+  installed on the host.
 
-# 1. Build
+# 1. Container and install
 
-The container image already has QEMU, `virtiofsd` and the toolchain:
+The container is opened as in [direct.md](direct.md), section 1 (`container/run.sh` for a shell,
+`container/run.sh '<command>'` for one command). The vm backend is installed with
+`scripts/install.sh --vm` into `~/.local/gramine-vm`:
 
     cd <repo-home>
-    ./container/run.sh                   # shell in the container; the rest runs inside
-    ./scripts/install.sh --vm            # build and install into ~/.local/gramine-vm
-    . ~/.local/gramine-vm/env.sh
+    container/run.sh 'scripts/install.sh --vm'
 
-On x86_64 `--vm` builds the direct PAL too, and the graphics paths ([graphics-vm.md](graphics-vm.md)); `--graphics disabled` leaves them out. On AArch64 it builds only the vm
-PAL.
+On x86_64 `--vm` builds the direct PAL too, and the graphics paths ([graphics-vm.md](graphics-vm.md));
+`--graphics disabled` leaves them out. On AArch64 it builds only the vm PAL. The vm install uses its
+own build directory (`build-vm-<arch>`) and prefix, so it never overwrites a direct install.
 
-**Host route** (Debian/Ubuntu, needs sudo for the packages; commands from `INSTALL.md`):
-
-    sudo apt install qemu-system-x86 virtiofsd lsof python3-psutil       # x86_64
-    sudo apt install qemu-system-arm virtiofsd device-tree-compiler      # AArch64
-    ./scripts/dependencies.sh --build-only
-    ./scripts/install.sh --vm
-    . ~/.local/gramine-vm/env.sh
-
-On x86_64, if `command -v virtiofsd` finds nothing, link `/usr/libexec/virtiofsd` into
-`/usr/local/bin`.
+`container/run.sh` loads `~/.local/gramine-vm/env.sh` itself when it exists, so `gramine-vm` is on
+`PATH` in every shell and every one-shot command of the container. A shell that was not opened by
+`container/run.sh` sources it by hand: `. ~/.local/gramine-vm/env.sh`.
 
 # 2. Example: Hello World
 
+Run in the container, from the directory of the example (`exec.sh` builds against the vm install,
+so that the manifest names its `libsysdb.so`, and runs the program under `gramine-vm`):
+
     cd CI-Examples/helloworld
-    make                               # against the vm install: the manifest names its libsysdb.so
-    gramine-vm helloworld
+    ./exec.sh --vm
 
 The output ends with:
 
     Hello, world
     [ VM exited with code 0 ]
 
-Refer to each example folder for further per-application build/run instructions.
+The steps by hand:
+
+    cd CI-Examples/helloworld
+    make
+    gramine-vm helloworld
+
+Every other example runs the same way (`./exec.sh --vm` in its directory). The recorded results of
+2026-10-20 are in [results-exec.md](../devel/ci-matrix/results-exec.md): all examples pass on Intel
+x86_64; on AArch64 `gcc`, `openjdk`, `pytorch` and `python` fail in the guest (`Failed to map
+file:/usr/bin/<program>`). Refer to each example folder for further per-application instructions.
 
 # 3. Regression Tests
 
@@ -72,8 +79,11 @@ lists the other suites.
     - Note that memory is allocated on-demand, so this is the maximum.
 - By default the guest runs several processes (x86_64 and AArch64; the key `sys.experimental__multiprocess` defaults to `true`). It needs guest RAM above 4G on x86_64 (a 4G guest has no free GiB for the frame pool and fails to boot). `sys.experimental__multiprocess = false` gives the single-process guest, where `fork` fails with `Function not implemented`. The key enables `fork`, `vfork`, `execve`, pipes, signals and shared memory between processes.
 - The guest has no TCP/IP stack of its own: TCP and UDP sockets are carried over vsock to a relay that the launcher starts per VM (`vm-relay: cid=... listening ...`) and that opens the real sockets on the host side. Outbound connections work by default; a server in the guest is reached through an `inbound` forward in the manifest's `[vm.net]` table or `GRAMINE_VM_INBOUND`.
+- Several checkouts on one machine each get their own container and their own range of guest CIDs
+  when the folder is named `gramine-<name>/gramine-multiarch` (see `AGENTS.md`).
 
 # 5. Troubleshooting
 
-- `vhost-vsock: failed to open vhost device: Permission denied` (AArch64), or socket calls fail with `Address family not supported`: give your user access to `/dev/vhost-vsock` (as for `/dev/kvm`) and load `vhost_vsock`.
+- `vhost-vsock: failed to open vhost device: Permission denied` (AArch64), or socket calls fail with `Address family not supported`: give the user access to `/dev/vhost-vsock` on the host (as for `/dev/kvm`) and load `vhost_vsock`.
+- `exec.sh` reports that `vm` cannot run: it names the reason (not installed: run `scripts/install.sh --vm`; no `/dev/kvm`: the host has no usable KVM, or the container was created without it).
 - AArch64 `Mounting "file:<app>" ... failed: ENOENT`: the binary is missing or not a PIE; rebuild it with `-fPIE -static-pie`.
