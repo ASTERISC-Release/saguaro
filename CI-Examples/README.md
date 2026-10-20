@@ -24,39 +24,39 @@ the example and runs it under one backend. Run it in the directory of the exampl
 
 # Results
 
-The table lists the recorded result of each example for each backend. The last run of `exec.sh` on all backends (x86_64, aarch64, SEV, SEV-SNP, SGX, and VBS on ARM64 and x64; the RISC-V column comes from another script, see ¹¹) is in [RESULTS.md](RESULTS.md) (2026-10-20).
+The table lists the recorded result of each example for each backend. The last run of `exec.sh` on all backends (x86_64, aarch64, SEV, SEV-SNP, SGX, and VBS on x86_64 and aarch64; the RISC-V column comes from another script, see ¹¹) is in [RESULTS.md](RESULTS.md) (2026-10-20).
 
-**Symbols:** in the VBS column a plain ✓ was measured on ARM64 and on x64 Windows 11. ✓ pass, ✗ fail, – not run or not applicable, blank not measured. 
+**Symbols:** ✓ pass, ✗ fail, – not run or not applicable, blank not measured. 
 
 <table>
 <thead>
-<tr><th rowspan="2">Example</th><th colspan="5">Sandboxed Environments</th><th colspan="5">Protected Environments</th></tr>
-<tr><th>Direct x86_64</th><th>Direct aarch64</th><th>Direct riscv64</th><th>VM x86_64</th><th>VM aarch64</th><th>SEV</th><th>SEV-SNP</th><th>TDX</th><th>SGX</th><th>VBS</th></tr>
+<tr><th rowspan="2">Example</th><th colspan="5">Sandboxed Environments</th><th colspan="6">Protected Environments</th></tr>
+<tr><th>Direct x86_64</th><th>Direct aarch64</th><th>Direct riscv64</th><th>VM x86_64</th><th>VM aarch64</th><th>SEV</th><th>SEV-SNP</th><th>TDX</th><th>SGX</th><th>VBS x86_64</th><th>VBS aarch64</th></tr>
 </thead>
 <tbody>
-<tr><td><code>bash</code></td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>¹</td></tr>
-<tr><td><code>blender</code></td><td>✓</td><td>–²</td><td>–</td><td>✓</td><td>–²</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>¹</td></tr>
-<tr><td><code>busybox</code></td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>✓</td></tr>
-<tr><td><code>curl</code></td><td>✓</td><td>✓</td><td>–</td><td>✓³</td><td>✓³</td><td>✓³</td><td>✓³</td><td></td><td>✓</td><td>✓</td></tr>
-<tr><td><code>gcc</code></td><td>✓</td><td>✓</td><td>–</td><td>✓</td><td>✗⁶</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>¹</td></tr>
-<tr><td><code>graphics</code></td><td>✓⁴</td><td>✓⁴</td><td>–</td><td>✓⁴</td><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td></tr>
-<tr><td><code>helloworld</code></td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓⁵</td><td>✓</td><td>✓</td></tr>
-<tr><td><code>iperf</code></td><td>✓</td><td>✓</td><td>–</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>✓</td></tr>
-<tr><td><code>lighttpd</code></td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>✓</td></tr>
-<tr><td><code>memcached</code></td><td>✓</td><td>✓</td><td>✓¹²</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>✓</td></tr>
-<tr><td><code>mongodb</code></td><td>✓</td><td>✓</td><td>–</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>¹</td></tr>
-<tr><td><code>nginx</code></td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>✓</td></tr>
-<tr><td><code>nodejs</code></td><td>✓</td><td>✓</td><td>–</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>✗ ARM64 (x18), ✗ x64 (no x64 recipe)</td></tr>
-<tr><td><code>openjdk</code></td><td>✓</td><td>✓</td><td>–</td><td>✓</td><td>✗⁶</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>–</td></tr>
-<tr><td><code>python</code></td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✗⁶</td><td>✓</td><td>✓</td><td>✓⁵</td><td>✓¹⁰</td><td>✓ ARM64, ✓⁹ x64</td></tr>
-<tr><td><code>pytorch</code></td><td>✓</td><td>✓</td><td>–</td><td>✓</td><td>✗⁶</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>¹</td></tr>
-<tr><td><code>r</code></td><td>✓</td><td>✓</td><td>–</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>¹</td></tr>
-<tr><td><code>ra-tls/*</code></td><td>–⁷</td><td>–⁷</td><td>–</td><td>–⁷</td><td>–⁷</td><td>–⁷</td><td>–⁷</td><td></td><td></td><td>–⁷</td></tr>
-<tr><td><code>redis</code></td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>✓</td></tr>
-<tr><td><code>rust</code></td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>✓⁸</td></tr>
-<tr><td><code>sqlite</code></td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>✓</td></tr>
-<tr><td><code>unit_tests</code></td><td>✓</td><td>✓</td><td>✓¹³</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓⁵</td><td>–</td><td>¹</td></tr>
-<tr><td><code>vbs/*</code></td><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td><td>✓</td></tr>
+<tr><td><code>bash</code></td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>¹</td><td>¹</td></tr>
+<tr><td><code>blender</code></td><td>✓</td><td>–²</td><td>–</td><td>✓</td><td>–²</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>¹</td><td>¹</td></tr>
+<tr><td><code>busybox</code></td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>✓</td><td>✓</td></tr>
+<tr><td><code>curl</code></td><td>✓</td><td>✓</td><td>–</td><td>✓³</td><td>✓³</td><td>✓³</td><td>✓³</td><td></td><td>✓</td><td>✓</td><td>✓</td></tr>
+<tr><td><code>gcc</code></td><td>✓</td><td>✓</td><td>–</td><td>✓</td><td>✗⁶</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>¹</td><td>¹</td></tr>
+<tr><td><code>graphics</code></td><td>✓⁴</td><td>✓⁴</td><td>–</td><td>✓⁴</td><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td></tr>
+<tr><td><code>helloworld</code></td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓⁵</td><td>✓</td><td>✓</td><td>✓</td></tr>
+<tr><td><code>iperf</code></td><td>✓</td><td>✓</td><td>–</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>✓</td><td>✓</td></tr>
+<tr><td><code>lighttpd</code></td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>✓</td><td>✓</td></tr>
+<tr><td><code>memcached</code></td><td>✓</td><td>✓</td><td>✓¹²</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>✓</td><td>✓</td></tr>
+<tr><td><code>mongodb</code></td><td>✓</td><td>✓</td><td>–</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>¹</td><td>¹</td></tr>
+<tr><td><code>nginx</code></td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>✓</td><td>✓</td></tr>
+<tr><td><code>nodejs</code></td><td>✓</td><td>✓</td><td>–</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>✗ (no x64 recipe)</td><td>✗ (x18)</td></tr>
+<tr><td><code>openjdk</code></td><td>✓</td><td>✓</td><td>–</td><td>✓</td><td>✗⁶</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>–</td><td>–</td></tr>
+<tr><td><code>python</code></td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✗⁶</td><td>✓</td><td>✓</td><td>✓⁵</td><td>✓¹⁰</td><td>✓⁹</td><td>✓</td></tr>
+<tr><td><code>pytorch</code></td><td>✓</td><td>✓</td><td>–</td><td>✓</td><td>✗⁶</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>¹</td><td>¹</td></tr>
+<tr><td><code>r</code></td><td>✓</td><td>✓</td><td>–</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>¹</td><td>¹</td></tr>
+<tr><td><code>ra-tls/*</code></td><td>–⁷</td><td>–⁷</td><td>–</td><td>–⁷</td><td>–⁷</td><td>–⁷</td><td>–⁷</td><td></td><td></td><td>–⁷</td><td>–⁷</td></tr>
+<tr><td><code>redis</code></td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>✓</td><td>✓</td></tr>
+<tr><td><code>rust</code></td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>✓⁸</td><td>✓⁸</td></tr>
+<tr><td><code>sqlite</code></td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td></td><td>✓</td><td>✓</td><td>✓</td></tr>
+<tr><td><code>unit_tests</code></td><td>✓</td><td>✓</td><td>✓¹³</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓⁵</td><td>–</td><td>¹</td><td>¹</td></tr>
+<tr><td><code>vbs/*</code></td><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td><td>✓</td><td>✓</td></tr>
 </tbody>
 </table>
 
