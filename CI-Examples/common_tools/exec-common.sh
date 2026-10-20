@@ -14,6 +14,10 @@
 #   EXAMPLE_BACKENDS   backends it supports (default: "direct vm sev"; set it empty for none)
 #   EXAMPLE_MODE       "run" (default): build the binary and run it with its args, and check the output
 #                      "check": run the example's own `make check` with GRAMINE set to the backend
+#   EXAMPLE_PROGRAM    what the runner is given (default ./$EXAMPLE_BINARY; "java" for a manifest named java)
+#   EXAMPLE_CHECK_TARGET  make target of mode "check" (default: check)
+#   EXAMPLE_REQUIRES   programs the example needs on the host (checked with `command -v` before the run;
+#                      a missing one is reported with the install-prereqs.sh that provides it)
 #   example_check_args  optional function: prints extra make variables for `make check` given the backend
 #   EXAMPLE_NOTE       why it is skipped on this host when no backend applies (printed with the SKIP)
 #
@@ -106,8 +110,8 @@ exec_one() {
         # exec.sh may define example_check_args <backend>: extra make variables for `make check`
         local -a check_args=()
         if declare -F example_check_args >/dev/null; then check_args=($(example_check_args "$b")); fi
-        echo "+ make check GRAMINE=$runner ${check_args[*]}" | tee -a "$log"
-        timeout -s KILL "$EXEC_TIMEOUT" make check GRAMINE="$runner" "${check_args[@]}" 2>&1 </dev/null | tee "$out"
+        echo "+ make ${EXAMPLE_CHECK_TARGET:-check} GRAMINE=$runner ${check_args[*]}" | tee -a "$log"
+        timeout -s KILL "$EXEC_TIMEOUT" make "${EXAMPLE_CHECK_TARGET:-check}" GRAMINE="$runner" "${check_args[@]}" 2>&1 </dev/null | tee "$out"
         rc=${PIPESTATUS[0]}
         cat "$out" >>"$log"
     else
@@ -128,8 +132,9 @@ exec_one() {
             return 1
         fi
 
-        echo "+ $runner ./$binary ${EXAMPLE_ARGS[*]}" | tee -a "$log"
-        timeout -s KILL "$EXEC_TIMEOUT" "$runner" "./$binary" "${EXAMPLE_ARGS[@]}" 2>&1 </dev/null | tee "$out"
+        local program=${EXAMPLE_PROGRAM:-./$binary}
+        echo "+ $runner $program ${EXAMPLE_ARGS[*]}" | tee -a "$log"
+        timeout -s KILL "$EXEC_TIMEOUT" "$runner" "$program" "${EXAMPLE_ARGS[@]}" 2>&1 </dev/null | tee "$out"
         rc=${PIPESTATUS[0]}
         cat "$out" >>"$log"
     fi
@@ -157,12 +162,12 @@ exec_main() {
                        requested+=("$2"); shift 2 ;;
             --direct|--vm|--sev) requested+=("${1#--}"); shift ;;
             --keep)    KEEP=1; shift ;;
-            -h|--help) sed -n '2,/^[^#]/p' "$EXEC_DIR/../common_tools/exec-common.sh" | sed '$d; s/^# \{0,1\}//'; exit 0 ;;
+            -h|--help) sed -n '2,/^[^#]/p' "${BASH_SOURCE[0]}" | sed '$d; s/^# \{0,1\}//'; exit 0 ;;
             *) echo "unknown option: $1" >&2; exit 2 ;;
         esac
     done
 
-    local arch backend reason failed=0
+    local arch backend reason prog failed=0
     arch=$(exec_host_arch)
     if ! [[ " ${EXAMPLE_ARCHES:-x86_64 aarch64} " == *" $arch "* ]]; then
         echo "[SKIP] $EXAMPLE_NAME: host $arch is not in '${EXAMPLE_ARCHES:-x86_64 aarch64}'"
@@ -196,6 +201,14 @@ exec_main() {
         fi
         if reason=$(backend_unavailable "$backend"); then
             echo "[FAIL] $EXAMPLE_NAME $backend on $arch: cannot run here: $reason"
+            failed=1
+            continue
+        fi
+        local missing=
+        for prog in ${EXAMPLE_REQUIRES:-}; do command -v "$prog" >/dev/null || missing+=" $prog"; done
+        if [ -n "$missing" ]; then
+            echo "[FAIL] $EXAMPLE_NAME $backend on $arch: cannot run here: missing on the host:$missing" \
+                 "(run ./install-prereqs.sh in $EXEC_DIR)"
             failed=1
             continue
         fi

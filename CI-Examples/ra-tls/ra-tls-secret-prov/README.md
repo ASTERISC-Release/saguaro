@@ -73,7 +73,7 @@ The feature-rich client links against `libsecret_prov_attest.so` explicitly at
 build time.
 
 The example needs SGX. It does not run under direct, VM, SEV or VBS. Pass or fail status per
-backend: matrix in [`CI-Examples/README.md`](../README.md).
+backend: matrix in [`CI-Examples/README.md`](../../README.md).
 
 # Building
 

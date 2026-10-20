@@ -26,7 +26,7 @@ The table lists the recorded result of each example for each backend.
 | `python` | ✓ | ✓ | ✓ | – | ✓⁶ | ✓⁵ |  | ✓ ARM64, ✓⁹ x64 |
 | `pytorch` | ✓ | ✓ | ✓ | ✗ | ✓ |  |  | ¹ |
 | `r` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  | ¹ |
-| `ra-tls-*` | –⁷ | –⁷ | –⁷ | –⁷ | –⁷ |  |  | –⁷ |
+| `ra-tls/*` | –⁷ | –⁷ | –⁷ | –⁷ | –⁷ |  |  | –⁷ |
 | `redis` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  | ✓ |
 | `rust` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  | ✓⁸ |
 | `sqlite` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  | ✓ |

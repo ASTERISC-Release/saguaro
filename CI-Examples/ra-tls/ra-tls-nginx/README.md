@@ -4,7 +4,7 @@ This example demonstrates how to attest a generic TLS server using RA-TLS. The c
 files are saved to a tmpfs inside Gramine with the `gramine-ratls` tool, and Nginx is configured to
 use them. This works because tmpfs is not shared between Gramine processes, but Nginx is
 `execve()`'d from `gramine-ratls`, so the tmpfs stays intact. Pass or fail status per backend:
-matrix in [`CI-Examples/README.md`](../README.md).
+matrix in [`CI-Examples/README.md`](../../README.md).
 
 The example needs SGX. It does not run under direct, VM, SEV or VBS.
 

@@ -6,6 +6,7 @@ EXAMPLE_MODE=check
 EXAMPLE_MANIFEST=nodejs.manifest
 EXAMPLE_ARCHES="x86_64 aarch64"
 EXAMPLE_BACKENDS="direct vm sev"
+EXAMPLE_REQUIRES="nodejs"
 
 . "$(dirname "$(readlink -f "$0")")/../common_tools/exec-common.sh"
 exec_main "$@"

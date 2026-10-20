@@ -63,7 +63,7 @@ fully up-to-date). Note that in production environments, you must carefully
 analyze whether to use these options!
 
 The example needs SGX. It does not run under direct, VM, SEV or VBS. Pass or fail status per
-backend: matrix in [`CI-Examples/README.md`](../README.md).
+backend: matrix in [`CI-Examples/README.md`](../../README.md).
 
 # Building
 

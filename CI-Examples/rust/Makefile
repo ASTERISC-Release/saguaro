@@ -99,6 +99,13 @@ endif
 start-gramine-server: all
 	$(GRAMINE) rust-hyper-http-server
 
+ifneq ($(VBS),1)
+# the server under $(GRAMINE), curl on the host's loopback (check.sh)
+.PHONY: check
+check: all
+	GRAMINE="$(GRAMINE)" ./check.sh
+endif
+
 .PHONY: clean
 clean:
 	$(RM) -rf *.token *.sig *.manifest.sgx *.manifest result-* OUTPUT
