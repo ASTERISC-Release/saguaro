@@ -61,6 +61,13 @@ RUN apt-get update && \
       python3-pytest python3-cryptography python3-toml python3-psutil procps file sqlite3 wget \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# Editors: the Ubuntu base image ships none, and the repository is edited inside the container.
+# `vim` and not `vim-tiny`, because vim-tiny provides only `vi`. Kept as the last package layer so a
+# rebuild after editing this line reuses every cached layer above it.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends vim nano \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
 # Marker + WORKDIR parity with the x86 image (repo mounts at /root/gramine-multiarch).
 RUN touch /var/lib/gramine-vm-aarch64
 WORKDIR /root

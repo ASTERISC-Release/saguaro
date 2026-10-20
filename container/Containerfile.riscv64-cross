@@ -29,6 +29,13 @@ RUN apt-get update && \
       cloud-image-utils openssh-client wget curl file gdb-multiarch iproute2 procps \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# Editors: the Ubuntu base image ships none, and the repository is edited inside the container.
+# `vim` and not `vim-tiny`, because vim-tiny provides only `vi`. Kept as the last package layer so a
+# rebuild after editing this line reuses every cached layer above it.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends vim nano \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
 RUN touch /var/lib/gramine-riscv64-cross
 WORKDIR /root
 
