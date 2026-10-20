@@ -194,13 +194,13 @@ application are packed into a signed enclave image at build time. The tool build
 - **Supported.** Threads, signals, host files, sockets, Python, servers (Redis, NGINX, memcached, lighttpd),
   SQLite, curl, a Rust server, `iperf3` and BusyBox applets, with a local attestation report and verifier. An
   opt-in TLS example binds its key to the report.
-- **Validation.** On ARM64 and on x64 (Ubuntu 26.04 in WSL), 11 of 12 example directories and all 8 static VBS examples pass. The LibOS regression
-  subset passes 71 of 102 cases; every failure is classified (`fork`, platform limits).
+- **Validation.** On ARM64 and on x64 (Ubuntu 26.04 in WSL), 11 of 12 example directories and all 8 static VBS
+  examples pass. The LibOS regression subset passes 71 of 102 cases; every failure is classified (`fork`, platform limits).
 - **Performance.** An enclave call costs about 7 us. Counting host calls and removing staging buffers improved
   throughput 1.8 times for Redis, 1.6 times for memcached and 5 to 7 times for NGINX with 1 MiB bodies.
 - **Platform findings.** The enclave environment does not preserve `TPIDR_EL0`, resets `x18` on preemption, gives
-  threads an 8 KiB stack and hangs on some faults. `nodejs` fails for the same reason: `libstdc++` uses the
-  reserved register `x18`. A strict memory policy also failed on one configuration.
+  threads an 8 KiB stack and hangs on some faults. On ARM64 `nodejs` fails for the same reason: `libstdc++` uses the
+  reserved register `x18`; on x64 it fails because it has no x64 recipe. A strict memory policy also failed on one configuration.
 - **Intermittent failure.** The `helloworld` check fails now and then right after its image is built and signed
   (`mmap` of a 512 MiB region): once in six rebuild-and-check cycles, never in thirteen checks of a used image.
 - **Use.** `scripts/install.sh --vbs`, then `./exec.sh --vbs`;
