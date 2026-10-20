@@ -26,11 +26,13 @@
 # Backends and where they are installed (scripts/install.sh; override with the env vars):
 #   direct   $GRAMINE_DIRECT_PREFIX (default ~/.local/gramine)      gramine-direct
 #   vm       $GRAMINE_VM_PREFIX     (default ~/.local/gramine-vm)   gramine-vm, needs /dev/kvm
-#   sev      $GRAMINE_VM_PREFIX     (same install as vm, --sev)     gramine-sev, x86_64 with SEV
+#   sev      $GRAMINE_VM_PREFIX     (same install as vm, --sev)     gramine-sev, x86_64 with SEV; plain SEV
+#   sev-snp  (same install and runner as sev)                        gramine-sev in SEV-SNP mode
 #
 # Usage of exec.sh:
-#   exec.sh --vm             build and run the example under backend vm; likewise --direct and --sev.
-#   exec.sh --backend B      the same as --B (B is direct, vm or sev). Repeat either form for several
+#   exec.sh --vm             build and run the example under backend vm; likewise --direct, --sev (plain
+#                            SEV) and --sev-snp (SEV-SNP).
+#   exec.sh --backend B      the same as --B (B is direct, vm, sev or sev-snp). Repeat either form for several
 #                            backends. A backend is required: without one the script lists the
 #                            backends and whether this host can run each, and exits with status 2.
 #   exec.sh --keep           keep the program output; logs are always written to $EXEC_LOG_DIR
@@ -42,7 +44,7 @@
 # Exit status: 0 when nothing failed, 1 when a backend failed or cannot run here (the reason is
 # printed), 2 for a usage error.
 # Environment: EXEC_TIMEOUT (seconds per run, default 300), EXEC_LOG_DIR (default /tmp/gramine-exec),
-# GRAMINE_SEV_MODE (sev or snp, default sev).
+# The backend sets GRAMINE_SEV_MODE for gramine-sev: sev for --sev, snp for --sev-snp.
 
 # EXEC_DIR (the directory to build and run in) and EXAMPLE_NAME default to the exec.sh's own directory;
 # unit_tests/exec.sh sets them to run each test of its subdirectories
@@ -53,9 +55,17 @@ EXEC_TIMEOUT=${EXEC_TIMEOUT:-300}
 
 exec_host_arch() { uname -m; }
 
+# backend_base <backend>: the backend whose install and runner it uses (sev-snp is gramine-sev, like sev)
+backend_base() {
+    case $1 in
+        sev-snp) echo sev ;;
+        *)       echo "$1" ;;
+    esac
+}
+
 # backend_prefix <backend>
 backend_prefix() {
-    case $1 in
+    case $(backend_base "$1") in
         direct) echo "${GRAMINE_DIRECT_PREFIX:-$HOME/.local/gramine}" ;;
         vm|sev) echo "${GRAMINE_VM_PREFIX:-$HOME/.local/gramine-vm}" ;;
     esac
@@ -64,7 +74,8 @@ backend_prefix() {
 # backend_unavailable <backend>: prints why this host cannot run the backend and returns 0; returns
 # 1 (and prints nothing) when it can.
 backend_unavailable() {
-    local b=$1 prefix runner
+    local b prefix runner
+    b=$(backend_base "$1")
     prefix=$(backend_prefix "$b")
     case $b in
         direct) runner=gramine-direct ;;
@@ -88,7 +99,8 @@ backend_unavailable() {
 
 # exec_one <backend>: build and run the example under one backend. Returns 0 PASS, 1 FAIL.
 exec_one() {
-    local b=$1 prefix log out rc start verdict
+    local b=$1 base prefix log out rc start verdict
+    base=$(backend_base "$b")
     prefix=$(backend_prefix "$b")
     mkdir -p "$EXEC_LOG_DIR"
     log=$EXEC_LOG_DIR/$EXAMPLE_NAME-$b-$(exec_host_arch).log
@@ -97,12 +109,15 @@ exec_one() {
     # only this shell sees the backend's gramine-manifest and runner: source the install's env.sh
     # (scripts/install.sh writes it; it sets PATH and PYTHONPATH), or just put its bin first
     if [ -r "$prefix/env.sh" ]; then . "$prefix/env.sh"; else export PATH="$prefix/bin:$PATH"; fi
-    export GRAMINE_SEV_MODE=${GRAMINE_SEV_MODE:-sev}
+    case $b in
+        sev)     export GRAMINE_SEV_MODE=sev ;;
+        sev-snp) export GRAMINE_SEV_MODE=snp ;;
+    esac
     cd "$EXEC_DIR" || return 1
     local binary=${EXAMPLE_BINARY:-$EXAMPLE_NAME}
     local manifest=${EXAMPLE_MANIFEST:-$binary.manifest}
     local runner mode=${EXAMPLE_MODE:-run}
-    case $b in direct) runner=gramine-direct ;; vm) runner=gramine-vm ;; sev) runner=gramine-sev ;; esac
+    case $base in direct) runner=gramine-direct ;; vm) runner=gramine-vm ;; sev) runner=gramine-sev ;; esac
 
     if [ "$mode" = check ]; then
         # the example's own `make check`, with this backend as its GRAMINE
@@ -113,7 +128,7 @@ exec_one() {
             || { echo "[FAIL] $EXAMPLE_NAME $b $(exec_host_arch): manifest failed (see $log)"; return 1; }
         # exec.sh may define example_check_args <backend>: extra make variables for `make check`
         local -a check_args=()
-        if declare -F example_check_args >/dev/null; then check_args=($(example_check_args "$b")); fi
+        if declare -F example_check_args >/dev/null; then check_args=($(example_check_args "$base")); fi
         echo "+ make ${EXAMPLE_CHECK_TARGET:-check} GRAMINE=$runner ${check_args[*]}" | tee -a "$log"
         timeout -s KILL "$EXEC_TIMEOUT" make "${EXAMPLE_CHECK_TARGET:-check}" GRAMINE="$runner" "${check_args[@]}" 2>&1 </dev/null | tee "$out"
         rc=${PIPESTATUS[0]}
@@ -163,9 +178,9 @@ exec_main() {
     KEEP=0
     while [ $# -gt 0 ]; do
         case $1 in
-            --backend) [ $# -ge 2 ] || { echo "--backend needs a value (direct, vm or sev)" >&2; exit 2; }
+            --backend) [ $# -ge 2 ] || { echo "--backend needs a value (direct, vm, sev or sev-snp)" >&2; exit 2; }
                        requested+=("$2"); shift 2 ;;
-            --direct|--vm|--sev) requested+=("${1#--}"); shift ;;
+            --direct|--vm|--sev|--sev-snp) requested+=("${1#--}"); shift ;;
             --keep)    KEEP=1; shift ;;
             -h|--help) sed -n '2,/^[^#]/p' "${BASH_SOURCE[0]}" | sed '$d; s/^# \{0,1\}//'; exit 0 ;;
             *) echo "unknown option: $1" >&2; exit 2 ;;
@@ -183,9 +198,9 @@ exec_main() {
     local supported=${EXAMPLE_BACKENDS-direct vm sev}
     local -a backends=()
     if [ ${#requested[@]} -eq 0 ]; then
-        echo "usage: $0 --direct|--vm|--sev [--keep]" >&2
+        echo "usage: $0 --direct|--vm|--sev|--sev-snp [--keep]" >&2
         echo "$EXAMPLE_NAME supports these backends; this host ($arch) can run:" >&2
-        for backend in $supported; do
+        for backend in ${supported/sev/sev sev-snp}; do
             if reason=$(backend_unavailable "$backend"); then
                 echo "  $backend: no, $reason" >&2
             else
@@ -198,7 +213,7 @@ exec_main() {
     backends=("${requested[@]}")
 
     for backend in "${backends[@]}"; do
-        if ! [[ " $supported " == *" $backend "* ]]; then
+        if ! [[ " $supported " == *" $(backend_base "$backend") "* ]]; then
             echo "[FAIL] $EXAMPLE_NAME $backend: this example does not support the backend" \
                  "(supported: ${supported:-none}${EXAMPLE_NOTE:+; $EXAMPLE_NOTE})"
             failed=1
