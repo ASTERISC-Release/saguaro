@@ -1,0 +1,2 @@
+2026-10-20 08:23:38: server.c.1513) server started (lighttpd/1.4.59)
+2026-10-20 08:23:38: server.c.1692) can't have more connections than fds/2: 1024 824

@@ -185,6 +185,13 @@ endif
 start-gramine-server: all
 	$(GRAMINE) ./nginx
 
+ifneq ($(VBS),1)
+# the server under $(GRAMINE), a client on the host's loopback (check.sh)
+.PHONY: check
+check: all
+	GRAMINE="$(GRAMINE)" ./check.sh
+endif
+
 .PHONY: clean
 clean:
 	$(RM) *.manifest *.manifest.sgx *.token *.sig OUTPUT result-* tmp nginx_args
