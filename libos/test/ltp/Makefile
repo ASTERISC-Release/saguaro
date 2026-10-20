@@ -12,7 +12,7 @@ clean-extra += clean-build
 all: $(INSTALLDIR)/INSTALL_SUCCESS manifests etc/nsswitch.conf etc/passwd
 
 $(SRCDIR)/Makefile:
-	$(error "$(SRCDIR) is empty. Please run `git submodule update --init $(SRCDIR)` or download the LTP source code (https://github.com/linux-test-project/ltp) into $(SRCDIR).")
+	$(error "$(SRCDIR) has no LTP sources. Clone https://github.com/linux-test-project/ltp into $(SRCDIR), or build them with scripts/fetch-ltp.sh (the same revision) and use scripts/build-ltp-manifests.sh instead of this Makefile.")
 
 $(SRCDIR)/configure: $(SRCDIR)/Makefile
 	$(MAKE) -C $(SRCDIR) autotools
