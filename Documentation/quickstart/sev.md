@@ -44,7 +44,7 @@ in `sev-tools/` next to the checkout:
 
     cd CI-Examples/helloworld
     make
-    GRAMINE_RAM_SIZE=4G gramine-sev helloworld
+    GRAMINE_RAM_SIZE=8G gramine-sev helloworld
 
 The output contains:
 
@@ -59,7 +59,9 @@ encryption.
 
 Note the following:
 
-- Set `GRAMINE_CPU_NUM` and `GRAMINE_RAM_SIZE` as for `gramine-vm`.
+- Set `GRAMINE_CPU_NUM` and `GRAMINE_RAM_SIZE` as for `gramine-vm`. Use at least 6G (the scripts of
+  `test/sev/` use 8G, which SEV pins at launch): with 4G the guest stops with `Cannot initialize the
+  multiprocess frame pool: Not enough memory`.
 - Mode can be selected with `GRAMINE_SEV_MODE` or `sev.mode` in the manifest (`snp` by default, or `sev`).
 - `GRAMINE_SEV_POLICY` or `sev.policy` sets the guest policy (default `0x30000` for SNP, with
   debugging disabled).
@@ -92,5 +94,5 @@ are currently not measured.
 
     GRAMINE_SEV_MODE=snp test/sev/test-sev.sh     # hello (1, 4 vCPUs), host-side memory check, vsock, attest
     test/sev/test-sev.sh                          # the same under plain SEV, with the launch measurement
-    GRAMINE_VM_LAUNCHER=gramine-sev GRAMINE_SEV_MODE=snp GRAMINE_RAM_SIZE=4G test/vm/test-vm.sh libos
+    GRAMINE_VM_LAUNCHER=gramine-sev GRAMINE_SEV_MODE=snp GRAMINE_RAM_SIZE=8G test/vm/test-vm.sh libos
     test/sev/test-sev-all.sh                      # everything above, at 1, 2 and 4 vCPUs, plus examples
