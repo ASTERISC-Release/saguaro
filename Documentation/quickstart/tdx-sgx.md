@@ -99,6 +99,8 @@ without the quote step (it needs remote attestation, `RA_TYPE=dcap`). `unit_test
 The enclave sizes are set by each manifest (`mongodb` 8G, `openjdk` 16G, `pytorch` 4G); a build and
 first run takes seconds to about two minutes.
 
+In a fresh container, `blender`, `mongodb`, `nodejs`, `openjdk` and `r` first stop with "cannot run here: missing on the host"; run `CI-Examples/install-all-prereqs.sh` once (or the `install-prereqs.sh` of that example, which the message names) and repeat the command.
+
 ### 5. Troubleshooting
 
 - `./exec.sh --sgx` says `no SGX device (/dev/sgx_enclave)`: the host has no SGX driver, or the

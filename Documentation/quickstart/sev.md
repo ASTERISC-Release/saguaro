@@ -73,6 +73,8 @@ encryption.
 Results of 2026-10-20 on an AMD EPYC 7443P ([RESULTS.md](../../CI-Examples/RESULTS.md)):
 `./exec.sh --sev` and `./exec.sh --sev-snp` pass for every example that supports them.
 
+In a fresh container, `blender`, `mongodb`, `nodejs`, `openjdk` and `r` first stop with "cannot run here: missing on the host"; run `CI-Examples/install-all-prereqs.sh` once (or the `install-prereqs.sh` of that example, which the message names) and repeat the command.
+
 Note the following:
 
 - Set `GRAMINE_CPU_NUM` and `GRAMINE_RAM_SIZE` as for `gramine-vm`. The guest needs at least 6G
