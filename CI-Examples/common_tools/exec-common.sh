@@ -28,11 +28,15 @@
 #   vm       $GRAMINE_VM_PREFIX     (default ~/.local/gramine-vm)   gramine-vm, needs /dev/kvm
 #   sev      $GRAMINE_VM_PREFIX     (same install as vm, --sev)     gramine-sev, x86_64 with SEV; plain SEV
 #   sev-snp  (same install and runner as sev)                        gramine-sev in SEV-SNP mode
+#   vbs      scripts/install.sh --vbs, in WSL on a Windows machine   Windows VBS enclave (make VBS=1); an
+#            with VBS enclaves                                       example offers it when it has a
+#                                                                    vbs.manifest.template
 #
 # Usage of exec.sh:
 #   exec.sh --vm             build and run the example under backend vm; likewise --direct, --sev (plain
-#                            SEV) and --sev-snp (SEV-SNP).
-#   exec.sh --backend B      the same as --B (B is direct, vm, sev or sev-snp). Repeat either form for several
+#                            SEV), --sev-snp (SEV-SNP) and --vbs (`make VBS=1` and `make VBS=1 check`, in
+#                            WSL; the runtime must be installed with scripts/install.sh --vbs first).
+#   exec.sh --backend B      the same as --B (B is direct, vm, sev, sev-snp or vbs). Repeat either form for several
 #                            backends. A backend is required: without one the script lists the
 #                            backends and whether this host can run each, and exits with status 2.
 #   exec.sh --keep           keep the program output; logs are always written to $EXEC_LOG_DIR
@@ -43,7 +47,8 @@
 #
 # Exit status: 0 when nothing failed, 1 when a backend failed or cannot run here (the reason is
 # printed), 2 for a usage error.
-# Environment: EXEC_TIMEOUT (seconds per run, default 300), EXEC_LOG_DIR (default /tmp/gramine-exec),
+# Environment: EXEC_TIMEOUT (seconds per run, default 300; EXEC_BUILD_TIMEOUT, default 3600, for the build
+# of a vbs image), EXEC_LOG_DIR (default /tmp/gramine-exec),
 # The backend sets GRAMINE_SEV_MODE for gramine-sev: sev for --sev, snp for --sev-snp.
 
 # EXEC_DIR (the directory to build and run in) and EXAMPLE_NAME default to the exec.sh's own directory;
@@ -76,6 +81,15 @@ backend_prefix() {
 backend_unavailable() {
     local b prefix runner
     b=$(backend_base "$1")
+    if [ "$b" = vbs ]; then
+        command -v powershell.exe >/dev/null \
+            || { echo "VBS needs WSL on a Windows machine with VBS enclaves (no powershell.exe on this host)"; return 0; }
+        local root
+        root=$(git -C "$EXEC_DIR" rev-parse --show-toplevel 2>/dev/null)
+        [ -e "$root/build-vbs/runtime.stamp" ] \
+            || { echo "the VBS runtime is not installed in ${root:-this checkout} (scripts/install.sh --vbs)"; return 0; }
+        return 1
+    fi
     prefix=$(backend_prefix "$b")
     case $b in
         direct) runner=gramine-direct ;;
@@ -97,10 +111,44 @@ backend_unavailable() {
     return 1
 }
 
+# exec_one_vbs: the example for a Windows VBS enclave: `make VBS=1` builds and signs the image (the
+# runtime is installed by scripts/install.sh --vbs), `make VBS=1 check` runs the example's check against
+# it. The check decides (EXAMPLE_EXPECT is not used: the check's echoed commands contain the text).
+exec_one_vbs() {
+    local b=$1 log out rc start verdict
+    mkdir -p "$EXEC_LOG_DIR"
+    log=$EXEC_LOG_DIR/$EXAMPLE_NAME-$b-$(exec_host_arch).log
+    out=$EXEC_LOG_DIR/$EXAMPLE_NAME-$b-$(exec_host_arch).out
+    start=$(date +%s)
+    cd "$EXEC_DIR" || return 1
+    { echo "== $EXAMPLE_NAME $b on $(exec_host_arch), $(date -Is), mode vbs"
+      echo "+ make VBS=1"
+      timeout -s KILL "${EXEC_BUILD_TIMEOUT:-3600}" make VBS=1 </dev/null; } 2>&1 | tee "$log"
+    [ "${PIPESTATUS[0]}" = 0 ] \
+        || { echo "[FAIL] $EXAMPLE_NAME $b $(exec_host_arch): build failed (see $log)"; return 1; }
+    echo "+ make VBS=1 check" | tee -a "$log"
+    timeout -s KILL "$EXEC_TIMEOUT" make VBS=1 check 2>&1 </dev/null | tee "$out"
+    rc=${PIPESTATUS[0]}
+    cat "$out" >>"$log"
+    if [ $rc = 137 ]; then verdict="TIMEOUT"
+    elif [ $rc != 0 ]; then verdict="FAIL(exit=$rc)"
+    else verdict=PASS
+    fi
+    local secs=$(( $(date +%s) - start ))
+    if [ "$verdict" = PASS ]; then
+        echo "[PASS] $EXAMPLE_NAME $b $(exec_host_arch) (${secs}s)"
+        [ "${KEEP:-0}" = 1 ] || rm -f "$out"
+        return 0
+    fi
+    echo "[FAIL] $EXAMPLE_NAME $b $(exec_host_arch): $verdict (log $log, output $out)"
+    return 1
+}
+
 # exec_one <backend>: build and run the example under one backend. Returns 0 PASS, 1 FAIL.
 exec_one() {
     local b=$1 base prefix log out rc start verdict
     base=$(backend_base "$b")
+    if [ "$base" = vbs ]; then exec_one_vbs "$b"; return; fi
     prefix=$(backend_prefix "$b")
     mkdir -p "$EXEC_LOG_DIR"
     log=$EXEC_LOG_DIR/$EXAMPLE_NAME-$b-$(exec_host_arch).log
@@ -178,9 +226,9 @@ exec_main() {
     KEEP=0
     while [ $# -gt 0 ]; do
         case $1 in
-            --backend) [ $# -ge 2 ] || { echo "--backend needs a value (direct, vm, sev or sev-snp)" >&2; exit 2; }
+            --backend) [ $# -ge 2 ] || { echo "--backend needs a value (direct, vm, sev, sev-snp or vbs)" >&2; exit 2; }
                        requested+=("$2"); shift 2 ;;
-            --direct|--vm|--sev|--sev-snp) requested+=("${1#--}"); shift ;;
+            --direct|--vm|--sev|--sev-snp|--vbs) requested+=("${1#--}"); shift ;;
             --keep)    KEEP=1; shift ;;
             -h|--help) sed -n '2,/^[^#]/p' "${BASH_SOURCE[0]}" | sed '$d; s/^# \{0,1\}//'; exit 0 ;;
             *) echo "unknown option: $1" >&2; exit 2 ;;
@@ -196,9 +244,13 @@ exec_main() {
 
     # EXAMPLE_BACKENDS="" (set, empty) means the example has no backend here; only unset gets the default
     local supported=${EXAMPLE_BACKENDS-direct vm sev}
+    # an example with a vbs.manifest.template runs for a Windows VBS enclave too (make VBS=1)
+    if [ -f "$EXEC_DIR/vbs.manifest.template" ] && [[ " $supported " != *" vbs "* ]]; then
+        supported="$supported vbs"
+    fi
     local -a backends=()
     if [ ${#requested[@]} -eq 0 ]; then
-        echo "usage: $0 --direct|--vm|--sev|--sev-snp [--keep]" >&2
+        echo "usage: $0 --direct|--vm|--sev|--sev-snp|--vbs [--keep]" >&2
         echo "$EXAMPLE_NAME supports these backends; this host ($arch) can run:" >&2
         for backend in ${supported/sev/sev sev-snp}; do
             if reason=$(backend_unavailable "$backend"); then
@@ -224,8 +276,12 @@ exec_main() {
             failed=1
             continue
         fi
+        # EXAMPLE_REQUIRES are the host programs of the direct, vm and sev builds; a VBS image is built from
+        # source with its own toolchain (scripts/install.sh --vbs)
         local missing=
-        for prog in ${EXAMPLE_REQUIRES:-}; do command -v "$prog" >/dev/null || missing+=" $prog"; done
+        if [ "$(backend_base "$backend")" != vbs ]; then
+            for prog in ${EXAMPLE_REQUIRES:-}; do command -v "$prog" >/dev/null || missing+=" $prog"; done
+        fi
         if [ -n "$missing" ]; then
             echo "[FAIL] $EXAMPLE_NAME $backend on $arch: cannot run here: missing on the host:$missing" \
                  "(run ./install-prereqs.sh in $EXEC_DIR)"
