@@ -37,15 +37,15 @@
 #                          aarch64/riscv64 builds, without --sgx or --tdx; glibc otherwise
 #                          (x86_64 direct keeps the patched glibc). SGX needs the bundled glibc.
 #   -j N                   ninja parallelism (default: nproc)
-#   --run-tests [suite...] run test/test-direct.sh afterwards, building the test manifests first
-#                          (with --vm on aarch64: test/test-vm.sh, suites libos|examples|hello)
+#   --run-tests [suite...] run test/direct/test-direct.sh afterwards, building the test manifests first
+#                          (with --vm on aarch64: test/vm/test-vm.sh, suites libos|examples|hello)
 #                          (naming suites implies this)
 #   -h, --help
 #
 # Environment: after installing, <prefix>/env.sh is written. A script cannot change the environment
 # of the shell that started it, so use the install in your current shell with
 #     . <prefix>/env.sh
-# (or pass --add-to-profile to get it in every new shell). test/test-direct.sh and the other scripts
+# (or pass --add-to-profile to get it in every new shell). test/direct/test-direct.sh and the other scripts
 # in this directory find the install by themselves (GRAMINE_PREFIX, default ~/.local/gramine).
 #
 # --vm builds the vm-PAL unikernel ("the correct vm version for this machine"): the default build
@@ -69,7 +69,7 @@
 #    meson/gcc exist; only *running* the resulting kernel needs QEMU with KVM.
 #  * --target riscv64 only *builds* (and installs); riscv64 binaries cannot run on this build
 #    machine's kernel. Run the test battery inside the RISC-V guest instead
-#    (scripts/riscv64/guest.sh + test/test-direct.sh there, see the plan's Phase 0 notes).
+#    (scripts/riscv64/guest.sh + test/direct/test-direct.sh there, see the plan's Phase 0 notes).
 #    --deps is skipped for cross builds: the cross toolchain comes from the container image,
 #    not from scripts/dependencies.sh.
 
@@ -159,7 +159,7 @@ if [ "$VM" = enabled ]; then
         # aarch64 recipe (Documentation/devel/vm.md): the vm kernel *is* the PAL here; the direct PAL and
         # SGX/TDX hosts do not exist in this build. The PAL regression battery is built against
         # the direct PAL and is not built; the LibOS regression suite runs under gramine-vm
-        # (test/test-vm.sh), which needs PIE test binaries (the guest maps DRAM at 0x40000000).
+        # (test/vm/test-vm.sh), which needs PIE test binaries (the guest maps DRAM at 0x40000000).
         if [ "$SGX" = enabled ] || [ "$TDX" = enabled ]; then
             echo "note: --sgx/--tdx have no aarch64 vm host; forcing them off"
         fi
@@ -285,7 +285,7 @@ fi
 if [ "$RUN_TESTS" = 1 ] && [ -n "$TARGET_ARCH" ]; then
     echo "note: skipping --run-tests: $TARGET_ARCH binaries cannot run on this build machine;"
     echo "      run the battery inside the RISC-V guest instead (scripts/riscv64/guest.sh,"
-    echo "      then test/test-direct.sh there -- see Documentation/devel/riscv/PLAN.md Phase 0)"
+    echo "      then test/direct/test-direct.sh there -- see Documentation/devel/riscv/PLAN.md Phase 0)"
     RUN_TESTS=0
 fi
 
@@ -293,10 +293,10 @@ if [ "$RUN_TESTS" = 1 ]; then
     export GRAMINE_PREFIX="$PREFIX"
     if [ "$VM" = enabled ] && [ "$ARCH" = aarch64 ]; then
         echo ">>> running the vm test battery"
-        exec "$REPO/test/test-vm.sh" --build-dir "$BUILDDIR" ${TEST_SUITES[@]+"${TEST_SUITES[@]}"}
+        exec "$REPO/test/vm/test-vm.sh" --build-dir "$BUILDDIR" ${TEST_SUITES[@]+"${TEST_SUITES[@]}"}
     else
         echo ">>> running the test battery"
-        exec "$REPO/test/test-direct.sh" ${TEST_SUITES[@]+"${TEST_SUITES[@]}"}
+        exec "$REPO/test/direct/test-direct.sh" ${TEST_SUITES[@]+"${TEST_SUITES[@]}"}
     fi
 fi
 
@@ -313,7 +313,7 @@ fi
 echo "Done. To use this install in the current shell:   . \"$PREFIX/env.sh\""
 [ "$ADD_TO_PROFILE" = 1 ] || echo "(or rerun with --add-to-profile to get it in every new shell)"
 if [ "$VM" = enabled ] && [ "$ARCH" = aarch64 ]; then
-    echo "Test with:  test/test-vm.sh --prefix \"$PREFIX\" --build-dir $BUILDDIR"
+    echo "Test with:  test/vm/test-vm.sh --prefix \"$PREFIX\" --build-dir $BUILDDIR"
 else
-    echo "Test with:  GRAMINE_PREFIX=\"$PREFIX\" test/test-direct.sh"
+    echo "Test with:  GRAMINE_PREFIX=\"$PREFIX\" test/direct/test-direct.sh"
 fi

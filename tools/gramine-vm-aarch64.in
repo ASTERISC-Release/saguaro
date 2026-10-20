@@ -6,7 +6,7 @@
 # vm-PAL unikernel (@LIBPAL_PATH@) under QEMU `virt` + KVM and runs <application>.manifest in it.
 # Usage is the same as on x86:   gramine-vm <application> [args...]
 #
-# Differences from the x86 launcher (see Documentation/devel/aarch64/vm/PLAN.md):
+# Differences from the x86 launcher (see Documentation/devel/CHANGELOG.md):
 #   * machine `virt,gic-version=3`, no BIOS blob; the kernel image is loaded with `-kernel`
 #   * QEMU does not hand an ELF `-kernel` a device tree, so the machine DTB is dumped with the
 #     *same* -smp/-m/-accel/-cpu, repacked with dtc and loaded as a RAM blob at the DRAM base
@@ -49,7 +49,7 @@ if [ "$1" == "" ]; then
 fi
 APPLICATION=$1
 
-# the per-VM vsock relay (Documentation/devel/vm-network/); installed next to the VM PAL
+# the per-VM vsock relay (Documentation/devel/CHANGELOG.md); installed next to the VM PAL
 . "$HOST_PAL_PATH/vm-relay.sh"
 vm_relay_find_python "${BASH_SOURCE[0]}"
 shift
@@ -227,7 +227,7 @@ QEMU_RAM="-object memory-backend-memfd,id=ram1,size=$QEMU_MEM_SIZE,share=on -mac
 
 # `-serial none`/`-display none`: the only console is the virtconsole above.
 # GRAMINE_VM_MONITOR=<path>: the QEMU monitor on a unix socket, so that a hung guest can be looked
-# at from outside (test/vm-multiproc-aarch64/vm-hang-report.py); GRAMINE_VM_SERIAL=<file>: the
+# at from outside (test/vm/multiproc-aarch64/vm-hang-report.py); GRAMINE_VM_SERIAL=<file>: the
 # PL011 UART (the kernel's early/debug output, debug_serial_io_write()) into a file.
 QEMU_MONITOR="-monitor none"
 [ -n "$GRAMINE_VM_MONITOR" ] && QEMU_MONITOR="-monitor unix:$GRAMINE_VM_MONITOR,server=on,wait=off"

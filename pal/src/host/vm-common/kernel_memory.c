@@ -91,7 +91,10 @@ static uint64_t sev_c_bit_for_phys(uint64_t phys) {
         return 0;
     if (PCI_HOLE_ADDR <= phys && phys < PCI_HOLE_ADDR + PCI_HOLE_SIZE)
         return 0;
-    if (phys == g_sev_extra_shared_page)
+    /* g_sev_extra_shared_page is 0 unless the SEV-ES/SNP GHCB page was set up: without this
+     * check, physical 0 (the first 2 MB, where the PAL image and its .process_data live) would
+     * match it and be mapped unencrypted under plain SEV */
+    if (g_sev_extra_shared_page && phys == g_sev_extra_shared_page)
         return 0;
     return g_sev_c_bit_mask;
 }

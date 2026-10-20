@@ -3,7 +3,7 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 # Runs test/proton-vm/probes.c natively, under gramine-direct and under gramine-vm (in the
 # container, after scripts/install.sh --vm). Usage: run-probes.sh [native|direct|vm] [PROBE...]
-# (default: all probes). PROBES_SRC selects another source (test/vm-timer/timerprobes.c on aarch64). Output: the PROBE lines; WORK (default .proton-vm/probes) holds the
+# (default: all probes). PROBES_SRC selects another source (test/vm/timer/timerprobes.c on aarch64). Output: the PROBE lines; WORK (default .proton-vm/probes) holds the
 # binary, the manifests and /tmp of the probes. GRAMINE_CPU_NUM and GRAMINE_RAM_SIZE apply to vm.
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)

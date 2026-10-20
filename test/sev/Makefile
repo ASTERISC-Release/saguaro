@@ -1,4 +1,4 @@
-# test/test-sev.sh builds this; GRAMINE_LOG_LEVEL=error unless set
+# test/sev/test-sev.sh builds this; GRAMINE_LOG_LEVEL=error unless set
 
 GRAMINE_LOG_LEVEL ?= error
 

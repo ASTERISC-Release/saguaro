@@ -2,7 +2,7 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 
 """
-vsock_relay -- the per-VM network relay of the VM PAL (Documentation/devel/vm-network/PLAN.md).
+vsock_relay -- the per-VM network relay of the VM PAL (Documentation/devel/CHANGELOG.md).
 
 One relay process per VM, started by `gramine-vm` in the container and stopped with the VM. It
 listens on AF_VSOCK port 65536 + <CID> (RELAY_PORT_BASE + CID; the guest knows its own CID, so the
@@ -16,7 +16,7 @@ For each inbound rule the relay listens on the host address `bind:host`; every a
 is bridged to a fresh AF_VSOCK connection to (CID, `guest`) -- the vsock socket the guest's emulated
 TCP listener for that port appears as (see pal/src/host/vm-common/pal_common_sockets.c, which keeps
 only the port of a bound AF_INET address). Bytes are pumped both ways until either side reaches EOF.
-This is exactly the connection the phase-1 regression client opens (test/vsock-loopback/), so a VM
+This is exactly the connection the phase-1 regression client opens (test/vm/vsock-loopback/), so a VM
 application that binds a TCP port needs no changes to be reachable through the relay.
 
 Outbound request framing is `GNR1 | version:u8 | op:u8 | protocol:u8 | family:u8 | port:u16 |`

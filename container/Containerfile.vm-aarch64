@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 
-# Development container for the aarch64 vm-PAL unikernel (Documentation/devel/vm.md / Documentation/devel/aarch64/vm/PLAN.md). Parallel to the x86 `Containerfile`
+# Development container for the aarch64 vm-PAL unikernel (Documentation/devel/vm.md / Documentation/devel/CHANGELOG.md). Parallel to the x86 `Containerfile`
 # (which targets the GPU/KVM/TDX Steam workflow); nothing here is shared.
 #
 # Target runtime is **KVM on a native aarch64 host** (`-accel kvm -cpu host`);
@@ -20,7 +20,7 @@
 # against new kernel UAPI headers) -- deliberately not chased here.
 #
 # QEMU: stock noble qemu-system-arm (8.2.x) -- this is the documented requirement for the aarch64
-# vm PAL (the numbers in Documentation/devel/aarch64/vm/TESTING.md use it). It is older than the
+# vm PAL (the numbers in Documentation/devel/CHANGELOG.md use it). It is older than the
 # 10.2.1 the initial bring-up ran on; virt/gic-version=3/KVM/vhost-user-fs behave the same for the
 # vm kernel's needs, but if a future machine-shape dependency shows up, pin a
 # newer QEMU in this layer (the kernel reads CPU count and PSCI conduit from

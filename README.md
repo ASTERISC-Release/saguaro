@@ -4,15 +4,12 @@
 AArch64 and RISC-V.*
 
 Gramine (formerly *Graphene*) runs an unmodified Linux application in an isolated environment, with its own
-implementation of the Linux system call interface (the *LibOS*) on top of a small host abstraction
+implementation of the Linux (POSIX) system call interface (the *LibOS*) on top of a small host abstraction
 layer (the *PAL*). It was initially designed and built by a diverse group of researchers
 and engineers from universities and industry to run on Intel x86 platforms. Please see the
-[Acknowledgements](#acknowledgements) section below and the [upstream repository](https://github.com/gramineproject/gramine).
+[Acknowledgements](#acknowledgements) section.
 
-This fork has been significantly extended to support additional architectures, backends and
-features. It extends [gramine-tdx](https://github.com/gramineproject/gramine-tdx) -- Gramine
-with Intel TDX and virtual-machine backends -- and keeps upstream's full history. It is implemented and maintained by the [ASU Trusted, Reliable, and Secure Computing
-(ASTERISC) Research Lab](https://asteriscresearchlab.com/). This fork supports several host environments:
+Keeping [upstream](https://github.com/gramineproject/gramine-tdx)'s full history, this Gramine fork has been extended to provide wide-support for additional backends, namely
 
 - Containerized userspace (`direct`)
 - Isolated userspace (`sgx`)
@@ -20,7 +17,19 @@ with Intel TDX and virtual-machine backends -- and keeps upstream's full history
 - Windows protected virtual machine (`vbs`)
 - Confidential virtual machine (`tdx`, `sev`)
 
+Additionally, several quality-of-life [features](Documentation/FEATURES.md) have been added, including
+
+- **Multi-architecture support:** AMD64, AArch64 and RISC-V.
+- **Graphics redirection:** redirection to the host GPU in the `vm`/`direct` PAL (see [Tirith](https://arxiv.org/abs/2609.17525)).
+  - Even allows us to play Windows games using Wine and Proton in the `vm` PAL.
+- **Richer system call coverage:** including multi-process (e.g., fork, clone), signaling, and network.
+
+These features and backends are the result of published and upcoming work by the [ASU Trusted, Reliable, and Secure Computing
+(ASTERISC) Research Lab](https://asteriscresearchlab.com/). Refer to this [section](#citation) for details and how to cite our work.
+
 ## Use-Cases
+
+There are three main use-cases of this project: 
 
 **(1) Sandboxing untrusted Linux applications (e.g., AI agents and games):** An application runs
 on Gramine's own system call interface rather than directly on the host kernel, reducing the
@@ -40,22 +49,6 @@ library OS and the small bare-metal kernel of the `vm` PAL (page tables, schedul
 and virtio drivers) are compact and readable. The same Linux-compatible interface is implemented
 on x86_64, AArch64 and RISC-V, so that the architecture-specific parts can be compared directly.
 
-## Status
-
-This is a research and teaching fork. It is **experimental, comes with no warranty and should not
-be used in production**. Current work is focused on the following:
-
-- **Multi-architecture:** AMD64, AArch64 and RISC-V.
-- **Graphics:** redirection to the host GPU in the `vm`/`direct` PAL (see [Tirith](https://arxiv.org/abs/2609.17525)).
-- **Windows VBS enclaves:** running applications inside VBS enclaves on Windows 11 (ARM64 and x64).
-- **Windows applications:** Wine and Proton in the `vm` PAL (a 64-bit game reaches its first level in
-  software rendering; the GPU path and 32-bit games are in progress).
-- **System call support:** richer coverage, including multi-process, signaling, and network.
-
-The features added so far and the planned/future ones are listed in
-[Documentation/FEATURES.md](Documentation/FEATURES.md) and
-[Documentation/TODO.md](Documentation/TODO.md).
-
 ## Platform Support
 
 |  |  |
@@ -66,7 +59,7 @@ The features added so far and the planned/future ones are listed in
 | ❌ | not supported: possible in principle, but it does not work (yet) |
 | ➖ | not applicable: the combination does not exist |
 
-### Sandboxing Environments
+### Sandboxed Environments
 
 | Platform Adaptation Layer (PAL)   | Intel x86_64 | AMD64 | AArch64 | RISC-V (RV64) |
 |-----------------------------------|--------------|-------|---------|---------------|
@@ -75,7 +68,7 @@ The features added so far and the planned/future ones are listed in
 | `vm` (`gramine-vm`)               | ✅           | ⚠️    | ⚠️      | 🛫            |
 | `vm` with redirected graphics     | ⚠️           | ⚠️    | 🛫      | ❌            |
 
-### Protected Computing
+### Protected Environments
 
 | Platform Adaptation Layer (PAL) | Intel x86_64 | AMD64 | AArch64 | RISC-V (RV64) |
 |---------------------------------|--------------|-------|---------|---------------|
@@ -83,12 +76,6 @@ The features added so far and the planned/future ones are listed in
 | `tdx` (Intel TDX)               | ⚠️           | ➖    | ➖      | ➖            |
 | `sev` (AMD SEV)                 | ➖           | ⚠️    | ➖      | ➖            |
 | `vbs` (Windows VBS enclaves)    | ⚠️           | ⚠️    | ⚠️      | ➖            |
-
-`sgx` and `tdx` are inherited from Gramine and gramine-tdx: they are built (`tdx` in CI), but this
-tree has not run them on hardware, so they are marked experimental.
-`sev` (`gramine-sev`, the vm PAL as an AMD SEV-SNP or plain SEV guest) runs the LibOS regression
-suite and attestation on an EPYC (Milan) host; it is experimental: no CI runner has SEV, and the
-host-supplied files are not yet checked (Documentation/devel/sev/).
 
 Please refer to per-cell details, build options and verification status: [Documentation/devel/multiarch.md](Documentation/devel/multiarch.md).
 
@@ -159,17 +146,28 @@ are retained.
 
 ## Citation
 
-This work is the culmination of several research projects undertaken by our lab, including:
+This work is the result of several research projects undertaken by our lab, out of which the following are published to-date:
 
-- `Tirith`
-- `Erebor`
-- `Whitepaper`
+- You Shall Not Pass into Ring-0! A User Privacy-Friendly Anti-Cheat Architecture for Personal Computers (ACM CCS'26)
+- Reducio: Optimized Confidential Serverless Cloud Deployments for Enterprise Customers (Arxiv)
+- Erebor: A Drop-In Sandbox Solution for Private Data Processing in Untrusted Confidential Virtual Machines (ACM EuroSys'25)
+- Veil: A Protected Services Framework for Confidential Virtual Machines (ACM ASPLOS'23)
+- Chancel: Efficient Multi-client Isolation Under Adversarial Programs (ISOC NDSS'21)
 
-(TODO: complete later)
+If you find this project useful, please cite it our work. 
+
+We are also in the process of releasing a whitepaper (to Arxiv) detailing the current project.
+
+## Disclaimer
+
+The current work is not designed to be **experimental** and should not be used in production environments.
+
+AI agents were heavily-involved in the development of this project, even though the design decisions were made by our team.
+Our rationale for using AI agents was to easily prototype and merge together disjoint artifacts from different research projects
+and make them available for research and teaching purposes.
 
 ## Acknowledgements
 
 This work builds on [Gramine](https://github.com/gramineproject/gramine) and its
 Intel TDX and virtual-machine fork [gramine-tdx](https://github.com/gramineproject/gramine-tdx). We thank the Gramine and gramine-tdx authors and contributors; the organizations and individuals are listed in
 [ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md).
-

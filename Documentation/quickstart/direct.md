@@ -48,9 +48,9 @@ The output is `Hello, world`.
 
 Execute the following commands (with `env.sh` sourced):
 
-    ./test/test-direct.sh --list                       # the suites
-    ./test/test-direct.sh pal libos helloworld python  # a quick selection, under a minute
-    ./test/test-direct.sh                              # everything: PAL, LibOS, 12 example suites
+    ./test/direct/test-direct.sh --list                       # the suites
+    ./test/direct/test-direct.sh pal libos helloworld python  # a quick selection, under a minute
+    ./test/direct/test-direct.sh                              # everything: PAL, LibOS, 12 example suites
 
 Each suite ends with a `PASS` or `FAIL` line. Logs are stored in `/tmp/gramine-multiarch-tests`.
 

@@ -1,4 +1,4 @@
-# test/test-sev.sh: the guest side of the SEV memory-encryption check (sev_probe.c)
+# test/sev/test-sev.sh: the guest side of the SEV memory-encryption check (sev_probe.c)
 
 libos.entrypoint = "/sev_probe"
 loader.log_level = "{{ log_level }}"

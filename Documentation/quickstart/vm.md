@@ -58,10 +58,10 @@ Refer to each example folder for further per-application build/run instructions.
 
 # 3. Regression Tests
 
-    test/test-vm.sh libos              # the LibOS suite under gramine-vm, about 2 to 3 minutes
+    test/vm/test-vm.sh libos              # the LibOS suite under gramine-vm, about 2 to 3 minutes
 
 It ends with a pytest summary (failures with a known cause are marked xfail by
-`libos/test/regression/vm_skip.toml`) and `ALL VM SUITES PASSED`. `test/test-vm.sh --help`
+`libos/test/regression/vm_skip.toml`) and `ALL VM SUITES PASSED`. `test/vm/test-vm.sh --help`
 lists the other suites.
 
 # 4. Other Information

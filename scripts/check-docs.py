@@ -27,7 +27,7 @@ DEFAULT_GLOBS = [
     'README.md', 'INSTALL.md', 'AGENTS.md',
     'Documentation/quickstart/*.md',
     'Documentation/README.md', 'Documentation/TODO.md', 'Documentation/FEATURES.md',
-    'Documentation/devel/README.md', 'Documentation/devel/summary.md', 'Documentation/devel/syscall-workflow.md',
+    'Documentation/devel/README.md', 'Documentation/devel/summary.md', 'Documentation/devel/CHANGELOG.md', 'Documentation/devel/syscall-workflow.md',
     'Documentation/devel/multiarch.md', 'Documentation/devel/vm.md',
     'Documentation/devel/*/PLAN.md', 'Documentation/devel/*/TODO.md', 'Documentation/devel/*/TESTING.md',
     'Documentation/devel/aarch64/*/PLAN.md', 'Documentation/devel/aarch64/*/TODO.md',

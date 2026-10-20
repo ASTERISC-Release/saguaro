@@ -26,7 +26,7 @@ the RISC-V cross-build). `vbs.md` is the manual for Windows VBS enclaves.
 | `devel/graphics/tirith-delta.md` | changes against upstream gramine-tdx |
 | `devel/summary.md` | outcome of each port in one page, with pointers into the logs |
 | `devel/README.md` | the layout of the development documents: `PLAN.md`, `FINDINGS.md`, `TODO.md`, `TESTING.md` per topic |
-| `devel/<topic>/` (`aarch64/direct`, `aarch64/vm`, `aarch64/hwcap`, `riscv`, `riscv-hardware`, `graphics`, `graphics-direct`, `graphics-aarch64`, `vulkan`, `proton-vm`, `libos-syscalls`, `vm-multiproc`, `vm-multiproc-aarch64`, `syscall-interception`, `runtime-libc`, `vm-network`, `syscall-compat`, `syscall-profile`, `vbs-enclave`, `docs-refactor`, `quickstart`) | plan, findings, open items and test results of each topic |
+| `devel/<topic>/` (`aarch64/direct`, `aarch64/hwcap`, `riscv`, `graphics`, `graphics-direct`, `graphics-aarch64`, `vulkan`, `proton-vm`, `libos-syscalls`, `vm-multiproc`, `vm-multiproc-aarch64`, `runtime-libc`, `syscall-compat`, `syscall-profile`, `vbs-enclave`, `docs-refactor`, `quickstart`) | plan, findings, open items and test results of each topic |
 | `TODO.md` | index of the per-topic open items |
 
 ## Inherited from upstream

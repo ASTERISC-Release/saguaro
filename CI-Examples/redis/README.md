@@ -42,6 +42,13 @@ make start-gramine-server GRAMINE=gramine-sev GRAMINE_VM_INBOUND=6379:6379    # 
 make SGX=1 start-gramine-server                                              # SGX; not verified
 ```
 
+- **direct:** `gramine-direct redis-server`. Verified on x86_64 and aarch64.
+- **vm:** `GRAMINE_RUNNER=gramine-vm test/direct/test-direct.sh redis`, from the repository root (the VM forwards the server's port through its relay). Verified on x86_64 and aarch64.
+- **sev:** not verified.¹
+- **tdx:** not verified.²
+- **sgx:** not verified.³ The commands are given above.
+- **vbs:** `make VBS=1 check`. Verified on ARM64 and x64.
+
 Under the VM and SEV, `GRAMINE_VM_INBOUND` forwards the port through the relay. No other setting is
 needed. `GRAMINE_RUNNER=gramine-vm test/test-direct.sh redis`, from the repository root, runs the
 VM case.

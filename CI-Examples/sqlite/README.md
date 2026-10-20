@@ -42,11 +42,6 @@ make SGX=1 regression                    # SGX; not verified
 make VBS=1 check                         # VBS
 ```
 
-Under the VM and SEV, `make regression` fails at its final `diff`: the launcher prints its console
-lines (`Configuring Gramine VM ...`, `[boot] ...`, `[ VM exited with code 0 ]`) to stdout and so
-into `OUTPUT`. Run the scripts by hand and compare the filtered output of the last one with
-`scripts/select.txt`, as `test/vm-multiproc/vm-examples.sh` does.
-
 To run one script by hand (the command-line options are hardcoded in the manifest):
 
 ```sh
@@ -65,3 +60,20 @@ name>"` with remote attestation; see `ra-tls-secret-prov`).
 SQLite guards concurrent access with POSIX record locks (`fcntl`). Gramine emulates them and does
 not translate them to host locks, so access from several processes is safe only within a single
 Gramine instance. In production, mount the database as a protected file or from tmpfs.
+
+# Running under each backend
+
+Build first (`make`, or `make VBS=1` for vbs) and activate the install of the backend (`Documentation/quickstart/`). Results and dates are in the matrix of `CI-Examples/README.md`.
+
+- **direct:** `gramine-direct sqlite3 < scripts/create.sql`. Verified on x86_64 and aarch64.
+- **vm:** `gramine-vm sqlite3 < scripts/create.sql`. Verified on x86_64 and aarch64.
+- **sev:** not verified.¹
+- **tdx:** not verified.²
+- **sgx:** not verified.³ The commands are given above.
+- **vbs:** `make VBS=1 check`. Verified on ARM64 and x64.
+
+With `GRAMINE=gramine-vm` or `GRAMINE=gramine-sev`, `make regression` ignores the launcher's console lines when it compares the output.
+
+¹ No result is recorded for this backend (matrix in `CI-Examples/README.md`).  
+² TDX was tested offline by the maintainer, with the same result as SEV. No TDX log is in the repository, so the result is reported and not verified here. The TDX install needs `td-shim` (`Documentation/TODO.md`).  
+³ SGX has not run on this tree's hardware. The SGX build needs `protobuf-c` (`Documentation/TODO.md`).
