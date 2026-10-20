@@ -232,7 +232,8 @@ Intel and 72 % on AMD.
 - **Finding.** Computing the guest memory layout at launch, instead of fixing it, reduced boot at 8 GB from 2.9 s
   to 0.8 s, and host memory follows what the guest touches.
 - **Limits.** The listener and the shared-page address are x86-only, which blocks AArch64. Minetest reaches 25 to
-  35 % of native speed.
+  35 % of native speed. With the default `sys.experimental__multiprocess` (true) the Intel GPU's DRM ioctls are not
+  translated, so a graphics manifest without `sys.experimental__multiprocess = false` shows no window.
 
 ### Windows games
 

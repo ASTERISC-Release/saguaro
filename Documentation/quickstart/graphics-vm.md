@@ -82,6 +82,17 @@ prints `vm intel gl3 run 1: 633 frames, N seconds: N fps`.
 - Input arrives through a shared ring by default; applications that read input without the Xlib
   calls the ring covers need `SHARED_INPUT=0` (`running.md`).
 - Two graphics VMs at once share one X relay; the second loses its display when the first exits.
+- **Known issue: no window with the default `sys.experimental__multiprocess`.** Since the VM PAL defaults this key to
+  true (2026-10-18), a graphics manifest that does not set it runs its first process with private page tables, and
+  the redirected ioctls go through bounce buffers that only translate the pointers inside the listed DRM ioctls
+  (`drm_version`, syncobj, amdgpu). The Intel ones are not listed: `I915_GETPARAM` fails with `EFAULT`, Mesa prints
+  `MESA: error: Kernel 4.15 required to read the CS timestamp frequency` and `Could not get intel_device_info`, the
+  program then waits forever and never creates its window (only QEMU's unmapped helper window exists). On the AMD GPU
+  (`EGL_DISCRETE=1`) the same manifest stops with `error: Internal memory fault at 0x00000010` after the first GBM
+  buffer. Workaround: set the key to false in the manifest template (`sys.experimental__multiprocess = false`: an
+  identity-mapped guest, as before) and run `make run` again; `quake2`, `minetest` and `supertuxkart` are expected to
+  need the same line and have not been checked. Programs that need processes (Wine, Proton) set the key to true
+  themselves, and their GPU path is the open work.
 
 ## Verified
 

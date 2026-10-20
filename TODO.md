@@ -6,7 +6,7 @@ Open items by architecture and host. Longer lists are kept with the maintainers'
 
 - `direct`: audit PAL state that a starting child allocates and frees at exit; sound and the remaining GPU-driver gaps for graphics.
 - `vm`: multi-vCPU performance at 2 and 4 vCPUs (fork cost, TLB shootdowns, scheduler lock contention); robust mutex for the System V shared tables.
-- `vm` with graphics: present events and a non-flipping blit for Vulkan, idle CPU of the listener, SuperTuxKart start hang, sound.
+- `vm` with graphics: **the graphics examples show no window under the default `sys.experimental__multiprocess` (Intel: the i915 ioctl pointers `GETPARAM`, `QUERY`, `EXECBUFFER2` are not translated by the bounce path; AMD EGL: memory fault); workaround `sys.experimental__multiprocess = false` in the manifest (see `Documentation/quickstart/graphics-vm.md`)**; present events and a non-flipping blit for Vulkan, idle CPU of the listener, SuperTuxKart start hang, sound.
 - `sev`: trusted files, Secure TSC; `sgx`: remote attestation (AESM, PCCS) and the `ra-tls` examples; `tdx`: never run on this tree's hardware, needs `td-shim` and a TDX QEMU.
 - Proton (Wine, DXVK) under `gramine-vm`: phase 1 and later, see the status in the development notes.
 
