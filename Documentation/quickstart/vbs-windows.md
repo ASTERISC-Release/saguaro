@@ -116,6 +116,10 @@ section 3 (results and conditions in [results-exec.md](../devel/ci-matrix/result
 `make VBS=1` stops with the install message when the runtime is missing and builds nothing itself.
 One early `helloworld` run failed in its check and passed on three re-runs; the cause is not known.
 
+`CI-Examples/vbs/` has its own `exec.sh`, which runs `helloworld`, `dynhello`, `python`, `tcpserver`,
+`attestation`, `tls-echo`, `jitprobe` and `rxprobe`; all eight pass on ARM64 (`jvmprobe`, an x64-only
+research probe, is not run).
+
 Not verified: `scripts/install.sh --vbs` itself as the step that builds the runtime of a fresh
-checkout (the runtime of the tested checkout was built by the earlier `make VBS=1`), the x64
-Windows machine, and `CI-Examples/vbs/*`, which `exec.sh` does not run.
+checkout (the runtime of the tested checkout was built by the earlier `make VBS=1`) and the x64
+Windows machine.
