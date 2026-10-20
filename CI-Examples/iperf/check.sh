@@ -14,18 +14,15 @@ PORT=${IPERF_PORT:-5201}
 SECONDS_=${IPERF_SECONDS:-2}
 TRIES=${IPERF_TRIES:-60}
 
-export GRAMINE_VM_INBOUND="$PORT:$PORT"
-# timeout runs the server in its own process group and passes a signal on to all of it, so stopping the
-# server also stops the QEMU process of the vm and sev (killing only gramine-vm leaves it running)
-timeout 600 "$GRAMINE" iperf3 > server.log 2>&1 </dev/null &
-pid=$!
-trap 'kill $pid 2>/dev/null; wait $pid 2>/dev/null; rm -f server.log client.log' EXIT
+. ../common_tools/server-check.sh
+server_start "$PORT:$PORT" "$GRAMINE" iperf3
+trap 'server_stop; rm -f client.log server.log' EXIT
 
 for i in $(seq "$TRIES"); do
     LD_LIBRARY_PATH=./install timeout 30 ./install/iperf3 -c 127.0.0.1 -p "$PORT" -t "$SECONDS_" \
         > client.log 2>&1 </dev/null
     grep -q "receiver" client.log && break
-    kill -0 $pid 2>/dev/null || { echo "FAIL: the server exited"; cat server.log; exit 1; }
+    kill -0 "$SERVER_PID" 2>/dev/null || { echo "FAIL: the server exited"; cat server.log; exit 1; }
     sleep 1
 done
 cat client.log
