@@ -53,7 +53,7 @@ backends x86_64, aarch64, SEV, SEV-SNP and VBS (ARM64) is in
 | `redis` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓ |
 | `rust` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓⁸ |
 | `sqlite` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓ |
-| `unit_tests` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓⁵ | ✗¹¹ | ¹ |
+| `unit_tests` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓⁵ | – | ¹ |
 | `vbs/*` | – | – | – | – | – | – | – | – | ✓ |
 
 ¹ No VBS recipe.  
@@ -66,4 +66,3 @@ backends x86_64, aarch64, SEV, SEV-SNP and VBS (ARM64) is in
 ⁸ Needs `rustup` stable with `rust-src`.  
 ⁹ x64 needs the research key `vbs.__insecure_skip_code_mprotect` (protection changes over packed code and data go to the data pages only). `CI-Examples/python/Makefile` sets it by default on x86_64; the HTTP test is intermittent (`Documentation/devel/vbs-enclave/TESTING.md`).  
 ¹⁰ SGX: without the quote step of the check, which needs remote attestation (`RA_TYPE=dcap`, the AESM service and a PCCS).  
-¹¹ SGX: only `mremap` has an SGX build, and it fails (the shrunk tail of a mapping stays readable); the other tests are skipped.
