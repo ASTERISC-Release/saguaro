@@ -102,7 +102,11 @@ then
     grep -q "Generated SGX report" OUTPUT && echo "[ Success SGX report ]"
     rm OUTPUT
 
-    $GRAMINE ./python scripts/sgx-quote.py > OUTPUT
-    grep -q "Extracted SGX quote" OUTPUT && echo "[ Success SGX quote ]"
-    rm OUTPUT
+    # the quote needs remote attestation (RA_TYPE=dcap, the AESM service and a PCCS)
+    if test "${RA_TYPE:-none}" != none
+    then
+        $GRAMINE ./python scripts/sgx-quote.py > OUTPUT
+        grep -q "Extracted SGX quote" OUTPUT && echo "[ Success SGX quote ]"
+        rm OUTPUT
+    fi
 fi

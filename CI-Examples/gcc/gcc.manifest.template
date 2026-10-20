@@ -41,6 +41,9 @@ sgx.trusted_files = [
   "file:{{ arch_libdir }}/",
   "file:/usr/{{ arch_libdir }}/",
   "file:{{ gcc_lib_path }}/{{ gcc_major_version }}/",
+{%- if gcc_libexec_path %}
+  "file:{{ gcc_libexec_path }}/{{ gcc_major_version }}/",
+{%- endif %}
 {%- if lib64_dir %}
   "file:{{ lib64_dir }}/",
 {%- endif %}

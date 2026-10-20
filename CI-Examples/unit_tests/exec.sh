@@ -26,6 +26,7 @@ for t in "${TESTS[@]}"; do
         EXAMPLE_PROGRAM=$program
         EXAMPLE_EXPECT=$expect
         EXAMPLE_ARGS=()
+        EXAMPLE_SKIP_UNSUPPORTED=1
         EXAMPLE_BACKENDS="direct vm sev"
         EXAMPLE_ARCHES="x86_64 aarch64"
         . "$HERE/../common_tools/exec-common.sh"

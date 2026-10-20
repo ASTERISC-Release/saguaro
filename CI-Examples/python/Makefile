@@ -128,14 +128,17 @@ ifeq ($(shell uname -m),x86_64)
 	@grep -q "Success 4/4" TEST_STDOUT
 endif
 else
-	./run-tests.sh > TEST_STDOUT 2> TEST_STDERR
+	RA_TYPE=$(RA_TYPE) ./run-tests.sh > TEST_STDOUT 2> TEST_STDERR
 	@grep -q "Success 1/4" TEST_STDOUT
 	@grep -q "Success 2/4" TEST_STDOUT
 	@grep -q "Success 3/4" TEST_STDOUT
 	@grep -q "Success 4/4" TEST_STDOUT
 ifeq ($(SGX),1)
 	@grep -q "Success SGX report" TEST_STDOUT
+# the quote needs remote attestation: RA_TYPE=dcap (and the AESM service and a PCCS)
+ifneq ($(RA_TYPE),none)
 	@grep -q "Success SGX quote" TEST_STDOUT
+endif
 endif
 endif
 

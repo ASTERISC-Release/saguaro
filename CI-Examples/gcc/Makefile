@@ -25,6 +25,8 @@ endif
 BINUTILS_VERSION ?= $(shell ld -v | awk '{print $$NF}')
 GCC_MAJOR_VERSION ?= $(shell gcc -v 2>&1 | tail -n1 | awk '{print $$3}' | awk 'BEGIN {FS="."}{print $$1}')
 GCC_LIB_PATH ?= /usr/lib/gcc/$(ARCH_LONG)
+# cc1, collect2 and lto-wrapper are in /usr/libexec/gcc on Ubuntu 24.04 (empty when the directory does not exist)
+GCC_LIBEXEC_PATH ?= $(wildcard /usr/libexec/gcc/$(ARCH_LONG))
 
 .PHONY: all
 all: gcc.manifest test_files/bzip2.c test_files/gzip.c
@@ -37,6 +39,7 @@ gcc.manifest: gcc.manifest.template
 		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		-Dgcc_lib_path=$(GCC_LIB_PATH) \
+		-Dgcc_libexec_path=$(GCC_LIBEXEC_PATH) \
 		-Dlib64_dir=$(wildcard /lib64) \
 		-Dgcc_major_version=$(GCC_MAJOR_VERSION) \
 		$< >$@

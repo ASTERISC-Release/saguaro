@@ -16,6 +16,8 @@
 #                      "check": run the example's own `make check` with GRAMINE set to the backend
 #   EXAMPLE_EXPECT_FILE  file the program writes instead of printing: EXAMPLE_EXPECT is searched in it, not in
 #                      the output (it is deleted before the run)
+#   EXAMPLE_SKIP_UNSUPPORTED  1: a backend the example does not support is a SKIP, not a FAIL (the drivers over
+#                      subdirectories set it)
 #   EXAMPLE_PROGRAM    what the runner is given (default ./$EXAMPLE_BINARY; "java" for a manifest named java)
 #   EXAMPLE_CHECK_TARGET  make target of mode "check" (default: check)
 #   EXAMPLE_REQUIRES   programs the example needs on the host (checked with `command -v` before the run;
@@ -288,6 +290,10 @@ exec_main() {
 
     for backend in "${backends[@]}"; do
         if ! [[ " $supported " == *" $(backend_base "$backend") "* ]]; then
+            if [ "${EXAMPLE_SKIP_UNSUPPORTED:-0}" = 1 ]; then
+                echo "[SKIP] $EXAMPLE_NAME $backend: this test has no build for the backend"
+                continue
+            fi
             echo "[FAIL] $EXAMPLE_NAME $backend: this example does not support the backend" \
                  "(supported: ${supported:-none}${EXAMPLE_NOTE:+; $EXAMPLE_NOTE})"
             failed=1
