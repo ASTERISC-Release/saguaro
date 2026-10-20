@@ -24,35 +24,35 @@ the example and runs it under one backend. Run it in the directory of the exampl
 
 # Results
 
-The table lists the recorded result of each example for each backend. The last run of `exec.sh` on all backends (x86_64, aarch64, SEV, SEV-SNP, SGX, and VBS on ARM64 and x64) is in [RESULTS.md](RESULTS.md) (2026-10-20).
+The table lists the recorded result of each example for each backend. The last run of `exec.sh` on all backends (x86_64, aarch64, SEV, SEV-SNP, SGX, and VBS on ARM64 and x64; the RISC-V column comes from another script, see ¹¹) is in [RESULTS.md](RESULTS.md) (2026-10-20).
 
 **Symbols:** in the VBS column a plain ✓ was measured on ARM64 and on x64 Windows 11. ✓ pass, ✗ fail, – not run or not applicable, blank not measured. 
 
-| Example | Direct x86_64 | VM x86_64 | Direct aarch64 | VM aarch64 | SEV | SEV-SNP | TDX | SGX | VBS |
-|---|---|---|---|---|---|---|---|---|---|
-| `bash` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ¹ |
-| `blender` | ✓ | ✓ | –² | –² | ✓ | ✓ |  | ✓ | ¹ |
-| `busybox` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓ |
-| `curl` | ✓ | ✓³ | ✓ | ✓³ | ✓³ | ✓³ |  | ✓ | ✓ |
-| `gcc` | ✓ | ✓ | ✓ | ✗⁶ | ✓ | ✓ |  | ✓ | ¹ |
-| `graphics` | ✓⁴ | ✓⁴ | ✓⁴ | – | – | – | – | – | – |
-| `helloworld` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓⁵ | ✓ | ✓ |
-| `iperf` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓ |
-| `lighttpd` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓ |
-| `memcached` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓ |
-| `mongodb` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ¹ |
-| `nginx` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓ |
-| `nodejs` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✗ ARM64 (x18), ✗ x64 (no x64 recipe) |
-| `openjdk` | ✓ | ✓ | ✓ | ✗⁶ | ✓ | ✓ |  | ✓ | – |
-| `python` | ✓ | ✓ | ✓ | ✗⁶ | ✓ | ✓ | ✓⁵ | ✓¹⁰ | ✓ ARM64, ✓⁹ x64 |
-| `pytorch` | ✓ | ✓ | ✓ | ✗⁶ | ✓ | ✓ |  | ✓ | ¹ |
-| `r` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ¹ |
-| `ra-tls/*` | –⁷ | –⁷ | –⁷ | –⁷ | –⁷ | –⁷ |  |  | –⁷ |
-| `redis` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓ |
-| `rust` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓⁸ |
-| `sqlite` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓ |
-| `unit_tests` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓⁵ | – | ¹ |
-| `vbs/*` | – | – | – | – | – | – | – | – | ✓ |
+| Example | Direct x86_64 | VM x86_64 | Direct aarch64 | VM aarch64 | Direct riscv64 | SEV | SEV-SNP | TDX | SGX | VBS |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `bash` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ¹ |
+| `blender` | ✓ | ✓ | –² | –² |  | ✓ | ✓ |  | ✓ | ¹ |
+| `busybox` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓ |
+| `curl` | ✓ | ✓³ | ✓ | ✓³ |  | ✓³ | ✓³ |  | ✓ | ✓ |
+| `gcc` | ✓ | ✓ | ✓ | ✗⁶ |  | ✓ | ✓ |  | ✓ | ¹ |
+| `graphics` | ✓⁴ | ✓⁴ | ✓⁴ | – | – | – | – | – | – | – |
+| `helloworld` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓⁵ | ✓ | ✓ |
+| `iperf` | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓ |  | ✓ | ✓ |
+| `lighttpd` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓ |
+| `memcached` | ✓ | ✓ | ✓ | ✓ | ✓¹² | ✓ | ✓ |  | ✓ | ✓ |
+| `mongodb` | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓ |  | ✓ | ¹ |
+| `nginx` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓ |
+| `nodejs` | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓ |  | ✓ | ✗ ARM64 (x18), ✗ x64 (no x64 recipe) |
+| `openjdk` | ✓ | ✓ | ✓ | ✗⁶ |  | ✓ | ✓ |  | ✓ | – |
+| `python` | ✓ | ✓ | ✓ | ✗⁶ | ✓ | ✓ | ✓ | ✓⁵ | ✓¹⁰ | ✓ ARM64, ✓⁹ x64 |
+| `pytorch` | ✓ | ✓ | ✓ | ✗⁶ |  | ✓ | ✓ |  | ✓ | ¹ |
+| `r` | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓ |  | ✓ | ¹ |
+| `ra-tls/*` | –⁷ | –⁷ | –⁷ | –⁷ | – | –⁷ | –⁷ |  |  | –⁷ |
+| `redis` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓ |
+| `rust` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓⁸ |
+| `sqlite` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓ |
+| `unit_tests` | ✓ | ✓ | ✓ | ✓ | ✓¹³ | ✓ | ✓ | ✓⁵ | – | ¹ |
+| `vbs/*` | – | – | – | – | – | – | – | – | – | ✓ |
 
 ¹ No VBS recipe.  
 ² Not run on aarch64: the example downloads an x86_64-only binary.  
@@ -64,3 +64,6 @@ The table lists the recorded result of each example for each backend. The last r
 ⁸ Needs `rustup` stable with `rust-src`.  
 ⁹ x64 needs the research key `vbs.__insecure_skip_code_mprotect` (protection changes over packed code and data go to the data pages only). `CI-Examples/python/Makefile` sets it by default on x86_64; the HTTP test is intermittent (`dev docs: vbs-enclave/TESTING.md`).  
 ¹⁰ SGX: without the quote step of the check, which needs remote attestation (`RA_TYPE=dcap`, the AESM service and a PCCS).  
+¹¹ Direct riscv64: native run on an Orange Pi RV2 board (Ky X1, 8 harts, 3.7 GiB) with `test/direct/test-direct.sh`, not `exec.sh`; 2026-10-20. Examples not named in that script were not run (blank).  
+¹² Needs `libevent-dev`; the board had none and no `sudo`, so libevent 2.1.12 was built by hand.  
+¹³ The `multi-thread` and `networks` suites of `test-direct.sh`.  

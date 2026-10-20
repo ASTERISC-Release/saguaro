@@ -20,7 +20,7 @@ production use.
   pipes, signals and shared memory between processes (bash, nginx workers, redis `BGSAVE`; qualified on
   the GX10). `CHANGELOG.md`, `vm-multiproc-aarch64/`
 - **RISC-V (RV64) direct PAL** (experimental). Cross-built; the regression suites and 11 example suites pass in an
-  emulated RISC-V guest, not yet on hardware. `riscv/`
+  emulated RISC-V guest and, natively, on one board (Orange Pi RV2: PAL 27 passed, LibOS 190 passed and 3 failed, all 12 example suites). `riscv/`
 - **x86_64 vm PAL, extended** (experimental). The inherited `gramine-vm` unikernel got a reworked vsock driver,
   PCI/ivshmem support and uncacheable shared mappings; it is the base of the graphics and network work.
   `vm.md`

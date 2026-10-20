@@ -19,7 +19,7 @@ Open items by architecture and host. Longer lists are kept with the maintainers'
 
 ## RISC-V (RV64)
 
-- `direct`: validation on hardware (stress under load, other example suites); the hosted `test_603` timeout; CPU identification in the PAL.
+- `direct`: the stress test under load on the board; `test_103_gettimeofday` needs about 15 s of the harness's 10 s default (the host clock path, not the rewriting); `test_2025_fork_reservation` fails with `ENOMEM` on a 3.7 GiB board; the hosted `test_603` timeout (it passes natively); CPU identification in the PAL.
 - `vm`: planned.
 
 ## Windows 11 (ARM64 and x64): VBS enclaves

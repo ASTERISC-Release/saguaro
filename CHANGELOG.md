@@ -12,7 +12,7 @@ gaps), *planned*. The whole tree is experimental and not for production use. Ope
 
 | PAL | Intel x86_64 | AMD64 | AArch64 | RISC-V (RV64) |
 |---|---|---|---|---|
-| `direct` | done | done | done | experimental (emulated guest) |
+| `direct` | done | done | done | experimental (emulated guest, one board) |
 | `direct`, host GPU graphics | experimental | experimental | experimental | not available |
 | `vm` | done | experimental | experimental | planned |
 | `vm`, redirected graphics | experimental | experimental | planned | not available |
@@ -63,8 +63,9 @@ Findings:
 ### RISC-V
 
 The direct PAL is cross-built for riscv64. In an emulated Ubuntu guest the PAL regression passes 27 tests (9
-skipped) and the LibOS regression 144 (36 skipped); eleven example suites pass with the bundled glibc. A run on
-an 8-hart board completed the basic suites; its single failure is caused by the board's memory size.
+skipped) and the LibOS regression 187 (38 skipped); eleven example suites pass with the bundled glibc. On an 8-hart
+Orange Pi RV2 board (3.7 GiB) the PAL regression passes 27 tests, the LibOS regression 190 (3 failed: two from the
+board's memory, one a timeout in `test_103_gettimeofday`) and all 12 example suites pass natively.
 
 Design decisions:
 - `tp` belongs to the application's libc, so the PAL finds its control block as on AArch64.
@@ -83,14 +84,15 @@ per-site stub (`sys.rewrite_syscalls`). After the first call, a system call no l
 needed. x86_64 keeps its patched glibc.
 
 - **Result.** On the RISC-V board a rewritten call costs 1.9 to 2.6 us against 7.8 to 8.4 us for the trap (3.3 to
-  4.1 times cheaper). In the emulated guest, a stress test passes 40 of 40 runs in every scenario.
+  4.1 times cheaper). In the emulated guest, a stress test passes 40 of 40 runs in every scenario; on the board, all 11 scenarios pass 20
+  of 20 cold runs.
 - **Design.** RISC-V stubs are reached by `jal` (about +-1 MiB). A 2-byte-aligned `ecall` is published through
   `c.ebreak`, and an instruction-cache flush makes it visible to the other harts. A "late handler" treats a trap at a
   site another thread has just rewritten as a normal system call.
 - **Findings.** The first stubs saved the wrong register range, losing `t3` and `t4` across a patched call; and
   the unaligned publication protocol raced with a thread running the site.
 - **Limits.** One hosted stress alarm (`test_603`, a timeout) occurred on two CI runs and not in about 90 local
-  runs; the test is deselected in the hosted workflow. Larger runs under load on hardware are not done.
+  runs; the test is deselected in the hosted workflow. The stress test under load on the board is not done.
 
 ### Host libc
 

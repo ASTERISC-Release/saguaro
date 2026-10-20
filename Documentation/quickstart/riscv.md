@@ -2,8 +2,8 @@
 
 The RISC-V port covers the direct PAL and is **experimental**: it is cross-built on an x86_64
 machine and run in an Ubuntu 24.04 riscv64 guest under `qemu-system-riscv64` (full-system
-emulation; user-mode emulation cannot run it, because it has no seccomp). It has not been run on
-RISC-V hardware. Details: the RISC-V section of [INSTALL.md](../../INSTALL.md) and
+emulation; user-mode emulation cannot run it, because it has no seccomp). It also builds and runs natively on a
+RISC-V board (see [Native build on a board](#native-build-on-a-board)). Details: the RISC-V section of [INSTALL.md](../../INSTALL.md) and
 `dev docs: riscv/PLAN.md`.
 
 Status (as in [README.md](../../README.md)): `direct` ⚠️; `vm` 🛫; graphics ❌.
@@ -70,4 +70,33 @@ answered after about 150 s of its first boot); `run-suite.sh pal`: 27 passed, 9 
 `PASS` after `build-essential` was installed in the guest (without it the build failed with
 `make: command not found`).
 
-Not verified: other example suites; anything on RISC-V hardware.
+Not verified in the guest: other example suites.
+
+## Native build on a board
+
+On a riscv64 machine the same PAL builds and runs without the cross container and the guest. Verified on
+2026-10-20 on an Orange Pi RV2 (Ky X1, 8 harts, 3.7 GiB RAM, Ubuntu 24.04) from a fresh clone of `main`:
+
+    scripts/install.sh -j4                    # native build and install; keep -j low on a small board
+    export GRAMINE_PREFIX="$HOME/.local/gramine" LOGDIR="$HOME/gramine-logs"
+    test/direct/test-direct.sh                # PAL, LibOS and the example suites (or name suites: libos pal redis)
+
+Results: the PAL regression passes 27 tests (9 skipped); the LibOS regression 190 (40 skipped, 3 failed); all 12
+example suites of `test-direct.sh` pass (`helloworld`, `multi-thread`, `bash`, `sqlite`, `python`, `networks`,
+`busybox`, `lighttpd`, `redis`, `nginx`, `memcached`, `rust`); `scripts/stress_rewrite.sh -n 20` passes all 11
+scenarios in 20 of 20 cold runs; with `sys.rewrite_syscalls` a `getppid` takes 1.9 us against 7.4 us without it (3.9
+times cheaper). The three LibOS failures:
+
+- `test_054_large_mmap`: the board's RAM (the second `mmap` fails with `ENOMEM`).
+- `test_2025_fork_reservation`: the child fails allocating an 8 GiB range (`ENOMEM`; the test asks for up to 16 GiB).
+  Probably the board's RAM as well; not confirmed.
+- `test_103_gettimeofday`: times out at the harness default of 10 s. Run directly it needs about 15 s for 4 threads
+  of 1M calls and prints `TEST OK`; turning rewriting off does not change the time, so it is spent in the host clock path.
+
+Notes for a board:
+
+- The examples download their sources. On the tested board `/etc/resolv.conf` was written by Tailscale and listed only
+  its own resolver, which does not answer public names, so every download failed (the empty file shows up as the hash
+  mismatch `e3b0c442...`). Give the machine a working DNS resolver before running the examples.
+- `memcached` needs `libevent-dev` (the workflow installs it with `apt`); `rust` needs `rustup` with a stable toolchain.
+- Building the examples on the board takes a long time (`redis`, `lighttpd` and `busybox` together took 28 minutes).
