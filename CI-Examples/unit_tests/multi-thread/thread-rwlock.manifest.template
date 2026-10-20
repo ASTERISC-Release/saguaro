@@ -18,5 +18,5 @@ loader.insecure__use_host_env = true
 fs.mounts = [
   # General libraries and hooks
   { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
-  { path = "/thread-stress", uri = "file:thread-stress" },
+  { path = "/thread-rwlock", uri = "file:thread-rwlock" },
 ]

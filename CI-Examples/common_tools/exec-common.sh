@@ -42,8 +42,10 @@
 # Environment: EXEC_TIMEOUT (seconds per run, default 300), EXEC_LOG_DIR (default /tmp/gramine-exec),
 # GRAMINE_SEV_MODE (sev or snp, default sev).
 
-EXEC_DIR=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
-EXAMPLE_NAME=$(basename "$EXEC_DIR")
+# EXEC_DIR (the directory to build and run in) and EXAMPLE_NAME default to the exec.sh's own directory;
+# unit_tests/exec.sh sets them to run each test of its subdirectories
+EXEC_DIR=${EXEC_DIR:-$(cd "$(dirname "$(readlink -f "$0")")" && pwd)}
+EXAMPLE_NAME=${EXAMPLE_NAME:-$(basename "$EXEC_DIR")}
 EXEC_LOG_DIR=${EXEC_LOG_DIR:-/tmp/gramine-exec}
 EXEC_TIMEOUT=${EXEC_TIMEOUT:-300}
 
