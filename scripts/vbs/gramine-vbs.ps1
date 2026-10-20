@@ -1,38 +1,29 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
-# gramine-vbs.ps1: gramine-vbs on one ARM64 or x64 Windows machine (Documentation/vbs.rst). The Linux
-# side of the build (the vbs glibc, the vbs PAL and LibOS, the application's vbs.build recipe,
-# pack.py and the clang-compiled Windows objects) runs inside a WSL2 distribution of this machine;
-# linking, veiid, signing and running happen here. gramine-vbs.cmd next to this file runs it.
+# gramine-vbs.ps1: the Windows-side runner of the VBS enclave tooling (Documentation/vbs.md). It
+# launches a signed enclave package, checks the Windows side of the machine and verifies attestation
+# reports. It does not build: applications are built and packaged in WSL with `make VBS=1`, and
+# `gramine-vbs <program>` in WSL calls this script through powershell.exe. gramine-vbs.cmd next to
+# this file runs it from cmd or PowerShell.
 #
-#   gramine-vbs setup  [-Install | -Apt]              check the machine; -Install puts the build
-#                                                     tools into the WSL distribution (no sudo),
-#                                                     -Apt installs them with sudo apt-get
-#   gramine-vbs build  <manifest> [-Out DIR] [-NoSign]
-#   gramine-vbs sign   <manifest|DIR>
-#   gramine-vbs run    <manifest|DIR> [-Threads N] [-Root DIR] [-Rebuild] [-ShowHost] [-- ARGS]
-#                      (builds first when the image is missing or a source file changed)
-#   gramine-vbs verify <manifest|DIR> -Report FILE [-- verifier options]
+#   gramine-vbs check                              check the Windows side (VBS, Visual Studio, SDK, certificate)
+#   gramine-vbs setup                              check Windows and WSL; install missing WSL tools user-level
+#   gramine-vbs run    <DIR> [-Threads N] [-Root DIR] [-PidLine] [-ShowHost] [-- ARGS]
+#   gramine-vbs sign   <DIR>
+#   gramine-vbs verify <DIR> -Report FILE [-- verifier options]
 #
-# Options for all commands: -Distro NAME (default $env:GRAMINE_VBS_DISTRO or Ubuntu-24.04),
-# -CertName SUBJECT (default $env:GRAMINE_VBS_CERT_NAME or TheDefaultTestEnclaveCertName).
-# The build folder DIR defaults to <manifest folder>\<name>.vbs. The repository this script is in
-# is copied into the distribution's home (~/.cache/gramine-vbs/checkouts/...) and built there; a
-# manifest outside the repository has its folder copied too (its vbs.packed_files must then stay
-# inside that folder).
-#
-# For objects prepared elsewhere (gramine-vbs build --no-sign on Linux, copied here with
-# link-sign.cmd and pal_vbs_enclave.def), the earlier form still works:
-#   gramine-vbs sign|run|verify -Dir <folder> -Name <name> [...]
+# DIR is a package folder: the signed <name>.dll, pal_vbs_host.exe (and objects for `sign`); <name> is
+# the folder's name without ".vbs", or -Name. Options for all commands: -Distro NAME (default
+# $env:GRAMINE_VBS_DISTRO or Ubuntu-24.04), -CertName SUBJECT (default $env:GRAMINE_VBS_CERT_NAME or
+# TheDefaultTestEnclaveCertName). The earlier form `run|sign|verify -Dir <folder> -Name <name>` still works.
 # Arguments are parsed here (no param block): `--` must reach the script when it is started with
 # powershell -File (gramine-vbs.cmd), where a param block would refuse it.
 $Command = 'help'; $Target = ''; $Out = ''; $Distro = ''; $CertName = ''; $Threads = 0; $Root = ''
-$Report = ''; $Dir = ''; $Name = ''; $NoSign = $false; $Rebuild = $false; $ShowHost = $false
-$Install = $false; $Apt = $false
+$Report = ''; $Dir = ''; $Name = ''; $ShowHost = $false; $PidLine = $false
 $Rest = @()
 $valueOpts = 'Out', 'Distro', 'CertName', 'Threads', 'Root', 'Report', 'Dir', 'Name'
-$switchOpts = 'NoSign', 'Rebuild', 'ShowHost', 'Install', 'Apt'
+$switchOpts = 'ShowHost', 'PidLine'
 $pos = @()
 for ($i = 0; $i -lt $args.Count; $i++) {
     $a = [string]$args[$i]
@@ -54,6 +45,19 @@ if ($pos.Count -ge 1) { $Command = $pos[0] }
 if ($pos.Count -ge 2) { $Target = $pos[1] }
 if ($pos.Count -ge 3) { $Rest = @($pos[2..($pos.Count - 1)]) + $Rest }
 $Threads = [int]$Threads
+# the application's arguments of `run`, from gramine-vbs in WSL: JSON in base64 in the environment
+# (no quoting layer in between), each one quoted for CommandLineToArgvW; Windows PowerShell 5.1
+# passes a native command's arguments without escaping embedded quotes
+if ($env:GRAMINE_VBS_ARGS) {
+    $json = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($env:GRAMINE_VBS_ARGS))
+    $Rest = @()
+    $items = ConvertFrom-Json $json
+    foreach ($x in $items) {
+        $s = [string]$x -replace '(\\*)"', '$1$1\"'
+        if ($s -eq '' -or $s -match '\s') { $s = '"' + ($s -replace '(\\+)$', '$1$1') + '"' }
+        $Rest += $s
+    }
+}
 
 $ErrorActionPreference = 'Continue'
 $ProgressPreference = 'SilentlyContinue'
@@ -62,7 +66,6 @@ if (-not $Distro) { $Distro = if ($env:GRAMINE_VBS_DISTRO) { $env:GRAMINE_VBS_DI
 if (-not $CertName) {
     $CertName = if ($env:GRAMINE_VBS_CERT_NAME) { $env:GRAMINE_VBS_CERT_NAME } else { 'TheDefaultTestEnclaveCertName' }
 }
-$RepoWin = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 
 # a full path relative to PowerShell's location (not the process's current directory)
 function Full-Path([string]$p) { return $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($p) }
@@ -138,135 +141,22 @@ function Wsl-Home {
     return ($h | Select-Object -Last 1).Trim()
 }
 
-function Short-Hash([string]$s) {
-    $sha = [Security.Cryptography.SHA256]::Create()
-    $b = $sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($s.ToLowerInvariant()))
-    return (($b[0..3] | ForEach-Object { $_.ToString('x2') }) -join '')
-}
-
-function Safe-Leaf([string]$p) { return ((Split-Path -Leaf $p) -replace '[^A-Za-z0-9._-]', '_') }
-
-# Copies a Windows folder into the distribution (tar.exe here, wsl-build.sh sync there).
-function Sync-Folder([string]$WinDir, [string]$Dest) {
-    $tmp = Join-Path ([IO.Path]::GetTempPath()) "gramine-vbs-$PID"
-    New-Item -ItemType Directory -Force -Path $tmp | Out-Null
-    try {
-        $tar = Join-Path $tmp 'src.tar'
-        & tar.exe -cf $tar --exclude .git --exclude '*.vbs' --exclude './build-vbs*' --exclude './build' `
-            --exclude './subprojects/packagecache' -C $WinDir .
-        if ($LASTEXITCODE -ne 0) { Fail "tar.exe of $WinDir failed" }
-        # the sync step runs from an LF copy of wsl-build.sh (the checkout may have CRLF line ends)
-        $self = Join-Path $tmp 'wsl-build.sh'
-        $text = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'wsl-build.sh')) -replace "`r`n", "`n"
-        [IO.File]::WriteAllText($self, $text, (New-Object Text.UTF8Encoding($false)))
-        $rc = Invoke-WslScript $self 'sync' '' @{ GV_TAR = $tar; GV_DEST = $Dest } @('GV_TAR') -IsWinPath
-        if ($rc -ne 0) { Fail "copying $WinDir into WSL failed (exit $rc)" }
-    } finally {
-        Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
-    }
-}
-
-# ---- what a build was made from: names, sizes and times of the files that are copied to WSL ----
-
-function Add-Stamp($sb, [string]$dir, [string]$rel) {
-    foreach ($e in [IO.Directory]::EnumerateFileSystemEntries($dir)) {
-        $n = [IO.Path]::GetFileName($e)
-        $r = if ($rel) { "$rel/$n" } else { $n }
-        if ([IO.Directory]::Exists($e)) {
-            # the folders Sync-Folder leaves out
-            if ($n -eq '.git' -or $n -like '*.vbs' -or (-not $rel -and ($n -like 'build-vbs*' -or $n -eq 'build')) -or
-                $r -eq 'subprojects/packagecache') { continue }
-            Add-Stamp $sb $e $r
-        } else {
-            $i = New-Object IO.FileInfo($e)
-            [void]$sb.Append($r).Append('|').Append($i.Length).Append('|').Append($i.LastWriteTimeUtc.Ticks).Append("`n")
-        }
-    }
-}
-
-function Sources-Stamp($b) {
-    $sb = New-Object Text.StringBuilder
-    Add-Stamp $sb $RepoWin ''
-    $mdir = Split-Path -Parent $b.manifest
-    if (-not $b.manifest.StartsWith($RepoWin + '\', [StringComparison]::OrdinalIgnoreCase)) {
-        [void]$sb.Append("== $mdir`n"); Add-Stamp $sb $mdir ''
-    }
-    $sha = [Security.Cryptography.SHA256]::Create()
-    return (($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($sb.ToString())) |
-        ForEach-Object { $_.ToString('x2') }) -join '')
-}
-
-# ---- the build folder ----
+# ---- the package folder ----
 
 function Resolve-Build([string]$t, [switch]$MustExist) {
-    if (-not $t) { Fail "give a manifest or a build folder" }
-    $b = @{}
-    if (Test-Path -PathType Container $t) {
-        $b.out = (Resolve-Path $t).Path
-        $b.name = (Split-Path -Leaf $b.out) -replace '\.vbs$', ''
-        $m = Join-Path $b.out 'manifest-path.txt'
-        $b.manifest = if (Test-Path $m) { (Get-Content -Raw $m).Trim() } else { '' }
-    } else {
-        if (-not (Test-Path -PathType Leaf $t)) { Fail "no manifest $t" }
-        $b.manifest = (Resolve-Path $t).Path
-        $leaf = Split-Path -Leaf $b.manifest
-        $b.name = $leaf -replace '\.manifest\.toml$', '' -replace '\.manifest\.vbs$', '' -replace '\.manifest$', ''
-        $b.out = if ($Out) { Full-Path $Out } else {
-            Join-Path (Split-Path -Parent $b.manifest) "$($b.name).vbs" }
-    }
+    if (-not $t) { Fail 'give a package folder' 2 }
+    if (-not (Test-Path -PathType Container $t)) { Fail "no package folder $t" }
+    $b = @{ out = (Convert-Path $t) }   # (Resolve-Path would prefix a \\wsl$ path with the provider name)
+    $b.name = if ($Name) { $Name } else { (Split-Path -Leaf $b.out) -replace '\.vbs$', '' }
     if ($MustExist -and -not (Test-Path (Join-Path $b.out "$($b.name).dll"))) {
-        Fail "$($b.out) holds no signed $($b.name).dll (gramine-vbs build)"
+        Fail "$($b.out) holds no signed $($b.name).dll (run make VBS=1 in WSL)"
     }
     return $b
 }
 
-function Do-Build($b) {
-    $t = Need-Toolchain
-    $stamp = Sources-Stamp $b
-    $home_ = Wsl-Home
-    $mirror = "$home_/.cache/gramine-vbs/checkouts/$(Safe-Leaf $RepoWin)-$(Short-Hash $RepoWin)"
-    $t0 = Get-Date
-    Say "copy $RepoWin into WSL (${Distro}: $mirror)"
-    Sync-Folder $RepoWin $mirror
-    $mdir = Split-Path -Parent $b.manifest
-    $rel = $null
-    if ($b.manifest.StartsWith($RepoWin + '\', [StringComparison]::OrdinalIgnoreCase)) {
-        $rel = $b.manifest.Substring($RepoWin.Length + 1) -replace '\\', '/'
-        $mlinux = "$mirror/$rel"
-    } else {
-        $app = "$home_/.cache/gramine-vbs/apps/$(Safe-Leaf $mdir)-$(Short-Hash $mdir)"
-        Say "copy $mdir into WSL ($app)"
-        Sync-Folder $mdir $app
-        $mlinux = "$app/$(Split-Path -Leaf $b.manifest)"
-    }
-    $t1 = Get-Date
-    Say ("copied in {0:N1} s; Linux side in WSL" -f ($t1 - $t0).TotalSeconds)
-    New-Item -ItemType Directory -Force -Path $b.out | Out-Null
-    $vars = @{ GV_MANIFEST = $mlinux; GV_OUT = $b.out; GV_HDRID = "$($t.sdk.Name)-$($t.vc.Name)"; GV_HDRTAR = '' }
-    $script = "$mirror/scripts/vbs/wsl-build.sh"
-    $rc = Invoke-WslScript $script 'manifest' '' $vars @('GV_OUT', 'GV_HDRTAR')
-    if ($rc -eq 10) {
-        Say "first build with SDK $($t.sdk.Name) and MSVC $($t.vc.Name): handing their headers to WSL"
-        $tar = Join-Path $b.out 'winhdr.tar'
-        & tar.exe -cf $tar -C $t.sdk.FullName um shared ucrt
-        if ($LASTEXITCODE -eq 0) { & tar.exe -rf $tar -C $t.vc.FullName include }
-        if ($LASTEXITCODE -ne 0) { Fail 'tar.exe of the SDK and MSVC headers failed' }
-        $vars.GV_HDRTAR = $tar
-        $rc = Invoke-WslScript $script 'manifest' '' $vars @('GV_OUT', 'GV_HDRTAR')
-        Remove-Item -Force $tar -ErrorAction SilentlyContinue
-    }
-    if ($rc -eq 11) { Fail "the WSL distribution lacks build tools: run 'gramine-vbs setup' (then -Install or -Apt)" }
-    if ($rc -ne 0) { Fail "the Linux side of the build failed in WSL (exit $rc)" }
-    Set-Content -Path (Join-Path $b.out 'manifest-path.txt') -Value $b.manifest -Encoding UTF8
-    Set-Content -Path (Join-Path $b.out 'sources.stamp') -Value $stamp -Encoding ASCII
-    Remove-Item -Force (Join-Path $b.out "$($b.name).dll") -ErrorAction SilentlyContinue
-    Say ("Linux side done in {0:N1} s" -f ((Get-Date) - $t1).TotalSeconds)
-    if (-not $NoSign) { Do-Sign $b $t }
-}
-
 function Do-Sign($b, $t = $null) {
     if (-not $t) { $t = Need-Toolchain }
-    if (-not (Test-Path (Join-Path $b.out 'pal_vbs_enclave.obj'))) { Fail "$($b.out) holds no objects (gramine-vbs build)" }
+    if (-not (Test-Path (Join-Path $b.out 'pal_vbs_enclave.obj'))) { Fail "$($b.out) holds no objects (make VBS=1 in WSL)" }
     $t0 = Get-Date
     Push-Location $b.out
     try {
@@ -284,42 +174,88 @@ function Do-Sign($b, $t = $null) {
 function Do-Run($b) {
     $root = if ($Root) { Full-Path $Root } else { Join-Path $b.out 'root' }
     New-Item -ItemType Directory -Force -Path $root | Out-Null
+    # the host folders the manifest allows (vbs.allowed_files entries ending in /), below the root
     $hd = Join-Path $b.out 'host-dirs.txt'
     if (Test-Path $hd) {
         Get-Content $hd | Where-Object { $_ } | ForEach-Object {
             New-Item -ItemType Directory -Force -Path (Join-Path $root $_) | Out-Null }
     }
-    Push-Location $b.out
-    try {
-        if ($ShowHost) {
-            & .\pal_vbs_host.exe "$($b.name).dll" $Threads boot $root @Rest 2>&1 | ForEach-Object { "$_" }
-        } else {
-            & .\pal_vbs_host.exe "$($b.name).dll" $Threads boot $root @Rest 2>&1 |
-                Where-Object { $_ -notmatch '^\[(vbs-w|host)\]' } | ForEach-Object { "$_" }
+    if ($PidLine) { Write-Output "[gramine-vbs-pid] $PID" }   # (gramine-vbs in WSL stops the host through it)
+    # The host is started with one command-line string, so that the arguments reach it exactly as
+    # quoted at the top (Windows PowerShell 5.1 re-quotes a native command's arguments). Its
+    # standard output and error are printed as they arrive.
+    $line = '"{0}.dll" {1} boot "{2}"' -f $b.name, $Threads, $root
+    foreach ($x in $Rest) { $line += ' ' + $x }
+    $psi = New-Object Diagnostics.ProcessStartInfo
+    $psi.FileName = Join-Path $b.out 'pal_vbs_host.exe'
+    $psi.Arguments = $line
+    $psi.WorkingDirectory = $b.out
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.StandardOutputEncoding = [Text.Encoding]::UTF8
+    $psi.StandardErrorEncoding = [Text.Encoding]::UTF8
+    $proc = New-Object Diagnostics.Process
+    $proc.StartInfo = $psi
+    try { [void]$proc.Start() } catch { Fail "cannot start $($psi.FileName): $($_.Exception.Message)" }
+    # Lines are read in order, on this thread (the OutputDataReceived events of .NET may be handled
+    # out of order, which scrambled the output of programs that write many lines).
+    $ot = $proc.StandardOutput.ReadLineAsync()
+    $et = $proc.StandardError.ReadLineAsync()
+    while ($ot -or $et) {
+        $idle = $true
+        if ($ot -and $ot.IsCompleted) {
+            $l = $ot.Result; $idle = $false
+            if ($null -eq $l) { $ot = $null } else {
+                if ($ShowHost -or $l -notmatch '^\[(vbs-w|host)\]') { [Console]::Out.WriteLine($l) }
+                $ot = $proc.StandardOutput.ReadLineAsync() }
         }
-        $rc = $LASTEXITCODE
-    } finally { Pop-Location }
+        if ($et -and $et.IsCompleted) {
+            $l = $et.Result; $idle = $false
+            if ($null -eq $l) { $et = $null } else {
+                if ($ShowHost -or $l -notmatch '^\[(vbs-w|host)\]') { [Console]::Out.WriteLine($l) }
+                $et = $proc.StandardError.ReadLineAsync() }
+        }
+        if ($idle) { Start-Sleep -Milliseconds 2 }
+    }
+    [Console]::Out.Flush()
+    $proc.WaitForExit()
+    $rc = $proc.ExitCode
     exit $rc
 }
 
-# ---- setup: check, print what is missing, install into WSL only when asked ----
+# ---- setup: check and install missing WSL packages ----
+
+function Check-Item($ok, $what, $fix) {
+    if ($ok) { Write-Host "  ok       $what" } else { Write-Host "  MISSING  $what"; Write-Host "           -> $fix"; $script:bad++ }
+}
+
+# The Windows side only; changes nothing. Returns after printing what is missing.
+function Check-Windows {
+    Write-Host 'Windows:'
+    Check-Item ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64' -or $env:PROCESSOR_ARCHITECTURE -eq 'AMD64') "ARM64 or x64 Windows ($env:PROCESSOR_ARCHITECTURE)" 'an ARM64 or x64 Windows 11 machine is needed'
+    $dg = Get-CimInstance -Namespace root\Microsoft\Windows\DeviceGuard -ClassName Win32_DeviceGuard -ErrorAction SilentlyContinue
+    Check-Item ($dg -and $dg.VirtualizationBasedSecurityStatus -eq 2) 'VBS running' 'turn on memory integrity (Core isolation) and restart (Documentation/vbs.md)'
+    $t = Find-Toolchain
+    Check-Item $t.vs "Visual Studio ($($t.vs))" "install Visual Studio with Desktop development with C++ (and the $VbsArch build tools)"
+    Check-Item $t.vc "MSVC $VbsArch with the enclave CRT ($($t.vc.Name))" "Visual Studio Installer: MSVC $VbsArch build tools"
+    Check-Item $t.sdk "Windows SDK with winenclave.h ($($t.sdk.Name))" 'Visual Studio Installer: Windows 11 SDK 10.0.26100 or later'
+    Check-Item ($t.sdkbin -and (Test-Path "$($t.sdkbin)\veiid.exe") -and (Test-Path "$($t.sdkbin)\signtool.exe")) "veiid.exe and signtool.exe (SDK, $VbsArch)" 'the Windows SDK signing tools'
+    $cert = Get-ChildItem Cert:\CurrentUser\My -ErrorAction SilentlyContinue | Where-Object { $_.Subject -eq "CN=$CertName" }
+    Check-Item $cert "signing certificate CN=$CertName (current user)" 'create one as Documentation/vbs.md describes, or give -CertName'
+}
+
+function Do-Check {
+    $script:bad = 0
+    Check-Windows
+    if ($script:bad) { Write-Host "$($script:bad) item(s) missing"; exit 1 }
+    Write-Host 'the Windows side is ready'
+}
 
 function Do-Setup {
     $script:bad = 0
-    function Check($ok, $what, $fix) {
-        if ($ok) { Write-Host "  ok       $what" } else { Write-Host "  MISSING  $what"; Write-Host "           -> $fix"; $script:bad++ }
-    }
-    Write-Host 'Windows:'
-    Check ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64' -or $env:PROCESSOR_ARCHITECTURE -eq 'AMD64') "ARM64 or x64 Windows ($env:PROCESSOR_ARCHITECTURE)" 'an ARM64 or x64 Windows 11 machine is needed'
-    $dg = Get-CimInstance -Namespace root\Microsoft\Windows\DeviceGuard -ClassName Win32_DeviceGuard -ErrorAction SilentlyContinue
-    Check ($dg -and $dg.VirtualizationBasedSecurityStatus -eq 2) 'VBS running' 'turn on memory integrity (Core isolation) and restart (Documentation/vbs.rst)'
-    $t = Find-Toolchain
-    Check $t.vs "Visual Studio ($($t.vs))" "install Visual Studio with Desktop development with C++ (and the $VbsArch build tools)"
-    Check $t.vc "MSVC $VbsArch with the enclave CRT ($($t.vc.Name))" "Visual Studio Installer: MSVC $VbsArch build tools"
-    Check $t.sdk "Windows SDK with winenclave.h ($($t.sdk.Name))" 'Visual Studio Installer: Windows 11 SDK 10.0.26100 or later'
-    Check ($t.sdkbin -and (Test-Path "$($t.sdkbin)\veiid.exe") -and (Test-Path "$($t.sdkbin)\signtool.exe")) "veiid.exe and signtool.exe (SDK, $VbsArch)" 'the Windows SDK signing tools'
-    $cert = Get-ChildItem Cert:\CurrentUser\My -ErrorAction SilentlyContinue | Where-Object { $_.Subject -eq "CN=$CertName" }
-    Check $cert "signing certificate CN=$CertName (current user)" 'create one as Documentation/vbs.rst describes, or give -CertName'
+    Check-Windows
+    function Check($ok, $what, $fix) { Check-Item $ok $what $fix }
     Check (Get-Command tar.exe -ErrorAction SilentlyContinue) 'tar.exe' 'part of Windows 10 1803 and later'
     Write-Host 'WSL:'
     $wsl = Get-Command wsl.exe -ErrorAction SilentlyContinue
@@ -336,64 +272,36 @@ function Do-Setup {
     $text = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'wsl-setup.sh')) -replace "`r`n", "`n"
     [IO.File]::WriteAllText($self, $text, (New-Object Text.UTF8Encoding($false)))
     try {
-        if ($Install) {
-            $rc = Invoke-WslScript $self 'user' 'clang' -IsWinPath
-        } elseif ($Apt) {
-            $pkgs = @()
-            Invoke-WslScript $self 'missing' 'clang' -IsWinPath | Out-Null
-            $pkgs = @((& wsl.exe -d $Distro -e cat /tmp/gramine-vbs-missing) -split ' ' | Where-Object { $_ })
-            if ($pkgs.Count) {
-                Write-Host "sudo apt-get install in ${Distro}: $($pkgs -join ' ')"
-                & wsl.exe -d $Distro -e sudo apt-get update
-                & wsl.exe -d $Distro -e sudo apt-get install -y --no-install-recommends @pkgs
-            }
-        }
+        $rc = Invoke-WslScript $self 'user' 'clang' -IsWinPath
         $rc = Invoke-WslScript $self 'check' 'clang' -IsWinPath
-        Check ($rc -eq 0) "build tools in $Distro" "gramine-vbs setup -Install (no sudo: into ~/.local/share/gramine-vbs) or -Apt (sudo apt-get)"
+        Check ($rc -eq 0) "build tools in $Distro" "gramine-vbs setup, or ./install.sh --vbs in WSL"
     } finally { Remove-Item -Force $self -ErrorAction SilentlyContinue }
     if ($script:bad) { Write-Host "$($script:bad) item(s) missing"; exit 1 }
     Write-Host 'everything needed is present'
 }
 
-# ---- the earlier -Dir/-Name form ----
-
+# the earlier form: run|sign|verify -Dir <folder> -Name <name>
 if ($Dir) {
-    if (-not $Name) { Fail '-Dir needs -Name' }
-    $b = @{ out = (Resolve-Path $Dir).Path; name = $Name; manifest = '' }
-    switch ($Command) {
-        'sign' { Do-Sign $b; exit 0 }
-        'run' { Do-Run $b }
-        'verify' { $Target = $b.out }
-        default { Fail "-Dir works with sign, run and verify" }
-    }
+    if (-not $Name) { Fail '-Dir needs -Name' 2 }
+    $Target = $Dir
 }
 
 switch ($Command) {
+    'check' { Do-Check }
     'setup' { Do-Setup }
-    'build' {
-        $b = Resolve-Build $Target
-        if (-not $b.manifest) { Fail 'build needs a manifest' }
-        Do-Build $b
-    }
     'sign' { Do-Sign (Resolve-Build $Target) }
     'run' {
         $b = Resolve-Build $Target
-        $dll = Join-Path $b.out "$($b.name).dll"
-        # rebuild when asked, when unsigned, or when a file of the checkout (or of the manifest's
-        # folder, if it is outside) changed since the build: names, sizes and times
-        $old = Join-Path $b.out 'sources.stamp'
-        if ($b.manifest -and ($Rebuild -or -not (Test-Path $dll) -or -not (Test-Path $old) -or
-                (Get-Content -Raw $old).Trim() -ne (Sources-Stamp $b))) {
-            $NoSign = $false
-            Do-Build $b
+        $hostExe = Join-Path $b.out 'pal_vbs_host.exe'
+        if (-not (Test-Path (Join-Path $b.out "$($b.name).dll")) -or -not (Test-Path $hostExe)) {
+            Fail "no signed package at $($b.out); build it with make VBS=1 in WSL" 
         }
-        if (-not (Test-Path $dll)) { Fail "$dll does not exist (gramine-vbs build)" }
         Do-Run $b
     }
     'verify' {
-        if (-not $Report) { Fail 'verify needs -Report <file>' }
+        if (-not $Report) { Fail 'verify needs -Report <file>' 2 }
         $Report = Full-Path $Report
-        $b = if ($Dir) { @{ out = (Resolve-Path $Dir).Path; name = $Name } } else { Resolve-Build $Target -MustExist }
+        $b = Resolve-Build $Target -MustExist
         Push-Location $b.out
         try {
             & .\pal_vbs_host.exe "$($b.name).dll" 1 verify $Report @Rest 2>&1 |
@@ -403,7 +311,7 @@ switch ($Command) {
         exit $rc
     }
     default {
-        Get-Content $PSCommandPath | Select-Object -Skip 3 -First 25 | ForEach-Object { $_ -replace '^# ?', '' }
+        Get-Content $PSCommandPath | Select-Object -Skip 3 -First 22 | ForEach-Object { $_ -replace '^# ?', '' }
         exit $(if ($Command -eq 'help') { 0 } else { 2 })
     }
 }

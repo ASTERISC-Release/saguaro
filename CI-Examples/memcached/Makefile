@@ -19,7 +19,7 @@ endif
 
 .PHONY: all
 ifeq ($(VBS),1)
-# Windows VBS enclave (scripts/vbs/Makefile.vbs, Documentation/vbs.rst): libevent and memcached
+# Windows VBS enclave (scripts/vbs/Makefile.vbs, Documentation/vbs.md): libevent and memcached
 # built with the vbs gcc (libevent linked statically: it is not in the vbs sysroot) in vbs-build/,
 # packed by vbs.manifest.template
 VBS_APP = memcached

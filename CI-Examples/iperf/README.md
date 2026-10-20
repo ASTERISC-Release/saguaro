@@ -10,16 +10,14 @@ recent version of `iperf` as of this writing (3.16).
 
 # Building instructions
 
-We build `iperf` from source because Ubuntu 22.04 has `iperf3` v3.9 in its
-package repositories which is built with `TCP_CONGESTION` requirement (i.e.,
-with `iperf3_cv_header_tcp_congestion="yes"` config option). Using the Ubuntu
-package would fail with the following error:
+`iperf` is built from source because the Ubuntu 22.04 package `iperf3` v3.9 requires
+`TCP_CONGESTION` (it is built with the `iperf3_cv_header_tcp_congestion="yes"` configuration
+option). Using the Ubuntu package fails with the following error:
 ```
 iperf3: error - unable to set TCP_CONGESTION: ...
 ```
 
-Thus we build `iperf` manually. In this case, it is built without
-`TCP_CONGESTION`, and can successfully execute under Gramine[^1].
+The manual build omits `TCP_CONGESTION` and runs under Gramine[^1].
 
 [^1]: Starting from version 3.10, `iperf` supports environments that do not
 implement congestion control algorithm. Thus, iperf 3.10+ prebuilt packages
@@ -82,5 +80,19 @@ LD_LIBRARY_PATH=./install ./install/iperf3 -c localhost -p 5201
 
 # Notes
 - Tested on Ubuntu 22.04.
-- In the execution instructions, we use port `5201` for the client.
-  This is the default port used by `iperf`.
+- The execution instructions use port `5201` for the client. This is the default port of `iperf`.
+
+# Running under each backend
+
+Build first (`make`, or `make VBS=1` for vbs) and activate the install of the backend (`Documentation/quickstart/`). Results and dates are in the matrix of `CI-Examples/README.md`.
+
+- **direct:** not verified.¹
+- **vm:** not verified.¹
+- **sev:** not verified.¹
+- **tdx:** not verified.²
+- **sgx:** not verified.³ The commands are given above.
+- **vbs:** `make VBS=1 check`. Verified on ARM64 and x64.
+
+¹ No result is recorded for this backend (matrix in `CI-Examples/README.md`).  
+² TDX was tested offline by the maintainer, with the same result as SEV. No TDX log is in the repository, so the result is reported and not verified here. The TDX install needs `td-shim` (`Documentation/TODO.md`).  
+³ SGX has not run on this tree's hardware. The SGX build needs `protobuf-c` (`Documentation/TODO.md`).

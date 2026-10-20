@@ -18,7 +18,7 @@
 #
 # Results are appended to test/benchmarks/results/<date>_<arch>.txt (git-ignored) together with a machine
 # header, so runs on different boxes (or before/after a change) can be diffed. Prerequisites:
-# test/benchmarks/syscall-bench and the redis example must be buildable (test/test-direct.sh builds redis).
+# test/benchmarks/syscall-bench and the redis example must be buildable (test/direct/test-direct.sh builds redis).
 # Re-run with the same settings before and after a change; compare min/median, not single runs.
 
 set -uo pipefail
@@ -80,7 +80,7 @@ run_redis_one() {  # label port launcher...
 
 bench_redis() {
     local d="$ROOT/CI-Examples/redis"
-    [ -x "$d/redis-server" ] && [ -x "$d/src/src/redis-benchmark" ] || { say "redis not built (run test/test-direct.sh redis first)"; return 1; }
+    [ -x "$d/redis-server" ] && [ -x "$d/src/src/redis-benchmark" ] || { say "redis not built (run test/direct/test-direct.sh redis first)"; return 1; }
     ( cd "$d" && make -s redis-server.manifest >/dev/null 2>&1 )
     say "## redis-benchmark (requests/s; higher is better)  N=$REDIS_N clients=$REDIS_C server cpu=$SERVER_CPU client cpus=$CLIENT_CPUS"
     run_redis_one native 6390 taskset -c "$SERVER_CPU" ./redis-server --port 6390 --save ""

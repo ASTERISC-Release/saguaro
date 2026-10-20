@@ -21,6 +21,9 @@
 #include "crypto.h"
 #include "hex.h"
 #include "libos_fs.h"
+#ifdef ENABLE_GRAPHICS
+#include "libos_graphics.h"
+#endif
 #include "libos_handle.h"
 #include "libos_internal.h"
 #include "libos_process.h"
@@ -751,7 +754,13 @@ again:
  */
 #define FDPASS_MAGIC 0x53444650u /* "PFDS" */
 
-enum fdpass_kind { FDPASS_FILE = 1, FDPASS_PIPE, FDPASS_SOCK, FDPASS_EVENTFD, FDPASS_HOSTFD };
+enum fdpass_kind {
+    FDPASS_FILE = 1, FDPASS_PIPE, FDPASS_SOCK, FDPASS_EVENTFD, FDPASS_HOSTFD,
+    /* a graphics host-redirected handle (TYPE_HOST/TYPE_HOST_IDENTITY, VM graphics): the fd is the
+     * listener's fd plus GRAPHICS_HOST_FD_OFFSET and there is no PAL stream, so the entry carries
+     * no cargo; the receiver asks the listener for a dup and installs it at the new number */
+    FDPASS_GFXHOST,
+};
 
 struct fdpass_hdr {
     uint32_t magic;
@@ -775,10 +784,17 @@ struct fdpass_entry {
     struct libos_pipe_handle pipe;
     /* FDPASS_FILE: the absolute path follows, NUL-terminated */
     uint32_t path_len;
+    /* whether a PAL handle travels with this entry (all kinds but FDPASS_GFXHOST) */
+    bool has_cargo;
+    /* FDPASS_GFXHOST: the sender's descriptor (host fd + offset) and the handle type */
+    int gfx_fd;
+    int gfx_type;
 };
 
-/* describes `hdl` into `*cur` (advancing it, bounded by `end`); returns its PAL handle */
-static int fdpass_describe(struct libos_handle* hdl, char** cur, char* end, PAL_HANDLE* out_pal) {
+/* describes `hdl` (the sender's descriptor `fd`) into `*cur` (advancing it, bounded by `end`);
+ * returns its PAL handle, NULL for a kind that travels without one */
+static int fdpass_describe(struct libos_handle* hdl, int fd, char** cur, char* end,
+                           PAL_HANDLE* out_pal) {
     struct fdpass_entry e = {0};
     PAL_HANDLE pal = NULL;
     char* path = NULL;
@@ -850,11 +866,24 @@ static int fdpass_describe(struct libos_handle* hdl, char** cur, char* end, PAL_
             e.kind = FDPASS_HOSTFD;
             pal = hdl->pal_handle;
             break;
+#ifdef ENABLE_GRAPHICS
+        case TYPE_HOST:
+        case TYPE_HOST_IDENTITY:
+            /* Wine's clients hand the server their DRM device fds (DXVK on the GPU) */
+            if (!graphics_redirect_enabled() || fd <= (int)GRAPHICS_HOST_FD_OFFSET)
+                return -EOPNOTSUPP;
+            e.kind = FDPASS_GFXHOST;
+            e.gfx_fd = fd;
+            e.gfx_type = hdl->type;
+            break;
+#endif
         default:
+            __UNUSED(fd);
             log_warning("sendmsg: an fd of a handle of type %d cannot be passed to another process",
                         hdl->type);
             return -EOPNOTSUPP;
     }
+    e.has_cargo = pal != NULL;
     if ((size_t)(end - *cur) < sizeof(e) + e.path_len) {
         free(path);
         return -EMSGSIZE;
@@ -937,9 +966,10 @@ static int fdpass_rebuild_orphan_file(struct libos_handle* hdl, const char* path
 
 /* rebuilds the handle of a description; takes over `pal` (destroyed on failure) */
 static int fdpass_rebuild(const struct fdpass_entry* e, const char* path, PAL_HANDLE pal,
-                          struct libos_handle** out_hdl) {
+                          struct libos_handle** out_hdl, int* out_fixed_fd) {
     struct libos_handle* hdl = NULL;
     int ret;
+    *out_fixed_fd = -1;
     switch (e->kind) {
         case FDPASS_FILE: {
             hdl = get_new_handle();
@@ -1033,6 +1063,35 @@ static int fdpass_rebuild(const struct fdpass_entry* e, const char* path, PAL_HA
             hdl->pal_handle = pal;
             pal = NULL;
             break;
+#ifdef ENABLE_GRAPHICS
+        case FDPASS_GFXHOST: {
+            /* this process talks to the listener from now on (the wineserver never ran the
+             * graphics library); then its own dup of the host fd, at the number the host chose */
+            /* (graphics_redirect_enabled() is "comm page mapped and a VM/TDX PAL": the receiver
+             * may not have the page yet, so the PAL kind is tested here and the page mapped) */
+            const char* host = g_pal_public_state->host_type;
+            if (pal || (strcmp(host, "VM") && strcmp(host, "TDX"))) {
+                ret = -EOPNOTSUPP;
+                goto fail;
+            }
+            ret = graphics_ensure_comm_mapped();
+            if (ret < 0)
+                goto fail;
+            long dup_fd = graphics_host_dup_request(e->gfx_fd, e->gfx_type);
+            if (dup_fd < 0) {
+                ret = (int)dup_fd;
+                goto fail;
+            }
+            hdl = get_new_handle();
+            if (!hdl) {
+                ret = -ENOMEM;
+                goto fail;
+            }
+            hdl->type = e->gfx_type; /* as libos_dup.c builds a dup'ed host handle */
+            *out_fixed_fd = (int)dup_fd;
+            break;
+        }
+#endif
         default:
             ret = -EOPNOTSUPP;
             goto fail;
@@ -1070,11 +1129,13 @@ static void fdpass_deliver(PAL_HANDLE* cargo, size_t cargo_count, const char* me
     if (meta_size >= sizeof(hdr))
         memcpy(&hdr, cur, sizeof(hdr));
     cur += sizeof(hdr);
-    if (hdr.magic != FDPASS_MAGIC || hdr.count != cargo_count) {
+    if (hdr.magic != FDPASS_MAGIC || hdr.count < cargo_count) {
         log_warning("recvmsg: %zu handle(s) came without a usable description; dropped",
                     cargo_count);
         hdr.count = 0;
     }
+    /* entries and cargo pair up in order; an entry without cargo (a graphics host handle) takes
+     * none, so `used` counts cargo, not entries */
     for (size_t i = 0; i < hdr.count && (size_t)(end - cur) >= sizeof(struct fdpass_entry); i++) {
         struct fdpass_entry e;
         memcpy(&e, cur, sizeof(e));
@@ -1086,20 +1147,37 @@ static void fdpass_deliver(PAL_HANDLE* cargo, size_t cargo_count, const char* me
             path = cur;
             cur += e.path_len;
         }
-        used = i + 1;
+        PAL_HANDLE pal = NULL;
+        if (e.has_cargo) {
+            if (used >= cargo_count)
+                break;
+            pal = cargo[used++];
+        }
         if (installed >= max_fds) {
             /* no room in the control message: Linux sets MSG_CTRUNC and closes the surplus */
-            PalObjectDestroy(cargo[i]);
+            if (pal)
+                PalObjectDestroy(pal);
             continue;
         }
         struct libos_handle* hdl = NULL;
-        int ret = fdpass_rebuild(&e, path, cargo[i], &hdl);
+        int fixed_fd = -1;
+        int ret = fdpass_rebuild(&e, path, pal, &hdl, &fixed_fd);
         if (ret < 0) {
             log_warning("recvmsg: cannot rebuild a passed handle of kind %u: %s", e.kind,
                         unix_strerror(ret));
             continue;
         }
-        int fd = set_new_fd_handle(hdl, cmsg_cloexec ? FD_CLOEXEC : 0, NULL);
+        int fd;
+        if (fixed_fd >= 0) {
+#ifdef ENABLE_GRAPHICS
+            ret = graphics_drop_stale_host_handle(fixed_fd);
+            if (ret == 0)
+                ret = set_new_fd_handle_by_fd(fixed_fd, hdl, cmsg_cloexec ? FD_CLOEXEC : 0, NULL);
+#endif
+            fd = ret < 0 ? ret : fixed_fd;
+        } else {
+            fd = set_new_fd_handle(hdl, cmsg_cloexec ? FD_CLOEXEC : 0, NULL);
+        }
         put_handle(hdl);
         if (fd < 0)
             continue;
@@ -1126,18 +1204,22 @@ static void fdpass_deliver(PAL_HANDLE* cargo, size_t cargo_count, const char* me
  * maybe_force_nonblocking_wrapper() (one attempt, EAGAIN surfaces as on Linux) */
 static int send_with_handles(bool force_nonblocking, struct libos_handle* handle,
                              PAL_HANDLE pal_handle, void* buf, size_t* size,
-                             struct libos_handle** hdls, size_t count) {
+                             struct libos_handle** hdls, const int* fds, size_t count) {
     size_t meta_cap = sizeof(struct fdpass_hdr) + count * (sizeof(struct fdpass_entry) + PATH_MAX);
     char* meta = malloc(meta_cap);
     if (!meta)
         return -ENOMEM;
     PAL_HANDLE cargo[PAL_STREAM_MAX_HANDLES];
+    size_t cargo_count = 0;
     char* cur = meta + sizeof(struct fdpass_hdr);
     int ret;
     for (size_t i = 0; i < count; i++) {
-        ret = fdpass_describe(hdls[i], &cur, meta + meta_cap, &cargo[i]);
+        PAL_HANDLE pal = NULL;
+        ret = fdpass_describe(hdls[i], fds[i], &cur, meta + meta_cap, &pal);
         if (ret < 0)
             goto out;
+        if (pal)
+            cargo[cargo_count++] = pal;
     }
     struct fdpass_hdr hdr = {.magic = FDPASS_MAGIC, .count = count};
     memcpy(meta, &hdr, sizeof(hdr));
@@ -1158,7 +1240,7 @@ static int send_with_handles(bool force_nonblocking, struct libos_handle* handle
             toggled = PalStreamAttributesSetByHandle(pal_handle, &attr) == 0;
         }
     }
-    ret = PalStreamWriteWithHandles(pal_handle, buf, size, cargo, count, meta, cur - meta);
+    ret = PalStreamWriteWithHandles(pal_handle, buf, size, cargo, cargo_count, meta, cur - meta);
     if (toggled) {
         attr.nonblocking = false;
         (void)PalStreamAttributesSetByHandle(pal_handle, &attr);
@@ -1188,6 +1270,7 @@ static int send(struct libos_handle* handle, struct iovec* iov, size_t iov_len, 
 
     /* the fds of SCM_RIGHTS control messages go with the data (fdpass_describe) */
     struct libos_handle* pass_hdls[PAL_STREAM_MAX_HANDLES];
+    int pass_fds[PAL_STREAM_MAX_HANDLES];
     size_t pass_cnt = 0;
     int ret = 0;
     struct cmsghdr* cmsg = (struct cmsghdr*)msg_control;
@@ -1212,6 +1295,7 @@ static int send(struct libos_handle* handle, struct iovec* iov, size_t iov_len, 
                     ret = -EBADF;
                     goto out_pass;
                 }
+                pass_fds[pass_cnt] = fd;
                 pass_hdls[pass_cnt++] = hdl;
             }
         } else if (cmsg->cmsg_level == SOL_SOCKET) {
@@ -1261,7 +1345,7 @@ static int send(struct libos_handle* handle, struct iovec* iov, size_t iov_len, 
         ret = maybe_force_nonblocking_wrapper(force_nonblocking, handle, pal_handle, PalStreamWrite,
                                               buf, &size);
     } else {
-        ret = send_with_handles(force_nonblocking, handle, pal_handle, buf, &size, pass_hdls,
+        ret = send_with_handles(force_nonblocking, handle, pal_handle, buf, &size, pass_hdls, pass_fds,
                                 pass_cnt);
     }
     free(backing_buf);
@@ -1372,7 +1456,8 @@ static int recv(struct libos_handle* handle, struct iovec* iov, size_t iov_len, 
             *msg_controllen_ptr = 0;
         } else if (ret < 0) {
             ret = pal_to_unix_errno(ret);
-        } else if (cargo_count) {
+        } else if (cargo_count || meta_size) {
+            /* handles, or a description alone (a graphics host handle carries no PAL handle) */
             fdpass_deliver(cargo, cargo_count, meta, meta_size, msg_control, msg_controllen_ptr,
                            cmsg_cloexec);
         } else {

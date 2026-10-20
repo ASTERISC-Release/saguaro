@@ -27,6 +27,13 @@ int PalVirtualMemoryAllocContiguous(void* addr, size_t size, pal_prot_flags_t pr
     return _PalVirtualMemoryAllocContiguous(addr, size, prot, out_phys);
 }
 
+int PalVirtualMemoryAlias(void* addr, void* src, size_t size, pal_prot_flags_t prot) {
+    if (!addr || !src || !size || !IS_ALLOC_ALIGNED_PTR(addr) || !IS_ALLOC_ALIGNED_PTR(src) ||
+            !IS_ALLOC_ALIGNED(size))
+        return -PAL_ERROR_INVAL;
+    return _PalVirtualMemoryAlias(addr, src, size, prot);
+}
+
 int PalVirtualMemoryFree(void* addr, size_t size) {
     if (!addr || !IS_ALLOC_ALIGNED_PTR(addr) || !size || !IS_ALLOC_ALIGNED(size)) {
         return -PAL_ERROR_INVAL;

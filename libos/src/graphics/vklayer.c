@@ -38,6 +38,7 @@
 #include <xcb/xcb.h>
 
 #include "common.h"
+#include "graphics_comm_abi.h"
 
 #define LAYER_NAME "VK_LAYER_GRAMINE_present"
 #define MAX_OBJECTS 64
@@ -203,6 +204,8 @@ struct swapchain {
     double last_x_present;   /* when the last buffer went to the listener (s) */
     uint64_t presents;
     uint64_t skipped;        /* frames not sent to X because of the pacing below */
+    double rate_log_start;   /* EGL_VULKAN_RATE_LOG: the window's start and presents then */
+    uint64_t rate_log_presents;
 };
 
 static double now_s(void) {
@@ -220,6 +223,10 @@ static double now_s(void) {
  * cross-GPU copy of about 3 ms per 1920x1080 frame). */
 static double g_fifo_interval = 1.0 / 60;
 static double g_max_interval = 1.0 / 144;
+/* EGL_VULKAN_RATE_LOG=<seconds>: a line with the presents of that window and their rate, on
+ * stderr, every so many seconds (a frame-rate reading where the window's own HUD is not visible,
+ * e.g. the Xorg dummy server; 0 or unset: off) */
+static double g_rate_log_interval = 0;
 
 static void read_pacing_env(void) {
     const char* r = getenv("EGL_VULKAN_REFRESH");
@@ -228,6 +235,28 @@ static void read_pacing_env(void) {
     const char* m = getenv("EGL_VULKAN_MAX_FPS");
     if (m && atof(m) > 0)
         g_max_interval = 1.0 / atof(m);
+    const char* l = getenv("EGL_VULKAN_RATE_LOG");
+    if (l && atof(l) > 0)
+        g_rate_log_interval = atof(l);
+}
+
+static void rate_log(struct swapchain* sc) {
+    if (g_rate_log_interval <= 0)
+        return;
+    double now = now_s();
+    if (!sc->rate_log_start) {
+        sc->rate_log_start = now;
+        sc->rate_log_presents = sc->presents;
+        return;
+    }
+    double dt = now - sc->rate_log_start;
+    if (dt < g_rate_log_interval)
+        return;
+    uint64_t n = sc->presents - sc->rate_log_presents;
+    LOG("rate: %lu presents in %.1f s = %.1f per second (%lu since start)\n", (unsigned long)n,
+        dt, n / dt, (unsigned long)sc->presents);
+    sc->rate_log_start = now;
+    sc->rate_log_presents = sc->presents;
 }
 
 /* ------------------------------------------------------------------------------------------------
@@ -378,16 +407,23 @@ static VKAPI_ATTR VkResult VKAPI_CALL layer_GetPhysicalDeviceSurfaceSupportKHR(
 
 static void fill_caps(struct layer_surface* s, VkSurfaceCapabilitiesKHR* caps) {
     uint32_t w = 0, h = 0;
-    if (!window_geometry(s, &w, &h)) {
-        w = 1920;
-        h = 1080;
-    }
+    bool known = window_geometry(s, &w, &h);
     memset(caps, 0, sizeof(*caps));
     caps->minImageCount = 2;
     caps->maxImageCount = MAX_IMAGES;
-    caps->currentExtent = (VkExtent2D){w, h};
-    caps->minImageExtent = (VkExtent2D){1, 1};
-    caps->maxImageExtent = (VkExtent2D){16384, 16384};
+    if (known) {
+        /* as Mesa's X11 WSI: the window's size is the only extent. Proton's full-screen hack
+         * (win32u's vkCreateSwapchainKHR) sizes its host swapchain from minImageExtent, so a
+         * minimum of 1x1 gave The Witcher 1 a 1x1 swapchain on a display larger than its mode
+         * (proton-vm/FINDINGS.md 2026-10-18) */
+        caps->currentExtent = (VkExtent2D){w, h};
+        caps->minImageExtent = caps->currentExtent;
+        caps->maxImageExtent = caps->currentExtent;
+    } else {
+        caps->currentExtent = (VkExtent2D){1920, 1080};
+        caps->minImageExtent = (VkExtent2D){1, 1};
+        caps->maxImageExtent = (VkExtent2D){16384, 16384};
+    }
     caps->maxImageArrayLayers = 1;
     caps->supportedTransforms = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
     caps->currentTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
@@ -837,19 +873,20 @@ static VKAPI_ATTR VkResult VKAPI_CALL layer_CreateSwapchainKHR(VkDevice device,
         VkImageSubresource sub = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0};
         VkSubresourceLayout layout;
         d->GetImageSubresourceLayout(d->device, sc->export_images[i], &sub, &layout);
-        /* The guest fd is a forwarded host fd (host fd + 500). The listener's XCB hands the fd to
+        /* The guest fd is a forwarded host fd (host fd + GRAPHICS_FS_OFFSET, the shared ABI
+         * constant: the listener gets the raw host fd number). The listener's XCB hands the fd to
          * the X server and closes it, so give it a host duplicate and keep our own fd. The guest
          * handle of the duplicate goes stale then and is left alone (the LibOS drops it when the
          * host reuses the number). */
         int dup_fd = dup(fd);
         close(fd);
-        if (dup_fd < 500) {
+        if (dup_fd < (int)GRAPHICS_FS_OFFSET) {
             LOG("unexpected dma-buf fd %d (not a forwarded host fd)\n", dup_fd);
             r = VK_ERROR_INITIALIZATION_FAILED;
             goto fail;
         }
         memset(&sc->bufs[i], 0, sizeof(sc->bufs[i]));
-        sc->bufs[i].bo_fd = dup_fd - 500;
+        sc->bufs[i].bo_fd = dup_fd - GRAPHICS_FS_OFFSET;
         send_setup(sc->bufs_pa, i, layout.size + layout.offset, layout.rowPitch);
     }
 
@@ -1128,6 +1165,7 @@ static VkResult present_one(struct swapchain* sc, uint32_t index, const VkSemaph
      * semaphore, whose signal comes later in submission order than this blit. */
     sc->held[index] = false;
     sc->presents++;
+    rate_log(sc);
     deliver_pending(sc);
     sc->pending = (int)e;
     return sc->out_of_date ? VK_ERROR_OUT_OF_DATE_KHR : VK_SUCCESS;

@@ -28,6 +28,8 @@
 #define GIC_INTID_TLB_SHOOTDOWN_SGI  1 /* software TLB shootdown IPI (SGI #1, see the
                                         * send_invalidate_tlb_ipi_and_wait protocol; SGI #0
                                         * stays untouched for firmware/debug use) */
+#define GIC_INTID_TIMER_KICK_SGI     2 /* a registration of an early timeout on another CPU asks
+                                        * CPU0 to re-arm its timer (lapic_timer_arm_cpu0) */
 #define GIC_INTID_SPI_VIRTIO1       32 /* virtio-mmio devices start here (offset by index) */
 #define GIC_INTID_SPI_UART0         33 /* PL011 (unused by the kernel: PL011 is polled) */
 
@@ -68,7 +70,10 @@
 
 void lapic_enable(void);                   /* unmask Group-1 IRQs via ICC_PMR_EL1 */
 int  lapic_timer_init(void);               /* EL1 physical generic timer + its PPI line */
-void lapic_timer_rearm(void);              /* reload CNTP_TVAL_EL0 (one-shot semantics) */
+/* Reload CNTP_TVAL_EL0 (one-shot semantics): on CPU0 with the delay to the earliest pending
+ * timeout (timeouts_next_delay_us(): at most the 100 ms tick, at least 50 us), on the other CPUs
+ * with the 100 ms tick. Does not EOI. */
+void lapic_timer_rearm(void);
 void lapic_signal_interrupt_complete(uint32_t intid); /* ICC_EOIR1_EL1, write carries INTID */
 
 /* Acknowledge the highest-priority pending Group-1 IRQ (ICC_IAR1_EL1); returns INTID

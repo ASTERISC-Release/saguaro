@@ -3,12 +3,10 @@
 This directory contains the Makefile and the template manifest for the most
 recent version of Redis (as of this writing, version 6.0.5).
 
-The Makefile and the template manifest contain extensive comments and are made
-self-explanatory. Please review them to gain understanding of Gramine and
-requirements for applications running under Gramine. If you want to contribute a
-new example to Gramine and you take this Redis example as a template, we
-recommend to remove the comments from your copies as they only add noise (see
-e.g. Memcached for a "stripped-down" example).
+The Makefile and the template manifest contain extensive comments. Review them to understand
+Gramine and the requirements for applications that run under it. A new example that takes this
+Redis example as a template should drop the comments, which only add noise (see Memcached for a
+stripped-down example).
 
 
 # Quick Start
@@ -58,7 +56,7 @@ USE_SELECT=1`.
 
 # Redis in a Windows VBS enclave
 
-In WSL on an ARM64 Windows machine with VBS (`Documentation/vbs.rst`, "Makefile flow"):
+In WSL on an ARM64 Windows machine with VBS (`Documentation/vbs.md`, "Makefile flow"):
 
 ```sh
 make VBS=1          # Redis 6.0.5 built with the vbs gcc in vbs-build/, packed, signed on Windows
@@ -76,3 +74,18 @@ are the Windows host's, and another interface would need a firewall rule) on por
 when the manifest is rendered). It uses the vbs glibc's malloc (`MALLOC=libc`) instead of jemalloc.
 `vbs.enclave_size` is 1G (`VBS_ENCLAVE_SIZE` when rendering; at least 256M): about 650,000 keys
 with 1 KiB values fit. Clients run on Windows: WSL2 in NAT mode cannot reach Windows' loopback.
+
+# Running under each backend
+
+Build first (`make`, or `make VBS=1` for vbs) and activate the install of the backend (`Documentation/quickstart/`). Results and dates are in the matrix of `CI-Examples/README.md`.
+
+- **direct:** `gramine-direct redis-server`. Verified on x86_64 and aarch64.
+- **vm:** `GRAMINE_RUNNER=gramine-vm test/direct/test-direct.sh redis`, from the repository root (the VM forwards the server's port through its relay). Verified on x86_64 and aarch64.
+- **sev:** not verified.¹
+- **tdx:** not verified.²
+- **sgx:** not verified.³ The commands are given above.
+- **vbs:** `make VBS=1 check`. Verified on ARM64 and x64.
+
+¹ No result is recorded for this backend (matrix in `CI-Examples/README.md`).  
+² TDX was tested offline by the maintainer, with the same result as SEV. No TDX log is in the repository, so the result is reported and not verified here. The TDX install needs `td-shim` (`Documentation/TODO.md`).  
+³ SGX has not run on this tree's hardware. The SGX build needs `protobuf-c` (`Documentation/TODO.md`).

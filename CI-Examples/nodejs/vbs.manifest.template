@@ -1,7 +1,7 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 # SPDX-License-Identifier: BSD-3-Clause
 
-# Node.js manifest for a Windows VBS enclave (`make VBS=1`, Documentation/vbs.rst). The node binary is
+# Node.js manifest for a Windows VBS enclave (`make VBS=1`, Documentation/vbs.md). The node binary is
 # the official linux-arm64 build (dynamic, not built with the vbs glibc); its interpreter is
 # /lib/ld-linux-aarch64.so.1 and its libraries are packed in /usr/lib. The arguments come from the
 # command line: `gramine-vbs node --jitless --v8-pool-size=1 /app/helloworld.js`.

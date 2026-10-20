@@ -1,0 +1,69 @@
+#!/bin/bash
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
+#
+# `scripts/install.sh --vbs`: the WSL half of the VBS enclave tooling (Documentation/vbs.md). Run it in
+# the WSL2 Ubuntu distribution of the Windows machine, as a normal user (no sudo):
+#
+#   1. installs the missing build packages user-level (wsl-setup.sh user: Ubuntu packages unpacked
+#      into ~/.local/share/gramine-vbs/tools; nothing is installed system-wide);
+#   2. puts `gramine-vbs` on the PATH (a link in ~/.local/bin);
+#   3. builds the vbs glibc, PAL and LibOS (once per checkout; `make VBS=1` would do it too);
+#   4. checks the Windows side through powershell.exe and prints the Windows steps it cannot do.
+#      It changes nothing on Windows.
+#
+# Idempotent: a second run finds everything in place. After it: `make VBS=1` in an example and
+# `gramine-vbs <program>`.
+set -e
+
+HERE=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)
+BIN=${GRAMINE_VBS_BIN:-$HOME/.local/bin}
+
+if [ "$(id -u)" = 0 ]; then
+    echo "ERROR: run install.sh --vbs as your normal user; it never needs root"
+    exit 1
+fi
+if ! grep -qi microsoft /proc/version 2>/dev/null; then
+    echo "note: this is not WSL; only the Linux half can be installed (GRAMINE_VBS_WINDOWS=user@host"
+    echo "      names a Windows machine over ssh)."
+fi
+
+echo ">>> build packages (user-level, no sudo)"
+if sh "$HERE/wsl-setup.sh" check clang >/dev/null 2>&1 || \
+        { [ -f "${GRAMINE_VBS_TOOLS:-$HOME/.local/share/gramine-vbs/tools}/env.sh" ] && \
+          (. "${GRAMINE_VBS_TOOLS:-$HOME/.local/share/gramine-vbs/tools}/env.sh"; \
+           sh "$HERE/wsl-setup.sh" check clang >/dev/null 2>&1); }; then
+    echo "all present"
+else
+    sh "$HERE/wsl-setup.sh" user clang
+fi
+
+echo ">>> gramine-vbs on the PATH ($BIN)"
+mkdir -p "$BIN"
+ln -sfn "$HERE/gramine-vbs" "$BIN/gramine-vbs"
+echo "$BIN/gramine-vbs -> $HERE/gramine-vbs"
+case ":$PATH:" in
+    *":$BIN:"*) ;;
+    *) echo "note: $BIN is not in your PATH; add it:  export PATH=\"$BIN:\$PATH\"" ;;
+esac
+
+echo ">>> vbs glibc, PAL and LibOS (first time: several minutes)"
+"$HERE/gramine-vbs" runtime
+
+echo ">>> Windows side"
+if "$HERE/gramine-vbs" check; then
+    echo
+    echo "Done. Next:  cd CI-Examples/helloworld && make VBS=1 && gramine-vbs helloworld"
+else
+    cat <<'MSG'
+
+The Windows side above is not ready. These steps change the machine and are done once on Windows
+(install.sh does not do them); see Documentation/vbs.md, Installation, and
+Documentation/devel/vbs-enclave/windows-fresh-machine.md:
+  - VBS running: Windows Security > Device security > Core isolation > Memory integrity, restart
+  - Visual Studio (C++ desktop workload, build tools of this architecture) and the Windows SDK
+  - the enclave test-signing certificate (CN=TheDefaultTestEnclaveCertName) and test signing on
+Then run scripts/install.sh --vbs again (or `gramine-vbs check`).
+MSG
+    exit 1
+fi

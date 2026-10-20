@@ -226,6 +226,10 @@ struct pal_public_state {
      * fs, ss), for the signal frames of system-call contexts, which the LibOS fills with Linux's
      * selectors otherwise (syscallas.S); 0 on other PALs */
     uint64_t vm_user_csgsfs;
+    /* VM PAL, x86_64: offset in the PAL TCB of the csgsfs the kernel's sigreturn stub returns
+     * with (the frame's CS: 32-bit code of Wine's WoW64 resumes in its own code segment); 0 on
+     * other PALs */
+    uint64_t vm_user_csgsfs_offset;
 };
 
 /* We cannot mark this as returning a pointer to `const` object, because LibOS can
@@ -284,6 +288,24 @@ int PalVirtualMemoryAlloc(void* addr, size_t size, pal_prot_flags_t prot);
  */
 int PalVirtualMemoryAllocContiguous(void* addr, size_t size, pal_prot_flags_t prot,
                                     uint64_t* out_phys);
+
+/*!
+ * \brief Map the device memory that `[src, src+size)` maps at `addr` as well.
+ *
+ * \param addr  Virtual address, page-aligned (a range the caller bookkept; what it mapped is
+ *              replaced).
+ * \param src   Virtual address of device memory outside guest RAM, page-aligned (a slice of the
+ *              VM PAL's graphics arenas that the host listener mapped a GPU buffer into).
+ * \param size  Size, page-aligned.
+ * \param prot  See #PalVirtualMemoryAlloc.
+ *
+ * For the VM PAL's graphics redirection: a mapping of a host GPU buffer at an address the
+ * application chose (MAP_FIXED; Wine's WoW64 places host-visible Vulkan memory below 4 GiB with
+ * VK_EXT_map_memory_placed, and the arenas lie above). Both ranges then show the same memory, with
+ * the same cache attributes. Freed with #PalVirtualMemoryFree, which leaves the device memory
+ * alone. Other PALs return -PAL_ERROR_NOTIMPLEMENTED.
+ */
+int PalVirtualMemoryAlias(void* addr, void* src, size_t size, pal_prot_flags_t prot);
 
 /*!
  * \brief Deallocate a previously allocated memory mapping.
@@ -1101,6 +1123,32 @@ int PalSegmentBaseGet(enum pal_segment_reg reg, uintptr_t* addr);
 int PalSegmentBaseSet(enum pal_segment_reg reg, uintptr_t addr);
 
 /*!
+ * \brief Set a per-thread segment descriptor in a GDT TLS slot (x86_64; Linux's set_thread_area).
+ *
+ * \param entry       The GDT entry, in Linux's numbering (12 to 14 are the TLS slots).
+ * \param descriptor  The raw 8-byte segment descriptor (0 clears the slot). It must describe a
+ *                    user (DPL 3) code or data segment when present.
+ *
+ * \returns 0 on success, negative error value on failure; -PAL_ERROR_NOTIMPLEMENTED where the
+ *          PAL has no per-thread GDT slots (the LibOS reports ENOSYS then).
+ *
+ * The slot belongs to the calling thread: every thread has its own three, empty at creation, and
+ * the PAL makes them effective whenever the thread runs. User code loads the selector
+ * `(entry << 3) | 3` into a segment register itself.
+ */
+int PalSegmentDescriptorSet(unsigned int entry, uint64_t descriptor);
+
+/*!
+ * \brief Get the calling thread's segment descriptor of a GDT TLS slot (x86_64).
+ *
+ * \param      entry       The GDT entry, in Linux's numbering (12 to 14).
+ * \param[out] descriptor  The raw 8-byte descriptor (0 when the slot is empty).
+ *
+ * \returns 0 on success, negative error value on failure.
+ */
+int PalSegmentDescriptorGet(unsigned int entry, uint64_t* descriptor);
+
+/*!
  * \brief Perform a device-specific operation `cmd`.
  *
  * \param         handle   Handle of the device.
@@ -1127,7 +1175,7 @@ int PalDeviceIoControl(PAL_HANDLE handle, uint32_t cmd, unsigned long arg, int* 
 /*
  * Host passthrough (Linux PAL only, i.e. `gramine-direct`). These calls give the LibOS access to
  * host objects that have no PAL abstraction. Every other PAL returns -PAL_ERROR_NOTIMPLEMENTED.
- * The LibOS uses them only when the manifest opts in (see Documentation/manifest-syntax.rst).
+ * The LibOS uses them only when the manifest opts in (see Documentation/manifest-syntax.md).
  */
 
 /*!

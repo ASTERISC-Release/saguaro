@@ -286,6 +286,11 @@ void prepare_sigframe(PAL_CONTEXT* context, siginfo_t* siginfo, void* handler, v
          * has its own, and Wine's handlers compare the frame's CS with the one they run with */
         if (g_pal_public_state->vm_user_csgsfs && libos_get_tcb()->context.syscall_nr >= 0)
             sigframe->uc.uc_mcontext.csgsfsss = g_pal_public_state->vm_user_csgsfs;
+        /* the handler itself runs in 64-bit mode whatever code the signal interrupted (32-bit
+         * code under Wine's WoW64 has CS 0x23 in the frame): the kernel's return into the
+         * handler takes CS/SS from the context (Linux sets __USER_CS the same way) */
+        if (g_pal_public_state->vm_user_csgsfs)
+            context->csgsfsss = g_pal_public_state->vm_user_csgsfs;
     }
 
     /* XXX: Currently we assume that `struct libos_xstate`, `PAL_XREGS_STATE` and `struct _fpstate`

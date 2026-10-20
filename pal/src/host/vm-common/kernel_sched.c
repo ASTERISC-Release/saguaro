@@ -55,6 +55,67 @@ static void switch_to_thread_address_space(struct thread* thread) {
     }
 }
 
+static inline uint16_t read_fs_selector(void) {
+    uint16_t sel;
+    __asm__ volatile("mov %%fs, %0" : "=r"(sel));
+    return sel;
+}
+
+static inline void load_fs_selector(uint16_t sel) {
+    __asm__ volatile("mov %0, %%fs" :: "r"(sel) : "memory");
+}
+
+static inline uint16_t read_ds_selector(void) {
+    uint16_t sel;
+    __asm__ volatile("mov %%ds, %0" : "=r"(sel));
+    return sel;
+}
+
+static inline uint16_t read_es_selector(void) {
+    uint16_t sel;
+    __asm__ volatile("mov %%es, %0" : "=r"(sel));
+    return sel;
+}
+
+/* Switch-out of a thread (or the entry of a deferred upcall on it): the user's %fs selector,
+ * which is still in the register since the kernel never loads %fs for itself, and, when it is a
+ * selector (Wine's 32-bit TLS, set_thread_area), the live base too: the user's own `mov %fs`
+ * or wrfsbase changed it since the last arch_prctl, and the switch-in restores this value. Also
+ * %ds and %es, which 32-bit code addresses through (the kernel never loads them after boot
+ * either). */
+void sched_thread_save_segs(struct thread* thread) {
+    if (!thread || thread->is_helper)
+        return;
+    uint16_t sel = read_fs_selector();
+    thread->user_fs_sel = sel;
+    if (sel)
+        thread->context.user_fsbase = rdmsr(MSR_IA32_FS_BASE);
+    thread->user_ds_sel = read_ds_selector();
+    thread->user_es_sel = read_es_selector();
+}
+
+/* Switch-in, on the CPU that runs the thread: its TLS descriptors into this CPU's GDT, then
+ * its selector (the CPU takes the base from the descriptor, as the user's `mov` did) or a null
+ * %fs (so that no selector leaks between threads: Wine's dispatcher compares the live %fs with
+ * the one it stored), then the saved base, which wins (Linux with FSGSBASE does the same). A TLS
+ * selector whose slot the thread has since cleared loads as null instead of faulting here. */
+static void thread_load_fs(struct thread* thread) {
+    gdt_load_tls(thread->tls_desc);
+    uint16_t sel = thread->user_fs_sel;
+    if (sel >= (GDT_ENTRY_TLS_MIN << 3) && sel < ((GDT_ENTRY_TLS_MIN + GDT_ENTRIES_TLS) << 3) &&
+            !(thread->tls_desc[(sel >> 3) - GDT_ENTRY_TLS_MIN] & (1ULL << 47)))
+        sel = 0;
+    if (sel || read_fs_selector())
+        load_fs_selector(sel);
+    wrmsr(MSR_IA32_FS_BASE, thread->context.user_fsbase);
+    /* %ds/%es: the thread's (a user selector or null); a CPU that ran only the kernel so far
+     * holds the kernel data selector, which an iretq to ring 3 would null */
+    if (read_ds_selector() != thread->user_ds_sel)
+        __asm__ volatile("mov %0, %%ds" :: "r"(thread->user_ds_sel) : "memory");
+    if (read_es_selector() != thread->user_es_sel)
+        __asm__ volatile("mov %0, %%es" :: "r"(thread->user_es_sel) : "memory");
+}
+
 /* Called by save_context_and_restore_next() on the scheduling (or interrupt) stack, after the
  * previous context is saved and GS holds the next thread's TCB. The root must not change while
  * still running on the previous thread's stack, which may be private to its process. */
@@ -68,6 +129,7 @@ void sched_switch_to_current_thread_root(void) {
     struct per_cpu_data* cpu = get_per_cpu_data();
     cpu->current_tcb = (void*)get_gs_base(thread);
     syscalls_select_entry(cpu, thread->user_gsbase != 0);
+    thread_load_fs(thread);
 }
 
 static uint64_t get_rflags(void) {
@@ -80,9 +142,10 @@ static void save_userland_context(struct thread* curr_thread, struct isr_regs* u
     if (!curr_thread)
         return;
 
-    /* we don't save the FS register because Gramine doesn't use/modify it; only the app uses and
-     * modifies it, and so we can just rely that curr_thread->context.user_fsbase is not affected
-     * during these context save/restore */
+    /* Gramine itself never loads FS: the register holds the application's selector, and the base
+     * is the application's unless it loaded a selector (then the descriptor's), see
+     * sched_thread_save_segs() */
+    sched_thread_save_segs(curr_thread);
 
     memcpy(curr_thread->context.fpregs, userland_regs->fpregs, g_xsave_size);
 
@@ -284,7 +347,9 @@ void sched_thread(uint32_t* lock_to_unlock, int* clear_child_tid) {
         clear_child_tid = NULL;
     }
 
-    /* it is cumbersome to restore FSBASE in asm, so restore explicitly here */
+    /* it is cumbersome to restore FSBASE in asm, so restore explicitly here (the switch-in
+     * reloads it after the TLS slots, sched_switch_to_current_thread_root()) */
+    sched_thread_save_segs(curr_thread);
     wrmsr(MSR_IA32_FS_BASE, next_thread->context.user_fsbase);
 
     uint64_t next_gs_base = (uint64_t)get_gs_base(next_thread);
@@ -321,6 +386,7 @@ void sched_thread_wait(int* futex_word, spinlock_t* lock) {
 
     assert(next_thread != curr_thread);
 
+    sched_thread_save_segs(curr_thread);
     wrmsr(MSR_IA32_FS_BASE, next_thread->context.user_fsbase);
 
     uint64_t next_gs_base = (uint64_t)get_gs_base(next_thread);
@@ -333,7 +399,19 @@ void sched_thread_wait(int* futex_word, spinlock_t* lock) {
     spinlock_lock(lock);
 }
 
+uint64_t g_streams_wake_gen;
+
+void sched_streams_wake(void) {
+    __atomic_fetch_add(&g_streams_wake_gen, 1, __ATOMIC_RELEASE);
+    sched_thread_wakeup(&g_streams_waiting_events_futex);
+}
+
 int sched_thread_wait_interruptible(int* futex_word, spinlock_t* lock) {
+    return sched_thread_wait_interruptible_gen(futex_word, lock, /*gen=*/NULL, /*expected=*/0);
+}
+
+int sched_thread_wait_interruptible_gen(int* futex_word, spinlock_t* lock, uint64_t* gen,
+                                        uint64_t expected) {
     assert(spinlock_is_locked(lock));
     assert(lock != &g_thread_list_lock);
 
@@ -349,6 +427,12 @@ int sched_thread_wait_interruptible(int* futex_word, spinlock_t* lock) {
         return -PAL_ERROR_INTERRUPTED;
     }
 
+    /* a wakeup that ran after the caller sampled the generation: the caller re-checks instead */
+    if (gen && __atomic_load_n(gen, __ATOMIC_ACQUIRE) != expected) {
+        spinlock_unlock_enable_irq(&g_thread_list_lock);
+        return 1;
+    }
+
     spinlock_unlock(lock);
 
     curr_thread->state              = THREAD_BLOCKED;
@@ -360,6 +444,7 @@ int sched_thread_wait_interruptible(int* futex_word, spinlock_t* lock) {
 
     assert(next_thread != curr_thread);
 
+    sched_thread_save_segs(curr_thread);
     wrmsr(MSR_IA32_FS_BASE, next_thread->context.user_fsbase);
 
     uint64_t next_gs_base = (uint64_t)get_gs_base(next_thread);

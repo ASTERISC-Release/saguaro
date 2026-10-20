@@ -3,7 +3,7 @@
 
 # SuperTuxKart under gramine-direct on the host GPU (Documentation/devel/graphics-direct/).
 # Insecure by design: the application can submit work to the GPU and talk to the X server directly
-# (see the insecure__ keys below and Documentation/manifest-syntax.rst).
+# (see the insecure__ keys below and Documentation/manifest-syntax.md).
 
 libos.entrypoint = "/supertuxkart/stk-build/stk-code/cmake_build/bin/supertuxkart"
 

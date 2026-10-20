@@ -1,10 +1,11 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 # SPDX-License-Identifier: BSD-3-Clause
 
-# Python3 manifest for a Windows VBS enclave (`make VBS=1`, Documentation/vbs.rst): the counterpart
+# Python3 manifest for a Windows VBS enclave (`make VBS=1`, Documentation/vbs.md): the counterpart
 # of python.manifest.template. The interpreter is CPython 3.12.7 built for the enclave against the
 # vbs glibc (scripts/vbs/build-python.sh, once per checkout, into build-vbs-python); it lacks the
-# modules whose libraries are not in that sysroot (zlib, OpenSSL, libffi, ...) and NumPy/SciPy.
+# modules whose libraries are not in that sysroot (zlib, OpenSSL, libffi, ...); NumPy/SciPy are
+# packed on x86_64 only (-Dnumpy=1).
 # Everything is packed into the signed image (vbs.packed_files, measured like sgx.trusted_files);
 # `gramine-vbs ./python scripts/helloworld.py` runs a script (the paths are relative to /app).
 
@@ -36,6 +37,7 @@ vbs.packed_files = [
 {% for lib in [vbs.ldso, "libc.so.6", "libm.so.6"] %}
   { path = "{{ arch_libdir }}/{{ lib }}", uri = "file:{{ vbs.sysroot }}/usr/lib/{{ lib }}" },
 {% endfor %}
+{% if numpy is defined %}
   # NumPy and SciPy (the manylinux wheels unpacked in vbs-build/site, Makefile) and the host runtime
   { path = "/usr/lib/python3.12/site-packages/numpy", uri = "file:vbs-build/site/numpy" },
   { path = "/usr/lib/python3.12/site-packages/scipy", uri = "file:vbs-build/site/scipy" },
@@ -44,6 +46,7 @@ vbs.packed_files = [
   { path = "/usr/lib/libstdc++.so.6", uri = "file:vbs-build/lib/libstdc++.so.6" },
   { path = "/usr/lib/libgcc_s.so.1", uri = "file:vbs-build/lib/libgcc_s.so.1" },
   { path = "/usr/lib/libz.so.1", uri = "file:vbs-build/lib/libz.so.1" },
+{% endif %}
   { path = "/app/scripts", uri = "file:scripts" },
   { path = "/etc/hosts", uri = "file:helper-files/hosts" },
 ]

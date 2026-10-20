@@ -7,8 +7,8 @@ the Makefile and a template for generating the manifest.
 
 ## Installing prerequisites
 
-For generating the manifest and running the test scripts, please run the following
-command to install the required packages (Ubuntu-specific):
+To generate the manifest and run the test scripts, install the required packages with the
+following command (Ubuntu-specific):
 
     sudo apt-get install libnss-mdns python3-numpy python3-scipy
 
@@ -47,7 +47,7 @@ run `sgx-quote.py` and verify the output, you will need to provide an
 
 ## Building for a Windows VBS enclave
 
-In WSL on an ARM64 Windows machine with VBS (see `Documentation/vbs.rst`, "Makefile flow"), run
+In WSL on an ARM64 Windows machine with VBS (see `Documentation/vbs.md`, "Makefile flow"), run
 `make VBS=1` in the directory. The first time it builds CPython 3.12.7 for the enclave against the
 vbs glibc (`scripts/vbs/build-python.sh`, about 80 s, kept in `build-vbs-python` of the checkout);
 then it renders `vbs.manifest.template` into `python.manifest.vbs`, packs the interpreter, its
@@ -59,7 +59,7 @@ enclaves; the page is also fetched with Windows' `curl.exe`) and skips 3/4 and 4
 
 # Run Python with Gramine
 
-Here's an example of running Python scripts under Gramine:
+Examples of running Python scripts under Gramine:
 ```
 gramine-sgx ./python scripts/helloworld.py
 gramine-sgx ./python scripts/test-numpy.py
@@ -80,3 +80,17 @@ To run Gramine in non-SGX (direct) mode, replace `gramine-sgx` with
 gramine-vbs ./python scripts/helloworld.py
 VBS=1 GRAMINE=$(realpath ../../scripts/vbs/gramine-vbs) ./run-tests.sh
 ```
+
+# Running under each backend
+
+Build first (`make`, or `make VBS=1` for vbs) and activate the install of the backend (`Documentation/quickstart/`). Results and dates are in the matrix of `CI-Examples/README.md`.
+
+- **direct:** `gramine-direct ./python scripts/helloworld.py`. Verified on x86_64 and aarch64.
+- **vm:** `gramine-vm python scripts/helloworld.py`. Verified on x86_64. Skipped on aarch64: the host python is not PIE.
+- **sev:** `gramine-sev python scripts/helloworld.py`. Verified. Only `scripts/helloworld.py` was run.
+- **tdx:** reported by the maintainer to pass, offline, as under SEV.¹
+- **sgx:** not verified.² The commands are given above.
+- **vbs:** `make VBS=1 check`. Tests 1/4 and 2/4 pass on ARM64 and x64. Tests 3/4 and 4/4 (NumPy, SciPy) are not packed on ARM64 and fail on x64.
+
+¹ TDX was tested offline by the maintainer, with the same result as SEV. No TDX log is in the repository, so the result is reported and not verified here. The TDX install needs `td-shim` (`Documentation/TODO.md`).  
+² SGX has not run on this tree's hardware. The SGX build needs `protobuf-c` (`Documentation/TODO.md`).

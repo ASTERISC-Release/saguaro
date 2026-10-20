@@ -17,6 +17,7 @@
 
 #include "kernel_apic.h"
 #include "kernel_multicore.h"
+#include "kernel_time.h"
 
 static bool g_gicv3 = false; /* decided in gic_init() */
 
@@ -150,7 +151,8 @@ int lapic_timer_init(void) {
          * that sets exactly the bits we want in addition to whatever the reset set. */
         uint32_t grp = gicr_read(rdbase, GICR_SGI_BASE + GICD_IGROUPR(30 / 32));
         gicr_write(rdbase, GICR_SGI_BASE + GICD_IGROUPR(30 / 32),
-                   grp | (1u << (30 % 32)) | (1u << GIC_INTID_TLB_SHOOTDOWN_SGI));
+                   grp | (1u << (30 % 32)) | (1u << GIC_INTID_TLB_SHOOTDOWN_SGI)
+                       | (1u << GIC_INTID_TIMER_KICK_SGI));
         /* priorities are byte-per-INTID (lower value = higher priority; both under PMR 0xf0);
          * RMW so neighboring INTIDs keep their bytes (a plain word write zeroes theirs) */
         uint32_t prio = gicr_read(rdbase, GICR_SGI_BASE + GICD_IPRIORITYR(30 / 4));
@@ -160,10 +162,15 @@ int lapic_timer_init(void) {
         unsigned b8 = 8 * (GIC_INTID_TLB_SHOOTDOWN_SGI % 4);
         prio = (prio & ~(0xffu << b8)) | (0x20u << b8);
         gicr_write(rdbase, GICR_SGI_BASE + GICD_IPRIORITYR(GIC_INTID_TLB_SHOOTDOWN_SGI / 4), prio);
+        prio = gicr_read(rdbase, GICR_SGI_BASE + GICD_IPRIORITYR(GIC_INTID_TIMER_KICK_SGI / 4));
+        b8 = 8 * (GIC_INTID_TIMER_KICK_SGI % 4);
+        prio = (prio & ~(0xffu << b8)) | (0x20u << b8);
+        gicr_write(rdbase, GICR_SGI_BASE + GICD_IPRIORITYR(GIC_INTID_TIMER_KICK_SGI / 4), prio);
         /* enables are write-1-to-set (reset already enables the SGIs, but set it explicitly) */
         gicr_write(rdbase, GICR_SGI_BASE + GICD_ISENABLER(30 / 32), 1u << (30 % 32));
         gicr_write(rdbase, GICR_SGI_BASE + GICD_ISENABLER(GIC_INTID_TLB_SHOOTDOWN_SGI / 32),
-                   1u << (GIC_INTID_TLB_SHOOTDOWN_SGI % 32));
+                   (1u << (GIC_INTID_TLB_SHOOTDOWN_SGI % 32))
+                   | (1u << (GIC_INTID_TIMER_KICK_SGI % 32)));
     } else {
         gic_set_priority(GIC_INTID_PPI_EL1_PHYS, 0x10);
         gic_enable_intid(GIC_INTID_PPI_EL1_PHYS);
@@ -180,10 +187,36 @@ int lapic_timer_init(void) {
     return 0;
 }
 
-void lapic_timer_rearm(void) {
+static void timer_program_us(uint64_t delay_us) {
     uint64_t cntfrq;
     __asm__ volatile("mrs %0, cntfrq_el0" : "=r"(cntfrq));
-    __asm__ volatile("msr cntp_tval_el0, %0" :: "r"(cntfrq / 10));
+    /* CNTP_TVAL_EL0 is a signed 32-bit down-counter: delay_us <= 100 ms keeps it far below 2^31 */
+    __asm__ volatile("msr cntp_tval_el0, %0" :: "r"(delay_us * cntfrq / 1000000));
+}
+
+void lapic_timer_rearm(void) {
+    /* only CPU0 serves timeouts (isr_c()): its timer is armed for the earliest pending deadline,
+     * the 100 ms tick being the ceiling; the other CPUs keep the 100 ms tick (their preemption
+     * quantum) */
+    uint64_t delay_us = LAPIC_TIMER_PERIOD_US;
+    if (get_per_cpu_data()->cpu_id == 0)
+        delay_us = timeouts_next_delay_us();
+    timer_program_us(delay_us);
+}
+
+void lapic_timer_arm_cpu0(uint64_t delay_us) {
+    /* called by register_timeout() with the timeouts lock held and IRQs disabled */
+    if (get_per_cpu_data()->cpu_id == 0) {
+        timer_program_us(delay_us);
+        return;
+    }
+    /* CNTP_TVAL_EL0 is per-CPU hardware: ask CPU0 to re-arm. Its handler (isr_c(), SGI case)
+     * recomputes the deadline from the list, so the delay is not passed. ICC_SGI1R_EL1 as in the
+     * TLB shootdown: INTID [27:24], TargetList [15:0] = CPU0 (Aff3.2.1 = 0, Aff0 range 0), IRM = 0.
+     * The DSB orders the list update before the SGI. */
+    uint64_t sgi = (1ULL << 0) | ((uint64_t)GIC_INTID_TIMER_KICK_SGI << 24);
+    __asm__ volatile("dsb ish\n\tisb" ::: "memory");
+    __asm__ volatile("msr " ICC_SGI1R_EL1 ", %0" :: "r"(sgi));
 }
 
 int gic_init(void) {

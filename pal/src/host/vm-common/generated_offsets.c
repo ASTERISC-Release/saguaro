@@ -33,6 +33,8 @@ const struct generated_offset generated_offsets[] = {
     /* struct pal_tcb_vm */
     OFFSET(PAL_TCB_LIBOS, pal_tcb_vm, common.libos_tcb),
     OFFSET(PAL_TCB_VM_USER_RIP, pal_tcb_vm, kernel_thread.context.user_rip),
+    OFFSET(PAL_TCB_VM_INT80_REGS, pal_tcb_vm, kernel_thread.int80_regs),
+    OFFSET(PAL_TCB_VM_INT80_RFLAGS, pal_tcb_vm, kernel_thread.int80_rflags),
     OFFSET(PAL_TCB_VM_PREEMPT_PENDING, pal_tcb_vm, kernel_thread.preempt_pending),
 
     OFFSET(PAL_TCB_VM_SIGRETURN_USER_RSP, pal_tcb_vm, kernel_thread.sigreturn_user_rsp),

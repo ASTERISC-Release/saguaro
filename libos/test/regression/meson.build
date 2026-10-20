@@ -213,6 +213,7 @@ if host_machine.cpu_family() == 'x86_64'
         'in_out_instruction' : {},
         'rdtsc': {},
         'sighandler_divbyzero': {},
+        'thread_area_x86_64': {},
     }
 endif
 

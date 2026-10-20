@@ -7,7 +7,7 @@
 # - make               -- create non-SGX manifest
 # - make SGX=1         -- create SGX manifest
 # - make VBS=1         -- build the SQLite shell for a Windows VBS enclave, pack and sign it (in
-#                         WSL; see Documentation/vbs.rst); make VBS=1 check runs the three scripts
+#                         WSL; see Documentation/vbs.md); make VBS=1 check runs the three scripts
 #                         in the enclave and compares the output
 
 ARCH_LIBDIR ?= /lib/$(shell $(CC) -dumpmachine)
@@ -73,6 +73,15 @@ regression: all
 	@echo "[ Success 2/3 ]"
 
 	$(GRAMINE) sqlite3 < scripts/select.sql > OUTPUT
+ifneq ($(filter gramine-vm gramine-sev,$(GRAMINE)),)
+	# The VM and SEV launchers print console lines to stdout; drop them before the diff. The
+	# patterns are those of vmfilter() in test/vm/multiproc/vm-examples.sh, plus the line the PAL
+	# added later ('Application address space').
+	grep -v -e '^Configuring Gramine VM' -e '^REM_MEM_SIZE' -e '^\[boot\]' -e '^(PAL) Physical' \
+		-e '^Private frame pool' -e 'self-check passed' -e '^\[ VM ' -e '^vm-relay:' \
+		-e '^Application address space' \
+		OUTPUT > OUTPUT.filtered; mv OUTPUT.filtered OUTPUT
+endif
 	diff OUTPUT scripts/select.txt
 	@echo "[ Success 3/3 ]"
 

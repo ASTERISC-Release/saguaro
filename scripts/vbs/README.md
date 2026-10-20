@@ -11,8 +11,8 @@ and the design of the hello-world path). An enclave image holds two kinds of cod
   machine (the repository's build container), and the manifest, all placed into the image by
   `pack.py`.
 
-`gramine-vbs` (in this folder; `Documentation/vbs.rst`) does all of the steps below from a
-manifest: `gramine-vbs run app.manifest`. `gramine-vbs.ps1` is its Windows-only half. The steps by
+`gramine-vbs` (in this folder; `Documentation/vbs.md`) does all of the steps below from a
+manifest (`gramine-vbs build app.manifest`, which `make VBS=1` calls); `gramine-vbs.ps1` is its Windows-side runner. The steps by
 hand (the commands used for the phase-2 hello world):
 
 1. **Linux ELF objects** (aarch64 build container):
@@ -50,10 +50,18 @@ hand (the commands used for the phase-2 hello world):
 5. **Run** on Windows: `pal_vbs_host.exe pal_vbs_enclave.dll 1 boot` runs the application;
    `pal_vbs_host.exe pal_vbs_enclave.dll 1` runs the PAL-level self-test.
 
-**On one Windows machine** (no second Linux machine; `Documentation/devel/vbs-enclave/PLAN-windows-build.md`):
-steps 1 and 2 run inside a WSL2 Ubuntu 24.04 aarch64 distribution (`wsl-setup.sh` checks and installs
-its tools, with apt or, without sudo, into a user prefix). `gramine-vbs.cmd` (`gramine-vbs.ps1`) is
-`gramine-vbs` for that machine: it copies the checkout into WSL, runs the Linux side there
-(`wsl-build.sh manifest`) and links, signs and runs on Windows. `build-enclave.ps1` does steps 3 to
+**On one Windows machine** (no second Linux machine; `Documentation/devel/vbs-enclave/PLAN-windows-build.md`,
+`PLAN-make-vbs.md`): everything runs in a WSL2 Ubuntu distribution of the machine's architecture,
+except linking, signing and running, which `gramine-vbs` reaches through `powershell.exe`:
+
+    scripts/install.sh --vbs          # once: user-level packages, gramine-vbs on PATH, runtime, Windows check
+    cd CI-Examples/helloworld
+    make VBS=1                        # build and package: helloworld.manifest.vbs, helloworld.vbs/helloworld.dll
+    gramine-vbs helloworld            # run it (never builds; says to run make VBS=1 if the package is missing)
+
+`gramine-vbs` (Python, this folder) does steps 1 to 4 and calls `gramine-vbs.ps1` for step 5.
+`gramine-vbs.ps1` (`gramine-vbs.cmd` runs it from cmd or PowerShell) is the Windows-side runner:
+`run`, `sign`, `verify`, `check` (the Windows side) and `setup` (Windows and WSL checks, user-level WSL
+packages); it does not build. `install-vbs.sh` is `install.sh --vbs`. `build-enclave.ps1` does steps 3 to
 5 for a pack made by hand in WSL (`wsl-build.sh objs`: the objects with clang inside WSL, against
 this machine's SDK and MSVC headers).

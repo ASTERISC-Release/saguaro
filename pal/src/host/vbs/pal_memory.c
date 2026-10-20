@@ -384,3 +384,11 @@ int _PalVirtualMemoryAllocContiguous(void* addr, size_t size, pal_prot_flags_t p
     __UNUSED(out_phys);
     return -PAL_ERROR_NOTIMPLEMENTED;
 }
+
+int _PalVirtualMemoryAlias(void* addr, void* src, size_t size, pal_prot_flags_t prot) {
+    __UNUSED(addr);
+    __UNUSED(src);
+    __UNUSED(size);
+    __UNUSED(prot);
+    return -PAL_ERROR_NOTIMPLEMENTED;
+}

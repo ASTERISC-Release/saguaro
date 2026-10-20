@@ -97,6 +97,8 @@ int main(int argc, char** argv, char** envp) {
 #if defined(__x86_64__)
     PRINT_SYMBOL(PalSegmentBaseGet);
     PRINT_SYMBOL(PalSegmentBaseSet);
+    PRINT_SYMBOL(PalSegmentDescriptorSet);
+    PRINT_SYMBOL(PalSegmentDescriptorGet);
 #endif
 
     return 0;

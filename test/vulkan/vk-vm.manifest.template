@@ -9,6 +9,10 @@
 libos.entrypoint = "{{ entrypoint }}"
 
 sys.stack.size = "32M"
+{% if multiprocess|string == "1" %}
+# the VM PAL's demand-paged processes (MULTIPROCESS=1): the children of vk-two are processes
+sys.experimental__multiprocess = true
+{% endif %}
 loader.insecure__use_host_env = true
 loader.insecure__use_cmdline_argv = true
 loader.log_level = "{{ log_level }}"
@@ -42,6 +46,9 @@ loader.env.EGL_IOCTL_LOG = "0"
 
 fs.mounts = [
   { path = "{{ entrypoint }}", uri = "file:{{ binary }}" },
+{% if two|string == "1" %}
+  { path = "/vk-headless", uri = "file:vk-headless" },
+{% endif %}
   { path = "/libgraphics.so", uri = "file:{{ gramine.libgraphics }}" },
 {% if present|string == "1" %}
   { path = "/gramine-xdg/vulkan", uri = "file:{{ layer_dir }}" },

@@ -10,9 +10,9 @@
 #   VM_PREFIX=/tmp/vm-prefix                   OUT=/tmp/vm-examples (per-run logs)
 #
 # Each example's manifest is re-rendered with `make -B` against the VM install (so loader.entrypoint
-# is the VM libsysdb), then run with `gramine-vm`. The application binary must be PIE (the VM's DRAM
-# starts at 0x40000000, a non-PIE binary linked at 0x400000 cannot be mapped); non-PIE ones are
-# reported SKIP. Examples that need a TCP/IP stack (redis, memcached, nginx, lighttpd, rust-hyper,
+# is the VM libsysdb), then run with `gramine-vm`. On aarch64 the application binary must be PIE (the
+# VM's DRAM starts at 0x40000000, a non-PIE binary linked at 0x400000 cannot be mapped); non-PIE ones
+# are reported SKIP. x86_64 has no such restriction. Examples that need a TCP/IP stack (redis, memcached, nginx, lighttpd, rust-hyper,
 # networks) cannot run: the VM PAL only has vsock.
 set -u
 
@@ -40,7 +40,9 @@ run_example() {
     if [ -n "$binary" ] && [ ! -e "$binary" ]; then
         make "$binary" > "$OUT/$name.build.log" 2>&1 || true
     fi
-    if [ -n "$binary" ] && [ -e "$binary" ] && ! file -L "$binary" | grep -q "pie executable\|shared object"; then
+    # only aarch64 needs PIE (its guest DRAM starts at 0x40000000); on x86_64 a non-PIE binary maps
+    if [ "$(uname -m)" = aarch64 ] && [ -n "$binary" ] && [ -e "$binary" ] \
+            && ! file -L "$binary" | grep -q "pie executable\|shared object"; then
         echo "SKIP  $name ($binary is not PIE)"; skip=$((skip+1)); return
     fi
     if [ "$stdin" = - ]; then
@@ -81,7 +83,7 @@ for ex in $SEL; do
         run_example busybox-echo busybox busybox.manifest busybox "Hello" - busybox echo Hello
         run_example busybox-uname busybox busybox.manifest busybox "$(uname -m)" - busybox uname -m ;;
     python)
-        # Ubuntu's python3 is a non-PIE ET_EXEC (linked at 0x400000): skipped unless a PIE one is used
+        # Ubuntu's python3 is a non-PIE ET_EXEC (linked at 0x400000): skipped on aarch64 unless a PIE one is used
         run_example python python python.manifest "$(readlink -f "$(command -v python3)")" "42" - python -c "print(6*7)" ;;
     sqlite)
         run_example sqlite sqlite sqlite3.manifest "" "" scripts/create.sql sqlite3 ;;

@@ -3,7 +3,7 @@
 
 /*
  * vbs-tls-client: a Windows TLS client (SChannel) that talks to a server in a VBS enclave only after
- * it verified the server's attestation (CI-Examples/vbs/tls-echo, Documentation/vbs.rst "TLS with
+ * it verified the server's attestation (CI-Examples/vbs/tls-echo, Documentation/vbs.md "TLS with
  * attestation"). `gramine-vbs tls-client ...` compiles it once with MSVC and runs it.
  *
  *   vbs-tls-client PORT --verifier DIR\IMAGE.dll [checks] [action]

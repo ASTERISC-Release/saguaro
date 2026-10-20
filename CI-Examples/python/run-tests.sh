@@ -73,6 +73,8 @@ trap - EXIT INT TERM
 rm -f OUTPUT1 OUTPUT2
 
 # === numpy ===
+# (not packed in the aarch64 VBS example: Makefile)
+if test -z "${VBS_NO_NUMPY:-}"; then
 $GRAMINE ./python scripts/test-numpy.py > OUTPUT
 grep -q "dot: " OUTPUT && echo "[ Success 3/4 ]"
 rm OUTPUT
@@ -81,6 +83,7 @@ rm OUTPUT
 $GRAMINE ./python scripts/test-scipy.py > OUTPUT
 grep -q "cholesky: " OUTPUT && echo "[ Success 4/4 ]"
 rm OUTPUT
+fi
 
 # === SGX quote ===
 if test -n "$SGX"

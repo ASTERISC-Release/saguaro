@@ -1842,6 +1842,17 @@ int memory_address_space_protect(struct memory_address_space* space, void* addr,
     return memory_address_space_flush_range(start, size);
 }
 
+int memory_address_space_alias_device(struct memory_address_space* space, uintptr_t dst,
+                                      uintptr_t src, size_t size, bool write, bool execute) {
+    __UNUSED(space);
+    __UNUSED(dst);
+    __UNUSED(src);
+    __UNUSED(size);
+    __UNUSED(write);
+    __UNUSED(execute);
+    return -PAL_ERROR_NOTIMPLEMENTED;
+}
+
 int memory_address_space_alloc_contiguous(struct memory_address_space* space, void* addr,
                                           size_t size, bool execute, uintptr_t* out_phys) {
     __UNUSED(space);

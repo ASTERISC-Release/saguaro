@@ -34,6 +34,19 @@ int _PalSegmentBaseSet(enum pal_segment_reg reg, uintptr_t addr) {
     }
 }
 
+/* the host kernel owns the GDT TLS slots; the LibOS reports ENOSYS for set_thread_area */
+int _PalSegmentDescriptorSet(unsigned int entry, uint64_t descriptor) {
+    __UNUSED(entry);
+    __UNUSED(descriptor);
+    return -PAL_ERROR_NOTIMPLEMENTED;
+}
+
+int _PalSegmentDescriptorGet(unsigned int entry, uint64_t* descriptor) {
+    __UNUSED(entry);
+    __UNUSED(descriptor);
+    return -PAL_ERROR_NOTIMPLEMENTED;
+}
+
 int _PalCpuIdRetrieve(uint32_t leaf, uint32_t subleaf, uint32_t values[static 4]) {
     cpuid(leaf, subleaf, values);
     return 0;

@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
-# Builds the DIRECT PAL natively on a hosted aarch64 runner and runs test/test-direct.sh. The other
+# Builds the DIRECT PAL natively on a hosted aarch64 runner and runs test/direct/test-direct.sh. The other
 # platforms have workflows of their own: direct-x86_64.yml, direct-riscv64-emulated.yml (cross-built,
 # tested in an emulated guest) and vm-x86_64.yml (the vm PAL).
 #
 # With the `vm_build` input on (the default), a second job builds and installs the aarch64 VM PAL
 # (gramine-vm) and renders and checks the helloworld manifest with it. Build only: the hosted aarch64
-# runners have no usable KVM (run it on an aarch64 machine with /dev/kvm: test/test-vm.sh). It exists
+# runners have no usable KVM (run it on an aarch64 machine with /dev/kvm: test/vm/test-vm.sh). It exists
 # because main once stopped building the aarch64 VM PAL unnoticed (the x86_64-only multiprocess work,
 # Documentation/devel/syscall-compat/TODO.md).
 #
@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
     inputs:
       suites:
-        description: "test/test-direct.sh suites (default: PAL and LibOS regression and the python example; see test/test-direct.sh --list for the other application suites)"
+        description: "test/direct/test-direct.sh suites (default: PAL and LibOS regression and the python example; see test/direct/test-direct.sh --list for the other application suites)"
         required: false
         default: "pal libos python"
       stress:
@@ -76,7 +76,7 @@ jobs:
           SUITES: ${{ inputs.suites || 'pal libos python' }}   # via env, never interpolated into the script text
         run: |
           export PATH="$HOME/.cargo/bin:$PATH"
-          test/test-direct.sh $SUITES
+          test/direct/test-direct.sh $SUITES
 
       - name: Rewrite stress (aarch64)
         if: ${{ inputs.stress }}

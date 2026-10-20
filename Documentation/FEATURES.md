@@ -18,7 +18,7 @@ production use.
 - **AArch64 vm PAL** (experimental). `gramine-vm` boots a microVM under stock QEMU `virt` with KVM at 1 to 4
   vCPUs and runs LibOS applications; with `sys.experimental__multiprocess` also `fork`, `vfork`, `execve`,
   pipes, signals and shared memory between processes (bash, nginx workers, redis `BGSAVE`; qualified on
-  the GX10). `aarch64/vm/`, `vm-multiproc-aarch64/`
+  the GX10). `CHANGELOG.md`, `vm-multiproc-aarch64/`
 - **RISC-V (RV64) direct PAL** (experimental). Cross-built; the regression suites and 11 example suites pass in an
   emulated RISC-V guest, not yet on hardware. `riscv/`
 - **x86_64 vm PAL, extended** (experimental). The inherited `gramine-vm` unikernel got a reworked vsock driver,
@@ -32,14 +32,13 @@ production use.
   example binds its key to the attestation report. `nodejs`, NumPy/SciPy, MongoDB and PyTorch are blocked by the
   ARM64 `x18` rule or the loader, `openjdk` by run-time code generation and R by process creation
   (`vbs-enclave/APPS.md`). Limits: no `fork`, no run-time code loading (no JIT), test-signed debug enclaves.
-  `gramine-vbs` and `make VBS=1` drive it. `Documentation/vbs.rst`, `vbs-enclave/`
+  `gramine-vbs` and `make VBS=1` drive it. `Documentation/vbs.md`, `vbs-enclave/`
 
 ### System calls and libc
 
 - **Runtime syscall-site rewriting** (done on AArch64 and RISC-V). The first trap at an `svc` or `ecall` site
   rewrites it into a branch to a stub (`sys.rewrite_syscalls`, on by default), so no patched libc is needed; on a
-  RISC-V board (Ky X1) a syscall is 3.3 to 4.1 times cheaper than the trap. `syscall-interception/`,
-  `riscv-hardware/`
+  RISC-V board (Ky X1) a syscall is 3.3 to 4.1 times cheaper than the trap. `CHANGELOG.md`
 - **Host libc instead of a built glibc** (done). With `libc=none` no glibc is built and applications run on the
   host's: the default for VM builds and for direct AArch64 and RISC-V builds; x86_64 direct keeps the patched
   glibc. The VM build in CI went from 5m45s to 1m19s. `runtime-libc/`
@@ -74,7 +73,7 @@ production use.
 
 - **TCP and UDP in the guest** (experimental). Guest sockets are carried over vsock to one relay process per
   VM: TCP, UDP, DNS, loopback, non-blocking connect, `SO_RCVTIMEO`, with outbound policy and inbound forwards
-  from the manifest's `vm.net`; x86_64 and AArch64. `vm-network/`
+  from the manifest's `vm.net`; x86_64 and AArch64. `CHANGELOG.md`
 - **Graphics host redirection** (experimental, x86_64 only). EGL, GBM and DRM calls of the application are
   forwarded through a shared page to a listener in QEMU that uses the host GPU, with stock Mesa; `glxgears`,
   SuperTuxKart, Quake II and Minetest run. `graphics/`
@@ -94,10 +93,10 @@ production use.
 ### Build, test and workflow
 
 - **`scripts/install.sh`** (done). One command builds and installs the direct and VM PALs (`--vm`,
-  `--graphics`, `--libc`, `--target riscv64`) and can run the tests. `INSTALL.rst`
+  `--graphics`, `--libc`, `--target riscv64`) and can run the tests. `INSTALL.md`
 - **Containers and workspaces** (done). `container/run.sh` gives each checkout its own rootless container,
   guest CIDs and ports, so several branches and agents work side by side. `AGENTS.md`
-- **Test batteries** (done). `test/test-direct.sh` (PAL, LibOS, 12 example suites; `GRAMINE_RUNNER=gramine-vm`
+- **Test batteries** (done). `test/direct/test-direct.sh` (PAL, LibOS, 12 example suites; `GRAMINE_RUNNER=gramine-vm`
   runs the server examples under the VM), the `test/test-vm*.sh` scripts and the VM skip list.
   `devel/multiarch.md`
 - **CI workflows** (done). Manual workflows for direct x86_64, direct AArch64, emulated RISC-V and the x86_64
@@ -128,11 +127,11 @@ production use.
 - **VBS: more.** `fork`, sealing, production signing, a Windows-only build without WSL. `vbs-enclave/TODO.md`
 - **Asynchronous signals and a finer timer in the vm PAL.** Blocking calls are interruptible on the x86_64 `vm` PAL;
   on AArch64 `main` `_PalThreadResume()` is still a stub (the implementation is on the paused phase-4 branch);
-  timed waits are 100 ms ticks. `aarch64/vm/TODO.md`, `vm-multiproc-aarch64/TODO.md`
+  timed waits are 100 ms ticks. `TODO.md`, `vm-multiproc-aarch64/TODO.md`
 - **VM networking.** IPv6 destinations, reaching guest servers from the real host, a faster relay, UDP policy,
-  `SO_SNDTIMEO`. `vm-network/TODO.md`
+  `SO_SNDTIMEO`. `TODO.md`
 - **Syscall interception.** An x86_64 evaluation (it keeps the patched glibc for now), one shared rewriting
-  implementation for AArch64 and RISC-V, hardening of the stub pages. `syscall-interception/TODO.md`
+  implementation for AArch64 and RISC-V, hardening of the stub pages. `TODO.md`
 - **Host libc.** Another distribution (Debian, Fedora), the debugger's library listing, TDX.
   `runtime-libc/TODO.md`
 - **Enhanced system call support** such as [uFork](https://arxiv.org/pdf/2509.09439).

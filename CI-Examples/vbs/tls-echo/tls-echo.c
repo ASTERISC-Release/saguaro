@@ -3,7 +3,7 @@
 
 /*
  * tls-echo: a TLS echo server for a Windows VBS enclave whose certificate carries the enclave's
- * attestation report (Documentation/vbs.rst, "TLS with attestation"; README.md of this folder).
+ * attestation report (Documentation/vbs.md, "TLS with attestation"; README.md of this folder).
  *
  * At start, inside the enclave, the optional helper ../common/vbs-ratls.c generates an ECDSA P-256
  * key pair, gets the VBS attestation report bound to it (user data = SHA-256 of the public key's

@@ -261,6 +261,16 @@ static bool is_graphics_host_path(const char* path) {
     if (!graphics_redirect_enabled()) {
         return false;
     }
+    /* The LibOS's own backing files in /dev/shm (SysV segments, memfds of the generic path) stay
+     * in the guest's store, as before the redirect starts: they are shared between guest
+     * processes and have no host consumer. On the host, a segment created after this process's
+     * graphics session started was mapped through the GEM arena, and llvmpipe's first store into
+     * Mesa's XShm image there never completed (The Witcher 1 on GPU=1, proton-vm/FINDINGS.md
+     * 2026-10-18); one created before it could not be attached after it. */
+    static const char gramine_shm_prefix[] = "/dev/shm/.gramine-";
+    if (!strncmp(path, gramine_shm_prefix, sizeof(gramine_shm_prefix) - 1))
+        return false;
+
     static const char* const roots[] = {"/dev", "/sys", "/root/.cache"};
 
     for (size_t i = 0; i < ARRAY_SIZE(roots); i++) {

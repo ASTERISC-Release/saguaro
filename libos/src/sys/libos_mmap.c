@@ -220,8 +220,29 @@ static void* do_mmap(void* addr, size_t length, int prot, int flags, int fd,
                          * PAL, rather than making the entire multi-GiB arena WC. */
                         ret = PalVirtualMemoryProtect(retval, length,
                                                       LINUX_PROT_TO_PAL(prot, flags));
-                        if (ret < 0)
+                        if (ret < 0) {
                             retval = (void*)pal_to_unix_errno(ret);
+                        } else if ((flags & MAP_FIXED) && addr && addr != retval) {
+                            /* A placed mapping: the application chose the address (Wine's
+                             * WoW64 maps host-visible Vulkan memory below 4 GiB through
+                             * VK_EXT_map_memory_placed, where Mesa passes MAP_FIXED; the arenas
+                             * lie above 4 GiB). The buffer stays in its arena slice and is
+                             * shown at the chosen address too; returning the arena address
+                             * instead left Wine's placed address unbacked by the buffer, so the
+                             * GPU never saw what a 32-bit game wrote there (The Witcher 1,
+                             * proton-vm/FINDINGS.md 2026-10-18). The arena slice is not
+                             * released when the placed range is unmapped. */
+                            ret = PalVirtualMemoryAlias(addr, retval, length,
+                                                        LINUX_PROT_TO_PAL(prot, flags));
+                            if (ret < 0) {
+                                log_warning("placed mapping of a host buffer at %p (arena %p, "
+                                            "size %zu) failed: %s", addr, retval, length,
+                                            pal_strerror(ret));
+                                retval = (void*)pal_to_unix_errno(ret);
+                            } else {
+                                retval = addr;
+                            }
+                        }
 
                         put_handle(hdl);
                         return retval;

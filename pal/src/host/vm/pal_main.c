@@ -814,7 +814,7 @@ noreturn int pal_start_continue(void* cmdline_) {
 #ifdef __x86_64__
     bool enable_multiprocess;
     ret = toml_bool_in(g_pal_public_state.manifest_root, "sys.experimental__multiprocess",
-                       /*defaultval=*/false, &enable_multiprocess);
+                       /*defaultval=*/true, &enable_multiprocess);
     if (ret < 0)
         INIT_FAIL("Cannot parse 'sys.experimental__multiprocess'");
     if (enable_multiprocess) {
@@ -853,6 +853,8 @@ noreturn int pal_start_continue(void* cmdline_) {
     g_pal_public_state.vm_user_csgsfs = 0x33ULL | (0x2bULL << 48); /* user CS 0x33, SS 0x2b (Linux numbering) */
     g_pal_public_state.vm_user_rip_offset = offsetof(struct pal_tcb_vm,
                                                      kernel_thread.context.user_rip);
+    g_pal_public_state.vm_user_csgsfs_offset = offsetof(struct pal_tcb_vm,
+                                                        kernel_thread.context.csgsfsss);
 
     ret = pal_common_get_topo_info(&g_pal_public_state.topo_info);
     if (ret < 0)

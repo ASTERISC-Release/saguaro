@@ -8,7 +8,7 @@
 # the host .exe) runs on the Windows machine -- see link-sign.cmd and build-host.cmd.
 #
 # The Windows SDK and MSVC headers are not redistributable; copy them from the Windows machine into
-# a scratch folder and point HDR at it (same mechanism as test/vbs-enclave/cross-build/xcompile.sh):
+# a scratch folder and point HDR at it (same mechanism as test/vbs/arm64/cross-build/xcompile.sh):
 #   HDR/sdk/{um,shared,ucrt}   from  <SDK>/Include/<ver>/{um,shared,ucrt}
 #   HDR/vc/include             from  <VC>/Tools/MSVC/<ver>/include
 #

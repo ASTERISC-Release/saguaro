@@ -3,7 +3,7 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 """gramine-vbs: from a manifest to an application running in a Windows VBS enclave.
 
-The work is split between two machines (Documentation/vbs.rst):
+The work is split between two machines (Documentation/vbs.md):
 
 * the Linux side (this script): packs the vbs PAL, the LibOS, the vDSO, the manifest and the
   application's files (`vbs.packed_files`) into the image contents (scripts/vbs/pack.py) and
@@ -12,13 +12,16 @@ The work is split between two machines (Documentation/vbs.rst):
   (scripts/vbs/link-sign.cmd), then runs the application with pal_vbs_host.exe.
 
 Commands:
-  gramine-vbs build  <manifest>             pack and compile; with a Windows target also sign
-  gramine-vbs sign   <manifest|build dir>   upload, link and sign on Windows
-  gramine-vbs run    <manifest|build dir> [-- args]   run (building first if needed)
-  gramine-vbs <app> [args]                  run <app>.manifest.vbs of this folder (the form of
-                                            gramine-direct <app> and gramine-sgx <app>)
-  gramine-vbs stop   <manifest|build dir>   stop the running hosts of a build on Windows
-  gramine-vbs verify <manifest|build dir> <report on Windows> [verifier options]
+  gramine-vbs <program> [args]              run a packaged program (made by `make VBS=1` in its
+                                            folder), like `gramine-vm <program>`; <program> is a
+                                            name, <name>.manifest.vbs or <name>.vbs; the exit code
+                                            is the program's. The Windows runner (gramine-vbs.ps1)
+                                            is called through powershell.exe.
+  gramine-vbs run    <program|dir> [--threads N] [--root DIR] [-v] [-- args]   the same, explicit
+  gramine-vbs check                         check the Windows side (changes nothing there)
+  gramine-vbs stop   <program|dir>          stop the running hosts of a package on Windows
+  gramine-vbs verify <program|dir> <report> [verifier options]   (report: a Windows path, or
+                                            relative to the host root, e.g. data/out/report.bin)
   gramine-vbs manifest [-Dk=v ...] <template> [out]   render a manifest template (Jinja, as
                                             gramine-manifest, with the vbs.* globals)
   gramine-vbs runtime                       build the vbs glibc and the vbs PAL and LibOS when
@@ -30,6 +33,10 @@ Commands:
                                             vbs-tls-client.c; CI-Examples/vbs/tls-echo)
   gramine-vbs win <program> [args]          run a program on the Windows side (e.g. curl.exe)
   gramine-vbs setup-headers                 copy the Windows SDK and MSVC headers from Windows
+
+Building is `make VBS=1` (scripts/vbs/Makefile.vbs), which uses these internal steps:
+  gramine-vbs build  <manifest>             pack and compile; with a Windows target also sign
+  gramine-vbs sign   <manifest|build dir>   upload, link and sign on Windows
 
 Settings (options override the environment):
   --runtime DIR / GRAMINE_VBS_RUNTIME     the meson build directory of `-Dvbs=enabled` (or a folder
@@ -64,7 +71,7 @@ import sys
 import time
 import tomllib
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.dirname(os.path.realpath(__file__))   # (gramine-vbs on PATH is a symlink)
 ROOT = os.path.dirname(os.path.dirname(HERE))
 # the architecture of the Linux side and of the enclave image: aarch64 (ARM64 Windows) or x86_64
 # (x64 Windows, Documentation/devel/vbs-enclave/PLAN-x64.md); GRAMINE_VBS_ARCH overrides
@@ -169,10 +176,9 @@ def ps_popen(host, script):
                             stdin=subprocess.DEVNULL, text=True, errors='replace', cwd=cwd)
 
 
-def ps(host, script, check=True, capture=False, on_line=None):
-    """Runs a PowerShell script on the Windows machine; returns (exit code, output). on_line(line)
+def consume(p, host, check=True, capture=False, on_line=None):
+    """Reads the lines of a started Windows process; returns (exit code, output). on_line(line)
     may consume a line (return True)."""
-    p = ps_popen(host, script)
     out = []
     for line in p.stdout:
         line = line.rstrip('\r\n')
@@ -187,6 +193,28 @@ def ps(host, script, check=True, capture=False, on_line=None):
     if check and rc:
         die(f'the command on {host} failed (exit {rc})')
     return rc, '\n'.join(out)
+
+
+def ps(host, script, check=True, capture=False, on_line=None):
+    """Runs a PowerShell script on the Windows machine; returns (exit code, output)."""
+    return consume(ps_popen(host, script), host, check, capture, on_line)
+
+
+def runner_popen(host, windir, argv):
+    """Starts the Windows-side runner (gramine-vbs.ps1, uploaded to `windir` by `sign`) with
+    `argv`: through powershell.exe -File from WSL, or over ssh."""
+    script = windir + '\\gramine-vbs.ps1'
+    if host == LOCAL:
+        exe = powershell_exe()
+        return subprocess.Popen([exe, '-NoProfile', '-NonInteractive', '-ExecutionPolicy',
+                                 'Bypass', '-File', script, *argv], stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, text=True,
+                                errors='replace', cwd=os.path.dirname(exe))
+    env = f"$env:GRAMINE_VBS_ARGS = {psq(os.environ['GRAMINE_VBS_ARGS'])}\n" \
+        if os.environ.get('GRAMINE_VBS_ARGS') else ''
+    return ps_popen(host, env + '& powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass '
+                          f'-File {psq(script)} ' + ' '.join(psq(a) for a in argv) +
+                    '\nexit $LASTEXITCODE')
 
 
 def psq(s):
@@ -496,7 +524,22 @@ def cmd_sign(args, b=None):
         text = f.read().replace('\r\n', '\n').replace('\n', '\r\n')
     with open(crlf, 'w', newline='') as f:
         f.write(text)
-    files += [crlf, os.path.join(ROOT, 'pal/src/host/vbs/enclave/pal_vbs_enclave.def')]
+    files += [crlf, os.path.join(ROOT, 'pal/src/host/vbs/enclave/pal_vbs_enclave.def'),
+              os.path.join(HERE, 'gramine-vbs.ps1')]
+    # the host folders the manifest allows (vbs.allowed_files entries ending in /), made below the
+    # host root before each run (gramine-vbs.ps1 run)
+    dirs = []
+    try:
+        with open(st['manifest'], 'rb') as f:
+            allowed = tomllib.load(f).get('vbs', {}).get('allowed_files', [])
+        dirs = [p.rstrip('/').replace('/', '\\') for p in allowed
+                if isinstance(p, str) and p.endswith('/') and p.startswith('/')]
+    except (OSError, tomllib.TOMLDecodeError):
+        pass
+    hd = os.path.join(b.dir, 'host-dirs.txt')
+    with open(hd, 'w', newline='') as f:
+        f.write(''.join(d + '\r\n' for d in dirs))
+    files.append(hd)
     log(f'upload {len(files)} files to {host}:{windir}')
     upload(host, files, windir)
     cert = setting(args, 'cert_name', 'GRAMINE_VBS_CERT_NAME', 'TheDefaultTestEnclaveCertName')
@@ -515,36 +558,31 @@ Get-Item {psq(b.name + '.dll')}, pal_vbs_host.exe | ForEach-Object {{ "$($_.Name
     if rc:
         die('link/sign on Windows failed (link.log there)')
     b.save(signed=st['objects'], windows=host, windows_dir=windir)
-    log(f'signed: {windir}\\{b.name}.dll')
+    # the package in WSL too: <app>.vbs/<app>.dll next to the objects it was made from
+    download(host, f'{windir}\\{b.name}.dll', os.path.join(b.dir, b.name + '.dll'))
+    log(f'signed: {windir}\\{b.name}.dll (copy: {os.path.join(b.dir, b.name + ".dll")})')
 
 
 def cmd_run(args):
-    b = Build(args.target)
+    """Runs a packaged application (made by `make VBS=1`); never builds."""
+    b = find_package(args.target)
     st = b.load()
-    if not os.path.isdir(args.target) and (args.rebuild or not st or not st.get('signed')
-                                           or os.path.getmtime(b.manifest)
-                                           > os.path.getmtime(b.state_file)):
-        args.output, args.no_sign = None, False
-        cmd_build(args)
-        st = b.load()
-    if not st or not st.get('signed'):
-        die(f'{b.dir} is not signed yet (gramine-vbs sign)')
     host = setting(args, 'windows', 'GRAMINE_VBS_WINDOWS', st.get('windows'))
     windir = setting(args, 'windows_dir', 'GRAMINE_VBS_WINDOWS_DIR', st.get('windows_dir'))
-    root = args.root or windir + '\\root'
-    app_args = ' '.join(psq(x) for x in args.args)
-    # the host root and the directories the manifest allows (vbs.allowed_files entries ending in /)
-    dirs = [root]
-    try:
-        with open(st['manifest'], 'rb') as f:
-            allowed = tomllib.load(f).get('vbs', {}).get('allowed_files', [])
-        dirs += [root + p.rstrip('/').replace('/', '\\') for p in allowed
-                 if isinstance(p, str) and p.endswith('/') and p.startswith('/')]
-    except (OSError, tomllib.TOMLDecodeError):
-        pass
-    mkdirs = '; '.join(f'New-Item -ItemType Directory -Force -Path {psq(d)} | Out-Null'
-                       for d in dirs)
-    # The script names its own process first: SIGTERM or SIGINT here stops the host process (its
+    argv = ['run', windir, '-Name', b.name, '-Threads', str(int(args.threads)), '-PidLine']
+    if args.root:
+        argv += ['-Root', args.root]
+    if args.verbose:
+        argv.append('-ShowHost')
+    # the application's arguments travel in an environment variable (JSON, base64), not on the
+    # command line: powershell.exe -File and the native-command rules of Windows PowerShell 5.1
+    # would otherwise split and unquote them
+    if args.args:
+        os.environ['GRAMINE_VBS_ARGS'] = base64.b64encode(json.dumps(args.args).encode()).decode()
+        if host == LOCAL:
+            os.environ['WSLENV'] = ':'.join(filter(None, [os.environ.get('WSLENV'),
+                                                          'GRAMINE_VBS_ARGS']))
+    # The runner names its own process first: SIGTERM or SIGINT here stops the host process (its
     # child) on Windows, so that scripts can stop a server with `kill` as with gramine-direct.
     pspid = []
     stopped = []
@@ -565,20 +603,57 @@ def cmd_run(args):
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     # settings of the host process that are passed on from this environment (measurement)
-    envs = '; '.join(f'$env:{k} = {psq(os.environ[k])}'
-                     for k in ('GRAMINE_VBS_HOSTCALL_STATS', 'GRAMINE_VBS_TIMER_RES')
-                     if os.environ.get(k))
-    rc, _ = ps(host, f'''
-Write-Output "[gramine-vbs-pid] $PID"
-Set-Location {psq(windir)}
-{mkdirs}
-{envs}
-& .\\pal_vbs_host.exe {psq(b.name + '.dll')} {int(args.threads)} boot {psq(root)} {app_args} 2>&1 |
-    Where-Object {{ {'$true' if args.verbose else "$_ -notmatch '^\\[(vbs-w|host)\\]'"} }} |
-    ForEach-Object {{ "$_" }}
-exit $LASTEXITCODE
-''', check=False, on_line=on_line)
+    for k in ('GRAMINE_VBS_HOSTCALL_STATS', 'GRAMINE_VBS_TIMER_RES'):
+        if os.environ.get(k) and host == LOCAL:
+            os.environ['WSLENV'] = ':'.join(filter(None, [os.environ.get('WSLENV'), k]))
+    if host == LOCAL:    # the runner of this checkout (a package signed earlier may hold an older one)
+        dst = os.path.join(wslpath(windir), 'gramine-vbs.ps1')
+        src = os.path.join(HERE, 'gramine-vbs.ps1')
+        with open(src, 'rb') as f1, open(dst, 'rb') as f2:
+            same = f1.read() == f2.read()
+        if not same:
+            shutil.copyfile(src, dst)
+    rc, _ = consume(runner_popen(host, windir, argv), host, check=False, on_line=on_line)
     sys.exit(128 + stopped[0] if stopped else rc)
+
+
+def find_package(target):
+    """The signed package named by `target`: a program name (<name>.manifest.vbs of this folder), a
+    manifest, or a package folder (<name>.vbs). Exits with the instruction to run make VBS=1."""
+    t = target[2:] if target.startswith('./') else target
+    t = t.rstrip('/')
+    if t.endswith('.vbs') and os.path.isdir(t):
+        pkg = t
+    else:
+        stem = t
+        for suffix in ('.manifest.vbs', '.manifest.toml', '.manifest'):
+            if stem.endswith(suffix):
+                stem = stem[:-len(suffix)]
+                break
+        pkg = stem + '.vbs'
+        if not os.path.isfile(stem + '.manifest.vbs') and not os.path.isdir(pkg):
+            die(f"no VBS package '{target}' in {os.getcwd()}: build it first with `make VBS=1` "
+                f"(in the example's folder)")
+    if not os.path.isfile(os.path.join(pkg, 'build.json')):
+        die(f"'{target}' is not built: run `make VBS=1` in its folder")
+    b = Build(pkg)
+    st = b.load()
+    if not st or not st.get('signed') or not st.get('windows_dir'):
+        die(f"'{target}' is not built and signed: run `make VBS=1` in its folder")
+    if os.path.getmtime(b.manifest) > os.path.getmtime(b.state_file):
+        die(f"the package of '{target}' is older than {os.path.basename(b.manifest)}: "
+            "run `make VBS=1` again")
+    return b
+
+
+def cmd_check(args):
+    """Checks the Windows side (VBS, Visual Studio, SDK, certificate) and changes nothing there."""
+    host = windows_host(args)
+    windir = windows_dir(args, host, 'runner')
+    upload(host, [os.path.join(HERE, 'gramine-vbs.ps1')], windir)
+    cert = setting(args, 'cert_name', 'GRAMINE_VBS_CERT_NAME', 'TheDefaultTestEnclaveCertName')
+    rc, _ = consume(runner_popen(host, windir, ['check', '-CertName', cert]), host, check=False)
+    sys.exit(rc)
 
 
 def build_hosts_script(windir):
@@ -589,7 +664,7 @@ def build_hosts_script(windir):
 
 
 def cmd_stop(args):
-    b = Build(args.target)
+    b = find_package(args.target)
     st = b.load()
     if not st or not st.get('windows_dir'):
         die(f'{b.dir} was not signed on Windows')
@@ -783,16 +858,19 @@ def cmd_win(args):
 
 
 def cmd_verify(args):
-    b = Build(args.target)
+    b = find_package(args.target)
     st = b.load()
     if not st or not st.get('signed'):
         die(f'{b.dir} is not signed yet')
     host = setting(args, 'windows', 'GRAMINE_VBS_WINDOWS', st.get('windows'))
     windir = setting(args, 'windows_dir', 'GRAMINE_VBS_WINDOWS_DIR', st.get('windows_dir'))
     extra = ' '.join(psq(x) for x in args.checks)
+    report = args.report
+    if ':' not in report and not report.startswith('\\\\'):    # relative: below the host root
+        report = windir + '\\root\\' + report.replace('/', '\\')
     rc, _ = ps(host, f'''
 Set-Location {psq(windir)}
-& .\\pal_vbs_host.exe {psq(b.name + '.dll')} 1 verify {psq(args.report)} {extra} 2>&1 |
+& .\\pal_vbs_host.exe {psq(b.name + '.dll')} 1 verify {psq(report)} {extra} 2>&1 |
     Where-Object {{ $_ -notmatch '^\\[host\\]' }} | ForEach-Object {{ "$_" }}
 exit $LASTEXITCODE
 ''', check=False)
@@ -871,7 +949,6 @@ def main():
     p.add_argument('target', metavar='manifest|build-dir')
     p.add_argument('--threads', default=0, help='enclave threads (0: as signed)')
     p.add_argument('--root', help='host root folder on Windows (default <windows dir>\\root)')
-    p.add_argument('--rebuild', action='store_true')
     p.add_argument('-v', '--verbose', action='store_true', help='show the host and runtime lines')
     p.add_argument('args', nargs='*', help='application arguments (after --)')
     common(p, build=True)
@@ -895,6 +972,8 @@ def main():
     p.add_argument('template')
     p.add_argument('out', nargs='?')
     sub.add_parser('runtime')
+    p = sub.add_parser('check')
+    common(p)
     p = sub.add_parser('net')
     p.add_argument('args', nargs=argparse.REMAINDER, help='wait|req|redis|bench ...')
     common(p)
@@ -907,16 +986,14 @@ def main():
     p.add_argument('args', nargs=argparse.REMAINDER)
     common(p)
 
-    # `gramine-vbs <app> [args]`: run <app>.manifest.vbs of the current folder
+    # `gramine-vbs <program> [args]`: run the packaged program, like `gramine-vm <program>`
     argv = sys.argv[1:]
     if argv and argv[0] not in sub.choices and not argv[0].startswith('-'):
-        app = argv[0][2:] if argv[0].startswith('./') else argv[0]
-        if os.path.isfile(app + '.manifest.vbs'):
-            argv = ['run', app + '.manifest.vbs', '--', *argv[1:]]
+        argv = ['run', argv[0], '--', *argv[1:]]
     args = ap.parse_args(argv)
     {'build': cmd_build, 'sign': lambda a: cmd_sign(a), 'run': cmd_run, 'verify': cmd_verify,
      'setup-headers': cmd_setup_headers, 'stop': cmd_stop, 'manifest': cmd_manifest,
-     'runtime': cmd_runtime, 'net': cmd_net, 'tls-client': cmd_tls_client,
+     'runtime': cmd_runtime, 'check': cmd_check, 'net': cmd_net, 'tls-client': cmd_tls_client,
      'win': cmd_win}[args.cmd](args)
 
 

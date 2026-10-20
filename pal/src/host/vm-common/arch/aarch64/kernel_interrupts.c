@@ -160,6 +160,15 @@ void isr_c(struct isr_regs* regs) {
                 sched_thread_uninterruptable(regs);
             }
             break;
+        case GIC_INTID_TIMER_KICK_SGI:
+            /* another CPU registered a timeout earlier than CPU0's timer is armed for
+             * (lapic_timer_arm_cpu0()): recompute and re-arm. Nothing is due yet (the timer
+             * interrupt at the deadline notifies and reschedules), so no notify and no
+             * reschedule here; an extra or spurious SGI only recomputes. */
+            if (get_per_cpu_data()->cpu_id == 0)
+                lapic_timer_rearm();
+            lapic_signal_interrupt_complete(intid);
+            break;
         case GIC_INTID_TLB_SHOOTDOWN_SGI: {
             /* "invalidate TLB" IPI -- may be spurious/extra, check for this (the hardening
              * mirrors x86's `case 33` verbatim, down to the malicious-host comments). Unlike

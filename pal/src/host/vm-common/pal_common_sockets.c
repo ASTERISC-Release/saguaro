@@ -48,7 +48,7 @@ static int g_sockets_reader_futex;
 static int g_sockets_writer_futex;
 static int udp_rx_futex;
 void thread_wakeup_vsock(bool is_read) {
-    sched_thread_wakeup(&g_streams_waiting_events_futex);
+    sched_streams_wake();
     sched_thread_wakeup(is_read ? &g_sockets_reader_futex : &g_sockets_writer_futex);
 }
 
@@ -1143,7 +1143,7 @@ static int pal_common_udp_send(struct pal_handle *handle,
                          __ATOMIC_RELEASE);
 
         sched_thread_wakeup(&r->udp_rx_futex);
-        sched_thread_wakeup(&g_streams_waiting_events_futex);
+        sched_streams_wake();
     }
 
     spinlock_unlock(&handle->sock.lock);

@@ -33,6 +33,7 @@ Several people or agents can work at once, each on their own branch. What makes 
   `Documentation/devel/README.md`.
 - **Keep documents true.** After editing documents, run `scripts/check-docs.py`: it reports paths and links
   that name no file of the repository (names that are legitimately external go in `scripts/check-docs.allow`).
+- **Writing documents.** Follow `Documentation/devel/doc-style.md`.
 - **Commit small, verified steps** on your own branch, with a message that says what changed and
   why.
 - **Ask first** before destructive git actions (`reset --hard`, deleting branches, anything on a
@@ -50,7 +51,7 @@ not check. If a test fails, give the output. When something is done and verified
 
 ## Where things are
 
-- Building, containers and the RISC-V test guest: `INSTALL.rst`.
+- Building, containers and the RISC-V test guest: `INSTALL.md`.
 - Platform matrix, build options, how to test: `Documentation/devel/multiarch.md`.
 - Development documents of every topic: `Documentation/devel/`.
 - Implementing or fixing a system call, and measuring it: `Documentation/devel/syscall-workflow.md`.

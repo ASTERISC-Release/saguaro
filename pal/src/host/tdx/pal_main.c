@@ -458,6 +458,8 @@ noreturn int pal_start_continue(void* cmdline_) {
 
     g_pal_public_state.vm_user_rip_offset = offsetof(struct pal_tcb_vm,
                                                      kernel_thread.context.user_rip);
+    g_pal_public_state.vm_user_csgsfs_offset = offsetof(struct pal_tcb_vm,
+                                                        kernel_thread.context.csgsfsss);
 
     ret = pal_common_get_topo_info(&g_pal_public_state.topo_info);
     if (ret < 0)

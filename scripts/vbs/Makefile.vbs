@@ -2,7 +2,7 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
 # `make VBS=1` for the application examples: the VBS counterpart of `make SGX=1`
-# (Documentation/vbs.rst, "Makefile flow: make VBS=1"). An example's Makefile includes this file
+# (Documentation/vbs.md, "Makefile flow: make VBS=1"). An example's Makefile includes this file
 # under `ifeq ($(VBS),1)` and sets, before the include:
 #
 #   VBS_APP      the application's name: vbs.manifest.template is rendered into

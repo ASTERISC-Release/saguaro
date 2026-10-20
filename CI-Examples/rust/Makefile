@@ -8,7 +8,7 @@
 # - make SGX=1         -- create SGX manifest
 # - make VBS=1         -- build the server for a Windows VBS enclave (a static PIE against the vbs
 #                         glibc, rustup's stable toolchain), pack and sign it (in WSL; see
-#                         Documentation/vbs.rst); make VBS=1 check runs it and asks it for a page
+#                         Documentation/vbs.md); make VBS=1 check runs it and asks it for a page
 
 ARCH_LIBDIR ?= /lib/$(shell $(CC) -dumpmachine)
 

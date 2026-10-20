@@ -819,3 +819,16 @@ int _PalSegmentBaseSet(enum pal_segment_reg reg, uintptr_t addr) {
             return -PAL_ERROR_INVAL;
     }
 }
+
+/* no per-thread GDT slots inside an enclave; the LibOS reports ENOSYS for set_thread_area */
+int _PalSegmentDescriptorSet(unsigned int entry, uint64_t descriptor) {
+    __UNUSED(entry);
+    __UNUSED(descriptor);
+    return -PAL_ERROR_NOTIMPLEMENTED;
+}
+
+int _PalSegmentDescriptorGet(unsigned int entry, uint64_t* descriptor) {
+    __UNUSED(entry);
+    __UNUSED(descriptor);
+    return -PAL_ERROR_NOTIMPLEMENTED;
+}

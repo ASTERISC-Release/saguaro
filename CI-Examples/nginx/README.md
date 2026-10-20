@@ -3,14 +3,13 @@
 This directory contains the Makefile and the template manifest for the most
 recent version of Nginx web server (as of this writing, version 1.16.1).
 
-We build Nginx from the source code instead of using an existing installation.
-On Ubuntu 20.04, please make sure that the following packages are installed:
+This example builds Nginx from source and does not use an existing installation. On Ubuntu 20.04,
+install the following packages:
 ```sh
 sudo apt-get install -y build-essential libssl-dev zlib1g-dev
 ```
 
-NOTE: The "benchmark-http.sh" script uses the wrk benchmark (wrk2) under the
-hood. Please refer to https://github.com/giltene/wrk2.
+NOTE: The `benchmark-http.sh` script uses the wrk benchmark (wrk2). See https://github.com/giltene/wrk2.
 
 # Quick Start
 
@@ -55,7 +54,7 @@ make SGX=1 start-gramine-server
 
 # NGINX in a Windows VBS enclave
 
-In WSL on an ARM64 Windows machine with VBS (`Documentation/vbs.rst`, "Makefile flow"):
+In WSL on an ARM64 Windows machine with VBS (`Documentation/vbs.md`, "Makefile flow"):
 
 ```sh
 make VBS=1          # NGINX built with the vbs gcc, installed into vbs-build/root, packed, signed
@@ -72,3 +71,18 @@ master would fork the workers), `worker_processes 1`, `daemon off`; HTTP only on
 modules). NGINX's prefix is `/nginx` in the enclave, everything below it (binary, configuration,
 `html/` with the test files) is packed into the signed image and read-only; the pid file and
 temporary files go to `/tmp`, an in-enclave tmpfs, and the error log to stderr.
+
+# Running under each backend
+
+Build first (`make`, or `make VBS=1` for vbs) and activate the install of the backend (`Documentation/quickstart/`). Results and dates are in the matrix of `CI-Examples/README.md`.
+
+- **direct:** `gramine-direct ./nginx`. Verified on x86_64 and aarch64.
+- **vm:** `GRAMINE_RUNNER=gramine-vm test/direct/test-direct.sh nginx`, from the repository root (the VM forwards the server's port through its relay; nginx runs with `master_process off`). Verified on x86_64 and aarch64.
+- **sev:** not verified.¹
+- **tdx:** not verified.²
+- **sgx:** not verified.³ The commands are given above.
+- **vbs:** `make VBS=1 check`. Verified on ARM64 and x64.
+
+¹ No result is recorded for this backend (matrix in `CI-Examples/README.md`).  
+² TDX was tested offline by the maintainer, with the same result as SEV. No TDX log is in the repository, so the result is reported and not verified here. The TDX install needs `td-shim` (`Documentation/TODO.md`).  
+³ SGX has not run on this tree's hardware. The SGX build needs `protobuf-c` (`Documentation/TODO.md`).

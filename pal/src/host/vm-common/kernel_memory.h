@@ -119,6 +119,11 @@ int memory_address_space_map_shared_frame(struct memory_address_space* space, ui
 /* Physically contiguous frames mapped into `space` at `addr`; `*out_phys` is their physical
  * address (the LibOS's graphics bounce buffers, design-gpu.md). x86_64 only; AArch64 returns
  * -PAL_ERROR_NOTIMPLEMENTED. */
+/* Maps the device memory (frames outside the frame pool: the graphics arenas) that
+ * [src, src + size) maps in `space` at [dst, dst + size) too, with the same cache attributes
+ * (PalVirtualMemoryAlias). x86_64 only; AArch64 returns -PAL_ERROR_NOTIMPLEMENTED. */
+int memory_address_space_alias_device(struct memory_address_space* space, uintptr_t dst,
+                                      uintptr_t src, size_t size, bool write, bool execute);
 int memory_address_space_alloc_contiguous(struct memory_address_space* space, void* addr,
                                           size_t size, bool execute, uintptr_t* out_phys);
 int memory_address_space_map_cow_frame(struct memory_address_space* space, uintptr_t addr,

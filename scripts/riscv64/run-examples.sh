@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
-# run-examples.sh -- run example suites of test/test-direct.sh for riscv64 in the test guest.
+# run-examples.sh -- run example suites of test/direct/test-direct.sh for riscv64 in the test guest.
 #
 # Usage (inside the cross container, guest started, build installed):
 #   scripts/riscv64/run-examples.sh [suite...]      e.g.  helloworld multithread sqlite
@@ -29,5 +29,5 @@ exec "$HERE/guest.sh" ssh "
     cd $DEST
     export GRAMINE_PREFIX=$BUILD/prefix
     export LOGDIR=/srv/gramine-examples-logs
-    test/test-direct.sh $ARGS
+    test/direct/test-direct.sh $ARGS
 "

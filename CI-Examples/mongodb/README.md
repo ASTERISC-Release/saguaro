@@ -7,7 +7,7 @@ Makefile and a template for generating the manifest.
 
 ## Installing prerequisites
 
-Please run the following commands to install MongoDB 7.0 Community Edition on Ubuntu 22.04:
+Install MongoDB 7.0 Community Edition on Ubuntu 22.04 with the following commands:
 
 1. Import the public key used by the package management system:
 
@@ -49,8 +49,8 @@ Run `make SGX=1` (non-debug) or `make SGX=1 DEBUG=1` (debug) in the directory.
 
 # Running MongoDB with Gramine
 
-Here's an example of running MongoDB under Gramine (note that command-line options are hardcoded in
-the manifest file):
+Examples of running MongoDB under Gramine (the command-line options are hardcoded in the manifest
+file):
 
 Without SGX:
 ```
@@ -68,3 +68,19 @@ Run the below commands from a new terminal:
 
 - `mongosh scripts/insert.js` - inserts new documents into a collection
 - `mongosh scripts/fetch.js` - fetches all documents, and prints their content
+
+# Running under each backend
+
+Build first (`make`, or `make VBS=1` for vbs) and activate the install of the backend (`Documentation/quickstart/`). Results and dates are in the matrix of `CI-Examples/README.md`.
+
+- **direct:** not verified.¹
+- **vm:** not verified.¹
+- **sev:** not verified.¹
+- **tdx:** not verified.²
+- **sgx:** not verified.³ The commands are given above.
+- **vbs:** not verified.⁴
+
+¹ No result is recorded for this backend (matrix in `CI-Examples/README.md`).  
+² TDX was tested offline by the maintainer, with the same result as SEV. No TDX log is in the repository, so the result is reported and not verified here. The TDX install needs `td-shim` (`Documentation/TODO.md`).  
+³ SGX has not run on this tree's hardware. The SGX build needs `protobuf-c` (`Documentation/TODO.md`).  
+⁴ No VBS recipe; `mongod` uses the x18 register (ARM64).

@@ -102,3 +102,19 @@ On AArch64 with the NVIDIA proprietary driver (`Documentation/devel/graphics-aar
 `-direct` targets of `glxgears`, `quake2`, `minetest` and `supertuxkart` run on the GPU; the manifests
 then also mount the NVIDIA device nodes (automatic when `/dev/nvidiactl` exists). The games are built
 from source in the container. `bastion` and `tf2` are x86_64 binaries and do not apply there.
+
+## Running under each backend
+
+Build first (`make`, or `make VBS=1` for vbs) and activate the install of the backend (`Documentation/quickstart/`). Results and dates are in the matrix of `CI-Examples/README.md`.
+
+- **direct:** `make run-direct`, in the directory of an application. Verified on x86_64 and aarch64.
+- **vm:** `make run`, in the directory of an application. Verified on x86_64. Not verified on aarch64.¹
+- **sev:** not verified.¹
+- **tdx:** not verified.²
+- **sgx:** not verified.³
+- **vbs:** not verified.⁴
+
+¹ No result is recorded for this backend (matrix in `CI-Examples/README.md`).  
+² TDX was tested offline by the maintainer, with the same result as SEV. No TDX log is in the repository, so the result is reported and not verified here. The TDX install needs `td-shim` (`Documentation/TODO.md`).  
+³ SGX has not run on this tree's hardware. The SGX build needs `protobuf-c` (`Documentation/TODO.md`).  
+⁴ No VBS recipe.

@@ -11,8 +11,12 @@
  * What Wine does (dlls/ntdll/unix/signal_x86_64.c, virtual.c, loader/preloader.c, checked
  * 2026-10-15) and the probe that checks it:
  *   gs        arch_prctl(ARCH_SET_GS, teb) per thread; NtCurrentTeb() is `mov %gs:0x30`
- *   fs32      the 32-bit TEB selector for new WoW64: set_thread_area / modify_ldt, loaded into %fs
+ *   fs32      the 32-bit TEB selector for new WoW64: set_thread_area (also through `int $0x80`,
+ *             as Wine issues it; modify_ldt is its fallback only), loaded into %fs, per thread
+ *             across context switches
  *   cs32      new WoW64 runs 32-bit code through a far jump to selector 0x23 (hard-coded on Linux)
+ *   sig32     a signal while in 32-bit code with %fs loaded, with Wine's handler protocol, and the
+ *             sigreturn back into the 32-bit code
  *   fixed     the preloader's reservations at fixed addresses (0x10000, 0x110000 to 0x200000000)
  *             and ntdll's top-down area 0x7ff000000000-0x7ff600000000, with MAP_FIXED_NOREPLACE
  *   huge      PROT_NONE MAP_NORESERVE reservations of many GiB; commit by touching
@@ -106,8 +110,23 @@ static long rss_kib(void) {
 /* ---- a SIGSEGV/SIGILL/SIGBUS catcher for the probes that may fault ---- */
 static sigjmp_buf g_jmp;
 static volatile int g_fault_sig;
+static unsigned long g_tls_base; /* the thread's TLS base, for a fault while %fs is a 32-bit selector */
+static volatile unsigned long g_fault_fsbase, g_fault_ip;
+static volatile unsigned g_fault_fs;
 static void fault_jump(int sig, siginfo_t* si, void* uc) {
-    (void)si; (void)uc;
+    (void)si;
+    /* what %fs was at the fault (FSGSBASE: rdfsbase works in user mode in the VM) */
+    unsigned long fsb = 0;
+    unsigned fs_sel;
+    __asm__ volatile("movw %%fs, %w0" : "=r"(fs_sel));
+    __asm__ volatile("rdfsbase %0" : "=r"(fsb));
+    g_fault_fs = fs_sel;
+    g_fault_fsbase = fsb;
+    g_fault_ip = ((ucontext_t*)uc)->uc_mcontext.gregs[REG_RIP];
+    /* a fault in 32-bit code (fs32, sig32) enters here with %fs still the 32-bit selector: the
+     * TLS base first, as Wine's init_handler, before libc's siglongjmp reads its pointer guard */
+    long rax_ = SYS_arch_prctl;
+    __asm__ volatile("syscall" : "+a"(rax_) : "D"(ARCH_SET_FS), "S"(g_tls_base) : "rcx", "r11", "memory");
     g_fault_sig = sig;
     siglongjmp(g_jmp, 1);
 }
@@ -115,6 +134,7 @@ static void catch_faults(int on) {
     struct sigaction sa = {0};
     sa.sa_sigaction = fault_jump;
     sa.sa_flags = SA_SIGINFO | SA_NODEFER | SA_ONSTACK;
+    syscall(SYS_arch_prctl, ARCH_GET_FS, &g_tls_base);
     if (!on) { sa.sa_handler = SIG_DFL; sa.sa_flags = 0; }
     sigaction(SIGSEGV, &sa, NULL);
     sigaction(SIGILL, &sa, NULL);
@@ -202,7 +222,7 @@ static int try_fs_selector(unsigned sel, uint32_t* base, const char* how) {
         __asm__ volatile("movw %w0, %%fs" ::"r"(sel));
         __asm__ volatile("movl %%fs:0, %0" : "=r"(v));
         /* restore the TLS base with a raw syscall: libc must not run while %fs is not the TLS */
-        __asm__ volatile("syscall" ::"a"(SYS_arch_prctl), "D"(ARCH_SET_FS), "S"(fsbase) : "rcx", "r11", "memory");
+        long rax_ = SYS_arch_prctl; __asm__ volatile("syscall" : "+a"(rax_) : "D"(ARCH_SET_FS), "S"(fsbase) : "rcx", "r11", "memory"); (void)rax_;
         ok = v == *base;
         P("fs32", "%s %s: selector %#x loaded into %%fs, read %#x (want %#x)", ok ? "PASS" : "FAIL", how, sel, v, *base);
         return ok;
@@ -210,6 +230,53 @@ static int try_fs_selector(unsigned sel, uint32_t* base, const char* how) {
     syscall(SYS_arch_prctl, ARCH_SET_FS, fsbase);
     P("fs32", "FAIL %s: loading selector %#x into %%fs raised signal %d", how, sel, g_fault_sig);
     return 0;
+}
+/* set_thread_area the way Wine issues it: `int $0x80` (the i386 ABI, number 243), the user_desc
+ * copied to `low` (an address below 4 GiB, as only 32 bits reach ebx); the 64-bit number 205 is
+ * ENOSYS in this container (seccomp), so the probes use this form where it matters */
+static long set_thread_area_int80(void* low, struct user_desc* d) {
+    memcpy(low, d, 16);
+    long ret = 243;
+    __asm__ volatile("int $0x80" : "+a"(ret) : "b"((uint32_t)(uintptr_t)low) : "memory");
+    memcpy(d, low, 16);
+    return ret;
+}
+#define FS32_SWITCH_ITERATIONS 300
+static int g_fs32_entry;
+static volatile int g_fs32_fail[2];
+/* %fs = the TLS selector with this thread's base in the shared entry, then FS32_SWITCH_ITERATIONS
+ * reads through %fs:0 with a sched_yield between them and a 1 ms nanosleep every 16th; raw
+ * system calls only, since libc's TLS is unreachable while %fs is the 32-bit selector */
+static void fs32_switch_loop(uint32_t* base, int who) {
+    struct user_desc d = {.entry_number = g_fs32_entry, .base_addr = (uint32_t)(uintptr_t)base, .limit = 0xfff,
+                          .seg_32bit = 1, .useable = 1};
+    if (set_thread_area_int80(base + 32, &d) < 0) {
+        g_fs32_fail[who] = -2;
+        return;
+    }
+    unsigned long fsbase = 0;
+    syscall(SYS_arch_prctl, ARCH_GET_FS, &fsbase);
+    struct timespec* ts = (struct timespec*)(base + 96); /* scratch in the low page, past the thread's marker */
+    ts->tv_sec = 0;
+    ts->tv_nsec = 1000000;
+    uint32_t want = *base;
+    int fail = -1;
+    __asm__ volatile("movw %w0, %%fs" ::"r"((d.entry_number << 3) | 3));
+    for (int i = 0; i < FS32_SWITCH_ITERATIONS; i++) {
+        uint32_t v;
+        __asm__ volatile("movl %%fs:0, %0" : "=r"(v));
+        if (v != want) { fail = i; break; }
+        if (i % 16 == 15)
+            { long rax_ = SYS_nanosleep; __asm__ volatile("syscall" : "+a"(rax_) : "D"(ts), "S"(0) : "rcx", "r11", "memory"); }
+        else
+            { long rax_ = SYS_sched_yield; __asm__ volatile("syscall" : "+a"(rax_) : : "rcx", "r11", "memory"); }
+    }
+    long rax_ = SYS_arch_prctl; __asm__ volatile("syscall" : "+a"(rax_) : "D"(ARCH_SET_FS), "S"(fsbase) : "rcx", "r11", "memory"); (void)rax_;
+    g_fs32_fail[who] = fail;
+}
+static void* fs32_thread(void* arg) {
+    fs32_switch_loop(arg, 1);
+    return NULL;
 }
 static void probe_fs32(void) {
     uint32_t* base = mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_32BIT, -1, 0);
@@ -227,15 +294,43 @@ static void probe_fs32(void) {
     setup_altstack();
     catch_faults(1);
     if (syscall(SYS_set_thread_area, &d) < 0)
-        P("fs32", "FAIL set_thread_area: %s", E());
+        P("fs32", "%s set_thread_area through `syscall` (number 205): %s", errno == ENOSYS ? "INFO" : "FAIL", E());
     else
         try_fs_selector((d.entry_number << 3) | 3, base, "set_thread_area");
     struct user_desc l = d;
     l.entry_number = 0;
     if (syscall(SYS_modify_ldt, 0x11, &l, sizeof(l)) < 0)
-        P("fs32", "FAIL modify_ldt: %s", E());
+        /* Wine's new WoW64 only falls back to modify_ldt when set_thread_area failed
+         * (Documentation/devel/proton-vm/design-32bit.md), so the VM leaves it out */
+        P("fs32", "INFO modify_ldt: %s (not needed: set_thread_area works)", E());
     else
         try_fs_selector((0 << 3) | 7, base, "modify_ldt");
+    /* Wine's alloc_fs_sel: the same entry again through `int $0x80` (the i386 ABI: number 243 in
+     * eax, the user_desc's 32-bit address in ebx; limit ~0, seg_32bit|usable), from 64-bit code */
+    struct user_desc w = {.entry_number = -1, .base_addr = (uint32_t)(uintptr_t)base, .limit = ~0u, .seg_32bit = 1, .useable = 1};
+    long int80_ret = set_thread_area_int80(base + 16, &w);
+    if (int80_ret < 0) {
+        P("fs32", "FAIL int $0x80 set_thread_area: %ld", int80_ret);
+        catch_faults(0);
+        return;
+    }
+    try_fs_selector((w.entry_number << 3) | 3, base, "int $0x80 set_thread_area");
+    d.entry_number = w.entry_number;
+    /* two threads with their own base in the same entry (Wine: one selector, one WoW64 TEB per
+     * thread), each keeping %fs loaded across context switches (yields and sleeps, on every vCPU):
+     * the base must stay the thread's own without any reload */
+    g_fs32_entry = d.entry_number;
+    g_fs32_fail[0] = g_fs32_fail[1] = -1;
+    pthread_t th;
+    uint32_t* other = base + 256;
+    *other = 0x600dbeef;
+    pthread_create(&th, NULL, fs32_thread, other);
+    fs32_switch_loop(base, 0);
+    pthread_join(th, NULL);
+    P("fs32", "%s two threads, one entry, %%fs loaded across %d yields and sleeps each: main %d, "
+      "thread %d (-1 = all reads saw the thread's own base)",
+      g_fs32_fail[0] == -1 && g_fs32_fail[1] == -1 ? "PASS" : "FAIL", FS32_SWITCH_ITERATIONS,
+      g_fs32_fail[0], g_fs32_fail[1]);
     catch_faults(0);
 }
 
@@ -249,6 +344,9 @@ __asm__(".text\n"
         "  push %rbx\n push %rbp\n push %r12\n push %r13\n push %r14\n push %r15\n"
         "  mov %rsp, 0xf0(%rdi)\n"          /* the 64-bit stack, restored by the return stub */
         "  lea 0xf80(%rdi), %rsp\n"         /* a stack inside the low page for the 32-bit code */
+        "  mov $0x2b, %ecx\n"               /* compat mode checks DS/ES: the user data selector, as */
+        "  mov %ecx, %ds\n"                 /* Wine's dispatcher loads them (null in 64-bit code) */
+        "  mov %ecx, %es\n"
         "  movzwl 0xf8(%rdi), %ecx\n"       /* the 32-bit code selector under test */
         "  push %rcx\n"
         "  lea 0x40(%rdi), %rcx\n"
@@ -288,6 +386,128 @@ static int try_cs32(unsigned char* page, unsigned sel) {
     }
     P("cs32", "FAIL selector %#x: far return raised signal %d", sel, g_fault_sig);
     return 0;
+}
+/* sig32: a signal (tgkill from another thread) while the thread runs 32-bit code at cs 0x23 with
+ * %fs = its 32-bit TLS selector, handled the way Wine does: the handler (64-bit) first restores the
+ * TLS base with arch_prctl(ARCH_SET_FS), records the frame's cs/fs, sets the flag the 32-bit loop
+ * waits for, reloads %fs with the 32-bit selector (leave_handler) and returns; the kernel's
+ * sigreturn must go back to the 32-bit code (the frame's CS), whose next read through %fs must
+ * see the 32-bit base */
+unsigned long g_sig32_tls;
+uint64_t g_sig32_csgsfs;
+unsigned char* g_sig32_page;
+unsigned g_sig32_sel;
+volatile int g_sig32_handled;
+static pid_t g_sig32_tid;
+extern void sig32_handler(int, siginfo_t*, void*);
+__asm__(".text\n"
+        ".globl sig32_handler\n"
+        ".type sig32_handler,@function\n"
+        "sig32_handler:\n"
+        "  push %rbx\n"
+        "  mov 184(%rdx), %rbx\n"             /* uc_mcontext.gregs[REG_CSGSFS] */
+        "  mov $158, %eax\n"                  /* arch_prctl(ARCH_SET_FS, tls): first, as Wine's init_handler */
+        "  mov $0x1002, %edi\n"
+        "  mov g_sig32_tls(%rip), %rsi\n"
+        "  syscall\n"
+        "  mov %rbx, g_sig32_csgsfs(%rip)\n"
+        "  movl $1, g_sig32_handled(%rip)\n"
+        "  mov g_sig32_page(%rip), %rax\n"
+        "  movl $1, 0xe8(%rax)\n"             /* the 32-bit loop's flag */
+        "  cmpw $0x23, %bx\n"                /* leave_handler: back to the 32-bit selector, only */
+        "  jne 1f\n"                         /* when the signal interrupted 32-bit code */
+        "  mov g_sig32_sel(%rip), %eax\n"
+        "  movw %ax, %fs\n"
+        "1:\n"
+        "  pop %rbx\n"
+        "  ret\n"
+        ".size sig32_handler, .-sig32_handler\n");
+static void* sig32_killer(void* arg) {
+    (void)arg;
+    usleep(50000);
+    syscall(SYS_tgkill, getpid(), g_sig32_tid, SIGUSR1);
+    return NULL;
+}
+static void probe_sig32(void) {
+    uint16_t cs64;
+    __asm__("movw %%cs, %0" : "=r"(cs64));
+    unsigned char* page = mmap(NULL, 4096, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS | MAP_32BIT, -1, 0);
+    if (page == MAP_FAILED)
+        page = mmap((void*)0x32000000, 4096, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, -1, 0);
+    if (page == MAP_FAILED || (uintptr_t)page >= 0x100000000ull) {
+        P("sig32", "FAIL no executable page below 4 GiB: %s", E());
+        return;
+    }
+    memset(page, 0xcc, 0x1000);
+    *(uint32_t*)page = 0xfeedc0de; /* read through %fs:0 by the 32-bit code */
+    struct user_desc d = {.entry_number = -1, .base_addr = (uint32_t)(uintptr_t)page, .limit = 0xfff, .seg_32bit = 1, .useable = 1};
+    long sta = set_thread_area_int80(page + 0x100, &d);
+    if (sta < 0) {
+        P("sig32", "FAIL int $0x80 set_thread_area: %ld", sta);
+        return;
+    }
+    g_sig32_sel = (d.entry_number << 3) | 3;
+    g_sig32_page = page;
+    g_sig32_tid = syscall(SYS_gettid);
+    syscall(SYS_arch_prctl, ARCH_GET_FS, &g_sig32_tls);
+    /* 32-bit code at +0x40: ecx = 0xffffffff (seconds of spinning: the VM delivers the signal at
+     * a timer tick, up to a few hundred ms after the tgkill); loop: eax = flag; jnz done; dec ecx;
+     * jnz loop; done: page+0xec = ecx (0 = the count ran out); ebx = %fs:0; push cs64;
+     * push page+0x80; lret */
+    unsigned char* c = page + 0x40;
+    *c++ = 0xb9; put32(c, 0xffffffff); c += 4;
+    *c++ = 0xa1; put32(c, (uint32_t)(uintptr_t)(page + 0xe8)); c += 4;
+    *c++ = 0x85; *c++ = 0xc0;
+    *c++ = 0x75; *c++ = 0x03;
+    *c++ = 0x49;
+    *c++ = 0x75; *c++ = 0xf4;
+    *c++ = 0x89; *c++ = 0x0d; put32(c, (uint32_t)(uintptr_t)(page + 0xec)); c += 4;
+    *c++ = 0x64; *c++ = 0x8b; *c++ = 0x1d; put32(c, 0); c += 4;
+    *c++ = 0x68; put32(c, cs64); c += 4;
+    *c++ = 0x68; put32(c, (uint32_t)(uintptr_t)(page + 0x80)); c += 4;
+    *c++ = 0xcb;
+    /* the 64-bit return stub at +0x80, as try_cs32() */
+    c = page + 0x80;
+    *c++ = 0x48; *c++ = 0x8b; *c++ = 0x24; *c++ = 0x25; put32(c, (uint32_t)(uintptr_t)(page + 0xf0)); c += 4;
+    *c++ = 0x89; *c++ = 0x04; *c++ = 0x25; put32(c, (uint32_t)(uintptr_t)(page + 0xe0)); c += 4;
+    *c++ = 0x89; *c++ = 0x1c; *c++ = 0x25; put32(c, (uint32_t)(uintptr_t)(page + 0xe4)); c += 4;
+    const unsigned char pops[] = {0x41, 0x5f, 0x41, 0x5e, 0x41, 0x5d, 0x41, 0x5c, 0x5d, 0x5b, 0xc3};
+    memcpy(c, pops, sizeof(pops));
+    *(uint16_t*)(page + 0xf8) = 0x23;
+    *(uint32_t*)(page + 0xe0) = 0;
+    *(uint32_t*)(page + 0xe4) = 0;
+    *(uint32_t*)(page + 0xe8) = 0;
+    *(uint32_t*)(page + 0xec) = 0;
+    setup_altstack();
+    struct sigaction sa = {0};
+    sa.sa_sigaction = sig32_handler;
+    sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
+    sigaction(SIGUSR1, &sa, NULL);
+    catch_faults(1);
+    pthread_t th;
+    pthread_create(&th, NULL, sig32_killer, NULL);
+    if (sigsetjmp(g_jmp, 1) == 0) {
+        __asm__ volatile("movw %w0, %%fs" ::"r"(g_sig32_sel));
+        cs32_trampoline(page);
+        long rax_ = SYS_arch_prctl; __asm__ volatile("syscall" : "+a"(rax_) : "D"(ARCH_SET_FS), "S"(g_sig32_tls) : "rcx", "r11", "memory");
+        pthread_join(th, NULL);
+        uint32_t ebx = *(uint32_t*)(page + 0xe4);
+        unsigned cs = g_sig32_csgsfs & 0xffff, fs = (g_sig32_csgsfs >> 32) & 0xffff;
+        /* Linux stores 0 for fs and gs in a 64-bit frame (setup_sigcontext); Wine uses its own
+         * thread_data->fs, so the value is reported, not required */
+        uint32_t by_flag = *(uint32_t*)(page + 0xec);
+        int ok = g_sig32_handled && cs == 0x23 && by_flag && ebx == 0xfeedc0de;
+        P("sig32", "%s signal in 32-bit code: handler ran %d, frame cs %#x (want 0x23), frame fs %#x (Linux: 0), "
+          "%s, read %#x through %%fs after it (want 0xfeedc0de)",
+          ok ? "PASS" : "FAIL", g_sig32_handled, cs, fs,
+          by_flag ? "the 32-bit loop resumed and saw the handler's flag" : "the 32-bit loop ran out before the signal arrived", ebx);
+    } else {
+        syscall(SYS_arch_prctl, ARCH_SET_FS, g_sig32_tls);
+        P("sig32", "FAIL signal %d while running 32-bit code with %%fs loaded (handler ran %d; at the fault: ip %#lx, "
+          "%%fs %#x, fs base %#lx; the page is %p, the TLS %#lx)", g_fault_sig, g_sig32_handled, g_fault_ip,
+          g_fault_fs, g_fault_fsbase, page, g_sig32_tls);
+    }
+    catch_faults(0);
 }
 static void probe_cs32(void) {
     uint16_t cs64, ss;
@@ -446,6 +666,295 @@ static void probe_futexv(void) {
     e = errno;
     pthread_join(t, NULL);
     P("futexv", "%s woken on the second futex: returned %ld (%s)", r == 1 ? "PASS" : "FAIL", r, r < 0 ? strerror(e) : "index");
+}
+
+/* futexrt: timed FUTEX_WAIT_BITSET with an absolute deadline, CLOCK_REALTIME (Wine's fsync waits
+ * use this form) and CLOCK_MONOTONIC: both must return ETIMEDOUT after about the deadline. */
+static int g_frt;
+static void futex_abs_wait(const char* what, clockid_t clk, int flags) {
+    struct timespec ts, t0, t1;
+    clock_gettime(clk, &ts);
+    ts.tv_nsec += 100000000;
+    if (ts.tv_nsec >= 1000000000) { ts.tv_sec++; ts.tv_nsec -= 1000000000; }
+    clock_gettime(CLOCK_MONOTONIC, &t0);
+    long r = syscall(__NR_futex, &g_frt, FUTEX_WAIT_BITSET | FUTEX_PRIVATE_FLAG | flags, 0, &ts, NULL,
+                     0xffffffff);
+    int e = errno;
+    clock_gettime(CLOCK_MONOTONIC, &t1);
+    double ms = (t1.tv_sec - t0.tv_sec) * 1000.0 + (t1.tv_nsec - t0.tv_nsec) / 1e6;
+    P("futexrt", "%s %s deadline now+100 ms: %s after %.0f ms", r < 0 && e == ETIMEDOUT && ms < 1500 ? "PASS" : "FAIL",
+      what, r < 0 ? strerror(e) : "returned", ms);
+}
+static void* futexrt_watchdog(void* arg) {
+    (void)arg;
+    sleep(5);
+    P("futexrt", "FAIL a wait did not return in 5 s");
+    _exit(3);
+}
+static void probe_futexrt(void) {
+    pthread_t w;
+    pthread_create(&w, NULL, futexrt_watchdog, NULL);
+    futex_abs_wait("CLOCK_MONOTONIC", CLOCK_MONOTONIC, 0);
+    futex_abs_wait("CLOCK_REALTIME", CLOCK_REALTIME, FUTEX_CLOCK_REALTIME);
+    struct timespec rt, mono;
+    clock_gettime(CLOCK_REALTIME, &rt);
+    clock_gettime(CLOCK_MONOTONIC, &mono);
+    P("futexrt", "INFO clocks: realtime %ld s, monotonic %ld s", (long)rt.tv_sec, (long)mono.tv_sec);
+}
+
+/* futexstress: llvmpipe's rasterizer pattern — N worker threads each wait on their own semaphore
+ * (mutex + condition variable), do a little work, meet at a barrier and signal "done"; the
+ * dispatcher loops this many times. A lost futex wakeup would hang it; a watchdog reports. */
+#define FS_WORKERS 4
+#define FS_ROUNDS 20000
+static pthread_mutex_t fs_mtx[FS_WORKERS];
+static pthread_cond_t fs_cnd[FS_WORKERS];
+static int fs_ready[FS_WORKERS];
+static pthread_barrier_t fs_barrier;
+static pthread_mutex_t fs_done_mtx = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t fs_done_cnd = PTHREAD_COND_INITIALIZER;
+static int fs_done;
+static volatile int fs_round;
+static void* fs_worker(void* arg) {
+    int me = (int)(intptr_t)arg;
+    for (int r = 0; r < FS_ROUNDS; r++) {
+        pthread_mutex_lock(&fs_mtx[me]);
+        while (fs_ready[me] <= 0)
+            pthread_cond_wait(&fs_cnd[me], &fs_mtx[me]);
+        fs_ready[me]--;
+        pthread_mutex_unlock(&fs_mtx[me]);
+        volatile unsigned x = 0;
+        for (int k = 0; k < 200; k++) x += k;      /* a little rasterizing */
+        pthread_barrier_wait(&fs_barrier);
+        if (me == 0) {
+            pthread_mutex_lock(&fs_done_mtx);
+            fs_done++;
+            pthread_cond_signal(&fs_done_cnd);
+            pthread_mutex_unlock(&fs_done_mtx);
+        }
+    }
+    return NULL;
+}
+static void* fs_watchdog(void* arg) {
+    (void)arg;
+    sleep(60);
+    P("futexstress", "FAIL hung at round %d of %d (60 s)", fs_round, FS_ROUNDS);
+    _exit(3);
+}
+static void probe_futexstress(void) {
+    pthread_t w, t[FS_WORKERS];
+    pthread_create(&w, NULL, fs_watchdog, NULL);
+    pthread_barrier_init(&fs_barrier, NULL, FS_WORKERS);
+    for (int i = 0; i < FS_WORKERS; i++) {
+        pthread_mutex_init(&fs_mtx[i], NULL);
+        pthread_cond_init(&fs_cnd[i], NULL);
+        pthread_create(&t[i], NULL, fs_worker, (void*)(intptr_t)i);
+    }
+    struct timespec t0, t1;
+    clock_gettime(CLOCK_MONOTONIC, &t0);
+    for (int r = 0; r < FS_ROUNDS; r++) {
+        fs_round = r;
+        for (int i = 0; i < FS_WORKERS; i++) {
+            pthread_mutex_lock(&fs_mtx[i]);
+            fs_ready[i]++;
+            pthread_cond_signal(&fs_cnd[i]);
+            pthread_mutex_unlock(&fs_mtx[i]);
+        }
+        pthread_mutex_lock(&fs_done_mtx);
+        while (fs_done <= r)
+            pthread_cond_wait(&fs_done_cnd, &fs_done_mtx);
+        pthread_mutex_unlock(&fs_done_mtx);
+    }
+    clock_gettime(CLOCK_MONOTONIC, &t1);
+    for (int i = 0; i < FS_WORKERS; i++)
+        pthread_join(t[i], NULL);
+    P("futexstress", "PASS %d rounds of %d workers in %.1f s", FS_ROUNDS, FS_WORKERS,
+      (t1.tv_sec - t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec) / 1e9);
+}
+
+/* pipeping: the wait-events path of the VM PAL under contention. Two threads pass one byte back and
+ * forth over two pipes, each side poll()ing its pipe before reading (poll -> PalStreamsWaitEvents
+ * -> the PAL's streams-waiting futex, which a pipe write wakes). A wakeup lost between the
+ * readiness check and the sleep hangs a side for ever; the watchdog reports the round. */
+#define PP_ROUNDS 200000
+static int pp_a[2], pp_b[2];
+static volatile int pp_round;
+static int pp_wait_read(int fd) {
+    struct pollfd pfd = { .fd = fd, .events = POLLIN };
+    for (;;) {
+        int r = poll(&pfd, 1, -1);
+        if (r < 0 && errno == EINTR) continue;
+        if (r < 0) return -1;
+        char c;
+        ssize_t n = read(fd, &c, 1);
+        if (n == 1) return 0;
+        if (n < 0 && errno == EINTR) continue;
+        return -1;
+    }
+}
+static void* pp_peer(void* arg) {
+    (void)arg;
+    for (int r = 0; r < PP_ROUNDS; r++) {
+        if (pp_wait_read(pp_a[0]) < 0) { P("pipeping", "FAIL peer read: %s", strerror(errno)); _exit(4); }
+        if (write(pp_b[1], "b", 1) != 1) { P("pipeping", "FAIL peer write: %s", strerror(errno)); _exit(4); }
+    }
+    return NULL;
+}
+static void* pp_watchdog(void* arg) {
+    (void)arg;
+    sleep(90);
+    P("pipeping", "FAIL hung at round %d of %d (90 s)", pp_round, PP_ROUNDS);
+    _exit(3);
+}
+static void probe_pipeping(void) {
+    if (pipe(pp_a) < 0 || pipe(pp_b) < 0) { P("pipeping", "FAIL pipe: %s", strerror(errno)); return; }
+    pthread_t w, t;
+    pthread_create(&w, NULL, pp_watchdog, NULL);
+    pthread_create(&t, NULL, pp_peer, NULL);
+    struct timespec t0, t1;
+    clock_gettime(CLOCK_MONOTONIC, &t0);
+    for (int r = 0; r < PP_ROUNDS; r++) {
+        pp_round = r;
+        if (write(pp_a[1], "a", 1) != 1) { P("pipeping", "FAIL write: %s", strerror(errno)); return; }
+        if (pp_wait_read(pp_b[0]) < 0) { P("pipeping", "FAIL read: %s", strerror(errno)); return; }
+    }
+    clock_gettime(CLOCK_MONOTONIC, &t1);
+    pthread_join(t, NULL);
+    P("pipeping", "PASS %d rounds in %.1f s", PP_ROUNDS,
+      (t1.tv_sec - t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec) / 1e9);
+}
+
+/* pollmany: one thread poll()s the read ends of many pipes (as the wineserver's epoll spans one
+ * request pipe per Wine thread) and echoes every byte back on the pipe's reply pipe; four writer
+ * threads keep writing to random pipes and wait for their echo with a blocking read. The PAL's
+ * wait-events loop checks every pipe before it sleeps, so a write to an already-checked pipe during
+ * that walk must still wake the poller: if the wakeup is lost, the poller sleeps with data pending,
+ * the writers wait for ever and the watchdog reports. */
+#define PM_PIPES 128
+#define PM_WRITERS 4
+#define PM_ROUNDS 20000
+static int pm_req[PM_PIPES][2], pm_rep[PM_PIPES][2];
+static volatile int pm_done[PM_WRITERS];
+static void* pm_poller(void* arg) {
+    (void)arg;
+    struct pollfd pfd[PM_PIPES];
+    for (int i = 0; i < PM_PIPES; i++) { pfd[i].fd = pm_req[i][0]; pfd[i].events = POLLIN; }
+    for (;;) {
+        int r = poll(pfd, PM_PIPES, -1);
+        if (r < 0 && errno == EINTR) continue;
+        if (r < 0) { P("pollmany", "FAIL poll: %s", strerror(errno)); _exit(4); }
+        for (int i = 0; i < PM_PIPES; i++) {
+            if (!(pfd[i].revents & POLLIN)) continue;
+            char c;
+            if (read(pm_req[i][0], &c, 1) != 1) { P("pollmany", "FAIL read: %s", strerror(errno)); _exit(4); }
+            if (write(pm_rep[i][1], &c, 1) != 1) { P("pollmany", "FAIL echo: %s", strerror(errno)); _exit(4); }
+        }
+    }
+    return NULL;
+}
+static void* pm_writer(void* arg) {
+    int me = (int)(intptr_t)arg;
+    unsigned seed = 12345u + me;
+    for (int r = 0; r < PM_ROUNDS; r++) {
+        int i = (me * (PM_PIPES / PM_WRITERS)) + (rand_r(&seed) % (PM_PIPES / PM_WRITERS));
+        char c = 'a' + me;
+        if (write(pm_req[i][1], &c, 1) != 1) { P("pollmany", "FAIL write: %s", strerror(errno)); _exit(4); }
+        char e;
+        ssize_t n;
+        do { n = read(pm_rep[i][0], &e, 1); } while (n < 0 && errno == EINTR);
+        if (n != 1 || e != c) { P("pollmany", "FAIL reply %zd '%c'", n, e); _exit(4); }
+        pm_done[me] = r + 1;
+    }
+    return NULL;
+}
+static void* pm_watchdog(void* arg) {
+    (void)arg;
+    sleep(90);
+    P("pollmany", "FAIL hung after 90 s: writers at rounds %d %d %d %d of %d", pm_done[0], pm_done[1],
+      pm_done[2], pm_done[3], PM_ROUNDS);
+    _exit(3);
+}
+static void probe_pollmany(void) {
+    for (int i = 0; i < PM_PIPES; i++)
+        if (pipe(pm_req[i]) < 0 || pipe(pm_rep[i]) < 0) { P("pollmany", "FAIL pipe %d: %s", i, strerror(errno)); return; }
+    pthread_t w, po, wr[PM_WRITERS];
+    pthread_create(&w, NULL, pm_watchdog, NULL);
+    pthread_create(&po, NULL, pm_poller, NULL);
+    struct timespec t0, t1;
+    clock_gettime(CLOCK_MONOTONIC, &t0);
+    for (int i = 0; i < PM_WRITERS; i++)
+        pthread_create(&wr[i], NULL, pm_writer, (void*)(intptr_t)i);
+    for (int i = 0; i < PM_WRITERS; i++)
+        pthread_join(wr[i], NULL);
+    clock_gettime(CLOCK_MONOTONIC, &t1);
+    P("pollmany", "PASS %d writers x %d rounds over %d pipes in %.1f s", PM_WRITERS, PM_ROUNDS, PM_PIPES,
+      (t1.tv_sec - t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec) / 1e9);
+}
+
+/* threadlat: what a game's short deadlines are spent on. (a) create a thread that returns at
+ * once and join it; (b) a pipe round trip to a peer thread that sleeps in poll() between messages
+ * (its vCPU idles, as the wineserver's does between requests); 200 samples each, median and max. */
+static int tl_cmp(const void* a, const void* b) { double x = *(const double*)a, y = *(const double*)b; return (x > y) - (x < y); }
+static double tl_now(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return t.tv_sec * 1e3 + t.tv_nsec / 1e6; }
+static void* tl_noop(void* a) { (void)a; return NULL; }
+static int tl_p[2], tl_q[2];
+static void* tl_peer(void* a) {
+    (void)a;
+    struct pollfd pfd = { .fd = tl_p[0], .events = POLLIN };
+    for (int i = 0; i < 200; i++) {
+        while (poll(&pfd, 1, -1) < 0 && errno == EINTR) ;
+        char c; if (read(tl_p[0], &c, 1) != 1) return NULL;
+        if (write(tl_q[1], &c, 1) != 1) return NULL;
+    }
+    return NULL;
+}
+static void tl_report(const char* what, double* v, int n) {
+    qsort(v, n, sizeof(*v), tl_cmp);
+    P("threadlat", "INFO %s: median %.2f ms, p90 %.2f ms, max %.2f ms (%d samples)", what, v[n / 2], v[n * 9 / 10], v[n - 1], n);
+}
+static void probe_threadlat(void) {
+    double v[200];
+    for (int i = 0; i < 200; i++) {
+        double t0 = tl_now(); pthread_t t; pthread_create(&t, NULL, tl_noop, NULL); pthread_join(t, NULL);
+        v[i] = tl_now() - t0;
+        usleep(3000); /* let the CPUs go idle between samples, as between a game's steps */
+    }
+    tl_report("thread create+join, CPUs idle between samples", v, 200);
+    if (pipe(tl_p) < 0 || pipe(tl_q) < 0) { P("threadlat", "FAIL pipe"); return; }
+    pthread_t peer; pthread_create(&peer, NULL, tl_peer, NULL);
+    usleep(20000);
+    for (int i = 0; i < 200; i++) {
+        double t0 = tl_now(); char c = 'x', r;
+        if (write(tl_p[1], &c, 1) != 1 || read(tl_q[0], &r, 1) != 1) { P("threadlat", "FAIL pipe round trip"); return; }
+        v[i] = tl_now() - t0;
+        usleep(3000);
+    }
+    pthread_join(peer, NULL);
+    tl_report("pipe round trip to a sleeping peer", v, 200);
+}
+
+/* tickgran: the granularity of short timed waits: nanosleep, a futex wait with a timeout, poll and
+ * epoll_wait with 1 ms and 5 ms timeouts, 20 each; median and max. */
+static double tg_now(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return t.tv_sec * 1e3 + t.tv_nsec / 1e6; }
+static void tg_report(const char* what, double* v, int n) {
+    qsort(v, n, sizeof(*v), tl_cmp);
+    P("tickgran", "INFO %-22s median %7.2f ms, max %7.2f ms", what, v[n / 2], v[n - 1]);
+}
+static void probe_tickgran(void) {
+    double v[20]; int w = 0; int fds[2]; pipe(fds);
+    int ep = epoll_create1(0); struct epoll_event ee = { .events = EPOLLIN, .data.fd = fds[0] }; epoll_ctl(ep, EPOLL_CTL_ADD, fds[0], &ee);
+    for (int ms = 1; ms <= 5; ms += 4) {
+        struct timespec ts = { 0, ms * 1000000L };
+        for (int i = 0; i < 20; i++) { double t0 = tg_now(); nanosleep(&ts, NULL); v[i] = tg_now() - t0; }
+        char name[32]; snprintf(name, sizeof(name), "nanosleep %d ms", ms); tg_report(name, v, 20);
+        for (int i = 0; i < 20; i++) { double t0 = tg_now(); struct timespec rel = { 0, ms * 1000000L }; syscall(__NR_futex, &w, FUTEX_WAIT | FUTEX_PRIVATE_FLAG, 0, &rel, NULL, 0); v[i] = tg_now() - t0; }
+        snprintf(name, sizeof(name), "futex wait %d ms", ms); tg_report(name, v, 20);
+        struct pollfd pfd = { .fd = fds[0], .events = POLLIN };
+        for (int i = 0; i < 20; i++) { double t0 = tg_now(); poll(&pfd, 1, ms); v[i] = tg_now() - t0; }
+        snprintf(name, sizeof(name), "poll %d ms", ms); tg_report(name, v, 20);
+        for (int i = 0; i < 20; i++) { double t0 = tg_now(); struct epoll_event out; epoll_wait(ep, &out, 1, ms); v[i] = tg_now() - t0; }
+        snprintf(name, sizeof(name), "epoll_wait %d ms", ms); tg_report(name, v, 20);
+    }
 }
 
 /* ------------------------------------------------------------------------------------------- */
@@ -1159,12 +1668,12 @@ static void probe_misc(void) {
 struct probe { const char* name; void (*fn)(void); };
 static const struct probe probes[] = {
     /* the ones that may take the guest down come last */
-    {"fixed", probe_fixed},   {"huge", probe_huge},     {"noreplace", probe_noreplace}, {"futexv", probe_futexv},
+    {"fixed", probe_fixed},   {"huge", probe_huge},     {"noreplace", probe_noreplace}, {"futexv", probe_futexv}, {"futexrt", probe_futexrt}, {"futexstress", probe_futexstress}, {"pipeping", probe_pipeping}, {"pollmany", probe_pollmany}, {"threadlat", probe_threadlat}, {"tickgran", probe_tickgran},
     {"eventfd", probe_eventfd}, {"scm", probe_scm},     {"unixsock", probe_unixsock}, {"unixsock2", probe_unixsock2}, {"sud", probe_sud}, {"ifaces", probe_ifaces},       {"signals", probe_signals},
     {"sig_chld", probe_sig_chld}, {"sig_spin", probe_sig_spin}, {"sig_block", probe_sig_block}, {"sig_proc", probe_sig_proc},
     {"threads", probe_threads}, {"procs", probe_procs}, {"proc", probe_proc},       {"misc", probe_misc},
     {"gs", probe_gs},         {"fs32", probe_fs32},     {"cs32", probe_cs32},       {"traps", probe_traps},
-    {"wrgsbase", probe_wrgsbase},
+    {"wrgsbase", probe_wrgsbase}, {"sig32", probe_sig32},
 };
 
 static void run_probe(const struct probe* p, int inline_only) {

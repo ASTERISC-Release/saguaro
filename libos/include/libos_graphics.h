@@ -45,6 +45,14 @@ bool graphics_redirect_enabled(void);
 
 /* Drops a stale TYPE_HOST handle at the guest slot of a host fd the host just returned (libos_open.c). */
 int graphics_drop_stale_host_handle(int fd);
+/* The comm page mapped in this process by the LibOS itself, for a process that never ran the
+ * graphics library (the wineserver receiving a host handle over SCM_RIGHTS): every forwarded
+ * operation on a host handle needs it. 0 when it is mapped (already or now), -errno otherwise. */
+int graphics_ensure_comm_mapped(void);
+/* Asks the listener to dup() the host fd behind `fd` (a TYPE_HOST or TYPE_HOST_IDENTITY descriptor,
+ * host fd + offset) and returns the new descriptor number (host fd + offset) or -errno; the caller
+ * installs the handle. */
+long graphics_host_dup_request(int fd, int type);
 
 /* Set once the application has mapped the comm window at COMM_ADDR (libos_syscall_mmap()). */
 extern bool g_graphics_comm_mapped;

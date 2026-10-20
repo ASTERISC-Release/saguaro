@@ -11,11 +11,17 @@ endif
 
 .PHONY: all
 ifeq ($(VBS),1)
-# Windows VBS enclave (scripts/vbs/Makefile.vbs, Documentation/vbs.rst): CPython built for the
+# Windows VBS enclave (scripts/vbs/Makefile.vbs, Documentation/vbs.md): CPython built for the
 # enclave once (scripts/vbs/build-python.sh), packed with the scripts by vbs.manifest.template
 VBS_PYTHON_STAMP = ../../build-vbs-python/.vbs-python
 VBS_APP = python
-VBS_DEPS = $(wildcard scripts/*.py) helper-files/hosts $(VBS_PYTHON_STAMP) vbs-build/site/.stamp
+VBS_DEPS = $(wildcard scripts/*.py) helper-files/hosts $(VBS_PYTHON_STAMP)
+# NumPy and SciPy are x86_64 wheels: packed on x64 Windows only (the aarch64 build has none, and the
+# host's aarch64 libstdc++ is refused by pack.py: it uses x18)
+ifeq ($(shell uname -m),x86_64)
+VBS_DEPS += vbs-build/site/.stamp
+VBS_DEFINES = -Dnumpy=1
+endif
 include ../../scripts/vbs/Makefile.vbs
 all: vbs-all
 
@@ -102,11 +108,13 @@ sgx_sign: python.manifest
 .PHONY: check
 check: all
 ifeq ($(VBS),1)
-	GRAMINE="$(GRAMINE)" VBS=1 ./run-tests.sh > TEST_STDOUT 2> TEST_STDERR
+	GRAMINE="$(GRAMINE)" VBS=1 $(if $(filter x86_64,$(shell uname -m)),,VBS_NO_NUMPY=1) ./run-tests.sh > TEST_STDOUT 2> TEST_STDERR
 	@grep -q "Success 1/4" TEST_STDOUT
 	@grep -q "Success 2/4" TEST_STDOUT
+ifeq ($(shell uname -m),x86_64)
 	@grep -q "Success 3/4" TEST_STDOUT
 	@grep -q "Success 4/4" TEST_STDOUT
+endif
 else
 	./run-tests.sh > TEST_STDOUT 2> TEST_STDERR
 	@grep -q "Success 1/4" TEST_STDOUT

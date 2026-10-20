@@ -253,6 +253,7 @@ int _PalEventWait(PAL_HANDLE handle, uint64_t* timeout_us);
 
 /* PalVirtualMemory calls */
 int _PalVirtualMemoryAlloc(void* addr, uint64_t size, pal_prot_flags_t prot);
+int _PalVirtualMemoryAlias(void* addr, void* src, size_t size, pal_prot_flags_t prot);
 int _PalVirtualMemoryAllocContiguous(void* addr, size_t size, pal_prot_flags_t prot,
                                      uint64_t* out_phys);
 int _PalVirtualMemoryFree(void* addr, uint64_t size);
@@ -289,6 +290,8 @@ void _PalGetHwcaps(uint64_t* out_hwcap, uint64_t* out_hwcap2);
 #endif
 int _PalSegmentBaseGet(enum pal_segment_reg reg, uintptr_t* addr);
 int _PalSegmentBaseSet(enum pal_segment_reg reg, uintptr_t addr);
+int _PalSegmentDescriptorSet(unsigned int entry, uint64_t descriptor);
+int _PalSegmentDescriptorGet(unsigned int entry, uint64_t* descriptor);
 int _PalCpuIdRetrieve(uint32_t leaf, uint32_t subleaf, uint32_t values[4]);
 int _PalAttestationReport(const void* user_report_data, size_t* user_report_data_size,
                           void* target_info, size_t* target_info_size, void* report,

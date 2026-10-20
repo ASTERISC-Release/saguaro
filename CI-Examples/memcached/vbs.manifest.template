@@ -1,7 +1,7 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 # SPDX-License-Identifier: BSD-3-Clause
 
-# Memcached manifest for a Windows VBS enclave (`make VBS=1`, Documentation/vbs.rst): the
+# Memcached manifest for a Windows VBS enclave (`make VBS=1`, Documentation/vbs.md): the
 # counterpart of memcached.manifest.template. memcached (libevent linked in statically, both built
 # with the vbs gcc) and the glibc libraries are packed into the signed image.
 

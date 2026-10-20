@@ -29,7 +29,9 @@
 - Time source: RDTSC (Invariant TSC) for relative time; absolute time is taken
   from the host on QEMU startup (untrusted!)
 
-- Timer interrupts: using TSC deadline mode, fired every 100ms
+- Timer interrupts: using TSC deadline mode; CPU0's timer is armed for the earliest pending
+  timeout, at most 100ms ahead (the tick), the other CPUs tick every 100ms (shared with the vm
+  PAL, `Documentation/devel/vm-timer/`; not yet run on TDX hardware)
 
 - Timeouts, alarms, waiting/sleeping with timeouts
 

@@ -1,38 +1,43 @@
 # Example Integrations
 
-This folder contains application integration examples. They are tested on
-Ubuntu 24.04 (aarch64 and x86_64) with `gramine-direct`; on aarch64 a subset also runs under
-`gramine-vm` (see `tools/run-vm-aarch64-examples.sh`).
+This folder contains application integration examples. Each subdirectory has a `README.md` with
+instructions to build and run the application under Gramine.
 
-For instructions how to build and run each application under Gramine, please
-see the README.md in each subdirectory.
+The table lists the recorded result of each example for each backend.
 
-Please note that most of the examples use oversimplified configurations which
-are not secure (e.g., they mount whole host directories into the application).
-If you take these examples as templates for your own workloads, please inspect
-and harden the configurations.
+**Symbols:** ✓ pass, ✗ fail, – not run or not applicable, blank not measured. 
 
-## Prerequisites
+| Example | Direct x86_64 | VM x86_64 | Direct aarch64 | VM aarch64 | SEV | TDX | SGX | VBS |
+|---|---|---|---|---|---|---|---|---|
+| `bash` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  | ¹ |
+| `blender` | ✓ | –² | –² | –² | ✓ |  |  | ¹ |
+| `busybox` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  | ✓ |
+| `curl` | ✓ | ✓³ | ✓ | ✓³ | ✓³ |  |  | ✓ |
+| `gcc` | ✓ | ✓ | ✓ | ✗ | ✓ |  |  | ¹ |
+| `graphics` | ✓⁴ | ✓⁴ | ✓⁴ |  | – |  |  | ¹ |
+| `helloworld` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓⁵ |  | ✓ |
+| `iperf` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  | ✓ |
+| `lighttpd` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  | ✓ |
+| `memcached` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  | ✓ |
+| `mongodb` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  | ¹ |
+| `nginx` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  | ✓ |
+| `nodejs` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  | ✗ ARM64, – x64 |
+| `openjdk` | ✓ | ✓ | ✓ | ✗ | ✓ |  |  | – |
+| `python` | ✓ | ✓ | ✓ | – | ✓⁶ | ✓⁵ |  | ✓ ARM64, ✗ x64 |
+| `pytorch` | ✓ | ✓ | ✓ | ✗ | ✓ |  |  | ¹ |
+| `r` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  | ¹ |
+| `ra-tls-*` | –⁷ | –⁷ | –⁷ | –⁷ | –⁷ |  |  | –⁷ |
+| `redis` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  | ✓ |
+| `rust` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  | ✓⁸ |
+| `sqlite` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  | ✓ |
+| `unit_tests` | ✓ | ✓ | ✓ | ✓ | ✓⁶ | ✓⁵ |  | ¹ |
+| `vbs/*` |  |  |  |  |  |  |  | ✓ |
 
-Install and enable Gramine first (`scripts/dependencies.sh`, `scripts/install.sh`
-and `. ~/.local/gramine/env.sh`, see `INSTALL.rst` in the repository root). Some examples need
-extra host packages: each has an `install-prereqs.sh`, and
-`install-all-prereqs.sh` runs all of them.
-
-## Building Examples
-
-All examples use simple Makefiles to build the application and generate its
-Gramine manifest. Use one of these commands:
-- `make`: create a no-debug-log manifest
-- `make DEBUG=1`: create a debug-log manifest
-
-Then run the application with `gramine-direct <application>`.
-
-Use `make clean` to remove Gramine-generated artifacts and `make distclean` to
-remove all build artifacts (if applicable).
-
-## Testing
-
-`test/test-direct.sh` (in the top-level `test/` directory) builds and runs most
-of the examples as part of the test battery; `test/test-direct.sh --list` shows the
-suites. `test/test-vm.sh examples` runs the aarch64 subset under `gramine-vm`. `unit_tests/` holds small test programs for LibOS and PAL behavior.
+¹ No VBS recipe.  
+² Not run on aarch64: the example downloads an x86_64-only binary. Not run on VM x86_64: no recorded reason.  
+³ `make check` serves on the host's loopback, which the guest cannot reach. Run it with the server on the container address.  
+⁴ Needs a display; run by hand.  
+⁵ TDX run offline; no log in the repository.  
+⁶ SEV: python runs only `scripts/helloworld.py`; unit_tests runs only `thread-tls`.  
+⁷ SGX attestation example only.  
+⁸ Needs `rustup` stable with `rust-src`.

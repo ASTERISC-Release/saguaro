@@ -1,5 +1,6 @@
 PalVirtualMemoryAlloc
 PalVirtualMemoryAllocContiguous
+PalVirtualMemoryAlias
 PalVirtualMemoryFree
 PalVirtualMemoryProtect
 PalSetMemoryBookkeepingUpcalls
@@ -48,6 +49,8 @@ PalObjectDestroy
 PalSetExceptionHandler
 PalSegmentBaseGet
 PalSegmentBaseSet
+PalSegmentDescriptorSet
+PalSegmentDescriptorGet
 PalStreamChangeName
 PalFileCreateSymlink
 PalFileExchange

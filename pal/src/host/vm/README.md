@@ -1,6 +1,6 @@
 This file describes the x86_64 VM PAL. The aarch64 VM PAL (QEMU `virt` machine, GICv3, PSCI,
 VMSAv8-64 paging) is described in `Documentation/devel/vm.md` and
-`Documentation/devel/aarch64/vm/PLAN.md`; its kernel sources are in
+`Documentation/devel/CHANGELOG.md`; its kernel sources are in
 `pal/src/host/vm-common/arch/aarch64/` and `pal/src/host/vm/arch/aarch64/`.
 
 # Features (x86_64)
@@ -34,7 +34,9 @@ VMSAv8-64 paging) is described in `Documentation/devel/vm.md` and
 - Time source: RDTSC (Invariant TSC) for relative time; absolute time is taken
   from the host on QEMU startup
 
-- Timer interrupts: using TSC deadline mode, fired every 100ms
+- Timer interrupts: using TSC deadline mode; CPU0's timer is armed for the earliest pending
+  timeout, at most 100ms ahead (the tick), the other CPUs tick every 100ms
+  (`Documentation/devel/vm-timer/`)
 
 - Timeouts, alarms, waiting/sleeping with timeouts
 

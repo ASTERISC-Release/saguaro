@@ -3,7 +3,7 @@
 
 /*
  * vbs-net: a small Winsock client for the checks and measurements of applications that run in a
- * VBS enclave (Documentation/vbs.rst, "Makefile flow"). The enclave's sockets are Windows sockets
+ * VBS enclave (Documentation/vbs.md, "Makefile flow"). The enclave's sockets are Windows sockets
  * of the host process, and WSL2 in its default (NAT) networking mode cannot reach Windows'
  * loopback, so clients run on Windows. `gramine-vbs net ...` compiles this file once with MSVC
  * and runs it (from WSL through interop).

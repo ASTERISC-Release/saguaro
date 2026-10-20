@@ -13,6 +13,9 @@ loader.env.PATH = "{{ execdir }}"
 
 loader.insecure__use_cmdline_argv = true
 
+# The VM PAL runs the multi-process checks only with this key (other PALs ignore it).
+sys.experimental__multiprocess = true
+
 fs.mounts = [
   { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
   { path = "{{ arch_libdir }}", uri = "file:{{ arch_libdir }}" },

@@ -1,7 +1,7 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 # SPDX-License-Identifier: BSD-3-Clause
 
-# SQLite manifest for a Windows VBS enclave (`make VBS=1`, Documentation/vbs.rst): the counterpart of
+# SQLite manifest for a Windows VBS enclave (`make VBS=1`, Documentation/vbs.md): the counterpart of
 # manifest.template. The shell is built from the amalgamation with the vbs gcc (vbs-build/sqlite3, a
 # static PIE) and runs one command per enclave: `sqlite3 DB SQL`, the arguments come from the command
 # line (vbs-check.sh), so that the scripts run with `.read` (the enclave has no console input).

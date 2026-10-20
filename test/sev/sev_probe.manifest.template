@@ -1,9 +1,13 @@
-# test/test-sev.sh: the guest side of the SEV memory-encryption check (sev_probe.c)
+# test/sev/test-sev.sh: the guest side of the SEV memory-encryption check (sev_probe.c)
 
 libos.entrypoint = "/sev_probe"
 loader.log_level = "{{ log_level }}"
 loader.env.LD_LIBRARY_PATH = "/lib"
 loader.insecure__use_cmdline_argv = true
+
+# the host-side check reads guest-physical memory at the probe's virtual address: single-process
+# guest, mapped 1:1 (with processes the probe's addresses are not physical ones)
+sys.experimental__multiprocess = false
 
 fs.mounts = [
   { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
