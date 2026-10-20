@@ -9,3 +9,6 @@
 *.manifest.vbs
 *.vbs/
 vbs-build/
+
+# server output of check.sh
+server.log

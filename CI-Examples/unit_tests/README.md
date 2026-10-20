@@ -12,6 +12,10 @@ application integrations in the parent directory. Each directory follows the usu
 | `mremap/` | `mremap` growing and shrinking a mapping in place (data must survive, the address must not move); prints `ALL IN-PLACE TESTS PASSED` | `make && gramine-direct helloworld` |
 | `align_test/` | an allocation / alignment probe (not a pass/fail test: it prints pointers and then waits) | `make && gramine-direct align_test` |
 
+`./exec.sh --vm` (also `--direct` and `--sev`) builds and runs `mremap/`, the three programs of
+`multi-thread/` and `networks/` under one backend, and skips `align_test/`. See
+[`CI-Examples/README.md`](../README.md).
+
 # Building
 
 Install the backend first (`Documentation/quickstart/`) and run all commands in the directory of a

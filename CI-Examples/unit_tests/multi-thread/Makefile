@@ -38,8 +38,16 @@ thread-rwlock.manifest: thread-rwlock.manifest.template
 		$< $@
 	gramine-manifest-check $@
 
+# A static executable must be position-independent on aarch64: the guest's memory starts at 0x40000000,
+# where a non-PIE executable would be linked.
+ifeq ($(shell uname -m),aarch64)
+STATIC_FLAG = -static-pie
+else
+STATIC_FLAG = -static
+endif
+
 thread-tls: thread-tls.o
-	$(CC) -static $(CFLAGS) -o $@ $^ $(LDFLAGS)
+	$(CC) $(STATIC_FLAG) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 thread-tls.o: thread-tls.c
 thread-tls.manifest: thread-tls.manifest.template
 	gramine-manifest \

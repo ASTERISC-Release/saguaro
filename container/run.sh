@@ -197,8 +197,11 @@ elif [ "$(podman container inspect "$CONTAINER" --format '{{.State.Running}}')" 
 fi
 
 # --- attach -----------------------------------------------------------------------------------------
+# Both modes load the Gramine environment of the vm install (scripts/install.sh --vm), when it exists:
+# gramine-vm and the Python tooling are then on PATH without sourcing env.sh by hand.
+GRAMINE_ENV='[ -f "$HOME/.local/gramine-vm/env.sh" ] && . "$HOME/.local/gramine-vm/env.sh"'
 if [ $# -gt 0 ]; then
-    exec podman exec -i -w /root/gramine-multiarch "$CONTAINER" bash -c "$*"
+    exec podman exec -i -w /root/gramine-multiarch "$CONTAINER" bash -c "$GRAMINE_ENV; $*"
 else
-    exec podman exec -it -w /root/gramine-multiarch "$CONTAINER" bash
+    exec podman exec -it -w /root/gramine-multiarch "$CONTAINER" bash -c "$GRAMINE_ENV; exec bash"
 fi

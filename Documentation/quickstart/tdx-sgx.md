@@ -8,11 +8,16 @@ treat this page as pointers.
 Status (as in [README.md](../../README.md)): Intel x86_64 ✅ (inherited); AMD64, AArch64 and
 RISC-V ➖.
 
+As in the other guides, the build runs in the container of `container/run.sh` (see
+[direct.md](direct.md), section 1); the commands below run in its shell, in the repository. The
+`exec.sh` scripts of `CI-Examples/` have no `sgx` or `tdx` backend (`--direct`, `--vm`, `--sev`,
+`--sev-snp` and `--vbs` only), so the examples are built by hand with `make SGX=1`.
+
 ## SGX
 
 Needs an Intel CPU with SGX (FLC), the in-kernel SGX driver (`/dev/sgx_enclave`) and, for remote
 attestation, Intel's DCAP or EPID services. The SGX build also needs the protobuf-c tools, which
-`scripts/dependencies.sh` does not install (`protobuf-c-compiler libprotobuf-c-dev`):
+`scripts/dependencies.sh` does not install (`protobuf-c-compiler libprotobuf-c-dev`; in the container they are installed with `apt-get install`, as its user is root):
 
     scripts/install.sh --sgx --prefix ~/.local/gramine-sgx --build-dir build-sgx
     . ~/.local/gramine-sgx/env.sh
@@ -28,7 +33,7 @@ Reference: [sgx-intro.md](../sgx-intro.md), [sgx-setup.md](../sgx-setup.md),
 ## TDX
 
 Needs an Intel CPU and host kernel with TDX, a QEMU with TDX support and the TD-shim firmware, as
-described by the upstream gramine-tdx project. The build is `scripts/install.sh --vm --tdx`; the
+described by the upstream gramine-tdx project. The build is `scripts/install.sh --vm --tdx` (in the container); the
 launcher is `gramine-tdx` (the TDX variant of `gramine-vm`, `tools/gramine-vm.in`).
 
 The install step links the PAL with TD-shim: it runs `cargo run -p td-shim-tools` in

@@ -935,8 +935,8 @@ int vm_process_runtime_copy_selfcheck(void) {
         goto out;
     }
 
-    log_always("PAL root state self-check passed (private process state copied, shared PAL state "
-               "visible, %zu process-data pages)", copied_pages);
+    // log_always("PAL root state self-check passed (private process state copied, shared PAL state "
+    //            "visible, %zu process-data pages)", copied_pages);
 
 out:
     if (address_space_active) {

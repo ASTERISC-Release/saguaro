@@ -163,7 +163,7 @@ check_epid: app epid
 	# secret_prov_minimal
 	cd secret_prov_minimal; \
 	./server_epid >/dev/null & SERVER_ID=$$!; \
-	../../../scripts/wait_for_server 60 127.0.0.1 4433; \
+	../../../../scripts/wait_for_server 60 127.0.0.1 4433; \
 	gramine-sgx client > ../OUTPUT; \
 	kill -9 $$SERVER_ID;
 	@grep -E "Received secret = 'A_SIMPLE_SECRET'" OUTPUT && echo "[ Success 1/4 ]"
@@ -171,7 +171,7 @@ check_epid: app epid
 	# secret_prov
 	cd secret_prov; \
 	./server_epid >/dev/null & SERVER_ID=$$!; \
-	../../../scripts/wait_for_server 60 127.0.0.1 4433; \
+	../../../../scripts/wait_for_server 60 127.0.0.1 4433; \
 	gramine-sgx client > ../OUTPUT; \
 	kill -9 $$SERVER_ID;
 	@grep -E "Received secret1 = 'FIRST_SECRET', secret2 = '42'" OUTPUT && echo "[ Success 2/4 ]"
@@ -179,7 +179,7 @@ check_epid: app epid
 	# secret_prov_pf
 	cd secret_prov_pf; \
 	./server_epid wrap_key >/dev/null & SERVER_ID=$$!; \
-	../../../scripts/wait_for_server 60 127.0.0.1 4433; \
+	../../../../scripts/wait_for_server 60 127.0.0.1 4433; \
 	gramine-sgx client > ../OUTPUT; \
 	kill -9 $$SERVER_ID;
 	@grep -E "\[parent\] Read from protected file: 'helloworld'" OUTPUT && echo "[ Success 3/4 ]"
@@ -192,7 +192,7 @@ check_dcap: app dcap
 	# secret_prov_minimal
 	cd secret_prov_minimal; \
 	./server_dcap >/dev/null & SERVER_ID=$$!; \
-	../../../scripts/wait_for_server 60 127.0.0.1 4433; \
+	../../../../scripts/wait_for_server 60 127.0.0.1 4433; \
 	gramine-sgx client > ../OUTPUT; \
 	kill -9 $$SERVER_ID;
 	@grep -E "Received secret = 'A_SIMPLE_SECRET'" OUTPUT && echo "[ Success 1/4 ]"
@@ -200,7 +200,7 @@ check_dcap: app dcap
 	# secret_prov
 	cd secret_prov; \
 	./server_dcap >/dev/null & SERVER_ID=$$!; \
-	../../../scripts/wait_for_server 60 127.0.0.1 4433; \
+	../../../../scripts/wait_for_server 60 127.0.0.1 4433; \
 	gramine-sgx client > ../OUTPUT; \
 	kill -9 $$SERVER_ID;
 	@grep -E "Received secret1 = 'FIRST_SECRET', secret2 = '42'" OUTPUT && echo "[ Success 2/4 ]"
@@ -208,7 +208,7 @@ check_dcap: app dcap
 	# secret_prov_pf
 	cd secret_prov_pf; \
 	./server_dcap wrap_key >/dev/null & SERVER_ID=$$!; \
-	../../../scripts/wait_for_server 60 127.0.0.1 4433; \
+	../../../../scripts/wait_for_server 60 127.0.0.1 4433; \
 	gramine-sgx client > ../OUTPUT; \
 	kill -9 $$SERVER_ID;
 	@grep -E "\[parent\] Read from protected file: 'helloworld'" OUTPUT && echo "[ Success 3/4 ]"

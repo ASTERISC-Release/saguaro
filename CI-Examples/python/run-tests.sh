@@ -54,7 +54,17 @@ echo -e "\n\nRunning HTTP client test-http.py:"
 if test "${GRAMINE_VM:-0}" = 1; then
     # Outbound guest connections and guest loopback are separate later phases. For phase 2, run
     # this example's HTTP client in the container and reach the guest server through the relay.
-    python3 scripts/test-http.py 127.0.0.1 "$HTTP_PORT" > OUTPUT1
+    # The relay listens on the host before the guest is up, so the wait above ends at once; a guest
+    # that boots slowly (SEV and SEV-SNP take 4 to 8 s) is not reachable yet. Try again until it is.
+    http_ok=0
+    for _ in $(seq 120); do
+        if python3 scripts/test-http.py 127.0.0.1 "$HTTP_PORT" > OUTPUT1 2>/dev/null; then
+            http_ok=1
+            break
+        fi
+        sleep 0.5
+    done
+    test "$http_ok" = 1 || python3 scripts/test-http.py 127.0.0.1 "$HTTP_PORT" > OUTPUT1
 else
     "$GRAMINE" ./python scripts/test-http.py 127.0.0.1 "$GUEST_HTTP_PORT" > OUTPUT1
 fi

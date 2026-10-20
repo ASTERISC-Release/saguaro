@@ -157,6 +157,13 @@ start-gramine-server: all
 
 ################################## CLEANUP ####################################
 
+ifneq ($(VBS),1)
+# the server under $(GRAMINE), a client on the host's loopback (check.sh)
+.PHONY: check
+check: all
+	GRAMINE="$(GRAMINE)" ./check.sh
+endif
+
 .PHONY: clean
 clean:
 	$(RM) *.token *.sig *.manifest.sgx *.manifest redis-server *.rdb

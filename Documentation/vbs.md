@@ -281,10 +281,12 @@ Linux shell):
 
 `make` and `make SGX=1` without `VBS=1` are unchanged. What `make VBS=1` does:
 
-1.  **The runtime**, once per checkout: the vbs glibc (`build-vbs-glibc`, about 2 minutes) and
-    the vbs PAL and LibOS (`build-vbs`, meson and ninja), then a `ninja` on every `make`
-    (`gramine-vbs runtime`). The build tools are those of [Windows only (WSL)](#windows-only-wsl) (`gramine-vbs`
-    uses the user-level ones of `scripts/install.sh --vbs` by itself).
+1.  **The runtime** is not built by `make`: `scripts/install.sh --vbs` builds it once per checkout (the vbs
+    glibc `build-vbs-glibc`, about 2 minutes, and the vbs PAL and LibOS `build-vbs`, meson and
+    ninja; `gramine-vbs runtime`) and again, quickly, after a change of the PAL or the LibOS. `make VBS=1`
+    stops with a message when the runtime is not installed, and rebuilds an image when the runtime
+    changed. The build tools are those of [Windows only (WSL)](#windows-only-wsl) (`scripts/install.sh --vbs`
+    installs the user-level ones).
 2.  **The application for the enclave**, by the example's own rules, with `$(VBS_GCC)`
     (`scripts/vbs/vbs-gcc`: a dynamic PIE against the vbs glibc, `-ffixed-x18`) or
     `$(VBS_CC_STATIC)`, into a folder of its own (`vbs-build/`), so that the direct build is

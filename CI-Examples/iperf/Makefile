@@ -114,6 +114,15 @@ check: all
 	GRAMINE="$(GRAMINE)" ./vbs-check.sh
 endif
 
+ifneq ($(VBS),1)
+# the server under $(GRAMINE), the native client on the host's loopback (check.sh)
+GRAMINE ?= gramine-direct
+
+.PHONY: check
+check: all
+	GRAMINE="$(GRAMINE)" ./check.sh
+endif
+
 ################################## CLEANUP ####################################
 
 .PHONY: clean

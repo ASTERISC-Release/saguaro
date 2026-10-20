@@ -123,8 +123,8 @@ static int init_multiprocess_frame_pool_sized(uintptr_t pool_size, bool* out_fou
             ret = vm_process_stream_selfcheck();
             if (ret < 0)
                 return ret;
-            log_always("Process stream I/O, endpoint transfer, shutdown, and frame-reclaim "
-                       "self-check passed");
+            // log_always("Process stream I/O, endpoint transfer, shutdown, and frame-reclaim "
+            //            "self-check passed");
 
             /* PAL thread stacks are intentionally recycled instead of freed from their own
              * stacks. Warm one stack before the frame-reclamation baseline is measured. */
@@ -191,7 +191,7 @@ static int init_multiprocess_frame_pool_sized(uintptr_t pool_size, bool* out_fou
                 memory_frame_free(frame2);
                 return ret;
             }
-            log_always("Frame-pool allocate, double-free rejection, and frame-reuse self-check passed");
+            // log_always("Frame-pool allocate, double-free rejection, and frame-reuse self-check passed");
             if (reused_frame != frame1 || *(uint64_t*)memory_frame_pointer(reused_frame) != 0) {
                 memory_frame_free(frame2);
                 memory_frame_free(reused_frame);
@@ -417,7 +417,7 @@ static int init_multiprocess_frame_pool_sized(uintptr_t pool_size, bool* out_fou
                           scheduler_switched, grandchild_survived_parent);
             if (!scheduler_switched || !grandchild_survived_parent)
                 return -PAL_ERROR_DENIED;
-            log_always("Address-space isolation, nested clone, parent teardown, frame reclaim, and scheduler self-check passed");
+            // log_always("Address-space isolation, nested clone, parent teardown, frame reclaim, and scheduler self-check passed");
             return 0;
         }
     }
@@ -565,14 +565,14 @@ static void boot_stamp(const char* what) {
     uint64_t t = get_tsc() - boot_tsc0;
     if (g_tsc_mhz) {
         unsigned long ms_val = (unsigned long)(t / (g_tsc_mhz * 1000));
-        log_always("[boot] +%lu ms: %s", ms_val, what);
+        // log_always("[boot] +%lu ms: %s", ms_val, what);
         debug_serial_io_write("[boot] +");
         debug_serial_io_write_int("", ms_val);
         debug_serial_io_write(" ms: ");
         debug_serial_io_write(what);
         debug_serial_io_write("\n");
     } else {
-        log_always("[boot] +%llu ticks: %s", (unsigned long long)t, what);
+        // log_always("[boot] +%llu ticks: %s", (unsigned long long)t, what);
         debug_serial_io_write("[boot] ");
         debug_serial_io_write_int("", t);
         debug_serial_io_write(" ticks: ");
@@ -890,9 +890,9 @@ noreturn int pal_start_continue(void* cmdline_) {
              * are reserved physical ranges inside the RAM part (the LibOS refuses fixed mappings
              * there), which does not shorten the range. */
             g_pal_public_state.memory_address_end = (void*)MEMORY_ADDRESS_SPACE_LIMIT;
-            log_always("Application address space: up to %p (demand-paged processes; guest RAM "
-                       "ends at %p%s)", g_pal_public_state.memory_address_end,
-                       g_vm_physical_memory_end, g_graphics_configured ? "; graphics arenas" : "");
+            // log_always("Application address space: up to %p (demand-paged processes; guest RAM "
+            //            "ends at %p%s)", g_pal_public_state.memory_address_end,
+            //            g_vm_physical_memory_end, g_graphics_configured ? "; graphics arenas" : "");
         }
     }
 #endif

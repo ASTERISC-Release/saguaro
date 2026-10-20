@@ -79,7 +79,7 @@ ifneq ($(filter gramine-vm gramine-sev,$(GRAMINE)),)
 	# added later ('Application address space').
 	grep -v -e '^Configuring Gramine VM' -e '^REM_MEM_SIZE' -e '^\[boot\]' -e '^(PAL) Physical' \
 		-e '^Private frame pool' -e 'self-check passed' -e '^\[ VM ' -e '^vm-relay:' \
-		-e '^Application address space' \
+		-e '^Application address space' -e '^Address-space switch' \
 		OUTPUT > OUTPUT.filtered; mv OUTPUT.filtered OUTPUT
 endif
 	diff OUTPUT scripts/select.txt

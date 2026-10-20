@@ -34,6 +34,11 @@ sgx_sign: mongod.manifest
 		--manifest $< \
 		--output $<.sgx
 
+# mongod under $(GRAMINE), the pymongo client test on the host's loopback (check.sh)
+.PHONY: check
+check: all
+	GRAMINE="$(GRAMINE)" ./check.sh
+
 .PHONY: clean
 clean:
 	$(RM) -rf *.token *.sig *.manifest *.manifest.sgx data/db/*

@@ -102,7 +102,8 @@ vm_relay_start() {
         RELAY_LOG=
         return 1
     fi
-    grep "^vm-relay:" "$RELAY_LOG" >&2
+    # the startup line is only read by the loop above; not echoed to the console
+    # grep "^vm-relay:" "$RELAY_LOG" >&2
     return 0
 }
 

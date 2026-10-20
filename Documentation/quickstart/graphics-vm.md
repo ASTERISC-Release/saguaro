@@ -13,7 +13,7 @@ AArch64 ðŸ›« (not available: the QEMU fork does not build for AArch64); RISC-V â
 ## Requirements
 
 - An x86_64 machine with KVM (`/dev/kvm`), `/dev/vhost-vsock`, and an Intel or AMD GPU with a
-  render node (`/dev/dri/renderD128`, `renderD129`) your user can open.
+  render node (`/dev/dri/renderD128`, `renderD129`) that the user can open.
 - An X server (Xwayland counts) with `DISPLAY` set when the container is created.
 - The QEMU fork [qemu-tirith](https://github.com/adilahmad17/qemu-tirith), branch
   `dev-graphics`, checked out **next to** this repository before the container is created (or
@@ -31,9 +31,12 @@ Inside the container:
 
     /root/qemu-tirith/tirith-build.sh                  # once: build/qemu-system-x86_64
     scripts/install.sh --vm                            # graphics on by default; builds libgraphics.so
-    . ~/.local/gramine-vm/env.sh
     export QEMU_PATH=/root/qemu-tirith/build/qemu-system-x86_64
     mkdir -p ~/.cache
+
+`container/run.sh` loads `~/.local/gramine-vm/env.sh` in the container shell, so no environment step
+is needed. The graphics examples are started by hand (their `exec.sh` lists no backend: it needs a
+display), so `./exec.sh` does not apply to them.
 
 If the container already existed without `DISPLAY` or without the fork, recreate it
 (`container/run.sh down`, which discards the install inside it).

@@ -1,8 +1,8 @@
 # Quickstart guides
 
-One short guide per platform, each from a fresh checkout to a running example, with the commands
+One guide per platform, each from a fresh checkout to a running example, with the commands
 that were run on a machine of that platform (each guide ends with what was verified, where and
-when). The complete instructions are in [INSTALL.md](../../INSTALL.md); the platform table
+when; anything else is marked "not verified"). The complete instructions are in [INSTALL.md](../../INSTALL.md); the platform table
 and status of this tree are in [README.md](../../README.md).
 
 Symbols as in `README.md`: ✅ supported, ⚠️ experimental, 🛫 planned, ❌ not supported, ➖ not
@@ -18,18 +18,36 @@ applicable.
 | AMD SEV-SNP (`gramine-sev`): hello world, regression tests, attestation | ➖ | ⚠️ | ➖ | ➖ | [sev.md](sev.md) |
 | Intel TDX and SGX (inherited; not verified here) | ✅ | ➖ | ➖ | ➖ | [tdx-sgx.md](tdx-sgx.md) |
 
+## The route of all guides
+
+- **The container is the only route.** `container/run.sh` opens a shell in the development
+  container of this machine's architecture, `container/run.sh '<command>'` runs one command in it,
+  and `container/run.sh --target riscv64 ...` opens the RISC-V cross container (see
+  [container/README.md](../../container/README.md)). Nothing is built or installed on the host.
+  The one exception is the Windows VBS enclave ([vbs-windows.md](vbs-windows.md)), which runs in
+  WSL on a Windows machine.
+- **Installation is `scripts/install.sh`** (there is no top-level `install.sh`). No option installs
+  the direct backend into `~/.local/gramine`; `--vm` the vm PAL into `~/.local/gramine-vm`;
+  `--sev --graphics disabled` the vm PAL with the SEV PAL and `gramine-sev`; `--vbs` the WSL side of
+  the VBS tooling and runtime. `container/run.sh` loads `~/.local/gramine-vm/env.sh` itself when
+  it exists.
+- **Examples run through `./exec.sh`** in the directory of the example under `CI-Examples/`:
+  `./exec.sh --direct | --vm | --sev | --sev-snp | --vbs`. A backend is required. See the
+  "Testing" section of [CI-Examples/README.md](../../CI-Examples/README.md) and the recorded results
+  in [results-exec.md](../devel/ci-matrix/results-exec.md) (2026-10-20).
+
 ## Which one do I need?
 
-- **Just trying Gramine, or developing it**: [direct.md](direct.md). It needs only
-  `podman` (or the build packages) and works anywhere, also in a VM or a container.
+- **Trying Gramine, or developing it**: [direct.md](direct.md). It needs only
+  `podman` and works anywhere, also in a VM or a container.
 - **The application should not run on the host's kernel**: [vm.md](vm.md). It needs a
   physical Linux machine of the same architecture with KVM.
-- **A game or another OpenGL/Vulkan program**: on your own desktop and with trusted code,
+- **A game or another OpenGL/Vulkan program**: on a desktop with trusted code,
   [graphics-direct.md](graphics-direct.md) (fastest, but not isolated; also AArch64 with
   NVIDIA); inside a microVM on x86_64, [graphics-vm.md](graphics-vm.md) (needs the QEMU
-  fork).
+  fork, kept outside this repository).
 - **A RISC-V build**, without RISC-V hardware: [riscv.md](riscv.md).
-- **An application protected from Windows itself**, on an ARM64 Windows 11 PC:
+- **An application protected from Windows itself**, on an ARM64 Windows 11 PC, in WSL (the one guide without the container):
   [vbs-windows.md](vbs-windows.md).
 - **Intel confidential computing**: [tdx-sgx.md](tdx-sgx.md), pointers to the inherited
   documents.
