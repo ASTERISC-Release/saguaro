@@ -23,7 +23,7 @@ The table lists the recorded result of each example for each backend.
 | `nginx` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  | ✓ |
 | `nodejs` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  | ✗ ARM64, – x64 |
 | `openjdk` | ✓ | ✓ | ✓ | ✗ | ✓ |  |  | – |
-| `python` | ✓ | ✓ | ✓ | – | ✓⁶ | ✓⁵ |  | ✓ ARM64, ✗ x64 |
+| `python` | ✓ | ✓ | ✓ | – | ✓⁶ | ✓⁵ |  | ✓ ARM64, ✓⁹ x64 |
 | `pytorch` | ✓ | ✓ | ✓ | ✗ | ✓ |  |  | ¹ |
 | `r` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  | ¹ |
 | `ra-tls-*` | –⁷ | –⁷ | –⁷ | –⁷ | –⁷ |  |  | –⁷ |
@@ -40,4 +40,5 @@ The table lists the recorded result of each example for each backend.
 ⁵ TDX run offline; no log in the repository.  
 ⁶ SEV: python runs only `scripts/helloworld.py`; unit_tests runs only `thread-tls`.  
 ⁷ SGX attestation example only.  
-⁸ Needs `rustup` stable with `rust-src`.
+⁸ Needs `rustup` stable with `rust-src`.  
+⁹ x64 needs the research key `vbs.__insecure_skip_code_mprotect` (protection changes over packed code and data go to the data pages only). `CI-Examples/python/Makefile` sets it by default on x86_64; the HTTP test is intermittent (`Documentation/devel/vbs-enclave/TESTING.md`).
