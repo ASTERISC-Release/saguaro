@@ -1,31 +1,122 @@
-# Quickstart: Intel TDX and SGX (inherited, not verified here)
+# Quickstart: Intel SGX and TDX
 
 This tree keeps the confidential-computing back ends of upstream [gramine-tdx](https://github.com/gramineproject/gramine-tdx) for Intel CPUs: `gramine-sgx` (the application
-in an SGX enclave) and `gramine-tdx` (the `vm` unikernel in a TDX trust domain). **Neither has
-been run on SGX or TDX hardware as part of this tree's work**; use the upstream documentation and
-treat this page as pointers.
+in an SGX enclave) and `gramine-tdx` (the `vm` unikernel in a TDX trust domain). **`gramine-sgx` is
+verified on SGX hardware (2026-10-20, section SGX below); `gramine-tdx` has not been run on TDX
+hardware as part of this tree's work**: for TDX, use the upstream documentation and treat that section as pointers.
 
-Status (as in [README.md](../../README.md)): Intel x86_64 ✅ (inherited); AMD64, AArch64 and
+Status (as in [README.md](../../README.md)): Intel x86_64 ✅ for SGX, ⚠️ for TDX (inherited, not run here); AMD64, AArch64 and
 RISC-V ➖.
 
 As in the other guides, the build runs in the container of `container/run.sh` (see
-[direct.md](direct.md), section 1); the commands below run in its shell, in the repository. The
-`exec.sh` scripts of `CI-Examples/` have no `sgx` or `tdx` backend (`--direct`, `--vm`, `--sev`,
-`--sev-snp` and `--vbs` only), so the examples are built by hand with `make SGX=1`.
+[direct.md](direct.md), section 1); the commands below run in its shell, in the repository, unless
+they say that they run on the host.
 
 ## SGX
 
-Needs an Intel CPU with SGX (FLC), the in-kernel SGX driver (`/dev/sgx_enclave`) and, for remote
-attestation, Intel's DCAP or EPID services. The SGX build also needs the protobuf-c tools, which
-`scripts/dependencies.sh` does not install (`protobuf-c-compiler libprotobuf-c-dev`; in the container they are installed with `apt-get install`, as its user is root):
+`gramine-sgx` runs an unmodified application in an Intel SGX enclave. The enclave is built and
+signed from the application's manifest; the Gramine runtime, the library OS and the application are
+measured into it. See [sgx-intro.md](../sgx-intro.md) for the concepts.
 
-    scripts/install.sh --sgx --prefix ~/.local/gramine-sgx --build-dir build-sgx
+### Requirements
+
+- An Intel CPU with SGX and flexible launch control: the `sgx` and `sgx_lc` flags in `/proc/cpuinfo`,
+  SGX enabled in the firmware, and a Linux kernel (5.11 or newer) with the in-kernel driver, which
+  provides `/dev/sgx_enclave` (and `/dev/sgx_provision`).
+- `/dev/sgx_enclave` readable and writable by the user: add the user to the `sgx` group on the host.
+- `podman` and the `crun` runtime for the container of `container/run.sh` (`uidmap`, `slirp4netns` and
+  `fuse-overlayfs` for rootless containers). Nothing else is installed on the host.
+- No other host setting is needed. In particular, `vm.mmap_min_addr` stays at the default of the
+  distribution (the loader's message `You may need to set sysctl vm.mmap_min_addr to zero` is
+  misleading, see Troubleshooting), and the examples run without the AESM service. Remote
+  attestation needs the AESM service, a PCCS and `sgx.remote_attestation` in the manifest; that is not covered here
+  (not verified).
+
+### 1. Prepare the host (once)
+
+On the host (Ubuntu 24.04; these steps need `sudo`):
+
+    sudo apt-get update
+    sudo apt-get install -y podman crun uidmap slirp4netns fuse-overlayfs
+    sudo usermod -aG sgx "$USER"
+
+Log in again so that the group applies, then check:
+
+    id -nG                             # contains sgx
+    ls -l /dev/sgx_enclave             # crw-rw---- root sgx
+    podman info --format '{{.Host.Security.Rootless}} {{.Host.OCIRuntime.Name}}'   # true crun
+
+### 2. Build and install
+
+    cd <repo-home>                     # a checkout in a folder gramine-<name>/gramine-multiarch
+    container/run.sh                   # shell in the container; it gets /dev/sgx_enclave
+    scripts/install.sh --sgx           # builds in build-sgx, installs to ~/.local/gramine-sgx
     . ~/.local/gramine-sgx/env.sh
-    is-sgx-available                   # what the CPU and kernel offer
-    gramine-sgx-gen-private-key        # once: the enclave signing key
+    is-sgx-available
+
+`container/run.sh` passes `/dev/sgx_enclave` and `/dev/sgx_provision` into the container, bound with
+the `exec` option (Gramine maps the enclave device with `PROT_EXEC`). `scripts/install.sh --sgx` has its own build
+directory and prefix, so it does not touch a direct install. `is-sgx-available` on the tested
+machine (Intel Xeon Gold 6430) printed, among others:
+
+    SGX supported by CPU: true
+    SGX1 (ECREATE, EENTER, ...): true
+    SGX2 (EAUG, EACCEPT, EMODPR, ...): true
+    Flexible Launch Control (IA32_SGXPUBKEYHASH{0..3} MSRs): true
+    AEX-Notify: true
+    EPC size: 0x7e7ff000
+    SGX driver loaded: true
+
+### 3. Example: Hello World
+
     cd CI-Examples/helloworld
-    make SGX=1                         # renders, then signs: helloworld.manifest.sgx, helloworld.sig
+    ./exec.sh --sgx
+
+`exec.sh` creates the enclave signing key `~/.config/gramine/enclave-key.pem` once (the equivalent of
+`gramine-sgx-gen-private-key`), runs `make SGX=1` (renders the manifest and signs it: `helloworld.manifest.sgx`
+and `helloworld.sig`, with the enclave measurement printed) and runs `gramine-sgx ./helloworld`. The output ends with:
+
+    Hello, world
+    [PASS] helloworld sgx x86_64 (3s)
+
+The steps by hand:
+
+    gramine-sgx-gen-private-key        # once
+    make SGX=1
     gramine-sgx helloworld
+
+The manifest of this example sets `sgx.enclave_size = "1G"`: the program maps 512 MiB, and the default
+enclave size is 256M.
+
+### 4. The other examples
+
+Every example whose Makefile has an `SGX=1` build runs with `./exec.sh --sgx` in its directory. On the
+tested machine (results and conditions: [results-exec.md](../devel/ci-matrix/results-exec.md), 2026-10-20)
+`bash`, `busybox`, `curl`, `gcc`, `iperf`, `lighttpd`, `memcached`, `mongodb`, `nginx`, `nodejs`,
+`openjdk`, `python`, `r`, `redis`, `rust`, `sqlite`, `blender` and `pytorch` pass. `python` passes
+without the quote step (it needs remote attestation, `RA_TYPE=dcap`). `unit_tests` has an SGX build for
+`mremap` only, and that test fails: the tail of a shrunk mapping stays readable in an enclave.
+The enclave sizes are set by each manifest (`mongodb` 8G, `openjdk` 16G, `pytorch` 4G); a build and
+first run takes seconds to about two minutes.
+
+### 5. Troubleshooting
+
+- `./exec.sh --sgx` says `no SGX device (/dev/sgx_enclave)`: the host has no SGX driver, or the
+  container was created without the device (before the user was in the `sgx` group, or with an older `container/run.sh`).
+  Recreate the container with `container/run.sh down` on the host, then repeat section 2 (the install inside it is discarded).
+- `no read/write access to /dev/sgx_enclave (group sgx)`: the user is not in the `sgx` group (section 1).
+- `error: Permission denied on mapping enclave. You may need to set sysctl vm.mmap_min_addr to zero`,
+  `Allocation of EPC memory failed: Operation not permitted (EPERM)`: Gramine's message for any `EPERM`
+  of the `PROT_EXEC` mapping of `/dev/sgx_enclave`. In a rootless container it was the `noexec` mount that
+  `--device` gives the node; the container of this `container/run.sh` binds it with `exec`. Check
+  `findmnt -T /dev/sgx_enclave` in the container (no `noexec`), and recreate a container that was created earlier.
+- `mmap ...: Cannot allocate memory` or an allocation failure inside the application: the enclave is
+  too small; raise `sgx.enclave_size` in the manifest (a power of two).
+- `There are no available TCS pages left for a new thread`: raise `sgx.max_threads` in the manifest.
+- `Cannot find /dev/attestation/quote`: the manifest has no remote attestation (`sgx.remote_attestation`);
+  see Requirements.
+- The `make SGX=1` step needs the protobuf-c tools (`protobuf-c-compiler libprotobuf-c-dev`), which the
+  container image has.
 
 Reference: [sgx-intro.md](../sgx-intro.md), [sgx-setup.md](../sgx-setup.md),
 [attestation.md](../attestation.md), the `sgx.*` keys of [manifest-syntax.md](../manifest-syntax.md), and [gramine.readthedocs.io](https://gramine.readthedocs.io).
@@ -47,6 +138,21 @@ Fixed issue (2026-10-15): until the `dev-tdx-build` fix the `tdx` PAL did not co
 
 ## Verified
 
+**SGX, 2026-10-20**, `dev-sgx` (commits `f9bedfbf` to `d5463628`), on an Intel Xeon Gold 6430 (SGX1 and SGX2,
+flexible launch control, 2 GB of EPC, in-kernel driver, Ubuntu 24.04, 128 GB RAM), in the container of
+`container/run.sh` (podman 4.9.3, crun 1.14.1, rootless): `scripts/install.sh --sgx` built and
+installed; `./exec.sh --sgx` passes for `helloworld`, `bash`, `busybox`, `curl`, `gcc`, `iperf`, `lighttpd`,
+`memcached`, `mongodb`, `nginx`, `nodejs`, `openjdk`, `python` (without the quote), `r`, `redis`, `rust`,
+`sqlite`, `blender` and `pytorch`; `unit_tests-mremap` fails. `helloworld`, `mongodb` and `sqlite` also
+pass with `vm.mmap_min_addr` at the default of 65536. The first runs stopped with `EPERM` (the `noexec`
+device mount) and `ENOMEM` (the 512 MiB program in the 256M default enclave); both are fixed in the
+tree.
+
+Not verified for SGX: remote attestation (the AESM service, a PCCS, `RA_TYPE=dcap`), the `CI-Examples/ra-tls/`
+examples, EDMM beyond the `mremap` test, and a host other than Ubuntu 24.04.
+
+**History (2026-10-15), without SGX or TDX hardware:**
+
 2026-10-15, `main` at `9e28ea81`, in the x86_64 container on a machine **without** SGX or TDX:
 after installing `protobuf-c-compiler libprotobuf-c-dev protobuf-compiler python3-protobuf` in
 the container, `scripts/install.sh --sgx ...` built and installed; `is-sgx-available` printed
@@ -59,5 +165,4 @@ signed `helloworld.manifest.sgx` and `helloworld.sig`; `gramine-sgx helloworld` 
 compile everything, including the `tdx` PAL (`pal/src/host/tdx/pal`), and stop at the TD-shim
 link step of the install (no `$HOME/td-shim` here).
 
-Not verified: running anything under SGX or TDX, attestation, the TD-shim link step, and the TDX
-QEMU and firmware.
+Not verified for TDX: running anything under TDX, the TD-shim link step, and the TDX QEMU and firmware.

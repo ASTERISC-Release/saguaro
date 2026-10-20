@@ -9,7 +9,7 @@ Install the backend first (`Documentation/quickstart/`). Each example has an `ex
 the example and runs it under one backend. Run it in the directory of the example:
 
 ```sh
-./exec.sh --vm         # also --direct, --sev (plain SEV) and --sev-snp (SEV-SNP)
+./exec.sh --vm         # also --direct, --sev (plain SEV), --sev-snp (SEV-SNP) and --sgx (Intel SGX)
 ```
 
 - A backend is required. Without one, `exec.sh` lists the backends the example supports and whether
@@ -32,28 +32,28 @@ backends x86_64, aarch64, SEV, SEV-SNP and VBS (ARM64) is in
 
 | Example | Direct x86_64 | VM x86_64 | Direct aarch64 | VM aarch64 | SEV | SEV-SNP | TDX | SGX | VBS |
 |---|---|---|---|---|---|---|---|---|---|
-| `bash` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |  | ¹ |
-| `blender` | ✓ | ✓ | –² | –² | ✓ | ✓ |  |  | ¹ |
-| `busybox` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |  | ✓ |
-| `curl` | ✓ | ✓³ | ✓ | ✓³ | ✓³ | ✓³ |  |  | ✓ |
-| `gcc` | ✓ | ✓ | ✓ | ✗⁶ | ✓ | ✓ |  |  | ¹ |
+| `bash` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ¹ |
+| `blender` | ✓ | ✓ | –² | –² | ✓ | ✓ |  | ✓ | ¹ |
+| `busybox` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓ |
+| `curl` | ✓ | ✓³ | ✓ | ✓³ | ✓³ | ✓³ |  | ✓ | ✓ |
+| `gcc` | ✓ | ✓ | ✓ | ✗⁶ | ✓ | ✓ |  | ✓ | ¹ |
 | `graphics` | ✓⁴ | ✓⁴ | ✓⁴ | – | – | – | – | – | – |
-| `helloworld` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓⁵ |  | ✓ |
-| `iperf` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |  | ✓ |
-| `lighttpd` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |  | ✓ |
-| `memcached` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |  | ✓ |
-| `mongodb` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |  | ¹ |
-| `nginx` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |  | ✓ |
-| `nodejs` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |  | ✗ ARM64, – x64 |
-| `openjdk` | ✓ | ✓ | ✓ | ✗⁶ | ✓ | ✓ |  |  | – |
-| `python` | ✓ | ✓ | ✓ | ✗⁶ | ✓ | ✓ | ✓⁵ |  | ✓ ARM64, ✓⁹ x64 |
-| `pytorch` | ✓ | ✓ | ✓ | ✗⁶ | ✓ | ✓ |  |  | ¹ |
-| `r` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |  | ¹ |
+| `helloworld` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓⁵ | ✓ | ✓ |
+| `iperf` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓ |
+| `lighttpd` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓ |
+| `memcached` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓ |
+| `mongodb` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ¹ |
+| `nginx` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓ |
+| `nodejs` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✗ ARM64, – x64 |
+| `openjdk` | ✓ | ✓ | ✓ | ✗⁶ | ✓ | ✓ |  | ✓ | – |
+| `python` | ✓ | ✓ | ✓ | ✗⁶ | ✓ | ✓ | ✓⁵ | ✓¹⁰ | ✓ ARM64, ✓⁹ x64 |
+| `pytorch` | ✓ | ✓ | ✓ | ✗⁶ | ✓ | ✓ |  | ✓ | ¹ |
+| `r` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ¹ |
 | `ra-tls/*` | –⁷ | –⁷ | –⁷ | –⁷ | –⁷ | –⁷ |  |  | –⁷ |
-| `redis` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |  | ✓ |
-| `rust` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |  | ✓⁸ |
-| `sqlite` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |  | ✓ |
-| `unit_tests` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓⁵ |  | ¹ |
+| `redis` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓ |
+| `rust` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓⁸ |
+| `sqlite` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  | ✓ | ✓ |
+| `unit_tests` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓⁵ | – | ¹ |
 | `vbs/*` | – | – | – | – | – | – | – | – | ✓ |
 
 ¹ No VBS recipe.  
@@ -64,4 +64,5 @@ backends x86_64, aarch64, SEV, SEV-SNP and VBS (ARM64) is in
 ⁶ VM aarch64: the guest cannot map the program (`Failed to map file:/usr/bin/<program>`, `EINVAL`; `openjdk`: `Could not allocate compressed class space`).  
 ⁷ SGX attestation example only.  
 ⁸ Needs `rustup` stable with `rust-src`.  
-⁹ x64 needs the research key `vbs.__insecure_skip_code_mprotect` (protection changes over packed code and data go to the data pages only). `CI-Examples/python/Makefile` sets it by default on x86_64; the HTTP test is intermittent (`Documentation/devel/vbs-enclave/TESTING.md`).
+⁹ x64 needs the research key `vbs.__insecure_skip_code_mprotect` (protection changes over packed code and data go to the data pages only). `CI-Examples/python/Makefile` sets it by default on x86_64; the HTTP test is intermittent (`Documentation/devel/vbs-enclave/TESTING.md`).  
+¹⁰ SGX: without the quote step of the check, which needs remote attestation (`RA_TYPE=dcap`, the AESM service and a PCCS).  

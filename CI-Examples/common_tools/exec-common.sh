@@ -16,6 +16,8 @@
 #                      "check": run the example's own `make check` with GRAMINE set to the backend
 #   EXAMPLE_EXPECT_FILE  file the program writes instead of printing: EXAMPLE_EXPECT is searched in it, not in
 #                      the output (it is deleted before the run)
+#   EXAMPLE_SKIP_UNSUPPORTED  1: a backend the example does not support is a SKIP, not a FAIL (the drivers over
+#                      subdirectories set it)
 #   EXAMPLE_PROGRAM    what the runner is given (default ./$EXAMPLE_BINARY; "java" for a manifest named java)
 #   EXAMPLE_CHECK_TARGET  make target of mode "check" (default: check)
 #   EXAMPLE_REQUIRES   programs the example needs on the host (checked with `command -v` before the run;
@@ -30,15 +32,17 @@
 #   vm       $GRAMINE_VM_PREFIX     (default ~/.local/gramine-vm)   gramine-vm, needs /dev/kvm
 #   sev      $GRAMINE_VM_PREFIX     (same install as vm, --sev)     gramine-sev, x86_64 with SEV; plain SEV
 #   sev-snp  (same install and runner as sev)                        gramine-sev in SEV-SNP mode
+#   sgx      $GRAMINE_SGX_PREFIX    (default ~/.local/gramine-sgx)   gramine-sgx, x86_64 with SGX (/dev/sgx_enclave);
+#            scripts/install.sh --sgx; make SGX=1 signs the enclave with ~/.config/gramine/enclave-key.pem
 #   vbs      scripts/install.sh --vbs, in WSL on a Windows machine   Windows VBS enclave (make VBS=1); an
 #            with VBS enclaves                                       example offers it when it has a
 #                                                                    vbs.manifest.template
 #
 # Usage of exec.sh:
 #   exec.sh --vm             build and run the example under backend vm; likewise --direct, --sev (plain
-#                            SEV), --sev-snp (SEV-SNP) and --vbs (`make VBS=1` and `make VBS=1 check`, in
+#                            SEV), --sev-snp (SEV-SNP), --sgx (`make SGX=1`: the signed enclave) and --vbs (`make VBS=1` and `make VBS=1 check`, in
 #                            WSL; the runtime must be installed with scripts/install.sh --vbs first).
-#   exec.sh --backend B      the same as --B (B is direct, vm, sev, sev-snp or vbs). Repeat either form for several
+#   exec.sh --backend B      the same as --B (B is direct, vm, sev, sev-snp, sgx or vbs). Repeat either form for several
 #                            backends. A backend is required: without one the script lists the
 #                            backends and whether this host can run each, and exits with status 2.
 #   exec.sh --keep           keep the program output; logs are always written to $EXEC_LOG_DIR
@@ -75,6 +79,7 @@ backend_prefix() {
     case $(backend_base "$1") in
         direct) echo "${GRAMINE_DIRECT_PREFIX:-$HOME/.local/gramine}" ;;
         vm|sev) echo "${GRAMINE_VM_PREFIX:-$HOME/.local/gramine-vm}" ;;
+        sgx)    echo "${GRAMINE_SGX_PREFIX:-$HOME/.local/gramine-sgx}" ;;
     esac
 }
 
@@ -97,8 +102,14 @@ backend_unavailable() {
         direct) runner=gramine-direct ;;
         vm)     runner=gramine-vm ;;
         sev)    runner=gramine-sev ;;
+        sgx)    runner=gramine-sgx ;;
         *)      echo "unknown backend $b"; return 0 ;;
     esac
+    if [ "$b" = sgx ]; then
+        [ "$(exec_host_arch)" = x86_64 ] || { echo "SGX needs an x86_64 host"; return 0; }
+        [ -e /dev/sgx_enclave ] || { echo "no SGX device (/dev/sgx_enclave): no SGX driver, or the container was created without it (container/run.sh)"; return 0; }
+        [ -r /dev/sgx_enclave ] && [ -w /dev/sgx_enclave ] || { echo "no read/write access to /dev/sgx_enclave (group sgx)"; return 0; }
+    fi
     if [ "$b" = sev ] && [ "$(exec_host_arch)" != x86_64 ]; then
         echo "SEV needs an x86_64 host"; return 0
     fi
@@ -159,21 +170,27 @@ exec_one() {
     # only this shell sees the backend's gramine-manifest and runner: source the install's env.sh
     # (scripts/install.sh writes it; it sets PATH and PYTHONPATH), or just put its bin first
     if [ -r "$prefix/env.sh" ]; then . "$prefix/env.sh"; else export PATH="$prefix/bin:$PATH"; fi
+    # sgx: the Makefiles build the signed enclave manifest with SGX=1 (the target `all`, not only the manifest);
+    # the enclave signing key is created once if it does not exist
+    local mtarget=
     case $b in
         sev)     export GRAMINE_SEV_MODE=sev ;;
         sev-snp) export GRAMINE_SEV_MODE=snp ;;
+        sgx)     export SGX=1; mtarget=all
+                 [ -e "${SGX_SIGNER_KEY:-$HOME/.config/gramine/enclave-key.pem}" ] || gramine-sgx-gen-private-key ;;
     esac
     cd "$EXEC_DIR" || return 1
     local binary=${EXAMPLE_BINARY:-$EXAMPLE_NAME}
     local manifest=${EXAMPLE_MANIFEST:-$binary.manifest}
     local runner mode=${EXAMPLE_MODE:-run}
-    case $base in direct) runner=gramine-direct ;; vm) runner=gramine-vm ;; sev) runner=gramine-sev ;; esac
+    case $base in direct) runner=gramine-direct ;; vm) runner=gramine-vm ;; sev) runner=gramine-sev ;; sgx) runner=gramine-sgx ;; esac
+    mtarget=${mtarget:-$manifest}
 
     if [ "$mode" = check ]; then
         # the example's own `make check`, with this backend as its GRAMINE
         { echo "== $EXAMPLE_NAME $b on $(exec_host_arch), $(date -Is), mode check"
-          echo "+ rm -f $manifest; make $manifest"
-          rm -f "$manifest"; make "$manifest"; } 2>&1 | tee "$log"
+          echo "+ rm -f $manifest; make $mtarget"
+          rm -f "$manifest" "$manifest.sgx"; make "$mtarget"; } 2>&1 | tee "$log"
         [ "${PIPESTATUS[0]}" = 0 ] \
             || { echo "[FAIL] $EXAMPLE_NAME $b $(exec_host_arch): manifest failed (see $log)"; return 1; }
         # exec.sh may define example_check_args <backend>: extra make variables for `make check`
@@ -190,8 +207,8 @@ exec_one() {
             echo "== $EXAMPLE_NAME $b on $(exec_host_arch), $(date -Is), mode run"
             if [ -n "$build" ]; then echo "+ make $build"; make "$build" || exit 1; fi
             # re-render the manifest for this backend (make -B would also rebuild the program)
-            echo "+ rm -f $manifest; make $manifest"
-            rm -f "$manifest"; make "$manifest"
+            echo "+ rm -f $manifest; make $mtarget"
+            rm -f "$manifest" "$manifest.sgx"; make "$mtarget"
         } 2>&1 | tee "$log"
         [ "${PIPESTATUS[0]}" = 0 ] \
             || { echo "[FAIL] $EXAMPLE_NAME $b $(exec_host_arch): build failed (see $log)"; return 1; }
@@ -228,9 +245,9 @@ exec_main() {
     KEEP=0
     while [ $# -gt 0 ]; do
         case $1 in
-            --backend) [ $# -ge 2 ] || { echo "--backend needs a value (direct, vm, sev, sev-snp or vbs)" >&2; exit 2; }
+            --backend) [ $# -ge 2 ] || { echo "--backend needs a value (direct, vm, sev, sev-snp, vbs or sgx)" >&2; exit 2; }
                        requested+=("$2"); shift 2 ;;
-            --direct|--vm|--sev|--sev-snp|--vbs) requested+=("${1#--}"); shift ;;
+            --direct|--vm|--sev|--sev-snp|--vbs|--sgx) requested+=("${1#--}"); shift ;;
             --keep)    KEEP=1; shift ;;
             -h|--help) sed -n '2,/^[^#]/p' "${BASH_SOURCE[0]}" | sed '$d; s/^# \{0,1\}//'; exit 0 ;;
             *) echo "unknown option: $1" >&2; exit 2 ;;
@@ -246,13 +263,18 @@ exec_main() {
 
     # EXAMPLE_BACKENDS="" (set, empty) means the example has no backend here; only unset gets the default
     local supported=${EXAMPLE_BACKENDS-direct vm sev}
+    # an example whose Makefile has an SGX=1 build (ifeq ($(SGX),1)) runs in an SGX enclave too
+    if [ -n "$supported" ] && [ -f "$EXEC_DIR/Makefile" ] && grep -qF 'ifeq ($(SGX),1)' "$EXEC_DIR/Makefile" \
+            && [[ " $supported " != *" sgx "* ]]; then
+        supported="$supported sgx"
+    fi
     # an example with a vbs.manifest.template runs for a Windows VBS enclave too (make VBS=1)
     if [ -f "$EXEC_DIR/vbs.manifest.template" ] && [[ " $supported " != *" vbs "* ]]; then
         supported="$supported vbs"
     fi
     local -a backends=()
     if [ ${#requested[@]} -eq 0 ]; then
-        echo "usage: $0 --direct|--vm|--sev|--sev-snp|--vbs [--keep]" >&2
+        echo "usage: $0 --direct|--vm|--sev|--sev-snp|--vbs|--sgx [--keep]" >&2
         echo "$EXAMPLE_NAME supports these backends; this host ($arch) can run:" >&2
         for backend in ${supported/sev/sev sev-snp}; do
             if reason=$(backend_unavailable "$backend"); then
@@ -268,6 +290,10 @@ exec_main() {
 
     for backend in "${backends[@]}"; do
         if ! [[ " $supported " == *" $(backend_base "$backend") "* ]]; then
+            if [ "${EXAMPLE_SKIP_UNSUPPORTED:-0}" = 1 ]; then
+                echo "[SKIP] $EXAMPLE_NAME $backend: this test has no build for the backend"
+                continue
+            fi
             echo "[FAIL] $EXAMPLE_NAME $backend: this example does not support the backend" \
                  "(supported: ${supported:-none}${EXAMPLE_NOTE:+; $EXAMPLE_NOTE})"
             failed=1

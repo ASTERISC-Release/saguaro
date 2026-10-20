@@ -143,6 +143,13 @@ fi
 # --vm: build the vm-PAL unikernel ("the correct vm version" for this machine).
 # (PREFIX is normalized below, after the vm default is applied.)
 
+# --sgx (without --vm): never share a direct-PAL build dir or install either; the SGX build has its own
+# (build-sgx, ~/.local/gramine-sgx), which also holds gramine-direct and the tools.
+if [ "$SGX" = enabled ] && [ "$VM" != enabled ]; then
+    if [ "$BUILDDIR_EXPLICIT" = 0 ]; then BUILDDIR="build-sgx"; fi
+    if [ "$PREFIX_EXPLICIT" = 0 ]; then PREFIX="$HOME/.local/gramine-sgx"; fi
+fi
+
 # --vm: build the vm-PAL unikernel ("the correct vm version" for this machine).
 DIRECT=enabled
 TESTS=enabled
