@@ -8,7 +8,8 @@
 #   1. installs the missing build packages user-level (wsl-setup.sh user: Ubuntu packages unpacked
 #      into ~/.local/share/gramine-vbs/tools; nothing is installed system-wide);
 #   2. puts `gramine-vbs` on the PATH (a link in ~/.local/bin);
-#   3. builds the vbs glibc, PAL and LibOS (once per checkout; `make VBS=1` would do it too);
+#   3. builds the vbs glibc, PAL and LibOS (once per checkout; `make VBS=1` does not build them and
+#      stops when they are missing; run this again after changing the PAL or the LibOS);
 #   4. checks the Windows side through powershell.exe and prints the Windows steps it cannot do.
 #      It changes nothing on Windows.
 #

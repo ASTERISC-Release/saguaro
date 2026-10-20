@@ -22,6 +22,10 @@
 # GRAMINE_VBS_WINDOWS_BASE); elsewhere on the Windows machine named by GRAMINE_VBS_WINDOWS (ssh);
 # with GRAMINE_VBS_WINDOWS=none or no Windows only the Linux half is built (`make VBS=1 vbs-sign`
 # later). $(GRAMINE) runs the application like gramine-direct: `$(GRAMINE) $(VBS_APP) args`.
+#
+# The runtime (the vbs glibc, PAL and LibOS) is not built here: `scripts/install.sh --vbs` builds it
+# once per checkout (and again when its sources change), and `make VBS=1` stops with a message when
+# it is not there.
 
 VBS_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 GRAMINE_VBS_REPO ?= $(abspath $(VBS_DIR)/../..)
@@ -41,8 +45,8 @@ endif
 VBS_TEMPLATE ?= vbs.manifest.template
 VBS_MANIFEST := $(VBS_APP).manifest.vbs
 VBS_IMAGE := $(VBS_APP).vbs/image.stamp
-# changes only when the runtime objects, the vbs glibc or the sources of the Windows half changed
-# (gramine-vbs runtime)
+# written by `scripts/install.sh --vbs` (gramine-vbs runtime); it changes only when the runtime
+# objects, the vbs glibc or the sources of the Windows half changed, which rebuilds the images
 VBS_RUNTIME_STAMP := $(GRAMINE_VBS_REPO)/build-vbs/runtime.stamp
 
 GRAMINE_LOG_LEVEL ?= error
@@ -53,13 +57,12 @@ GRAMINE_LOG_LEVEL ?= error
 .PHONY: vbs-all vbs-runtime vbs-sign vbs-stop vbs-clean
 vbs-all: $(VBS_IMAGE)
 
-# the vbs glibc (once, about 2 minutes), the vbs PAL and LibOS (meson + ninja)
+# the runtime is installed by scripts/install.sh --vbs, not built by make: this only checks it
 vbs-runtime: $(VBS_RUNTIME_STAMP)
-$(VBS_RUNTIME_STAMP): vbs-always
-	$(GRAMINE_VBS) runtime
-
-.PHONY: vbs-always
-vbs-always:
+$(VBS_RUNTIME_STAMP):
+	@echo "error: the VBS runtime (the vbs glibc, PAL and LibOS) is not installed in $(GRAMINE_VBS_REPO)." >&2
+	@echo "       Install it once with:  $(GRAMINE_VBS_REPO)/scripts/install.sh --vbs" >&2
+	@exit 1
 
 $(VBS_MANIFEST): $(VBS_TEMPLATE)
 	$(GRAMINE_VBS) manifest \
