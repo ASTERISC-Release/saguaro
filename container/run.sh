@@ -153,8 +153,11 @@ if ! podman container exists "$CONTAINER"; then
     # Intel SGX: the enclave device of the in-kernel driver, and /dev/sgx_provision (quotes). The nodes belong
     # to the group `sgx` (mode 0660, provision usually root-only), so keep-groups carries the user's
     # supplementary groups into the rootless container (needs the crun runtime), as for /dev/sev.
+    # They are bind-mounted with `exec`: Gramine maps /dev/sgx_enclave with PROT_EXEC, which fails with EPERM
+    # on the `noexec` mount that `--device` makes in a rootless container (the loader's message then blames
+    # vm.mmap_min_addr, which is not the cause).
     for d in /dev/sgx_enclave /dev/sgx_provision; do
-        [ -e "$d" ] && DEVICES+=(--device "$d:$d")
+        [ -e "$d" ] && DEVICES+=(-v "$d:$d:dev,exec")
     done
     if [ -r /dev/sgx_enclave ] && [ -w /dev/sgx_enclave ] && [[ " ${DEVICES[*]} " != *" keep-groups "* ]]; then
         DEVICES+=(--group-add keep-groups)

@@ -14,6 +14,8 @@ fs.mounts = [
 ]
 
 sgx.debug = true
+# the program maps 512 MiB (helloworld.c); the default enclave size is 256M
+sgx.enclave_size = "1G"
 sgx.edmm_enable = {{ 'true' if env.get('EDMM', '0') == '1' else 'false' }}
 
 sgx.trusted_files = [
