@@ -25,6 +25,15 @@ production use.
   PCI/ivshmem support and uncacheable shared mappings; it is the base of the graphics and network work.
   `vm.md`
 
+- **AMD SEV and SEV-SNP** (experimental, AMD64). `gramine-sev` runs the VM PAL as a SEV or SEV-SNP guest launched from an
+  IGVM file; the launch measurement covers the guest kernel and can be recomputed from the file. Attestation reports
+  from `/dev/attestation` verify against AMD's VCEK chain. The LibOS suite passes except `test_020_cpuinfo` (the host
+  has `mwaitx`, the KVM guest does not), and all examples pass in both modes (2026-10-20, EPYC 7443P). Trusted files
+  and Secure TSC are open. `sev/`, `Documentation/quickstart/sev.md`
+- **Intel SGX route** (experimental, Intel x86_64). The inherited SGX backend builds and runs again: `scripts/install.sh --sgx`
+  and a rootless container that passes the enclave devices (bound with `exec`, which a rootless `--device` mount
+  lacks). 19 of 20 examples pass under `./exec.sh --sgx` (2026-10-20, Xeon Gold 6430). Remote attestation and the
+  `ra-tls` examples are not covered. `Documentation/quickstart/tdx-sgx.md`
 - **Windows VBS enclaves** (experimental, ARM64 and x64 Windows 11). The `vbs` PAL runs an application inside a
   signed VBS enclave: the library OS, a glibc and the application are packed into the enclave image at build
   time. Threads, signals, host files and sockets, Python, servers (Redis, NGINX, memcached, lighttpd), SQLite,
@@ -32,7 +41,9 @@ production use.
   example binds its key to the attestation report. `nodejs`, NumPy/SciPy, MongoDB and PyTorch are blocked by the
   ARM64 `x18` rule or the loader, `openjdk` by run-time code generation and R by process creation
   (`vbs-enclave/APPS.md`). Limits: no `fork`, no run-time code loading (no JIT), test-signed debug enclaves.
-  `gramine-vbs` and `make VBS=1` drive it. `Documentation/vbs.md`, `vbs-enclave/`
+  `gramine-vbs`, `scripts/install.sh --vbs` and `./exec.sh --vbs` drive it. On both ARM64 and x64, 11 of 12 examples and
+  all 8 static examples pass (2026-10-20; `nodejs` fails: the x18 rule on ARM64, no x64 recipe on x64).
+  `Documentation/vbs.md`, `vbs-enclave/`
 
 ### System calls and libc
 
@@ -59,9 +70,14 @@ production use.
 
 - **Processes** (experimental, x86_64 and AArch64). `fork`, `vfork`, `execve`, `wait`, signals between processes,
   pipes, shared futexes, guest-wide `/dev/shm` and System V IPC, behind `sys.experimental__multiprocess`; shells,
-  nginx with workers and Redis `BGSAVE` run on x86_64. On AArch64 spawn, `fork` and `wait` work (phases 0 to 3);
-  nginx, Redis and Bash have not been checked there, and the 4-vCPU `fork` speed fix and interruptible waits are on a
-  paused branch (`dev-aarch64-multiproc-p4`). `vm-multiproc/`, `vm-multiproc-aarch64/`
+  nginx with workers and Redis `BGSAVE` run on x86_64. On AArch64 the same works at 1, 2 and 4 vCPUs (frame pool, per-process
+  translation roots, interruptible waits, `_PalThreadResume`): Bash, nginx with four workers and Redis `BGSAVE` run,
+  a thousand forks at 4 vCPUs take 32 to 42 s instead of up to 480 s, and an LTP run with the key on passes 720 of
+  1,327 scenarios without a guest panic.
+  `vm-multiproc/`, `vm-multiproc-aarch64/`
+
+- **Timer granularity** (done, x86_64, AArch64 and SEV-SNP). CPU 0's one-shot timer is armed for the earliest pending
+  timeout and the 100 ms tick stays the ceiling, so short timed waits take about their length. `vm-timer/`
 
 - **Windows games with Wine and Proton** (experimental, x86_64 `vm`). GE-Proton's Wine runs in a guest: `hello.exe`,
   then DOOM I Enhanced (64-bit, Direct3D 11 through DXVK) to its title screen and first level with keyboard input,
@@ -93,41 +109,49 @@ production use.
 ### Build, test and workflow
 
 - **`scripts/install.sh`** (done). One command builds and installs the direct and VM PALs (`--vm`,
-  `--graphics`, `--libc`, `--target riscv64`) and can run the tests. `INSTALL.md`
+  `--graphics`, `--libc`, `--target riscv64`) and the `--sev`, `--sgx` and `--vbs` runtimes, and can run the tests. `INSTALL.md`
 - **Containers and workspaces** (done). `container/run.sh` gives each checkout its own rootless container,
   guest CIDs and ports, so several branches and agents work side by side. `AGENTS.md`
+- **`./exec.sh --<backend>`** (done). Every `CI-Examples/` directory runs with `--direct`, `--vm`, `--sev`, `--sev-snp`,
+  `--sgx` or `--vbs`: it explains why a backend cannot run, prints the command under test, streams the logs and ends
+  with the example's check. The shared helpers (`CI-Examples/common_tools/`) also start and stop the server examples.
+  Results per backend: `CI-Examples/README.md`, `CI-Examples/RESULTS.md`.
 - **Test batteries** (done). `test/direct/test-direct.sh` (PAL, LibOS, 12 example suites; `GRAMINE_RUNNER=gramine-vm`
-  runs the server examples under the VM), the `test/test-vm*.sh` scripts and the VM skip list.
+  runs the server examples under the VM), the `test/test-vm*.sh` scripts, `test/sev/test-sev.sh` and the VM skip list.
   `multiarch.md`
-- **CI workflows** (done). Manual workflows for direct x86_64, direct AArch64, emulated RISC-V and the x86_64
-  VM PAL under `.github/workflows/`. `multiarch.md`
+- **CI workflows** (done). Manual workflows for direct x86_64, direct AArch64, emulated RISC-V, the x86_64
+  VM PAL, SEV (self-hosted) and the documentation check under `.github/workflows/`. `multiarch.md`
 - **RISC-V test guest** (done). `scripts/riscv64/` boots an Ubuntu guest in QEMU for the cross-built tests.
   `riscv/`
-- **Quickstart guides** (done). One guide per platform, with the commands run on a machine of that platform.
+- **Quickstart guides** (done). One guide per platform, with the commands run on a machine of that platform; the
+  container is the only route except Windows VBS, and `./exec.sh` runs the examples.
   `Documentation/quickstart/`
-- **Development documents** (done). Plan, findings, open items and test results per topic, in a private repository.
+- **Brief public documents** (done). `CHANGELOG.md` (what the tree adds, by area) and `TODO.md` (open items). The plans,
+  findings and test records of every topic are in a private repository.
 
 ### Inherited
 
-- The Intel TDX and VM backends of gramine-tdx; the SGX backend is built but not tested here. The `tdx` PAL is
-  compiled in CI only.
+- The Intel TDX and VM backends of gramine-tdx; the SGX backend builds and is tested on one Intel machine (see above) but not otherwise. The `tdx` PAL is
+  compiled in CI only and has never run on TDX hardware here.
 
 ## Planned
 
 - **Proton, next.** The per-process graphics channel for Wine on the GPU, 32-bit games (a per-process LDT),
   Intel's driver tables, faster synchronisation. `proton-vm/TODO.md`
 - **VM memory size from the manifest.** The guest RAM of `gramine-vm` chosen by a manifest key instead of a
-  launcher default (proposed, branch `dev-vm-memory`).
+  launcher default (proposed).
 - **RISC-V on hardware, and a RISC-V vm PAL.** Validate the direct PAL and the rewriting on a board, then make
   rewriting the default; the vm PAL is not started.
 - **Graphics in the vm PAL on AArch64.** Deferred until the QEMU listener is redesigned. `graphics-aarch64/`
 - **Graphics fixes.** Faster Quake II mouse look and Minetest, a discrete GPU, Team Fortress 2, huge pages, more
   vCPUs. `graphics/TODO.md`
-- **AMD SEV.** A confidential-VM backend for AMD64; no code yet.
-- **VBS: more.** `fork`, sealing, production signing, a Windows-only build without WSL. `vbs-enclave/TODO.md`
-- **Asynchronous signals and a finer timer in the vm PAL.** Blocking calls are interruptible on the x86_64 `vm` PAL;
-  on AArch64 `main` `_PalThreadResume()` is still a stub (the implementation is on the paused phase-4 branch);
-  timed waits are 100 ms ticks. `TODO.md`, `vm-multiproc-aarch64/TODO.md`
+- **SEV: more.** Trusted files, Secure TSC, upstreaming one QEMU patch and two VM-PAL fixes. `sev/`
+- **SGX: remote attestation.** AESM and PCCS, the `ra-tls` examples, and `unit_tests-mremap` (a shrunk mapping stays readable).
+- **TDX route.** The `tdx` PAL needs a TDX host, `td-shim` and a TDX QEMU; `exec.sh --tdx` does not exist yet.
+- **VBS: more.** An x64 recipe for `nodejs`, `fork`, sealing, production signing, a Windows-only build without WSL.
+  `vbs-enclave/TODO.md`
+- **VM on AArch64.** The guest cannot map some distribution programs (`gcc`, `openjdk`, `pytorch`, `python`), and pipe
+  round trips at 4 vCPUs are slow. `vm-timer/`, `vm-multiproc-aarch64/`
 - **VM networking.** IPv6 destinations, reaching guest servers from the real host, a faster relay, UDP policy,
   `SO_SNDTIMEO`. `TODO.md`
 - **Syscall interception.** An x86_64 evaluation (it keeps the patched glibc for now), one shared rewriting
