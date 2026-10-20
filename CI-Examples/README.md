@@ -35,7 +35,7 @@ The table lists the recorded result of each example for each backend.
 
 ¹ No VBS recipe.  
 ² Not run on aarch64: the example downloads an x86_64-only binary. Not run on VM x86_64: no recorded reason.  
-³ `make check` serves on the host's loopback, which the guest cannot reach. Run it with the server on the container address.  
+³ The server of `make check` must be on a host address that is not loopback, which the guest cannot reach: `make check HTTP_ADDR=<address>`; `exec.sh --vm` and `--sev` pass it.  
 ⁴ Needs a display; run by hand.  
 ⁵ TDX run offline; no log in the repository.  
 ⁶ SEV: python runs only `scripts/helloworld.py`; unit_tests runs only `thread-tls`.  

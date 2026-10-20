@@ -14,6 +14,7 @@
 #   EXAMPLE_BACKENDS   backends it supports (default: "direct vm sev"; set it empty for none)
 #   EXAMPLE_MODE       "run" (default): build the binary and run it with its args, and check the output
 #                      "check": run the example's own `make check` with GRAMINE set to the backend
+#   example_check_args  optional function: prints extra make variables for `make check` given the backend
 #   EXAMPLE_NOTE       why it is skipped on this host when no backend applies (printed with the SKIP)
 #
 # Backends and where they are installed (scripts/install.sh; override with the env vars):
@@ -102,8 +103,11 @@ exec_one() {
           make -B "$manifest"; } 2>&1 | tee "$log"
         [ "${PIPESTATUS[0]}" = 0 ] \
             || { echo "[FAIL] $EXAMPLE_NAME $b $(exec_host_arch): manifest failed (see $log)"; return 1; }
-        echo "+ make check GRAMINE=$runner" | tee -a "$log"
-        timeout -s KILL "$EXEC_TIMEOUT" make check GRAMINE="$runner" 2>&1 </dev/null | tee "$out"
+        # exec.sh may define example_check_args <backend>: extra make variables for `make check`
+        local -a check_args=()
+        if declare -F example_check_args >/dev/null; then check_args=($(example_check_args "$b")); fi
+        echo "+ make check GRAMINE=$runner ${check_args[*]}" | tee -a "$log"
+        timeout -s KILL "$EXEC_TIMEOUT" make check GRAMINE="$runner" "${check_args[@]}" 2>&1 </dev/null | tee "$out"
         rc=${PIPESTATUS[0]}
         cat "$out" >>"$log"
     else

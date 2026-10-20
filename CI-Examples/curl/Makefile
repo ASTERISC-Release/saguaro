@@ -15,6 +15,10 @@ CURL_DIR ?= /usr/bin
 
 ARCH_LIBDIR ?= /lib/$(shell $(CC) -dumpmachine)
 
+# Address of the test server in `make check`. In a vm or sev guest 127.0.0.1 is the guest itself, so
+# those need an address of the host that is not loopback (exec.sh passes it).
+HTTP_ADDR ?= 127.0.0.1
+
 ifeq ($(DEBUG),1)
 GRAMINE_LOG_LEVEL = debug
 else
@@ -104,9 +108,9 @@ check: all
 else
 .PHONY: check
 check: all
-	(cd test-docroot; exec python3 -m http.server -b 127.0.0.1 19111) & httpd_pid=$$!; \
-	../common_tools/wait_for_server 5 127.0.0.1 19111; \
-	$(GRAMINE) ./curl http://127.0.0.1:19111/ > OUTPUT; rc=$$?; \
+	(cd test-docroot; exec python3 -m http.server -b $(HTTP_ADDR) 19111) & httpd_pid=$$!; \
+	../common_tools/wait_for_server 5 $(HTTP_ADDR) 19111; \
+	$(GRAMINE) ./curl http://$(HTTP_ADDR):19111/ > OUTPUT; rc=$$?; \
 	kill $$httpd_pid; exit $$rc
 
 	@grep -q "Hello World" OUTPUT && echo "[ Success 1/1 ]"

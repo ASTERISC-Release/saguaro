@@ -40,10 +40,17 @@ make SGX=1 check                    # SGX; not verified
 make VBS=1 check                    # VBS
 ```
 
-`make check` does not work under the VM and SEV: the test server listens on the host's loopback
-address, and in the guest `127.0.0.1` is the guest itself (`curl: (7) Failed to connect to
-127.0.0.1 port 19111`). Serve the page on the address of the container instead, and give that
-address to curl:
+Under the VM and SEV, `make check` needs the server on an address of the host that is not loopback:
+in the guest `127.0.0.1` is the guest itself (`curl: (7) Failed to connect to 127.0.0.1 port
+19111`). `HTTP_ADDR` sets that address, and `./exec.sh --vm` (or `--sev`) passes the host's first
+address:
+
+```sh
+make check GRAMINE=gramine-vm HTTP_ADDR=$(hostname -I | awk '{print $1}')   # VM
+./exec.sh --vm
+```
+
+By hand, the same thing:
 
 ```sh
 IP=$(hostname -I | awk '{print $1}')
