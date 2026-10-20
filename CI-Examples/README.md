@@ -3,13 +3,13 @@
 This folder contains application integration examples. Each subdirectory has a `README.md` with
 instructions to build and run the application under Gramine.
 
-# Running an example
+# Testing
 
 Install the backend first (`Documentation/quickstart/`). Each example has an `exec.sh` that builds
 the example and runs it under one backend. Run it in the directory of the example:
 
 ```sh
-./exec.sh --vm        # also --direct and --sev (--backend B is the same as --B)
+./exec.sh --vm         # also --direct and --sev 
 ```
 
 - A backend is required. Without one, `exec.sh` lists the backends the example supports and whether
@@ -21,16 +21,6 @@ the example and runs it under one backend. Run it in the directory of the exampl
   `+`), and shows the output as it is produced. The output is also written to `$EXEC_LOG_DIR`
   (default `/tmp/gramine-exec/`). `--keep` keeps the program output of a passing run.
 - The exit status is 0 on a pass, 1 on a failure or a backend that cannot run, and 2 on a usage error.
-
-Servers (`curl`, `iperf`, `lighttpd`, `memcached`, `mongodb`, `nginx`, `redis`, `rust`, `python`)
-run under the backend, and a client on the host checks them through the loopback; the `vm` and `sev`
-relay forwards the server's port (`GRAMINE_VM_INBOUND`). `curl` serves its page on an address of the
-host that is not loopback, because in a `vm` or `sev` guest `127.0.0.1` is the guest itself.
-`unit_tests` runs each test of its subdirectories (`align_test` is not a test). The shared code is
-`common_tools/exec-common.sh`; its header lists the variables an `exec.sh` sets.
-
-Not run by `exec.sh`: `blender` (needs a scene data set), `pytorch` (needs a model download),
-`graphics` (needs a display), `ra-tls/*` (SGX attestation only) and `vbs/*` (Windows VBS only).
 
 # Results
 

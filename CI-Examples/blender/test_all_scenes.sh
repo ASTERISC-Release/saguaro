@@ -5,11 +5,15 @@
 
 set -e
 
-if test -n "$SGX"
+# GRAMINE (for example gramine-vm, from exec.sh) names the runner; otherwise SGX selects gramine-sgx
+if test -z "$GRAMINE"
 then
-    GRAMINE=gramine-sgx
-else
-    GRAMINE=gramine-direct
+    if test -n "$SGX"
+    then
+        GRAMINE=gramine-sgx
+    else
+        GRAMINE=gramine-direct
+    fi
 fi
 
 for i in `ls "$DATA_DIR"/scenes/`;

@@ -14,6 +14,8 @@
 #   EXAMPLE_BACKENDS   backends it supports (default: "direct vm sev"; set it empty for none)
 #   EXAMPLE_MODE       "run" (default): build the binary and run it with its args, and check the output
 #                      "check": run the example's own `make check` with GRAMINE set to the backend
+#   EXAMPLE_EXPECT_FILE  file the program writes instead of printing: EXAMPLE_EXPECT is searched in it, not in
+#                      the output (it is deleted before the run)
 #   EXAMPLE_PROGRAM    what the runner is given (default ./$EXAMPLE_BINARY; "java" for a manifest named java)
 #   EXAMPLE_CHECK_TARGET  make target of mode "check" (default: check)
 #   EXAMPLE_REQUIRES   programs the example needs on the host (checked with `command -v` before the run;
@@ -135,6 +137,7 @@ exec_one() {
         fi
 
         local program=${EXAMPLE_PROGRAM:-./$binary}
+        [ -z "${EXAMPLE_EXPECT_FILE:-}" ] || rm -f "$EXAMPLE_EXPECT_FILE"
         echo "+ $runner $program ${EXAMPLE_ARGS[*]}" | tee -a "$log"
         timeout -s KILL "$EXEC_TIMEOUT" "$runner" "$program" "${EXAMPLE_ARGS[@]}" 2>&1 </dev/null | tee "$out"
         rc=${PIPESTATUS[0]}
@@ -142,7 +145,7 @@ exec_one() {
     fi
     if [ $rc = 137 ]; then verdict="TIMEOUT"
     elif [ $rc != 0 ]; then verdict="FAIL(exit=$rc)"
-    elif [ -n "${EXAMPLE_EXPECT:-}" ] && ! grep -qF -- "$EXAMPLE_EXPECT" "$out"; then verdict="FAIL(output)"
+    elif [ -n "${EXAMPLE_EXPECT:-}" ] && ! grep -qF -- "$EXAMPLE_EXPECT" "${EXAMPLE_EXPECT_FILE:-$out}"; then verdict="FAIL(output)"
     else verdict=PASS
     fi
     local secs=$(( $(date +%s) - start ))

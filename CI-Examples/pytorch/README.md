@@ -35,13 +35,15 @@ The example has no VBS recipe.
 
 # Testing
 
-The workload reads `input.jpg` and prints what the classifier detects:
+The workload reads `input.jpg` and writes what the classifier detects to `result.txt`
+(`./exec.sh --vm` runs it and checks that file):
 
 ```sh
 gramine-direct ./pytorch ./pytorchexample.py
 ```
 
-For the image that ships with the example, the output is:
+For the image that ships with the example, `result.txt` contains (the percentages differ slightly
+with the versions of `torch` and `torchvision`):
 
 ```
 [('Labrador retriever', 41.58518600463867), ('golden retriever', 16.59165382385254), ('Saluki, gazelle hound', 16.286855697631836), ('whippet', 2.853914976119995), ('Ibizan hound, Ibizan Podenco', 2.3924756050109863)]
