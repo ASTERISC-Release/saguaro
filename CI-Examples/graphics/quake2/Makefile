@@ -42,6 +42,7 @@ $(Q2_BIN):
 
 .PHONY: FORCE
 quake2.manifest: quake2.manifest.template $(Q2_BIN) FORCE
+	mkdir -p ~/.yq2 
 	gramine-manifest $(MANIFEST_ARGS) $< $@
 	gramine-manifest-check $@
 
@@ -78,7 +79,8 @@ NVIDIA ?= $(if $(wildcard /dev/nvidiactl),1,0)
 X_DISPLAY_NUM = $(patsubst :%,%,$(firstword $(subst ., ,$(DISPLAY))))
 
 quake2-direct.manifest: quake2-direct.manifest.template $(Q2_BIN) FORCE
-	gramine-manifest \
+		mkdir -p ~/.yq2
+		gramine-manifest \
 		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
 		-Ddisplay=$(X_DISPLAY_NUM) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
