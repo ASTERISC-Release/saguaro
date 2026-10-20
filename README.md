@@ -160,7 +160,7 @@ We are also in the process of releasing a whitepaper (to Arxiv) detailing the cu
 
 ## Disclaimer
 
-The current work is not designed to be **experimental** and should not be used in production environments.
+The current work is **experimental** and should not be used in production environments.
 
 AI agents were heavily-involved in the development of this project, even though the design decisions were made by our team.
 Our rationale for using AI agents was to easily prototype and merge together disjoint artifacts from different research projects
