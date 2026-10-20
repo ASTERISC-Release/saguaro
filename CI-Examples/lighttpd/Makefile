@@ -27,7 +27,7 @@ CONF_FILES = lighttpd-server.conf lighttpd.conf
 
 .PHONY: all
 ifeq ($(VBS),1)
-# Windows VBS enclave (scripts/vbs/Makefile.vbs, Documentation/vbs.md): lighttpd built with the vbs
+# Windows VBS enclave (scripts/vbs/Makefile.vbs, dev docs: vbs-enclave/manual.md): lighttpd built with the vbs
 # gcc (no OpenSSL, PCRE, zlib or bzip2: not in the vbs sysroot) and installed with its modules, its
 # configuration and the test files into vbs-build/root/lighttpd, packed by vbs.manifest.template
 VBS_APP = lighttpd

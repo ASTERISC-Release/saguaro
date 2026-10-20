@@ -1,7 +1,7 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 # SPDX-License-Identifier: BSD-3-Clause
 
-# Rust (hyper) HTTP server manifest for a Windows VBS enclave (`make VBS=1`, Documentation/vbs.md):
+# Rust (hyper) HTTP server manifest for a Windows VBS enclave (`make VBS=1`, dev docs: vbs-enclave/manual.md):
 # the counterpart of rust-hyper-http-server.manifest.template. The server is a static PIE built by
 # cargo against the vbs glibc (vbs-build/rust-hyper-http-server): nothing to pack but the program.
 

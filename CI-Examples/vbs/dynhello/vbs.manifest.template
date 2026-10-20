@@ -1,4 +1,4 @@
-# A dynamically linked program in a Windows VBS enclave (Documentation/vbs.md): the program, the
+# A dynamically linked program in a Windows VBS enclave (dev docs: vbs-enclave/manual.md): the program, the
 # dynamic loader and libc are packed, and libm.so.6 for its run-time dlopen. The source is the
 # vbs PAL's test pal/src/host/vbs/test/dynhello/dynhello.c. make VBS=1; gramine-vbs dynhello
 loader.entrypoint = "file:/libsysdb.so"

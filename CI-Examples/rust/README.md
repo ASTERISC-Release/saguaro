@@ -24,7 +24,7 @@ make SGX=1
 
 ## VBS
 
-In WSL on a Windows machine with VBS (`Documentation/vbs.md`, "Makefile flow"). This needs rustup
+In WSL on a Windows machine with VBS (`dev docs: vbs-enclave/manual.md`, "Makefile flow"). This needs rustup
 stable with the `rust-src` component:
 
 ```sh

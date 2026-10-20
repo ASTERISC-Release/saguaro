@@ -204,7 +204,7 @@ application are packed into a signed enclave image at build time. The tool build
 - **Intermittent failure.** The `helloworld` check fails now and then right after its image is built and signed
   (`mmap` of a 512 MiB region): once in six rebuild-and-check cycles, never in thirteen checks of a used image.
 - **Use.** `scripts/install.sh --vbs`, then `./exec.sh --vbs`;
-  [quickstart/vbs-windows.md](Documentation/quickstart/vbs-windows.md) and [vbs.md](Documentation/vbs.md).
+  [quickstart/vbs-windows.md](Documentation/quickstart/vbs-windows.md) and `dev docs: vbs-enclave/manual.md`.
 - **Limits.** No `fork`, no run-time code generation (so no JIT), test-signed debug enclaves only.
 
 ## Graphics

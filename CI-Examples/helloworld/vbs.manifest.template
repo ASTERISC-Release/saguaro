@@ -1,7 +1,7 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 # SPDX-License-Identifier: BSD-3-Clause
 
-# Hello World manifest for a Windows VBS enclave (`make VBS=1`, Documentation/vbs.md). The
+# Hello World manifest for a Windows VBS enclave (`make VBS=1`, dev docs: vbs-enclave/manual.md). The
 # counterpart of helloworld.manifest.template: everything the enclave runs is packed into the signed
 # image (vbs.packed_files, measured like sgx.trusted_files); the program is the static PIE that
 # `make VBS=1` builds into vbs-build/.

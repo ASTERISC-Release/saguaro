@@ -7,7 +7,7 @@
 # - make               -- create non-SGX manifest
 # - make SGX=1         -- create SGX manifest
 # - make VBS=1         -- build the SQLite shell for a Windows VBS enclave, pack and sign it (in
-#                         WSL; see Documentation/vbs.md); make VBS=1 check runs the three scripts
+#                         WSL; see dev docs: vbs-enclave/manual.md); make VBS=1 check runs the three scripts
 #                         in the enclave and compares the output
 
 ARCH_LIBDIR ?= /lib/$(shell $(CC) -dumpmachine)

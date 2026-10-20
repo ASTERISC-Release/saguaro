@@ -43,7 +43,7 @@ production use.
   (`vbs-enclave/APPS.md`). Limits: no `fork`, no run-time code loading (no JIT), test-signed debug enclaves.
   `gramine-vbs`, `scripts/install.sh --vbs` and `./exec.sh --vbs` drive it. On both ARM64 and x64, 11 of 12 examples and
   all 8 static examples pass (2026-10-20; `nodejs` fails: the x18 rule on ARM64, no x64 recipe on x64).
-  `Documentation/vbs.md`, `vbs-enclave/`
+  `dev docs: vbs-enclave/manual.md`, `vbs-enclave/`
 
 ### System calls and libc
 

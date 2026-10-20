@@ -24,7 +24,7 @@ make SGX=1
 
 ## VBS
 
-In WSL on a Windows machine with VBS (`Documentation/vbs.md`, "Makefile flow"):
+In WSL on a Windows machine with VBS (`dev docs: vbs-enclave/manual.md`, "Makefile flow"):
 
 ```sh
 make VBS=1

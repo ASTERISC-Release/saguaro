@@ -6,7 +6,7 @@ Pass or fail status: matrix in [`CI-Examples/README.md`](../../README.md).
 
 # Building
 
-Install the VBS backend first (`Documentation/vbs.md`) and run all commands in this directory.
+Install the VBS backend first (`dev docs: vbs-enclave/manual.md`) and run all commands in this directory.
 
 ## VBS
 

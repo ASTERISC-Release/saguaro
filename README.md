@@ -106,8 +106,8 @@ Using this tree:
 - [INSTALL.md](INSTALL.md): building, installing, containers, the RISC-V cross-build.
 - [Will my application run?](Documentation/will-it-run.md): the syscall profiler and the
   tolerance check.
-- [Windows VBS enclaves](Documentation/vbs.md): the manual (installation on Windows, the
-  `gramine-vbs` tool, attestation, limits).
+- [Enabling VBS on a Windows machine](Documentation/quickstart/vbs-enable.md): the one-time setup (VBS, test signing,
+  Visual Studio, signing certificate).
 - Graphics: in `gramine-direct` (x86_64, AArch64) and in the `vm` PAL (x86_64); the guides are
   [direct](Documentation/quickstart/graphics-direct.md) and [vm](Documentation/quickstart/graphics-vm.md),
   the examples [CI-Examples/graphics/](CI-Examples/graphics/).

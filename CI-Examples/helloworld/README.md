@@ -23,7 +23,7 @@ make SGX=1
 
 ## VBS
 
-In WSL on a Windows machine with VBS (`Documentation/vbs.md`, "Makefile flow"). The command builds
+In WSL on a Windows machine with VBS (`dev docs: vbs-enclave/manual.md`, "Makefile flow"). The command builds
 the program as a static PIE against the vbs glibc (in `vbs-build/`), packs it into
 `helloworld.vbs/` and links and signs `helloworld.dll` on Windows:
 

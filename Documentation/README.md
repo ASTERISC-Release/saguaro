@@ -7,7 +7,7 @@ Upstream's own documentation is at <https://gramine.readthedocs.io>.
 
 Start with `../README.md` (what this tree is, platform matrix), `quickstart/README.md` (one short
 guide per platform), `FEATURES.md` (what it adds) and `../INSTALL.md` (build, install, containers,
-the RISC-V cross-build). `vbs.md` is the manual for Windows VBS enclaves.
+the RISC-V cross-build). `quickstart/vbs-enable.md` explains how to enable VBS on a Windows machine.
 
 ## Written for this tree
 
@@ -19,8 +19,7 @@ the RISC-V cross-build). `vbs.md` is the manual for Windows VBS enclaves.
 | `manifest-keys.md` | index of documented manifest keys, their applicability and purpose |
 | `quickstart/direct.md`, `quickstart/vm.md` | `gramine-direct` and `gramine-vm` on x86_64 and AArch64: install, hello world, tests |
 | `quickstart/graphics-direct.md`, `quickstart/graphics-vm.md` | graphics under `gramine-direct` (x86_64, AArch64 with NVIDIA) and under `gramine-vm` (x86_64) |
-| `quickstart/riscv.md`, `quickstart/vbs-windows.md`, `quickstart/tdx-sgx.md` | the RISC-V cross-build and test guest; Windows VBS enclaves; pointers for the inherited TDX and SGX back ends |
-| `vbs.md` | `gramine-vbs` manual: Windows installation (ARM64 and x64), quick start, the tool, attestation, limits |
+| `quickstart/riscv.md`, `quickstart/vbs-windows.md`, `quickstart/vbs-enable.md`, `quickstart/tdx-sgx.md` | the RISC-V cross-build and test guest; Windows VBS enclaves and enabling VBS on a machine; pointers for the inherited TDX and SGX back ends |
 
 ## Inherited from upstream
 

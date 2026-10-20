@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
-# `scripts/install.sh --vbs`: the WSL half of the VBS enclave tooling (Documentation/vbs.md). Run it in
+# `scripts/install.sh --vbs`: the WSL half of the VBS enclave tooling (dev docs: vbs-enclave/manual.md). Run it in
 # the WSL2 Ubuntu distribution of the Windows machine, as a normal user (no sudo):
 #
 #   1. installs the missing build packages user-level (wsl-setup.sh user: Ubuntu packages unpacked
@@ -59,7 +59,7 @@ else
     cat <<'MSG'
 
 The Windows side above is not ready. These steps change the machine and are done once on Windows
-(install.sh does not do them); see Documentation/vbs.md, Installation, and
+(install.sh does not do them); see Documentation/quickstart/vbs-enable.md, and
 dev docs: vbs-enclave/windows-fresh-machine.md:
   - VBS running: Windows Security > Device security > Core isolation > Memory integrity, restart
   - Visual Studio (C++ desktop workload, build tools of this architecture) and the Windows SDK

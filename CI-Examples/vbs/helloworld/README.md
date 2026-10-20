@@ -7,7 +7,7 @@ arguments. The example is for the VBS backend only. For the same program on the 
 
 # Building
 
-Install the VBS backend first (`Documentation/vbs.md`) and run all commands in this directory.
+Install the VBS backend first (`dev docs: vbs-enclave/manual.md`) and run all commands in this directory.
 
 ## VBS
 

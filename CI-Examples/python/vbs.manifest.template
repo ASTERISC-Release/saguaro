@@ -1,7 +1,7 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 # SPDX-License-Identifier: BSD-3-Clause
 
-# Python3 manifest for a Windows VBS enclave (`make VBS=1`, Documentation/vbs.md): the counterpart
+# Python3 manifest for a Windows VBS enclave (`make VBS=1`, dev docs: vbs-enclave/manual.md): the counterpart
 # of python.manifest.template. The interpreter is CPython 3.12.7 built for the enclave against the
 # vbs glibc (scripts/vbs/build-python.sh, once per checkout, into build-vbs-python); it lacks the
 # modules whose libraries are not in that sysroot (zlib, OpenSSL, libffi, ...); NumPy/SciPy are

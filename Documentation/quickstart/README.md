@@ -14,7 +14,7 @@ applicable.
 | `gramine-vm`: a microVM under KVM; processes, VM size, networking | ✅ | ⚠️ | ⚠️ | 🛫 | [vm.md](vm.md) |
 | `gramine-direct` with the host GPU: glxgears, Quake II, Vulkan | ⚠️ | ⚠️ | ⚠️ (NVIDIA) | ❌ | [graphics-direct.md](graphics-direct.md) |
 | `gramine-vm` with graphics redirection: glxgears, Quake II (OpenGL, Vulkan) | ⚠️ | ⚠️ | 🛫 | ❌ | [graphics-vm.md](graphics-vm.md) |
-| Windows VBS enclaves (`gramine-vbs`): hello world, Python, attestation | ❌ | ❌ | ⚠️ (Windows 11) | ➖ | [vbs-windows.md](vbs-windows.md) |
+| Windows VBS enclaves (`gramine-vbs`): hello world, Python, attestation | ❌ | ❌ | ⚠️ (Windows 11) | ➖ | [vbs-windows.md](vbs-windows.md); machine setup: [vbs-enable.md](vbs-enable.md) |
 | AMD SEV-SNP (`gramine-sev`): hello world, regression tests, attestation | ➖ | ⚠️ | ➖ | ➖ | [sev.md](sev.md) |
 | Intel SGX (verified 2026-10-20) and TDX (inherited; not verified here) | ✅ | ➖ | ➖ | ➖ | [tdx-sgx.md](tdx-sgx.md) |
 

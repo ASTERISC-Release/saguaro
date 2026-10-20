@@ -7,7 +7,7 @@
 # - make SGX=1         -- create SGX no-debug-log manifest
 # - make SGX=1 DEBUG=1 -- create SGX debug-log manifest
 # - make VBS=1         -- build Redis for a Windows VBS enclave, pack and sign it (in WSL; see
-#                         Documentation/vbs.md); make VBS=1 check runs it and checks it
+#                         dev docs: vbs-enclave/manual.md); make VBS=1 check runs it and checks it
 #
 # Any of these invocations clones Redis' git repository and builds Redis in
 # default configuration and in the latest-to-date (6.0.5) version.

@@ -2,7 +2,7 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
 # `make VBS=1` builds and packages the attestation example for a Windows VBS enclave
-# (Documentation/vbs.md, "Makefile flow"). attest.manifest has no template variables, so it is the
+# (dev docs: vbs-enclave/manual.md, "Makefile flow"). attest.manifest has no template variables, so it is the
 # template of attest.manifest.vbs; its vbs.build compiles attest.c for the enclave.
 #   make VBS=1
 #   gramine-vbs attest <64 hex digits>

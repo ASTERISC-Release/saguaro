@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
-# gramine-vbs.ps1: the Windows-side runner of the VBS enclave tooling (Documentation/vbs.md). It
+# gramine-vbs.ps1: the Windows-side runner of the VBS enclave tooling (dev docs: vbs-enclave/manual.md). It
 # launches a signed enclave package, checks the Windows side of the machine and verifies attestation
 # reports. It does not build: applications are built and packaged in WSL with `make VBS=1`, and
 # `gramine-vbs <program>` in WSL calls this script through powershell.exe. gramine-vbs.cmd next to
@@ -235,14 +235,14 @@ function Check-Windows {
     Write-Host 'Windows:'
     Check-Item ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64' -or $env:PROCESSOR_ARCHITECTURE -eq 'AMD64') "ARM64 or x64 Windows ($env:PROCESSOR_ARCHITECTURE)" 'an ARM64 or x64 Windows 11 machine is needed'
     $dg = Get-CimInstance -Namespace root\Microsoft\Windows\DeviceGuard -ClassName Win32_DeviceGuard -ErrorAction SilentlyContinue
-    Check-Item ($dg -and $dg.VirtualizationBasedSecurityStatus -eq 2) 'VBS running' 'turn on memory integrity (Core isolation) and restart (Documentation/vbs.md)'
+    Check-Item ($dg -and $dg.VirtualizationBasedSecurityStatus -eq 2) 'VBS running' 'turn on memory integrity (Core isolation) and restart (dev docs: vbs-enclave/manual.md)'
     $t = Find-Toolchain
     Check-Item $t.vs "Visual Studio ($($t.vs))" "install Visual Studio with Desktop development with C++ (and the $VbsArch build tools)"
     Check-Item $t.vc "MSVC $VbsArch with the enclave CRT ($($t.vc.Name))" "Visual Studio Installer: MSVC $VbsArch build tools"
     Check-Item $t.sdk "Windows SDK with winenclave.h ($($t.sdk.Name))" 'Visual Studio Installer: Windows 11 SDK 10.0.26100 or later'
     Check-Item ($t.sdkbin -and (Test-Path "$($t.sdkbin)\veiid.exe") -and (Test-Path "$($t.sdkbin)\signtool.exe")) "veiid.exe and signtool.exe (SDK, $VbsArch)" 'the Windows SDK signing tools'
     $cert = Get-ChildItem Cert:\CurrentUser\My -ErrorAction SilentlyContinue | Where-Object { $_.Subject -eq "CN=$CertName" }
-    Check-Item $cert "signing certificate CN=$CertName (current user)" 'create one as Documentation/vbs.md describes, or give -CertName'
+    Check-Item $cert "signing certificate CN=$CertName (current user)" 'create one as Documentation/quickstart/vbs-enable.md describes, or give -CertName'
 }
 
 function Do-Check {

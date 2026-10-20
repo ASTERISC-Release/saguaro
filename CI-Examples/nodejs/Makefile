@@ -7,7 +7,7 @@
 # - make               -- create non-SGX manifest (system node)
 # - make SGX=1         -- create SGX manifest
 # - make VBS=1         -- pack the official Node.js linux-arm64 binary for a Windows VBS enclave, and
-#                         sign it (in WSL; see Documentation/vbs.md); make VBS=1 check runs
+#                         sign it (in WSL; see dev docs: vbs-enclave/manual.md); make VBS=1 check runs
 #                         helloworld.js and heavy.js with --jitless in the enclave
 
 THIS_DIR := $(dir $(lastword $(MAKEFILE_LIST)))

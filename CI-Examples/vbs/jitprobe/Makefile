@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
-# `make VBS=1` builds and packages this example for a Windows VBS enclave (Documentation/vbs.md,
+# `make VBS=1` builds and packages this example for a Windows VBS enclave (dev docs: vbs-enclave/manual.md,
 # "Makefile flow"); `gramine-vbs jitprobe` runs it and `make VBS=1 check` prints what the enclave answers (a report, no verdict).
 
 .PHONY: all

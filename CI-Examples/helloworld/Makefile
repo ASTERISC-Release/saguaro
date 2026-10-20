@@ -13,7 +13,7 @@ endif
 
 .PHONY: all
 ifeq ($(VBS),1)
-# Windows VBS enclave (scripts/vbs/Makefile.vbs, Documentation/vbs.md): the program built for the
+# Windows VBS enclave (scripts/vbs/Makefile.vbs, dev docs: vbs-enclave/manual.md): the program built for the
 # enclave (a static PIE against the vbs glibc) in vbs-build/, packed by vbs.manifest.template
 VBS_APP = helloworld
 VBS_DEPS = vbs-build/helloworld

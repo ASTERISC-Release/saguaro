@@ -7,7 +7,7 @@
 # - make               -- create non-SGX manifest
 # - make SGX=1         -- create SGX manifest
 # - make VBS=1         -- build BusyBox for a Windows VBS enclave, pack and sign it (in WSL; see
-#                         Documentation/vbs.md); make VBS=1 check runs single applets in enclaves
+#                         dev docs: vbs-enclave/manual.md); make VBS=1 check runs single applets in enclaves
 #                         (no shell pipelines, no httpd server: a VBS enclave has one process)
 
 ARCH_LIBDIR ?= /lib/$(shell $(CC) -dumpmachine)

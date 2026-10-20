@@ -28,7 +28,7 @@ What happens:
 
 # Building
 
-Install the VBS backend first (`Documentation/vbs.md`) and run all commands in this directory, in
+Install the VBS backend first (`dev docs: vbs-enclave/manual.md`) and run all commands in this directory, in
 WSL on the Windows machine.
 
 ## VBS

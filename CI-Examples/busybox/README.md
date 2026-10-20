@@ -44,7 +44,7 @@ make SGX=1 RA_TYPE=epid RA_CLIENT_SPID=12345678901234567890123456789012 RA_CLIEN
 
 ## VBS
 
-In WSL on a Windows machine with VBS (`Documentation/vbs.md`, "Makefile flow"):
+In WSL on a Windows machine with VBS (`dev docs: vbs-enclave/manual.md`, "Makefile flow"):
 
 ```sh
 make VBS=1

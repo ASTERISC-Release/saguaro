@@ -7,7 +7,7 @@ PowerShell on Windows. The example is for the VBS backend only. Pass or fail sta
 
 # Building
 
-Install the VBS backend first (`Documentation/vbs.md`) and run all commands in this directory.
+Install the VBS backend first (`dev docs: vbs-enclave/manual.md`) and run all commands in this directory.
 
 ## VBS
 

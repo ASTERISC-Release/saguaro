@@ -22,7 +22,7 @@ installed with `scripts/install.sh --vbs`, and the examples run through `./exec.
 
 - Windows 11 25H2 with **VBS enabled** and development environment setup (including enclave test signing
 with a custom certificate and Visual Studio 2022 or later).
-  - Refer to [the VBS manual](../vbs.md) for one-time machine setup details.
+  - Refer to [the VBS machine setup](vbs-enable.md) for one-time machine setup details.
 - **WSL2** with an Ubuntu 24.04 distribution.
 
 # 1. Install
@@ -79,7 +79,7 @@ interpreter with its standard library; `hello.py` prints the Python version, a S
 results of three threads.
 
 Other examples with a `vbs.manifest.template`: `CI-Examples/redis`, `memcached`, `lighttpd`, `nginx`
-and more (listed in [vbs.md](../vbs.md)); `./exec.sh --vbs` in their directory (or the same two commands by hand) builds and runs them. On ARM64 `busybox`, `sqlite`, `redis`, `memcached`, `iperf`, `curl`, `lighttpd`, `nginx` and `rust` pass; `nodejs` fails because `libstdc++` uses the reserved register x18 (results: [RESULTS.md](../../CI-Examples/RESULTS.md), 2026-10-20).
+and more (listed in `dev docs: vbs-enclave/manual.md`); `./exec.sh --vbs` in their directory (or the same two commands by hand) builds and runs them. On ARM64 `busybox`, `sqlite`, `redis`, `memcached`, `iperf`, `curl`, `lighttpd`, `nginx` and `rust` pass; `nodejs` fails because `libstdc++` uses the reserved register x18 (results: [RESULTS.md](../../CI-Examples/RESULTS.md), 2026-10-20).
 
 # 4. Attestation
 
@@ -92,7 +92,7 @@ data, and `gramine-vbs verify` checks one on the same machine:
     gramine-vbs verify attest data/out/report.bin --user-data <64 hex digits> --same-image --min-svn 1
 
 The check is local to this machine; what it establishes and what it does not is in
-[vbs.md](../vbs.md), Attestation.
+`dev docs: vbs-enclave/manual.md`, Attestation.
 
 # 5. Troubleshooting
 
@@ -106,7 +106,7 @@ The check is local to this machine; what it establishes and what it does not is 
   VBS supports one process per enclave (no `fork`/`vfork`/new-process `execve`) and no run-time code generation.
 - For an application of the user, write a `vbs.manifest.template` with `vbs.packed_files` (what goes into the image)
   and a Makefile that includes `scripts/vbs/Makefile.vbs`; start from `CI-Examples/helloworld` and
-  [vbs.md](../vbs.md).
+  `dev docs: vbs-enclave/manual.md`.
 
 # 6. Verification status
 

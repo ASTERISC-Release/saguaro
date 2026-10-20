@@ -1,12 +1,12 @@
 # Attestation (VBS enclave)
 
 The enclave writes an attestation report for given user data. The verifier accepts the report for
-that data and rejects it for other data (`Documentation/vbs.md`, "Attestation"). The example is for
+that data and rejects it for other data (`dev docs: vbs-enclave/manual.md`, "Attestation"). The example is for
 the VBS backend only. Pass or fail status: matrix in [`CI-Examples/README.md`](../../README.md).
 
 # Building
 
-Install the VBS backend first (`Documentation/vbs.md`) and run all commands in this directory.
+Install the VBS backend first (`dev docs: vbs-enclave/manual.md`) and run all commands in this directory.
 
 ## VBS
 

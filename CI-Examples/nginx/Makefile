@@ -25,7 +25,7 @@ endif
 
 .PHONY: all
 ifeq ($(VBS),1)
-# Windows VBS enclave (scripts/vbs/Makefile.vbs, Documentation/vbs.md): NGINX built with the vbs
+# Windows VBS enclave (scripts/vbs/Makefile.vbs, dev docs: vbs-enclave/manual.md): NGINX built with the vbs
 # gcc (HTTP only, no basic authentication: no OpenSSL, zlib, PCRE or libcrypt in the vbs sysroot)
 # and installed with its
 # configuration and test files into vbs-build/root/nginx, all packed by vbs.manifest.template

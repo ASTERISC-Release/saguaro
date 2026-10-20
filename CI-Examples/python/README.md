@@ -41,7 +41,7 @@ make SGX=1 RA_TYPE=epid RA_CLIENT_SPID=12345678901234567890123456789012 RA_CLIEN
 
 ## VBS
 
-In WSL on an ARM64 or x64 Windows machine with VBS (`Documentation/vbs.md`, "Makefile flow"). The
+In WSL on an ARM64 or x64 Windows machine with VBS (`dev docs: vbs-enclave/manual.md`, "Makefile flow"). The
 first build compiles CPython 3.12.7 for the enclave (`scripts/vbs/build-python.sh`, about 80 s,
 kept in `build-vbs-python` of the checkout). That CPython lacks the modules whose libraries are not
 in the vbs sysroot (zlib, OpenSSL, libffi, ...):

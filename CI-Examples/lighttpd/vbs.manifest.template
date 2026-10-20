@@ -1,7 +1,7 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 # SPDX-License-Identifier: BSD-3-Clause
 
-# lighttpd manifest for a Windows VBS enclave (`make VBS=1`, Documentation/vbs.md): the counterpart
+# lighttpd manifest for a Windows VBS enclave (`make VBS=1`, dev docs: vbs-enclave/manual.md): the counterpart
 # of lighttpd.manifest.template. lighttpd (built with the vbs gcc, prefix /lighttpd), its modules
 # (loaded with dlopen: packed objects), its configuration and the test files are packed into the
 # signed image.

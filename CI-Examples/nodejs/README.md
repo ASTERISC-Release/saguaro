@@ -22,7 +22,7 @@ make SGX=1
 
 ## VBS
 
-In WSL on a Windows machine with VBS (`Documentation/vbs.md`, "Makefile flow"). The recipe downloads
+In WSL on a Windows machine with VBS (`dev docs: vbs-enclave/manual.md`, "Makefile flow"). The recipe downloads
 and packs the linux-arm64 `node`, so it applies to ARM64:
 
 ```sh

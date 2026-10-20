@@ -75,6 +75,6 @@ built-debug
 .mp-probes/
 /.syscall-profiles/
 /.game/
-# the vbs PAL build trees (Documentation/vbs.md)
+# the vbs PAL build trees (dev docs: vbs-enclave/manual.md)
 /build-vbs*/
 .proton-vm/

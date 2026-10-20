@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 #
 # `make VBS=1 check`: the enclave writes an attestation report for given user data and the
-# verifier accepts it for that data and rejects it for other data (Documentation/vbs.md, Attestation).
+# verifier accepts it for that data and rejects it for other data (dev docs: vbs-enclave/manual.md, Attestation).
 set -euo pipefail
 : "${GRAMINE:=../../../scripts/vbs/gramine-vbs}"
 N=$(printf 'ab%.0s' $(seq 32)); O=$(printf 'cd%.0s' $(seq 32))

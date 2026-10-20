@@ -82,4 +82,4 @@ runtime/glibc$
 # the development documents: a private repository checked out next to this one (AGENTS.md)
 ^\.\./gramine-multiarch-docs$
 ^(aarch64/(direct|hwcap)|graphics|graphics-direct|graphics-aarch64|libos-syscalls|proton-vm|riscv|runtime-libc|sev|syscall-compat|syscall-profile|vbs-enclave|vm-multiproc|vm-multiproc-aarch64|vm-timer|vulkan)(/.*)?$
-^(multiarch|summary|syscall-workflow|doc-style|running|PLAN|FINDINGS|TESTING|TODO)\.md$
+^(multiarch|summary|syscall-workflow|doc-style|running|manual|PLAN|FINDINGS|TESTING|TODO)\.md$
