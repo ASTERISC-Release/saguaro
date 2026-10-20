@@ -114,12 +114,14 @@ Verified on 2026-10-20 on a Windows 11 ARM64 machine, in WSL (Ubuntu 24.04), wit
 the checkout: `./exec.sh --vbs` for `helloworld`, `python` and the nine other examples listed in
 section 3 (results and conditions in [results-exec.md](../devel/ci-matrix/results-exec.md)), and that
 `make VBS=1` stops with the install message when the runtime is missing and builds nothing itself.
-One early `helloworld` run failed in its check and passed on three re-runs; the cause is not known.
+`scripts/install.sh --vbs` on a fresh clone (no `build-vbs`, no `build-vbs-glibc`) took 225 s, built the
+runtime, and reported the Windows side ready. `helloworld` fails in its check now and then right after its
+image was built and signed (`mmap DATA_REGION: Cannot allocate memory`, printed by the example itself
+when its 512 MiB `mmap` fails): 1 of 6 rebuild-and-check cycles, 0 of 13 checks of an image that had
+been run; it is the failure that `vbs-enclave/TODO.md` already records, and a re-run passes.
 
 `CI-Examples/vbs/` has its own `exec.sh`, which runs `helloworld`, `dynhello`, `python`, `tcpserver`,
 `attestation`, `tls-echo`, `jitprobe` and `rxprobe`; all eight pass on ARM64 (`jvmprobe`, an x64-only
 research probe, is not run).
 
-Not verified: `scripts/install.sh --vbs` itself as the step that builds the runtime of a fresh
-checkout (the runtime of the tested checkout was built by the earlier `make VBS=1`) and the x64
-Windows machine.
+Not verified: the x64 Windows machine.
