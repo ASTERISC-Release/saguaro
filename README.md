@@ -29,7 +29,7 @@ These features and backends are the result of published and upcoming work by the
 
 ## Use-Cases
 
-There are three main use-cases of this project: 
+There are three main use-cases of this project:
 
 **(1) Sandboxing untrusted Linux applications (e.g., AI agents and games):** An application runs
 on Gramine's own system call interface rather than directly on the host kernel, reducing the
@@ -93,6 +93,8 @@ Guides for graphics and for the RISC-V cross-build are listed in the [quickstart
 
 [INSTALL.md](INSTALL.md) is the complete reference
 for building and installing, on a host or in the supplied containers.
+[Documentation/README.md](Documentation/README.md) lists the documents of this tree, and
+[AGENTS.md](AGENTS.md) says how to build and run each mode (for people and coding agents).
 
 `CI-Examples/` contains ready-made applications.
 
@@ -123,7 +125,7 @@ This work is the result of several research projects undertaken by our lab, out 
 - Veil: A Protected Services Framework for Confidential Virtual Machines (ACM ASPLOS'23)
 - Chancel: Efficient Multi-client Isolation Under Adversarial Programs (ISOC NDSS'21)
 
-If you find this project useful, please cite it our work. 
+If you find this project useful, please cite our work.
 
 We are also in the process of releasing a whitepaper (to Arxiv) detailing the current project.
 
