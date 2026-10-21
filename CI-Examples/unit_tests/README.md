@@ -1,76 +1,34 @@
-# Unit-test programs
+# Unit tests
 
-Small, self-contained programs for exercising specific Gramine behavior, as opposed to the
-application integrations in the parent directory. Each directory follows the usual example layout
-(`Makefile`, manifest template, sources). Pass or fail status per backend: matrix in
-[`CI-Examples/README.md`](../README.md).
+Small programs that exercise specific Gramine behaviour, as opposed to the application examples.
 
-| directory | what it checks | how it is run |
-|---|---|---|
-| `multi-thread/` | per-thread TLS (`thread-tls`), pthread rwlocks (`thread-rwlock`), and a many-thread stress test (`thread-stress`) | `test/direct/test-direct.sh multithread` |
-| `networks/` | a UDP socket self-test over loopback (server thread plus client: small, medium and large datagrams, ordering, a 400-packet burst); prints `UDP SOCKET TEST PASSED` | `test/direct/test-direct.sh networks` |
-| `mremap/` | `mremap` growing and shrinking a mapping in place (data must survive, the address must not move); prints `ALL IN-PLACE TESTS PASSED` | `make && gramine-direct helloworld` |
-| `align_test/` | an allocation / alignment probe (not a pass/fail test: it prints pointers and then waits) | `make && gramine-direct align_test` |
+| Directory | What it runs |
+|---|---|
+| `multi-thread/` | per-thread TLS (`thread-tls`), pthread rwlocks (`thread-rwlock`), a many-thread stress test (`thread-stress`) |
+| `networks/` | a UDP socket self-test over loopback; prints `UDP SOCKET TEST PASSED` |
+| `mremap/` | `mremap` growing and shrinking a mapping in place; prints `ALL IN-PLACE TESTS PASSED` |
+| `align_test/` | an allocation and alignment probe for manual inspection (not a test; skipped by `exec.sh`) |
 
-`./exec.sh --vm` (also `--direct` and `--sev`) builds and runs `mremap/`, the three programs of
-`multi-thread/` and `networks/` under one backend, and skips `align_test/`. See
-[`CI-Examples/README.md`](../README.md).
+## Run
 
-# Building
-
-Install the backend first (`Documentation/quickstart/`) and run all commands in the directory of a
-test.
-
-## Direct, VM, and SEV
+Install the backend first: [`Documentation/quickstart/`](../../Documentation/quickstart/README.md).
 
 ```sh
-make
+./exec.sh --direct      # builds and runs mremap, multi-thread and networks, and checks; also: --vm, --sev, --sev-snp
 ```
 
-`networks/Makefile` links the Tirith graphics stack (`sharedgl`, EGL, GL, X11) when
-`../../../../sharedgl/build` exists next to this tree, and otherwise builds the plain-sockets
-variant.
-
-## SGX
+By hand, in the directory of a test:
 
 ```sh
-make SGX=1
+make                    # make SGX=1 for SGX
+gramine-direct thread-tls       # multi-thread/; likewise thread-rwlock, thread-stress
+gramine-direct helloworld       # mremap/
+gramine-direct align_test       # align_test/
 ```
 
-The tests have no VBS recipe.
+The `multi-thread` and `networks` suites also run from the repository root: `test/direct/test-direct.sh multithread` and `test/direct/test-direct.sh networks` (`GRAMINE_RUNNER=gramine-vm` for the VM).
 
-# Testing
+## Notes
 
-- **direct:** the commands in the table above. Verified on aarch64 for `multi-thread`, `networks` and `mremap`, and on x86_64 for `multi-thread` and `mremap` (`networks` is not applicable there). `align_test` is not a test.
-- **vm:** `gramine-vm thread-tls` in `multi-thread/`, `gramine-vm helloworld` in `mremap/`, and `GRAMINE_RUNNER=gramine-vm test/direct/test-direct.sh networks` from the repository root. Verified on x86_64 and aarch64.
-- **sev:** `gramine-sev thread-tls`, in `multi-thread/`. Verified. Only `thread-tls` was run.
-- **tdx:** reported by the maintainer to pass, offline, as under SEV.⁵
-- **sgx:** not verified.
-- **vbs:** not verified.¹
-
-Run the program of a directory with the backend's command. The program is `thread-tls`,
-`thread-rwlock` or `thread-stress` in `multi-thread/`, `helloworld` in `mremap/`, and
-`align_test` in `align_test/`:
-
-```sh
-gramine-direct thread-tls            # direct, in multi-thread/
-gramine-vm thread-tls                # VM
-gramine-sev thread-tls               # SEV; only thread-tls was run
-gramine-direct helloworld            # direct, in mremap/
-gramine-vm helloworld                # VM
-```
-
-`networks/` is run from the repository root, with the test script:
-
-```sh
-test/test-direct.sh networks                           # direct
-GRAMINE_RUNNER=gramine-vm test/test-direct.sh networks # VM
-```
-
-`make check` in `mremap/` runs `$(GRAMINE) helloworld` and compares its output with `Hello, world`;
-`GRAMINE` is `gramine-direct` (`gramine-sgx` with `SGX=1`) and can be set on the command line.
-The `check` targets of `multi-thread/` and `align_test/` run the same comparison, which does not
-match their programs; use the commands above. No backend needs another setting.
-
-¹ No VBS recipe.  
-⁵ TDX run offline; no log in the repository.
+- `make check` in `mremap/`, `multi-thread/` and `align_test/` compares the output with `Hello, world`, which none of these programs prints, so it fails; use `exec.sh` or the commands above (the Makefiles need a fix).
+- `networks/Makefile` builds a variant that links the shared GL stack when `../../../../sharedgl/build` exists, and the plain-sockets variant otherwise.
