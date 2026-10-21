@@ -3,9 +3,9 @@
 This tree extends [gramine-tdx](https://github.com/gramineproject/gramine-tdx), the Intel TDX and
 virtual-machine fork of Gramine, with additional platform adaptation layers (PALs), architectures and
 tooling. This document lists what the tree adds, grouped by area. Each area states the contribution, the
-design decisions that matter, the findings worth recording, how to use it and its limits. Status words follow
-[README.md](README.md): *done* (works and is tested here), *experimental* (works in the tested setups, with known
-gaps), *planned*. The whole tree is experimental and not for production use. Open items are in
+design decisions that matter, the findings worth recording, how to use it and its limits. Status words: *done*
+(works and is tested here; ✅ in [README.md](README.md)), *experimental* (works in the tested setups, with known
+gaps; ⚠️), *planned* (🛫). The whole tree is experimental and not for production use. Open items are in
 [Documentation/TODO.md](Documentation/TODO.md); measured results of the examples are in [CI-Examples/RESULTS.md](CI-Examples/RESULTS.md).
 
 ## Platform support
@@ -63,9 +63,9 @@ Findings:
 ### RISC-V
 
 The direct PAL is cross-built for riscv64. In an emulated Ubuntu guest the PAL regression passes 27 tests (9
-skipped) and the LibOS regression 187 (38 skipped); eleven example suites pass with the bundled glibc. On an 8-hart
-Orange Pi RV2 board (3.7 GiB) the PAL regression passes 27 tests, the LibOS regression 190 (3 failed: two from the
-board's memory, one a timeout in `test_103_gettimeofday`) and all 12 example suites pass natively.
+skipped) and the LibOS regression 187 (38 skipped); eleven example suites pass with the bundled glibc. Natively on a
+RISC-V board the PAL regression passes 27 tests, the LibOS regression 190 (3 failed: two from too little memory, one
+a timeout in `test_103_gettimeofday`) and all 12 example suites pass.
 
 Design decisions:
 - `tp` belongs to the application's libc, so the PAL finds its control block as on AArch64.
@@ -119,7 +119,7 @@ The VM PAL runs the library OS as a unikernel in a microVM, under stock QEMU wit
 
 ### Processes
 
-With `sys.experimental__multiprocess` the guest supports `fork`, `vfork`, `execve`, `wait`, signals between
+With `sys.experimental__multiprocess` (on by default on x86_64 and AArch64) the guest supports `fork`, `vfork`, `execve`, `wait`, signals between
 processes, pipes, futexes shared between processes, a guest-wide `/dev/shm` and System V IPC. Shells, nginx with
 workers and Redis `BGSAVE` run at 1, 2 and 4 vCPUs on x86_64 and on AArch64.
 
@@ -170,8 +170,7 @@ measurement covers the kernel, so the measurement can be recomputed from the fil
   (version 11.1.2, built by `container/sev/`) adds the IGVM measurement support.
 - **Modes.** `./exec.sh --sev` tests plain SEV and `--sev-snp` tests SEV-SNP as separate runs.
 - **Use.** [quickstart/sev.md](Documentation/quickstart/sev.md).
-- **Limits.** Trusted files and Secure TSC are not implemented. The tested host is a single AMD EPYC 7443P
-  system.
+- **Limits.** Trusted files and Secure TSC are not implemented.
 
 ## Intel SGX
 
@@ -179,7 +178,7 @@ The inherited SGX backend is built and tested again. `scripts/install.sh --sgx` 
 `container/run.sh` passes the enclave devices and the AESM socket into the rootless container.
 
 - **Result.** 19 of the 20 examples pass under `./exec.sh --sgx`. `unit_tests-mremap` fails because a shrunk
-  mapping remains readable. The hardware is a Xeon Gold 6430 (SGX1 and SGX2, flexible launch control).
+  mapping remains readable.
 - **Finding.** Enclave creation failed with `EPERM` in the rootless container. The apparent cause was
   `vm.mmap_min_addr`, but the actual cause was that a rootless `--device` mount is `noexec`, so the enclave's
   `PROT_EXEC` mapping was refused. Binding the device nodes with `exec` fixes it.
@@ -196,7 +195,7 @@ application are packed into a signed enclave image at build time. The tool build
 - **Supported.** Threads, signals, host files, sockets, Python, servers (Redis, NGINX, memcached, lighttpd),
   SQLite, curl, a Rust server, `iperf3` and BusyBox applets, with a local attestation report and verifier. An
   opt-in TLS example binds its key to the report.
-- **Validation.** On ARM64 and on x64 (Ubuntu 26.04 in WSL), 11 of 12 example directories and all 8 static VBS
+- **Validation.** On ARM64 and on x64, 11 of 12 example directories and all 8 static VBS
   examples pass. The LibOS regression subset passes 71 of 102 cases; every failure is classified (`fork`, platform limits).
 - **Performance.** An enclave call costs about 7 us. Counting host calls and removing staging buffers improved
   throughput 1.8 times for Redis, 1.6 times for memcached and 5 to 7 times for NGINX with 1 MiB bodies.
@@ -215,7 +214,7 @@ application are packed into a signed enclave image at build time. The tool build
 
 Opt-in manifest keys let an unmodified OpenGL application (and, on x86_64, a Vulkan application) use the host's
 render node and X server. `glxgears`, Quake II, SuperTuxKart and Minetest reach 97 to 102 % of native speed on
-Intel, 76 to 91 % on AMD, and 88 to 100 % on an NVIDIA GB10 with the proprietary driver (AArch64).
+Intel, 76 to 91 % on AMD, and 88 to 100 % on an NVIDIA GPU with the proprietary driver (AArch64).
 
 - **Findings.** The NVIDIA driver needed file-descriptor translation for its ioctls; the X connection needed
   socketpair ends passed across the boundary; and a `poll` and an `mremap` defect surfaced only with a real driver.
@@ -268,7 +267,7 @@ memory and message queues, `faccessat2`, `getresuid`, more `prctl` options, file
 - **`scripts/install.sh`** installs the runtime for a backend, and `container/run.sh` provides a rootless
   container per checkout. The quickstart guides use the container as the only route, except Windows VBS.
 - **Findings from running everything.** Writing the guides on real machines found an x86_64 LibOS regression with the
-  bundled glibc and that the `tdx` PAL does not build. A direct run of the iperf example
+  bundled glibc and that the `tdx` PAL did not build (the build is fixed). A direct run of the iperf example
   hung for 600 s until the shared server helpers started servers in their own process group.
 - **Documentation.** `scripts/check-docs.py` verifies the paths and links of the documents. Workflows cover direct
   x86_64, direct AArch64, emulated RISC-V, VM x86_64 and SEV.

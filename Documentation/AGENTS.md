@@ -33,7 +33,7 @@ Several people or agents can work at once, each on their own branch. What makes 
   decisions with a recommendation, risks) and get it agreed. A topic also has `FINDINGS.md` (the dated log,
   appended), `TODO.md` (future tasks) and `TESTING.md` (test results, with dates and conditions). Keep
   `README.md` and `summary.md` of that repository current.
-- **This repository keeps two short files**: `CHANGELOG.md` (what was added, by date) and `Documentation/TODO.md` (open items by
+- **This repository keeps two short files**: `CHANGELOG.md` (what was added, by area) and `Documentation/TODO.md` (open items by
   architecture). Update them when a topic finishes. Do not put commit hashes, machine names, user names or
   addresses in anything committed here.
 - **Keep documents true.** After editing documents, run `scripts/check-docs.py`: it reports paths and links
