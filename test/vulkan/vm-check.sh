@@ -8,6 +8,10 @@
 # for renderD129, the AMD GPU; 0 for the first render node) and the QEMU fork with the listener.
 # Usage (in the container, after scripts/install.sh --vm):
 #   test/vulkan/vm-check.sh [N]        (default N=2; GRAMINE_PREFIX, QEMU_PATH, EGL_DISCRETE apply)
+# The guest's Vulkan loader lists every GPU of the host and vk-headless picks device 0 unless
+# VKH_DEVICE names one (an index or a name substring); on a machine with an AMD and an Intel GPU
+#   VKH_DEVICE=Intel test/vulkan/vm-check.sh
+# runs the checks on anv, that is through the i915 entries of the LibOS pointer table.
 # Prints one PASS/FAIL line per run and exits non-zero when any failed.
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -17,6 +21,7 @@ N=${1:-2}
 export EGL_DISCRETE=${EGL_DISCRETE:-1}
 cd "$HERE" || exit 2
 make -s vk-headless vk-two gfx-fdpass vk-session-shim.so >/dev/null || exit 2
+mkdir -p /tmp/vkshim # the manifests mount it as the guest's /tmp (the session shim's memfd names)
 echo "# $(date -u +%Y-%m-%dT%H:%MZ) vm-check N=$N EGL_DISCRETE=$EGL_DISCRETE $(uptime | sed 's/.*load/load/')"
 filter() { grep -v "preloader\|^(qemu)\|^$\|self-check\|Frame-pool\|boot\]\|REM_MEM\|vm-relay\|frame pool\|Configuring\|Physical\|memtype\|heap [0-9]"; }
 rc=0
