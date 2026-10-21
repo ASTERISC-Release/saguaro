@@ -94,10 +94,36 @@ instances share the relay port and the second fails to start.
 
 ## Proton games
 
-Results of the Windows games under GE-Proton's Wine in `gramine-vm` on the redirected route
-(`test/proton-vm/`), each on both GPUs. "Native" is the same game through the same Wine prefix on
-the host; the FPS ratio is against native on the same GPU.
+Results of the Windows games under GE-Proton's Wine (version 11-9, DXVK) in `gramine-vm` on the
+redirected route (`test/proton-vm/`), 2026-10-20, each on both GPUs of the machine above: the
+guest with 4 vCPUs and 12 GiB, `GPU=1`, the presentation layer's rate log and the DXVK overlay
+read from captures of the window; "native" is the same game through the same Wine prefix on the
+host (vsync off where stated). Every window went full screen at 3840x2160. The games were driven
+by a short key script to the first level or the menu; sound had no device. FPS are those of the
+DXVK overlay at the stated point; the ratio is against native on the same GPU at the same point.
 
 | Game | Bitness | API | GPU | Native FPS | `gramine-vm` FPS | Result | First blocker |
 |---|---|---|---|---|---|---|---|
-| (pending) | | | | | | | |
+| DOOM I Enhanced | x86-64 | D3D11 | AMD | 2294 to 2347 (vsync off), E1M1 | 72 (0.03), E1M1 | plays the first level; one run in three crashed before the first present¹ | the intermittent crash¹ |
+| DOOM I Enhanced | x86-64 | D3D11 | Intel | 68 to 69 (vsync off), E1M1 | 59.5 (0.86), E1M1 | plays the first level | – |
+| Psychonauts | i386 | D3D9 | AMD | 29.8, intro | 29.1 (1.0), intro | starts, the intro cinematic plays at the video's rate | none within 200 s (a null ALSA device is needed) |
+| Psychonauts | i386 | D3D9 | Intel | 29.7, intro | 29.2 (1.0), intro | as AMD | – |
+| The Witcher: Enhanced Edition | i386 | D3D9 | AMD | 299.9, intro | 301.5 (1.0), title | starts, title screen after the intros (the game caps at 300) | – |
+| The Witcher: Enhanced Edition | i386 | D3D9 | Intel | 85.7, intro | 50.4 (0.59), title | starts, title screen | – |
+| BioShock 2 Remastered | i386 | D3D9/D3D10 | AMD | 144 (vsync), menu | 64.6 (0.45), menu | reaches the main menu | – |
+| BioShock 2 Remastered | i386 | D3D9/D3D10 | Intel | 96.6, menu | 58.7 (0.61), menu | reaches the main menu | – |
+| Tomb Raider: Underworld | i386 | D3D9 | AMD, Intel | 60 (the game's cap), start-up dialogs | – | does not start | `wine: failed to create main module ... status c0000018`: the executable has no relocations and must load at 0x400000 to 0x1236000, and the guest has something mapped in that range (the 32-bit reservation of the low range fails in every guest process) |
+
+¹ A user-space copy (the C library's `memmove`, 260 bytes) in the game's process reads 180
+bytes past the end of a 1 MiB anonymous mapping into the LibOS's adjacent internal thread stack,
+which the LibOS treats as an internal fault and ends the process. The application's mappings and
+the LibOS's internal ones interleave at the top of the address space. With the LibOS of this
+branch 4 of 12 runs crashed; with the LibOS without the pointer-table commit 0 of 6, so the
+commit changes what the AMD path does before the first present (`AMDGPU_GEM_OP` now succeeds)
+in a way that exposes the over-read; the copy's caller is not identified (dev docs:
+`proton-vm/FINDINGS.md`, 2026-10-20).
+
+The AMD figures of the guest are bound by the present path (about 60 to 70 presents per second
+in FIFO mode, 300 for The Witcher, which runs its own cap), not by the GPU; the Intel figures are
+close to the GPU's native rate. Gameplay beyond the first level or menu, sound and input were not
+checked.

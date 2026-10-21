@@ -242,6 +242,9 @@ Under `gramine-vm`, GE-Proton's Wine runs `hello.exe` and DOOM I Enhanced (64-bi
 first level, with keyboard input, in software rendering (44 to 48 frames per second). It required named Unix-socket
 nodes, `fork` without copying reservations, `SCM_RIGHTS`, a virtual `%gs`, exception events, a 512 GiB address space
 and syscall user dispatch. This is a feasibility result: Wine's GPU path and 32-bit games are open.
+On the GPU path (2026-10-20, [Documentation/GRAPHICS.md](Documentation/GRAPHICS.md)) DOOM plays its first level on
+an Intel iGPU at 86 % of native and on an AMD GPU at the present path's rate; Psychonauts, The Witcher and BioShock 2
+(32-bit) start on both GPUs; Tomb Raider: Underworld does not load (a non-relocatable executable's address range).
 
 ## LibOS system calls and compatibility
 
