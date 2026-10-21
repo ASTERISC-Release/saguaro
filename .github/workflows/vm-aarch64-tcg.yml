@@ -89,22 +89,25 @@ jobs:
             test/vm/test-vm.sh --prefix "$GRAMINE_PREFIX" loopback epoll outbound udp guest-loopback \
             2>&1 | tee vm-net.log
 
-      - name: Install application prerequisites (memcached, nginx)
+      - name: Install the prerequisites of the memcached and nginx examples
         run: scripts/dependencies.sh
 
-      - name: Smoke test - memcached under gramine-vm (inbound relay)
+      - name: memcached example (./exec.sh --vm)
         run: |
-          . "$GRAMINE_PREFIX/env.sh"
-          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "GRAMINE_PREFIX=$GRAMINE_PREFIX" GRAMINE_RUNNER=gramine-vm \
-            timeout 900 test/direct/test-direct.sh memcached 2>&1 | tee vm-memcached.log
-          grep -q "PASS  memcached" vm-memcached.log
+          export GRAMINE_VM_PREFIX="$GRAMINE_PREFIX"
+          cd CI-Examples/memcached
+          # gramine-vm's virtiofsd serves / and needs root, as in the other steps
+          sudo -E env "PATH=$PATH" "PYTHONPATH=${PYTHONPATH:-}" ./exec.sh --vm
 
-      - name: Smoke test - nginx under gramine-vm (inbound relay)
+      - name: nginx example (./exec.sh --vm)
         run: |
-          . "$GRAMINE_PREFIX/env.sh"
-          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "GRAMINE_PREFIX=$GRAMINE_PREFIX" GRAMINE_RUNNER=gramine-vm \
-            timeout 900 test/direct/test-direct.sh nginx 2>&1 | tee vm-nginx.log
-          grep -q "PASS  nginx" vm-nginx.log
+          export GRAMINE_VM_PREFIX="$GRAMINE_PREFIX"
+          cd CI-Examples/nginx
+          sudo -E env "PATH=$PATH" "PYTHONPATH=${PYTHONPATH:-}" ./exec.sh --vm
+
+      - name: Give the workspace back to the runner user
+        if: always()
+        run: sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
 
       - name: LibOS regression suite under gramine-vm
         env:
@@ -126,3 +129,4 @@ jobs:
           path: |
             vm-*.log
             vm-examples/
+            /tmp/gramine-exec/

@@ -19,9 +19,9 @@ on:
   workflow_dispatch:
     inputs:
       suites:
-        description: "test/direct/test-direct.sh suites (default: PAL and LibOS regression, the python, memcached and nginx examples; see test/direct/test-direct.sh --list for the other application suites)"
+        description: "test/direct/test-direct.sh suites (default: PAL and LibOS regression and the python example; see test/direct/test-direct.sh --list for the other application suites)"
         required: false
-        default: "pal libos python memcached nginx"
+        default: "pal libos python"
       stress:
         description: "also run scripts/stress_rewrite.sh (~10 min)"
         type: boolean
@@ -75,10 +75,25 @@ jobs:
 
       - name: Run the direct-PAL regression tests
         env:
-          SUITES: ${{ inputs.suites || 'pal libos python memcached nginx' }}   # via env, never interpolated into the script text
+          SUITES: ${{ inputs.suites || 'pal libos python' }}   # via env, never interpolated into the script text
         run: |
           export PATH="$HOME/.cargo/bin:$PATH"
           test/direct/test-direct.sh $SUITES
+
+      - name: Install the prerequisites of the memcached and nginx examples
+        run: scripts/dependencies.sh
+
+      - name: memcached example (./exec.sh --direct)
+        run: |
+          export GRAMINE_DIRECT_PREFIX="$GRAMINE_PREFIX"
+          cd CI-Examples/memcached
+          ./exec.sh --direct
+
+      - name: nginx example (./exec.sh --direct)
+        run: |
+          export GRAMINE_DIRECT_PREFIX="$GRAMINE_PREFIX"
+          cd CI-Examples/nginx
+          ./exec.sh --direct
 
       - name: Rewrite stress (aarch64)
         if: ${{ inputs.stress }}
@@ -92,6 +107,7 @@ jobs:
           path: |
             test-logs
             /tmp/rewrite-stress-fail
+            /tmp/gramine-exec/
           if-no-files-found: ignore
 
   vm-build:

@@ -129,8 +129,8 @@ jobs:
 
       - name: Smoke test - python example (hello, numpy, scipy) under gramine-vm
         run: |
-          # Only the three scripts that need no network run here; the servers are tested below
-          # (Redis, memcached, nginx) through the inbound relay.
+          # Only the three scripts that need no network run here; the servers are tested in the steps
+          # below (Redis, memcached, nginx).
           . "$GRAMINE_PREFIX/env.sh"
           cd CI-Examples/python
           make python.manifest
@@ -149,22 +149,25 @@ jobs:
             timeout 600 test/vm/network/test-vm-redis.sh 2>&1 | tee vm-redis.log
           grep -q "Redis PING/SET/GET and benchmark passed" vm-redis.log
 
-      - name: Install application prerequisites (memcached, nginx)
+      - name: Install the prerequisites of the memcached and nginx examples
         run: scripts/dependencies.sh
 
-      - name: Smoke test - memcached under gramine-vm (inbound relay)
+      - name: memcached example (./exec.sh --vm)
         run: |
-          . "$GRAMINE_PREFIX/env.sh"
-          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "GRAMINE_PREFIX=$GRAMINE_PREFIX" GRAMINE_RUNNER=gramine-vm \
-            timeout 900 test/direct/test-direct.sh memcached 2>&1 | tee vm-memcached.log
-          grep -q "PASS  memcached" vm-memcached.log
+          export GRAMINE_VM_PREFIX="$GRAMINE_PREFIX"
+          cd CI-Examples/memcached
+          # gramine-vm's virtiofsd serves / and needs root, as in the other steps
+          sudo -E env "PATH=$PATH" "PYTHONPATH=${PYTHONPATH:-}" ./exec.sh --vm
 
-      - name: Smoke test - nginx under gramine-vm (inbound relay)
+      - name: nginx example (./exec.sh --vm)
         run: |
-          . "$GRAMINE_PREFIX/env.sh"
-          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "GRAMINE_PREFIX=$GRAMINE_PREFIX" GRAMINE_RUNNER=gramine-vm \
-            timeout 900 test/direct/test-direct.sh nginx 2>&1 | tee vm-nginx.log
-          grep -q "PASS  nginx" vm-nginx.log
+          export GRAMINE_VM_PREFIX="$GRAMINE_PREFIX"
+          cd CI-Examples/nginx
+          sudo -E env "PATH=$PATH" "PYTHONPATH=${PYTHONPATH:-}" ./exec.sh --vm
+
+      - name: Give the workspace back to the runner user
+        if: always()
+        run: sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
 
       - name: LibOS regression suite under gramine-vm (informational)
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_suite }}
@@ -285,4 +288,5 @@ jobs:
           path: |
             vm-*.log
             vm-mp-logs/
+            /tmp/gramine-exec/
             build-vm-x86_64/subprojects/glibc-2.39-1/glibc-build.log
