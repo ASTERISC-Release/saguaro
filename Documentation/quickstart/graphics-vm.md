@@ -82,6 +82,12 @@ prints `vm intel gl3 run 1: 633 frames, N seconds: N fps`.
 - Input arrives through a shared ring by default; applications that read input without the Xlib
   calls the ring covers need `SHARED_INPUT=0` (`running.md`).
 - Two graphics VMs at once share one X relay; the second loses its display when the first exits.
+- With `sys.experimental__multiprocess` on (the default) the application is demand-paged and
+  every pointer inside a forwarded DRM ioctl is translated by a table in the LibOS
+  (`../GRAPHICS.md`). The table covers what Mesa 25.2's `iris`, `anv`, `radeonsi` and `radv`
+  issue; a request outside it (user-pointer objects, `I915_EXEC_FENCE_IN`, an engine map with
+  extensions) fails with `EFAULT` or `EINVAL` and a LibOS warning. Until 2026-10-20 no i915
+  request was in the table, so Intel GPUs needed `sys.experimental__multiprocess = false`.
 
 ## Verified
 

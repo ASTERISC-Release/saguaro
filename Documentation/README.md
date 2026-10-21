@@ -18,6 +18,7 @@ the RISC-V cross-build). `quickstart/vbs-enable.md` explains how to enable VBS o
 | `will-it-run.md` | checking whether an application is likely to run: the syscall profiler and the tolerance check |
 | `manifest-keys.md` | index of documented manifest keys, their applicability and purpose |
 | `quickstart/direct.md`, `quickstart/vm.md` | `gramine-direct` and `gramine-vm` on x86_64 and AArch64: install, hello world, tests |
+| `GRAPHICS.md` | the graphics architecture (direct and redirected routes, the pointer table of demand-paged processes), the Intel pointer-table issue and its fix, results of Windows games under Proton |
 | `quickstart/graphics-direct.md`, `quickstart/graphics-vm.md` | graphics under `gramine-direct` (x86_64, AArch64 with NVIDIA) and under `gramine-vm` (x86_64) |
 | `quickstart/riscv.md`, `quickstart/vbs-windows.md`, `quickstart/vbs-enable.md`, `quickstart/tdx-sgx.md` | the RISC-V cross-build and test guest; Windows VBS enclaves and enabling VBS on a machine; pointers for the inherited TDX and SGX back ends |
 

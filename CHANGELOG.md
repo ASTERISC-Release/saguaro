@@ -229,6 +229,10 @@ Intel and 72 % on AMD.
 
 - **Finding.** Computing the guest memory layout at launch, instead of fixing it, reduced boot at 8 GB from 2.9 s
   to 0.8 s, and host memory follows what the guest touches.
+- **Finding (2026-10-20).** With `sys.experimental__multiprocess` on, the first process is demand-paged and the
+  pointers inside every forwarded DRM ioctl go through a table in the LibOS. The table had no i915 entry, so Intel
+  GPUs failed at Mesa's device probe once the key's default became `true`; the i915 requests of Mesa 25.2 and
+  `AMDGPU_GEM_OP` are now translated ([Documentation/GRAPHICS.md](Documentation/GRAPHICS.md)).
 - **Limits.** The listener and the shared-page address are x86-only, which blocks AArch64. Minetest reaches 25 to
   35 % of native speed.
 
