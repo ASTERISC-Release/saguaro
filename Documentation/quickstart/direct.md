@@ -44,8 +44,9 @@ direct backend and installs it into `~/.local/gramine`:
 The `~` is the home directory of the container's root user; it stays when the container is
 stopped and is discarded when the container is recreated (the builds inside the repository
 survive). Re-running the script is cheap: meson and ninja rebuild only what changed.
-In a shell that is not opened by `container/run.sh`, `. ~/.local/gramine/env.sh` sets `PATH` and
-`PYTHONPATH`; `scripts/install.sh --add-to-profile` does it for every new shell.
+`container/run.sh` loads only the environment of the vm install (`~/.local/gramine-vm/env.sh`), so
+`gramine-direct` of this install is not on `PATH` by itself: `. ~/.local/gramine/env.sh` sets `PATH` and
+`PYTHONPATH` in the current shell, and `scripts/install.sh --add-to-profile` does it for every new shell.
 
 # 2. Example: Hello World
 
@@ -55,7 +56,7 @@ chosen backend and checks the output. In the container shell:
     cd CI-Examples/helloworld
     ./exec.sh --direct
 
-A backend is required (`--direct`, `--vm`, `--sev`, `--sev-snp`, `--vbs`); without one the script
+A backend is required (`--direct`, `--vm`, `--sev`, `--sev-snp`, `--sgx`, `--vbs`); without one the script
 lists the backends and whether this host can run each. The script prints each command it runs
 (lines that start with `+`) and writes the log to `/tmp/gramine-exec/`. The exit status is 0 on a
 pass. The run ends with the output `Hello, world`.
@@ -63,14 +64,15 @@ pass. The run ends with the output `Hello, world`.
 The same steps by hand, which show what `exec.sh` does (the program is built, `helloworld.manifest`
 is rendered from its template, and `gramine-direct` runs the program on the LibOS):
 
+    . ~/.local/gramine/env.sh             # gramine-direct and the tools on PATH
     cd CI-Examples/helloworld
     make                                  # builds the program and renders helloworld.manifest
     gramine-direct helloworld
 
 The output is `Hello, world`. The other examples run the same way (`./exec.sh --direct` in their
 directory); the recorded results are in
-[RESULTS.md](../../CI-Examples/RESULTS.md) (2026-10-20: every example passes under
-`direct` on Intel x86_64 and on AArch64; `blender` runs on x86_64 only).
+[RESULTS.md](../../CI-Examples/RESULTS.md): every example passes under `direct` on Intel x86_64 and on
+AArch64; `blender` runs on x86_64 only.
 
 # 3. Regression Tests
 
@@ -85,8 +87,8 @@ Each suite ends with a `PASS` or `FAIL` line. Logs are stored in `/tmp/gramine-m
 
 # 4. Troubleshooting
 
-- `gramine-direct: command not found` in a shell that `container/run.sh` did not open: run
-  `. ~/.local/gramine/env.sh` (or `scripts/install.sh --add-to-profile` once).
+- `gramine-direct: command not found`: run `. ~/.local/gramine/env.sh` in that shell
+  (`container/run.sh` loads only the vm install's environment), or `scripts/install.sh --add-to-profile` once.
 - `exec.sh` reports that a backend is not installed: run `scripts/install.sh` (direct) or
   `scripts/install.sh --vm` (vm) in the container, as in section 1.
 - An application cannot find a file or library: the manifest mounts only what it names
