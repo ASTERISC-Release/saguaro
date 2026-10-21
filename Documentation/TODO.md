@@ -15,7 +15,7 @@ Open items by architecture and host. Longer lists are kept with the maintainers'
   `I915_EXEC_FENCE_IN`, engine maps with extensions and user-pointer objects, and the `xe` driver is not covered;
   an AArch64 build check of the changes; equal-scene frame-rate comparisons for The Witcher and BioShock 2.
 - `vm` with graphics: qemu-tirith will be published: give it a stable tag, update the clone URLs in the guides, and decide whether to pin it as a git submodule (a pinned commit under a fixed path would remove the `QEMU_TIRITH_DIR` step; a submodule needs `--recursive` and a 1+ GB build tree) or keep a documented separate checkout.
-- CI for `sev` and other hardware (planned, not started): no self-hosted runner is registered. Plan: no automatic runs (no `pull_request` workflow may use a self-hosted label); maintainer-approved manual runs only, after reading everything the run executes (`.github/`, `container/`, `scripts/`, `test/sev/`); a dedicated unprivileged user and an ephemeral runner on the hardware host; the repository setting 'Require approval for all outside collaborators' and read-only workflow permissions before the repository is made public; consider a private mirror repository for the runner.
+- CI for hardware-bound backends (`sev`, `sgx`, `vbs`, `tdx`): there is no workflow and no self-hosted runner, deliberately (the repository is public); `test/sev/test-sev-all.sh` and the `./exec.sh --<backend>` runs are done by hand on the hardware.
 - `sev`: trusted files, Secure TSC; `sgx`: remote attestation (AESM, PCCS) and the `ra-tls` examples.
 - Proton (Wine, DXVK) under `gramine-vm`: phase 1 and later, see the status in the development notes.
 

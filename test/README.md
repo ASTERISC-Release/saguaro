@@ -72,4 +72,4 @@ display).
 
 All workflows are manual (`workflow_dispatch`). Calls into `test/`: `direct-x86_64.yml` and
 `direct-aarch64.yml` run `test/direct/test-direct.sh`; `vm-x86_64.yml` runs `test/vm/network/test-vm-redis.sh` and
-`test/vm/multiproc/check-probes.sh`; `sev-x86_64.yml` runs `test/sev/test-sev-all.sh`.
+`test/vm/multiproc/check-probes.sh`; `test/sev/test-sev-all.sh` runs the SEV checks by hand on an AMD SEV-SNP host (there is no workflow for it).

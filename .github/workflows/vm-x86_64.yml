@@ -4,8 +4,8 @@
 #
 # gramine-vm needs hardware virtualization (/dev/kvm) on a machine of the same architecture, and
 # on x86_64 also /dev/vhost-vsock. Hosted x86_64 runners provide both; the hosted aarch64 runners have
-# no usable KVM, so the aarch64 vm PAL is not tested in CI (it needs a self-hosted aarch64 runner with
-# /dev/kvm; see test/vm/test-vm.sh).
+# no usable KVM, so the aarch64 vm PAL is tested under software emulation instead (vm-aarch64-tcg.yml);
+# on a machine with /dev/kvm use test/vm/test-vm.sh.
 #
 #   x86_64-vm   builds the vm PAL on a hosted x86_64 runner and runs gramine-vm: a smoke test
 #               (helloworld, a multi-threaded example) that must pass, then the LibOS regression suite
@@ -20,6 +20,8 @@
 name: VM PAL (x86_64)
 
 on:
+  push:                      # TEMPORARY, removed before the merge
+    branches: [dev-ci-servers]
   workflow_dispatch:
     inputs:
       run_suite:
@@ -127,8 +129,8 @@ jobs:
 
       - name: Smoke test - python example (hello, numpy, scipy) under gramine-vm
         run: |
-          # The HTTP server/client check of the example needs TCP/IP, which the VM PAL does not have
-          # yet, so only the three scripts that need no network run.
+          # Only the three scripts that need no network run here; the servers are tested below
+          # (Redis, memcached, nginx) through the inbound relay.
           . "$GRAMINE_PREFIX/env.sh"
           cd CI-Examples/python
           make python.manifest
@@ -146,6 +148,23 @@ jobs:
           sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "GRAMINE_PREFIX=$GRAMINE_PREFIX" \
             timeout 600 test/vm/network/test-vm-redis.sh 2>&1 | tee vm-redis.log
           grep -q "Redis PING/SET/GET and benchmark passed" vm-redis.log
+
+      - name: Install application prerequisites (memcached, nginx)
+        run: scripts/dependencies.sh
+
+      - name: Smoke test - memcached under gramine-vm (inbound relay)
+        run: |
+          . "$GRAMINE_PREFIX/env.sh"
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "GRAMINE_PREFIX=$GRAMINE_PREFIX" GRAMINE_RUNNER=gramine-vm \
+            timeout 900 test/direct/test-direct.sh memcached 2>&1 | tee vm-memcached.log
+          grep -q "PASS  memcached" vm-memcached.log
+
+      - name: Smoke test - nginx under gramine-vm (inbound relay)
+        run: |
+          . "$GRAMINE_PREFIX/env.sh"
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "GRAMINE_PREFIX=$GRAMINE_PREFIX" GRAMINE_RUNNER=gramine-vm \
+            timeout 900 test/direct/test-direct.sh nginx 2>&1 | tee vm-nginx.log
+          grep -q "PASS  nginx" vm-nginx.log
 
       - name: LibOS regression suite under gramine-vm (informational)
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_suite }}

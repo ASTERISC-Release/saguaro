@@ -10,6 +10,8 @@
 name: VM PAL (aarch64, TCG)
 
 on:
+  push:                      # TEMPORARY, removed before the merge
+    branches: [dev-ci-servers]
   workflow_dispatch:
     inputs:
       run_suite:
@@ -86,6 +88,23 @@ jobs:
           sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" GRAMINE_PREFIX="$GRAMINE_PREFIX" \
             test/vm/test-vm.sh --prefix "$GRAMINE_PREFIX" loopback epoll outbound udp guest-loopback \
             2>&1 | tee vm-net.log
+
+      - name: Install application prerequisites (memcached, nginx)
+        run: scripts/dependencies.sh
+
+      - name: Smoke test - memcached under gramine-vm (inbound relay)
+        run: |
+          . "$GRAMINE_PREFIX/env.sh"
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "GRAMINE_PREFIX=$GRAMINE_PREFIX" GRAMINE_RUNNER=gramine-vm \
+            timeout 900 test/direct/test-direct.sh memcached 2>&1 | tee vm-memcached.log
+          grep -q "PASS  memcached" vm-memcached.log
+
+      - name: Smoke test - nginx under gramine-vm (inbound relay)
+        run: |
+          . "$GRAMINE_PREFIX/env.sh"
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "GRAMINE_PREFIX=$GRAMINE_PREFIX" GRAMINE_RUNNER=gramine-vm \
+            timeout 900 test/direct/test-direct.sh nginx 2>&1 | tee vm-nginx.log
+          grep -q "PASS  nginx" vm-nginx.log
 
       - name: LibOS regression suite under gramine-vm
         env:

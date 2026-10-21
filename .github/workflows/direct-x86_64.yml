@@ -8,12 +8,14 @@
 name: Direct PAL (x86_64)
 
 on:
+  push:                      # TEMPORARY, removed before the merge
+    branches: [dev-ci-servers]
   workflow_dispatch:
     inputs:
       suites:
-        description: "test/direct/test-direct.sh suites (default: PAL and LibOS regression and the python example; see test/direct/test-direct.sh --list for the other application suites)"
+        description: "test/direct/test-direct.sh suites (default: PAL and LibOS regression, the python, memcached and nginx examples; see test/direct/test-direct.sh --list for the other application suites)"
         required: false
-        default: "pal libos python"
+        default: "pal libos python memcached nginx"
       tdx_build:
         description: "Also compile the TDX PAL (build only: it cannot run without TDX hardware, and the td-shim link step of the install is skipped)"
         type: boolean
@@ -55,7 +57,7 @@ jobs:
 
       - name: Run the direct-PAL regression tests
         env:
-          SUITES: ${{ inputs.suites || 'pal libos python' }}   # via env, never interpolated into the script text
+          SUITES: ${{ inputs.suites || 'pal libos python memcached nginx' }}   # via env, never interpolated into the script text
         run: |
           export PATH="$HOME/.cargo/bin:$PATH"
           test/direct/test-direct.sh $SUITES
