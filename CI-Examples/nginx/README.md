@@ -1,62 +1,30 @@
 # Nginx
 
-This directory contains the Makefile and the template manifest for Nginx 1.22.0, built from source
-(the Makefile downloads it). Pass or fail status per backend: matrix in
-[`CI-Examples/README.md`](../README.md).
+Runs the Nginx 1.22.0 web server (built from source by the Makefile) on `127.0.0.1:8002` (HTTP) and `8444` (HTTPS, self-signed certificate).
 
-# Building
+## Prerequisites
 
-## Pre-requisites
+Packages `build-essential`, `libssl-dev` and `zlib1g-dev`.
 
-Install `build-essential`, `libssl-dev` and `zlib1g-dev` (Ubuntu). 
+## Run
 
-## Direct, VM, and SEV
+Install the backend first: [`Documentation/quickstart/`](../../Documentation/quickstart/README.md).
+
+```sh
+./exec.sh --direct      # builds, runs and checks; also: --vm, --sev, --sev-snp, --sgx, --vbs
+```
+
+By hand, the server in one terminal and the client in another:
 
 ```sh
 make
+make start-gramine-server       # VM and SEV: add GRAMINE=gramine-vm (or gramine-sev) GRAMINE_VM_INBOUND=8002:8002,8444:8444
+curl -s http://127.0.0.1:8002/random/10K.1.html | wc -c      # 10240
+curl -sk https://127.0.0.1:8444/random/10K.1.html | wc -c    # HTTPS
 ```
 
-## SGX
+`make check` starts the server, fetches pages and stops it (`make SGX=1`, `make VBS=1` for those backends).
 
-```sh
-make SGX=1
-```
+## Notes
 
-## VBS
-
-In WSL on an ARM64 or x64 Windows machine with VBS (`dev docs: vbs-enclave/manual.md`, "Makefile flow"):
-
-```sh
-make VBS=1
-```
-
-# Testing
-
-Start the server under `gramine-direct` in one terminal. It listens on `127.0.0.1:8002` (HTTP) and
-`8444` (HTTPS):
-
-```sh
-make start-gramine-server GRAMINE=<backend> GRAMINE_VM_INBOUND=8002:8002,8444:8444
-# `backend` can be gramine-vm, gramine-sev, or gramine-tdx
-```
-
-Note that for **VBS:** `make VBS=1 check` starts Nginx in an enclave and fetches the pages from Windows (HTTP only, on 8002; no SSL).
-
-Fetch a test page from another terminal. The page is 10 KiB of random data, so the expected output
-is the byte count:
-
-```sh
-curl -s http://127.0.0.1:8002/random/10K.1.html | wc -c        # expected: 10240
-curl -sk https://127.0.0.1:8444/random/10K.1.html | wc -c      # HTTPS, self-signed certificate
-```
-
-Stop the server with Ctrl-C. `../common_tools/benchmark-http.sh http://127.0.0.1:8002` runs a
-benchmark (needs wrk2).
-
-- **direct:** `gramine-direct ./nginx`. Verified on x86_64 and aarch64.
-- **vm:** `GRAMINE_RUNNER=gramine-vm test/direct/test-direct.sh nginx`, from the repository root (the VM forwards the server's port through its relay; nginx runs with `master_process off`). Verified on x86_64 and aarch64.
-- **sev:** not verified.
-- **tdx:** not verified.
-- **sgx:** not verified. The commands are given above.
-- **vbs:** `make VBS=1 check`. Verified on ARM64 and x64.
-
+- Under VBS only HTTP on port 8002 is served (no SSL).
