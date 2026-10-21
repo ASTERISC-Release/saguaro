@@ -44,7 +44,7 @@ for s in "${SUITES[@]}"; do
     case $s in
     libos)
         (cd "$REPO/libos/test/regression" && GRAMINE_VM=1 GRAMINE_CPU_NUM=${GRAMINE_CPU_NUM:-2} \
-            gramine-test pytest -- -q -rfEsxX --tb=short -p no:cacheprovider test_libos.py) || rc=1 ;;
+            gramine-test pytest -- -q -rfEsxX --tb=short -p no:cacheprovider test_libos.py ${PYTEST_ARGS:-}) || rc=1 ;;
     examples)
         "$REPO/tools/run-vm-aarch64-examples.sh" || rc=1 ;;
     hello)

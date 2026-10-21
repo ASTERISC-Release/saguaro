@@ -22,6 +22,7 @@ Open items by architecture and host. Longer lists are kept with the maintainers'
 ## AArch64
 
 - `direct`: the `kill11` hang; longer soak runs and real applications (openssh, dropbear); ABI-conformance tests.
+- `vm` under TCG (software emulation, the `VM PAL (aarch64, TCG)` workflow): `test_604_sigreturn_regs` hangs on the hosted arm64 runner (it passes under TCG on a local aarch64 machine, and under KVM); it is deselected in the workflow until the cause is found (a timing-dependent asynchronous-signal return, x17 and the flags).
 - `vm`: the guest cannot map distribution programs (`gcc`, `openjdk`, `pytorch`, `python` fail); the pipe round trips at 4 vCPUs.
 - Graphics: several GPU nodes, Vulkan and CUDA untested; `vm` with graphics is not available.
 - CPU feature words: SVE, PAC, BTI and MTE stay masked until the LibOS supports them.
