@@ -67,8 +67,8 @@ avoided the failure.
 `AMDGPU_GEM_OP`'s output, and refuses the user-pointer objects (`GEM_USERPTR`), whose memory
 cannot be bounced. The fixup records keep the slot each pointer was rewritten in, so the
 application's values are restored in every bounced copy before anything is copied back (the
-query items are both an output and hold pointers). The layouts come from `drm/i915_drm.h` and
-`drm/amdgpu_drm.h`; the set of requests from LibOS traces of the examples.
+query items are both an output and hold pointers). The layouts come from the kernel's uapi
+headers (the i915 and amdgpu DRM headers); the set of requests from LibOS traces of the examples.
 
 **Evidence** (2026-10-20, the container of `quickstart/graphics-vm.md`, Mesa 25.2.8, the
 manifests' default for the multiprocess key, an Intel UHD 770 and an AMD Radeon RX 9070):
