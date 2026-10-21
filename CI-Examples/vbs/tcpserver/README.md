@@ -1,34 +1,15 @@
 # TCP server (VBS enclave)
 
-A TCP server in the enclave. It listens on `127.0.0.1:18080` through the host's sockets, answers
-three clients with `echo from the enclave: <request>` and exits. `client.ps1` is the client for
-PowerShell on Windows. The example is for the VBS backend only. Pass or fail status: matrix in
-[`CI-Examples/README.md`](../../README.md).
+A TCP server that listens on `127.0.0.1:18080` through the host's sockets, answers three clients with `echo from the enclave: <request>` and exits. VBS only.
 
-# Building
+## Run
 
-Install the VBS backend first (`dev docs: vbs-enclave/manual.md`) and run all commands in this directory.
-
-## VBS
+In WSL on a Windows machine with VBS enabled. Install the backend first: [`Documentation/quickstart/vbs-windows.md`](../../../Documentation/quickstart/vbs-windows.md) (machine setup: [`vbs-enable.md`](../../../Documentation/quickstart/vbs-enable.md)).
 
 ```sh
-make VBS=1
+make VBS=1              # build and sign
+make VBS=1 check        # run and check
+gramine-vbs tcpserver   # by hand; then run .\client.ps1 three times in PowerShell
 ```
 
-The example does not run under direct, VM or SEV; `make` without `VBS=1` says so.
-
-# Testing
-
-```sh
-make VBS=1 check
-```
-
-To run the server by hand, then connect from another PowerShell window, three times:
-
-```sh
-gramine-vbs tcpserver
-```
-
-```powershell
-.\client.ps1
-```
+`../exec.sh --vbs` builds, runs and checks all the VBS examples; `make` without `VBS=1` says that the example does not run elsewhere.

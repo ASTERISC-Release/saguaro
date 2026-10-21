@@ -1,30 +1,15 @@
 # Python (VBS enclave)
 
-A small Python script (`hello.py`) that prints the Python version, a SHA-256 digest and the result
-of three threads. The example is for the VBS backend only. For the full Python example see
-`../../python/README.md`. Pass or fail status: matrix in
-[`CI-Examples/README.md`](../../README.md).
+Runs `hello.py`: prints the Python version, a SHA-256 digest and the result of three threads. VBS only; the full Python example is `../../python/`.
 
-# Building
+## Run
 
-Install the VBS backend first (`dev docs: vbs-enclave/manual.md`) and run all commands in this directory.
-
-## VBS
+In WSL on a Windows machine with VBS enabled. Install the backend first: [`Documentation/quickstart/vbs-windows.md`](../../../Documentation/quickstart/vbs-windows.md) (machine setup: [`vbs-enable.md`](../../../Documentation/quickstart/vbs-enable.md)).
 
 ```sh
-make VBS=1
+make VBS=1              # build and sign
+make VBS=1 check        # run and check
+gramine-vbs python      # by hand
 ```
 
-The example does not run under direct, VM or SEV; `make` without `VBS=1` says so.
-
-# Testing
-
-```sh
-make VBS=1 check
-```
-
-The check looks for `Python 3.12.7` and prints `[ Success ]`. To run the script by hand:
-
-```sh
-gramine-vbs python
-```
+`../exec.sh --vbs` builds, runs and checks all the VBS examples; `make` without `VBS=1` says that the example does not run elsewhere.

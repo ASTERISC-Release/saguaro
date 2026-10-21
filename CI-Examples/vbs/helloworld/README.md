@@ -1,31 +1,15 @@
 # Hello World (VBS enclave)
 
-A program that prints `Hello, world from a VBS enclave`, its process id and the number of its
-arguments. The example is for the VBS backend only. For the same program on the other backends see
-`../../helloworld/README.md`. Pass or fail status: matrix in
-[`CI-Examples/README.md`](../../README.md).
+Prints `Hello, world from a VBS enclave`, its process id and its argument count. VBS only; the same program for the other backends is in `../../helloworld/`.
 
-# Building
+## Run
 
-Install the VBS backend first (`dev docs: vbs-enclave/manual.md`) and run all commands in this directory.
-
-## VBS
+In WSL on a Windows machine with VBS enabled. Install the backend first: [`Documentation/quickstart/vbs-windows.md`](../../../Documentation/quickstart/vbs-windows.md) (machine setup: [`vbs-enable.md`](../../../Documentation/quickstart/vbs-enable.md)).
 
 ```sh
-make VBS=1
+make VBS=1              # build and sign
+make VBS=1 check        # run and check
+gramine-vbs helloworld  # by hand
 ```
 
-The example does not run under direct, VM or SEV; `make` without `VBS=1` says so.
-
-# Testing
-
-```sh
-make VBS=1 check
-```
-
-The check expects the line `Hello, world from a VBS enclave (pid N, 0 arguments)` and prints
-`[ Success ]`. To run the program by hand:
-
-```sh
-gramine-vbs helloworld
-```
+`../exec.sh --vbs` builds, runs and checks all the VBS examples; `make` without `VBS=1` says that the example does not run elsewhere.
