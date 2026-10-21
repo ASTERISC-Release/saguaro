@@ -890,6 +890,12 @@ noreturn int pal_start_continue(void* cmdline_) {
              * are reserved physical ranges inside the RAM part (the LibOS refuses fixed mappings
              * there), which does not shorten the range. */
             g_pal_public_state.memory_address_end = (void*)MEMORY_ADDRESS_SPACE_LIMIT;
+            /* The LibOS's own mappings (thread stacks, the slab, checkpoints) come from the top
+             * 4 GiB; the application's stay below, contiguous as under Linux. Interleaved, a
+             * read running a few bytes past the end of an application mapping (Wine does that)
+             * lands on a LibOS page, which user code cannot touch (dev docs:
+             * proton-vm/FINDINGS.md, 2026-10-20). */
+            g_pal_public_state.internal_mem_size = 4UL << 30;
             // log_always("Application address space: up to %p (demand-paged processes; guest RAM "
             //            "ends at %p%s)", g_pal_public_state.memory_address_end,
             //            g_vm_physical_memory_end, g_graphics_configured ? "; graphics arenas" : "");

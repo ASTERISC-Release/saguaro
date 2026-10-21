@@ -155,6 +155,12 @@ struct pal_public_state {
                                                  and munmap() (VM PAL, multiprocess support) */
     void* memory_address_start;             /*!< usable memory start address */
     void* memory_address_end;               /*!< usable memory end address */
+    size_t internal_mem_size;               /*!< size of the range below memory_address_end kept
+                                                 for the LibOS's own mappings (thread stacks, the
+                                                 slab), so that they do not interleave with the
+                                                 application's; 0: no such range. Set by the VM
+                                                 PAL (multiprocess), where user code cannot touch
+                                                 LibOS pages and a read past a mapping may. */
     uintptr_t early_libos_mem_range_start;  /*!< start of memory usable before checkpoint restore */
     uintptr_t early_libos_mem_range_end;    /*!< end of memory usable before checkpoint restore */
     void* shared_address_start;             /*!< usable shared memory start address */

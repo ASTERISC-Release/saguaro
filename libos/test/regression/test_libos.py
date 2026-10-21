@@ -1037,6 +1037,13 @@ class TC_30_Syscall(RegressionTestCase):
         stdout, _ = self.run_binary(['munmap'])
         self.assertIn('TEST OK', stdout)
 
+    def test_05B_vma_neighbor(self):
+        # a read past the end of a mapping reads the neighbour or raises the application's
+        # SIGSEGV; it must not end the process because the neighbour is the LibOS's own memory
+        stdout, _ = self.run_binary(['vma_neighbor'])
+        self.assertIn('vma_neighbor: ', stdout)
+        self.assertIn('TEST OK', stdout)
+
     def test_060_sigaltstack(self):
         stdout, _ = self.run_binary(['sigaltstack'])
 

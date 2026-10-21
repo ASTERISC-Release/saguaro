@@ -197,6 +197,7 @@ tests = {
     'unix': {},
     'unix_fdpass': {},
     'vfork_and_exec': {},
+    'vma_neighbor': {},
     'xattr_misc': {},
 }
 

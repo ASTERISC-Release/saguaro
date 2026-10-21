@@ -1174,18 +1174,46 @@ static int bkeep_mmap_any_excluding_user_reserved(void* bottom_addr, void* top_a
                                    comment, ret_val_ptr);
 }
 
+/* Where the PAL names a size (`internal_mem_size`), the LibOS's own mappings (VMA_INTERNAL: thread
+ * stacks, the slab, checkpoints, PAL memory) are taken from that many bytes at the top of the
+ * address space and the application's from below it, so that an application mapping is never
+ * followed by a LibOS page: a read running a few bytes past a mapping's end then reaches the next
+ * application mapping or nothing, as under Linux, never memory that user code may not touch.
+ * Either side falls back to the whole range when its own is full. Returns the end of the address
+ * space when there is no such range. */
+static uintptr_t internal_range_bottom(void) {
+    uintptr_t start = (uintptr_t)g_pal_public_state->memory_address_start;
+    uintptr_t end = (uintptr_t)g_pal_public_state->memory_address_end;
+    size_t size = g_pal_public_state->internal_mem_size;
+    if (!size || end - start <= 2 * size)
+        return end;
+    return ALLOC_ALIGN_DOWN(end - size);
+}
+
 int bkeep_mmap_any(size_t length, int prot, int flags, struct libos_handle* file, uint64_t offset,
                    const char* comment, void** ret_val_ptr) {
-    return bkeep_mmap_any_excluding_user_reserved(g_pal_public_state->memory_address_start,
-                                                   g_pal_public_state->memory_address_end, length,
-                                                   prot, flags, file, offset, comment, ret_val_ptr);
+    void* start = g_pal_public_state->memory_address_start;
+    void* end = g_pal_public_state->memory_address_end;
+    void* split = (void*)internal_range_bottom();
+    if (split < end) {
+        int ret = flags & VMA_INTERNAL
+                  ? bkeep_mmap_any_excluding_user_reserved(split, end, length, prot, flags, file,
+                                                           offset, comment, ret_val_ptr)
+                  : bkeep_mmap_any_excluding_user_reserved(start, split, length, prot, flags, file,
+                                                           offset, comment, ret_val_ptr);
+        if (ret >= 0)
+            return ret;
+    }
+    return bkeep_mmap_any_excluding_user_reserved(start, end, length, prot, flags, file, offset,
+                                                   comment, ret_val_ptr);
 }
 
 int bkeep_mmap_any_aslr(size_t length, int prot, int flags, struct libos_handle* file,
                         uint64_t offset, const char* comment, void** ret_val_ptr) {
     int ret;
+    void* top = MIN(g_aslr_addr_top, (void*)internal_range_bottom());
     ret = bkeep_mmap_any_excluding_user_reserved(g_pal_public_state->memory_address_start,
-                                                  g_aslr_addr_top, length, prot, flags, file,
+                                                  top, length, prot, flags, file,
                                                   offset, comment, ret_val_ptr);
     if (ret >= 0) {
         return ret;

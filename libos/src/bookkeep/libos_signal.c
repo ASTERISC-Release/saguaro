@@ -370,7 +370,19 @@ static void memfault_upcall(bool is_in_pal, uintptr_t addr, PAL_CONTEXT* context
     struct libos_vma_info vma_info;
     if (!lookup_vma((void*)addr, &vma_info)) {
         if (vma_info.flags & VMA_INTERNAL) {
-            internal_fault("Internal memory fault with VMA", addr, context);
+            /* User code touched memory of the LibOS itself (a read running past the end of its
+             * own mapping, for example). For the application that memory does not exist: this
+             * is its SIGSEGV, not a fault of the LibOS (the LibOS's own faults took the branch
+             * above). */
+            log_debug("user access to the LibOS's memory at 0x%08lx ('%s', IP = 0x%08lx)", addr,
+                      vma_info.comment, pal_context_get_ip(context));
+            if (vma_info.file)
+                put_handle(vma_info.file);
+            info.si_signo = SIGSEGV;
+            info.si_code = SEGV_MAPERR;
+            force_signal(&info);
+            handle_signal(context);
+            return;
         }
         struct libos_handle* file = vma_info.file;
         if (file && file->type == TYPE_CHROOT) {
