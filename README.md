@@ -95,8 +95,7 @@ Guides for graphics and for the RISC-V cross-build are listed in the [quickstart
 [INSTALL.md](INSTALL.md) is the complete reference
 for building and installing, on a host or in the supplied containers.
 
-`CI-Examples/` contains ready-made applications. To check whether your own application is likely
-to run, see [Will my application run?](Documentation/will-it-run.md).
+`CI-Examples/` contains ready-made applications.
 
 ## Contributing
 
