@@ -81,8 +81,7 @@ Per-cell details, build options and verification status are in the development n
 
 ## Getting Started
 
-Each quickstart guide goes from a fresh checkout to a running example, with the commands verified
-on a machine of that platform:
+Each quickstart guide goes from a checkout to a running example:
 
 - **Containerized userspace** (`direct`): [Documentation/quickstart/direct.md](Documentation/quickstart/direct.md)
 - **Micro-virtual machine** (`vm`): [Documentation/quickstart/vm.md](Documentation/quickstart/vm.md)

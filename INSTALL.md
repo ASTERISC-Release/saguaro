@@ -1,6 +1,6 @@
 # Installing
 
-Short, verified walk-throughs per platform (direct, vm, graphics, RISC-V, Windows VBS, TDX/SGX) are
+Short walk-throughs per platform (direct, vm, graphics, RISC-V, Windows VBS, TDX/SGX) are
 in the [quickstart guides](Documentation/quickstart/README.md); this page is the complete
 reference.
 

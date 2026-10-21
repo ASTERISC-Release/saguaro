@@ -1,7 +1,6 @@
 # test/: map
 
-Written 2026-10-18 (paths updated for phase 2) from file headers and the runners' usage text; the helper scripts were not
-read in full and nothing here was run for this map. "Not confirmed" marks a mapping taken from a
+Compiled from the file headers and the runners' usage text. "Not confirmed" marks a mapping taken from a
 header alone or not found in any runner, workflow or document. The refactor plan is
 `dev docs: test-layout/PLAN.md`.
 
