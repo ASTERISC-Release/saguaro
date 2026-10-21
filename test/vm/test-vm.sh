@@ -43,6 +43,7 @@ for s in "${SUITES[@]}"; do
     echo "=== $s"
     case $s in
     libos)
+        [ -z "${PYTEST_ARGS:-}" ] || echo "pytest arguments: $PYTEST_ARGS"
         (cd "$REPO/libos/test/regression" && GRAMINE_VM=1 GRAMINE_CPU_NUM=${GRAMINE_CPU_NUM:-2} \
             gramine-test pytest -- -q -rfEsxX --tb=short -p no:cacheprovider test_libos.py ${PYTEST_ARGS:-}) || rc=1 ;;
     examples)

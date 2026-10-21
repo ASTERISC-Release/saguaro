@@ -117,7 +117,7 @@ jobs:
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_suite }}
         run: |
           . "$GRAMINE_PREFIX/env.sh"
-          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" \
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "PYTEST_ARGS=$PYTEST_ARGS" \
             test/vm/test-vm.sh --prefix "$GRAMINE_PREFIX" libos 2>&1 | tee vm-libos.log
           exit "${PIPESTATUS[0]}"
 
