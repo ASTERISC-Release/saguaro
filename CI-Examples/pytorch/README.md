@@ -1,60 +1,27 @@
 # PyTorch
 
-This directory contains steps and artifacts to run a PyTorch sample workload on Gramine. The
-example uses a pre-trained model for image classification. Pass or fail status per backend: matrix
-in [`CI-Examples/README.md`](../README.md).
+Classifies an image (`input.jpg`) with a pre-trained AlexNet model and writes the result to `result.txt`.
 
-# Building
-
-Install the backend first (`Documentation/quickstart/`) and run all commands in this directory.
-
-## Pre-requisites
-
-On a standard Ubuntu distribution:
+## Prerequisites
 
 ```sh
-sudo apt install libnss-mdns libnss-myhostname python3-pip lsb-release
+./install-prereqs.sh    # python3, venv, pip, lsb-release; the Makefile then installs CPU-only torch into ./my_venv (about 900 MB)
 ```
 
-The first two packages are DNS-resolver libraries. `pip` installs the Python packages, and the
-Makefile uses `lsb_release`.
+## Run
 
-## Direct, VM, and SEV
+Install the backend first: [`Documentation/quickstart/`](../../Documentation/quickstart/README.md).
 
 ```sh
-make
+./exec.sh --direct      # builds, runs and checks; also: --vm, --sev, --sev-snp, --sgx
 ```
 
-## SGX
+By hand:
 
 ```sh
-make SGX=1
-```
-
-The example has no VBS recipe.
-
-# Testing
-
-The workload reads `input.jpg` and writes what the classifier detects to `result.txt`
-(`./exec.sh --vm` runs it and checks that file):
-
-```sh
-gramine-direct ./pytorch ./pytorchexample.py
-```
-
-For the image that ships with the example, `result.txt` contains (the percentages differ slightly
-with the versions of `torch` and `torchvision`):
-
-```
-[('Labrador retriever', 41.58518600463867), ('golden retriever', 16.59165382385254), ('Saluki, gazelle hound', 16.286855697631836), ('whippet', 2.853914976119995), ('Ibizan hound, Ibizan Podenco', 2.3924756050109863)]
-```
-
-The other backends use the same arguments (SGX: not verified):
-
-```sh
-gramine-vm ./pytorch ./pytorchexample.py
-gramine-sev ./pytorch ./pytorchexample.py
-gramine-sgx ./pytorch ./pytorchexample.py    # SGX
+make                    # make SGX=1 for SGX
+gramine-direct ./pytorch ./pytorchexample.py     # or gramine-vm, gramine-sev, gramine-sgx
+cat result.txt          # first entry: Labrador retriever
 ```
 
 `python3 pytorchexample.py` runs the workload without Gramine.

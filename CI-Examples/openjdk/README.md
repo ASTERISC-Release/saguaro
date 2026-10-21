@@ -1,41 +1,28 @@
-# Java example
+# OpenJDK
 
-This directory contains an example for running OpenJDK in Gramine, including the Makefile and a
-template for generating the manifest. Pass or fail status per backend: matrix in
-[`CI-Examples/README.md`](../README.md).
+Runs Java (`MultiThreadMain`, a multi-threaded program) under Gramine.
 
-# Building
-
-Install the backend first (`Documentation/quickstart/`) and run all commands in this directory.
-Install OpenJDK (Ubuntu):
+## Prerequisites
 
 ```sh
-sudo apt-get install openjdk-11-jdk
+./install-prereqs.sh    # installs OpenJDK 17, or 21, or 11 (the first one available in apt)
 ```
 
-## Direct, VM, and SEV
+## Run
+
+Install the backend first: [`Documentation/quickstart/`](../../Documentation/quickstart/README.md).
 
 ```sh
-make
+./exec.sh --direct      # builds, runs and checks; also: --vm, --sev, --sev-snp, --sgx
 ```
 
-## SGX
+By hand:
 
 ```sh
-make SGX=1
+make                    # make SGX=1 for SGX
+gramine-direct java MultiThreadMain     # or gramine-vm, gramine-sev; SGX: gramine-sgx java -Xmx8G MultiThreadMain
 ```
 
-The example has no VBS recipe.
+## Notes
 
-# Testing
-
-The program `MultiThreadMain` starts several threads:
-
-```sh
-gramine-direct java MultiThreadMain
-gramine-vm java MultiThreadMain             # VM
-gramine-sev java MultiThreadMain            # SEV
-gramine-sgx java -Xmx8G MultiThreadMain     # SGX; not verified
-```
-
-Under SGX, `-Xmx8G` is needed unless the enclave size is 64G or more.
+- Under SGX `-Xmx8G` is needed unless the enclave size is 64G or more (the manifest sets 16G).
