@@ -6,7 +6,7 @@ tooling. This document lists what the tree adds, grouped by area. Each area stat
 design decisions that matter, the findings worth recording, how to use it and its limits. Status words follow
 [README.md](README.md): *done* (works and is tested here), *experimental* (works in the tested setups, with known
 gaps), *planned*. The whole tree is experimental and not for production use. Open items are in
-[TODO.md](TODO.md); measured results of the examples are in [CI-Examples/RESULTS.md](CI-Examples/RESULTS.md).
+[Documentation/TODO.md](Documentation/TODO.md); measured results of the examples are in [CI-Examples/RESULTS.md](CI-Examples/RESULTS.md).
 
 ## Platform support
 

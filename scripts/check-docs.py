@@ -24,7 +24,7 @@ os.chdir(ROOT)
 
 # Dated logs (kept as written) and the historical plan are not checked: they name things as they were.
 DEFAULT_GLOBS = [
-    'README.md', 'INSTALL.md', 'AGENTS.md', 'CHANGELOG.md', 'TODO.md',
+    'README.md', 'INSTALL.md', 'AGENTS.md', 'CHANGELOG.md', 'Documentation/TODO.md',
     'CI-Examples/README.md', 'CI-Examples/RESULTS.md',
     'Documentation/quickstart/*.md',
     'Documentation/README.md', 'Documentation/FEATURES.md',

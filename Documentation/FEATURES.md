@@ -126,7 +126,7 @@ production use.
 - **Quickstart guides** (done). One guide per platform, with the commands run on a machine of that platform; the
   container is the only route except Windows VBS, and `./exec.sh` runs the examples.
   `Documentation/quickstart/`
-- **Brief public documents** (done). `CHANGELOG.md` (what the tree adds, by area) and `TODO.md` (open items). The plans,
+- **Brief public documents** (done). `CHANGELOG.md` (what the tree adds, by area, at the top of the repository) and `TODO.md` (open items, in this folder). The plans,
   findings and test records of every topic are in a private repository.
 
 ### Inherited

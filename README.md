@@ -77,7 +77,7 @@ on x86_64, AArch64 and RISC-V, so that the architecture-specific parts can be co
 | `sev` (AMD SEV)                 | ➖           | ⚠️    | ➖      | ➖            |
 | `vbs` (Windows VBS enclaves)    | ⚠️           | ⚠️    | ⚠️      | ➖            |
 
-Per-cell details, build options and verification status are in the development notes (a private repository; see [CHANGELOG.md](CHANGELOG.md) and [TODO.md](TODO.md) for the public summary).
+Per-cell details, build options and verification status are in the development notes (a private repository; see [CHANGELOG.md](CHANGELOG.md) and [TODO.md](Documentation/TODO.md) for the public summary).
 
 ## Getting Started
 
