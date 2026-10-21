@@ -50,9 +50,8 @@ SGX); a failure not listed there is new.
 - **The manifest must exist** in the current directory: run `make` in the example first. A missing manifest is reported
   by `gramine-vm` as a relay failure; read the last line of the message.
 - **Graphics under the VM:** export `QEMU_PATH=<qemu-tirith>/build/qemu-system-x86_64`; create the container with
-  `DISPLAY` set (`DISPLAY=:0 container/run.sh`) and mount the QEMU checkout with `QEMU_TIRITH_DIR`. Read the "Limits"
-  of `Documentation/quickstart/graphics-vm.md`: a graphics manifest without `sys.experimental__multiprocess = false`
-  may show no window.
+  `DISPLAY` set (`DISPLAY=:0 container/run.sh`) and mount the QEMU checkout with `QEMU_TIRITH_DIR`. Run one graphics
+  VM at a time. Details: `Documentation/GRAPHICS.md`.
 - **SGX and rootless podman:** the enclave devices need the `exec` bind mount that `container/run.sh` already uses.
 - **VBS from WSL:** run `gramine-vbs`, `make VBS=1` and `./exec.sh --vbs` in the foreground of the shell; a detached
   process has no Windows interop and fails at the Windows step.
