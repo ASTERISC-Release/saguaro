@@ -637,6 +637,26 @@ long libos_syscall_lseek(int fd, off_t offset, int origin) {
         return -EBADF;
 
     off_t ret = 0;
+#ifdef ENABLE_GRAPHICS
+    if (hdl->type == TYPE_HOST || hdl->type == TYPE_HOST_IDENTITY) {
+        /* A forwarded host object has no `fs`: the host seeks (libdrm sizes a dma-buf with
+         * lseek(SEEK_END)). A TYPE_HOST handle sits at host fd + fs_offset (taken above); an
+         * identity handle (the graphics library registered the raw host number as its own fd)
+         * sits at the raw number, and the listener subtracts fs_offset from what it gets. */
+        uint64_t host_arg = hdl->type == TYPE_HOST_IDENTITY ? (uint64_t)fd + fs_offset
+                                                             : (uint64_t)fd;
+        put_handle(hdl);
+        long _offset = libos_syscall_acquire_libos_lock();
+        comm_page_t* c = comm_page(_offset);
+        c->p1 = host_arg;
+        c->p2 = (uint64_t)offset;
+        c->p3 = (uint64_t)origin;
+        c->req_bit = LSEEK;
+        retval = (long)comm_sync_notify(c);
+        libos_syscall_relinquish_libos_lock(_offset);
+        return retval;
+    }
+#endif
     if (hdl->is_dir) {
         ret = do_lseek_dir(hdl, offset, origin);
         goto out;

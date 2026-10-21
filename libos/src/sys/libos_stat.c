@@ -105,8 +105,12 @@ long libos_syscall_fstat(int fd, struct stat* stat) {
         return -EFAULT;
 
     #ifdef ENABLE_GRAPHICS
-        if(hdl->type == TYPE_HOST)
+        if(hdl->type == TYPE_HOST || hdl->type == TYPE_HOST_IDENTITY)
         {
+            /* a forwarded host object has no `fs`; an identity handle sits at the raw host
+             * number and the listener subtracts fs_offset (as for lseek) */
+            uint64_t host_arg = hdl->type == TYPE_HOST_IDENTITY ? (uint64_t)fd + fs_offset
+                                                                 : (uint64_t)fd;
             long _offset = libos_syscall_acquire_libos_lock();
             comm_page_t* c = comm_page(_offset);
             struct gbounce* b = graphics_bounce(_offset);
@@ -117,7 +121,7 @@ long libos_syscall_fstat(int fd, struct stat* stat) {
                 put_handle(hdl);
                 return -ENOMEM;
             }
-            c->p1 = (uint64_t) fd;
+            c->p1 = host_arg;
             c->p2 = stat_pa;
             __sync_synchronize();
             c->req_bit = FSTAT;
