@@ -10,8 +10,6 @@
 name: VM PAL (aarch64, TCG)
 
 on:
-  push:                      # TEMPORARY, removed before the merge
-    branches: [dev-ci-servers]
   workflow_dispatch:
     inputs:
       run_suite:
