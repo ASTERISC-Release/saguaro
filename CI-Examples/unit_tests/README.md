@@ -30,5 +30,5 @@ The `multi-thread` and `networks` suites also run from the repository root: `tes
 
 ## Notes
 
-- `make check` in `mremap/`, `multi-thread/` and `align_test/` compares the output with `Hello, world`, which none of these programs prints, so it fails; use `exec.sh` or the commands above (the Makefiles need a fix).
+- `make check` in `mremap/` and `multi-thread/` runs the programs and fails on a non-zero exit status or a missing `ALL IN-PLACE TESTS PASSED`; `align_test/` has no `check` (a manual probe).
 - `networks/Makefile` builds a variant that links the shared GL stack when `../../../../sharedgl/build` exists, and the plain-sockets variant otherwise.

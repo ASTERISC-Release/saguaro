@@ -87,8 +87,9 @@ endif
 
 .PHONY: check
 check: all
-	$(GRAMINE) helloworld > OUTPUT
-	echo "Hello, world" | diff OUTPUT -
+	$(GRAMINE) thread-tls
+	$(GRAMINE) thread-rwlock
+	$(GRAMINE) thread-stress
 	@echo "[ Success ]"
 
 .PHONY: clean

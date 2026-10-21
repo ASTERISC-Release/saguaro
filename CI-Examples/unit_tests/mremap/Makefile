@@ -60,7 +60,7 @@ endif
 .PHONY: check
 check: all
 	$(GRAMINE) helloworld > OUTPUT
-	echo "Hello, world" | diff OUTPUT -
+	grep -q "ALL IN-PLACE TESTS PASSED" OUTPUT
 	@echo "[ Success ]"
 
 .PHONY: clean

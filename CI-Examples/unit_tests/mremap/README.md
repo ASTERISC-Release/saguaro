@@ -7,4 +7,4 @@ make
 gramine-direct helloworld        # prints "ALL IN-PLACE TESTS PASSED"
 ```
 
-`../exec.sh --direct` (or `--vm`, `--sev`, `--sev-snp`) builds, runs and checks it. `make check` here compares the output with `Hello, world` and fails; it needs a Makefile fix.
+`../exec.sh --direct` (or `--vm`, `--sev`, `--sev-snp`) builds, runs and checks it. `make check` here runs it and requires `ALL IN-PLACE TESTS PASSED`.
