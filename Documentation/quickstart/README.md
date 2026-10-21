@@ -16,7 +16,7 @@ applicable.
 | `gramine-vm` with graphics redirection: glxgears, Quake II (OpenGL, Vulkan) | ⚠️ | ⚠️ | 🛫 | ❌ | [graphics-vm.md](graphics-vm.md) |
 | Windows VBS enclaves (`gramine-vbs`): hello world, Python, attestation | ⚠️ (Windows 11 x64) | ⚠️ (Windows 11 x64) | ⚠️ (Windows 11 ARM64) | ➖ | [vbs-windows.md](vbs-windows.md); machine setup: [vbs-enable.md](vbs-enable.md) |
 | AMD SEV-SNP (`gramine-sev`): hello world, regression tests, attestation | ➖ | ⚠️ | ➖ | ➖ | [sev.md](sev.md) |
-| Intel SGX (verified 2026-10-20) and TDX (inherited; not verified here) | ✅ | ➖ | ➖ | ➖ | [tdx-sgx.md](tdx-sgx.md) |
+| Intel SGX and TDX | ⚠️ | ➖ | ➖ | ➖ | [tdx-sgx.md](tdx-sgx.md) |
 
 ## The route of all guides
 
@@ -49,8 +49,8 @@ applicable.
 - **A RISC-V build**, without RISC-V hardware: [riscv.md](riscv.md).
 - **An application protected from Windows itself**, on an ARM64 Windows 11 PC, in WSL (the one guide without the container):
   [vbs-windows.md](vbs-windows.md).
-- **Intel confidential computing**: [tdx-sgx.md](tdx-sgx.md). SGX is verified (2026-10-20: the
-  container route, `scripts/install.sh --sgx`, `./exec.sh --sgx`); TDX is pointers to the inherited
-  documents.
+- **Intel confidential computing**: [tdx-sgx.md](tdx-sgx.md). SGX: the container route,
+  `scripts/install.sh --sgx`, `./exec.sh --sgx`. TDX: `scripts/install.sh --vm --tdx` and `gramine-tdx`; the
+  examples that run on SEV also run on TDX.
 - **AMD confidential computing** (SEV-SNP, with attestation): [sev.md](sev.md). It needs an
   EPYC host with SEV-SNP and access to `/dev/sev`.

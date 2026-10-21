@@ -8,7 +8,7 @@ Open items by architecture and host. Longer lists are kept with the maintainers'
 - `vm`: multi-vCPU performance at 2 and 4 vCPUs (fork cost, TLB shootdowns, scheduler lock contention); robust mutex for the System V shared tables.
 - `vm` with graphics: **the graphics examples show no window under the default `sys.experimental__multiprocess` (Intel: the i915 ioctl pointers `GETPARAM`, `QUERY`, `EXECBUFFER2` are not translated by the bounce path; AMD EGL: memory fault); workaround `sys.experimental__multiprocess = false` in the manifest (see `Documentation/quickstart/graphics-vm.md`)**; present events and a non-flipping blit for Vulkan, idle CPU of the listener, SuperTuxKart start hang, sound.
 - CI for `sev` and other hardware (planned, not started): no self-hosted runner is registered. Plan: no automatic runs (no `pull_request` workflow may use a self-hosted label); maintainer-approved manual runs only, after reading everything the run executes (`.github/`, `container/`, `scripts/`, `test/sev/`); a dedicated unprivileged user and an ephemeral runner on the hardware host; the repository setting 'Require approval for all outside collaborators' and read-only workflow permissions before the repository is made public; consider a private mirror repository for the runner.
-- `sev`: trusted files, Secure TSC; `sgx`: remote attestation (AESM, PCCS) and the `ra-tls` examples; `tdx`: never run on this tree's hardware, needs `td-shim` and a TDX QEMU.
+- `sev`: trusted files, Secure TSC; `sgx`: remote attestation (AESM, PCCS) and the `ra-tls` examples.
 - Proton (Wine, DXVK) under `gramine-vm`: phase 1 and later, see the status in the development notes.
 
 ## AArch64

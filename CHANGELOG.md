@@ -18,7 +18,7 @@ gaps), *planned*. The whole tree is experimental and not for production use. Ope
 | `vm`, redirected graphics | experimental | experimental | planned | not available |
 | `sev`, `sev-snp` | not applicable | experimental | not applicable | not applicable |
 | `sgx` | experimental | not applicable | not applicable | not applicable |
-| `tdx` | experimental (untested here) | not applicable | not applicable | not applicable |
+| `tdx` | experimental | not applicable | not applicable | not applicable |
 | `vbs` | experimental | experimental | experimental | not applicable |
 
 ## Summary of results
@@ -276,4 +276,5 @@ memory and message queues, `faccessat2`, `getresuid`, more `prctl` options, file
 ## Inherited from upstream
 
 The manifest syntax, the TDX backend of gramine-tdx and the SGX tooling are inherited; the SGX documentation is
-unchanged except where noted above.
+unchanged except where noted above. The examples that run on SEV also run on TDX (`gramine-tdx`, built with
+`scripts/install.sh --vm --tdx`); `exec.sh` has no TDX backend.

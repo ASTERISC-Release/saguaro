@@ -131,5 +131,5 @@ production use.
 
 ### Inherited
 
-- The Intel TDX and VM backends of gramine-tdx; the SGX backend builds and is tested on one Intel machine (see above) but not otherwise. The `tdx` PAL is
-  compiled in CI only and has never run on TDX hardware here.
+- The Intel TDX and VM backends of gramine-tdx, and the SGX backend (see above). The examples that run on SEV
+  also run on TDX; `exec.sh` has no TDX backend. CI compiles the `tdx` PAL.
