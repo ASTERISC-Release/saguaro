@@ -627,12 +627,7 @@ sys.allowed_ioctls = [
 ]
 ```
 
-<div id="raw-device-ioctls">
-
-Raw device IOCTLs (`gramine-direct`)
-""
-
-</div>
+### Raw device IOCTLs (`gramine-direct`)
 
 ```
 sys.insecure__allow_raw_device_ioctl = [true|false]
@@ -658,12 +653,7 @@ IOCTLs on its character devices (major 195) that carry an fd.
 > this means submitting commands to it. File descriptors inside IOCTL arguments
 > are host file descriptors unless Gramine knows the IOCTL and translates them.
 
-<div id="host-unix-sockets">
-
-Host UNIX sockets (`gramine-direct`)
-""
-
-</div>
+### Host UNIX sockets (`gramine-direct`)
 
 ```
 sys.insecure__host_unix_sockets = ["[HOST PATH]", ...]
