@@ -98,34 +98,6 @@ for building and installing, on a host or in the supplied containers.
 `CI-Examples/` contains ready-made applications. To check whether your own application is likely
 to run, see [Will my application run?](Documentation/will-it-run.md).
 
-## Documentation
-
-Using this tree:
-
-- [Quickstart guides](Documentation/quickstart/README.md): one per platform.
-- [INSTALL.md](INSTALL.md): building, installing, containers, the RISC-V cross-build.
-- [Will my application run?](Documentation/will-it-run.md): the syscall profiler and the
-  tolerance check.
-- [Enabling VBS on a Windows machine](Documentation/quickstart/vbs-enable.md): the one-time setup (VBS, test signing,
-  Visual Studio, signing certificate).
-- Graphics: in `gramine-direct` (x86_64, AArch64) and in the `vm` PAL (x86_64); the guides are
-  [direct](Documentation/quickstart/graphics-direct.md) and [vm](Documentation/quickstart/graphics-vm.md),
-  the examples [CI-Examples/graphics/](CI-Examples/graphics/).
-
-Reference:
-
-- [Features](Documentation/FEATURES.md): what this tree adds to gramine-tdx; open items are in [TODO.md](TODO.md).
-- [Changelog](CHANGELOG.md) and [open items](TODO.md) of this tree.
-- [Results of the examples](CI-Examples/RESULTS.md).
-- [Upstream documentation](https://gramine.readthedocs.io) for features shared with Gramine
-  (manifest syntax and others); details may differ in this tree.
-
-Development:
-
-- [Documentation index](Documentation/README.md): what each document is, and which are inherited
-  from upstream.
-- Development documents (plans, logs, test results of every port) are kept in a separate private repository.
-
 ## Contributing
 
 Bug reports and pull requests are welcome through the GitHub repository. By
