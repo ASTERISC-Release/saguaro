@@ -110,9 +110,10 @@ Using this tree:
   Visual Studio, signing certificate).
 - Graphics: in `gramine-direct` (x86_64, AArch64) and in the `vm` PAL (x86_64); the guides are
   [direct](Documentation/quickstart/graphics-direct.md) and [vm](Documentation/quickstart/graphics-vm.md),
-  the examples [CI-Examples/graphics/](CI-Examples/graphics/); the architecture, the pointer
+  the examples [CI-Examples/graphics/](CI-Examples/graphics/); the two routes, the pointer
   table of the redirected route and the Proton game results are in
-  [Documentation/GRAPHICS.md](Documentation/GRAPHICS.md).
+  [Documentation/GRAPHICS.md](Documentation/GRAPHICS.md), with one summary page per topic in
+  [Documentation/graphics/](Documentation/graphics/README.md).
 
 Reference:
 
