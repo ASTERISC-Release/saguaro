@@ -117,7 +117,8 @@ backend_unavailable() {
         [ -e /dev/sev ] || { echo "no SEV device (/dev/sev) on this host"; return 0; }
         [ -r /dev/sev ] && [ -w /dev/sev ] || { echo "no read/write access to /dev/sev"; return 0; }
     fi
-    if [ "$b" = vm ] || [ "$b" = sev ]; then
+    # the aarch64 launcher falls back to software emulation (TCG) without /dev/kvm; x86_64 and SEV need KVM
+    if [ "$b" = sev ] || { [ "$b" = vm ] && [ "$(uname -m)" != aarch64 ]; }; then
         [ -r /dev/kvm ] && [ -w /dev/kvm ] || { echo "no read/write access to /dev/kvm"; return 0; }
     fi
     [ -x "$prefix/bin/$runner" ] || { echo "$runner not installed in $prefix (scripts/install.sh)"; return 0; }

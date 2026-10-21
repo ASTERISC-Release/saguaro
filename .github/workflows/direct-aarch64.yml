@@ -14,8 +14,6 @@
 name: Direct PAL (aarch64)
 
 on:
-  push:                      # TEMPORARY, removed before the merge
-    branches: [dev-ci-servers]
   workflow_dispatch:
     inputs:
       suites:

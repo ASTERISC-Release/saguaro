@@ -20,8 +20,6 @@
 name: VM PAL (x86_64)
 
 on:
-  push:                      # TEMPORARY, removed before the merge
-    branches: [dev-ci-servers]
   workflow_dispatch:
     inputs:
       run_suite:
