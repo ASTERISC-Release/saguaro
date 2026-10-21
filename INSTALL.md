@@ -131,7 +131,7 @@ Notes:
 
 - The images are `gramine-vm-aarch64` and `gramine-vm-x86_64` (`container/Containerfile.vm-*`, tags below);
   set `CONTAINER_NAME` / `IMAGE_NAME` for other names. A checkout in a folder named
-  `gramine-<name>` gets its own container and guest CID range (see `AGENTS.md`).
+  `gramine-<name>` gets its own container and guest CID range (see `Documentation/AGENTS.md`).
 - The container runs with `--cap-add ALL` (virtiofsd serves the container's `/` as the guest's `/`)
   and `seccomp=unconfined` (the direct PAL calls `personality()`, which the default profile blocks).
 - Images are tagged per Containerfile version (`gramine-vm-x86_64:cf-<first 12 digits of the Containerfile's sha256>`): checkouts whose Containerfiles differ (branches) get their own images and

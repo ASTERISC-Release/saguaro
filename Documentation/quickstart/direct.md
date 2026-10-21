@@ -21,7 +21,7 @@ Symbols as in [README.md](../../README.md):
 - A Linux host of the architecture to be tested (Intel x86_64, AMD64 or AArch64). The direct PAL
   needs no device: it also works inside a virtual machine or another container. RISC-V is covered
   by [riscv.md](riscv.md).
-- Checkout location: a folder `gramine-<name>/gramine-multiarch` (see `AGENTS.md`) keeps the
+- Checkout location: a folder `gramine-<name>/gramine-multiarch` (see `Documentation/AGENTS.md`) keeps the
   container names of several checkouts apart.
 
 # 1. Container and install
@@ -93,4 +93,4 @@ Each suite ends with a `PASS` or `FAIL` line. Logs are stored in `/tmp/gramine-m
   (`fs.mounts`); add the missing path, as the examples do. `make DEBUG=1` or
   `loader.log_level = "debug"` shows what the library OS looked for.
 - `container/run.sh` refuses a container that mounts a different checkout: name the folder
-  `gramine-<name>/gramine-multiarch` or set `GRAMINE_WORKSPACE` (see `AGENTS.md`).
+  `gramine-<name>/gramine-multiarch` or set `GRAMINE_WORKSPACE` (see `Documentation/AGENTS.md`).
