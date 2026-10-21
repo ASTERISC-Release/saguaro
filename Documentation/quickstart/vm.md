@@ -15,7 +15,9 @@ Symbols as in [README.md](../../README.md):
 ## Requirements
 
 - A **native** Linux machine of the same architecture with hardware virtualisation: `/dev/kvm`
-  readable and writable by the user. Emulation (TCG) is not supported, but it *might* work.
+  readable and writable by the user. On AArch64, without `/dev/kvm` the launcher falls back to QEMU's
+  software emulation (TCG, `-cpu max`; `GRAMINE_ACCEL` and `GRAMINE_CPU` override): the same suites pass, about
+  1.2 times slower for syscall-bound code and about 10 times slower for compute-bound code. On x86_64, KVM is required.
 - For guest networking: `/dev/vhost-vsock` (module `vhost_vsock`), also accessible to the user.
   - vsock is available on most recent Linux kernels; it is enabled with `sudo modprobe vhost_vsock`
     on the host.

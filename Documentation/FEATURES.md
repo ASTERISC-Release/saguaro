@@ -122,7 +122,7 @@ production use.
   runs the server examples under the VM), the `test/test-vm*.sh` scripts, `test/sev/test-sev.sh` and the VM skip list.
   `dev docs: multiarch.md`
 - **CI workflows** (done). Manual workflows for direct x86_64, direct AArch64, emulated RISC-V, the x86_64
-  VM PAL, SEV (self-hosted) and the documentation check under `.github/workflows/`. `dev docs: multiarch.md`
+  VM PAL, the AArch64 VM PAL under software emulation (TCG), SEV (self-hosted) and the documentation check under `.github/workflows/`. `dev docs: multiarch.md`
 - **RISC-V test guest** (done). `scripts/riscv64/` boots an Ubuntu guest in QEMU for the cross-built tests.
   `dev docs: riscv/`
 - **Quickstart guides** (done). One guide per platform; the container is the only route except Windows VBS, and

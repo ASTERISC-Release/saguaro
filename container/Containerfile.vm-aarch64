@@ -4,13 +4,12 @@
 # Development container for the aarch64 vm-PAL unikernel (dev docs: vm.md / dev docs: CHANGELOG.md). Parallel to the x86 `Containerfile`
 # (which targets the GPU/KVM/TDX Steam workflow); nothing here is shared.
 #
-# Target runtime is **KVM on a native aarch64 host** (`-accel kvm -cpu host`);
-# TCG is out of scope. The container is therefore useless for building/running
-# the VM on x86 -- it exists to give a headless aarch64 box the QEMU/virtiofsd
-# stack that the distro host does not ship.
+# Target runtime is **KVM on a native aarch64 host** (`-accel kvm -cpu host`). Without
+# /dev/kvm the launcher falls back to QEMU's software emulation (TCG, `-cpu max`): the same
+# tests pass, only slower. The container exists to give a headless aarch64 box the
+# QEMU/virtiofsd stack that the distro host does not ship.
 #
-# Build + start with container/run.sh
-# (they pass `--device /dev/kvm` which is mandatory for the runner).
+# Build + start with container/run.sh (it passes `--device /dev/kvm` when the device exists).
 #
 # Ubuntu 24.04 (noble), matching the x86 Containerfile's pinned base image:
 # the vm-PAL/LibOS build and the glibc/mbedtls subprojects are validated on

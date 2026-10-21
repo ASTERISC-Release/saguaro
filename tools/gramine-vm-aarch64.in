@@ -11,7 +11,8 @@
 #   * QEMU does not hand an ELF `-kernel` a device tree, so the machine DTB is dumped with the
 #     *same* -smp/-m/-accel/-cpu, repacked with dtc and loaded as a RAM blob at the DRAM base
 #     (the kernel takes its RAM size, CPU count and PSCI conduit from it)
-#   * KVM + `-cpu host` is the target (TCG is out of scope); no NUMA/hugepage DIMM split
+#   * KVM + `-cpu host` is the target; without a usable /dev/kvm the launcher falls back to TCG
+#     (`-accel tcg,thread=multi -cpu max`, see below); no NUMA/hugepage DIMM split
 #   * the guest powers itself off with PSCI SYSTEM_OFF, so QEMU's exit status is always 0: the
 #     guest's exit code is recovered from the "[ VM exited with code N ]" console line
 #
@@ -122,8 +123,18 @@ if [ ! -f "$LIBPAL_PATH" ]; then
     exit 2
 fi
 
-ACCEL=${GRAMINE_ACCEL:-kvm}
-CPU=${GRAMINE_CPU:-host}
+# KVM when /dev/kvm is usable, else TCG (software emulation: any aarch64 or x86_64 host, 10-100x
+# slower in theory; -cpu max because `host` needs KVM; the PAL needs at least ARMv8.1)
+if [ -z "${GRAMINE_ACCEL:-}" ]; then
+    if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
+        GRAMINE_ACCEL=kvm
+    else
+        GRAMINE_ACCEL=tcg,thread=multi
+        GRAMINE_CPU=${GRAMINE_CPU:-max}
+    fi
+fi
+ACCEL=$GRAMINE_ACCEL
+case $ACCEL in kvm*) CPU=${GRAMINE_CPU:-host} ;; *) CPU=${GRAMINE_CPU:-max} ;; esac
 QEMU_MACHINE="-machine virt,gic-version=3,highmem-ecam=off"
 # everything that shapes the DTB; the dump and the boot must agree on all of it
 QEMU_SHAPE="-accel $ACCEL -cpu $CPU -m $QEMU_MEM_SIZE -smp $QEMU_CPU_NUM"
@@ -159,7 +170,7 @@ trap 'exit 130' INT TERM
 $QEMU_PATH $QEMU_MACHINE $QEMU_SHAPE -nic none -machine dumpdtb="$WORK/virt.dtb" >/dev/null 2>&1 \
     && dtc -I dtb -O dtb -o "$WORK/virt-packed.dtb" "$WORK/virt.dtb" 2>/dev/null
 if [ ! -s "$WORK/virt-packed.dtb" ]; then
-    echo "gramine-vm: could not generate the machine DTB (is /dev/kvm available?)" >&2
+    echo "gramine-vm: could not generate the machine DTB (is /dev/kvm available? else set GRAMINE_ACCEL=tcg)" >&2
     exit 2
 fi
 

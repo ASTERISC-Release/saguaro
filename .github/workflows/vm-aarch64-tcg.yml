@@ -1,0 +1,105 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
+# The aarch64 VM PAL (gramine-vm) under QEMU software emulation (TCG).
+#
+# Hosted aarch64 runners have no usable KVM, so the launcher (tools/gramine-vm-aarch64.in) falls back to
+# `-accel tcg,thread=multi -cpu max` by itself. The aarch64 VM PAL is built natively with
+# scripts/install.sh --vm (no cross toolchain exists in the repository), hence the arm64 runner.
+#
+# Manual trigger only (Actions tab -> "VM PAL (aarch64, TCG)" -> Run workflow).
+name: VM PAL (aarch64, TCG)
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_suite:
+        description: "also run the LibOS regression suite under gramine-vm"
+        type: boolean
+        default: true
+      cpus:
+        description: "guest vCPUs (GRAMINE_CPU_NUM)"
+        required: false
+        default: "2"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vm-aarch64-tcg-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  aarch64-vm-tcg:
+    name: aarch64 vm PAL (TCG)
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    env:
+      GRAMINE_PREFIX: ${{ github.workspace }}/.install-vm
+      GRAMINE_CPU_NUM: ${{ inputs.cpus || '2' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies, QEMU and virtiofsd
+        run: |
+          scripts/dependencies.sh --build-only
+          # qemu-system-arm provides qemu-system-aarch64 (8.2.2 on noble, the version measured)
+          sudo apt-get install -y -qq qemu-system-arm virtiofsd device-tree-compiler \
+            procps file iproute2 lsof
+          # gramine-vm starts `virtiofsd` by name (as in vm-x86_64.yml)
+          for d in /usr/libexec /usr/lib/qemu; do
+            if [ -x "$d/virtiofsd" ]; then sudo ln -sf "$d/virtiofsd" /usr/local/bin/virtiofsd; break; fi
+          done
+          command -v virtiofsd dtc
+          qemu-system-aarch64 --version | head -1
+
+      - name: vhost-vsock (the guest's TCP/UDP sockets and the relay need it; no /dev/kvm needed)
+        run: |
+          sudo modprobe vhost_vsock || echo "::warning::vhost_vsock is not available on this kernel"
+          sudo chmod 0666 /dev/vhost-vsock || true
+          ls -l /dev/vhost-vsock || echo "no /dev/vhost-vsock: socket tests will fail (GRAMINE_VSOCK=0 fallback)"
+          ls -l /dev/kvm || echo "no /dev/kvm (expected): QEMU runs with TCG"
+          uname -r
+
+      - name: Build and install Gramine (aarch64 vm PAL)
+        run: scripts/install.sh --vm --prefix "$GRAMINE_PREFIX" -j "$(nproc)"
+
+      - name: Smoke test - helloworld under gramine-vm (TCG)
+        run: |
+          . "$GRAMINE_PREFIX/env.sh"
+          cd CI-Examples/helloworld
+          make
+          # virtiofsd serves / with --sandbox none: run as root, like the container does
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" timeout 300 gramine-vm helloworld \
+            2>&1 | tee ../../vm-hello.log
+          grep -q "Hello, world" ../../vm-hello.log
+
+      - name: CI-Examples under gramine-vm (helloworld, mremap, threads, bash, busybox, sqlite)
+        run: |
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" RUN_TIMEOUT=600 VM_PREFIX="$GRAMINE_PREFIX" \
+            OUT="$GITHUB_WORKSPACE/vm-examples" tools/run-vm-aarch64-examples.sh 2>&1 | tee vm-examples.log
+          grep -q "fail=0" vm-examples.log
+
+      - name: VM network suites (vsock relay)
+        run: |
+          . "$GRAMINE_PREFIX/env.sh"
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" GRAMINE_PREFIX="$GRAMINE_PREFIX" \
+            test/vm/test-vm.sh --prefix "$GRAMINE_PREFIX" loopback epoll outbound udp guest-loopback \
+            2>&1 | tee vm-net.log
+
+      - name: LibOS regression suite under gramine-vm (informational)
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_suite }}
+        continue-on-error: true
+        run: |
+          . "$GRAMINE_PREFIX/env.sh"
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" \
+            test/vm/test-vm.sh --prefix "$GRAMINE_PREFIX" libos 2>&1 | tee vm-libos.log
+          exit "${PIPESTATUS[0]}"
+
+      - name: Upload logs
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: vm-aarch64-tcg-logs
+          path: |
+            vm-*.log
+            vm-examples/

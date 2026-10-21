@@ -183,7 +183,8 @@ defaults in [Which libc](#which-libc) are set by `scripts/install.sh`.
   seccomp profile that blocks `personality()` (typically a default container). Run it natively or with
   `--security-opt seccomp=unconfined` (`container/run.sh` does this).
 - `gramine-vm` does nothing useful, or `/dev/kvm` is missing: the vm PAL needs hardware
-  virtualisation on a machine of the *same* architecture; emulation (TCG) is not supported.
+  virtualisation on a machine of the *same* architecture; on AArch64 the launcher falls back to software emulation (TCG)
+  without `/dev/kvm`, on x86_64 KVM is required.
 - `[ VM exited with code 134 ]`: the guest kernel panicked; the lines above it hold the register dump.
 - aarch64 `Mounting "file:<app>" ... failed: ENOENT`: the application binary is not built or is not a
   PIE; rebuild it with `-fPIE -static-pie` (`tools/run-vm-aarch64-examples.sh` shows how).
