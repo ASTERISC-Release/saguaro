@@ -158,6 +158,17 @@ exec_one_vbs() {
     return 1
 }
 
+# exec_accel <backend>: for the vm backend on aarch64, the accelerator the launcher will use: kvm, or tcg
+# (QEMU software emulation: no usable /dev/kvm, or GRAMINE_ACCEL names tcg). Empty for everything else.
+exec_accel() {
+    [ "$(backend_base "$1")" = vm ] && [ "$(uname -m)" = aarch64 ] || return 0
+    case ${GRAMINE_ACCEL:-} in
+        kvm*) echo kvm ;;
+        ?*)   echo tcg ;;
+        *)    if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then echo kvm; else echo tcg; fi ;;
+    esac
+}
+
 # exec_one <backend>: build and run the example under one backend. Returns 0 PASS, 1 FAIL.
 exec_one() {
     local b=$1 base prefix log out rc start verdict
@@ -181,6 +192,13 @@ exec_one() {
                  [ -e "${SGX_SIGNER_KEY:-$HOME/.config/gramine/enclave-key.pem}" ] || gramine-sgx-gen-private-key ;;
     esac
     cd "$EXEC_DIR" || return 1
+    # QEMU software emulation is much slower than KVM: say so (the log header repeats it)
+    local accel accel_tag=
+    accel=$(exec_accel "$b")
+    if [ "$accel" = tcg ]; then
+        accel_tag=", accelerator TCG (software emulation, no usable /dev/kvm)"
+        echo "[note] $EXAMPLE_NAME $b on $(exec_host_arch): no usable /dev/kvm, QEMU runs under software emulation (TCG); expect slower runs"
+    fi
     local binary=${EXAMPLE_BINARY:-$EXAMPLE_NAME}
     local manifest=${EXAMPLE_MANIFEST:-$binary.manifest}
     local runner mode=${EXAMPLE_MODE:-run}
@@ -189,7 +207,7 @@ exec_one() {
 
     if [ "$mode" = check ]; then
         # the example's own `make check`, with this backend as its GRAMINE
-        { echo "== $EXAMPLE_NAME $b on $(exec_host_arch), $(date -Is), mode check"
+        { echo "== $EXAMPLE_NAME $b on $(exec_host_arch), $(date -Is), mode check$accel_tag"
           echo "+ rm -f $manifest; make $mtarget"
           rm -f "$manifest" "$manifest.sgx"; make "$mtarget"; } 2>&1 | tee "$log"
         [ "${PIPESTATUS[0]}" = 0 ] \
@@ -205,7 +223,7 @@ exec_one() {
         # EXAMPLE_BUILD (set empty when make has no rule for the program) is the make target for the program
         local build=${EXAMPLE_BUILD-$binary}
         {
-            echo "== $EXAMPLE_NAME $b on $(exec_host_arch), $(date -Is), mode run"
+            echo "== $EXAMPLE_NAME $b on $(exec_host_arch), $(date -Is), mode run$accel_tag"
             if [ -n "$build" ]; then echo "+ make $build"; make "$build" || exit 1; fi
             # re-render the manifest for this backend (make -B would also rebuild the program)
             echo "+ rm -f $manifest; make $mtarget"
