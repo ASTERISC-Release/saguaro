@@ -43,9 +43,9 @@ for s in "${SUITES[@]}"; do
     echo "=== $s"
     case $s in
     libos)
-        [ -z "${PYTEST_ARGS:-}" ] || echo "pytest arguments: $PYTEST_ARGS"
+        [ -z "${PYTEST_K:-}${PYTEST_ARGS:-}" ] || echo "pytest selection: -k '${PYTEST_K:-}' ${PYTEST_ARGS:-}"
         (cd "$REPO/libos/test/regression" && GRAMINE_VM=1 GRAMINE_CPU_NUM=${GRAMINE_CPU_NUM:-2} \
-            gramine-test pytest -- -q -rfEsxX --tb=short -p no:cacheprovider test_libos.py ${PYTEST_ARGS:-}) || rc=1 ;;
+            gramine-test pytest -- -q -rfEsxX --tb=short -p no:cacheprovider test_libos.py ${PYTEST_K:+-k "$PYTEST_K"} ${PYTEST_ARGS:-}) || rc=1 ;;
     examples)
         "$REPO/tools/run-vm-aarch64-examples.sh" || rc=1 ;;
     hello)

@@ -113,11 +113,11 @@ jobs:
         env:
           # test_604_sigreturn_regs hangs on the hosted runner under TCG (it passes under TCG on a local
           # aarch64 machine); see Documentation/TODO.md. Everything else must pass.
-          PYTEST_ARGS: --deselect test_libos.py::TC_01_Bootstrap::test_604_sigreturn_regs
+          PYTEST_K: not test_604_sigreturn_regs
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_suite }}
         run: |
           . "$GRAMINE_PREFIX/env.sh"
-          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "PYTEST_ARGS=$PYTEST_ARGS" \
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "PYTEST_K=$PYTEST_K" \
             test/vm/test-vm.sh --prefix "$GRAMINE_PREFIX" libos 2>&1 | tee vm-libos.log
           exit "${PIPESTATUS[0]}"
 
