@@ -10,6 +10,8 @@
 name: VM PAL (aarch64, TCG)
 
 on:
+  push:                      # TEMPORARY, removed before the merge: lets the branch run before the file is on main
+    branches: [dev-vm-tcg]
   workflow_dispatch:
     inputs:
       run_suite:
