@@ -38,6 +38,7 @@ jobs:
     env:
       GRAMINE_PREFIX: ${{ github.workspace }}/.install-vm
       GRAMINE_CPU_NUM: ${{ inputs.cpus || '2' }}
+      GRAMINE_TEST_TIMEOUT: "300"          # seconds per test; software emulation needs more than the 40 to 120 s defaults
     steps:
       - uses: actions/checkout@v4
 
@@ -88,9 +89,8 @@ jobs:
             test/vm/test-vm.sh --prefix "$GRAMINE_PREFIX" loopback epoll outbound udp guest-loopback \
             2>&1 | tee vm-net.log
 
-      - name: LibOS regression suite under gramine-vm (informational)
+      - name: LibOS regression suite under gramine-vm
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_suite }}
-        continue-on-error: true
         run: |
           . "$GRAMINE_PREFIX/env.sh"
           sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" \
