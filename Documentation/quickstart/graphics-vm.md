@@ -86,8 +86,10 @@ prints `vm intel gl3 run 1: 633 frames, N seconds: N fps`.
   every pointer inside a forwarded DRM ioctl is translated by a table in the LibOS
   (`../GRAPHICS.md`). The table covers what Mesa 25.2's `iris`, `anv`, `radeonsi` and `radv`
   issue; a request outside it (user-pointer objects, `I915_EXEC_FENCE_IN`, an engine map with
-  extensions) fails with `EFAULT` or `EINVAL` and a LibOS warning. Until 2026-10-20 no i915
-  request was in the table, so Intel GPUs needed `sys.experimental__multiprocess = false`.
+  extensions) fails with `EFAULT` or `EINVAL` and a LibOS warning. Before 2026-10-20 no i915
+  request was in the table, so Intel GPUs needed `sys.experimental__multiprocess = false`; that
+  is fixed, and the LibOS now keeps its own mappings apart from the application's (the guard in
+  `../GRAPHICS.md`). Not covered by the table: the `xe` kernel driver's requests.
 
 ## Verified
 

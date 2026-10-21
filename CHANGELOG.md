@@ -232,7 +232,12 @@ Intel and 72 % on AMD.
 - **Finding (2026-10-20).** With `sys.experimental__multiprocess` on, the first process is demand-paged and the
   pointers inside every forwarded DRM ioctl go through a table in the LibOS. The table had no i915 entry, so Intel
   GPUs failed at Mesa's device probe once the key's default became `true`; the i915 requests of Mesa 25.2 and
-  `AMDGPU_GEM_OP` are now translated ([Documentation/GRAPHICS.md](Documentation/GRAPHICS.md)).
+  `AMDGPU_GEM_OP` are now translated. The LibOS's own mappings (thread stacks, the slab) then got a range of their
+  own at the top of the address space, so that an application's read past the end of a mapping reaches its next
+  mapping as under Linux and not a LibOS page, and a user-mode access to a LibOS mapping is the application's
+  `SIGSEGV` ([Documentation/GRAPHICS.md](Documentation/GRAPHICS.md); regression test `vma_neighbor`). `lseek` and
+  `fstat` on a host object registered under its raw host fd number no longer end the process (the
+  "Internal memory fault at 0x10" of the AMD EGL path).
 - **Limits.** The listener and the shared-page address are x86-only, which blocks AArch64. Minetest reaches 25 to
   35 % of native speed.
 
@@ -243,8 +248,9 @@ first level, with keyboard input, in software rendering (44 to 48 frames per sec
 nodes, `fork` without copying reservations, `SCM_RIGHTS`, a virtual `%gs`, exception events, a 512 GiB address space
 and syscall user dispatch. This is a feasibility result: Wine's GPU path and 32-bit games are open.
 On the GPU path (2026-10-20, [Documentation/GRAPHICS.md](Documentation/GRAPHICS.md)) DOOM plays its first level on
-an Intel iGPU at 86 % of native and on an AMD GPU at the present path's rate; Psychonauts, The Witcher and BioShock 2
-(32-bit) start on both GPUs; Tomb Raider: Underworld does not load (a non-relocatable executable's address range).
+an Intel iGPU at 86 % of native and on an AMD GPU at the present path's rate (about 70 frames per second);
+Psychonauts, The Witcher and BioShock 2 (32-bit) start on both GPUs; Tomb Raider: Underworld does not load (a
+non-relocatable executable's address range). Soak tests of the games are an open item ([TODO.md](TODO.md)).
 
 ## LibOS system calls and compatibility
 
