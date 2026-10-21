@@ -75,12 +75,17 @@ static void close_host_fd(int host_fd) {
  * Pointers inside forwarded ioctl arguments (design-gpu.md, stage 3). The host kernel follows
  * them, so they must be physical: each pointed-to array is copied into the slot's bounce, the
  * field in the bounced argument is rewritten to the copy's physical address, outputs are copied
- * back afterwards and the application's pointer values are restored before the argument itself
- * is copied back. The sizes come from a count field (times an element size, or times a size
- * field) or a byte-length field. AMDGPU_CS nests three levels and is handled in code.
+ * back afterwards and the application's pointer values are restored (in every bounced copy)
+ * before any copy is written back. The sizes come from a count field (times an element size, or
+ * times a size field), a byte-length field, or are fixed. Requests whose pointers depend on other
+ * fields (AMDGPU_CS and AMDGPU_GEM_OP; the i915 extension chains, I915_QUERY items,
+ * I915_GEM_EXECBUFFER2 and the context parameters) are handled in code below the table. The
+ * layouts are those of the kernel's uapi headers (drm/drm.h, drm/amdgpu_drm.h, drm/i915_drm.h);
+ * the set of requests is what Mesa's radeonsi/radv and iris/anv issue (dev docs:
+ * graphics/FINDINGS.md, the i915 pointer table).
  */
 enum ptr_dir { PTR_IN = 1, PTR_OUT = 2, PTR_INOUT = 3 };
-enum cnt_kind { CNT_U32, CNT_U64, CNT_SIZET_BYTES, CNT_U32_BYTES };
+enum cnt_kind { CNT_U32, CNT_U64, CNT_SIZET_BYTES, CNT_U32_BYTES, CNT_FIXED /* `elem` bytes */ };
 struct ptr_field {
     uint16_t ptr_off;   /* the u64 pointer field */
     uint16_t cnt_off;   /* the count or byte-length field */
@@ -120,17 +125,48 @@ static const struct ptr_ioctl g_ptr_ioctls[] = {
     { 0xc0186443, {{16, 8, CNT_U32, 0, 12, PTR_IN}}, 1 },
     /* struct drm_amdgpu_gem_va (64-byte form): input_fence_syncobj_handles[num_syncobj_handles] */
     { 0xc0406448, {{56, 52, CNT_U32, 4, 0, PTR_IN}}, 1 },
+    /* struct drm_i915_getparam { s32 param; s32 pad; int* value; }: one int, written */
+    { 0xc0106446, {{8, 0, CNT_FIXED, 4, 0, PTR_OUT}}, 1 },
 };
 #define DRM_IOCTL_AMDGPU_CS_CMD 0xc0186444
 #define AMDGPU_CHUNK_ID_BO_HANDLES_ID 0x06
+/* union drm_amdgpu_gem_op { u32 handle; u32 op; u64 value; }: for GET_GEM_CREATE_INFO `value`
+ * points to a struct drm_amdgpu_gem_create_in (32 bytes) the kernel fills; for SET_PLACEMENT it
+ * is the value itself */
+#define DRM_IOCTL_AMDGPU_GEM_OP_CMD 0xc0106450
+#define AMDGPU_GEM_OP_GET_GEM_CREATE_INFO_ID 0
+/* The user-pointer objects cannot be forwarded: the kernel pins the pages behind an address of
+ * the listener's address space, not a copy, and the guest's addresses mean nothing there. */
+#define DRM_IOCTL_AMDGPU_GEM_USERPTR_CMD 0xc0186451
+#define DRM_IOCTL_I915_GEM_USERPTR_CMD 0xc0186473
+/* i915 (drm/i915_drm.h) */
+#define DRM_IOCTL_I915_QUERY_CMD 0xc0106479               /* struct drm_i915_query, 16 bytes */
+#define DRM_IOCTL_I915_GEM_CREATE_EXT_CMD 0xc018647c      /* struct drm_i915_gem_create_ext, 24 */
+#define DRM_IOCTL_I915_GEM_CONTEXT_CREATE_EXT_CMD 0xc010646d /* ..._context_create_ext, 16 */
+#define DRM_IOCTL_I915_GEM_CONTEXT_GETPARAM_CMD 0xc0186474   /* struct drm_i915_gem_context_param */
+#define DRM_IOCTL_I915_GEM_CONTEXT_SETPARAM_CMD 0xc0186475   /* (24 bytes) */
+#define DRM_IOCTL_I915_GEM_EXECBUFFER2_CMD 0x40406469     /* struct drm_i915_gem_execbuffer2, 64 */
+#define DRM_IOCTL_I915_GEM_EXECBUFFER2_WR_CMD 0xc0406469
+#define I915_USER_EXTENSION_SIZE 32 /* struct i915_user_extension { u64 next; u32 name; ... } */
+#define I915_GEM_CREATE_EXT_MEMORY_REGIONS_ID 0   /* 48 bytes: num_regions @36, regions @40 */
+#define I915_GEM_CREATE_EXT_PROTECTED_CONTENT_ID 1 /* 40 bytes */
+#define I915_GEM_CREATE_EXT_SET_PAT_ID 2          /* 40 bytes */
+#define I915_CONTEXT_CREATE_EXT_SETPARAM_ID 0     /* 56 bytes: a drm_i915_gem_context_param @32 */
+#define I915_CONTEXT_PARAM_ENGINES_ID 0xa
+#define I915_EXEC_FENCE_ARRAY_FLAG 0x80000        /* cliprects_ptr: drm_i915_gem_exec_fence[] */
+#define I915_EXEC_USE_EXTENSIONS_FLAG 0x200000    /* cliprects_ptr: an extension chain */
+#define I915_EXEC_FENCE_IN_FLAG 0x10000           /* rsvd2: a sync_file fd (not translated) */
+#define DRM_I915_GEM_EXECBUFFER_EXT_TIMELINE_FENCES_ID 0 /* 56 bytes: count @32, ptrs @40, @48 */
+#define I915_EXT_CHAIN_MAX 16
 
 struct ptr_fixup {
-    void* user;   /* the application's buffer */
-    void* copy;   /* its copy in the bounce */
+    void* user;      /* the application's buffer */
+    void* copy;      /* its copy in the bounce */
+    uint64_t* slot;  /* the pointer field (in a bounced structure) that was rewritten */
     size_t size;
     bool out;
 };
-#define MAX_FIXUPS 64
+#define MAX_FIXUPS 128
 
 static const struct ptr_ioctl* find_ptr_ioctl(unsigned int cmd) {
     for (size_t i = 0; i < ARRAY_SIZE(g_ptr_ioctls); i++)
@@ -154,7 +190,8 @@ static int bounce_array(struct gbounce* b, uint64_t* pslot, size_t size, bool ou
         return -ENOMEM;
     if (*nfix >= MAX_FIXUPS)
         return -ENOMEM;
-    fixups[*nfix] = (struct ptr_fixup){ .user = user, .copy = copy, .size = size, .out = out };
+    fixups[*nfix] = (struct ptr_fixup){ .user = user, .copy = copy, .slot = pslot, .size = size,
+                                        .out = out };
     (*nfix)++;
     *pslot = pa;
     return 0;
@@ -166,7 +203,152 @@ static size_t field_count(const char* arg, const struct ptr_field* f) {
         case CNT_U64: return (size_t)*(const uint64_t*)(arg + f->cnt_off);
         case CNT_SIZET_BYTES: return *(const size_t*)(arg + f->cnt_off);
         case CNT_U32_BYTES: return *(const uint32_t*)(arg + f->cnt_off);
+        case CNT_FIXED: return 1;
     }
+    return 0;
+}
+
+/* a struct drm_i915_gem_context_param { u32 ctx_id; u32 size; u64 param; u64 value; } at `p`
+ * (in a bounced structure): `value` is a pointer to `size` bytes when `size` is not zero (SSEU,
+ * the engine map), the value itself otherwise */
+static int translate_i915_context_param(struct gbounce* b, char* p, bool out,
+                                        struct ptr_fixup* fixups, size_t* nfix) {
+    uint32_t size = *(uint32_t*)(p + 4);
+    uint64_t param = *(uint64_t*)(p + 8);
+    if (!size)
+        return 0;
+    size_t n = *nfix;
+    int ret = bounce_array(b, (uint64_t*)(p + 16), size, out, fixups, nfix);
+    if (ret < 0 || n == *nfix)
+        return ret;
+    if (param == I915_CONTEXT_PARAM_ENGINES_ID && size >= 8 && *(uint64_t*)fixups[n].copy) {
+        log_warning("forwarded ioctl: an i915 engine map with extensions is not supported");
+        return -EINVAL; /* struct i915_context_param_engines: its own chain (load balancing) */
+    }
+    return 0;
+}
+
+enum i915_chain { CHAIN_GEM_CREATE, CHAIN_CONTEXT_CREATE, CHAIN_EXECBUF };
+
+/* the linked extension blocks of the i915 requests: each starts with a struct i915_user_extension
+ * { u64 next_extension; u32 name; u32 flags; u32 rsvd[4]; } and its size depends on `name`; the
+ * kernel reads them (and the arrays some of them point to), so each is bounced in turn */
+static int translate_i915_ext_chain(struct gbounce* b, uint64_t* slot, enum i915_chain kind,
+                                    struct ptr_fixup* fixups, size_t* nfix) {
+    for (int depth = 0; *slot; depth++) {
+        if (depth >= I915_EXT_CHAIN_MAX)
+            return -EINVAL;
+        /* the header first: its name gives the block's size */
+        if (!is_user_memory_readable((void*)(uintptr_t)*slot, I915_USER_EXTENSION_SIZE))
+            return -EFAULT;
+        uint32_t name = *(uint32_t*)((char*)(uintptr_t)*slot + 8);
+        size_t size;
+        switch (kind) {
+            case CHAIN_GEM_CREATE:
+                size = name == I915_GEM_CREATE_EXT_MEMORY_REGIONS_ID ? 48
+                     : name == I915_GEM_CREATE_EXT_PROTECTED_CONTENT_ID ? 40
+                     : name == I915_GEM_CREATE_EXT_SET_PAT_ID ? 40 : 0;
+                break;
+            case CHAIN_CONTEXT_CREATE:
+                size = name == I915_CONTEXT_CREATE_EXT_SETPARAM_ID ? 56 : 0;
+                break;
+            case CHAIN_EXECBUF:
+                size = name == DRM_I915_GEM_EXECBUFFER_EXT_TIMELINE_FENCES_ID ? 56 : 0;
+                break;
+            default:
+                size = 0;
+        }
+        if (!size) {
+            log_warning("forwarded ioctl: unknown i915 extension %u (chain %d)", name, (int)kind);
+            return -EINVAL;
+        }
+        size_t n = *nfix;
+        int ret = bounce_array(b, slot, size, /*out=*/false, fixups, nfix);
+        if (ret < 0)
+            return ret;
+        char* ext = fixups[n].copy;
+        if (kind == CHAIN_GEM_CREATE && name == I915_GEM_CREATE_EXT_MEMORY_REGIONS_ID) {
+            /* regions[num_regions] of struct drm_i915_gem_memory_class_instance (4 bytes) */
+            ret = bounce_array(b, (uint64_t*)(ext + 40), (size_t)*(uint32_t*)(ext + 36) * 4,
+                               /*out=*/false, fixups, nfix);
+        } else if (kind == CHAIN_CONTEXT_CREATE) {
+            ret = translate_i915_context_param(b, ext + 32, /*out=*/false, fixups, nfix);
+        } else if (kind == CHAIN_EXECBUF) {
+            /* handles_ptr: fence_count x struct drm_i915_gem_exec_fence (8 bytes); values_ptr:
+             * fence_count x u64 */
+            size_t count = *(uint32_t*)(ext + 32);
+            ret = bounce_array(b, (uint64_t*)(ext + 40), count * 8, /*out=*/false, fixups, nfix);
+            if (ret == 0)
+                ret = bounce_array(b, (uint64_t*)(ext + 48), count * 8, /*out=*/false, fixups,
+                                   nfix);
+        }
+        if (ret < 0)
+            return ret;
+        slot = (uint64_t*)ext; /* next_extension, in the bounced copy */
+    }
+    return 0;
+}
+
+/* struct drm_i915_query { u32 num_items; u32 flags; u64 items_ptr; }: items[num_items] of struct
+ * drm_i915_query_item { u64 query_id; s32 length; u32 flags; u64 data_ptr; } (24 bytes); the kernel
+ * writes each item's length and, where length was given, `length` bytes at data_ptr */
+static int translate_i915_query(struct gbounce* b, char* arg, struct ptr_fixup* fixups,
+                                size_t* nfix) {
+    uint32_t num_items = *(uint32_t*)arg;
+    if (num_items > 64)
+        return -EINVAL;
+    size_t n = *nfix;
+    int ret = bounce_array(b, (uint64_t*)(arg + 8), (size_t)num_items * 24, /*out=*/true, fixups,
+                           nfix);
+    if (ret < 0 || n == *nfix)
+        return ret;
+    char* items = fixups[n].copy;
+    for (uint32_t i = 0; i < num_items; i++) {
+        int32_t length = *(int32_t*)(items + i * 24 + 8);
+        if (length <= 0)
+            continue;
+        ret = bounce_array(b, (uint64_t*)(items + i * 24 + 16), (size_t)length, /*out=*/true,
+                           fixups, nfix);
+        if (ret < 0)
+            return ret;
+    }
+    return 0;
+}
+
+/* struct drm_i915_gem_execbuffer2 { u64 buffers_ptr; u32 buffer_count; u32 batch_start_offset;
+ * u32 batch_len; u32 DR1; u32 DR4; u32 num_cliprects; u64 cliprects_ptr; u64 flags; u64 rsvd1;
+ * u64 rsvd2; }: buffers[buffer_count] of struct drm_i915_gem_exec_object2 (56 bytes; the kernel
+ * writes the offsets back), each with relocs_ptr -> relocation_count x 32 bytes (written back
+ * too); cliprects_ptr is a fence array (I915_EXEC_FENCE_ARRAY) or an extension chain
+ * (I915_EXEC_USE_EXTENSIONS) */
+static int translate_i915_execbuffer2(struct gbounce* b, char* arg, struct ptr_fixup* fixups,
+                                      size_t* nfix) {
+    uint32_t buffer_count = *(uint32_t*)(arg + 8);
+    uint64_t flags = *(uint64_t*)(arg + 40);
+    if (flags & I915_EXEC_FENCE_IN_FLAG) {
+        log_warning("forwarded ioctl: I915_EXEC_FENCE_IN is not supported");
+        return -EINVAL;
+    }
+    size_t n = *nfix;
+    int ret = bounce_array(b, (uint64_t*)arg, (size_t)buffer_count * 56, /*out=*/true, fixups,
+                           nfix);
+    if (ret < 0)
+        return ret;
+    if (n < *nfix) {
+        char* objs = fixups[n].copy;
+        for (uint32_t i = 0; i < buffer_count; i++) {
+            char* obj = objs + i * 56;
+            ret = bounce_array(b, (uint64_t*)(obj + 8), (size_t)*(uint32_t*)(obj + 4) * 32,
+                               /*out=*/true, fixups, nfix);
+            if (ret < 0)
+                return ret;
+        }
+    }
+    if (flags & I915_EXEC_USE_EXTENSIONS_FLAG)
+        return translate_i915_ext_chain(b, (uint64_t*)(arg + 32), CHAIN_EXECBUF, fixups, nfix);
+    if (flags & I915_EXEC_FENCE_ARRAY_FLAG)
+        return bounce_array(b, (uint64_t*)(arg + 32), (size_t)*(uint32_t*)(arg + 28) * 8,
+                            /*out=*/false, fixups, nfix);
     return 0;
 }
 
@@ -215,8 +397,34 @@ static int translate_pointers(unsigned int cmd, struct gbounce* b, char* arg, si
                               struct ptr_fixup* fixups, size_t* nfix) {
     if (!b)
         return 0; /* identity-mapped memory: the kernel reaches the application's buffers */
-    if (cmd == DRM_IOCTL_AMDGPU_CS_CMD)
-        return translate_amdgpu_cs(b, arg, fixups, nfix);
+    switch (cmd) {
+        case DRM_IOCTL_AMDGPU_CS_CMD:
+            return translate_amdgpu_cs(b, arg, fixups, nfix);
+        case DRM_IOCTL_AMDGPU_GEM_OP_CMD:
+            if (*(uint32_t*)(arg + 4) != AMDGPU_GEM_OP_GET_GEM_CREATE_INFO_ID)
+                return 0;
+            return bounce_array(b, (uint64_t*)(arg + 8), 32, /*out=*/true, fixups, nfix);
+        case DRM_IOCTL_AMDGPU_GEM_USERPTR_CMD:
+        case DRM_IOCTL_I915_GEM_USERPTR_CMD:
+            log_warning("forwarded ioctl 0x%x: user-pointer objects are not available from a "
+                        "demand-paged process", cmd);
+            return -EFAULT;
+        case DRM_IOCTL_I915_QUERY_CMD:
+            return translate_i915_query(b, arg, fixups, nfix);
+        case DRM_IOCTL_I915_GEM_CREATE_EXT_CMD:
+            return translate_i915_ext_chain(b, (uint64_t*)(arg + 16), CHAIN_GEM_CREATE, fixups,
+                                            nfix);
+        case DRM_IOCTL_I915_GEM_CONTEXT_CREATE_EXT_CMD:
+            return translate_i915_ext_chain(b, (uint64_t*)(arg + 8), CHAIN_CONTEXT_CREATE, fixups,
+                                            nfix);
+        case DRM_IOCTL_I915_GEM_CONTEXT_SETPARAM_CMD:
+            return translate_i915_context_param(b, arg, /*out=*/false, fixups, nfix);
+        case DRM_IOCTL_I915_GEM_CONTEXT_GETPARAM_CMD:
+            return translate_i915_context_param(b, arg, /*out=*/true, fixups, nfix);
+        case DRM_IOCTL_I915_GEM_EXECBUFFER2_CMD:
+        case DRM_IOCTL_I915_GEM_EXECBUFFER2_WR_CMD:
+            return translate_i915_execbuffer2(b, arg, fixups, nfix);
+    }
     const struct ptr_ioctl* pi = find_ptr_ioctl(cmd);
     if (!pi)
         return 0;
@@ -311,30 +519,18 @@ static long forwarded_ioctl(unsigned int fd, unsigned int cmd, unsigned long arg
     c->p5 = time_field ? GRAPHICS_IOCTL_TIME_REL_MAGIC : 0;
     c->req_bit = IOCTL;
     long ret = (long)comm_sync_notify(c);
-    /* outputs back to the application, innermost last is fine (they do not overlap); the pointer
-     * slots the translation rewrote live in bounce copies, so restore them there before any
-     * structure is copied back: the copies of nested structures (chunks) are not copied back,
-     * only the argument is */
+    /* The pointer slots the translation rewrote live in bounce copies (the argument's or a nested
+     * structure's): put the application's values back in all of them first, so that whatever is
+     * copied back below carries the application's pointers, not bounce addresses. Then the
+     * outputs (they do not overlap), then the argument itself. */
+    for (size_t i = 0; i < nfix; i++)
+        *fixups[i].slot = (uint64_t)(uintptr_t)fixups[i].user;
     for (size_t i = 0; i < nfix; i++)
         if (fixups[i].out && ret >= 0)
             memcpy(fixups[i].user, fixups[i].copy, fixups[i].size);
     if (arg_copy && arg_copy != (void*)arg && (_IOC_DIR(cmd) & _IOC_READ) &&
-            is_user_memory_writable((void*)arg, arg_size)) {
-        /* the application's pointer values, not the bounce addresses */
-        if (cmd == DRM_IOCTL_AMDGPU_CS_CMD) {
-            uint64_t* slot = (uint64_t*)((char*)arg_copy + 16);
-            if (nfix) *slot = (uint64_t)(uintptr_t)fixups[0].user;
-        } else {
-            const struct ptr_ioctl* pi = find_ptr_ioctl(cmd);
-            size_t k = 0;
-            for (size_t i = 0; pi && i < pi->fields_cnt; i++) {
-                uint64_t* slot = (uint64_t*)((char*)arg_copy + pi->fields[i].ptr_off);
-                if (*slot && k < nfix)
-                    *slot = (uint64_t)(uintptr_t)fixups[k++].user;
-            }
-        }
+            is_user_memory_writable((void*)arg, arg_size))
         memcpy((void*)arg, arg_copy, arg_size);
-    }
     libos_syscall_relinquish_libos_lock(_offset);
 
     if (!ti)
