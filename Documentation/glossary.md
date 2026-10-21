@@ -57,8 +57,7 @@ two TEEs. They are typically built on top of the classic TLS/SSL channels.
 
 SGX  
 Software Guard Extensions is a set of instructions on Intel processors for
-creating Trusted Execution Environments (`TEE`). See
-`/sgx-intro`.
+creating Trusted Execution Environments (`TEE`).
 
 Thread Control Block
 

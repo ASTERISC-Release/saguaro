@@ -117,7 +117,8 @@ are retained.
 
 ## Citation
 
-This work is the result of several research projects undertaken by our lab, out of which the following are published to-date:
+We are in the process of releasing a whitepaper to Arxiv detailing the current project. For now, we refer 
+you to the following published work by our lab (out of which this work is born):
 
 - You Shall Not Pass into Ring-0! A User Privacy-Friendly Anti-Cheat Architecture for Personal Computers (ACM CCS'26)
 - Reducio: Optimized Confidential Serverless Cloud Deployments for Enterprise Customers (Arxiv)
@@ -125,19 +126,16 @@ This work is the result of several research projects undertaken by our lab, out 
 - Veil: A Protected Services Framework for Confidential Virtual Machines (ACM ASPLOS'23)
 - Chancel: Efficient Multi-client Isolation Under Adversarial Programs (ISOC NDSS'21)
 
-If you find this project useful, please cite our work.
-
-We are also in the process of releasing a whitepaper (to Arxiv) detailing the current project.
+If you find this project useful, we request that you cite our work.
 
 ## Disclaimer
 
-The current work is **experimental** and should not be used in production environments.
-
-AI agents were heavily-involved in the development of this project, even though the design decisions were made by our team.
+The current work is **experimental** and should not be used in production environments. Although all design decisions were made by our team, 
+an AI agent (namely our lab's *riscy* agent) was heavily-involved in the development of this project (as evident from the commit history).
 Our rationale for using AI agents was to easily prototype and merge together disjoint artifacts from different research projects
-and make them available for research and teaching purposes.
+and make them available for research and teaching.
 
-## Acknowledgements
+## Acknowledgement
 
 This work builds on [Gramine](https://github.com/gramineproject/gramine) and its
 Intel TDX and virtual-machine fork [gramine-tdx](https://github.com/gramineproject/gramine-tdx). We thank the Gramine and gramine-tdx authors and contributors; the organizations and individuals are listed in
