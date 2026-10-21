@@ -70,8 +70,8 @@ The digest depends on the PAL build and vCPU count; the attestation report must 
 The guest's serial log (`GRAMINE_VM_SERIAL_LOG=<file>`) starts with `SEV: memory encryption active: SEV SEV-ES SEV-SNP (SEV_STATUS 0x7), C-bit 51`. The SEV PAL refuses to run without
 encryption.
 
-Results of 2026-10-20 on an AMD EPYC 7443P ([RESULTS.md](../../CI-Examples/RESULTS.md)):
-`./exec.sh --sev` and `./exec.sh --sev-snp` pass for every example that supports them.
+`./exec.sh --sev` and `./exec.sh --sev-snp` pass for every example that supports them
+([RESULTS.md](../../CI-Examples/RESULTS.md)).
 
 In a fresh container, `blender`, `mongodb`, `nodejs`, `openjdk` and `r` first stop with "cannot run here: missing on the host"; run `CI-Examples/install-all-prereqs.sh` once (or the `install-prereqs.sh` of that example, which the message names) and repeat the command.
 
@@ -116,8 +116,8 @@ are currently not measured.
     test/sev/test-sev-all.sh                      # everything above, at 1, 2 and 4 vCPUs, plus examples
 
 `GRAMINE_SEV_MODE=snp test/sev/test-sev.sh` runs under SNP, `test/sev/test-sev.sh` under plain SEV
-(see the header of the script for the suites). On 2026-10-20 `test/sev/test-sev.sh` passed in both
-modes ([RESULTS.md](../../CI-Examples/RESULTS.md)).
+(see the header of the script for the suites). `test/sev/test-sev.sh` passes in both modes
+([RESULTS.md](../../CI-Examples/RESULTS.md)).
 
 # 5. Troubleshooting
 

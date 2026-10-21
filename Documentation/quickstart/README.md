@@ -1,8 +1,6 @@
 # Quickstart guides
 
-One guide per platform, each from a fresh checkout to a running example, with the commands
-that were run on a machine of that platform (each guide ends with what was verified, where and
-when; anything else is marked "not verified"). The complete instructions are in [INSTALL.md](../../INSTALL.md); the platform table
+One guide per platform, each from a checkout to a running example. The complete instructions are in [INSTALL.md](../../INSTALL.md); the platform table
 and status of this tree are in [README.md](../../README.md).
 
 Symbols as in `README.md`: ✅ supported, ⚠️ experimental, 🛫 planned, ❌ not supported, ➖ not
@@ -28,13 +26,14 @@ applicable.
   WSL on a Windows machine.
 - **Installation is `scripts/install.sh`** (there is no top-level `install.sh`). No option installs
   the direct backend into `~/.local/gramine`; `--vm` the vm PAL into `~/.local/gramine-vm`;
-  `--sev --graphics disabled` the vm PAL with the SEV PAL and `gramine-sev`; `--vbs` the WSL side of
+  `--sev --graphics disabled` the vm PAL with the SEV PAL and `gramine-sev`; `--sgx` the SGX backend into
+  `~/.local/gramine-sgx`; `--vbs` the WSL side of
   the VBS tooling and runtime. `container/run.sh` loads `~/.local/gramine-vm/env.sh` itself when
   it exists.
 - **Examples run through `./exec.sh`** in the directory of the example under `CI-Examples/`:
-  `./exec.sh --direct | --vm | --sev | --sev-snp | --vbs`. A backend is required. See the
+  `./exec.sh --direct | --vm | --sev | --sev-snp | --sgx | --vbs`. A backend is required. See the
   "Testing" section of [CI-Examples/README.md](../../CI-Examples/README.md) and the recorded results
-  in [RESULTS.md](../../CI-Examples/RESULTS.md) (2026-10-20).
+  in [RESULTS.md](../../CI-Examples/RESULTS.md).
 
 ## Which one do I need?
 
@@ -47,7 +46,7 @@ applicable.
   NVIDIA); inside a microVM on x86_64, [graphics-vm.md](graphics-vm.md) (needs the QEMU
   fork, kept outside this repository).
 - **A RISC-V build**, without RISC-V hardware: [riscv.md](riscv.md).
-- **An application protected from Windows itself**, on an ARM64 Windows 11 PC, in WSL (the one guide without the container):
+- **An application protected from Windows itself**, on an ARM64 or x64 Windows 11 PC, in WSL (the one guide without the container):
   [vbs-windows.md](vbs-windows.md).
 - **Intel confidential computing**: [tdx-sgx.md](tdx-sgx.md). SGX: the container route,
   `scripts/install.sh --sgx`, `./exec.sh --sgx`. TDX: `scripts/install.sh --vm --tdx` and `gramine-tdx`; the

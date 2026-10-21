@@ -1,18 +1,18 @@
 # Quickstart: Windows VBS enclaves (`gramine-vbs`)
 
-The `vbs` PAL runs an unmodified Linux AArch64 application inside a Windows
+The `vbs` PAL runs an unmodified Linux application (AArch64 or x86_64, as the Windows machine) inside a Windows
 *virtualization-based security* (VBS) enclave. Because a VBS enclave cannot make memory executable
 at run time, the library OS, a glibc, the application and its files are packed into a signed
 enclave image when it is built.
 
 ## Requirements
 
-- Windows 11 25H2 (x86 or Aarch64) with [**VBS enabled and development environment setup**](vbs-enable.md).
+- Windows 11 25H2 (ARM64 or x64) with [**VBS enabled and development environment setup**](vbs-enable.md).
 - **WSL2** with a Ubuntu 24.04 or Ubuntu 26.04 distribution.
 
 # 1. Install
 
-In WSL (Ubuntu 24.04), in a checkout of the repository. No sudo; nothing on Windows is changed:
+In WSL, in a checkout of the repository. No sudo; nothing on Windows is changed:
 
     cd <repo-home>
     scripts/install.sh --vbs
@@ -52,7 +52,7 @@ By hand:
     make VBS=1
     gramine-vbs python
 
-The first `make VBS=1` builds CPython 3.12.7 for the enclave in WSL (about 70 s, once) and packs the
+The first `make VBS=1` builds CPython 3.12.7 for the enclave in WSL (once) and packs the
 interpreter with its standard library; `hello.py` prints the Python version, a SHA-256 and the
 results of three threads.
 
