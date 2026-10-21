@@ -6,25 +6,6 @@ host's Mesa or NVIDIA libraries. No QEMU and no preload library are involved. De
 `dev docs: graphics-direct/running.md` and
 `dev docs: graphics-aarch64/`.
 
-Status (as in [README.md](../../README.md)): Intel x86_64 ⚠️, AMD64 ⚠️, AArch64 ⚠️
-(experimental); RISC-V ❌.
-
-## Security: read this first
-
-`gramine-direct` is **not a sandbox**, and graphics widen what the application can reach. The
-example manifests turn on three opt-in keys, each off by default and documented in
-[manifest-syntax.md](../manifest-syntax.md):
-
-- `sys.insecure__allow_raw_device_ioctl = true`: any ioctl on the devices it opens, so it can
-  submit work to the GPU (with NVIDIA: any request to the kernel driver);
-- `sys.insecure__host_unix_sockets = ["/tmp/.X11-unix/X0"]`: it talks to the host's X server
-  directly, so it can see and control other windows and read the keyboard;
-- `host_symlinks = true` on the `/sys` mount: it reads the host's symbolic links under
-  `/sys`.
-
-Use them for running games and tests on a desktop with trusted code, never for untrusted code or in
-production.
-
 ## Requirements
 
 - **x86_64**: an Intel or AMD GPU with Mesa, a render node (`/dev/dri/renderD128`) that the user can
@@ -106,20 +87,6 @@ Vulkan programs run as they are, on the host's Vulkan drivers:
   runs `make` and name its socket `/tmp/.X11-unix/X<N>`. `Mounting "file:/root/.cache" ... failed` means the `mkdir -p ~/.cache` step was skipped.
 
 More games (SuperTuxKart, Minetest) and their targets: [CI-Examples/graphics/README.md](../../CI-Examples/graphics/README.md).
-
-## Verified
-
-2026-10-15, `main` at `9e28ea81`, in the container, windows closed after a few seconds:
-
-- x86_64 host with an Intel UHD 770 and an AMD Radeon RX 9070, Xwayland: glxgears (about 35,000
-  FPS at 300x300, X server's GPU and `DRI_PRIME` to the AMD GPU); `make run-direct-timedemo`: `633 frames, 0.3 seconds: 2068.6 fps` on the AMD GPU; `vulkaninfo --summary` lists the AMD, Intel and llvmpipe devices; `vkcube` selected the AMD GPU and ran
-  until stopped; `make run-direct` of Quake II opened its window; `LIBGL_ALWAYS_SOFTWARE=1`
-  glxgears: about 200 FPS. Without `~/.cache` the run fails with the mount error above. Every
-  program was stopped with `timeout -s TERM`.
-- AArch64 Ubuntu 24.04 host with an NVIDIA GB10 (driver 580), display `:1` of a locked session:
-  glxgears with `NVIDIA=1` (about 14,000 FPS at 300x300); software rendering (about 660 FPS);
-  `./setup-quake.sh` (18 s) and `make run-direct-timedemo` with `GL_RENDERER: NVIDIA GB10/PCIe`: `633 frames, 8.4 seconds: 75.0 fps` (full screen, synchronised to the display; the
-  measurements in `graphics-aarch64/TESTING.md` use a window and `r_vsync 0`).
 
 Not verified: stopping with Ctrl-C or the game's `quit`; `make run-direct` of Quake II on
 AArch64 (only its timedemo); Vulkan on AArch64 (not part of this quickstart).
