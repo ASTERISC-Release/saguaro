@@ -12,7 +12,7 @@ route and the Proton results are in [../GRAPHICS.md](../GRAPHICS.md); the guides
 
 | Page | Topic | Summarises |
 |---|---|---|
-| [vm.md](vm.md) | redirected graphics for `gramine-vm` (x86_64) | the port of the Tirith redirection: the preload library, the listener in the QEMU fork, the memory layout, the examples' frame rates |
+| [vm.md](vm.md) | redirected graphics for `gramine-vm` (x86_64) | the port of the graphics redirection: the preload library, the listener in the QEMU fork, the memory layout, the examples' frame rates |
 | [direct.md](direct.md) | the host GPU under `gramine-direct` | render nodes and the X socket passed through, the ioctl translations, frame rates on Intel, AMD and NVIDIA |
 | [aarch64.md](aarch64.md) | graphics on AArch64 | `gramine-direct` with the NVIDIA driver on an AArch64 board; why the VM route is not available there |
 | [vulkan.md](vulkan.md) | Vulkan under both routes | the device path through forwarded ioctls, the presentation layer, the headless suite and the check script, Quake II and vkcube rates |

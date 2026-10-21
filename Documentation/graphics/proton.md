@@ -28,8 +28,8 @@ in a per-CPU GDT and are set through `set_thread_area` (also via `int $0x80`), s
 **Key results.** `hello.exe` prints its six lines in an 8 GB guest; `d3d11.exe` (Direct3D 11 through
 DXVK) renders on the AMD GPU in the guest at about 3,700 FPS; `vkwin.exe` presents through the
 layer. DOOM I Enhanced (64-bit, Direct3D 11): software rendering reached the first level at 44 to
-48 FPS; on the GPU (2026-10-20, 4 vCPUs, 12 GB) it plays the first level on the Intel UHD 770 at
-59.5 FPS against 68 to 69 natively (vsync off, 86 %) and on the AMD RX 9070 at 72 FPS, bound by
+48 FPS; on the GPU (4 vCPUs, 12 GB) it plays the first level on the Intel iGPU at
+59.5 FPS against 68 to 69 natively (vsync off, 86 %) and on the AMD GPU at 72 FPS, bound by
 the present path (about 70 presents/s) against 2300 natively. Psychonauts, The Witcher: Enhanced
 Edition and BioShock 2 (32-bit, Direct3D 9) start on both GPUs (intro, title screen, main menu);
 Tomb Raider: Underworld does not load. The table with every number is in

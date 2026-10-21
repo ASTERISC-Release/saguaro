@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
-# test-direct.sh — run the full aarch64 port test battery:
+# test-direct.sh — run the test battery of the direct PAL (any architecture):
 #   PAL regression, LibOS regression, and the CI example applications
 #   (helloworld, multi-thread, busybox, bash, redis, memcached, sqlite, python,
 #   lighttpd, nginx, rust, networks).
@@ -20,8 +20,8 @@
 #                    lighttpd, nginx, rust) and `networks` under the VM PAL instead. The install must be
 #                    a --vm build; each server's guest port is forwarded to the same port on 127.0.0.1
 #                    by the VM's relay (GRAMINE_VM_INBOUND), so the clients are the ones of the direct run.
-#                    nginx gets `master_process off;` (the VM PAL cannot create worker processes).
-#                    Under the VM PAL the suites pal, libos and the exec/fork based ones do not apply.
+#                    nginx gets `master_process off;` (one process is enough for the check).
+#                    The other suites run under gramine-direct in either case.
 #
 # The script is architecture-neutral and also runs on x86_64 for parity
 # testing, given a Gramine install built for that host (set GRAMINE_PREFIX to
@@ -36,16 +36,14 @@
 # CONFIG_ARP and CONFIG_ARPING disabled in src/.config to compile against
 # modern (>= ~6.x) kernel headers on any arch.
 #
-# ## Install steps (Debian/Ubuntu, arch-neutral — run from gramine-tdx/)
+# ## Install steps (Debian/Ubuntu, arch-neutral — run from the repository root)
 #
 #   # 1. Build + runtime dependencies
 #   sudo apt install build-essential meson ninja-build pkg-config \
 #       python3-pytest python3-click python3-jinja2 python3-cryptography \
 #       python3-voluptuous python3-toml nasm procps iproute2 file linux-libc-dev
-#   (On this box voluptuous came from "pip3 install --user voluptuous" because
-#    python3-voluptuous was not installed; either source works. click/jinja2/
-#    cryptography resolve from apt here; elftools/_graminelibos_offsets are
-#    only imported by the SGX-signing tools, which stay disabled.)
+#   (voluptuous from "pip3 install --user voluptuous" works as well; elftools and
+#    _graminelibos_offsets are only imported by the SGX-signing tools, which stay disabled.)
 #
 #   # 2. Configure, build, install into a private prefix (~3 min native build).
 #   #    Or just run scripts/install.sh, which automates this step (and optionally
@@ -53,8 +51,7 @@
 #   #    `ninja install` places the CLI scripts in <prefix>/bin and the
 #   #    graminelibos package in <prefix>/lib/python3.X/site-packages — which
 #   #    is why the script exports PYTHONPATH for exactly that directory.
-#   #    (The vm/tdx options are Tirith forks of the upstream PAL; keep them
-#   #    disabled for this direct-PAL test battery.)
+#   #    (Keep the vm/tdx PALs disabled for this direct-PAL test battery.)
 #   meson setup build-$(uname -m) -Dbuildtype=release -Ddirect=enabled \
 #       -Dsgx=disabled -Dvm=disabled -Dtdx=disabled -Dtests=enabled \
 #       -Dlibc=glibc -Dprefix="$HOME/.local/gramine"

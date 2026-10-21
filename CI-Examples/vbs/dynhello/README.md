@@ -1,29 +1,15 @@
 # Dynamically linked program (VBS enclave)
 
-A dynamically linked program. The LibOS loads it and `ld.so`, and `ld.so` maps `libc.so.6`. The
-program sorts an array with `qsort` and prints the result. The example is for the VBS backend only.
-Pass or fail status: matrix in [`CI-Examples/README.md`](../../README.md).
+A dynamically linked program (loaded with `ld.so` and `libc.so.6`) that sorts an array with `qsort` and prints the result. VBS only.
 
-# Building
+## Run
 
-Install the VBS backend first (`dev docs: vbs-enclave/manual.md`) and run all commands in this directory.
-
-## VBS
+In WSL on a Windows machine with VBS enabled. Install the backend first: [`Documentation/quickstart/vbs-windows.md`](../../../Documentation/quickstart/vbs-windows.md) (machine setup: [`vbs-enable.md`](../../../Documentation/quickstart/vbs-enable.md)).
 
 ```sh
-make VBS=1
+make VBS=1              # build and sign
+make VBS=1 check        # run and check
+gramine-vbs dynhello    # by hand
 ```
 
-The example does not run under direct, VM or SEV; `make` without `VBS=1` says so.
-
-# Testing
-
-```sh
-make VBS=1 check
-```
-
-The check looks for the lines `sorted 1 3 5 7 9` and `cos(0) = 1`. To run the program by hand:
-
-```sh
-gramine-vbs dynhello
-```
+`../exec.sh --vbs` builds, runs and checks all the VBS examples; `make` without `VBS=1` says that the example does not run elsewhere.

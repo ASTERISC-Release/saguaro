@@ -1,47 +1,23 @@
-# Bash example
+# Bash
 
-This directory contains an example for running Bash in Gramine, including the Makefile and a
-template for generating the manifest. Pass or fail status per backend: matrix in
-[`CI-Examples/README.md`](../README.md).
+Runs Bash and the commands and scripts it starts (`ls`, the scripts in `scripts/`).
 
-# Building
+## Run
 
-Activate the install of the backend first (`Documentation/quickstart/`): the manifest names that
-install's files. Run the commands in this directory.
+Install the backend first: [`Documentation/quickstart/`](../../Documentation/quickstart/README.md).
 
-## Direct, VM and SEV
+```sh
+./exec.sh --direct      # builds, runs and checks; also: --vm, --sev, --sev-snp, --sgx
+```
+
+By hand:
 
 ```sh
 make
+gramine-direct ./bash -c "ls"
+make regression         # 7 checks, prints [ Success N/7 ]; GRAMINE=gramine-vm etc. for another backend, SGX=1 for SGX
 ```
 
-## SGX
+## Notes
 
-```sh
-make SGX=1
-```
-
-The example has no VBS recipe.
-
-# Testing
-
-Under `gramine-direct`, `make regression` runs `ls` and the scripts in `scripts/` (7 checks) and
-prints `[ Success N/7 ]` for each:
-
-```sh
-make regression
-```
-
-Other backends use the same target with `GRAMINE` set:
-
-```sh
-make regression GRAMINE=gramine-vm    # VM
-make regression GRAMINE=gramine-sev   # SEV
-make SGX=1 regression                 # SGX; not verified
-```
-
-Only the VM needs a setting: the checks start child processes, so `manifest.template` sets
-`sys.experimental__multiprocess = true` (supported on x86_64 only). The other backends ignore the key.
-
-To run a single command, for example `gramine-direct ./bash -c "ls"`, replace `gramine-direct` by
-`gramine-vm`, `gramine-sev` or `gramine-sgx`.
+- The checks start child processes, so the manifest sets `sys.experimental__multiprocess = true` (used by the VM, x86_64 only).

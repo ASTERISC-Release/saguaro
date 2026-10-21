@@ -3,22 +3,22 @@
 This tree extends [gramine-tdx](https://github.com/gramineproject/gramine-tdx), the Intel TDX and
 virtual-machine fork of Gramine, with additional platform adaptation layers (PALs), architectures and
 tooling. This document lists what the tree adds, grouped by area. Each area states the contribution, the
-design decisions that matter, the findings worth recording, how to use it and its limits. Status words follow
-[README.md](README.md): *done* (works and is tested here), *experimental* (works in the tested setups, with known
-gaps), *planned*. The whole tree is experimental and not for production use. Open items are in
-[TODO.md](TODO.md); measured results of the examples are in [CI-Examples/RESULTS.md](CI-Examples/RESULTS.md).
+design decisions that matter, the findings worth recording, how to use it and its limits. Status words: *done*
+(works and is tested here; ✅ in [README.md](README.md)), *experimental* (works in the tested setups, with known
+gaps; ⚠️), *planned* (🛫). The whole tree is experimental and not for production use. Open items are in
+[Documentation/TODO.md](Documentation/TODO.md); measured results of the examples are in [CI-Examples/RESULTS.md](CI-Examples/RESULTS.md).
 
 ## Platform support
 
 | PAL | Intel x86_64 | AMD64 | AArch64 | RISC-V (RV64) |
 |---|---|---|---|---|
-| `direct` | done | done | done | experimental (emulated guest) |
+| `direct` | done | done | done | experimental (emulated guest, one board) |
 | `direct`, host GPU graphics | experimental | experimental | experimental | not available |
 | `vm` | done | experimental | experimental | planned |
 | `vm`, redirected graphics | experimental | experimental | planned | not available |
 | `sev`, `sev-snp` | not applicable | experimental | not applicable | not applicable |
 | `sgx` | experimental | not applicable | not applicable | not applicable |
-| `tdx` | experimental (untested here) | not applicable | not applicable | not applicable |
+| `tdx` | experimental | not applicable | not applicable | not applicable |
 | `vbs` | experimental | experimental | experimental | not applicable |
 
 ## Summary of results
@@ -63,8 +63,9 @@ Findings:
 ### RISC-V
 
 The direct PAL is cross-built for riscv64. In an emulated Ubuntu guest the PAL regression passes 27 tests (9
-skipped) and the LibOS regression 144 (36 skipped); eleven example suites pass with the bundled glibc. A run on
-an 8-hart board completed the basic suites; its single failure is caused by the board's memory size.
+skipped) and the LibOS regression 187 (38 skipped); eleven example suites pass with the bundled glibc. Natively on a
+RISC-V board the PAL regression passes 27 tests, the LibOS regression 190 (3 failed: two from too little memory, one
+a timeout in `test_103_gettimeofday`) and all 12 example suites pass.
 
 Design decisions:
 - `tp` belongs to the application's libc, so the PAL finds its control block as on AArch64.
@@ -83,14 +84,15 @@ per-site stub (`sys.rewrite_syscalls`). After the first call, a system call no l
 needed. x86_64 keeps its patched glibc.
 
 - **Result.** On the RISC-V board a rewritten call costs 1.9 to 2.6 us against 7.8 to 8.4 us for the trap (3.3 to
-  4.1 times cheaper). In the emulated guest, a stress test passes 40 of 40 runs in every scenario.
+  4.1 times cheaper). In the emulated guest, a stress test passes 40 of 40 runs in every scenario; on the board, all 11 scenarios pass 20
+  of 20 cold runs.
 - **Design.** RISC-V stubs are reached by `jal` (about +-1 MiB). A 2-byte-aligned `ecall` is published through
   `c.ebreak`, and an instruction-cache flush makes it visible to the other harts. A "late handler" treats a trap at a
   site another thread has just rewritten as a normal system call.
 - **Findings.** The first stubs saved the wrong register range, losing `t3` and `t4` across a patched call; and
   the unaligned publication protocol raced with a thread running the site.
 - **Limits.** One hosted stress alarm (`test_603`, a timeout) occurred on two CI runs and not in about 90 local
-  runs; the test is deselected in the hosted workflow. Larger runs under load on hardware are not done.
+  runs; the test is deselected in the hosted workflow. The stress test under load on the board is not done.
 
 ### Host libc
 
@@ -117,7 +119,7 @@ The VM PAL runs the library OS as a unikernel in a microVM, under stock QEMU wit
 
 ### Processes
 
-With `sys.experimental__multiprocess` the guest supports `fork`, `vfork`, `execve`, `wait`, signals between
+With `sys.experimental__multiprocess` (on by default on x86_64 and AArch64) the guest supports `fork`, `vfork`, `execve`, `wait`, signals between
 processes, pipes, futexes shared between processes, a guest-wide `/dev/shm` and System V IPC. Shells, nginx with
 workers and Redis `BGSAVE` run at 1, 2 and 4 vCPUs on x86_64 and on AArch64.
 
@@ -168,8 +170,7 @@ measurement covers the kernel, so the measurement can be recomputed from the fil
   (version 11.1.2, built by `container/sev/`) adds the IGVM measurement support.
 - **Modes.** `./exec.sh --sev` tests plain SEV and `--sev-snp` tests SEV-SNP as separate runs.
 - **Use.** [quickstart/sev.md](Documentation/quickstart/sev.md).
-- **Limits.** Trusted files and Secure TSC are not implemented. The tested host is a single AMD EPYC 7443P
-  system.
+- **Limits.** Trusted files and Secure TSC are not implemented.
 
 ## Intel SGX
 
@@ -177,7 +178,7 @@ The inherited SGX backend is built and tested again. `scripts/install.sh --sgx` 
 `container/run.sh` passes the enclave devices and the AESM socket into the rootless container.
 
 - **Result.** 19 of the 20 examples pass under `./exec.sh --sgx`. `unit_tests-mremap` fails because a shrunk
-  mapping remains readable. The hardware is a Xeon Gold 6430 (SGX1 and SGX2, flexible launch control).
+  mapping remains readable.
 - **Finding.** Enclave creation failed with `EPERM` in the rootless container. The apparent cause was
   `vm.mmap_min_addr`, but the actual cause was that a rootless `--device` mount is `noexec`, so the enclave's
   `PROT_EXEC` mapping was refused. Binding the device nodes with `exec` fixes it.
@@ -194,7 +195,7 @@ application are packed into a signed enclave image at build time. The tool build
 - **Supported.** Threads, signals, host files, sockets, Python, servers (Redis, NGINX, memcached, lighttpd),
   SQLite, curl, a Rust server, `iperf3` and BusyBox applets, with a local attestation report and verifier. An
   opt-in TLS example binds its key to the report.
-- **Validation.** On ARM64 and on x64 (Ubuntu 26.04 in WSL), 11 of 12 example directories and all 8 static VBS
+- **Validation.** On ARM64 and on x64, 11 of 12 example directories and all 8 static VBS
   examples pass. The LibOS regression subset passes 71 of 102 cases; every failure is classified (`fork`, platform limits).
 - **Performance.** An enclave call costs about 7 us. Counting host calls and removing staging buffers improved
   throughput 1.8 times for Redis, 1.6 times for memcached and 5 to 7 times for NGINX with 1 MiB bodies.
@@ -213,7 +214,7 @@ application are packed into a signed enclave image at build time. The tool build
 
 Opt-in manifest keys let an unmodified OpenGL application (and, on x86_64, a Vulkan application) use the host's
 render node and X server. `glxgears`, Quake II, SuperTuxKart and Minetest reach 97 to 102 % of native speed on
-Intel, 76 to 91 % on AMD, and 88 to 100 % on an NVIDIA GB10 with the proprietary driver (AArch64).
+Intel, 76 to 91 % on AMD, and 88 to 100 % on an NVIDIA GPU with the proprietary driver (AArch64).
 
 - **Findings.** The NVIDIA driver needed file-descriptor translation for its ioctls; the X connection needed
   socketpair ends passed across the boundary; and a `poll` and an `mremap` defect surfaced only with a real driver.
@@ -239,7 +240,8 @@ Intel and 72 % on AMD.
   `fstat` on a host object registered under its raw host fd number no longer end the process (the
   "Internal memory fault at 0x10" of the AMD EGL path).
 - **Limits.** The listener and the shared-page address are x86-only, which blocks AArch64. Minetest reaches 25 to
-  35 % of native speed.
+  35 % of native speed. With the default `sys.experimental__multiprocess` (true) the Intel GPU's DRM ioctls are not
+  translated, so a graphics manifest without `sys.experimental__multiprocess = false` shows no window.
 
 ### Windows games
 
@@ -278,7 +280,7 @@ memory and message queues, `faccessat2`, `getresuid`, more `prctl` options, file
 - **`scripts/install.sh`** installs the runtime for a backend, and `container/run.sh` provides a rootless
   container per checkout. The quickstart guides use the container as the only route, except Windows VBS.
 - **Findings from running everything.** Writing the guides on real machines found an x86_64 LibOS regression with the
-  bundled glibc and that the `tdx` PAL does not build. A direct run of the iperf example
+  bundled glibc and that the `tdx` PAL did not build (the build is fixed). A direct run of the iperf example
   hung for 600 s until the shared server helpers started servers in their own process group.
 - **Documentation.** `scripts/check-docs.py` verifies the paths and links of the documents. Workflows cover direct
   x86_64, direct AArch64, emulated RISC-V, VM x86_64 and SEV.
@@ -286,4 +288,5 @@ memory and message queues, `faccessat2`, `getresuid`, more `prctl` options, file
 ## Inherited from upstream
 
 The manifest syntax, the TDX backend of gramine-tdx and the SGX tooling are inherited; the SGX documentation is
-unchanged except where noted above.
+unchanged except where noted above. The examples that run on SEV also run on TDX (`gramine-tdx`, built with
+`scripts/install.sh --vm --tdx`); `exec.sh` has no TDX backend.

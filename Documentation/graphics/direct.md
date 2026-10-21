@@ -17,8 +17,8 @@ Gramine's clock is real time. Stock Mesa with DRI3 is the default; the `libgraph
 library of the VM route also works here (`PRELOAD=1`) and presents through its own X connection.
 NVIDIA's proprietary driver works through the same keys with its own device nodes.
 
-**Key results** (2026-10-14/15, 1920x1080). Intel UHD 770: Quake II 452 FPS against 454 FPS
-natively (99.8 %), `glxgears` 597 FPS (100 %), `vkcube` 99 % of native. AMD RX 9070: `glxgears`
+**Key results** (1920x1080). Intel iGPU: Quake II 452 FPS against 454 FPS
+natively (99.8 %), `glxgears` 597 FPS (100 %), `vkcube` 99 % of native. AMD GPU: `glxgears`
 about 34,000 FPS against about 45,000 natively (76 %: the per-frame system calls of a light
 program show), SuperTuxKart and Minetest 89 to 91 %, `vkcube` 69 %. Quake II with the Vulkan
 renderer: 374 FPS against 371 natively on Intel, 3000 against 3213 on AMD (93 %).

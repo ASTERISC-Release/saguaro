@@ -22,7 +22,7 @@ the pointers to physical addresses: which fields are pointers comes from a per-r
 `libos/src/sys/libos_ioctl.c`. Details: [graphics/vm.md](graphics/vm.md),
 [graphics/vulkan.md](graphics/vulkan.md).
 
-## Known issue (2026-10-20) and its fix
+## Known issue and its fix
 
 *Cause.* With the multiprocess key on, the first process is demand-paged by design (the VM PAL
 creates it with private page tables), so every graphics manifest without the key took the bounce
@@ -34,12 +34,12 @@ and no i915 request, so on an Intel GPU Mesa's first i915 request (`I915_GETPARA
 *Fix.* The table and its code now translate the i915 requests of Mesa 25.2 (`GETPARAM`, `QUERY`
 and its items, the extension chains of `GEM_CREATE_EXT` and `GEM_CONTEXT_CREATE_EXT`, the
 context parameters, `GEM_EXECBUFFER2` with objects, relocations and fences) and `AMDGPU_GEM_OP`;
-user-pointer objects are refused. *Verified* with the default key on an Intel UHD 770 and an AMD
-RX 9070: `glxgears` (430 FPS Intel), Quake II (OpenGL 410 / Vulkan 331 FPS Intel; 3000 / 2277
+user-pointer objects are refused. With the default key, on an Intel iGPU and an AMD
+GPU: `glxgears` (430 FPS Intel), Quake II (OpenGL 410 / Vulkan 331 FPS Intel; 3000 / 2277
 AMD), Minetest and SuperTuxKart windows on both GPUs, `test/vulkan/vm-check.sh` on both Vulkan
 devices (`VKH_DEVICE=Intel` for anv), the VM LibOS regression unchanged (168 passed).
 
-## The guard (2026-10-20)
+## The guard
 
 DOOM on the AMD path then crashed in 4 of 12 runs: a 260-byte `memmove` in Wine's Unix side
 reads past the end of a 1 MiB mapping, and the next page was a LibOS thread stack, because the
@@ -60,7 +60,7 @@ handles to the host. Verified: Minetest and `glxgears` on the AMD GPU, three run
 ## Proton games
 
 GE-Proton 11's Wine with DXVK in `gramine-vm` on the redirected route (`test/proton-vm/`),
-2026-10-20, on both GPUs; the guest with 4 vCPUs and 12 GiB; "native" is the same game through the
+on both GPUs; the guest with 4 vCPUs and 12 GiB; "native" is the same game through the
 same Wine prefix on the host, vsync off where stated; every window went full screen at 3840x2160;
 the games were driven by a short key script; the FPS are the DXVK overlay at the stated point and
 the ratio is against native on the same GPU. Details: [graphics/proton.md](graphics/proton.md).

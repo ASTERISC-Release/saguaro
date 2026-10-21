@@ -41,9 +41,9 @@ For example:
 
 The tools use the subject `CN=TheDefaultTestEnclaveCertName`; pass `--cert-name` to `gramine-vbs` for another one.
 
-## 5. x64 only: Smart App Control off
+## 5. Smart App Control off
 
-On x64 Windows, Smart App Control must be off. In enforcement mode it refuses enclave images signed with a self-made
+Smart App Control must be off. In enforcement mode it refuses enclave images signed with a self-made
 certificate (`LoadEnclaveImageW` fails with 4551, and the code-integrity log names the `VerifiedAndReputableDesktop`
 policy) and, without cloud lookups, new unsigned executables such as `pal_vbs_host.exe`. Turn it off in *Windows
 Security* > *App & browser control* > *Smart App Control settings*. On some Windows builds it cannot be turned on again

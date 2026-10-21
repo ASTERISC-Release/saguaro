@@ -28,7 +28,8 @@ notices in the source files):
 - IBM Corporation
 - Integritee AG
 - ARM Limited
-- The ASTERISC Research Lab, which maintains this tree and wrote its multi-architecture and AArch64 work
+- Microsoft Corporation (sample code in `test/vbs`)
+- The ASTERISC Research Lab at Arizona State University, which maintains this tree and wrote its multi-architecture and AArch64 work
 - "Gramine contributors", the collective notice used on files written by the many individuals below
 
 Third-party components keep their own copyright notices and licenses (see `LICENSE.addendum.txt`);

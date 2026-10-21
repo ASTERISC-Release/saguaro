@@ -8,8 +8,9 @@ The work is split between two machines (dev docs: vbs-enclave/manual.md):
 * the Linux side (this script): packs the vbs PAL, the LibOS, the vDSO, the manifest and the
   application's files (`vbs.packed_files`) into the image contents (scripts/vbs/pack.py) and
   compiles the Windows enclave runtime and host with clang (scripts/vbs/build-objs.sh);
-* the Windows side, over ssh: links, `veiid`s and test-signs the enclave DLL and builds the host
-  (scripts/vbs/link-sign.cmd), then runs the application with pal_vbs_host.exe.
+* the Windows side, through powershell.exe in WSL (or over ssh with --windows HOST): links,
+  `veiid`s and test-signs the enclave DLL and builds the host (scripts/vbs/link-sign.cmd), then
+  runs the application with pal_vbs_host.exe.
 
 Commands:
   gramine-vbs <program> [args]              run a packaged program (made by `make VBS=1` in its

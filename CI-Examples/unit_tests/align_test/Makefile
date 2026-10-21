@@ -57,11 +57,7 @@ else
 GRAMINE = gramine-sgx
 endif
 
-.PHONY: check
-check: all
-	$(GRAMINE) align_test > OUTPUT
-	echo "Hello, world" | diff OUTPUT -
-	@echo "[ Success ]"
+# align_test is a manual probe (it prints pointers and then sleeps), not a test: there is no `check`.
 
 .PHONY: clean
 clean:

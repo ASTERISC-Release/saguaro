@@ -1,59 +1,30 @@
-# MongoDB example
+# MongoDB
 
-This directory contains an example for running MongoDB in Gramine, including the Makefile and a
-template for generating the manifest. Pass or fail status per backend: matrix in
-[`CI-Examples/README.md`](../README.md).
+Runs the MongoDB 7.0 server (`mongod`) on port 27017; a Python client inserts and fetches documents.
 
-# Building
-
-Install the backend first (`Documentation/quickstart/`) and run all commands in this directory.
-
-## Pre-requisites
-
-Install MongoDB 7.0 Community Edition on Ubuntu 22.04:
+## Prerequisites
 
 ```sh
-sudo apt-get install gnupg curl
-curl -fsSL https://pgp.mongodb.com/server-7.0.asc | \
-    sudo gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg --dearmor
-echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | \
-    sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
-sudo apt-get update
-sudo apt-get install -y mongodb-org
+./install-prereqs.sh    # pymongo and libraries; downloads the MongoDB 7.0 tarball (checksum verified) into ~/.local/mongodb and links mongod into ~/.local/bin
 ```
 
-## Direct, VM, and SEV
+## Run
+
+Install the backend first: [`Documentation/quickstart/`](../../Documentation/quickstart/README.md).
 
 ```sh
-make
+./exec.sh --direct      # builds, runs and checks; also: --vm, --sev, --sev-snp, --sgx
 ```
 
-## SGX
+By hand, the server in one terminal and the client in another:
 
 ```sh
-make SGX=1
+make                    # make SGX=1 for SGX
+gramine-direct mongod   # VM and SEV: GRAMINE_VM_INBOUND=27017:27017 gramine-vm mongod (or gramine-sev)
+mongosh scripts/insert.js && mongosh scripts/fetch.js       # needs mongosh; make check uses pymongo instead
 ```
 
-The example has no VBS recipe.
+## Notes
 
-# Testing
-
-Start the server (the command-line options are hardcoded in the manifest). It listens on the
-MongoDB default port 27017. Under the VM and SEV, `GRAMINE_VM_INBOUND` forwards the port through
-the relay:
-
-```sh
-gramine-direct mongod
-GRAMINE_VM_INBOUND=27017:27017 gramine-vm mongod     # VM
-GRAMINE_VM_INBOUND=27017:27017 gramine-sev mongod    # SEV
-gramine-sgx mongod                                   # SGX; not verified
-```
-
-From a new terminal, insert documents into a collection and fetch them:
-
-```sh
-mongosh scripts/insert.js
-mongosh scripts/fetch.js
-```
-
-`fetch.js` prints the inserted documents.
+- The server options are hardcoded in the manifest. `make check` prints `[ Success 1/1 ]`.
+- On aarch64, MongoDB 7.0 needs an ARMv8.2-A CPU.

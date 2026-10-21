@@ -1,60 +1,62 @@
-# Guidelines for AI agents and contributors
+# Running the system: instructions for AI agents
 
-This file is for any coding agent, whatever the tool, and for people. It is the single copy of
-these guidelines; tool-specific files should only point here.
+This file tells a coding agent (and a person) how to build and run this tree in each of its modes. How to
+**develop** here (parallel checkouts, plans, testing rules, reporting) is in
+[`Documentation/AGENTS.md`](Documentation/AGENTS.md); read it before changing code. Everything is experimental.
+Platform status: [`README.md`](README.md). Measured results of the examples: [`CI-Examples/RESULTS.md`](CI-Examples/RESULTS.md).
 
-## Working in parallel
+## The route
 
-Several people or agents can work at once, each on their own branch. What makes that safe:
+- **Use the container.** `container/run.sh` opens a shell in the development container of this machine's
+  architecture, `container/run.sh '<command>'` runs one command in it, `container/run.sh --target riscv64 ...` is the
+  RISC-V cross container, and `container/run.sh down` removes the container (**the install inside it is lost**).
+  Nothing is built or installed on the host. The one exception is Windows VBS, which runs in WSL.
+- **Install with `scripts/install.sh`** (there is no top-level `install.sh`). Options: none = the direct backend into
+  `~/.local/gramine`; `--vm` = also the vm PAL (`~/.local/gramine-vm`); `--sev --graphics disabled` = the vm PAL with
+  the SEV PAL and `gramine-sev`; `--sgx` (`~/.local/gramine-sgx`); `--vbs` = the WSL side of the VBS tooling;
+  `--target riscv64` = a cross build; `-j N` limits parallelism (use `-j4` on a small board). `scripts/install.sh --help`
+  lists the rest. Load the environment with `. <prefix>/env.sh`; `container/run.sh` loads `~/.local/gramine-vm/env.sh`
+  itself.
+- **Run an example with `./exec.sh --<backend>`** in its directory under `CI-Examples/`. A backend is required. It says
+  why a backend cannot run, prints the command under test, streams the logs, and ends with the example's check; the
+  exit status is the verdict. In a fresh container, `blender`, `mongodb`, `nodejs`, `openjdk` and `r` first stop with
+  "cannot run here: missing on the host": run `CI-Examples/install-all-prereqs.sh` (or that example's
+  `install-prereqs.sh`) once.
 
-- **One checkout per branch.** Give each branch its own checkout (a clone or a git worktree) and do
-  not work in another's. Switching branches inside a shared checkout while someone else uses it is
-  what causes conflicts.
-- **Name the folder `gramine-<name>`** (for example `gramine-graphics/gramine-multiarch`). Then
-  `container/run.sh` names the container after the folder, gives it its own guest-CID base, and
-  refuses a container that mounts a different checkout. Without such a folder it falls back to the
-  default shared names, which suit one checkout only. `GRAMINE_WORKSPACE` sets the name by hand.
-- **A QEMU fork** that a branch needs (see dev docs: `graphics/`) sits next to the
-  checkout as `qemu-tirith/`, or wherever `QEMU_TIRITH_DIR` points.
-- **Push only your own branch.** Do not force-push or rewrite history that is already pushed. Leave
-  the integration branch to whoever integrates.
-- **Shared machine resources are not isolated by checkouts:** the screen, the hugepage pool, the
-  CPUs (and so any timing), fixed test ports, CI minutes. Before you open a window, run a benchmark
-  or start a test server, check that nobody else is using the same thing.
+## The modes
 
-## How to work
+| Mode | Needs | Install | Run | Guide |
+|---|---|---|---|---|
+| `direct`: an ordinary Linux process | any Linux host (container) | `scripts/install.sh` | `gramine-direct <app>`; `./exec.sh --direct` | `Documentation/quickstart/direct.md` |
+| `vm`: a microVM under KVM | same-architecture host with `/dev/kvm` and `/dev/vhost-vsock` | `scripts/install.sh --vm` | `gramine-vm <app>`; `./exec.sh --vm` | `Documentation/quickstart/vm.md` |
+| `sev` and `sev-snp` | AMD EPYC host with `/dev/sev`; `sev-tools/` (QEMU for SEV) beside the checkout | `scripts/install.sh --sev --graphics disabled` | `gramine-sev`; `./exec.sh --sev` or `--sev-snp`; `test/sev/test-sev.sh` | `Documentation/quickstart/sev.md` |
+| `sgx` | Intel host with the in-kernel SGX driver (`/dev/sgx_enclave`) | `scripts/install.sh --sgx` | `gramine-sgx`; `./exec.sh --sgx` | `Documentation/quickstart/tdx-sgx.md` |
+| `vbs`: a Windows VBS enclave | Windows 11 (ARM64 or x64) with VBS enabled, WSL | `scripts/install.sh --vbs` in WSL | `gramine-vbs <app>`; `./exec.sh --vbs` | `Documentation/quickstart/vbs-windows.md` (machine setup: `vbs-enable.md`) |
+| `tdx` | Intel TDX host, a QEMU with TDX and the TD-shim checkout (as for upstream gramine-tdx) | `scripts/install.sh --vm --tdx` | `gramine-tdx <app>`; the examples that run on SEV also run on TDX (`exec.sh` has no TDX backend) | `Documentation/quickstart/tdx-sgx.md` |
+| RISC-V (`direct`) | cross container, or a riscv64 board | `scripts/install.sh --target riscv64`, or plain on the board | in the QEMU guest (`scripts/riscv64/`), or `test/direct/test-direct.sh` on a board | `Documentation/quickstart/riscv.md` |
+| Graphics, direct | host GPU and X server | `scripts/install.sh` | `make run-direct` in `CI-Examples/graphics/<example>` | `Documentation/quickstart/graphics-direct.md` |
+| Graphics, vm (x86_64) | the QEMU fork `qemu-tirith` (outside this repository), `DISPLAY` set when the container is created | `scripts/install.sh --vm` | `make run` in `CI-Examples/graphics/<example>` with `QEMU_PATH` exported | `Documentation/quickstart/graphics-vm.md` |
 
-- **Development documents are in a separate private repository**, `gramine-multiarch-docs`, checked out
-  next to this one (`../gramine-multiarch-docs`; `GRAMINE_DEV_DOCS` names another place for the tools that read it).
-  Comments in the code that say "dev docs: <topic>/<file>" mean that checkout.
-- **Plan first.** Before a development task, write `<topic>/PLAN.md` there (scope, phases with exit criteria,
-  decisions with a recommendation, risks) and get it agreed. A topic also has `FINDINGS.md` (the dated log,
-  appended), `TODO.md` (future tasks) and `TESTING.md` (test results, with dates and conditions). Keep
-  `README.md` and `summary.md` of that repository current.
-- **This repository keeps two short files**: `CHANGELOG.md` (what was added, by date) and `TODO.md` (open items by
-  architecture). Update them when a topic finishes. Do not put commit hashes, machine names, user names or
-  addresses in anything committed here.
-- **Keep documents true.** After editing documents, run `scripts/check-docs.py`: it reports paths and links
-  that name no file of the repository (names that are legitimately external go in `scripts/check-docs.allow`).
-- **Writing documents.** Follow `doc-style.md` of the development documents.
-- **Commit small, verified steps** on your own branch, with a message that says what changed and
-  why.
-- **Ask first** before destructive git actions (`reset --hard`, deleting branches, anything on a
-  remote), before spending CI minutes, before changing a branch that is not yours, and before
-  removing a container or install prefix that holds work.
-- **No root.** The development scripts use rootless containers; do not add steps that need `sudo`.
-- **Shared code.** A change to a file used by several architectures or PALs is minimal, guarded by
-  the architecture where possible, and checked with a build for the other targets before it is
-  merged.
+Tests: `test/direct/test-direct.sh` (PAL and LibOS regression and the example suites; `GRAMINE_PREFIX` and `LOGDIR`
+select the install and the logs), `test/test-vm*.sh` (the VM suites), `test/sev/test-sev.sh`, `scripts/stress_rewrite.sh`
+(syscall-site rewriting), `scripts/check-docs.py` (documents). Expected results and known failures are in
+`CI-Examples/RESULTS.md` (for example `test_020_cpuinfo` under SEV-SNP, `nodejs` under VBS, `unit_tests-mremap` under
+SGX); a failure not listed there is new.
 
-## Reporting
+## Things that go wrong
 
-Say what you ran and what it showed. Do not report a result you did not measure; say what you did
-not check. If a test fails, give the output. When something is done and verified, say so plainly.
-
-## Where things are
-
-- Building, containers and the RISC-V test guest: `INSTALL.md`.
-- Platform matrix: `README.md`; results of the examples: `CI-Examples/RESULTS.md`; open items: `TODO.md`.
-- Development documents of every topic, build options, how to test, implementing a system call: the
-  `gramine-multiarch-docs` checkout (`multiarch.md`, `syscall-workflow.md`).
+- **One `gramine-vm` at a time** per machine: two instances collide on the vsock relay port ("vsock relay did not
+  start: Address already in use"). Stop one before starting the other.
+- **The manifest must exist** in the current directory: run `make` in the example first. A missing manifest is reported
+  by `gramine-vm` as a relay failure; read the last line of the message.
+- **Graphics under the VM:** export `QEMU_PATH=<qemu-tirith>/build/qemu-system-x86_64`; create the container with
+  `DISPLAY` set (`DISPLAY=:0 container/run.sh`) and mount the QEMU checkout with `QEMU_TIRITH_DIR`. Read the "Limits"
+  of `Documentation/quickstart/graphics-vm.md`: a graphics manifest without `sys.experimental__multiprocess = false`
+  may show no window.
+- **SGX and rootless podman:** the enclave devices need the `exec` bind mount that `container/run.sh` already uses.
+- **VBS from WSL:** run `gramine-vbs`, `make VBS=1` and `./exec.sh --vbs` in the foreground of the shell; a detached
+  process has no Windows interop and fails at the Windows step.
+- **Files owned by the container** (created by a rootless container) are not removable by the host user; use
+  `podman unshare rm -rf <path>`.
+- **A board without working DNS** fails every download with an empty file (hash `e3b0c442...`): fix the resolver first.
+- **Do not report what you did not run.** A skipped or unsupported backend is "not run", not a pass. Give failing output.

@@ -1,45 +1,28 @@
 # Node.js
 
-This directory contains a Makefile and a template manifest to run Node.js on Gramine. The example
-uses the Node.js installed on the system and does not compile it from source. Pass or fail status
-per backend: matrix in [`CI-Examples/README.md`](../README.md).
+Runs the system Node.js (not built from source) on `helloworld.js`.
 
-# Building
-
-Install the backend first (`Documentation/quickstart/`) and run all commands in this directory.
-
-## Direct, VM, and SEV
+## Prerequisites
 
 ```sh
-make
+./install-prereqs.sh    # installs nodejs
 ```
 
-## SGX
+## Run
+
+Install the backend first: [`Documentation/quickstart/`](../../Documentation/quickstart/README.md).
 
 ```sh
-make SGX=1
+./exec.sh --direct      # builds, runs and checks; also: --vm, --sev, --sev-snp, --sgx, --vbs
 ```
 
-## VBS
-
-In WSL on a Windows machine with VBS (`dev docs: vbs-enclave/manual.md`, "Makefile flow"). The recipe downloads
-and packs the linux-arm64 `node`, so it applies to ARM64:
+By hand:
 
 ```sh
-make VBS=1
+make                    # make SGX=1 for SGX; make VBS=1 in WSL for VBS
+make check              # runs helloworld.js, prints [ Success 1/1 ]; GRAMINE=gramine-vm etc., SGX=1 or VBS=1 for those backends
 ```
 
-# Testing
+## Notes
 
-`make check` runs `helloworld.js` and prints `[ Success 1/1 ]` if the output contains `Hello World`.
-It takes the backend from `GRAMINE`:
-
-```sh
-make check                          # direct
-make check GRAMINE=gramine-vm       # VM
-make check GRAMINE=gramine-sev      # SEV
-make SGX=1 check                    # SGX; not verified
-make VBS=1 check                    # VBS
-```
-
-No backend needs another setting in the Makefile or the manifest template.
+- The VBS recipe packs the linux-arm64 `node`, so it applies to ARM64 only.

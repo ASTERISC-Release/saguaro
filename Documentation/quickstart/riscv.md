@@ -2,8 +2,8 @@
 
 The RISC-V port covers the direct PAL and is **experimental**: it is cross-built on an x86_64
 machine and run in an Ubuntu 24.04 riscv64 guest under `qemu-system-riscv64` (full-system
-emulation; user-mode emulation cannot run it, because it has no seccomp). It has not been run on
-RISC-V hardware. Details: the RISC-V section of [INSTALL.md](../../INSTALL.md) and
+emulation; user-mode emulation cannot run it, because it has no seccomp). It also builds and runs natively on a
+RISC-V board (see [Native build on a board](#native-build-on-a-board)). Details: the RISC-V section of [INSTALL.md](../../INSTALL.md) and
 `dev docs: riscv/PLAN.md`.
 
 Status (as in [README.md](../../README.md)): `direct` ⚠️; `vm` 🛫; graphics ❌.
@@ -61,13 +61,34 @@ workflow in `.github/workflows/` lists the ones it installs).
 - `port 2222 is already in use`: another guest (or service) listens on the port in this network
   namespace; set `RISCV_GUEST_PORT`.
 
-## Verified
+## Results in the guest
 
-2026-10-15, `main` at `9e28ea81`, x86_64 host (Arch Linux, rootless podman), fresh clone and
-cross container: the cross-build and `guest.sh start` took about 5 minutes together (the guest
-answered after about 150 s of its first boot); `run-suite.sh pal`: 27 passed, 9 skipped;
-`run-suite.sh libos`: 187 passed, 38 skipped (2 min 22 s); `run-examples.sh helloworld`:
-`PASS` after `build-essential` was installed in the guest (without it the build failed with
-`make: command not found`).
+The PAL regression passes 27 tests (9 skipped) and the LibOS regression 187 (38 skipped); `run-examples.sh
+helloworld` passes once `build-essential` is installed in the guest.
 
-Not verified: other example suites; anything on RISC-V hardware.
+## Native build on a board
+
+On a riscv64 machine the same PAL builds and runs without the cross container and the guest:
+
+    scripts/install.sh -j4                    # native build and install; keep -j low on a small board
+    export GRAMINE_PREFIX="$HOME/.local/gramine" LOGDIR="$HOME/gramine-logs"
+    test/direct/test-direct.sh                # PAL, LibOS and the example suites (or name suites: libos pal redis)
+
+Results: the PAL regression passes 27 tests (9 skipped); the LibOS regression 190 (40 skipped, 3 failed); all 12
+example suites of `test-direct.sh` pass (`helloworld`, `multi-thread`, `bash`, `sqlite`, `python`, `networks`,
+`busybox`, `lighttpd`, `redis`, `nginx`, `memcached`, `rust`); `scripts/stress_rewrite.sh -n 20` passes all 11
+scenarios in 20 of 20 cold runs; with `sys.rewrite_syscalls` a `getppid` is about 3.9 times cheaper than without
+it. The three LibOS failures:
+
+- `test_054_large_mmap`: too little RAM (the second `mmap` fails with `ENOMEM`).
+- `test_2025_fork_reservation`: the child fails allocating an 8 GiB range (`ENOMEM`; the test asks for up to 16 GiB).
+  Probably too little RAM as well; not confirmed.
+- `test_103_gettimeofday`: times out at the harness default of 10 s. Run directly it needs about 15 s for 4 threads
+  of 1M calls and prints `TEST OK`; turning rewriting off does not change the time, so it is spent in the host clock path.
+
+Notes for a board:
+
+- The examples download their sources: without a working DNS resolver every download fails (the empty file shows
+  up as the hash mismatch `e3b0c442...`).
+- `memcached` needs `libevent-dev` (the workflow installs it with `apt`); `rust` needs `rustup` with a stable toolchain.
+- Building the examples natively on a board takes a long time.

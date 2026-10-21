@@ -1,7 +1,9 @@
 # Building the Windows VBS-enclave PAL
 
-The `vbs` PAL targets AArch64 Windows (see `dev docs: vbs-enclave/PLAN.md`, decisions D1-D3
-and the design of the hello-world path). An enclave image holds two kinds of code:
+The `vbs` PAL targets ARM64 and x64 Windows (see `dev docs: vbs-enclave/PLAN.md`, decisions D1-D3
+and the design of the hello-world path). The description below is for ARM64; on x64 the same steps
+use `x86_64-pc-windows-msvc` and x86_64 ELF objects (`dev docs: vbs-enclave/PLAN-x64.md`). An enclave
+image holds two kinds of code:
 
 - the **Windows enclave runtime** (`pal/src/host/vbs/enclave/`) and the **host** executable
   (`pal/src/host/vbs/host/`): Windows ARM64 code, compiled on Linux with

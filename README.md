@@ -29,7 +29,7 @@ These features and backends are the result of published and upcoming work by the
 
 ## Use-Cases
 
-There are three main use-cases of this project: 
+There are three main use-cases of this project:
 
 **(1) Sandboxing untrusted Linux applications (e.g., AI agents and games):** An application runs
 on Gramine's own system call interface rather than directly on the host kernel, reducing the
@@ -77,12 +77,11 @@ on x86_64, AArch64 and RISC-V, so that the architecture-specific parts can be co
 | `sev` (AMD SEV)                 | ➖           | ⚠️    | ➖      | ➖            |
 | `vbs` (Windows VBS enclaves)    | ⚠️           | ⚠️    | ⚠️      | ➖            |
 
-Per-cell details, build options and verification status are in the development notes (a private repository; see [CHANGELOG.md](CHANGELOG.md) and [TODO.md](TODO.md) for the public summary).
+Per-cell details, build options and verification status are in the development notes (a private repository; see [CHANGELOG.md](CHANGELOG.md) and [TODO.md](Documentation/TODO.md) for the public summary).
 
 ## Getting Started
 
-Each quickstart guide goes from a fresh checkout to a running example, with the commands verified
-on a machine of that platform:
+Each quickstart guide goes from a checkout to a running example:
 
 - **Containerized userspace** (`direct`): [Documentation/quickstart/direct.md](Documentation/quickstart/direct.md)
 - **Micro-virtual machine** (`vm`): [Documentation/quickstart/vm.md](Documentation/quickstart/vm.md)
@@ -94,40 +93,10 @@ Guides for graphics and for the RISC-V cross-build are listed in the [quickstart
 
 [INSTALL.md](INSTALL.md) is the complete reference
 for building and installing, on a host or in the supplied containers.
+[Documentation/README.md](Documentation/README.md) lists the documents of this tree, and
+[AGENTS.md](AGENTS.md) says how to build and run each mode (for people and coding agents).
 
-`CI-Examples/` contains ready-made applications. To check whether your own application is likely
-to run, see [Will my application run?](Documentation/will-it-run.md).
-
-## Documentation
-
-Using this tree:
-
-- [Quickstart guides](Documentation/quickstart/README.md): one per platform.
-- [INSTALL.md](INSTALL.md): building, installing, containers, the RISC-V cross-build.
-- [Will my application run?](Documentation/will-it-run.md): the syscall profiler and the
-  tolerance check.
-- [Enabling VBS on a Windows machine](Documentation/quickstart/vbs-enable.md): the one-time setup (VBS, test signing,
-  Visual Studio, signing certificate).
-- Graphics: in `gramine-direct` (x86_64, AArch64) and in the `vm` PAL (x86_64); the guides are
-  [direct](Documentation/quickstart/graphics-direct.md) and [vm](Documentation/quickstart/graphics-vm.md),
-  the examples [CI-Examples/graphics/](CI-Examples/graphics/); the two routes, the pointer
-  table of the redirected route and the Proton game results are in
-  [Documentation/GRAPHICS.md](Documentation/GRAPHICS.md), with one summary page per topic in
-  [Documentation/graphics/](Documentation/graphics/README.md).
-
-Reference:
-
-- [Features](Documentation/FEATURES.md): what this tree adds to gramine-tdx; open items are in [TODO.md](TODO.md).
-- [Changelog](CHANGELOG.md) and [open items](TODO.md) of this tree.
-- [Results of the examples](CI-Examples/RESULTS.md).
-- [Upstream documentation](https://gramine.readthedocs.io) for features shared with Gramine
-  (manifest syntax and others); details may differ in this tree.
-
-Development:
-
-- [Documentation index](Documentation/README.md): what each document is, and which are inherited
-  from upstream.
-- Development documents (plans, logs, test results of every port) are kept in a separate private repository.
+`CI-Examples/` contains ready-made applications.
 
 ## Contributing
 
@@ -140,7 +109,10 @@ file it modifies or adds (LGPL-3.0-or-later, or BSD-3-Clause for files under
 
 Gramine is licensed under the LGPL-3.0-or-later (see `LICENSE.txt`); the
 examples in `CI-Examples/` are BSD-3-Clause unless a file says otherwise (see
-`LICENSE.addendum.txt`). The copyright notices of upstream Gramine and gramine-tdx
+`LICENSE.addendum.txt`). The code added by the ASTERISC Research Lab (Arizona State
+University) is copyright (C) 2026 The ASTERISC Research Lab and is licensed under the
+same terms as the part of the tree it belongs to; the addendum lists the third-party
+material this tree added. The copyright notices of upstream Gramine and gramine-tdx
 are retained.
 
 ## Citation
@@ -153,7 +125,7 @@ This work is the result of several research projects undertaken by our lab, out 
 - Veil: A Protected Services Framework for Confidential Virtual Machines (ACM ASPLOS'23)
 - Chancel: Efficient Multi-client Isolation Under Adversarial Programs (ISOC NDSS'21)
 
-If you find this project useful, please cite it our work. 
+If you find this project useful, please cite our work.
 
 We are also in the process of releasing a whitepaper (to Arxiv) detailing the current project.
 

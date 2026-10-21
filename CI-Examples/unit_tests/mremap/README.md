@@ -1,9 +1,10 @@
 # mremap
 
-Tests `mremap(2)` without `MREMAP_MAYMOVE`: a mapping is grown in place, filled and checked, then
-shrunk in place and checked again. The address must not change and the data must survive.
+Tests `mremap(2)` without `MREMAP_MAYMOVE`: a mapping is grown in place and shrunk in place; the address must not change and the data must survive.
 
-    make
-    gramine-direct helloworld        # prints "ALL IN-PLACE TESTS PASSED"
+```sh
+make
+gramine-direct helloworld        # prints "ALL IN-PLACE TESTS PASSED"
+```
 
-(`make check` is not wired up for this example.) See `libos/src/sys/libos_mremap.c`.
+`../exec.sh --direct` (or `--vm`, `--sev`, `--sev-snp`) builds, runs and checks it. `make check` here runs it and requires `ALL IN-PLACE TESTS PASSED`.

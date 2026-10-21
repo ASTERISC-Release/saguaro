@@ -9,7 +9,9 @@
 #   scripts/install.sh [options] [suite...]
 #
 # Options:
-#   --prefix DIR           install prefix (default: $HOME/.local/gramine; no root needed)
+#   --prefix DIR           install prefix (no root needed). Default: $HOME/.local/gramine;
+#                          $HOME/.local/gramine-vm with --vm or --sev; $HOME/.local/gramine-sgx
+#                          with --sgx (without --vm); $HOME/.local/gramine-riscv64 with --target
 #   --target ARCH          cross-build for ARCH instead of the build machine's own
 #                          architecture (riscv64; see dev docs: riscv/PLAN.md).
 #                          Requires the matching cross toolchain to be installed -- for
@@ -18,7 +20,8 @@
 #                          build dir and prefix gain a -riscv64 suffix so a cross build can
 #                          never clobber the native one.
 #   --build-dir DIR        meson build directory, relative to the repository root
-#                          (default: build-$(uname -m), or build-riscv64 with --target)
+#                          (default: build-$(uname -m); build-vm-<arch> with --vm or --sev,
+#                          build-sgx with --sgx (without --vm), build-riscv64 with --target)
 #   --deps                 install the build dependencies first (scripts/dependencies.sh
 #                          --build-only; done automatically if build tools are missing)
 #   --add-to-profile       also source <prefix>/env.sh from ~/.bashrc, so new shells have Gramine
@@ -50,9 +53,9 @@
 #
 # --vm builds the vm-PAL unikernel ("the correct vm version for this machine"): the default build
 # dir becomes build-vm-<arch> so it never reconfigures a direct-PAL build dir, and on aarch64 the
-# option set is fixed to the dev docs: vm.md recipe (-Dvm=enabled, direct/sgx/tdx/tests all disabled --
-# the aarch64 vm kernel replaces the direct PAL entirely, so a direct-PAL test battery does not
-# apply). On x86_64 your --sgx/--tdx choices are kept.
+# option set is fixed to the dev docs: vm.md recipe (-Dvm=enabled; direct, sgx, tdx and graphics
+# disabled -- the aarch64 vm kernel replaces the direct PAL; the tests are built as PIE for the LibOS
+# suite under gramine-vm, test/vm/test-vm.sh). On x86_64 your --sgx/--tdx choices are kept.
 #
 # Defaults match this repo's tested configuration:
 #   -Ddirect=enabled -Dsgx=disabled -Dvm=disabled -Dtdx=disabled -Dgraphics=enabled
@@ -63,13 +66,13 @@
 #
 # Notes:
 #  * Dependencies come from scripts/dependencies.sh (apt, sudo, may prompt for a password).
-#  * vm/tdx are Tirith forks of the PAL that need extra system dependencies (and SGX/TDX hardware);
-#    they stay disabled for the direct-PAL battery.
+#  * vm/tdx are the PALs inherited from gramine-tdx: vm needs QEMU with KVM to run, tdx needs TDX
+#    hardware; they stay disabled for the direct-PAL battery.
 #  * --vm on aarch64 is self-contained: no SGX/TDX packages are needed, and the build runs wherever
 #    meson/gcc exist; only *running* the resulting kernel needs QEMU with KVM.
 #  * --target riscv64 only *builds* (and installs); riscv64 binaries cannot run on this build
 #    machine's kernel. Run the test battery inside the RISC-V guest instead
-#    (scripts/riscv64/guest.sh + test/direct/test-direct.sh there, see the plan's Phase 0 notes).
+#    (scripts/riscv64/guest.sh + scripts/riscv64/run-suite.sh, see Documentation/quickstart/riscv.md).
 #    --deps is skipped for cross builds: the cross toolchain comes from the container image,
 #    not from scripts/dependencies.sh.
 

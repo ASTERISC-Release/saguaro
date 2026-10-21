@@ -24,8 +24,7 @@ here.
 
 ## Syscall cost
 
-Measured on one machine: an 8-core aarch64 system (Qualcomm CPU, about 7.6 GiB of RAM) running
-Ubuntu 24.04 under WSL2. WSL2 is virtualized, so signal delivery (and therefore the seccomp-trap
+Measured on AArch64 under WSL2. WSL2 is virtualized, so signal delivery (and therefore the seccomp-trap
 path) may cost more than on bare metal: read the absolute numbers as indicative and the ratios as
 the result. No bare-metal numbers are published yet.
 

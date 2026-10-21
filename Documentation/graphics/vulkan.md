@@ -25,12 +25,12 @@ exports), `vk-two` (several processes in one session), `gfx-fdpass` (a host fd o
 to a forked and to an exec'd process), run together by `test/vulkan/vm-check.sh` from demand-paged
 processes (`VKH_DEVICE=Intel` selects the Intel device on a two-GPU machine).
 
-**Key results** (2026-10-15, 1920x1080, native / direct / VM). Quake II with the Vulkan
+**Key results** (1920x1080, native / direct / VM). Quake II with the Vulkan
 renderer: Intel 371 / 374 / 318 FPS (VM 86 % of native), AMD 3213 / 3000 / 2315 FPS (72 %).
 `vkcube`: Intel 356 / – / 349 FPS (98 %), AMD 27,473 / – / 10,989 FPS (40 %). `vkmark` score:
 Intel 630 / – / 493 (78 %), AMD 35,553 / – / 18,459 (52 %). Submit-and-wait latency of an
 empty command buffer: Intel 39 µs natively, 43 to 47 µs in the VM; AMD 34 against 35 to 37 µs. On
-2026-10-20 the headless suite passed on both GPUs from demand-paged processes, on Intel through the
+the headless suite passes on both GPUs from demand-paged processes, on Intel through the
 i915 entries of the pointer table ([../GRAPHICS.md](../GRAPHICS.md)).
 
 **Findings worth knowing.** Timeline-semaphore waits returned `VK_ERROR_UNKNOWN` instead of

@@ -1,66 +1,31 @@
-# Rust example
+# Rust
 
-This directory contains an example for running Rust in Gramine, including the Makefile and a
-template for generating the manifest. The application is an HTTP server based on `hyper`; it also
-tests Gramine's `epoll` implementation, as Rust's async runtimes used to trigger bugs in it. Pass or
-fail status per backend: matrix in [`CI-Examples/README.md`](../README.md).
+Runs an HTTP server written in Rust (`hyper`) on `127.0.0.1:3000`; it also exercises Gramine's `epoll`.
 
-# Building
-
-Install the backend first (`Documentation/quickstart/`) and run all commands in this directory.
-The build needs `cargo`.
-
-## Direct, VM, and SEV
+## Prerequisites
 
 ```sh
-make
+./install-prereqs.sh    # cargo/rustc (1.85 if available), curl, build-essential; VBS also needs rustup stable with rust-src (WITH_RUSTUP=1 ./install-prereqs.sh)
 ```
 
-## SGX
+## Run
+
+Install the backend first: [`Documentation/quickstart/`](../../Documentation/quickstart/README.md).
 
 ```sh
-make SGX=1
+./exec.sh --direct      # builds, runs and checks; also: --vm, --sev, --sev-snp, --sgx, --vbs
 ```
 
-## VBS
-
-In WSL on a Windows machine with VBS (`dev docs: vbs-enclave/manual.md`, "Makefile flow"). This needs rustup
-stable with the `rust-src` component:
+By hand, the server in one terminal and the client in another:
 
 ```sh
-make VBS=1
+make                    # make SGX=1 for SGX; make VBS=1 in WSL for VBS
+make start-gramine-server       # VM and SEV: add GRAMINE=gramine-vm (or gramine-sev) GRAMINE_VM_INBOUND=3000:3000
+curl http://127.0.0.1:3000      # Hello, World
 ```
 
-# Testing
+`make check` starts the server, queries it and stops it (`make SGX=1`, `make VBS=1` for those backends).
 
-- **direct:** `make start-gramine-server`. Verified on x86_64 and aarch64.
-- **vm:** `GRAMINE_RUNNER=gramine-vm test/direct/test-direct.sh rust`, from the repository root (the VM forwards the server's port through its relay). Verified on x86_64 and aarch64.
-- **sev:** not verified.
-- **tdx:** not verified.
-- **sgx:** not verified. The commands are given above.
-- **vbs:** `make VBS=1 check`. Verified on ARM64 and x64.
+## Notes
 
-Start the server in one terminal. The bind address and port are hardcoded in `src/main.rs`
-(`127.0.0.1:3000`):
-
-```sh
-make start-gramine-server                                                    # direct
-make start-gramine-server GRAMINE=gramine-vm GRAMINE_VM_INBOUND=3000:3000     # VM
-make start-gramine-server GRAMINE=gramine-sev GRAMINE_VM_INBOUND=3000:3000    # SEV
-make SGX=1 start-gramine-server                                              # SGX; not verified
-```
-
-Under the VM and SEV, `GRAMINE_VM_INBOUND` forwards the port through the relay. No other setting is
-needed. `GRAMINE_RUNNER=gramine-vm test/test-direct.sh rust`, from the repository root, runs the VM
-case.
-
-Query the server from another terminal. The expected output is `Hello, World`:
-
-```sh
-curl http://127.0.0.1:3000
-```
-
-Stop the server with Ctrl-C. `../common_tools/benchmark-http.sh http://127.0.0.1:3000` runs a
-benchmark (needs wrk2).
-
-For VBS, `make VBS=1 check` starts the server in an enclave and asks it for a page.
+- The address and port are hardcoded in `src/main.rs`.

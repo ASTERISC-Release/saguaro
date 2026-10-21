@@ -20,7 +20,7 @@ gramine-argv-serializer
 to stdout. The result is intended to be redirected to a file that can
 be used as a trusted or a protected file and `loader.argv_src_file` manifest
 option pointed to it.
-For more information on the usage, please refer to `../manifest-syntax`.
+For more information on the usage, please refer to [manifest-syntax.md](../manifest-syntax.md).
 
 For an example on how to use this utility from Python, please refer to
 `libos/test/regression/test_libos.py`.

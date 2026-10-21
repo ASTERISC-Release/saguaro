@@ -140,9 +140,9 @@ GramineManifestSchema = Schema({
     },
 
     # The VM PAL (`gramine-vm`); see dev docs: CHANGELOG.md. Only `vm.net` is read
-    # today, by the launcher and its per-VM vsock relay. The `vm` table is shared with the VM
-    # memory plan (dev docs: vm-memory/PLAN.md): whichever topic lands first adds its
-    # keys here; keep the other's keys when editing.
+    # today, by the launcher and its per-VM vsock relay. The `vm` table is shared with a planned
+    # VM memory topic (not in the development notes yet; dev docs: TODO.md records it): whichever
+    # topic lands first adds its keys here; keep the other's keys when editing.
     'vm': {
         'net': {
             # "allow" (the default) lets the guest connect out through the relay, "deny" blocks

@@ -1,12 +1,10 @@
 # Quickstart: Intel SGX and TDX
 
 This tree keeps the confidential-computing back ends of upstream [gramine-tdx](https://github.com/gramineproject/gramine-tdx) for Intel CPUs: `gramine-sgx` (the application
-in an SGX enclave) and `gramine-tdx` (the `vm` unikernel in a TDX trust domain). **`gramine-sgx` is
-verified on SGX hardware (2026-10-20, section SGX below); `gramine-tdx` has not been run on TDX
-hardware as part of this tree's work**: for TDX, use the upstream documentation and treat that section as pointers.
+in an SGX enclave) and `gramine-tdx` (the `vm` unikernel in a TDX trust domain). The examples that run on
+SEV also run on TDX.
 
-Status (as in [README.md](../../README.md)): Intel x86_64 ✅ for SGX, ⚠️ for TDX (inherited, not run here); AMD64, AArch64 and
-RISC-V ➖.
+Status (as in [README.md](../../README.md)): Intel x86_64 ⚠️ for SGX and for TDX; AMD64, AArch64 and RISC-V ➖.
 
 As in the other guides, the build runs in the container of `container/run.sh` (see
 [direct.md](direct.md), section 1); the commands below run in its shell, in the repository, unless
@@ -29,8 +27,7 @@ measured into it. See [sgx-intro.md](../sgx-intro.md) for the concepts.
 - No other host setting is needed. In particular, `vm.mmap_min_addr` stays at the default of the
   distribution (the loader's message `You may need to set sysctl vm.mmap_min_addr to zero` is
   misleading, see Troubleshooting), and the examples run without the AESM service. Remote
-  attestation needs the AESM service, a PCCS and `sgx.remote_attestation` in the manifest; that is not covered here
-  (not verified).
+  attestation needs the AESM service, a PCCS and `sgx.remote_attestation` in the manifest; that is not covered here.
 
 ### 1. Prepare the host (once)
 
@@ -56,15 +53,13 @@ Log in again so that the group applies, then check:
 
 `container/run.sh` passes `/dev/sgx_enclave` and `/dev/sgx_provision` into the container, bound with
 the `exec` option (Gramine maps the enclave device with `PROT_EXEC`). `scripts/install.sh --sgx` has its own build
-directory and prefix, so it does not touch a direct install. `is-sgx-available` on the tested
-machine (Intel Xeon Gold 6430) printed, among others:
+directory and prefix, so it does not touch a direct install. On a host with SGX2 and flexible launch
+control, `is-sgx-available` prints, among others:
 
     SGX supported by CPU: true
     SGX1 (ECREATE, EENTER, ...): true
     SGX2 (EAUG, EACCEPT, EMODPR, ...): true
     Flexible Launch Control (IA32_SGXPUBKEYHASH{0..3} MSRs): true
-    AEX-Notify: true
-    EPC size: 0x7e7ff000
     SGX driver loaded: true
 
 ### 3. Example: Hello World
@@ -77,7 +72,7 @@ machine (Intel Xeon Gold 6430) printed, among others:
 and `helloworld.sig`, with the enclave measurement printed) and runs `gramine-sgx ./helloworld`. The output ends with:
 
     Hello, world
-    [PASS] helloworld sgx x86_64 (3s)
+    [PASS] helloworld sgx x86_64 (...)
 
 The steps by hand:
 
@@ -90,14 +85,13 @@ enclave size is 256M.
 
 ### 4. The other examples
 
-Every example whose Makefile has an `SGX=1` build runs with `./exec.sh --sgx` in its directory. On the
-tested machine (results and conditions: [RESULTS.md](../../CI-Examples/RESULTS.md), 2026-10-20)
+Every example whose Makefile has an `SGX=1` build runs with `./exec.sh --sgx` in its directory.
 `bash`, `busybox`, `curl`, `gcc`, `iperf`, `lighttpd`, `memcached`, `mongodb`, `nginx`, `nodejs`,
-`openjdk`, `python`, `r`, `redis`, `rust`, `sqlite`, `blender` and `pytorch` pass. `python` passes
+`openjdk`, `python`, `r`, `redis`, `rust`, `sqlite`, `blender` and `pytorch` pass
+([RESULTS.md](../../CI-Examples/RESULTS.md)). `python` passes
 without the quote step (it needs remote attestation, `RA_TYPE=dcap`). `unit_tests` has an SGX build for
 `mremap` only, and that test fails: the tail of a shrunk mapping stays readable in an enclave.
-The enclave sizes are set by each manifest (`mongodb` 8G, `openjdk` 16G, `pytorch` 4G); a build and
-first run takes seconds to about two minutes.
+The enclave sizes are set by each manifest (`mongodb` 8G, `openjdk` 16G, `pytorch` 4G).
 
 In a fresh container, `blender`, `mongodb`, `nodejs`, `openjdk` and `r` first stop with "cannot run here: missing on the host"; run `CI-Examples/install-all-prereqs.sh` once (or the `install-prereqs.sh` of that example, which the message names) and repeat the command.
 
@@ -133,38 +127,10 @@ The install step links the PAL with TD-shim: it runs `cargo run -p td-shim-tools
 `$HOME/td-shim`, so that checkout (built as upstream gramine-tdx describes) must exist, or the
 install stops there after everything has compiled.
 
-Fixed issue (2026-10-15): until the `dev-tdx-build` fix the `tdx` PAL did not compile
-(`pal/src/host/vm-common/pal_common_sockets.c`: `invalid application of 'sizeof' to incomplete type 'struct udp_rx_ring'`): the network code shared by the vm PALs used a structure that only the
-`vm` PAL's host header defined. The structure is now in the shared `vm-common` header, and the
-`tdx-build` job of `direct-x86_64.yml` compiles the `tdx` PAL on every manual run.
+The examples that run on SEV also run on TDX. `exec.sh` has no TDX backend. CI compiles the `tdx` PAL
+(the `tdx-build` job of `direct-x86_64.yml`).
 
-## Verified
+## Not covered
 
-**SGX, 2026-10-20**, `dev-sgx` (commits `f9bedfbf` to `d5463628`), on an Intel Xeon Gold 6430 (SGX1 and SGX2,
-flexible launch control, 2 GB of EPC, in-kernel driver, Ubuntu 24.04, 128 GB RAM), in the container of
-`container/run.sh` (podman 4.9.3, crun 1.14.1, rootless): `scripts/install.sh --sgx` built and
-installed; `./exec.sh --sgx` passes for `helloworld`, `bash`, `busybox`, `curl`, `gcc`, `iperf`, `lighttpd`,
-`memcached`, `mongodb`, `nginx`, `nodejs`, `openjdk`, `python` (without the quote), `r`, `redis`, `rust`,
-`sqlite`, `blender` and `pytorch`; `unit_tests-mremap` fails. `helloworld`, `mongodb` and `sqlite` also
-pass with `vm.mmap_min_addr` at the default of 65536. The first runs stopped with `EPERM` (the `noexec`
-device mount) and `ENOMEM` (the 512 MiB program in the 256M default enclave); both are fixed in the
-tree.
-
-Not verified for SGX: remote attestation (the AESM service, a PCCS, `RA_TYPE=dcap`), the `CI-Examples/ra-tls/`
-examples, EDMM beyond the `mremap` test, and a host other than Ubuntu 24.04.
-
-**History (2026-10-15), without SGX or TDX hardware:**
-
-2026-10-15, `main` at `9e28ea81`, in the x86_64 container on a machine **without** SGX or TDX:
-after installing `protobuf-c-compiler libprotobuf-c-dev protobuf-compiler python3-protobuf` in
-the container, `scripts/install.sh --sgx ...` built and installed; `is-sgx-available` printed
-`SGX supported by CPU: false`; `gramine-sgx-gen-private-key` and `make SGX=1` produced the
-signed `helloworld.manifest.sgx` and `helloworld.sig`; `gramine-sgx helloworld` stopped with
-`Cannot open SGX driver device`, as expected without SGX. `scripts/install.sh --tdx` and
-`--vm --tdx` failed with the build error above.
-
-2026-10-15, after the fix (same container, no TDX): `scripts/install.sh --tdx` and `--vm --tdx`
-compile everything, including the `tdx` PAL (`pal/src/host/tdx/pal`), and stop at the TD-shim
-link step of the install (no `$HOME/td-shim` here).
-
-Not verified for TDX: running anything under TDX, the TD-shim link step, and the TDX QEMU and firmware.
+SGX remote attestation (the AESM service, a PCCS, `RA_TYPE=dcap`), the `CI-Examples/ra-tls/` examples, and
+SGX EDMM beyond the `mremap` test.

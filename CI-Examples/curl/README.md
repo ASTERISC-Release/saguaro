@@ -1,63 +1,28 @@
 # Curl
 
-This directory contains a Makefile and a template manifest to run curl on Gramine. The example uses
-the curl installed on the system and does not compile it from source. Pass or fail status per
-backend: matrix in [`CI-Examples/README.md`](../README.md).
+Runs the system `curl` (not built from source) against a local web server.
 
-# Building
-
-Install the backend first (`Documentation/quickstart/`) and run all commands in this directory.
-
-## Direct, VM, and SEV
+## Prerequisites
 
 ```sh
-make
+./install-prereqs.sh    # curl, python3, netcat
 ```
 
-## SGX
+## Run
+
+Install the backend first: [`Documentation/quickstart/`](../../Documentation/quickstart/README.md).
 
 ```sh
-make SGX=1
+./exec.sh --direct      # builds, runs and checks; also: --vm, --sev, --sev-snp, --sgx, --vbs
 ```
 
-## VBS
-
-In WSL on a Windows machine with VBS (`dev docs: vbs-enclave/manual.md`, "Makefile flow"):
+By hand:
 
 ```sh
-make VBS=1
+make                    # make SGX=1 for SGX; make VBS=1 in WSL for VBS
+make check              # serves test-docroot on 127.0.0.1:19111, fetches it with curl, prints [ Success 1/1 ]
 ```
 
-# Testing
+## Notes
 
-`make check` starts a local web server (`python3 -m http.server` on `127.0.0.1:19111`), fetches
-its page with curl and prints `[ Success 1/1 ]` if the page contains `Hello World`. It takes the
-backend from `GRAMINE`:
-
-```sh
-make check                          # direct
-make SGX=1 check                    # SGX; not verified
-make VBS=1 check                    # VBS
-```
-
-Under the VM and SEV, `make check` needs the server on an address of the host that is not loopback:
-in the guest `127.0.0.1` is the guest itself (`curl: (7) Failed to connect to 127.0.0.1 port
-19111`). `HTTP_ADDR` sets that address, and `./exec.sh --vm` (or `--sev`) passes the host's first
-address:
-
-```sh
-make check GRAMINE=gramine-vm HTTP_ADDR=$(hostname -I | awk '{print $1}')   # VM
-./exec.sh --vm
-```
-
-By hand, the same thing:
-
-```sh
-IP=$(hostname -I | awk '{print $1}')
-(cd test-docroot && python3 -m http.server -b $IP 19111) &
-gramine-vm ./curl http://$IP:19111/      # VM
-gramine-sev ./curl http://$IP:19111/     # SEV
-kill %%
-```
-
-Each curl command exits with 0 and prints the page (`Hello World!`).
+- Under the VM and SEV the guest cannot reach the host's loopback: use `make check GRAMINE=gramine-vm HTTP_ADDR=<host address>` (`exec.sh` does this for you).
