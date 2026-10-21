@@ -28,6 +28,7 @@ DEFAULT_GLOBS = [
     'CI-Examples/README.md', 'CI-Examples/RESULTS.md',
     'Documentation/quickstart/*.md',
     'Documentation/README.md', 'Documentation/FEATURES.md',
+    'Documentation/GRAPHICS.md', 'Documentation/graphics/*.md',
 ]
 DOC_EXT = ('.md', '.sh', '.py', '.toml', '.yml')
 # tokens that are not paths at all: placeholders, options, urls, absolute system paths, code
