@@ -32,9 +32,11 @@ From the repository root:
 
 |  |  |
 |----|----|
-| `--prefix DIR` | install prefix (default `~/.local/gramine`; no root needed) |
-| `--build-dir DIR` | meson build directory (default `build-<arch>`) |
-| `--vm`, `--tdx`, `--sgx` | also build that PAL (the direct PAL is always built) |
+| `--prefix DIR` | install prefix, no root needed; default `~/.local/gramine`, `~/.local/gramine-vm` with `--vm` or `--sev`, `~/.local/gramine-sgx` with `--sgx` (without `--vm`), `~/.local/gramine-riscv64` with `--target riscv64` |
+| `--build-dir DIR` | meson build directory; default `build-<arch>`, `build-vm-<arch>` with `--vm`, `build-sgx` with `--sgx` (without `--vm`), `build-riscv64` with `--target riscv64` |
+| `--vm`, `--tdx`, `--sgx` | also build that PAL (the direct PAL is always built, except by `--vm` on aarch64) |
+| `--sev` | `--vm` plus the AMD SEV build of the vm PAL and `gramine-sev` (x86_64) |
+| `--vbs` | the Windows VBS tooling, in WSL on the Windows machine (`scripts/vbs/install-vbs.sh`: `gramine-vbs` in `~/.local/bin`, the vbs runtime in `build-vbs`); nothing else is built |
 | `--graphics disabled` | leave out the Tirith graphics host-redirection paths |
 | `--libc glibc|none|musl` | libc of the runtime directory; see [Which libc](#which-libc) |
 | `--target riscv64` | cross-build (see [RISC-V (cross-build and test guest)](#risc-v-cross-build-and-test-guest)) |
@@ -46,7 +48,7 @@ From the repository root:
 Check the install and run an example:
 
     test/direct/test-direct.sh               # PAL + LibOS regression tests and the example applications
-    test/direct/test-direct.sh libos         # only the named suites (``--list`` shows them)
+    test/direct/test-direct.sh libos         # only the named suites (`--list` shows them)
 
     cd CI-Examples/helloworld
     make
@@ -67,8 +69,9 @@ aarch64:
 On aarch64 `--vm` builds *only* the vm PAL (no direct PAL, SGX or TDX), builds without graphics (the
 redirection needs the QEMU fork's host agent, which does not exist for aarch64) and builds the test
 programs as PIE, because the guest maps RAM at `0x40000000`. Use stock distribution QEMU; the
-repository's QEMU fork is not needed and does not build for aarch64. The VM PAL runs single-process
-applications (no `fork`/`exec`). Guest TCP and UDP go through a vsock relay that the launcher starts,
+repository's QEMU fork is not needed and does not build for aarch64. The VM PAL runs multi-process
+applications (`fork`, `vfork`, `execve`) by default, as on x86_64 (`sys.experimental__multiprocess`, see
+[quickstart/vm.md](Documentation/quickstart/vm.md)). Guest TCP and UDP go through a vsock relay that the launcher starts,
 which needs `/dev/vhost-vsock` (module `vhost_vsock`) to be readable and writable by your user, as
 `/dev/kvm` is. See `dev docs: vm.md` for the exact limits.
 
@@ -143,8 +146,8 @@ Notes:
 
 ## RISC-V (cross-build and test guest)
 
-The RISC-V (RV64) port covers the direct PAL and is experimental. It is cross-built on an x86_64 or
-AArch64 machine and tested in a RISC-V Linux guest under `qemu-system-riscv64` (user-mode emulation
+The RISC-V (RV64) port covers the direct PAL and is experimental. It is cross-built on an x86_64
+machine (`container/run.sh --target riscv64` refuses other hosts) and tested in a RISC-V Linux guest under `qemu-system-riscv64` (user-mode emulation
 cannot run it, because it has no seccomp). Everything runs unprivileged, in a container of its own:
 
     container/run.sh --target riscv64                       # shell in the cross container

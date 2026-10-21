@@ -17,7 +17,7 @@ descriptions in `INSTALL.md` at the top of this repository.
 
 ## Check for SGX compatibility
 
-We supply a tool, `manpages/is-sgx-available` that checks the environment
+We supply a tool, `is-sgx-available` ([manual page](manpages/is-sgx-available.md)), that checks the environment
 for SGX compatibility. Use this tool to check your hardware and system. It is
 installed together with the Gramine package.
 
@@ -29,7 +29,7 @@ Only for SGX, and if you haven't already, enter the following:
 
 This command generates an RSA 3072 key suitable for signing SGX enclaves and
 stores it in `$HOME/.config/gramine/enclave-key.pem`. Protect this key and do
-not disclose it to anyone. See also `manpages/gramine-sgx-gen-private-key`.
+not disclose it to anyone. See also [gramine-sgx-gen-private-key](manpages/gramine-sgx-gen-private-key.md).
 
 Signing an SGX enclave is a required step in Intel SGX. First, SGX platforms
 only load signed enclave images. Second, the enclave's signed structure (called
