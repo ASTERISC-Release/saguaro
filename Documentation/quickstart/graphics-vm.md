@@ -3,12 +3,7 @@
 With the graphics host redirection ([Tirith](https://arxiv.org/abs/2609.17525)) an OpenGL or
 Vulkan application runs inside the `gramine-vm` microVM and draws on the host's GPU: a preload
 library in the guest (`libgraphics.so`) forwards the GPU work to a listener in a QEMU fork on the
-host, and the application's own X connection is relayed over vsock. Details:
-`dev docs: graphics/running.md` and
-`dev docs: vulkan/`.
-
-Status (as in [README.md](../../README.md)): Intel x86_64 ⚠️, AMD64 ⚠️ (experimental);
-AArch64 🛫 (not available: the QEMU fork does not build for AArch64); RISC-V ❌.
+host, and the application's own X connection is relayed over vsock. 
 
 ## Requirements
 
@@ -93,15 +88,3 @@ prints `vm intel gl3 run 1: 633 frames, N seconds: N fps`.
   identity-mapped guest, as before) and run `make run` again; `quake2`, `minetest` and `supertuxkart` are expected to
   need the same line and have not been checked. Programs that need processes (Wine, Proton) set the key to true
   themselves, and their GPU path is the open work.
-
-## Verified
-
-2026-10-15, `main` at `9e28ea81`, `qemu-tirith` `dev-graphics` at `45f0b236`, in the
-container on an x86_64 host with KVM, an Intel UHD 770 (`renderD128`) and an AMD Radeon RX 9070
-(`renderD129`), Xwayland: `tirith-build.sh` and `scripts/install.sh --vm`; glxgears `make run` (about 205 FPS over the first minute at the tiled window's size); `q2-timedemo.sh`: Intel
-OpenGL 411 FPS and Vulkan 295 FPS, AMD OpenGL 3073 FPS and Vulkan 2131 FPS; `make run` of Quake
-II opened its window with shared input enabled. Each window was closed after at most 70 seconds.
-
-Not verified: `make run VULKAN=1` and `EGL_DISCRETE=1 make run` interactively (the same
-manifest settings ran in `q2-timedemo.sh`); `make run-native`; stopping with Ctrl-C (the runs
-were stopped with `timeout -s INT`); the `https` clone URL (the fork was cloned over ssh).
