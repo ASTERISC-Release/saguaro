@@ -27,6 +27,12 @@ Additionally, several quality-of-life [features](Documentation/FEATURES.md) have
 These features and backends are the result of published and upcoming work by the [ASU Trusted, Reliable, and Secure Computing
 (ASTERISC) Research Lab](https://asteriscresearchlab.com/). Refer to this [section](#citation) for details and how to cite our work.
 
+
+> **Disclaimer:** The current work is **experimental** and should not be used in production environments. Although all design decisions were made by our team, 
+an AI agent (namely our lab's *riscy* agent) was heavily-involved in the development of this project (as evident from the commit history).
+Our rationale for using AI agents was to easily prototype and merge together disjoint artifacts from different research projects
+and make them available for research and teaching.
+
 ## Use-Cases
 
 There are three main use-cases of this project:
@@ -127,13 +133,6 @@ you to the following published work by our lab (out of which this work is born):
 - Chancel: Efficient Multi-client Isolation Under Adversarial Programs (ISOC NDSS'21)
 
 If you find this project useful, we request that you cite our work.
-
-## Disclaimer
-
-The current work is **experimental** and should not be used in production environments. Although all design decisions were made by our team, 
-an AI agent (namely our lab's *riscy* agent) was heavily-involved in the development of this project (as evident from the commit history).
-Our rationale for using AI agents was to easily prototype and merge together disjoint artifacts from different research projects
-and make them available for research and teaching.
 
 ## Acknowledgement
 
