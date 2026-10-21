@@ -14,7 +14,7 @@ they say that they run on the host.
 
 `gramine-sgx` runs an unmodified application in an Intel SGX enclave. The enclave is built and
 signed from the application's manifest; the Gramine runtime, the library OS and the application are
-measured into it. See [sgx-intro.md](../sgx-intro.md) for the concepts.
+measured into it.
 
 ### Requirements
 
@@ -114,8 +114,7 @@ In a fresh container, `blender`, `mongodb`, `nodejs`, `openjdk` and `r` first st
 - The `make SGX=1` step needs the protobuf-c tools (`protobuf-c-compiler libprotobuf-c-dev`), which the
   container image has.
 
-Reference: [sgx-intro.md](../sgx-intro.md), [sgx-setup.md](../sgx-setup.md),
-[attestation.md](../attestation.md), the `sgx.*` keys of [manifest-syntax.md](../manifest-syntax.md), and [gramine.readthedocs.io](https://gramine.readthedocs.io).
+Reference: [attestation.md](../attestation.md), the `sgx.*` keys of [manifest-syntax.md](../manifest-syntax.md), and [gramine.readthedocs.io](https://gramine.readthedocs.io).
 
 ## TDX
 
