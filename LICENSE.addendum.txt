@@ -9,10 +9,7 @@ under the same terms as the part of the tree it belongs to: LGPL-3.0-or-later
 outside `CI-Examples`, BSD-3-Clause inside it. This covers, among others, the
 vm, SEV, SEV-SNP and VBS PALs, the AArch64 and RISC-V ports, the graphics
 redirection, the tools under `scripts/` and `tools/`, and the `exec.sh`
-scripts of the examples. A file that carries an SPDX-License-Identifier line is
-licensed as that line says; a file without one follows the rule above. The
-copyright notices of upstream Gramine and gramine-tdx stay in the files that
-come from them.
+scripts of the examples. 
 
 Gramine also includes the following third party sources (and licenses):
 * cJSON - MIT
