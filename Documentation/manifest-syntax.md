@@ -697,7 +697,7 @@ This syntax enables the `flock` system call in Gramine.
 ## VBS syntax (Windows VBS enclaves)
 
 These keys configure the `vbs` PAL, which runs Linux applications inside
-Windows VBS enclaves on ARM64 Windows 11 (see `vbs`). Other PALs ignore
+Windows VBS enclaves on ARM64 or x64 Windows 11 (see `vbs`). Other PALs ignore
 them. The image, its configuration and every packed file are fixed when the
 enclave image is built and signed (`gramine-vbs build`); nothing executable
 can be added at run time. A VBS manifest also needs:
@@ -723,14 +723,16 @@ and its data. `uri` names a file or directory on the build machine, relative
 to the manifest; `path` is where the enclave sees it (default: `/` and the
 file name). A directory is packed with everything below it except the names
 or relative paths that match an `exclude` pattern (shell patterns; a pattern
-ending in `/` matches directories). AArch64 ELF shared objects and position-
-independent executables are packed as loadable objects at a fixed place in the
-image (their `svc` instructions are rewritten at build time); every other file
+ending in `/` matches directories). ELF shared objects and position-independent
+executables of the build machine's architecture (AArch64 or x86_64) are packed
+as loadable objects at a fixed place in the image (their `svc` or `syscall`
+instructions are rewritten at build time); every other file
 is packed as read-only data. `libos.entrypoint` must be one of the packed
 paths. Packed files are measured as part of the image (the report's unique ID).
 
 Programs and libraries for the enclave must be built with
-`scripts/vbs/vbs-gcc` (`-ffixed-x18`, 4 KiB pages, the vbs glibc sysroot).
+`scripts/vbs/vbs-gcc` (4 KiB pages, the vbs glibc sysroot; on AArch64 also
+`-ffixed-x18`).
 
 ### Trusted and allowed host files
 
