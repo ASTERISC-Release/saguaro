@@ -23,7 +23,7 @@ HAS_SGX = os.environ.get('SGX') == '1'
 IS_VM = os.environ.get('IS_VM') == '1'
 # Run the tests under the VM PAL (`saguaro-vm`) instead of Linux-direct/SGX. Note this is not IS_VM,
 # which says the *test machine* is a VM.
-USE_GRAMINE_VM = os.environ.get('SAGUARO_VM') == '1'
+USE_SAGUARO_VM = os.environ.get('SAGUARO_VM') == '1'
 # the launcher of the VM runs: saguaro-vm, or saguaro-sev for the AMD SEV build of the vm PAL
 # (dev docs: sev/), whose PAL lives in <pkglibdir>/sev
 VM_LAUNCHER = os.environ.get('SAGUARO_VM_LAUNCHER', 'saguaro-vm')
@@ -175,7 +175,7 @@ class RegressionTestCase(unittest.TestCase):
     # The VM PAL boots a whole guest per run and services timed waits from a 100 ms tick, so its runs
     # need more headroom; SAGUARO_TEST_TIMEOUT overrides any default.
     DEFAULT_TIMEOUT = int(os.environ.get('SAGUARO_TEST_TIMEOUT',
-                                         20 if HAS_SGX else 40 if USE_GRAMINE_VM else 10))
+                                         20 if HAS_SGX else 40 if USE_SAGUARO_VM else 10))
 
     def get_env(self, name):
         try:
@@ -187,13 +187,13 @@ class RegressionTestCase(unittest.TestCase):
     def pal_path(self):
         # pylint: disable=protected-access
         vm_host = 'sev' if VM_LAUNCHER == 'saguaro-sev' else 'vm'
-        host = 'sgx' if HAS_SGX else vm_host if USE_GRAMINE_VM else 'direct'
+        host = 'sgx' if HAS_SGX else vm_host if USE_SAGUARO_VM else 'direct'
         return pathlib.Path(graminelibos._CONFIG_PKGLIBDIR) / host
 
     @property
     def libpal_path(self):
         # the VM PAL is a kernel image, not a shared library
-        return self.pal_path / ('pal' if USE_GRAMINE_VM else 'libpal.so')
+        return self.pal_path / ('pal' if USE_SAGUARO_VM else 'libpal.so')
 
     @property
     def loader_path(self):
@@ -228,16 +228,16 @@ class RegressionTestCase(unittest.TestCase):
         if prefix is None:
             prefix = []
 
-        if USE_GRAMINE_VM:
+        if USE_SAGUARO_VM:
             if not self.libpal_path.exists():
                 self.fail('vm-PAL kernel ({}) not found'.format(self.libpal_path))
             # `saguaro-vm` exits with the guest's exit code. The guest has a single (virtio)
             # console carrying application stdout/stderr and Gramine's log, so both streams
             # are that console.
             # absolute path: tests that pass a custom `env=` may not carry our PATH
-            gramine_vm = shutil.which(VM_LAUNCHER) or VM_LAUNCHER
+            saguaro_vm = shutil.which(VM_LAUNCHER) or VM_LAUNCHER
             try:
-                _returncode, stdout, stderr = run_command([*prefix, gramine_vm, *args],
+                _returncode, stdout, stderr = run_command([*prefix, saguaro_vm, *args],
                                                           timeout=timeout, **kwds)
             except subprocess.CalledProcessError as e:
                 # same merged console for tests that inspect `e.stderr` / `e.output`

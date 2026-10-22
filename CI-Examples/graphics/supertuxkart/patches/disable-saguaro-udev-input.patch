@@ -6,8 +6,8 @@ index 2ba106af7..1ba5fcfd3 100644
 
      m_master_player_only = false;
  #ifndef SERVER_ONLY
-+    const bool gramine_vm = SDL_getenv("EGL_GRAMINE") != NULL ||
-+                            SDL_getenv("IVSHMEM_GRAMINE_VM") != NULL;
++    const bool saguaro_vm = SDL_getenv("EGL_SAGUARO") != NULL ||
++                            SDL_getenv("IVSHMEM_SAGUARO_VM") != NULL;
 +
  #ifdef __SWITCH__
      padConfigureInput(8, HidNpadStyleSet_NpadStandard);
@@ -17,14 +17,14 @@ index 2ba106af7..1ba5fcfd3 100644
      );
  #endif // __SWITCH__
 -    if (SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER) != 0)
-+    if (!gramine_vm && SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER) != 0)
++    if (!saguaro_vm && SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER) != 0)
      {
          Log::error("InputManager", "Failed to init SDL game controller: %s",
              SDL_GetError());
      }
 
 -    if (SDL_InitSubSystem(SDL_INIT_HAPTIC) != 0)
-+    if (!gramine_vm && SDL_InitSubSystem(SDL_INIT_HAPTIC) != 0)
++    if (!saguaro_vm && SDL_InitSubSystem(SDL_INIT_HAPTIC) != 0)
      {
          Log::error("InputManager", "Failed to init SDL haptics: %s",
              SDL_GetError());

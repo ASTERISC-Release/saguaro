@@ -13,7 +13,7 @@ errno values propagate, absolute deadlines of syncobj waits are translated to th
 the communication page has four request slots so that several threads submit at once, and arena
 free lists let `munmap` return GPU buffers without aborting QEMU. On AMD, write-combined memory
 was incoherent until KVM's "ignore guest PAT" quirk was turned off for the guest. *Presentation:*
-an implicit layer in `libgraphics.so` (`VK_LAYER_GRAMINE_present`, on with
+an implicit layer in `libgraphics.so` (`VK_LAYER_SAGUARO_present`, on with
 `EGL_VULKAN_PRESENT=1`) answers the surface and swapchain calls itself: the application renders
 into exportable images, the layer blits them and hands the dma-bufs to the host listener, which
 shows them in its window; FIFO mode paces with a yielding wait (the VM PAL's timed sleeps have a

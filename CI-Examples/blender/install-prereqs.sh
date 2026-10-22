@@ -6,7 +6,7 @@
 set -euo pipefail
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 . "$HERE/../common_tools/prereqs.sh"
-check_gramine
+check_saguaro
 apt_install lsb-release
 prereq_log "note: make downloads the Blender 2.82 tarball (about 170 MB)"
 prereq_log "blender: prerequisites OK"

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
 /* Copyright (C) 2026 The ASTERISC Research Lab */
 /*
- * VK_LAYER_GRAMINE_present: Vulkan presentation under saguaro-vm (dev docs: vulkan/,
+ * VK_LAYER_SAGUARO_present: Vulkan presentation under saguaro-vm (dev docs: vulkan/,
  * "Phase 2 design").
  *
  * An implicit Vulkan layer that implements the X11 window-system extensions (VK_KHR_surface,
@@ -40,7 +40,7 @@
 #include "common.h"
 #include "graphics_comm_abi.h"
 
-#define LAYER_NAME "VK_LAYER_GRAMINE_present"
+#define LAYER_NAME "VK_LAYER_SAGUARO_present"
 #define MAX_OBJECTS 64
 #define MAX_IMAGES 8
 #define GEOMETRY_CHECK_INTERVAL 16
@@ -1312,10 +1312,10 @@ static VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL layer_GetDeviceProcAddr(VkDevice
 }
 #undef INTERCEPT
 
-/* The entry point named in the layer manifest (VkLayer_gramine_present.json). Deliberately not
+/* The entry point named in the layer manifest (VkLayer_saguaro_present.json). Deliberately not
  * vkNegotiateLoaderLayerInterfaceVersion: this library is preloaded into the application, so its
  * exported symbols must not shadow standard Vulkan names. */
-__attribute__((visibility("default"))) VkResult gramine_vk_negotiate(
+__attribute__((visibility("default"))) VkResult saguaro_vk_negotiate(
         VkNegotiateLayerInterface* iface) {
     if (!iface || iface->sType != LAYER_NEGOTIATE_INTERFACE_STRUCT)
         return VK_ERROR_INITIALIZATION_FAILED;

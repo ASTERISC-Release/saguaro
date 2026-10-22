@@ -74,13 +74,13 @@ objcopy = find_program('objcopy')
 # get_external_property; that is only evaluated under is_cross_build(), and the riscv64
 # cross container ships meson 1.x; the >=0.56 floor above stays for native users.)
 if meson.is_cross_build()
-    gramine_exe_wrapper = meson.get_external_property('exe_wrapper', [])
-    if gramine_exe_wrapper == []
+    saguaro_exe_wrapper = meson.get_external_property('exe_wrapper', [])
+    if saguaro_exe_wrapper == []
         error('cross build requires an `exe_wrapper` property in the cross file ' +
               '(see scripts/riscv64/meson-cross.ini)')
     endif
 else
-    gramine_exe_wrapper = []
+    saguaro_exe_wrapper = []
 endif
 
 pythonmod = import('python')

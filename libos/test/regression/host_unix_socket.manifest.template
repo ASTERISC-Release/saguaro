@@ -5,7 +5,7 @@ loader.env.LD_LIBRARY_PATH = "/lib"
 loader.insecure__use_cmdline_argv = true
 
 # Linux PAL only: connect() to this path reaches the host socket
-sys.insecure__host_unix_sockets = ["/tmp/gramine_host_unix_test.sock"]
+sys.insecure__host_unix_sockets = ["/tmp/saguaro_host_unix_test.sock"]
 
 fs.mounts = [
   { path = "/lib", uri = "file:{{ saguaro.runtimedir(libc) }}" },

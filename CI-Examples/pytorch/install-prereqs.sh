@@ -5,7 +5,7 @@
 set -euo pipefail
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 . "$HERE/../common_tools/prereqs.sh"
-check_gramine
+check_saguaro
 apt_install python3 python3-venv python3-pip lsb-release
 # The upstream README also lists libnss-mdns/libnss-myhostname (hostname resolution); the example
 # runs without them, so they are opt-in: WITH_NSS=1 ./install-prereqs.sh

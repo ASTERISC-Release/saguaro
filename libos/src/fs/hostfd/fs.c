@@ -209,10 +209,10 @@ static int host_fd_of(int fd) {
 static int64_t host_deadline(int64_t deadline) {
     if (deadline <= 0 || deadline == INT64_MAX)
         return deadline;
-    uint64_t gramine_us = 0, host_ns = 0;
-    if (PalSystemTimeQuery(&gramine_us) < 0 || PalHostClockMonotonic(&host_ns) < 0)
+    uint64_t pal_us = 0, host_ns = 0;
+    if (PalSystemTimeQuery(&pal_us) < 0 || PalHostClockMonotonic(&host_ns) < 0)
         return deadline;
-    int64_t remaining = deadline - (int64_t)(gramine_us * 1000);
+    int64_t remaining = deadline - (int64_t)(pal_us * 1000);
     int64_t moved;
     if (__builtin_add_overflow((int64_t)host_ns, remaining, &moved))
         return remaining > 0 ? INT64_MAX : 0;

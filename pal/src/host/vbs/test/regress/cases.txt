@@ -30,7 +30,7 @@ fork_and_access_file
 fork_pacret
 getsockopt
 gettimeofday
-host_unix_socket|/tmp/gramine_host_unix_test.file
+host_unix_socket|/tmp/saguaro_host_unix_test.file
 hostname|localhost
 ioctl_misc
 itimer

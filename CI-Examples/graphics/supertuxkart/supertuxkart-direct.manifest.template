@@ -19,7 +19,7 @@ loader.env.LD_LIBRARY_PATH = "/lib:/usr/lib:/usr{{ arch_libdir }}:{{ arch_libdir
 {% if preload|string != "0" %}
 # The preload library in its native ("process") mode: EGL on GBM, presentation with DRI3.
 loader.env.LD_PRELOAD = "/libgraphics.so"
-loader.env.EGL_GRAMINE = "0"
+loader.env.EGL_SAGUARO = "0"
 loader.env.EGL_DISCRETE = "{{ egl_discrete }}"
 loader.env.GBM_BACKEND = "dri"
 {% endif %}

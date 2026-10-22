@@ -15,17 +15,17 @@ SAGUARO_PREFIX="${SAGUARO_PREFIX:-$HOME/.local/saguaro}"
 export SAGUARO_PREFIX
 export PATH="$SAGUARO_PREFIX/bin:$PATH"
 
-_gramine_py_ver=$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null || true)
-_gramine_sp=""
-for _d in "$SAGUARO_PREFIX/lib/python${_gramine_py_ver}/site-packages" \
-          "$SAGUARO_PREFIX/lib/python${_gramine_py_ver}/dist-packages" \
+_saguaro_py_ver=$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null || true)
+_saguaro_sp=""
+for _d in "$SAGUARO_PREFIX/lib/python${_saguaro_py_ver}/site-packages" \
+          "$SAGUARO_PREFIX/lib/python${_saguaro_py_ver}/dist-packages" \
           "$SAGUARO_PREFIX"/lib/python3*/site-packages \
           "$SAGUARO_PREFIX"/lib/python3*/dist-packages; do
-    if [ -d "$_d" ]; then _gramine_sp=$_d; break; fi
+    if [ -d "$_d" ]; then _saguaro_sp=$_d; break; fi
 done
-if [ -n "$_gramine_sp" ]; then
-    export PYTHONPATH="$_gramine_sp${PYTHONPATH:+:$PYTHONPATH}"
+if [ -n "$_saguaro_sp" ]; then
+    export PYTHONPATH="$_saguaro_sp${PYTHONPATH:+:$PYTHONPATH}"
 fi
-unset _gramine_py_ver _gramine_sp _d
+unset _saguaro_py_ver _saguaro_sp _d
 
 export LOGDIR="${LOGDIR:-${TMPDIR:-/tmp}/saguaro-tests}"

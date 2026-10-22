@@ -5,6 +5,6 @@
 set -euo pipefail
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 . "$HERE/../common_tools/prereqs.sh"
-check_gramine
+check_saguaro
 apt_install curl python3 netcat-openbsd   # curl binary under test; python3 http.server; nc for wait_for_server
 prereq_log "curl: prerequisites OK"

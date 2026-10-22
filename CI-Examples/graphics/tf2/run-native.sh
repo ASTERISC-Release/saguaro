@@ -149,7 +149,7 @@ if [[ "$limit_cpu" == "1" ]]; then
     tf2_command=(taskset -c "$TF2_CPU" env "LD_PRELOAD=$preload_libraries" ./tf_linux64)
 fi
 if [[ "${TF2_AUTOINPUT:-1}" != "0" ]]; then
-    readiness_log="$TF2_DIR/tf/gramine_ready.log"
+    readiness_log="$TF2_DIR/tf/saguaro_ready.log"
     rm -f -- "$readiness_log"
 fi
 "${tf2_command[@]}" \
@@ -168,7 +168,7 @@ fi
     -windowed \
     -w "$width" \
     -h "$height" \
-    +exec gramine_workload \
+    +exec saguaro_workload \
     "${tf2_arguments[@]}" &
 tf2_pid=$!
 

@@ -17,7 +17,7 @@ libos_generated_offsets_print = executable('libos-generated-offsets-print',
 # Under a cross build this program is a riscv64 binary executed on the build machine, so
 # it runs under the cross file's exe_wrapper (qemu-riscv64 user-mode); empty natively.
 libos_asm_offsets_h = custom_target('asm_offsets.h[libos]',
-    command: gramine_exe_wrapper + [libos_generated_offsets_print, '--h'],
+    command: saguaro_exe_wrapper + [libos_generated_offsets_print, '--h'],
     capture: true,
     output: 'asm_offsets.h',
 )

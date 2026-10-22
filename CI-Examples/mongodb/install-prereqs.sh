@@ -11,7 +11,7 @@
 set -euo pipefail
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 . "$HERE/../common_tools/prereqs.sh"
-check_gramine
+check_saguaro
 
 VER=${MONGODB_VERSION:-7.0.14}
 PREFIX=${MONGODB_PREFIX:-$HOME/.local/mongodb}

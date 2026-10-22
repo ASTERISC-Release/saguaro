@@ -18,7 +18,7 @@ from graminelibos.regression import (
     HAS_SGX,
     IS_VM,
     ON_X86,
-    USE_GRAMINE_VM,
+    USE_SAGUARO_VM,
     USES_MUSL,
     VM_LAUNCHER,
     RegressionTestCase,
@@ -462,7 +462,7 @@ class TC_01_Bootstrap(RegressionTestCase):
         self.assertIn('TEST OK', stdout)
 
     @unittest.skipUnless(ON_X86, 'x86-specific')
-    @unittest.skipUnless(USE_GRAMINE_VM, 'per-thread GDT TLS slots exist only in the VM PAL '
+    @unittest.skipUnless(USE_SAGUARO_VM, 'per-thread GDT TLS slots exist only in the VM PAL '
                          '(set_thread_area is ENOSYS elsewhere)')
     def test_606_thread_area_x86_64(self):
         # set_thread_area/get_thread_area (also through `int $0x80`, as Wine's new WoW64 issues
@@ -478,7 +478,7 @@ class TC_01_Bootstrap(RegressionTestCase):
         # executed once (dev docs: aarch64/hwcap/PLAN.md).
         stdout, _ = self.run_binary(['hwcap_aarch64'])
         self.assertIn('TEST OK', stdout)
-        if USE_GRAMINE_VM:
+        if USE_SAGUARO_VM:
             return
         # saguaro-direct: the words are the host kernel's, masked to the allowlist
         words = {}
@@ -691,7 +691,7 @@ class TC_04_Attestation(RegressionTestCase):
         self.assertIn("Test local attestation... SUCCESS", stdout)
         self.assertIn("Test quote interface... SUCCESS", stdout)
 
-@unittest.skipUnless(USE_GRAMINE_VM and VM_LAUNCHER == 'saguaro-sev'
+@unittest.skipUnless(USE_SAGUARO_VM and VM_LAUNCHER == 'saguaro-sev'
                      and os.environ.get('SAGUARO_SEV_MODE') == 'snp',
     'SEV-SNP attestation: only under saguaro-sev with SAGUARO_SEV_MODE=snp')
 class TC_04_AttestationSevSnp(RegressionTestCase):
@@ -1775,7 +1775,7 @@ class TC_80_Socket(RegressionTestCase):
     def test_005_host_unix_socket(self):
         # A server on the host: receives an fd with "FD" and reads the file through it, then
         # answers "OK" with the read end of a pipe that holds a greeting.
-        path = '/tmp/gramine_host_unix_test.sock'
+        path = '/tmp/saguaro_host_unix_test.sock'
         if os.path.exists(path):
             os.remove(path)
         srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -1818,7 +1818,7 @@ class TC_80_Socket(RegressionTestCase):
         thread = threading.Thread(target=serve)
         thread.start()
         try:
-            stdout, _ = self.run_binary(['host_unix_socket', '/tmp/gramine_host_unix_test.file'])
+            stdout, _ = self.run_binary(['host_unix_socket', '/tmp/saguaro_host_unix_test.file'])
         finally:
             thread.join(30)
             srv.close()

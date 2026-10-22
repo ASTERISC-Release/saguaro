@@ -5,6 +5,6 @@
 set -euo pipefail
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 . "$HERE/../common_tools/prereqs.sh"
-check_gramine
+check_saguaro
 apt_install build-essential wget   # iperf3 is built from source (tarball fetched with wget)
 prereq_log "iperf: prerequisites OK"

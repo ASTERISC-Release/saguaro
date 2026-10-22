@@ -5,6 +5,6 @@
 set -euo pipefail
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 . "$HERE/../common_tools/prereqs.sh"
-check_gramine
+check_saguaro
 apt_install build-essential patch wget   # gcc/binutils run inside Gramine; patch+wget fetch and fix the test sources
 prereq_log "gcc: prerequisites OK"

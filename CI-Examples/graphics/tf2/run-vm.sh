@@ -85,7 +85,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 if [[ "${TF2_AUTOINPUT:-1}" != "0" ]]; then
-    readiness_log="$TF2_DIR/tf/gramine_ready.log"
+    readiness_log="$TF2_DIR/tf/saguaro_ready.log"
     rm -f -- "$readiness_log"
     TF2_AUTOINPUT_DIRECT=1 TF2_AUTOINPUT_READY_FILE="$readiness_log" \
         "$SCRIPT_DIR/auto-input.sh" &

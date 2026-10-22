@@ -31,7 +31,7 @@ loader.argv = [
   "-windowed",
   "-w", "{{ width }}",
   "-h", "{{ height }}",
-  "+exec", "gramine_workload",
+  "+exec", "saguaro_workload",
 ]
 
 loader.env.LD_LIBRARY_PATH = "/tf2/bin/linux64:/tf2/tf/bin/linux64:/tf2:/lib:/usr/lib:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu"
@@ -48,7 +48,7 @@ vm.net.direct_vsock_ports = [{{ 6000 + (display.split(':')[1].split('.')[0] | in
 loader.env.SteamAppId = "440"
 loader.env.SteamGameId = "440"
 loader.env.SteamNoOverlayUIDrawing = "1"
-loader.env.IVSHMEM_GRAMINE_VM = "1"
+loader.env.IVSHMEM_SAGUARO_VM = "1"
 loader.env.HOST_SDL_WINDOW = "1"
 loader.env.GALLIUM_THREAD = "0"
 loader.env.GLIBC_TUNABLES = "glibc.pthread.rseq=0"
@@ -59,7 +59,7 @@ loader.env.SDL_VIDEODRIVER = "x11"
 loader.env.PULSE_SERVER = "none"
 loader.env.PIPEWIRE_REMOTE = "none"
 loader.env.GBM_BACKEND = "dri"
-loader.env.EGL_GRAMINE = "1"
+loader.env.EGL_SAGUARO = "1"
 loader.env.EGL_DISCRETE = "0"
 # Input over the X connection, as in Tirith: the game ships its own SDL2, and whether that works
 # with the shared input ring has not been tested (build with SHARED_INPUT=1 to try).

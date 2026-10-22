@@ -23,7 +23,7 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-#define SOCK_PATH "/tmp/gramine_host_unix_test.sock"
+#define SOCK_PATH "/tmp/saguaro_host_unix_test.sock"
 #define FILE_TEXT "hello from gramine"
 #define HOST_TEXT "hello from the host"
 

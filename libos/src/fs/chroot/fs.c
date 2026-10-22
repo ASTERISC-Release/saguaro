@@ -63,7 +63,7 @@ static int chroot_setup_dentry(struct libos_dentry* dent, mode_t type, mode_t pe
 /* Whether a host link's target (absolute, or relative to the link's directory) exists in Gramine's
  * file system: a nested lookup, under the cache lock the caller holds. Links met while probing
  * are probed in turn, to a small depth (a link whose target passes through itself ends there). */
-static bool link_target_in_gramine(struct libos_dentry* dent, const char* target) {
+static bool link_target_in_saguaro(struct libos_dentry* dent, const char* target) {
     static unsigned int g_probe_depth; /* under g_dcache_lock */
     assert(locked(&g_dcache_lock));
     if (g_probe_depth >= 4)
@@ -126,7 +126,7 @@ static int chroot_lookup(struct libos_dentry* dent) {
         bool same_dir = link_buf[0] != '/' && strcmp(link_buf, "..") != 0 &&
                         strncmp(link_buf, "../", 3) != 0 && !strstr(link_buf, "/../") &&
                         !(link_len >= 3 && !strcmp(link_buf + link_len - 3, "/.."));
-        bool as_link = same_dir || link_target_in_gramine(dent, link_buf) ||
+        bool as_link = same_dir || link_target_in_saguaro(dent, link_buf) ||
                        PalStreamAttributesQuery(uri, &pal_attr) == -PAL_ERROR_STREAMNOTEXIST;
         if (as_link) {
             char* target = strdup(link_buf);

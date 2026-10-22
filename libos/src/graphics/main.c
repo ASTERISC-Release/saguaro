@@ -140,8 +140,8 @@ void __attribute__((constructor)) sharedgl_entry(void) {
     }
 
     /* Check the gramine environment variable */
-    const char *egl_gramine = getenv("EGL_GRAMINE");
-    if (egl_gramine && strcmp(egl_gramine, "1") == 0) {
+    const char *egl_saguaro = getenv("EGL_SAGUARO");
+    if (egl_saguaro && strcmp(egl_saguaro, "1") == 0) {
         /* Under the VM the graphics session (the comm-page handshake with the host listener and
          * the GBM device on the forwarded render node) starts at the first graphics call, in
          * graphics_ensure_session(), not here: a process that inherits LD_PRELOAD but never draws

@@ -67,7 +67,7 @@ pip_user_install() {
 }
 
 # Warn (do not fail) if Saguaro itself is not installed; examples need saguaro-direct.
-check_gramine() {
+check_saguaro() {
     if command -v saguaro-direct >/dev/null; then
         prereq_log "saguaro-direct found: $(command -v saguaro-direct)"
     else

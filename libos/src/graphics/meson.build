@@ -33,7 +33,7 @@ vulkan_dep = dependency('vulkan', required: false)
 if vulkan_dep.found()
     graphics_sources += 'vklayer.c'
     graphics_deps += vulkan_dep.partial_dependency(compile_args: true, includes: true)
-    install_data('VkLayer_gramine_present.json',
+    install_data('VkLayer_saguaro_present.json',
         install_dir: pkglibdir / 'vulkan' / 'implicit_layer.d')
 else
     warning('Vulkan headers not found: libgraphics.so is built without the Vulkan presentation layer')
