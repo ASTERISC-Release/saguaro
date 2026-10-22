@@ -87,7 +87,7 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends vim nano \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-RUN touch /var/lib/gramine-vm-x86_64
+RUN touch /var/lib/saguaro-vm-x86_64
 WORKDIR /root
 
 CMD ["bash"]

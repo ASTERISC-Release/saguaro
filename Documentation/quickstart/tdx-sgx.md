@@ -45,7 +45,7 @@ Log in again so that the group applies, then check:
 
 ### 2. Build and install
 
-    cd <repo-home>                     # a checkout in a folder gramine-<name>/gramine-multiarch
+    cd <repo-home>                     # a checkout in a folder saguaro-<name>/saguaro
     container/run.sh                   # shell in the container; it gets /dev/sgx_enclave
     scripts/install.sh --sgx           # builds in build-sgx, installs to ~/.local/saguaro-sgx
     . ~/.local/saguaro-sgx/env.sh

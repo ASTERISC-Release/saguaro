@@ -2,7 +2,7 @@
 # nginx with master process and 4 workers under gramine-vm (experimental multiprocess)
 set -u
 . ~/.local/saguaro-vm/env.sh
-cd ${REPO:-/root/gramine-multiarch}/CI-Examples/nginx
+cd "${REPO:-$(cd "$(dirname "$(readlink -f "$0")")/../../.." && pwd)}"/CI-Examples/nginx
 cp install/conf/nginx-gramine.conf /tmp/nginx-conf.bak
 cp nginx.manifest /tmp/nginx-manifest.bak
 sed -i '/^master_process off;$/d' install/conf/nginx-gramine.conf

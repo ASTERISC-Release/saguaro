@@ -19,7 +19,7 @@ host, and the application's own X connection is relayed over vsock.
 From the folder that holds the checkout:
 
     git clone -b dev-graphics https://github.com/adilahmad17/qemu-tirith.git
-    cd gramine-multiarch
+    cd saguaro
     container/run.sh                   # with DISPLAY set; the rest runs inside
 
 Inside the container:

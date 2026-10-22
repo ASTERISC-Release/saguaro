@@ -4,7 +4,7 @@
 # the external QEMU fork (qemu-tirith) and the graphics workspace layout
 ^qemu-tirith/
 ^qemu/
-^gramine-graphics/
+^saguaro-graphics/
 ^tirith-build\.sh$
 (^|/)util/(sg-listener\.c|sg-xcb\.c|input_ring\.h|meson\.build|mmap-alloc\.c)$
 ^include/qemu/sg\.h$

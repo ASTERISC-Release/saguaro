@@ -21,14 +21,14 @@ Symbols as in [README.md](../../README.md):
 - A Linux host of the architecture to be tested (Intel x86_64, AMD64 or AArch64). The direct PAL
   needs no device: it also works inside a virtual machine or another container. RISC-V is covered
   by [riscv.md](riscv.md).
-- Checkout location: a folder `gramine-<name>/gramine-multiarch` (see `Documentation/AGENTS.md`) keeps the
+- Checkout location: a folder `saguaro-<name>/saguaro` (see `Documentation/AGENTS.md`) keeps the
   container names of several checkouts apart.
 
 # 1. Container and install
 
 `container/run.sh` builds an Ubuntu 24.04 image for the architecture of this machine with every
 build dependency (the first call takes a few minutes), creates a long-lived container and attaches
-a shell. The repository is mounted at `/root/gramine-multiarch`. Three forms exist:
+a shell. The repository is mounted at `/root/<checkout folder>` (`/root/saguaro`). Three forms exist:
 
     cd <repo-home>
     container/run.sh                    # opens a shell in the container
@@ -95,4 +95,4 @@ Each suite ends with a `PASS` or `FAIL` line. Logs are stored in `/tmp/saguaro-t
   (`fs.mounts`); add the missing path, as the examples do. `make DEBUG=1` or
   `loader.log_level = "debug"` shows what the library OS looked for.
 - `container/run.sh` refuses a container that mounts a different checkout: name the folder
-  `gramine-<name>/gramine-multiarch` or set `SAGUARO_WORKSPACE` (see `Documentation/AGENTS.md`).
+  `saguaro-<name>/saguaro` or set `SAGUARO_WORKSPACE` (see `Documentation/AGENTS.md`).

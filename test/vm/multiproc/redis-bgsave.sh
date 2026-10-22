@@ -1,7 +1,7 @@
 #!/bin/bash
 set -u
 . ~/.local/saguaro-vm/env.sh
-cd ${REPO:-/root/gramine-multiarch}/CI-Examples/redis
+cd "${REPO:-$(cd "$(dirname "$(readlink -f "$0")")/../../.." && pwd)}"/CI-Examples/redis
 cp redis-server.manifest /tmp/redis-manifest.bak
 sed -i 's/^enable_sigterm_injection = true$/enable_sigterm_injection = true\nexperimental__multiprocess = true/' redis-server.manifest
 rm -f dump.rdb

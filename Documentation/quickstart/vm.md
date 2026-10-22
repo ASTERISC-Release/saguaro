@@ -86,7 +86,7 @@ lists the other suites.
 - By default the guest runs several processes (x86_64 and AArch64; the key `sys.experimental__multiprocess` defaults to `true`). `sys.experimental__multiprocess = false` gives the single-process guest, where `fork` fails with `Function not implemented`. The key enables `fork`, `vfork`, `execve`, pipes, signals and shared memory between processes.
 - The guest has no TCP/IP stack of its own: TCP and UDP sockets are carried over vsock to a relay that the launcher starts per VM (`vm-relay: cid=... listening ...`) and that opens the real sockets on the host side. Outbound connections work by default; a server in the guest is reached through an `inbound` forward in the manifest's `[vm.net]` table or `SAGUARO_VM_INBOUND`.
 - Several checkouts on one machine each get their own container and their own range of guest CIDs
-  when the folder is named `gramine-<name>/gramine-multiarch` (see `Documentation/AGENTS.md`).
+  when the folder is named `saguaro-<name>/saguaro` (see `Documentation/AGENTS.md`).
 
 # 5. Troubleshooting
 

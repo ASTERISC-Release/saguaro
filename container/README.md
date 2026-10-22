@@ -3,7 +3,7 @@
 One script does everything: `container/run.sh` detects the machine's architecture (aarch64 or x86_64),
 builds the matching image if it is missing or its Containerfile changed, creates/starts the long-lived
 container, and attaches a shell. Both images are Ubuntu 24.04 with stock QEMU, virtiofsd and the
-build/test toolchain; the repository is mounted at `/root/gramine-multiarch`.
+build/test toolchain; the repository is mounted at `/root/<checkout folder>` (for example `/root/saguaro`).
 
 ```sh
 container/run.sh                      # shell in the container for this machine
@@ -17,10 +17,10 @@ container/run.sh 'test/vm/test-vm.sh'             # ... and run the vm battery
 
 | | aarch64 | x86_64 |
 |---|---|---|
-| image / container | `gramine-vm-aarch64` | `gramine-vm-x86_64` |
+| image / container | `saguaro-vm-aarch64` | `saguaro-vm-x86_64` |
 | recipe | `Containerfile.vm-aarch64` | `Containerfile.vm-x86_64` |
 
-`container/run.sh --target riscv64 [...]` uses a third container instead, `gramine-riscv64-cross`
+`container/run.sh --target riscv64 [...]` uses a third container instead, `saguaro-riscv64-cross`
 (`Containerfile.riscv64-cross`, x86_64 hosts only): the riscv64 cross toolchain and
 `qemu-system-riscv64` for the test guest of the RISC-V direct-PAL port (see `INSTALL.md`).
 

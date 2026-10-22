@@ -36,7 +36,7 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends vim nano \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-RUN touch /var/lib/gramine-riscv64-cross
+RUN touch /var/lib/saguaro-riscv64-cross
 WORKDIR /root
 
 CMD ["bash"]

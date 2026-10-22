@@ -110,7 +110,8 @@ a build directory of its own, for the patched glibc. On aarch64 the direct PAL n
 
 `container/run.sh` is the single entry point. It detects the machine's architecture, builds the
 matching image if it is missing or its Containerfile changed, creates a long-lived container and opens a
-shell in it. The repository is mounted at `/root/gramine-multiarch`; builds and install prefixes live
+shell in it. The repository is mounted at `/root/<checkout folder>` (`/root/saguaro` for a
+checkout named `saguaro`); builds and install prefixes live
 in the container's home. You need `podman`, and for `gramine-vm` a native host of the same
 architecture with `/dev/kvm`.
 
@@ -119,7 +120,7 @@ architecture with `/dev/kvm`.
     container/run.sh --rebuild            # force an image rebuild and container recreation
     container/run.sh down                 # stop and remove the container (the image is kept)
 
-Typical session (on x86_64 the container is `gramine-vm-x86_64`):
+Typical session (on x86_64 the container is `saguaro-vm-x86_64`):
 
     container/run.sh                              # shell inside
     scripts/install.sh pal libos                  # direct PAL: build, install, run the PAL + LibOS suites
@@ -132,12 +133,13 @@ or as a one-shot command from the host: `container/run.sh 'scripts/install.sh --
 
 Notes:
 
-- The images are `gramine-vm-aarch64` and `gramine-vm-x86_64` (`container/Containerfile.vm-*`, tags below);
+- The images are `saguaro-vm-aarch64` and `saguaro-vm-x86_64` (`container/Containerfile.vm-*`, tags below);
   set `CONTAINER_NAME` / `IMAGE_NAME` for other names. A checkout in a folder named
-  `gramine-<name>` gets its own container and guest CID range (see `Documentation/AGENTS.md`).
+  `saguaro-<name>` gets its own container and guest CID range (see `Documentation/AGENTS.md`); a folder
+  named `gramine-<name>` (the earlier convention) is accepted too.
 - The container runs with `--cap-add ALL` (virtiofsd serves the container's `/` as the guest's `/`)
   and `seccomp=unconfined` (the direct PAL calls `personality()`, which the default profile blocks).
-- Images are tagged per Containerfile version (`gramine-vm-x86_64:cf-<first 12 digits of the Containerfile's sha256>`): checkouts whose Containerfiles differ (branches) get their own images and
+- Images are tagged per Containerfile version (`saguaro-vm-x86_64:cf-<first 12 digits of the Containerfile's sha256>`): checkouts whose Containerfiles differ (branches) get their own images and
   never rebuild or retag each other's, and an existing image built from the same Containerfile is reused
   by tagging it, without a build. A checkout's container is recreated only when its own Containerfile
   changes; that discards what the container keeps outside the repository (its `/tmp`, an install

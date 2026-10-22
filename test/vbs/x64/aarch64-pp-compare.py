@@ -7,7 +7,7 @@
 # base tree unpacked by `git archive origin/main | tar -x -C /tmp/oldtree`):
 #   aarch64-pp-compare.py [OLD_TREE] [PATH_PATTERN]
 import json, shlex, subprocess, os, sys
-NEW=os.getcwd(); OLD=sys.argv[1] if len(sys.argv) > 1 else '/tmp/oldtree'; CB='/root/gramine-multiarch'
+NEW=os.getcwd(); OLD=sys.argv[1] if len(sys.argv) > 1 else '/tmp/oldtree'; CB='/root/'+os.path.basename(NEW)  # where the build ran: the container mounts the checkout at /root/<folder>
 BUILD=os.path.join(NEW,'build-vbs-x64')
 res=subprocess.check_output(['clang','-print-resource-dir'],text=True).strip()+'/include'
 cc=json.load(open(os.path.join(BUILD,'compile_commands.json')))

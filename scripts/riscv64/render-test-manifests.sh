@@ -22,7 +22,8 @@
 set -euo pipefail
 
 SUITE="${1:?usage: render-test-manifests.sh <pal|libos>}"
-REPO="${REPO:-/root/gramine-multiarch}"
+# the checkout this script belongs to (in the container: /root/<checkout folder>)
+REPO="${REPO:-$(cd "$(dirname "$(readlink -f "$0")")/../.." && pwd)}"
 BUILD="${BUILD:-$REPO/build-riscv64}"
 PREFIX="${PREFIX:-$BUILD/prefix}"
 

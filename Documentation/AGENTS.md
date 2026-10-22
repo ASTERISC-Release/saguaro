@@ -12,10 +12,11 @@ Several people or agents can work at once, each on their own branch. What makes 
 - **One checkout per branch.** Give each branch its own checkout (a clone or a git worktree) and do
   not work in another's. Switching branches inside a shared checkout while someone else uses it is
   what causes conflicts.
-- **Name the folder `gramine-<name>`** (for example `gramine-graphics/gramine-multiarch`). Then
+- **Name the folder `saguaro-<name>`** (for example `saguaro-graphics/saguaro`). Then
   `container/run.sh` names the container after the folder, gives it its own guest-CID base, and
   refuses a container that mounts a different checkout. Without such a folder it falls back to the
-  default shared names, which suit one checkout only. `SAGUARO_WORKSPACE` sets the name by hand.
+  default shared names, which suit one checkout only. `SAGUARO_WORKSPACE` sets the name by hand. A
+  folder named `gramine-<name>` (the earlier convention) is still accepted.
 - **A QEMU fork** that a branch needs (see dev docs: `graphics/`) sits next to the
   checkout as `qemu-tirith/`, or wherever `QEMU_TIRITH_DIR` points.
 - **Push only your own branch.** Do not force-push or rewrite history that is already pushed. Leave
