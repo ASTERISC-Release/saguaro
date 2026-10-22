@@ -313,12 +313,29 @@ The tree was renamed to Saguaro. What an upgrader has to change (there are no al
   `VkLayer_saguaro_present.json`); the TF2 workload files are `saguaro_workload.cfg`, `saguaro_cp_badlands.cfg` and
   `saguaro_lock_points.nut` (log `saguaro_ready.log`); the supertuxkart patch is `disable-saguaro-udev-input.patch`
   (an STK checkout patched with the old one is reported as "failed to apply": re-fetch it).
-- **Unchanged**: the Python package and distribution `saguarolibos`, the RA-TLS and mbedtls package names
-  (`ra_tls_gramine`, `secret_prov_gramine`, `mbedtls_gramine`, headers under `include/gramine/`), the manifest
-  syntax, the launcher-to-guest strings (`-gramine-args`, the fw_cfg items `opt/gramine/<name>`, the virtio-fs tag
-  `graminefs`), the LibOS's own file names (`/dev/shm/.gramine-*`), the C macros of the LibOS ABI
-  (`GRAMINE_CALL_*`, `GRAMINE_SYSCALL*`) and the graphics names shared with qemu-tirith (`GRAMINE_ABI_ROOT`,
-  `GRAMINE_ABI_DIR`, `libos/src/graphics/xcb.c` with `in_gramine_vm` is kept byte-identical to its copy there).
+- **Python package**: `graminelibos` is `saguarolibos` (distribution `saguarolibos`, installed as
+  `<site-packages>/saguarolibos`; the SGX offsets module is `_saguarolibos_offsets`, the variable
+  `GRAMINE_IMPORT_FOR_SPHINX_ANYWAY` is `SAGUARO_IMPORT_FOR_SPHINX_ANYWAY`). Update own scripts with
+  `sed -i 's/graminelibos/saguarolibos/g'`.
+- **Internal markers** (both ends are in this tree, so old and new builds do not mix): the launcher-to-guest
+  strings `-saguaro-args`/`-saguaro-envs` (`-end`), the fw_cfg items `opt/saguaro/<name>`, the virtio-fs tag
+  `saguarofs`, the CID files `/tmp/saguaro_vhostfs_<cid>` and `/tmp/saguaro_vm_<cid>.lock` (an old and a new
+  install on one host no longer see each other's CIDs), the LibOS files `/dev/shm/.saguaro-*`
+  (`.saguaro-memfd-*`, `.saguaro-sysv-*`), `saguaro-unix-socket:`, `saguaro-pipe-handles` and the pipe socket
+  `/saguaro/<pipename>`.
+- **VBS enclave identity**: the example family ids are `saguaro-vbs-test` and `saguaro-vbs-tls`; enclaves and
+  sealed data of earlier builds have a different identity.
+- **File names**: `saguaro.spec`, `saguaro_entry_api.h` (the libc patches in `subprojects/packagefiles` include
+  it under this name), `saguaro_hash.c`, the GDB scripts `saguaro.gdb`, `saguaro_sgx.gdb`, `saguaro_sgx_gdb.py`,
+  `saguaro_linux_gdb.py`, `nginx-saguaro.conf(.template)`.
+- **Unchanged**: the RA-TLS and mbedtls package names (`ra_tls_gramine`, `secret_prov_gramine`, `mbedtls_gramine`,
+  `libra_tls_verify_dcap_gramine.so`, headers under `include/gramine/`), the manifest syntax, the C macros of the
+  LibOS ABI and their header guard (`GRAMINE_CALL_*`, `GRAMINE_SYSCALL*`, ...), the C functions of the entry API
+  that patched libcs call (`gramine_register_library`, ...), the example Makefile variable `GRAMINE`, the legacy
+  fallbacks (`~/.config/gramine/enclave-key.pem`, `gramine-<name>` workspace folders) and the names qemu-tirith
+  reads: the launcher exports `GRAMINE_RAM_BASES` and `GRAMINE_DATA_ADDR` for it (next to the `SAGUARO_` ones),
+  its build uses `GRAMINE_ABI_ROOT`/`GRAMINE_ABI_DIR`, and `libos/src/graphics/xcb.c` (with `in_gramine_vm`) is
+  kept byte-identical to its copy there.
 
 ## Inherited from upstream
 
