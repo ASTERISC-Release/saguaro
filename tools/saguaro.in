@@ -38,7 +38,7 @@ if [ "$PERF" == "1" ]; then
 fi
 
 if [ "$1" == "--version" ]; then
-    echo "Gramine @VERSION@ (@VCS_TAG@)"
+    echo "Saguaro @VERSION@ (@VCS_TAG@)"
     exit 0
 fi
 

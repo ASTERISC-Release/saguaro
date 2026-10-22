@@ -1,6 +1,6 @@
 # OpenJDK
 
-Runs Java (`MultiThreadMain`, a multi-threaded program) under Gramine.
+Runs Java (`MultiThreadMain`, a multi-threaded program) under Saguaro.
 
 ## Prerequisites
 

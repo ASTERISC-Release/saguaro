@@ -20,7 +20,7 @@
  * small data sections (.sdata/.sdata2 -- GCC places file-scope initialized objects <=8 bytes
  * there) into gp-relative addressing, whose base the linker defines as __global_pointer$ (the
  * start of .sdata plus 0x800). The kernel does not plant `gp` for us at execve of a
- * Gramine-loaded binary, so -- exactly like glibc's csu/start.S REGISTER_GP macro -- the entry
+ * Saguaro-loaded binary, so -- exactly like glibc's csu/start.S REGISTER_GP macro -- the entry
  * code sets it itself before any relaxed code can run. (`la gp, ...` must be wrapped in
  * `.option norelax` so the relaxation machinery cannot rewrite this very instruction.)
  */

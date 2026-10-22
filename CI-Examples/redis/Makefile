@@ -16,7 +16,7 @@
 # select, use `make USE_SELECT=1`. For correct re-builds, always clean up
 # Redis source code beforehand via `make distclean`.
 #
-# Use `make clean` to remove Gramine-generated files and `make distclean` to
+# Use `make clean` to remove Saguaro-generated files and `make distclean` to
 # additionally remove the cloned Redis git repository.
 
 ################################# CONSTANTS ###################################
@@ -102,8 +102,8 @@ endif
 ################################ REDIS MANIFEST ###############################
 
 # The template file is a Jinja2 template and contains almost all necessary
-# information to run Redis under Gramine / Gramine-SGX. We create
-# redis-server.manifest (to be run under non-SGX Gramine) by replacing variables
+# information to run Redis under Saguaro / Saguaro-SGX. We create
+# redis-server.manifest (to be run under non-SGX Saguaro) by replacing variables
 # in the template file using the "saguaro-manifest" script.
 
 redis-server.manifest: redis-server.manifest.template
@@ -112,7 +112,7 @@ redis-server.manifest: redis-server.manifest.template
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		$< > $@
 
-# Manifest for Gramine-SGX requires special "saguaro-sgx-sign" procedure. This
+# Manifest for Saguaro-SGX requires special "saguaro-sgx-sign" procedure. This
 # procedure measures all Redis trusted files, adds the measurement to the
 # resulting manifest.sgx file (among other, less important SGX options) and
 # creates redis-server.sig (SIGSTRUCT object).

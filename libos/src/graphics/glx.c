@@ -512,7 +512,7 @@ void glXSwapBuffers(Display *dpy, GLXDrawable drawable) {
         /* Process */
         xcb_present(bufs, cur);
     } else {
-        /* Gramine VM */
+        /* Saguaro VM */
         /* Send message to the host */
         long _offset = acquire_libos_lock();
         comm_page_t* c = comm_page(_offset);
@@ -1568,7 +1568,7 @@ Display* glXGetCurrentDisplay(void) {
     #endif
     /* GLX returns the display belonging to the calling thread's current
      * context. Opening a new X connection here leaks the connection and, more
-     * importantly in Gramine VM, can interleave several independent streams
+     * importantly in Saguaro VM, can interleave several independent streams
      * through the vsock relay while SDL is still initializing. Irrlicht calls
      * this function repeatedly during driver setup. */
     return current_glx_display;

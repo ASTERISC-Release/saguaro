@@ -108,7 +108,7 @@ noreturn static void print_usage_and_exit(const char* argv_0) {
                "<reserved_mem_ranges_fd> args...",
                self, self);
     log_always("This is an internal interface. Use saguaro-direct wrapper to launch applications "
-               "in Gramine.");
+               "in Saguaro.");
     _PalProcessExit(1);
 }
 
@@ -156,7 +156,7 @@ static int verify_hw_requirements(void) {
     else if (!(values[CPUID_WORD_ECX] & (1 << 26)))
         missing = "XSAVE";
     if (missing) {
-        log_error("Gramine with Linux backend requires %s CPU instruction(s). "
+        log_error("Saguaro with Linux backend requires %s CPU instruction(s). "
                   "Please upgrade your hardware.", missing);
         return -EINVAL;
     }

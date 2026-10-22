@@ -1,6 +1,6 @@
 # Unit tests
 
-Small programs that exercise specific Gramine behaviour, as opposed to the application examples.
+Small programs that exercise specific Saguaro behaviour, as opposed to the application examples.
 
 | Directory | What it runs |
 |---|---|

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Copyright (C) 2026 The ASTERISC Research Lab
-# Gramine x64 phase-0 spike: what an x86_64 ELF needs from a VBS packer. Usage: elf-scan.sh <elf>
+# Saguaro x64 phase-0 spike: what an x86_64 ELF needs from a VBS packer. Usage: elf-scan.sh <elf>
 # Prints relocation types, raw system-call instructions (syscall, sysenter, int 0x80), %fs/%gs-relative
 # instructions, red-zone uses (negative %rsp displacements), xsave/cpuid/rdtsc counts.
 f=$1

@@ -26,6 +26,6 @@ make regression         # prints [ Success N/3 ]; GRAMINE=saguaro-vm etc., SGX=1
 
 ## Notes
 
-- The files in `db/` are encrypted by Gramine, but the key is hardcoded in the manifest: the example is **insecure**. For real use set `key_name` to `_sgx_mrenclave`/`_sgx_mrsigner` or provision the key (see `../ra-tls/ra-tls-secret-prov`).
-- SQLite uses POSIX record locks, which Gramine emulates: access from several processes is safe only inside one Gramine instance.
+- The files in `db/` are encrypted by Saguaro, but the key is hardcoded in the manifest: the example is **insecure**. For real use set `key_name` to `_sgx_mrenclave`/`_sgx_mrsigner` or provision the key (see `../ra-tls/ra-tls-secret-prov`).
+- SQLite uses POSIX record locks, which Saguaro emulates: access from several processes is safe only inside one Saguaro instance.
 - The command-line options are hardcoded in the manifest. Under VBS the shell is built from the SQLite amalgamation without readline and zlib.

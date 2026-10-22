@@ -61,7 +61,7 @@ jobs:
         if: ${{ inputs.suites != '' && inputs.suites != 'pal libos' }}
         run: INSTALL_RUSTUP=1 scripts/dependencies.sh
 
-      - name: Build and install Gramine (direct PAL)
+      - name: Build and install Saguaro (direct PAL)
         env:
           LIBC: ${{ inputs.libc || 'none' }}   # via env, never interpolated into the script text
         run: scripts/install.sh --prefix "$SAGUARO_PREFIX" --libc "$LIBC"
@@ -121,7 +121,7 @@ jobs:
       - name: Install build dependencies
         run: scripts/dependencies.sh --build-only
 
-      - name: Build and install Gramine (vm PAL, graphics disabled)
+      - name: Build and install Saguaro (vm PAL, graphics disabled)
         run: scripts/install.sh --vm --graphics disabled --prefix "$SAGUARO_PREFIX" -j "$(nproc)"
 
       - name: Check the installed vm PAL

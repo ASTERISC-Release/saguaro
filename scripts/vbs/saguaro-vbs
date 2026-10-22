@@ -330,7 +330,7 @@ def find_runtime(rt):
                 found[name] = p
                 break
         else:
-            die(f'{fname} not found in the runtime directory {rt} (--runtime): build Gramine with '
+            die(f'{fname} not found in the runtime directory {rt} (--runtime): build Saguaro with '
                 f'`meson setup build-vbs -Dvbs=enabled ...` on an {ARCH} Linux machine')
     return found
 
@@ -679,7 +679,7 @@ def cmd_stop(args):
 
 def jinja_env():
     """The Jinja environment of saguaro-manifest (python/graminelibos/gen_jinja_env.py), loaded from
-    this source tree so that no installed Gramine is needed, plus the vbs.* globals."""
+    this source tree so that no installed Saguaro is needed, plus the vbs.* globals."""
     import importlib.util  # pylint: disable=import-outside-toplevel
     import types  # pylint: disable=import-outside-toplevel
     pkgdir = os.path.join(ROOT, 'python', 'graminelibos')

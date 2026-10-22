@@ -4,7 +4,7 @@
 # Minetest 5.6.1 under saguaro-vm with the Tirith graphics redirection (x86_64). Build the game
 # first with ./setup-minetest.sh; see dev docs: graphics/ for the host setup.
 
-# The graphics preload library is built and installed with Gramine (-Dgraphics=enabled and a
+# The graphics preload library is built and installed with Saguaro (-Dgraphics=enabled and a
 # VM-type PAL); the manifest refers to it as saguaro.libgraphics.
 GRAPHICS_LIB = $(shell python3 -c "import graminelibos; print(graminelibos._CONFIG_PKGLIBDIR)")/libgraphics.so
 MT_DIR = $(abspath luanti-5.6.1)
@@ -47,7 +47,7 @@ dirs: $(MT_BIN)
 	mkdir -p $(HOME)/.cache
 	cp $(MT_CONF) $(MT_DIR)/minetest.conf
 
-# Without Gramine: the preload library presents through its own X connection.
+# Without Saguaro: the preload library presents through its own X connection.
 .PHONY: run-native
 run-native: $(MT_BIN) dirs
 	LD_PRELOAD=$(GRAPHICS_LIB) EGL_DISCRETE=$${EGL_DISCRETE:-0} SDL_AUDIODRIVER=dummy \
@@ -83,7 +83,7 @@ minetest-direct.manifest: minetest-direct.manifest.template $(MT_BIN) FORCE
 run-direct: minetest-direct.manifest dirs
 	saguaro-direct minetest-direct
 
-# The same game without Gramine and without the preload library (stock Mesa), for comparison.
+# The same game without Saguaro and without the preload library (stock Mesa), for comparison.
 .PHONY: run-native-stock
 run-native-stock: $(MT_BIN) dirs
 	SDL_AUDIODRIVER=dummy ALSOFT_DRIVERS=null vblank_mode=0 $(MT_BIN) $(MT_ARGS)

@@ -5,7 +5,7 @@
 #                    Michał Kowalczyk <mkow@invisiblethingslab.com>
 #                    Paweł Marczewski <pawel@invisiblethingslab.com>
 
-# Gramine GDB configuration (Linux-SGX specific).
+# Saguaro GDB configuration (Linux-SGX specific).
 
 # Without this GDB would interpret all the expressions below depending on the app code where it just
 # happened to stop.

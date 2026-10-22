@@ -1,6 +1,6 @@
 #!/bin/sh
 # Copyright (C) 2026 The ASTERISC Research Lab
-# Gramine x64 phase-0 spike (step h): build the x86_64 Linux program with the GNU toolchain (WSL
+# Saguaro x64 phase-0 spike (step h): build the x86_64 Linux program with the GNU toolchain (WSL
 # Ubuntu on the x64 machine, or any x86_64 gcc) and write elf_blob.c, which places its two segments
 # into sections of the enclave image (MSVC has no INCBIN in ml64).
 set -e

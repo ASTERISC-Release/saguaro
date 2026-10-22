@@ -14,7 +14,7 @@
  *
  * This is the riscv64 analog of x86_64's RDTSC and aarch64's CNTVCT_EL0 read: a free-running
  * monotonic counter (10 MHz on the QEMU `virt` platform, 25 MHz on many real SoCs), not a
- * CPU-cycle counter, but it serves the same "cheap monotonic counter" role everywhere Gramine
+ * CPU-cycle counter, but it serves the same "cheap monotonic counter" role everywhere Saguaro
  * used `get_tsc()`. Written as `csrr ..., time` (which the assembler encodes as `rdtime`): the
  * `time` CSR is architecturally read-only at supervisor/user level, and reading it never traps
  * when the Sstc/time delegation is in place, which every Linux riscv64 platform has.
@@ -45,7 +45,7 @@ static noreturn void die_or_inf_loop(void) {
 
 /*
  * Interrupt masking. On x86_64/aarch64 these map onto ring-0 interrupt flags (RFLAGS.IF /
- * PSTATE.{D,A,I,F}) that Gramine's vm unikernel kernel manipulates at EL1/ring-0; riscv64 has no
+ * PSTATE.{D,A,I,F}) that Saguaro's vm unikernel kernel manipulates at EL1/ring-0; riscv64 has no
  * user-mode-accessible interrupt mask (sstatus.SIE is supervisor state, unreachable from EL0), so
  * these compile to nothing. They are kept only because the shared vm-PAL sources reference them;
  * a future riscv64 vm-PAL will need a different mechanism (e.g. SBI or a software mask).

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Gramine x64 phase-0 spike (step g): compile a VBS enclave C source on Linux with clang for
+# Saguaro x64 phase-0 spike (step g): compile a VBS enclave C source on Linux with clang for
 # x86_64-pc-windows-msvc. The Windows SDK and MSVC headers are not redistributable; copy them from
 # the Windows machine into a scratch folder first:
 #   ssh <win> "tar -C 'C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0' -cf - um shared ucrt" | tar -C $HDR/sdk -xf -

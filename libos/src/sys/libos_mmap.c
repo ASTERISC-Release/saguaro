@@ -792,7 +792,7 @@ long libos_syscall_msync(unsigned long start, size_t len_orig, int flags) {
     }
 
     if (flags & MS_INVALIDATE) {
-        log_warning("Gramine does not support MS_INVALIDATE");
+        log_warning("Saguaro does not support MS_INVALIDATE");
         return -ENOSYS;
     }
 

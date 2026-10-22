@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: LGPL-3.0-or-later
-"""Run selected LTP syscall tests under native Linux or a Gramine loader."""
+"""Run selected LTP syscall tests under native Linux or a Saguaro loader."""
 
 import argparse
 import concurrent.futures
@@ -492,7 +492,7 @@ def main():
                           if not (args.harness_dir / f"{ltp_test_command(scenarios[name])}.manifest").exists()})
         if missing:
             parser.error("manifests missing; build them with saguaro-test build first: " + ", ".join(missing[:10]))
-        # Under a Gramine loader the binary comes from the manifests' `install` symlink, not from
+        # Under a Saguaro loader the binary comes from the manifests' `install` symlink, not from
         # --ltp-root: point the symlink at --ltp-root so the two cannot disagree (they once did, and
         # an "unmodified" run measured the no-fork build). The manifests do not depend on which
         # install the symlink names; one run at a time per harness directory.

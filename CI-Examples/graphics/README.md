@@ -22,14 +22,14 @@ cd CI-Examples/graphics/<example>
 mkdir -p ~/.cache
 make run-direct    # saguaro-direct on the host GPU (not tf2)
 make run           # saguaro-vm
-make run-native    # without Gramine, to tell a GPU problem from a Gramine one
+make run-native    # without Saguaro, to tell a GPU problem from a Saguaro one
 ```
 
 For the VM, export `QEMU_PATH=<qemu checkout>/build/qemu-system-x86_64` first. The QEMU fork is a separate checkout, built as described in [`graphics-vm.md`](../../Documentation/quickstart/graphics-vm.md).
 
 ## Notes
 
-- `DEBUG=1` sets the Gramine debug log level; `SHARED_INPUT=0` takes input over the X connection instead of the shared ring.
+- `DEBUG=1` sets the Saguaro debug log level; `SHARED_INPUT=0` takes input over the X connection instead of the shared ring.
 - `SAGUARO_CPU_NUM` and `SAGUARO_RAM_SIZE` set the guest's vCPUs and memory (defaults 1 and 8G). A graphics guest needs at least 5G, and 3G plus `SAGUARO_DATA_SIZE` (default 1G).
 - Quake II: `make run-direct-timedemo`. SuperTuxKart: `make run-startup PROFILE_TIME=<seconds>`, `make run-direct-startup`.
 - The `-direct` manifests enable insecure options (raw GPU ioctls, the X server's Unix socket): `saguaro-direct` is not a sandbox here.

@@ -14,7 +14,7 @@
  * dev docs: riscv/PLAN.md) the dispatch table is *shared* with aarch64 rather than
  * copied: riscv64 adds only two calls of its own (below), has the same omissions as aarch64 (no
  * vfork/open/pipe/getdents/... legacy calls -- see libos_table.c for how each maps onto the
- * *at()/generic replacement Gramine already implements), and where the two architectures' headers
+ * *at()/generic replacement Saguaro already implements), and where the two architectures' headers
  * both define a number, they define the same one. If a future build machine's headers are older,
  * the build fails with a clear "undeclared identifier" rather than silently using a wrong number
  * -- add a fallback here if/when that happens.

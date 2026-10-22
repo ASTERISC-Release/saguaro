@@ -23,7 +23,7 @@ fs.mounts = [
   { type = "encrypted", path = "/db/", uri = "file:db/", key_name = "default" },
 ]
 
-# Unfortunately, non-SGX Gramine cannot use special keys such as "_sgx_mrenclave", so for this
+# Unfortunately, non-SGX Saguaro cannot use special keys such as "_sgx_mrenclave", so for this
 # example to work on both non-SGX and SGX versions we hardcode a dummy key. In SGX production case,
 # it is recommended to remove this insecure key and instead use "_sgx_mrenclave"/"_sgx_mrsigner".
 fs.insecure__keys.default = "ffeeddccbbaa99887766554433221100"

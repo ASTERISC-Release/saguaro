@@ -21,7 +21,7 @@
  * syscalls at all (no open/stat/lstat/access/poll/select/dup2/fork/vfork/pipe/getdents/alarm/
  * time/creat/link/unlink/symlink/readlink/chmod/chown/lchown/rename/utime/utimes/mkdir/rmdir/
  * mknod/arch_prctl/...) -- see libos_table.c for how each of those maps onto the *at()/generic
- * replacement Gramine already implements. */
+ * replacement Saguaro already implements. */
 
 /* Graphics, syscall no. for acquiring lock from gramine to synchronize libgraphics comms.
  * Picked comfortably above the highest real aarch64 syscall number (461) so it can never collide

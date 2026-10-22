@@ -5,7 +5,7 @@
 PAL  
 Platform Adaptation Layer
 
-PAL is the layer of Gramine that implements a narrow Drawbridge-like ABI
+PAL is the layer of Saguaro that implements a narrow Drawbridge-like ABI
 interface (with function names starting with the <span class="title-ref">Pal</span> prefix)
 
 <div class="seealso">
@@ -14,7 +14,7 @@ interface (with function names starting with the <span class="title-ref">Pal</sp
 
 </div>
 
-Whenever Gramine requires a service from the host platform (memory
+Whenever Saguaro requires a service from the host platform (memory
 allocation, thread management and synchronization, filesystem and network
 stacks, etc.), it calls the corresponding PAL functionality. The PAL ABI
 is host-platform agnostic and is backed by the host-platform specific PAL,

@@ -22,9 +22,9 @@ bool aarch64_signal_frame_fits(PAL_CONTEXT* context, bool should_use_altstack);
 
 /* SIGILL handling hooks used by illegal_upcall() (see bookkeep/libos_signal.c). */
 
-/* True if an illegal instruction at \p addr is an intentional Gramine-internal one: here, the
- * `svc` inside the rt_sigreturn trampoline. Anything else in Gramine-internal memory taking an
- * illegal instruction is a Gramine bug. */
+/* True if an illegal instruction at \p addr is an intentional Saguaro-internal one: here, the
+ * `svc` inside the rt_sigreturn trampoline. Anything else in Saguaro-internal memory taking an
+ * illegal instruction is a Saguaro bug. */
 bool libos_arch_is_intentional_internal_insn(uintptr_t addr);
 
 /* Give the architecture a chance to repair the SIGILL in \p context instead of delivering it to

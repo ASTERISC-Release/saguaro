@@ -14,7 +14,7 @@
  *
  * This is the aarch64 analog of x86_64's RDTSC; it is the free-running counter underlying the
  * generic timer, not a CPU-cycle counter, but it serves the same "cheap monotonic counter" role
- * everywhere Gramine used `get_tsc()`.
+ * everywhere Saguaro used `get_tsc()`.
  */
 static inline uint64_t get_tsc(void) {
     uint64_t val;
@@ -39,7 +39,7 @@ static noreturn void die_or_inf_loop(void) {
 /*
  * Interrupt masking. x86's `sti`/`cli` map onto the PSTATE.{D,A,I,F} bits, moved as a unit
  * between a GPR and PSTATE via MRS/MSR #DAIF. We mask/unmask all four (value 0xf), matching
- * how the Gramine vm kernel uses sti/cli around its scheduler critical sections; note that
+ * how the Saguaro vm kernel uses sti/cli around its scheduler critical sections; note that
  * these only have effect at EL1 (the vm unikernel kernel) -- at EL0 the writes are trapped or
  * ignored, exactly like `sti`/`cli` faulting in user mode on x86.
  */
@@ -53,7 +53,7 @@ static inline void sti(void) {
 
 /*
  * Random 32-bit value. x86's rdrand() is a single `rdrand` instruction whose "data valid" flag
- * is ignored by all Gramine call sites (they use it for log jitter, canary mixing etc., not for
+ * is ignored by all Saguaro call sites (they use it for log jitter, canary mixing etc., not for
  * security). The aarch64 analog is ARMv8.5-RNG's RNDR (`mrs x, rndr`, C-flag signals validity);
  * it is present on QEMU virt with `-cpu max` and on all Armv8.5+ cores. On a pre-8.5 core the
  * `mrs rndr` would be an undefined instruction -- acceptable for the same reason the x86 code

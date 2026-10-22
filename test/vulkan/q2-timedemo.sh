@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Quake II timedemo (633 frames of the demo's first map) with the Vulkan renderer ref_vk, natively,
 # under saguaro-direct or under saguaro-vm, windowed 1920x1080 (dev docs: vulkan/, phase 3).
-# Run inside the container, with Gramine's env.sh sourced and, for vm, QEMU_PATH set.
+# Run inside the container, with Saguaro's env.sh sourced and, for vm, QEMU_PATH set.
 #
 # Usage: test/vulkan/q2-timedemo.sh native|direct|vm intel|amd [RUNS] [RENDERER]
 #   RENDERER: vk (default), gl3 or gl1

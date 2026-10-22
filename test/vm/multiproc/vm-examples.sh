@@ -52,7 +52,7 @@ grep -q busybox-shell-works "$OUT/busybox.log" && grep -qx x86_64 "$OUT/busybox.
     && res PASS busybox || res FAIL busybox
 
 vmfilter() {  # drop the VM launcher/PAL lines that the single guest console mixes into stdout
-    grep -v -e '^Configuring Gramine VM' -e '^REM_MEM_SIZE' -e '^\[boot\]' -e '^(PAL) Physical' \
+    grep -v -e '^Configuring Saguaro VM' -e '^REM_MEM_SIZE' -e '^\[boot\]' -e '^(PAL) Physical' \
             -e '^Private frame pool' -e 'self-check passed' -e '^\[ VM ' -e '^vm-relay:'
 }
 

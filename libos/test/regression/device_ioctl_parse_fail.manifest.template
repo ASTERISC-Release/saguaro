@@ -22,7 +22,7 @@ sgx.allowed_files = [
 ]
 
 # Below IOCTL structs are intentionally modified to test IOCTL parsing (i.e. they don't really make
-# sense). Each IOCTL struct has a single error/limitation that should fail Gramine's IOCTL parser.
+# sense). Each IOCTL struct has a single error/limitation that should fail Saguaro's IOCTL parser.
 
 # Sub-regions must be TOML tables and not e.g. strings
 sys.ioctl_structs.subregion_is_not_a_table = [

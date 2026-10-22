@@ -9,7 +9,7 @@
 //
 //*********************************************************
 //
-// Gramine phase-0 spike (step h): host for the ELF-in-image enclave. Usage: host.exe [1|2]
+// Saguaro phase-0 spike (step h): host for the ELF-in-image enclave. Usage: host.exe [1|2]
 
 #include <windows.h>
 #include <enclaveapi.h>

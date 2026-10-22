@@ -67,7 +67,7 @@ the relay for x86_64 and AArch64.
 | Key | Applies to | Purpose | Details |
 |---|---|---|---|
 | `sys.experimental__multiprocess` | VM PAL; experimental, with architecture-specific limits | Process creation and related multi-process support in the guest. Default `true` on the x86_64 and AArch64 VM PAL (needs guest RAM above 4G on x86_64); `false` gives the single-process guest. | [VM process support](quickstart/vm.md#4-other-information) |
-| `sys.experimental__assume_external_processes_alive` | Common LibOS option; used by VM/TDX integrations | Make `kill(pid, 0)` succeed when the target is outside Gramine and would otherwise be reported as absent. | [Implementation](../libos/src/sys/libos_sigaction.c) |
+| `sys.experimental__assume_external_processes_alive` | Common LibOS option; used by VM/TDX integrations | Make `kill(pid, 0)` succeed when the target is outside Saguaro and would otherwise be reported as absent. | [Implementation](../libos/src/sys/libos_sigaction.c) |
 | `sys.experimental__shared_input_ring` | VM and TDX PALs; graphics use | Make the VM vsock driver use interrupt-driven polling when the graphics shared input ring is active. | dev docs: `graphics/` |
 | `sys.experimental__enable_host_sysv_semaphores` | VM/TDX with graphics enabled and a host agent | Forward System V semaphore operations to the host agent. | [Graphics example](../CI-Examples/graphics/tf2/README.md) |
 | `tdx.enclave_size` | `saguaro-tdx` | Set guest memory size from the TDX manifest. | [VM size](quickstart/vm.md#4-other-information) |
@@ -95,7 +95,7 @@ The VBS-specific keys are for the Windows VBS PAL; other PALs ignore them.
 
 ## SGX
 
-The SGX-specific keys are ignored when Gramine is not running with SGX.
+The SGX-specific keys are ignored when Saguaro is not running with SGX.
 
 | Key | Applies to | Purpose | Details |
 |---|---|---|---|

@@ -43,7 +43,7 @@ static void signal_io(IDTYPE caller, void* arg) {
  *    unchanged (the graphics preload library hands raw host fds to Mesa itself, see egl.c);
  *  - FD_OUT: the host fd the kernel wrote is installed as a new TYPE_HOST handle, and its LibOS fd
  *    is written back;
- *  - TIME_ABS: an absolute CLOCK_MONOTONIC deadline on Gramine's clock is made relative to "now",
+ *  - TIME_ABS: an absolute CLOCK_MONOTONIC deadline on Saguaro's clock is made relative to "now",
  *    and the listener adds its own CLOCK_MONOTONIC (the guest cannot read the host's clock); the
  *    comm page's p4 names the field (offset + 1) and p5 carries GRAPHICS_IOCTL_TIME_REL_MAGIC.
  * Input fields are restored after the call, so the application sees its own values.

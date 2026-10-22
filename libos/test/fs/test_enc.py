@@ -11,7 +11,7 @@ from graminelibos import _CONFIG_SGX_ENABLED
 
 # TODO: While encrypted files are no longer SGX-only, the related tools (saguaro-sgx-pf-crypt,
 # saguaro-sgx-pf-tamper) are still part of Linux-SGX PAL. As a result, we are able to run the tests
-# with other PALs, but only if Gramine was built with SGX enabled.
+# with other PALs, but only if Saguaro was built with SGX enabled.
 
 @unittest.skipUnless(_CONFIG_SGX_ENABLED, 'Encrypted files tests require SGX to be enabled')
 class TC_50_EncryptedFiles(test_fs.TC_00_FileSystem):
@@ -91,7 +91,7 @@ class TC_50_EncryptedFiles(test_fs.TC_00_FileSystem):
         self.verify_open_close(stdout, stderr, output_path, 'output')
         self.assertTrue(os.path.isfile(output_path))
 
-    # overrides TC_00_FileSystem to not skip Gramine-SGX
+    # overrides TC_00_FileSystem to not skip Saguaro-SGX
     def test_111_read_write_mmap(self):
         file_path = os.path.join(self.OUTPUT_DIR, 'test_111') # new file to be created
         stdout, stderr = self.run_binary(['read_write_mmap', file_path])

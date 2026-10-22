@@ -100,7 +100,7 @@ static bool open_gbm_device(void) {
         create_and_setup_xcb_window();
         fprintf(stderr, "[*] XCB connection established\n");
     } else {
-        fprintf(stderr, "[*] Skipping XCB connection setup in Gramine VM\n");
+        fprintf(stderr, "[*] Skipping XCB connection setup in Saguaro VM\n");
     }
 
     cur = 0;
@@ -154,11 +154,11 @@ void __attribute__((constructor)) sharedgl_entry(void) {
          * constructor to run once per process that draws, so only set it for such programs. */
         const char *eager = getenv("EGL_EAGER_SESSION");
         if (eager && strcmp(eager, "1") == 0) {
-            fprintf(stderr, "[.] RUNTIME: Gramine VM (EGL_EAGER_SESSION: graphics session starts now)\n");
+            fprintf(stderr, "[.] RUNTIME: Saguaro VM (EGL_EAGER_SESSION: graphics session starts now)\n");
             graphics_ensure_session();
             return;
         }
-        fprintf(stderr, "[.] RUNTIME: Gramine VM (graphics session starts at the first graphics call)\n");
+        fprintf(stderr, "[.] RUNTIME: Saguaro VM (graphics session starts at the first graphics call)\n");
         return;
     }
     fprintf(stderr, "[.] RUNTIME: Process\n");

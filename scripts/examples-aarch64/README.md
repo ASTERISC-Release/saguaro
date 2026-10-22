@@ -2,7 +2,7 @@
 
 The applicable examples from <https://github.com/gramineproject/examples> (commit 9fdd89c5) now
 live in `CI-Examples/`: `curl gcc iperf mongodb nodejs openjdk pytorch r`. Run them with
-`scripts/examples-aarch64/run_examples.sh` (needs the Gramine install from `scripts/install.sh`).
+`scripts/examples-aarch64/run_examples.sh` (needs the Saguaro install from `scripts/install.sh`).
 Not copied (x86 / Intel-specific): `tensorflow-lite`, `openvino`, `scikit-learn-intelex`.
 
 ## Host prerequisites
@@ -14,7 +14,7 @@ uses `sudo` for apt and may prompt; `DRY_RUN=1` previews). `CI-Examples/install-
 - pytorch: python3-venv, python3-pip, lsb-release (`WITH_NSS=1` adds libnss-mdns/libnss-myhostname)
 - mongodb: runtime libs, `pymongo`, and the official release tarball (SHA-256 checked) unpacked to
   `~/.local/mongodb` with `mongod` linked into `~/.local/bin` (ARMv8.2 CPU required on arm64)
-`iperf` needs two processes (server under Gramine, client natively) and is not in the runner:
+`iperf` needs two processes (server under Saguaro, client natively) and is not in the runner:
 `cd CI-Examples/iperf && make && saguaro-direct iperf3` then
 `LD_LIBRARY_PATH=./install ./install/iperf3 -c 127.0.0.1`.
 
@@ -42,7 +42,7 @@ uses `sudo` for apt and may prompt; `DRY_RUN=1` previews). `CI-Examples/install-
 | pytorch | pass; output byte-identical to native; ~2.4 s vs ~2.0 s native |
 | mongodb | pass (7.0.14; ~3.2 s vs 3.4 s native; data survives a restart; 5/5 cold runs) |
 
-Notes: oneDNN prints `Can't open MIDR_EL1 sysfs entry` under Gramine (the guest does not emulate
+Notes: oneDNN prints `Can't open MIDR_EL1 sysfs entry` under Saguaro (the guest does not emulate
 `/sys/devices/system/cpu/cpuN/regs/identification/`; harmless). MongoDB logs benign warnings for
 missing `/sys/block`, the TCP fast-open option and acceptor queue length. `saguaro-direct`
 resolves symlinks, so a symlinked `mongod` still uses `mongod.manifest`.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Gramine phase-0 spike (step h): write the two PT_LOAD segments of app.elf as text.bin (padded to
+"""Saguaro phase-0 spike (step h): write the two PT_LOAD segments of app.elf as text.bin (padded to
 a fixed 64 KiB so that the enclave image layout does not depend on the program) and data.bin
 (padded to its memory size), and check that the program needs no relocation."""
 TEXT_PAD = 0x10000

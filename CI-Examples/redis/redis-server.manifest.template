@@ -5,10 +5,10 @@
 
 ################################## GRAMINE ####################################
 
-# Entrypoint binary which Gramine invokes.
+# Entrypoint binary which Saguaro invokes.
 libos.entrypoint = "/redis-server"
 
-# Verbosity of Gramine debug log (none/error/warning/debug/trace/all). Note
+# Verbosity of Saguaro debug log (none/error/warning/debug/trace/all). Note
 # that SAGUARO_LOG_LEVEL macro is expanded in the Makefile as part of the
 # building process: the default is "error" for non-debug builds, and "debug"
 # for debug builds.
@@ -22,7 +22,7 @@ loader.argv = ["redis-server", "--save", ""]
 ################################# ENV VARS ####################################
 
 # Specify paths to search for libraries. The usual LD_LIBRARY_PATH syntax
-# applies. Paths must be in-Gramine visible paths, not host paths (i.e.,
+# applies. Paths must be in-Saguaro visible paths, not host paths (i.e.,
 # paths must be taken from fs.mounts[...].path, not fs.mounts[...].uri).
 #
 # In case of Redis:
@@ -39,26 +39,26 @@ sys.enable_sigterm_injection = true
 
 # General notes:
 # - All mount points are mounted using the default 'chroot' type.
-# - `path`: names of directories and files in Gramine environment; they may be
+# - `path`: names of directories and files in Saguaro environment; they may be
 #           arbitrary but here we mostly reuse host URIs for simplicity (except
 #           for the first `/lib` mount point).
 # - `uri`:  names of directories and files on the host, somewhat confusingly
 #           prepended by the 'file:' keyword.
 
 fs.mounts = [
-  # Mount on-host directory to Gramine glibc/runtime libraries (in 'uri') into
-  # in-Gramine visible directory /lib (in 'path').
+  # Mount on-host directory to Saguaro glibc/runtime libraries (in 'uri') into
+  # in-Saguaro visible directory /lib (in 'path').
   { path = "/lib", uri = "file:{{ saguaro.runtimedir() }}" },
 
   # Mount redis-server executable (located in the current directory) under the
-  # in-Gramine visible root directory.
+  # in-Saguaro visible root directory.
   { path = "/redis-server", uri = "file:redis-server" },
 ]
 
 ############################### SGX: GENERAL ##################################
 
 # Create a debug SGX enclave (with SIGSTRUCT.ATTRIBUTES.DEBUG bit set to 1).
-# This allows to debug Gramine with the application using GDB, read perf
+# This allows to debug Saguaro with the application using GDB, read perf
 # counters and enable SGX statistics. Note that this option is *insecure*!
 sgx.debug = true
 
@@ -81,10 +81,10 @@ sgx.edmm_enable = {{ 'true' if env.get('EDMM', '0') == '1' else 'false' }}
 # enclave creation time.
 #
 # Note that when EDMM is enabled, there is no need to specify a particular
-# number of threads, as Gramine will automatically adjust to the application
+# number of threads, as Saguaro will automatically adjust to the application
 # demands.
 #
-# Note that internally Gramine may spawn two additional threads, one for IPC
+# Note that internally Saguaro may spawn two additional threads, one for IPC
 # and one for asynchronous events/alarms. Redis is technically single-threaded
 # but spawns couple additional threads to do background bookkeeping. Therefore,
 # specifying '8' allows to run a maximum of 6 Redis threads which is enough.
@@ -97,16 +97,16 @@ sgx.max_threads = {{ '1' if env.get('EDMM', '0') == '1' else '8' }}
 # files (like configuration files).
 #
 # The paths to files are on-host paths. These files will be searched for in
-# in-Gramine visible paths according to mount points above.
+# in-Saguaro visible paths according to mount points above.
 #
-# As part of the build process, Gramine-SGX script (`saguaro-sgx-sign`) finds
+# As part of the build process, Saguaro-SGX script (`saguaro-sgx-sign`) finds
 # each specified file, measures its hash, and adds it to the manifest entry for
 # that file (converting each entry to a table with "uri" and "sha256" keys).
 # Note that this happens on the developer machine or a build server. If a
 # directory is specified in the list below, then this directory is recursively
 # traversed and each found file is processed as described above.
 #
-# At runtime, during loading of each "trusted file", Gramine-SGX measures its
+# At runtime, during loading of each "trusted file", Saguaro-SGX measures its
 # hash and compares with the "sha256" value in the corresponding manifest entry.
 # If hashes match, this file is trusted and allowed to be loaded and used. Note
 # that this happens on the deployment machine.

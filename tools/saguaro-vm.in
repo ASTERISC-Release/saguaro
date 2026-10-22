@@ -46,7 +46,7 @@ fi
 # Try to get the VM memory config from `.manifest.tdx` file, by parsing `tdx.enclave_size` value.
 # If this fails, try alternatively with `.manifest.sgx` and `sgx.enclave_size`
 #
-# We enforce a 1GB lower limit for VM memory because (a) Gramine VM kernel reserves ~512MB for
+# We enforce a 1GB lower limit for VM memory because (a) Saguaro VM kernel reserves ~512MB for
 # shared virtio-queues memory, page tables, PAL binary, etc. and (b) for simplicity we want to reuse
 # already-existing SGX manifests, thus we don't want to bump `sgx.enclave_size` to 1GB explicitly.
 export SAGUARO_MANIFEST=$APPLICATION.manifest
@@ -191,7 +191,7 @@ fi
 GRAPHICS_BACKEND_ARGS=""
 
 if [ "$SAGUARO_HUGEPAGES" == "1" ]; then
-    # echo "Configuring Gramine VM with hugepages support."
+    # echo "Configuring Saguaro VM with hugepages support."
     if [ "$RAW_MEM_SIZE" -lt 5 ]; then
         echo "Error: hugepages deployments need at least 5G of guest RAM (2G hugetlb below" \
              "4G for kernel+app, 2G normal pages at 4-6G for the data arena, and the 1G" \
@@ -225,7 +225,7 @@ if [ "$SAGUARO_HUGEPAGES" == "1" ]; then
     -numa node,memdev=huge_bucket,nodeid=2 "
     [ "$HAVE_APP_BACKEND" = 1 ] && GRAPHICS_BACKEND_ARGS+="-numa node,memdev=ram2,nodeid=3 "
 else
-    # echo "Configuring Gramine VM without hugepages."
+    # echo "Configuring Saguaro VM without hugepages."
 
     # 2G below 4G for kernel+app, 2G normal at 4-6G (the GEM arenas; at RAM=4G they fill it
     # entirely), and normal pages for the rest. 4 guests get no third backend.
@@ -316,7 +316,7 @@ else
     QEMU_BINARIES="-bios $TDSHIM_PAL_PATH"
 fi
 
-# We need to specify a Gramine VM ID to be able to run two independent Gramine instances at the
+# We need to specify a Saguaro VM ID to be able to run two independent Saguaro instances at the
 # same time on the same machine. They are used as IDs for the virtiofs and the vsock guest-cid.
 # SAGUARO_VM_ID_BASE: set per workspace by container/run.sh, so that containers of different
 # checkouts do not pick the same (host-global) guest CID.
@@ -344,7 +344,7 @@ for process in qemu_processes:
     if guest_cid is not None:
         used_cids.add(guest_cid)
 
-# Identify the next available Gramine VM ID based on the uniquely assigned vsock guest-cid.
+# Identify the next available Saguaro VM ID based on the uniquely assigned vsock guest-cid.
 cid = "$DEFAULT_GRAMINE_VM_ID"
 while cid in used_cids:
     cid += 1
@@ -358,7 +358,7 @@ else:
 EXIT_STATUS=$?
 
 if [ $EXIT_STATUS -ne 0 ]; then
-    echo "Error: Python script for determining the Gramine-VM ID exited with a non-zero status: $EXIT_STATUS"
+    echo "Error: Python script for determining the Saguaro VM ID exited with a non-zero status: $EXIT_STATUS"
     echo "Error message: $SAGUARO_VM_ID"
     exit $EXIT_STATUS
 fi
@@ -512,7 +512,7 @@ fi
 # connects directly to the guest's vsock port, the way the X proxy above does.
 vm_relay_start "$SAGUARO_VM_ID" "$SAGUARO_MANIFEST" || exit 2
 
-# Check if the Gramine vhostfs pid file is already in use by another process
+# Check if the Saguaro vhostfs pid file is already in use by another process
 if lsof /tmp/gramine_vhostfs_"$SAGUARO_VM_ID".pid 2>/dev/null; then
     echo "Error: /tmp/gramine_vhostfs_"$SAGUARO_VM_ID".pid is already in use."
     exit 2

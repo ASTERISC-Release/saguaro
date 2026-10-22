@@ -4,7 +4,7 @@
 # Yamagi Quake II under saguaro-vm with the Tirith graphics redirection (x86_64). Build the game
 # first with ./setup-quake.sh; see dev docs: graphics/ for the host setup.
 
-# The graphics preload library is built and installed with Gramine (-Dgraphics=enabled and a
+# The graphics preload library is built and installed with Saguaro (-Dgraphics=enabled and a
 # VM-type PAL); the manifest refers to it as saguaro.libgraphics.
 GRAPHICS_LIB = $(shell python3 -c "import graminelibos; print(graminelibos._CONFIG_PKGLIBDIR)")/libgraphics.so
 Q2_DIR = $(abspath quake2_bin)
@@ -50,9 +50,9 @@ quake2.manifest: quake2.manifest.template $(Q2_BIN) FORCE
 dirs:
 	mkdir -p $(HOME)/.yq2 $(HOME)/.cache
 
-# Without Gramine: the preload library presents through its own X connection. Quake II refuses to
+# Without Saguaro: the preload library presents through its own X connection. Quake II refuses to
 # run as root, so as root (the usual case in the container) it is started in a user namespace that
-# shows the same user as uid 1000; under Gramine the manifest's loader.uid does the same job.
+# shows the same user as uid 1000; under Saguaro the manifest's loader.uid does the same job.
 ifeq ($(shell id -u),0)
 NATIVE_AS = unshare --user --map-user=1000 --map-group=1000 env
 else

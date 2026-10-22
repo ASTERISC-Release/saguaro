@@ -69,7 +69,7 @@ vm_relay_start() {
     [ "${SAGUARO_VM_RELAY:-1}" = "0" ] && return 0
 
     if ! python3 -c 'import graminelibos.vsock_relay' 2>/dev/null; then
-        echo "Error: the VM's vsock relay needs the Python package graminelibos of this Gramine" \
+        echo "Error: the VM's vsock relay needs the Python package graminelibos of this Saguaro" \
              "installation (set PYTHONPATH to <prefix>/lib/python3*/site-packages)" >&2
         return 1
     fi

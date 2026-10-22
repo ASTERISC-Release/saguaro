@@ -150,7 +150,7 @@ def run_command(cmd, *, timeout, open_fds_limit=None, can_fail=False, **kwds):
         if timed_out:
             if main_returncode is not None:
                 # XXX: Don't fail the test as long the main process exited (i.e. if it left dangling
-                # child processes). This can happen due to a known issue with Gramine failing to
+                # child processes). This can happen due to a known issue with Saguaro failing to
                 # deliver a signal for an arbitrary amount of time. See the comment in
                 # `libos_internal.h:handle_signal` for details.
                 #
@@ -158,7 +158,7 @@ def run_command(cmd, *, timeout, open_fds_limit=None, can_fail=False, **kwds):
                 # `fdatasync01`, `recvfrom01`, `sendto01`) that send SIGKILL to child processes.
                 logging.warning(
                     'run_command: Command %s timed out, but the main process exited. This might be '
-                    'due to a known issue with Gramine failing to deliver a signal. Continuing.',
+                    'due to a known issue with Saguaro failing to deliver a signal. Continuing.',
                     cmd)
             else:
                 raise AssertionError('Command {} timed out after {} s'.format(cmd, timeout))
@@ -232,7 +232,7 @@ class RegressionTestCase(unittest.TestCase):
             if not self.libpal_path.exists():
                 self.fail('vm-PAL kernel ({}) not found'.format(self.libpal_path))
             # `saguaro-vm` exits with the guest's exit code. The guest has a single (virtio)
-            # console carrying application stdout/stderr and Gramine's log, so both streams
+            # console carrying application stdout/stderr and Saguaro's log, so both streams
             # are that console.
             # absolute path: tests that pass a custom `env=` may not carry our PATH
             saguaro_vm = shutil.which(VM_LAUNCHER) or VM_LAUNCHER

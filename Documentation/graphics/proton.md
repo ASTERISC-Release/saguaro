@@ -11,7 +11,7 @@ first, server-side synchronisation, then the GPU, then 32-bit games.
 **How it works.** A native Proton run was traced and compared with the VM PAL, which gave the
 blocker list. The LibOS then gained, in order: named Unix-socket nodes (Wine finds its server),
 a `fork` that sends the VMAs instead of copying untouched reservations, `SCM_RIGHTS` fd passing
-between Gramine processes, a virtual user `%gs` handed to the application lazily at the LibOS
+between Saguaro processes, a virtual user `%gs` handed to the application lazily at the LibOS
 boundary, interruptible blocking calls and the exception vectors as signals, a demand-paged
 address space of 512 GiB per process with on-demand page tables and free `PROT_NONE`
 reservations, syscall user dispatch and drive links. *GPU design:* the redirection had required an

@@ -3,7 +3,7 @@
 
 /*
  * Phase-4 attestation test of the VBS-enclave PAL: an application inside the enclave gets an
- * attestation report through Gramine's /dev/attestation interface, with its own user report data,
+ * attestation report through Saguaro's /dev/attestation interface, with its own user report data,
  * and writes it to the host for the host verifier (`pal_vbs_host.exe <image> 1 verify ...`).
  *
  *   attest <user data as hex, at most 64 bytes> [output directory, default /data/out]

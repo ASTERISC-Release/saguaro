@@ -46,7 +46,7 @@ class TC_10_Tmpfs(test_fs.TC_00_FileSystem):
         self.assertIn('compare(' + file_path + ') RW OK', stdout)
         self.assertIn('close(' + file_path + ') RW OK', stdout)
 
-    # overrides TC_00_FileSystem to not skip Gramine-SGX and to skip verification of file existence
+    # overrides TC_00_FileSystem to not skip Saguaro-SGX and to skip verification of file existence
     def test_111_read_write_mmap(self):
         file_path = os.path.join(self.OUTPUT_DIR, 'test_111') # new file to be created
         stdout, stderr = self.run_binary(['read_write_mmap', file_path])

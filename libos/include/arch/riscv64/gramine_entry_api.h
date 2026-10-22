@@ -98,7 +98,7 @@ __asm__(
     ".endm\n"
 );
 
-/* Magic syscall number for Gramine custom calls. riscv64 keeps the "which call is this" number
+/* Magic syscall number for Saguaro custom calls. riscv64 keeps the "which call is this" number
  * in a7 (separate from the a0-a2 arguments), mirroring how real riscv64 syscalls keep the number
  * in a7 separate from the a0-a5 arguments -- unlike x86_64, which reuses %eax for both (the
  * aarch64 sibling keeps it in x8 for the same reason). */

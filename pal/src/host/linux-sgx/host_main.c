@@ -792,7 +792,7 @@ static int parse_loader_config(char* manifest, struct pal_enclave* enclave_info,
 
 #ifndef SGX_VTUNE_PROFILE
     if (g_vtune_profile_enabled)
-        log_always("Gramine was not built with VTune profiling support, "
+        log_always("Saguaro was not built with VTune profiling support, "
                    "'sgx.vtune_profile' manifest option has no impact.");
 #endif
 
@@ -868,7 +868,7 @@ static int parse_loader_config(char* manifest, struct pal_enclave* enclave_info,
 #else
     if (profile_str && strcmp(profile_str, "none")) {
         log_error("Invalid 'sgx.profile.enable' "
-                  "(SGX profiling works only when Gramine is compiled in debug mode)");
+                  "(SGX profiling works only when Saguaro is compiled in debug mode)");
         ret = -EINVAL;
         goto out;
     }
@@ -954,14 +954,14 @@ static int load_enclave(struct pal_enclave* enclave, char* args, size_t args_siz
 
     if (parent_stream_fd < 0) {
         /* only print during main process's startup (note that this message is always printed) */
-        log_always("Gramine is starting. Parsing TOML manifest file, this may take some time...");
+        log_always("Saguaro is starting. Parsing TOML manifest file, this may take some time...");
     }
     ret = parse_loader_config(enclave->raw_manifest_data, enclave, &extra_runtime_domain_names_conf);
     if (ret < 0) {
         log_error("Parsing manifest failed");
         return -EINVAL;
     }
-    log_debug("Gramine parsed TOML manifest file successfully");
+    log_debug("Saguaro parsed TOML manifest file successfully");
 
     ret = open_sgx_driver();
     if (ret < 0)
@@ -1084,7 +1084,7 @@ noreturn static void print_usage_and_exit(const char* argv_0) {
                "\tChildren:      %s <path to libpal.so> child <parent_stream_fd> args...",
                self, self);
     log_always("This is an internal interface. Use saguaro-sgx wrapper to launch applications in "
-               "Gramine.");
+               "Saguaro.");
     DO_SYSCALL(exit_group, 1);
     die_or_inf_loop();
 }
@@ -1131,7 +1131,7 @@ static void setup_asan(void) {
 static int verify_hw_requirements(char* envp[]) {
     uint64_t at_hwcap2;
     if (get_aux_value(envp, AT_HWCAP2, &at_hwcap2) != 0 || !(at_hwcap2 & 0x2)) {
-        log_error("Gramine with Linux-SGX backend requires support for FSGSBASE CPU instructions "
+        log_error("Saguaro with Linux-SGX backend requires support for FSGSBASE CPU instructions "
                   "in the host kernel. Please update your system.");
         return -EINVAL;
     }
@@ -1146,7 +1146,7 @@ static int verify_hw_requirements(char* envp[]) {
     else if (!(values[CPUID_WORD_ECX] & (1 << 30)))
         missing = "RDRAND";
     if (missing) {
-        log_error("Gramine with Linux-SGX backend requires %s CPU instruction(s). "
+        log_error("Saguaro with Linux-SGX backend requires %s CPU instruction(s). "
                   "Please upgrade your hardware.", missing);
         return -EINVAL;
     }

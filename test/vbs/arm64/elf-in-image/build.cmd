@@ -1,5 +1,5 @@
 @echo off
-rem Gramine phase-0 spike (step h): build the enclave that contains the Linux program.
+rem Saguaro phase-0 spike (step h): build the enclave that contains the Linux program.
 rem Run linux/build.sh in WSL first (it writes linux\text.bin and linux\data.bin).
 setlocal
 call "%ProgramFiles%\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=arm64 -host_arch=arm64 -no_logo || exit /b 1

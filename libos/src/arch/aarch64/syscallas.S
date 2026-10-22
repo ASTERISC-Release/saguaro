@@ -59,7 +59,7 @@ libos_syscall_entry:
      * TPIDR_EL0 by set_tls(), which is every clone()/fork() child's first act, hence always
      * present before a thread's first syscall -- to that thread's PAL_TCB. Entries are stored
      * {key = tls|1, tcb} with 0 = empty; deregistration frees slots at arbitrary indices, so
-     * the scan below must cover the whole table. Tagged pointers (bit 0 set: Gramine-internal
+     * the scan below must cover the whole table. Tagged pointers (bit 0 set: Saguaro-internal
      * threads whose TLS register pal_set_tcb() still owns) decode to their TCB directly.
      *
      * A genuine miss can only be the main thread before its first pal_get_tcb() self-registration

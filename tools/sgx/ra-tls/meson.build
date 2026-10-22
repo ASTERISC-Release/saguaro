@@ -1,4 +1,4 @@
-# Link mbedtls statically to Gramine-provided libraries, e.g., RA-TLS and Secret Provisioning
+# Link mbedtls statically to Saguaro-provided libraries, e.g., RA-TLS and Secret Provisioning
 # libraries. This is because they are loaded dynamically to users' software and we don't want our
 # patched mbedtls to collide with libraries the program already uses.
 
@@ -212,7 +212,7 @@ endif
 pkgconfig.generate(
     name: 'ra_tls_gramine',
     filebase: 'ra_tls_gramine',
-    description: 'RA-TLS (SGX Remote Attestation TLS library) for Gramine',
+    description: 'RA-TLS (SGX Remote Attestation TLS library) for Saguaro',
     subdirs: 'gramine',
     libraries: [
         '-L${libdir}',
@@ -224,7 +224,7 @@ pkgconfig.generate(
 pkgconfig.generate(
     name: 'secret_prov_gramine',
     filebase: 'secret_prov_gramine',
-    description: 'Secret Provisioning library for Gramine',
+    description: 'Secret Provisioning library for Saguaro',
     subdirs: 'gramine',
     libraries: [
         '-L${libdir}',

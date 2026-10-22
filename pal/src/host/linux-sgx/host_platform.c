@@ -156,7 +156,7 @@ int init_quoting_enclave_targetinfo(bool is_epid, sgx_target_info_t* qe_targetin
         Response__InitQuoteResponse* r = res->initquoteres;
         if (r->errorcode != 0) {
             log_error("AESM service returned error %d; this may indicate that infrastructure for "
-                      "the EPID attestation requested by Gramine is missing on this machine",
+                      "the EPID attestation requested by Saguaro is missing on this machine",
                       r->errorcode);
             goto failed;
         }
@@ -195,7 +195,7 @@ int init_quoting_enclave_targetinfo(bool is_epid, sgx_target_info_t* qe_targetin
         Response__InitQuoteExResponse* r = res->initquoteexres;
         if (r->errorcode != 0) {
             log_error("AESM service returned error %d; this may indicate that infrastructure for "
-                      "the DCAP attestation requested by Gramine is missing on this machine",
+                      "the DCAP attestation requested by Saguaro is missing on this machine",
                       r->errorcode);
             goto failed;
         }

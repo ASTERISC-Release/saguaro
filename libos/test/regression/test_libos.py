@@ -88,11 +88,11 @@ class TC_00_Unittests(RegressionTestCase):
         except subprocess.CalledProcessError as e:
             stderr = e.stderr.decode()
             self.assertIn('run_test("{}") ...'.format(test_name), stderr,
-                          'Gramine should not abort before attempting to run test')
+                          'Saguaro should not abort before attempting to run test')
             for expected in expected_list:
                 self.assertIn(expected, stderr)
             self.assertNotIn('run_test("{}") ='.format(test_name), stderr,
-                             'Gramine should abort before returning to application')
+                             'Saguaro should abort before returning to application')
 
 class TC_01_Bootstrap(RegressionTestCase):
     def test_001_helloworld(self):
@@ -105,7 +105,7 @@ class TC_01_Bootstrap(RegressionTestCase):
 
     def test_010_console(self):
         stdout, stderr = self.run_binary(['console'], timeout=40)
-        # recall that Gramine redirects app's stdout/stderr to host stdout
+        # recall that Saguaro redirects app's stdout/stderr to host stdout
         self.assertIn('First hello on stdout!', stdout)
         self.assertIn('First hello on stderr!', stdout)
         self.assertIn('Second hello on stdout!', stdout)
@@ -550,7 +550,7 @@ class TC_01_Bootstrap(RegressionTestCase):
 
     def test_702_debug_log_inline_unexpected_arg(self):
         try:
-            # `debug_log_inline` program logic is irrelevant here, we only want to test Gramine's
+            # `debug_log_inline` program logic is irrelevant here, we only want to test Saguaro's
             # handling of unexpected args when the manifest has no explicit argv handling options
             self.run_binary(['debug_log_inline', 'unexpected arg'])
             self.fail('expected to return nonzero')
@@ -1146,7 +1146,7 @@ class TC_30_Syscall(RegressionTestCase):
             self.run_binary(['sighandler_sigpipe'])
             self.fail('expected to return nonzero')
         except subprocess.CalledProcessError as e:
-            # FIXME: It's unclear what Gramine process should return when the app
+            # FIXME: It's unclear what Saguaro process should return when the app
             # inside dies due to a signal.
             self.assertTrue(e.returncode in [signal.SIGPIPE, 128 + signal.SIGPIPE])
             stdout = e.stdout.decode()
@@ -1429,7 +1429,7 @@ class TC_40_FileSystem(RegressionTestCase):
     def test_030_fdleak(self):
         # The fd limit is rather arbitrary, but must be in sync with numbers from the test.
         # Currently test opens 10 fds simultaneously, so 50 is a safe margin for any fds that
-        # Gramine might open internally.
+        # Saguaro might open internally.
         stdout, _ = self.run_binary(['fdleak'], timeout=40, open_fds_limit=50)
         self.assertIn("TEST OK", stdout)
 
@@ -1683,7 +1683,7 @@ class TC_40_FileSystem(RegressionTestCase):
 class TC_50_GDB(RegressionTestCase):
     def setUp(self):
         if not self.has_debug():
-            self.skipTest('test runs only when Gramine is compiled in debug mode')
+            self.skipTest('test runs only when Saguaro is compiled in debug mode')
 
     def find(self, name, stdout):
         match = re.search('<{0} start>(.*)<{0} end>'.format(name), stdout, re.DOTALL)
@@ -1756,14 +1756,14 @@ class TC_50_GDB(RegressionTestCase):
         # opened trusted files to allowed files after fork. This test starts a program that forks
         # and then reads the trusted file. The GDB script stops the program after fork, modifies the
         # trusted file, and then lets the program continue execution. The child process must see the
-        # modified trusted file, and Gramine's verification logic must fail the whole program.
+        # modified trusted file, and Saguaro's verification logic must fail the whole program.
         try:
             stdout, _ = self.run_gdb(['fork_and_access_file'], 'fork_and_access_file.gdb')
             self.assertIn('BREAK ON FORK', stdout)
             self.assertIn('EXITING GDB WITH A GRAMINE ERROR', stdout)
-            # below message must NOT be printed; it means Gramine didn't fail but the program itself
+            # below message must NOT be printed; it means Saguaro didn't fail but the program itself
             self.assertNotIn('EXITING GDB WITHOUT A GRAMINE ERROR', stdout)
-            # below message from program must NOT be printed; Gramine must fail before it
+            # below message from program must NOT be printed; Saguaro must fail before it
             self.assertNotIn('child read data different from what parent read', stdout)
         finally:
             # restore the trusted file contents (modified by the GDB script in this test)
@@ -1905,7 +1905,7 @@ class TC_80_Socket(RegressionTestCase):
         self.assertIn('[parent] TEST OK', stdout)
 
     def test_101_socket_unix_fdpass(self):
-        # SCM_RIGHTS between two Gramine processes over a socketpair and a named socket
+        # SCM_RIGHTS between two Saguaro processes over a socketpair and a named socket
         stdout, _ = self.run_binary(['unix_fdpass'], timeout=60)
         self.assertIn('socketpair OK', stdout)
         self.assertIn('named socket OK', stdout)

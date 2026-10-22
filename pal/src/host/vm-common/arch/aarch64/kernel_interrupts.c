@@ -8,7 +8,7 @@
  *   - The el0_irq asm entry (kernel_context.S) snapshots all user GPRs + ELR/SPSR/SP_EL0 into
  *     `struct isr_regs` and calls `isr_c()` below; it is used for IRQs arriving while in EL0.
  *   - The el1_sync asm entry calls `isr_kernel_c()` for synchronous exceptions in the kernel
- *     itself (a Gramine kernel fault is fatal -- same policy as x86, which panics on #PF).
+ *     itself (a Saguaro kernel fault is fatal -- same policy as x86, which panics on #PF).
  *   - The el0_sync (`svc`) fast path never goes through this file: it is handled inline by the
  *     syscall dispatcher in kernel_context.S (x86 analog: `syscall_asm` in kernel_events.S).
  *

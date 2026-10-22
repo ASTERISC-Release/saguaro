@@ -15,7 +15,7 @@
  *   2. validate every dynamic relocation (type, target, symbol) BEFORE writing anything;
  *   3. make the object's own writable PT_LOAD pages read-write with VirtualProtect -- the one-way
  *      change from the image's execute-read protection that the platform allows (phase 0, step c);
- *   4. apply the relocations in place (the four AArch64 types Gramine's own loaders handle:
+ *   4. apply the relocations in place (the four AArch64 types Saguaro's own loaders handle:
  *      R_AARCH64_RELATIVE, R_AARCH64_ABS64, R_AARCH64_GLOB_DAT, R_AARCH64_JUMP_SLOT), binding
  *      undefined symbols to the table of functions the enclave offers (the PAL's exports);
  *   5. make the PT_GNU_RELRO pages read-only again, and return the entry address.

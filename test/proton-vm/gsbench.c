@@ -5,7 +5,7 @@
  * Costs that decide the `%gs` design (dev docs: proton-vm/design-gs.md): what a system
  * call costs today on the fast path (glibc's `getppid`) and on a raw `syscall` instruction, what
  * the swap of the GS base would add in user mode (`rdgsbase` + `wrgsbase`, needs CR4.FSGSBASE) or
- * through the kernel (`arch_prctl(ARCH_SET_GS)` natively; under Gramine it is ENOSYS, so
+ * through the kernel (`arch_prctl(ARCH_SET_GS)` natively; under Saguaro it is ENOSYS, so
  * `ARCH_SET_FS` with the current value stands in), and a plain TLS load through `%fs`.
  * Usage: gsbench [iterations] [-g] (default 1,000,000; -g: own %gs first with
  * arch_prctl(ARCH_SET_GS), to measure the paths of a thread that owns %gs). Run natively, under

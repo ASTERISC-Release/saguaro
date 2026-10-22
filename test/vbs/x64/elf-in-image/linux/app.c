@@ -1,5 +1,5 @@
 /* Copyright (C) 2026 The ASTERISC Research Lab */
-/* Gramine x64 phase-0 spike (step h): a freestanding x86_64 Linux program (System V ABI). Its only
+/* Saguaro x64 phase-0 spike (step h): a freestanding x86_64 Linux program (System V ABI). Its only
  * "system call" goes through a function pointer that the loader passes (as a PAL table would). It
  * uses read-only data, initialised data and zero-initialised data, all addressed RIP-relative.
  *

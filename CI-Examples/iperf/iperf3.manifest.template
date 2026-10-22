@@ -7,7 +7,7 @@ libos.entrypoint = "/install/iperf3"
 
 loader.log_level = "{{ log_level }}"
 
-# Hardcode the argument to run the iperf3 server inside Gramine
+# Hardcode the argument to run the iperf3 server inside Saguaro
 loader.argv = ["/install/iperf3", "-s"]
 
 loader.env.LD_LIBRARY_PATH = "/install:/lib:{{ arch_libdir }}:/usr/{{ arch_libdir }}"
@@ -21,13 +21,13 @@ fs.mounts = [
   { type = "tmpfs", path = "/tmp"},
 
   # Mount iperf3 executable and libiperf (located in the install directory)
-  # in Gramine under the /install directory.
+  # in Saguaro under the /install directory.
   { path = "/install/iperf3", uri = "file:install/iperf3" },
   { path = "/install/libiperf.so.0", uri = "file:install/libiperf.so.0" },
 ]
 
 sgx.edmm_enable = {{ 'true' if env.get('EDMM', '0') == '1' else 'false' }}
-# iperf3 is single threaded; we choose 4 to accommodate Gramine additional
+# iperf3 is single threaded; we choose 4 to accommodate Saguaro additional
 # threads for IPC and asynchronous events/alarms.
 sgx.max_threads = {{ '1' if env.get('EDMM', '0') == '1' else '4' }}
 sgx.enclave_size = "1024M"

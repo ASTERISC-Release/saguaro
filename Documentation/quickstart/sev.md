@@ -1,6 +1,6 @@
 # Quickstart: AMD SEV Confidential Virtual Machine (`saguaro-sev`)
 
-`saguaro-sev` runs a Gramine micro-VM as an AMD SEV-SNP guest. SEV-SNP protects guest
+`saguaro-sev` runs a Saguaro micro-VM as an AMD SEV-SNP guest. SEV-SNP protects guest
 memory and registers from the host and supports hardware-signed attestation. The guest kernel is
 loaded from an IGVM file measured at launch. See the [VM quickstart](vm.md) and the
 dev docs: `sev/PLAN.md`.

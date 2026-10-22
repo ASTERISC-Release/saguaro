@@ -1,6 +1,6 @@
 cflags_libos = [
     '-fPIC',
-    # TODO: check whether all standard functions implemented in Gramine match their APIs and remove
+    # TODO: check whether all standard functions implemented in Saguaro match their APIs and remove
     # this
     '-ffreestanding',
 

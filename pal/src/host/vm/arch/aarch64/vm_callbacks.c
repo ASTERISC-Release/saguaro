@@ -126,7 +126,7 @@ void vm_mmio_writeq(uint64_t* mmio_addr, uint64_t data) {
 
 /*
  * x86 port I/O callbacks: kept only to satisfy the shared header contract. On aarch64 no
- * Gramine kernel code paths reach these after the fw_cfg (MMIO at 0x09020000) and PCI config
+ * Saguaro kernel code paths reach these after the fw_cfg (MMIO at 0x09020000) and PCI config
  * (ECAM at 0x3f000000) splits landed; reaching one is a bug.
  */
 uint8_t vm_portio_readb(uint16_t port) {

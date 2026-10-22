@@ -1,14 +1,14 @@
 # Protected (Encrypted) Files
 
 This directory contains the implementation of Protected Files (PF), a library
-used for implementing *encrypted files* in Gramine. These files are encrypted on
-disk and transparently decrypted when accessed by Gramine or by application
-running inside Gramine.
+used for implementing *encrypted files* in Saguaro. These files are encrypted on
+disk and transparently decrypted when accessed by Saguaro or by application
+running inside Saguaro.
 
 Originally, the whole feature was called *protected files*, and was implemented
 for SGX only. After moving it to LibOS, we updated the name:
 
-- *encrypted files* is the name of the feature in Gramine,
+- *encrypted files* is the name of the feature in Saguaro,
 - `protected_files` is the name of the platform-independent library used by
   that feature (i.e. this directory).
 
@@ -30,7 +30,7 @@ for SGX only. After moving it to LibOS, we updated the name:
       { type = "encrypted", path = "/another_file", uri = "file:another_dir/some_file" },
     ]
 
-Gramine allows mounting files and directories as encrypted. If a directory is
+Saguaro allows mounting files and directories as encrypted. If a directory is
 mounted as encrypted, all existing files/directories within it are recursively
 treated as encrypted.
 
@@ -56,6 +56,6 @@ Some tests in `libos/test/regression` also work with encrypted files.
 ## TODO
 
 - The recovery file feature is disabled, this needs to be discussed if it's
-  needed in Gramine.
+  needed in Saguaro.
 - Tests for invalid/malformed/corrupted files need to be ported to the new
   format.

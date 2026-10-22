@@ -2,7 +2,7 @@ QEMU 11.1.2: plain SEV (sev-guest, no SEV-ES) with an IGVM file fails with
 "sev_launch_update_data: LAUNCH_UPDATE ret=-5 fw_error=2 'Guest state is invalid'":
 the machine-done notifier takes LAUNCH_MEASURE (state launch-update -> launch-secret)
 before the IGVM file is processed, which happens in the reset phase (backends/igvm-cfg.c,
-igvm_reset_hold). Measured on the AMD EPYC 7443P host with Gramine's IGVM file and with
+igvm_reset_hold). Measured on the AMD EPYC 7443P host with Saguaro's IGVM file and with
 buildigvm's OVMF IGVM (dev docs: sev/FINDINGS.md 2026-10-16, phase 1).
 
 Fix: with an IGVM file, do not register the notifier; take the measurement when the VM

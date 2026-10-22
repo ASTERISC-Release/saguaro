@@ -506,7 +506,7 @@ static void illegal_upcall(bool is_in_pal, uintptr_t addr, PAL_CONTEXT* context)
         internal = false;
     }
     if (internal) {
-        internal_fault("Illegal instruction during Gramine internal execution", addr, context);
+        internal_fault("Illegal instruction during Saguaro internal execution", addr, context);
     }
 
     if (vma_info.file) {

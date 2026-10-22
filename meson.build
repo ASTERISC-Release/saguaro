@@ -17,7 +17,7 @@ project(
 )
 
 # If C23 (or experimetal C23 - C2x) is available, use it.
-# TODO: Gramine supports older versions of gcc, so newer versions of compilers
+# TODO: Saguaro supports older versions of gcc, so newer versions of compilers
 #       may not be available.
 #       We can change to c2x when we drop *EL8 and Ubuntu 20.04.
 #       We can't change to c23 for any supported versions yet (requires at
@@ -224,7 +224,7 @@ gen_symbol_map_cmd = [
 #
 
 # Not all compilers support mstack-protector-guard, so use stack protector only if supported.
-# Gramine-custom stack protector uses the canary stored in the TCB (same for both in LibOS and PAL)
+# Saguaro-custom stack protector uses the canary stored in the TCB (same for both in LibOS and PAL)
 # at offset 0x8.
 if host_machine.cpu_family() == 'x86_64'
     cflags_custom_stack_protector = [
@@ -254,7 +254,7 @@ if not cc.has_multi_arguments(cflags_custom_stack_protector)
     cflags_custom_stack_protector = '-fno-stack-protector'
 endif
 
-# Don't support b_sanitize: integration with sanitizers in Gramine is tricky and we want more
+# Don't support b_sanitize: integration with sanitizers in Saguaro is tricky and we want more
 # control over the exact flags.
 if get_option('b_sanitize') != 'none'
     error('Please don\'t use the b_sanitize option; use -Dubsan=enabled instead.')

@@ -60,7 +60,7 @@ libos_syscall_entry:
      * Entries are {key = tls|1, tcb}, 0 = empty; deregistration at thread exit frees slots at
      * arbitrary indices, so the scan must cover the *whole* table and must not stop at the first
      * empty slot (stopping early would resolve the singleton and run this thread's syscalls on
-     * the *main* thread's LibOS stack). `tp` bit 0 set = a Gramine-internal thread whose TLS
+     * the *main* thread's LibOS stack). `tp` bit 0 set = a Saguaro-internal thread whose TLS
      * register pal_set_tcb() still owns: the tagged pointer decodes to its own TCB directly.
      *
      * The scan needs four live values at once (key, cursor, matched TCB, end mask), so t1-t4

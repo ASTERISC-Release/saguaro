@@ -16,14 +16,14 @@
  * those has a modern replacement (openat, newfstatat, faccessat[2], ppoll, pselect6, dup3,
  * clone, pipe2, getdents64, setitimer, openat+O_CREAT, linkat, unlinkat, symlinkat, readlinkat,
  * fchmodat, fchownat, renameat, utimensat, mkdirat, unlinkat+AT_REMOVEDIR, mknodat, getpgid,
- * eventfd2, epoll_pwait) that Gramine *also* already implements as real handlers on x86_64 (see
+ * eventfd2, epoll_pwait) that Saguaro *also* already implements as real handlers on x86_64 (see
  * libos_table.c there), so nothing is lost by dropping the legacy numbers here -- they simply
  * have no number to map to on this architecture. x86_64-only concepts with no aarch64 analog at
  * all (arch_prctl, iopl, ioperm, modify_ldt, set_thread_area, get_thread_area) are dropped
  * outright: TLS is set directly via TPIDR_EL0 with no syscall involved (see
  * libos_tcb_arch.h/pal_host_arch.h).
  *
- * Entries stubbed to 0 mirror the x86_64 table's own "not implemented in Gramine" set -- these
+ * Entries stubbed to 0 mirror the x86_64 table's own "not implemented in Saguaro" set -- these
  * are feature gaps independent of CPU architecture, not an aarch64 port limitation.
  */
 

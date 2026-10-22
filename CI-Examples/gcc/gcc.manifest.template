@@ -21,7 +21,7 @@ fs.mounts = [
   { uri = "file:{{ lib64_dir }}", path = "{{ lib64_dir }}" },
 {%- endif %}
 
-  # cannot replace /tmp with "tmpfs" mount because Gramine currently doesn't support multi-process
+  # cannot replace /tmp with "tmpfs" mount because Saguaro currently doesn't support multi-process
   # "tmpfs" files (e.g., "tmpfs" files created in a child process are not visible in the parent)
   { uri = "file:/tmp", path = "/tmp" },
 ]

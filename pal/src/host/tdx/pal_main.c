@@ -387,7 +387,7 @@ noreturn int pal_start_continue(void* cmdline_) {
 
     ret = cmdline_read_gramine_args(cmdline, &argc, &argv[0]);
     if (ret < 0)
-        INIT_FAIL("Failed to read Gramine arguments");
+        INIT_FAIL("Failed to read Saguaro arguments");
 
     static int envp_cnt = 0;
     static const char* envp[MAX_ENVS_CNT] = { NULL };

@@ -49,7 +49,7 @@ def verify_signature(data, exponent, modulus, signature, key_file, passphrase=No
     # if signature verification fails.
     public_key.verify(signature_bytes, data, padding.PKCS1v15(), hashes.SHA256())
 
-# This test is omitted when Gramine is installed without SGX support because graminelibos.sgx_sign
+# This test is omitted when Saguaro is installed without SGX support because graminelibos.sgx_sign
 # is not installed in such case. This is also why we perform top-level import in this function.
 # pylint: disable=redefined-outer-name
 @pytest.mark.sgx
@@ -63,7 +63,7 @@ def test_sign_from_pem_path(tmp_rsa_key):
         exponent, modulus, signature = sign_with_private_key_from_pem_path(data, key_path)
         verify_signature(data, exponent, modulus, signature, key_file)
 
-# This test is omitted when Gramine is installed without SGX support because graminelibos.sgx_sign
+# This test is omitted when Saguaro is installed without SGX support because graminelibos.sgx_sign
 # is not installed in such case. This is also why we perform top-level import in this function.
 # pylint: disable=redefined-outer-name
 @pytest.mark.sgx

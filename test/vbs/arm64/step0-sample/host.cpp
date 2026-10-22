@@ -9,7 +9,7 @@
 //
 //*********************************************************
 //
-// Gramine phase-0 spike (step 0): the host of Microsoft's "VbsEnclave" sample without the WIL
+// Saguaro phase-0 spike (step 0): the host of Microsoft's "VbsEnclave" sample without the WIL
 // dependency; every API result is printed with its Win32 error code.
 
 #include <windows.h>

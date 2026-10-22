@@ -1,10 +1,10 @@
 # RA-TLS with Nginx
 
-Attests a generic TLS server with RA-TLS: `saguaro-ratls` writes the certificate and key to a tmpfs inside Gramine and then `execve()`s Nginx, which uses them. SGX only (it does not run under direct, VM, SEV or VBS).
+Attests a generic TLS server with RA-TLS: `saguaro-ratls` writes the certificate and key to a tmpfs inside Saguaro and then `execve()`s Nginx, which uses them. SGX only (it does not run under direct, VM, SEV or VBS).
 
 ## Prerequisites
 
-An SGX machine with Gramine installed for SGX ([`Documentation/quickstart/tdx-sgx.md`](../../../Documentation/quickstart/tdx-sgx.md)) and, for the default DCAP attestation, a working DCAP setup.
+An SGX machine with Saguaro installed for SGX ([`Documentation/quickstart/tdx-sgx.md`](../../../Documentation/quickstart/tdx-sgx.md)) and, for the default DCAP attestation, a working DCAP setup.
 
 ## Run
 

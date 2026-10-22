@@ -504,7 +504,7 @@ drop_rest:
     return bytes;
 
 drop_all:
-    /* not a Gramine sender, or a damaged blob: the fds are dropped, as Linux drops unread ones */
+    /* not a Saguaro sender, or a damaged blob: the fds are dropped, as Linux drops unread ones */
     close_fds(fds, 0, fds_count);
     free(blob);
     *out_truncated = true;

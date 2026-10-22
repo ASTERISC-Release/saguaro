@@ -111,7 +111,7 @@ static inline void libos_arch_exec_abandon_old_tls(void) {
  * Thread exit: drop this thread's TLS-keyed registry binding *before* it removes itself from the
  * thread list -- that removal is what releases the exec winner's kill_other_threads() loop, which
  * then unmaps (and, via mmap reuse, hands to new threads) the address region this binding is
- * keyed by -- and take TPIDR_EL0 over for Gramine's own use (tagged-PAL_TCB fast path) so every
+ * keyed by -- and take TPIDR_EL0 over for Saguaro's own use (tagged-PAL_TCB fast path) so every
  * remaining lookup on this host thread (check_last_thread(), the async cleanup,
  * _PalThreadExit()'s host-stack recycling, the wait-forever park) keeps resolving *this* thread's
  * own PAL_TCB without a registry entry. This thread never runs guest code again from here, and a

@@ -66,7 +66,7 @@ int proc_cpuinfo_display_cpu(char** str, size_t* size, size_t* max,
     ADD_INFO("siblings\t: %zu\n", siblings_on_socket);
 
     double bogomips = cpu->cpu_bogomips;
-    // Apparently Gramine snprintf cannot into floats.
+    // Apparently Saguaro snprintf cannot into floats.
     ADD_INFO("BogoMIPS\t: %lu.%02lu\n", (unsigned long)bogomips,
              (unsigned long)(bogomips * 100.0 + 0.5) % 100);
     ADD_INFO("\n");

@@ -15,7 +15,7 @@ int main(void) {
     );
 #elif defined(__aarch64__)
     /* The aarch64 analog of the raw `syscall`: a bare `svc #0` with the number in x8. Under
-     * Gramine's seccomp-based trap emulation this is exactly what an un-patched libc wrapper
+     * Saguaro's seccomp-based trap emulation this is exactly what an un-patched libc wrapper
      * executes, so the test exercises the whole trap-emulation entry path (the return into the
      * application clobbers x16/x17 and the link register by design, hence the clobber list;
      * x0 -- the result register -- survives as the output). */
@@ -30,7 +30,7 @@ int main(void) {
     ret = x0;
 #elif defined(__riscv)
     /* The riscv64 analog of the raw `svc` above: a bare `ecall` with the number in a7. Under
-     * Gramine's seccomp-based trap emulation this is exactly what an un-patched libc wrapper
+     * Saguaro's seccomp-based trap emulation this is exactly what an un-patched libc wrapper
      * executes, so the test exercises the whole trap-emulation entry path. Unlike aarch64,
      * `ecall` destroys *no* registers (riscv64 keeps the syscall number in a7, separate from
      * the a0 return value -- see pal_arch.h's pal_context_get_syscall comment -- and the trap

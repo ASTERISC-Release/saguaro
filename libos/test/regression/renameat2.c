@@ -4,7 +4,7 @@
  * Regression tests for renameat2 with nonzero flags.
  *
  * The two LTP tests for renameat2 are gated on a reported kernel version and never run under
- * Gramine, so the flag behavior is checked directly here: RENAME_NOREPLACE on tmpfs and on the
+ * Saguaro, so the flag behavior is checked directly here: RENAME_NOREPLACE on tmpfs and on the
  * host-backed filesystem, RENAME_EXCHANGE on tmpfs and on the host-backed filesystem, and the
  * Linux flag-combination validation results (EINVAL / EOPNOTSUPP / ENOENT / EEXIST).
  *

@@ -9,7 +9,7 @@
 //
 //*********************************************************
 //
-// Gramine phase-0 spike: the probe enclave. The enclave configuration and DLL skeleton come from
+// Saguaro phase-0 spike: the probe enclave. The enclave configuration and DLL skeleton come from
 // Microsoft's VbsEnclave sample (MIT); the probes are new. Every export takes a PROBE_IO pointer in
 // host memory and writes its results there.
 //
@@ -523,7 +523,7 @@ void* CALLBACK E_Exec(void* param)
     case 1: {
         stack_info("exec");
         logf("exec: NtCurrentTeb()=%p gs:[0x30]=0x%llx\n", (void*)NtCurrentTeb(), __readgsqword(0x30));
-        // TEB fields that Gramine could borrow on x64 (see PLAN-x64.md): NT_TIB.ExceptionList (0x0),
+        // TEB fields that Saguaro could borrow on x64 (see PLAN-x64.md): NT_TIB.ExceptionList (0x0),
         // SubSystemTib (0x18, where the patched glibc's `jmp *%gs:24` would look), FiberData (0x20),
         // ArbitraryUserPointer (0x28), ThreadLocalStoragePointer (0x58), TlsSlots (0x1480)
         logf("exec: TEB fields: [0x0]=0x%llx [0x18]=0x%llx [0x20]=0x%llx [0x28]=0x%llx [0x58]=0x%llx\n",
@@ -779,7 +779,7 @@ void* CALLBACK E_Exec(void* param)
     }
     case 11: {
         // the enclave thread's TEB: how large is it, and which of its qwords are in use (non-zero)?
-        // (Gramine's own TCB could live in an unused part of it, see PLAN-x64.md, X2)
+        // (Saguaro's own TCB could live in an unused part of it, see PLAN-x64.md, X2)
         unsigned char* teb = (unsigned char*)NtCurrentTeb();
         query("TEB", teb);
         MEMORY_BASIC_INFORMATION mbi;

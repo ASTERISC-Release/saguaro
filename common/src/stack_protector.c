@@ -31,6 +31,6 @@ uintptr_t __stack_chk_guard = 0xbadbadbadbadUL;
 noreturn void __stack_chk_fail(void);
 
 noreturn void __stack_chk_fail(void) {
-    log_always("Stack protector: Gramine internal stack corruption detected");
+    log_always("Stack protector: Saguaro internal stack corruption detected");
     abort();
 }

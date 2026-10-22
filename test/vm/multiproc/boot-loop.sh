@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Starts N saguaro-vm guests back to back (as a CI step or the LibOS suite does) and counts the ones
 # that do not print the program's output or exit status: a guest that dies early in boot prints only
-# the launcher lines ("Configuring Gramine VM ...", "vm-relay: ... listening ...") and, since the
+# the launcher lines ("Configuring Saguaro VM ...", "vm-relay: ... listening ...") and, since the
 # launcher checks for that, "Error: the guest ended without reporting an exit code" with the guest's
 # serial output. Run in the container after `scripts/install.sh --vm`. LOAD=32 at 2 vCPUs is what
 # reproduced the boot crash of dev docs: vm-multiproc/FINDINGS.md (2026-10-15).

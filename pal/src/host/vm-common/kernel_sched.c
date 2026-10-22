@@ -142,7 +142,7 @@ static void save_userland_context(struct thread* curr_thread, struct isr_regs* u
     if (!curr_thread)
         return;
 
-    /* Gramine itself never loads FS: the register holds the application's selector, and the base
+    /* Saguaro itself never loads FS: the register holds the application's selector, and the base
      * is the application's unless it loaded a selector (then the descriptor's), see
      * sched_thread_save_segs() */
     sched_thread_save_segs(curr_thread);

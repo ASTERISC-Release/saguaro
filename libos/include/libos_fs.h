@@ -656,7 +656,7 @@ int check_permissions(struct libos_dentry* dent, mode_t mask);
 
 /*
  * A named UNIX socket leaves a node at its path (`bind` creates it, `unlink` removes it, `connect`
- * and `stat` find it from any process of the session). Gramine cannot create a real socket node on
+ * and `stat` find it from any process of the session). Saguaro cannot create a real socket node on
  * a host mount, so the node is a symbolic link whose target is this marker followed by the
  * permission bits in octal (`gramine-unix-socket:0755`); the file systems report such a link as
  * `S_IFSOCK`. See `libos/src/net/unix.c`.

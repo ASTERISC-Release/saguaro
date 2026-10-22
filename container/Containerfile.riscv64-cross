@@ -2,7 +2,7 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 
 # Development container for the RISC-V (riscv64) port: an x86_64 image with the riscv64 cross
-# toolchain and qemu-system-riscv64. Gramine is cross-compiled here and tested in a RISC-V Linux
+# toolchain and qemu-system-riscv64. Saguaro is cross-compiled here and tested in a RISC-V Linux
 # guest under full-system emulation (see dev docs: riscv/PLAN.md). No KVM is involved:
 # an x86_64 host cannot accelerate a RISC-V guest.
 #
@@ -11,7 +11,7 @@ FROM ubuntu:noble
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Cross toolchain and the host build tools of Gramine's build system.
+# Cross toolchain and the host build tools of Saguaro's build system.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
       build-essential gcc make cmake patch git pkg-config gawk bison ca-certificates \

@@ -14,7 +14,7 @@ THIS_DIR="$(cd "$(dirname "$0")" && pwd)"
 NGINX_VERSION=1.22.0
 OPENSSL_VERSION=1.1.1w
 PCRE_VERSION=8.45
-# Needs the Gramine tools on PATH (saguaro-manifest for the final `make`); otherwise pick them up
+# Needs the Saguaro tools on PATH (saguaro-manifest for the final `make`); otherwise pick them up
 # from SAGUARO_PREFIX (default ~/.local/saguaro) like the other scripts do.
 if ! command -v saguaro-manifest >/dev/null; then
   . "$THIS_DIR/../../scripts/saguaro-env.sh"

@@ -8,7 +8,7 @@ fs.mounts = [
   { path = "/{{ entrypoint }}", uri = "file:{{ binary_dir }}/{{ entrypoint }}" },
 ]
 
-# app runs with 4 parallel threads + Gramine has couple internal threads
+# app runs with 4 parallel threads + Saguaro has couple internal threads
 sgx.max_threads = {{ '1' if env.get('EDMM', '0') == '1' else '8' }}
 
 sgx.debug = true

@@ -71,7 +71,7 @@ def add_globals_from_python(env):
 def host_libc_dir():
     """Directory of the host's glibc and its dynamic loader.
 
-    Used when Gramine was built without a bundled libc (meson option `libc=none`): applications then
+    Used when Saguaro was built without a bundled libc (meson option `libc=none`): applications then
     run on the libc of the machine the manifest is rendered on. `SAGUARO_HOST_LIBC_DIR` overrides
     the search, for example when manifests for another machine are rendered.
     """
@@ -90,7 +90,7 @@ def host_libc_dir():
         if (path / 'libc.so.6').exists() and any(path.glob('ld-linux*.so*')):
             return path.resolve()
 
-    raise RuntimeError('This Gramine was built without a bundled libc (libc=none), but no glibc '
+    raise RuntimeError('This Saguaro was built without a bundled libc (libc=none), but no glibc '
                        'was found in ' + ', '.join(candidates) + '. Set SAGUARO_HOST_LIBC_DIR to '
                        'the directory that holds libc.so.6 and the dynamic loader.')
 
@@ -116,7 +116,7 @@ def add_globals_from_saguaro(env):
 
     try:
         import _graminelibos_offsets as offsets # pylint: disable=import-outside-toplevel
-    except ImportError: # no SGX gramine installed, skipping
+    except ImportError: # no SGX build installed, skipping
         pass
     else:
         env.globals['saguaro'].update(

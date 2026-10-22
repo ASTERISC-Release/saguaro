@@ -5,7 +5,7 @@
 # The game is commercial: buy it on GOG.com and unpack it with ./setup-bastion.sh first. See
 # README.md here and dev docs: graphics/ for the host setup.
 
-# The graphics preload library is built and installed with Gramine (-Dgraphics=enabled and a
+# The graphics preload library is built and installed with Saguaro (-Dgraphics=enabled and a
 # VM-type PAL); the manifest refers to it as saguaro.libgraphics.
 GRAPHICS_LIB = $(shell python3 -c "import graminelibos; print(graminelibos._CONFIG_PKGLIBDIR)")/libgraphics.so
 GAME_DIR = $(abspath bastion_game)
@@ -52,7 +52,7 @@ bastion.manifest: bastion.manifest.template $(GAME_BIN) FORCE
 dirs:
 	mkdir -p $(DATA_DIR)/share $(DATA_DIR)/config $(HOME)/.cache
 
-# Without Gramine: the preload library presents through its own X connection. The saves of this
+# Without Saguaro: the preload library presents through its own X connection. The saves of this
 # run go to the same DATA_DIR, through XDG_DATA_HOME and XDG_CONFIG_HOME.
 .PHONY: run-native
 run-native: $(GAME_BIN) dirs

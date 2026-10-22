@@ -1,6 +1,6 @@
 # Rust
 
-Runs an HTTP server written in Rust (`hyper`) on `127.0.0.1:3000`; it also exercises Gramine's `epoll`.
+Runs an HTTP server written in Rust (`hyper`) on `127.0.0.1:3000`; it also exercises Saguaro's `epoll`.
 
 ## Prerequisites
 

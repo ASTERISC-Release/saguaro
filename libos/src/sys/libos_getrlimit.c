@@ -118,7 +118,7 @@ long libos_syscall_getrusage(int who, struct __kernel_rusage* usage) {
     if (!is_user_memory_writable(usage, sizeof(*usage)))
         return -EFAULT;
 
-    /* CPU times come from the PAL (`PalGetCpuTime()`: the host's accounting of the Gramine process
+    /* CPU times come from the PAL (`PalGetCpuTime()`: the host's accounting of the Saguaro process
      * or thread under the Linux PAL); a PAL without accounting (the VM PAL) leaves them zero, which
      * is never synthesized from wall-clock time. Children's usage is not collected (zero). */
     memset(usage, 0, sizeof(*usage));

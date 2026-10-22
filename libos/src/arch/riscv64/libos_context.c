@@ -138,14 +138,14 @@ noreturn void restore_child_context_after_clone(struct libos_context* context) {
  * riscv64 has nothing resembling x86_64's SA_RESTORER (its `struct sigaction` has no usable
  * restorer mechanism at all -- see the comment in pal/include/arch/riscv64/linux/ucontext.h and
  * the `#ifndef SA_RESTORER` call sites in libos_signal.c), and unlike the riscv64 *kernel*, which
- * points `ra` at the vDSO's `__kernel_rt_sigreturn` when delivering a signal natively, Gramine
+ * points `ra` at the vDSO's `__kernel_rt_sigreturn` when delivering a signal natively, Saguaro
  * synthesizes the frame itself and must therefore install the return address itself -- aarch64
  * finding #5 verbatim, down to the symptom (without this, every handler's `ret` goes to whatever
  * `ra` the interrupted context happened to hold).
  *
  * As on aarch64 it lives in libsysdb's own executable .text rather than inside the frame: the
  * kernel can put its trampoline in the frame only because its stack pages are executable, and
- * making Gramine's guest stacks executable to enable a signal restorer would be a real security
+ * making Saguaro's guest stacks executable to enable a signal restorer would be a real security
  * regression for no benefit. Execution happens with the application's live SP -- all `rt_sigreturn`
  * consumes -- and the `ecall` below is deliberately an ordinary one: the seccomp filter traps it
  * exactly like the guest libc's own syscall `ecall`s, so it is emulated as the `rt_sigreturn`
@@ -249,7 +249,7 @@ void restart_syscall(PAL_CONTEXT* context, uint64_t syscall_nr) {
     context->regs[17] = syscall_nr;
     /* a0 carried the -ERESTART* code do_syscall() wrote as the "return value"; put the caller's
      * original first argument back before re-dispatching (a0 is both arg0 and the result register
-     * on riscv64; the riscv64 kernel keeps the same distinction through pt_regs, and Gramine
+     * on riscv64; the riscv64 kernel keeps the same distinction through pt_regs, and Saguaro
      * reproduces it with orig_a0 -- aarch64 finding #6 verbatim). Without this, a restarted
      * `read(fd, ...)` would see fd = -ERESTARTSYS. */
     context->regs[10] = context->orig_a0;

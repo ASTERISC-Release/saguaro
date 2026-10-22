@@ -11,7 +11,7 @@ async fn hello_world(_req: Request<Body>) -> Result<Response<Body>, Infallible> 
 }
 
 // By default, tokio spawns as many threads as there are CPU cores. This is undesirable,
-// because you need to specify in the Gramine manifest the maximal number of threads per
+// because you need to specify in the Saguaro manifest the maximal number of threads per
 // process, and ideally this wouldn't depend on your hardware.
 //
 // See sgx.max_threads in the manifest.

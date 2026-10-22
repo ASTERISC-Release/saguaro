@@ -10,7 +10,7 @@
 #include "pal_common.h"
 
 #if defined(__x86_64__) || defined(__aarch64__)
-/* `dev:/dev/shm/...` (Gramine's untrusted_shm mount): with the experimental multiprocess support,
+/* `dev:/dev/shm/...` (Saguaro's untrusted_shm mount): with the experimental multiprocess support,
  * objects of the guest store in guest RAM (pal_shm.c), shared by all guest processes; without it,
  * host files reached through virtio-fs (the opened handle is an ordinary file handle). */
 static bool is_dev_shm(const char* uri) {

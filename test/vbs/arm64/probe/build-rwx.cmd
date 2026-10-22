@@ -1,5 +1,5 @@
 @echo off
-rem Gramine phase-0 spike: the probe enclave plus a section marked RWX (/SECTION:.gxrwx,ERW).
+rem Saguaro phase-0 spike: the probe enclave plus a section marked RWX (/SECTION:.gxrwx,ERW).
 rem Run after build.cmd (uses its output folder).
 setlocal
 call "%ProgramFiles%\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=arm64 -host_arch=arm64 -no_logo || exit /b 1

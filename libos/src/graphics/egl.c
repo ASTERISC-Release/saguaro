@@ -326,7 +326,7 @@ void setup_egl(void) {
         if (in_gramine_vm && bufs[i].bo_fd >= (int)GRAPHICS_FS_OFFSET)
             bufs[i].bo_fd -= GRAPHICS_FS_OFFSET;
 
-        /* Register the bo_fd with Gramine (only needed once, since it remains the same) */
+        /* Register the bo_fd with Saguaro (only needed once, since it remains the same) */
         if (in_gramine_vm) {
             long ret = syscall(syscall_register_host_identity_fd, bufs[i].bo_fd);
             if (ret < 0) {

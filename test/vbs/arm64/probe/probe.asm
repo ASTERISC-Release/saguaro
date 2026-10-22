@@ -1,4 +1,4 @@
-; Gramine phase-0 spike: AArch64 helpers for the probe enclave (armasm64 syntax).
+; Saguaro phase-0 spike: AArch64 helpers for the probe enclave (armasm64 syntax).
 ; Leaf functions without unwind data; exceptions in them unwind through LR.
 
     AREA |.text|, CODE, READONLY, ALIGN=4

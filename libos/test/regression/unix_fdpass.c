@@ -2,7 +2,7 @@
 /* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /*
- * SCM_RIGHTS between two Gramine processes, as wineserver and its clients use it: a child passes a
+ * SCM_RIGHTS between two Saguaro processes, as wineserver and its clients use it: a child passes a
  * pipe end, a file (open, positioned, then unlinked), an eventfd and a socket end over an AF_UNIX
  * socketpair and then over a named socket; the parent reads through the received fds; a message
  * read with a control buffer that is too small loses the surplus fds; a plain read() of a message

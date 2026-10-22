@@ -110,7 +110,7 @@ static inline __attribute__((unused)) void ensure_lock_ready(struct libos_lock *
     if(!(create_lock(lock))){
         assert(false);
     }else {
-        // log_always("[Gramine] Global lock initialized\n");
+        // log_always("[Saguaro] Global lock initialized\n");
     }
 }
 

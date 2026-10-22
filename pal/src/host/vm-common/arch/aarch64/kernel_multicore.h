@@ -5,7 +5,7 @@
  * aarch64 counterpart of vm-common/kernel_multicore.h.
  *
  * x86_64 keeps two levels of "current" pointers in swap-able MSRs: GS_BASE points at the
- * current thread's Gramine TCB (swapped by save_context_and_restore_next on every kernel
+ * current thread's Saguaro TCB (swapped by save_context_and_restore_next on every kernel
  * context switch) and GS_KERNEL_BASE points at per-CPU data (set once per CPU). aarch64 has
  * exactly one EL1-writable software thread register, TPIDR_EL1, so it goes to the per-CPU data
  * (the GS_KERNEL_BASE role -- set once when a CPU comes up and never touched again). The
@@ -47,7 +47,7 @@ struct per_cpu_data {
     uint8_t invalidate_tlb_ipi_received; /* to protect against extra "invalidate TLB" interrupts */
     uint8_t reserved[7];
 
-    /* GS_BASE role: TCB (pal_tcb_vm) of the Gramine thread running on this CPU, or 0 while
+    /* GS_BASE role: TCB (pal_tcb_vm) of the Saguaro thread running on this CPU, or 0 while
      * executing kernel/boot code with no thread context. Maintained by
      * save_context_and_restore_next() and by the EL0 sync entry path, read by the `svc`
      * dispatcher to find the current thread's PAL TCB. `void*` because struct pal_tcb_vm is

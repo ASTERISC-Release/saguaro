@@ -221,13 +221,13 @@ static bool handle_ud(sgx_cpu_context_t* uc, int* out_event_num) {
         /* A disabled {RD,WR}{FS,GS}BASE instruction generated a #UD */
         log_error(
             "{RD,WR}{FS,GS}BASE instructions are not permitted on this platform. Please check the "
-            "instructions under \"Building with SGX support\" from Gramine documentation.");
+            "instructions under \"Building with SGX support\" from Saguaro documentation.");
         return false;
     } else if (instr[0] == 0x0f && instr[1] == 0x05) {
         /* syscall: LibOS may know how to handle this */
         if (FIRST_TIME()) {
             log_always("Emulating a raw syscall instruction. This degrades performance, consider"
-                       " patching your application to use Gramine syscall API.");
+                       " patching your application to use Saguaro syscall API.");
         }
         return false;
     } else if (is_in_out(instr) && !has_lock_prefix(instr)) {
@@ -411,7 +411,7 @@ void _PalExceptionHandler(uint32_t trusted_exit_info_,
                 exception_name = exception_name ? : "#CP";
                 /* fallthrough */
             default:
-                log_error("Handling %s exceptions is currently unsupported by Gramine",
+                log_error("Handling %s exceptions is currently unsupported by Saguaro",
                           exception_name ? : "[unknown]");
                 _PalProcessExit(1);
                 /* UNREACHABLE */

@@ -52,7 +52,7 @@ prepare() {
     if [ ! -f "$DISK" ]; then
         qemu-img create -q -f qcow2 -F qcow2 -b "$BASE" "$DISK" 20G
         # First-boot configuration: root login with our key, the repository mounted at its usual
-        # path, and the Python packages the Gramine tools and test suites import.
+        # path, and the Python packages the Saguaro tools and test suites import.
         cat > "$DIR/user-data" <<USERDATA
 #cloud-config
 disable_root: false

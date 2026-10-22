@@ -11,8 +11,8 @@
  * fork() child still authenticates signatures the parent made before the fork (the
  * kernel delivers the child with the parent's keys), so e.g. Ubuntu's bash -- whose
  * `make_child()` returns through exactly such a signature in the vfork child interval
- * -- runs fine natively. Gramine emulates fork() in-process and resumes the child on a
- * Gramine host task, where the stale signature cannot authenticate (no EL0 interface
+ * -- runs fine natively. Saguaro emulates fork() in-process and resumes the child on a
+ * Saguaro host task, where the stale signature cannot authenticate (no EL0 interface
  * to copy keys exists); `illegal_upcall()`'s failed-authentication repair in
  * libos/src/bookkeep/libos_signal.c emulates the successful-authentication outcome.
  * Without that repair this test dies with SIGILL in the child, exactly like the

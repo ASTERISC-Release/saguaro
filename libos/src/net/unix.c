@@ -9,7 +9,7 @@
  */
 
 /*
- * Pathname UNIX domain sockets are visible on the Gramine filesystem: `bind` creates a node at the
+ * Pathname UNIX domain sockets are visible on the Saguaro filesystem: `bind` creates a node at the
  * path (a marker link that the file systems report as `S_IFSOCK`, see UNIX_SOCKET_NODE_MARKER in
  * `libos_fs.h`), `connect` and `stat` find it from any process of the session on a shared mount,
  * `unlink` removes it. The PAL pipe behind a named socket is named after the canonical absolute
@@ -35,7 +35,7 @@
 #include "toml_utils.h"
 
 /*
- * Host UNIX sockets (saguaro-direct). Gramine's UNIX sockets connect Gramine processes only. The
+ * Host UNIX sockets (saguaro-direct). Saguaro's UNIX sockets connect Saguaro processes only. The
  * manifest can list host socket paths (`sys.insecure__host_unix_sockets`, for example the X
  * server's `/tmp/.X11-unix/X0`); a `connect()` to such a path connects to the host socket itself,
  * through the Linux PAL, and file descriptors passed with `SCM_RIGHTS` are translated between
@@ -540,7 +540,7 @@ static int connect(struct libos_handle* handle, void* addr, size_t addrlen, bool
     assert(locked(&sock->lock));
 
     if (sock->state != SOCK_NEW) {
-        log_warning("Gramine does not support connect on already bound UNIX socket");
+        log_warning("Saguaro does not support connect on already bound UNIX socket");
         return -EINVAL;
     }
 
@@ -744,11 +744,11 @@ again:
 }
 
 /*
- * SCM_RIGHTS between Gramine processes. The PAL handle travels with the data
+ * SCM_RIGHTS between Saguaro processes. The PAL handle travels with the data
  * (PalStreamWriteWithHandles); the LibOS side of the handle goes as the blob next to it: the kind,
  * the open flags and position, and what the kind needs to rebuild a `struct libos_handle` in the
  * receiver (the path of a file, the address state of a socket, the eventfd flags). The receiver
- * gets a copy of the open file description (Gramine does not share offsets between processes, as
+ * gets a copy of the open file description (Saguaro does not share offsets between processes, as
  * after fork). Supported: files, directories and devices of chroot mounts, pipes, sockets with a
  * PAL handle, host eventfds, host fds; others give EOPNOTSUPP.
  */

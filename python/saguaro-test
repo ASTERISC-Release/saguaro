@@ -15,7 +15,7 @@ def change_dir(_ctx, _param, value):
     if value:
         os.chdir(value)
 
-@click.group(help='Helper program for running Gramine tests.')
+@click.group(help='Helper program for running Saguaro tests.')
 @click.option('--sgx/--no-sgx', default=(os.environ.get('SGX') == '1'),
               help='Enable SGX mode (you can also set SGX=1 before running)')
 @click.option('--conf-file-name', '-n', type=click.Path(exists=True, dir_okay=False),
@@ -26,7 +26,7 @@ def change_dir(_ctx, _param, value):
 @click.pass_context
 def main(ctx, sgx, conf_file_name):
     if sgx and not _CONFIG_SGX_ENABLED:
-        raise click.ClickException('This version of Gramine is built without SGX')
+        raise click.ClickException('This version of Saguaro is built without SGX')
     ctx.obj = {
         'sgx': sgx,
         'conf_file_name': conf_file_name,
@@ -66,7 +66,7 @@ def clean(ctx):
 
 
 @main.command(
-    help='Run Gramine on a test program, rebuilding the manifest first. '
+    help='Run Saguaro on a test program, rebuilding the manifest first. '
     'Arguments will be passed to the test program.',
     context_settings={'ignore_unknown_options': True},
 )

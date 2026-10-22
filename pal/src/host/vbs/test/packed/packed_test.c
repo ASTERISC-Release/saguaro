@@ -6,7 +6,7 @@
  * (its whole load image) into the signed VBS enclave image, and that the PAL's in-enclave loader
  * makes writable where needed, relocates at run time and calls -- the (a') experiment of PLAN.md D2.
  *
- * It exercises what Gramine's loaders will face with the LibOS and glibc:
+ * It exercises what Saguaro's loaders will face with the LibOS and glibc:
  *   - .rodata, initialised .data and .bss, all PC-relative;
  *   - a default-visibility global reached through the GOT     (R_AARCH64_GLOB_DAT / ABS64);
  *   - a data pointer to that global                            (R_AARCH64_ABS64 with a symbol);

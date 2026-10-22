@@ -1,4 +1,4 @@
-// Gramine phase-0 spike: interface between the probe host and the probe enclave.
+// Saguaro phase-0 spike: interface between the probe host and the probe enclave.
 #pragma once
 
 #define PROBE_TEXT 32768

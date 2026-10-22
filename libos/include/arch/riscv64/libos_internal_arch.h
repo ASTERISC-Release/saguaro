@@ -22,9 +22,9 @@ void* libos_rt_sigreturn_trampoline_addr(void);
 
 /* SIGILL handling hooks used by illegal_upcall() (see bookkeep/libos_signal.c). */
 
-/* True if an illegal instruction at \p addr is an intentional Gramine-internal one: here, the
- * `ecall` inside the rt_sigreturn trampoline. Anything else in Gramine-internal memory taking an
- * illegal instruction is a Gramine bug. (The exact-context-restore `ebreak` of finding #15's riscv
+/* True if an illegal instruction at \p addr is an intentional Saguaro-internal one: here, the
+ * `ecall` inside the rt_sigreturn trampoline. Anything else in Saguaro-internal memory taking an
+ * illegal instruction is a Saguaro bug. (The exact-context-restore `ebreak` of finding #15's riscv
  * counterpart is a *trap*, not an illegal instruction, and is consumed by the PAL's SIGTRAP
  * handler before ever reaching this path.) */
 bool libos_arch_is_intentional_internal_insn(uintptr_t addr);

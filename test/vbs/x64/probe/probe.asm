@@ -1,5 +1,5 @@
 ; Copyright (C) 2026 The ASTERISC Research Lab
-; Gramine x64 phase-0 spike: x86_64 helpers for the probe enclave (ml64 syntax).
+; Saguaro x64 phase-0 spike: x86_64 helpers for the probe enclave (ml64 syntax).
 ; Windows x64 calling convention: arguments in rcx, rdx, r8, r9; rbx, rbp, rdi, rsi, r12-r15 and
 ; xmm6-xmm15 are callee-saved. Leaf functions that do not move rsp need no unwind data.
 

@@ -18,7 +18,7 @@
  *
  * The one thing deliberately *not* reproduced: newer riscv64 kernels append a summary section
  * headed by a `hart isa` line (and per-hart `<id> rv64imafdc...` lines) after the per-block
- * output. Gramine's synthesized file omits it -- the regression suite's cpuinfo test parses
+ * output. Saguaro's synthesized file omits it -- the regression suite's cpuinfo test parses
  * the last blank-line-separated block as `key: value` pairs, which that colon-less section
  * would break, and nothing else reads it.
  */
@@ -43,7 +43,7 @@ int proc_cpuinfo_display_cpu(char** str, size_t* size, size_t* max,
     __UNUSED(topo);
     __UNUSED(thread);
 
-    /* `hart` is the hardware thread id the kernel prints; Gramine has no access to the physical
+    /* `hart` is the hardware thread id the kernel prints; Saguaro has no access to the physical
      * hart ids and renders the linear thread index instead -- identical on the FDT-enumerated
      * platforms riscv64 Linux boots on, where hart ids are assigned 0..n-1 at boot. */
     ADD_INFO("processor\t: %lu\n", i);

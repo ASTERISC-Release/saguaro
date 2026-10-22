@@ -81,7 +81,7 @@ __asm__(
     ".endm\n"
 );
 
-/* Magic syscall number for Gramine custom calls. aarch64 keeps the "which call is this" number
+/* Magic syscall number for Saguaro custom calls. aarch64 keeps the "which call is this" number
  * in X8 (separate from the X0-X2 arguments), mirroring how real aarch64 syscalls keep the
  * syscall number in X8 separate from the X0-X5 arguments -- unlike x86_64, which reuses %eax for
  * both the real syscall number and this custom-call number. */

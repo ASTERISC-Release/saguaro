@@ -41,7 +41,7 @@ RUN apt-get update && \
 
 # Build layer: meson/ninja/gcc toolchain for the vm PAL + LibOS
 # (`meson setup build-vm-container -Dvm=enabled ...` + ninja; see dev docs: vm.md).
-# The python3-* modules are Gramine's meson-time deps; patch/pkg-config feed the
+# The python3-* modules are Saguaro's meson-time deps; patch/pkg-config feed the
 # vendored subprojects (mbedtls's meson.build probes pkg-config). gawk+bison are
 # glibc 2.39's configure requirements (fatal without them).
 RUN apt-get update && \

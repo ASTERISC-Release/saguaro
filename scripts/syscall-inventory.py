@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: LGPL-3.0-or-later
-"""Inventory Linux syscall numbers and Gramine LibOS table coverage."""
+"""Inventory Linux syscall numbers and Saguaro LibOS table coverage."""
 
 import argparse
 import collections

@@ -83,7 +83,7 @@ static ssize_t eventfd_read(struct libos_handle* hdl, void* buf, size_t count, f
     /* emulate-in-libos mode */
     if (hdl->info.eventfd.broken_in_child) {
         log_warning("Child process tried to access eventfd created by parent process. This is "
-                    "disallowed in Gramine (but see `sys.insecure__allow_eventfd`).");
+                    "disallowed in Saguaro (but see `sys.insecure__allow_eventfd`).");
         return -EIO;
     }
 
@@ -161,7 +161,7 @@ static ssize_t eventfd_write(struct libos_handle* hdl, const void* buf, size_t c
     /* emulate-in-libos mode */
     if (hdl->info.eventfd.broken_in_child) {
         log_warning("Child process tried to access eventfd created by parent process. This is "
-                    "disallowed in Gramine (but see `sys.insecure__allow_eventfd`).");
+                    "disallowed in Saguaro (but see `sys.insecure__allow_eventfd`).");
         return -EIO;
     }
 
@@ -215,7 +215,7 @@ static void eventfd_post_poll(struct libos_handle* hdl, pal_wait_flags_t* pal_re
 
     if (hdl->info.eventfd.broken_in_child) {
         log_warning("Child process tried to access eventfd created by parent process. This is "
-                    "disallowed in Gramine (but see `sys.insecure__allow_eventfd`).");
+                    "disallowed in Saguaro (but see `sys.insecure__allow_eventfd`).");
         *pal_ret_events = PAL_WAIT_ERROR;
         return;
     }

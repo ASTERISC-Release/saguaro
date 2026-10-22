@@ -1,5 +1,5 @@
 @echo off
-rem Gramine phase-0 spike: build, protect (veiid) and test-sign the probe enclave and its host.
+rem Saguaro phase-0 spike: build, protect (veiid) and test-sign the probe enclave and its host.
 rem Usage: build.cmd [extra cl defines, e.g. /DPROBE_THREADS=4]
 setlocal
 set VSDEV="%ProgramFiles%\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat"

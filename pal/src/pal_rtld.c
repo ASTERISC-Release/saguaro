@@ -89,7 +89,7 @@ extern const elf_ehdr_t __ehdr_start __attribute__((visibility("hidden")));
  * comment above; binding the name to it means the one accept-branch below covers riscv64's
  * GOT entries with no extra #ifdef, and find_symbol_in_loaded_maps() resolves their symbol
  * index the same way. R_RISCV_RELATIVE/R_RISCV_JUMP_SLOT have the usual meaning. (This assumes
- * the linker emits RELA, which riscv64's psABI does for the ET_DYN/PIE objects Gramine builds;
+ * the linker emits RELA, which riscv64's psABI does for the ET_DYN/PIE objects Saguaro builds;
  * a REL-format `--emit-relocs` oddity would be rejected loudly by the loop below, not
  * silently misapplied.) */
 #define RELOC_TYPE_RELATIVE  R_RISCV_RELATIVE
@@ -395,7 +395,7 @@ static int verify_dynamic_entries(struct link_map* map) {
             case DT_RELR:
             case DT_RELRSZ:
                 /* be explicit about unsupported RELR relocation type */
-                log_error("Unsupported relocation type DT_RELR; you may need to rebuild Gramine "
+                log_error("Unsupported relocation type DT_RELR; you may need to rebuild Saguaro "
                           "with `-Wl,-z,nopack-relative-relocs` linker option");
                 return -PAL_ERROR_DENIED;
             default:
@@ -1076,7 +1076,7 @@ noreturn void start_execution(const char** arguments, const char** environs) {
      * rule, which is why x86's version above just does `movq rsp`). `andi` reaches the -16 mask
      * as a 12-bit sign-extended immediate (aarch64 needed the `and` with its logical-imm
      * encoding); `jr` is the register-indirect jump (`call`/`jal` would *write* ra, which the
-     * loaded program must not observe as leftover Gramine state -- aarch64's `br` has the same
+     * loaded program must not observe as leftover Saguaro state -- aarch64's `br` has the same
      * non-clobbering property for a reason). */
     __asm__ volatile("andi sp, %0, -16\n"
                      "jr %1\n"

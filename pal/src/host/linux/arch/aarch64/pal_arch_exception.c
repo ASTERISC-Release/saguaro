@@ -184,7 +184,7 @@ __attribute__((visibility("protected"))) bool libos_tcb_registry_scan(PAL_TCB** 
     uintptr_t tp;
     __asm__("mrs %0, tpidr_el0" : "=r"(tp));
     if (tp & 1) {
-        return false; /* Gramine-internal thread: handled by pal_get_tcb()'s tagged fast path */
+        return false; /* Saguaro-internal thread: handled by pal_get_tcb()'s tagged fast path */
     }
     uintptr_t key = tp | 1;
     for (size_t i = 0; i < LIBOS_TCB_REGISTRY_MAX; i++) {

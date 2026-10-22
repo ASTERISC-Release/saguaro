@@ -267,7 +267,7 @@ __attribute__((visibility("protected"))) bool libos_tcb_registry_scan(PAL_TCB** 
     uintptr_t tp;
     __asm__("mv %0, tp" : "=r"(tp));
     if (tp & 1) {
-        return false; /* Gramine-internal thread: handled by pal_get_tcb()'s tagged fast path */
+        return false; /* Saguaro-internal thread: handled by pal_get_tcb()'s tagged fast path */
     }
     uintptr_t key = tp | 1;
     for (size_t i = 0; i < LIBOS_TCB_REGISTRY_MAX; i++) {
@@ -294,7 +294,7 @@ __attribute__((visibility("protected"))) bool libos_tcb_registry_scan(PAL_TCB** 
  * `brk #imm`, which is self-identifying), hence the a7 payload: an application `ebreak` cannot
  * plausibly have a7 == 0x6772677267726772, and anything else keeps its previous behavior:
  * restore the default action and return, so the instruction re-executes and the process dies as
- * it did before this handler existed (core dump, like a plain ebreak without Gramine).
+ * it did before this handler existed (core dump, like a plain ebreak without Saguaro).
  */
 void pal_arch_handle_trap(ucontext_t* uc) {
     uintptr_t pc = ucontext_get_ip(uc);

@@ -1,5 +1,5 @@
 ; Copyright (C) 2026 The ASTERISC Research Lab
-; Gramine x64 phase-0 spike (step h): the Windows x64 to System V thunk.
+; Saguaro x64 phase-0 spike (step h): the Windows x64 to System V thunk.
 
 _TEXT SEGMENT
 

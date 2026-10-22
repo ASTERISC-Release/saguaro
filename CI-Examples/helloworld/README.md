@@ -1,6 +1,6 @@
 # Hello World
 
-A minimal C program that prints `Hello, world`: the sanity test of a Gramine installation.
+A minimal C program that prints `Hello, world`: the sanity test of a Saguaro installation.
 
 ## Run
 

@@ -75,7 +75,7 @@ else
 fi
 echo >> OUTPUT2  # include newline since wget doesn't add it
 # check if all lines from OUTPUT2 are included in OUTPUT1
-# TODO: simplify after fixing Gramine logging subsystem, which currently mixes its output with the
+# TODO: simplify after fixing Saguaro logging subsystem, which currently mixes its output with the
 # application output.
 diff OUTPUT1 OUTPUT2 | grep -q '^>' || echo "[ Success 2/4 ]"
 stop_http_server

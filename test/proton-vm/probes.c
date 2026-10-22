@@ -524,7 +524,7 @@ static void probe_cs32(void) {
     setup_altstack();
     catch_faults(1);
     if (!try_cs32(page, 0x23)) {            /* Linux's selector, hard-coded in Wine */
-        try_cs32(page, 0x1b);               /* the Gramine VM kernel's 32-bit user code entry */
+        try_cs32(page, 0x1b);               /* the Saguaro VM kernel's 32-bit user code entry */
         try_cs32(page, 0x2b);
     }
     catch_faults(0);
@@ -1233,7 +1233,7 @@ static void* sud_thread(void* arg) {
 }
 /* interface enumeration as Wine's nsiproxy.sys does it (ndis.c: if_nameindex() without a NULL
  * check, SIOCGIFFLAGS/SIOCGIFMTU, /proc/net/dev); the game's login dialog calls
- * GetAdaptersAddresses and its driver thread died on the NULL under Gramine */
+ * GetAdaptersAddresses and its driver thread died on the NULL under Saguaro */
 static void probe_ifaces(void) {
     struct if_nameindex* ix = if_nameindex();
     int n = 0;

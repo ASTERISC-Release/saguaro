@@ -781,7 +781,7 @@ noreturn int pal_start_continue(void* cmdline_) {
 
     ret = cmdline_read_gramine_args(cmdline, &argc, &argv[0]);
     if (ret < 0)
-        INIT_FAIL("Failed to read Gramine arguments");
+        INIT_FAIL("Failed to read Saguaro arguments");
 
     static int envp_cnt = 0;
     ret = cmdline_read_gramine_envs(g_envs, &envp_cnt, &g_vm_envp[0]);
@@ -793,7 +793,7 @@ noreturn int pal_start_continue(void* cmdline_) {
 
     bool first_process = !strcmp(argv[0], "init");
     if (!first_process)
-        INIT_FAIL("Gramine-VM currently runs only in single-process mode (with `init`)");
+        INIT_FAIL("Saguaro-VM currently runs only in single-process mode (with `init`)");
 
     char* manifest_path = alloc_concat(argv[1], -1, ".manifest", -1);
     if (!manifest_path)
@@ -922,7 +922,7 @@ noreturn void vm_pal_process_start(PAL_HANDLE parent_process, const char** argum
      * must install its own callbacks during LibOS initialization. */
     PalResetMemoryBookkeepingUpcallsForChild();
 
-    /* All processes of one Gramine instance share its instance id (it names the IPC pipes). The
+    /* All processes of one Saguaro instance share its instance id (it names the IPC pipes). The
      * copied process-data segment still holds the parent's public state at this point. */
     uint64_t instance_id = g_pal_public_state.instance_id;
     pal_startup_allocs_record(true);

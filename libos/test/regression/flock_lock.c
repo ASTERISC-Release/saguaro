@@ -125,7 +125,7 @@ static void test_flock_mix_with_fcntl(void) {
 
     int fd = open("/dev/attestation", O_RDONLY);
     if (fd < 0) {
-        printf("   - Gramine not detected, skipping this Gramine-specific test\n");
+        printf("   - Saguaro not detected, skipping this Saguaro-specific test\n");
         return;
     }
     CHECK(close(fd));

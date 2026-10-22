@@ -1,5 +1,5 @@
 @echo off
-rem Gramine x64 phase-0 spike (step h): build the enclave that contains the x86_64 Linux program.
+rem Saguaro x64 phase-0 spike (step h): build the enclave that contains the x86_64 Linux program.
 rem Run linux/build.sh <DATA_ADDR> in WSL first (it writes linux\elf_blob.c and linux\elf_blob.h);
 rem this script prints the distance between .gxelft and .gxelfd that DATA_ADDR must equal.
 rem Copyright (C) 2026 The ASTERISC Research Lab

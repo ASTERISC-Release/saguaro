@@ -3,7 +3,7 @@
 
 /*
  * AArch64 host-arch definitions of the Windows VBS-enclave PAL. As in the direct PAL, a
- * Gramine-internal thread keeps its PAL_TCB in TPIDR_EL0, tagged with bit 0 (an application thread
+ * Saguaro-internal thread keeps its PAL_TCB in TPIDR_EL0, tagged with bit 0 (an application thread
  * keeps its own TLS there and is found through the registry; see pal_arch.h). TPIDR_EL0 is writable
  * inside a VBS enclave and kept per thread (phase 0, step d).
  */

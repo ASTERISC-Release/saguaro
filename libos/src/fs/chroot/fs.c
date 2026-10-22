@@ -60,7 +60,7 @@ static int chroot_setup_dentry(struct libos_dentry* dent, mode_t type, mode_t pe
     return 0;
 }
 
-/* Whether a host link's target (absolute, or relative to the link's directory) exists in Gramine's
+/* Whether a host link's target (absolute, or relative to the link's directory) exists in Saguaro's
  * file system: a nested lookup, under the cache lock the caller holds. Links met while probing
  * are probed in turn, to a small depth (a link whose target passes through itself ends there). */
 static bool link_target_in_saguaro(struct libos_dentry* dent, const char* target) {
@@ -95,11 +95,11 @@ static int chroot_lookup(struct libos_dentry* dent) {
 
     /*
      * A host symbolic link (one made by an earlier process of this session, or before it) is
-     * shown as a link when resolving it inside Gramine is the same as on the host: a relative
+     * shown as a link when resolving it inside Saguaro is the same as on the host: a relative
      * target without ".." stays in the same directory of the same mount. A dangling link is a
      * link too (it used to be reported missing). Other links (absolute targets, ones climbing out
      * with "..", e.g. into the host's /etc/alternatives) are links too when their target exists in
-     * Gramine's own file system (a nested lookup under the cache lock, bounded in depth), so that
+     * Saguaro's own file system (a nested lookup under the cache lock, bounded in depth), so that
      * the link and its target are one dentry with one identity: Wine finds the drive of a path by
      * the (st_dev, st_ino) of its drive links (dosdevices/z: -> /, c: -> ../drive_c); otherwise
      * they are followed on the host as before, since manifests rely on that (a target outside
@@ -164,7 +164,7 @@ static int chroot_lookup(struct libos_dentry* dent) {
             break;
         case PAL_TYPE_PIPE:
             log_warning("trying to access '%s' which is a host-level FIFO (named pipe); "
-                        "Gramine supports only named pipes created by Gramine processes",
+                        "Saguaro supports only named pipes created by Saguaro processes",
                         uri);
             ret = -EACCES;
             goto out;
@@ -598,7 +598,7 @@ static bool is_privileged_xattr(const char* name) {
 
 /*
  * Extended attributes are the host file's. The privileged namespaces (`security.`, `trusted.`)
- * are the exception when the host refuses them (Gramine usually runs unprivileged on the host,
+ * are the exception when the host refuses them (Saguaro usually runs unprivileged on the host,
  * while the LibOS's root may set them): those are kept in the LibOS inode instead, for as long as
  * the inode lives in this process (they are not written to the host nor seen by other processes).
  * Get and remove look there first, list shows both.

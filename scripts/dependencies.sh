@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
-# Installs the host packages for building Gramine and running test/direct/test-direct.sh
+# Installs the host packages for building Saguaro and running test/direct/test-direct.sh
 # (Debian/Ubuntu). Idempotent: only missing packages are installed; sudo may prompt for a password.
 #   scripts/dependencies.sh               # build + test dependencies
 #   scripts/dependencies.sh --build-only  # only what scripts/install.sh needs to build
@@ -22,7 +22,7 @@ esac
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 . "$HERE/../CI-Examples/common_tools/prereqs.sh"
 
-# Build + runtime dependencies of Gramine itself (what scripts/install.sh needs) ...
+# Build + runtime dependencies of Saguaro itself (what scripts/install.sh needs) ...
 apt_install build-essential meson ninja-build pkg-config bison gawk nasm file procps iproute2 \
     linux-libc-dev python3 python3-pip python3-pytest python3-click python3-jinja2 \
     python3-cryptography python3-voluptuous python3-toml python3-tomli python3-tomli-w \

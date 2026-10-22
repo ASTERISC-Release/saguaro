@@ -4,7 +4,7 @@
 > This page is inherited from upstream Gramine and describes the Intel SGX backend. This tree
 > still builds that backend but does not test it; see `README.md` for what is validated here.
 
-Gramine is typically used to create and run Trusted Execution Environments
+Saguaro is typically used to create and run Trusted Execution Environments
 (`TEE`). A very important aspect of a TEE is `Attestation`. Broadly
 speaking, attestation is a mechanism for a remote user to verify that the
 application runs on a real hardware in an up-to-date TEE with the expected
@@ -13,7 +13,7 @@ initial state.
 There are two types of attestation: `Local Attestation` and
 `Remote Attestation`. Local attestation is used when two TEEs run on the
 same physical machine and remote attestation is used when a user attests a TEE
-running on a remote physical machine. In the following, even though Gramine
+running on a remote physical machine. In the following, even though Saguaro
 attestation flows are designed to be TEE-agnostic, we discuss only `SGX`
 attestation flows (the SGX flows are the ones described here; for Windows VBS
 enclaves, `/dev/attestation` returns VBS attestation reports, see the
@@ -26,11 +26,11 @@ create a `Secure Channel` for trusted communication with the remote TEE.
 In many cases, the user also wants `Secret Provisioning` to transparently
 provision secret keys and other sensitive data to the remote TEE.
 
-Gramine provides support for all three levels of attestation flows:
+Saguaro provides support for all three levels of attestation flows:
 
 1.  `Local Attestation` and `Remote Attestation` are exposed to the
     application via `/dev/attestation` pseudo-filesystem. SGX local attestation
-    in Gramine relies on the `EREPORT` hardware instruction. SGX remote
+    in Saguaro relies on the `EREPORT` hardware instruction. SGX remote
     attestation uses the Intel SGX PSW's AESM service and the Intel IAS service
     (for EPID flows) or DCAP libraries (for ECDSA/DCAP flows) under the hood.
 2.  `Secure Channel` is constructed using the RA-TLS libraries.
@@ -38,12 +38,12 @@ Gramine provides support for all three levels of attestation flows:
 3.  `Secret Provisioning` is built using the Secret Provisioning libraries.
     These libraries use RA-TLS under the hood.
 
-Applications running under Gramine can use each of the above three levels to
+Applications running under Saguaro can use each of the above three levels to
 build their attestation flows. Each next level builds on the previous one and
 exposes a simpler API to the application (but also is more restricted in its
 functionality).
 
-In addition to these three Gramine-native flows, there are two additional
+In addition to these three Saguaro-native flows, there are two additional
 options: (1) to use vendor-specific plugins to RA-TLS and Secret Provisioning
 libraries, or (2) to use third-party attestation & secret provisioning
 solutions. These options may be better suited for complex deployments, for
@@ -65,10 +65,10 @@ the attestation evidence from this enclave on a trusted machine.
 
 EPID based remote attestation starts with the enclavized user application
 opening the special file `/dev/attestation/user_report_data` for write (step
-1). Under the hood, Gramine uses the `EREPORT` hardware instruction to
+1). Under the hood, Saguaro uses the `EREPORT` hardware instruction to
 generate an `SGX Report` (step 2). After the SGX report is generated, the
 application opens another special file `/dev/attestation/quote` for read (step
-3). Under the hood, Gramine communicates with the `Quoting Enclave` to
+3). Under the hood, Saguaro communicates with the `Quoting Enclave` to
 receive the `SGX Quote` (step 4). In turn, the Quoting Enclave uses the
 EPID key provided by the `Provisioning Enclave` (step 5, only during
 initial deployment of this SGX machine). The Provisioning Enclave requests the
@@ -188,10 +188,10 @@ is EPID based or DCAP/ECDSA based:
   `Intel Provisioning Certification Service`, caching these certificates
   in the Provisioning Certificate Caching Service, etc.).
 
-Gramine does *not* provide any pseudo-files under `/dev/attestation` for
+Saguaro does *not* provide any pseudo-files under `/dev/attestation` for
 verification of the attestation quote. Instead, the remote user is encouraged to
 use the `quote_dump`, `ias_request` and
-`verify_ias_report` tools shipped together with Gramine (for
+`verify_ias_report` tools shipped together with Saguaro (for
 EPID based quote verification) or to use the Intel DCAP libraries and tools (for
 DCAP based quote verification).
 
@@ -371,7 +371,7 @@ communication with the remote user but simply a way to securely obtain this
 single key from a well-known location.
 
 This is the scenario where the high-level `Secret Provisioning` interface
-comes into play. Secret Provisioning is shipped together with Gramine in the
+comes into play. Secret Provisioning is shipped together with Saguaro in the
 form of (helper) shared libraries. These libraries are reference implementations
 for the flows to provision secrets from a trusted machine (service, verifier) to
 an enclavized application (client, attester). These libraries rely heavily on
@@ -418,17 +418,17 @@ environment variables if available:
   starts. By default, it is not set, thus secret provisioning must be explicitly
   requested by the application.
 - `SECRET_PROVISION_SET_KEY` (optional) -- set it to the name of the key that
-  will be provisioned into the Gramine enclave as the secret. For example,
+  will be provisioned into the Saguaro enclave as the secret. For example,
   setting this environment variable to `default` will install the provisioned
   key as the default encryption key for encrypted files. The key must be sent
   (by the secret provisioning service) as 16-bytes-long AES-GCM encryption key.
   This environment variable is checked only if `SECRET_PROVISION_CONSTRUCTOR`
   is set. The library puts the provisioned key into
-  `/dev/attestation/keys/<key_name>` so that Gramine recognizes it.
+  `/dev/attestation/keys/<key_name>` so that Saguaro recognizes it.
 
 > [!NOTE]
 > Previously, `SECRET_PROVISION_SET_PF_KEY = 1/true/TRUE` was used for
-> setting the `default` encryption key, and Gramine still supports that
+> setting the `default` encryption key, and Saguaro still supports that
 > environment variable for backward compatibility. It is deprecated and will be
 > removed in the next releases of Gramine.
 
@@ -489,7 +489,7 @@ working correctly on the host.
 The RA-TLS and Secret Provisioning interfaces described above work only with
 default Intel-provided attestation infrastructures (IAS for the EPID flows and
 Intel PCCS/PCS flows). There are several other attestation infrastructures built
-by vendors other than Intel. For these cases, Gramine provides plugins to RA-TLS
+by vendors other than Intel. For these cases, Saguaro provides plugins to RA-TLS
 and Secret Provisioning, which currently can be found in the companion [contrib](https://github.com/gramineproject/contrib) repository.
 
 ### Microsoft Azure Attestation (MAA)
@@ -512,7 +512,7 @@ For more information, refer to the [MAA plugin README](https://github.com/gramin
 
 ## Third-Party Solutions
 
-The three Gramine-native interfaces described above are quite limited in their
+The three Saguaro-native interfaces described above are quite limited in their
 functionality. For example, RA-TLS currently creates only self-signed X.509
 certificates that may not fit well in traditional Public Key Infrastructure
 (PKI) flows. As another example, our Secret Provisioning service is only a

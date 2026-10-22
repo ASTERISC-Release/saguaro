@@ -1,5 +1,5 @@
 @echo off
-rem Gramine x64 phase-0 spike: build, protect (veiid) and test-sign the probe enclave and its host
+rem Saguaro x64 phase-0 spike: build, protect (veiid) and test-sign the probe enclave and its host
 rem on an x64 machine. Usage: build.cmd [OUTDIR-SUFFIX [extra cl defines, e.g. /DPROBE_STRICT]]
 rem Copyright (C) 2026 The ASTERISC Research Lab
 setlocal

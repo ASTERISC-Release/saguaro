@@ -34,7 +34,7 @@
  * because %gs isn't writable directly from userspace), this just tags and stores the pointer
  * directly in TPIDR_EL0 -- no syscall needed -- which gives *this* thread an immediately correct,
  * independent-of-every-other-thread PAL_TCB for as long as nothing else overwrites TPIDR_EL0.
- * That holds forever for Gramine's own internal threads (IPC/async worker: they never run
+ * That holds forever for Saguaro's own internal threads (IPC/async worker: they never run
  * application code), and until application code's own TLS setup overwrites it for whichever
  * thread actually runs the application -- see pal_tcb_singleton_snapshot_before_user_entry()
  * for how that one thread's PAL_TCB stays reachable afterwards. */

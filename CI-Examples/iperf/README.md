@@ -1,6 +1,6 @@
 # iperf
 
-Runs the iperf3 3.16 server (built from source by the Makefile) under Gramine, with the native client.
+Runs the iperf3 3.16 server (built from source by the Makefile) under Saguaro, with the native client.
 
 ## Prerequisites
 

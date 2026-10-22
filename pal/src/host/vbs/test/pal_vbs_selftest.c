@@ -4,7 +4,7 @@
 /*
  * A PAL-level test program for the VBS-enclave PAL (phase 1). It runs INSIDE the enclave on top of
  * the PAL's primitives (pal_vbs_env) and prints its result through the host console OCALL. It is
- * deliberately independent of the Gramine LibOS: phase 1's exit criterion is that the PAL boundary
+ * deliberately independent of the Saguaro LibOS: phase 1's exit criterion is that the PAL boundary
  * works, not that the LibOS runs (that is phase 2).
  *
  * Each step returns true on success; the suite returns 0 on full success, else the 1-based index of

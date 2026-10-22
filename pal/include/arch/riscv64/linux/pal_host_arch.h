@@ -35,7 +35,7 @@
  * the one such register and the application's own libc TLS needs it, so the PAL cannot *keep*
  * PAL_TCB there. pal_set_tcb() therefore tags PAL_TCB with bit 0 and installs it in `tp`, giving
  * *this* thread an immediately correct, independent-of-every-other-thread PAL_TCB for as long as
- * nothing else overwrites `tp` (forever for Gramine's own internal threads; until the app's TLS
+ * nothing else overwrites `tp` (forever for Saguaro's own internal threads; until the app's TLS
  * setup takes over for the thread that runs application code -- see
  * pal_tcb_singleton_snapshot_before_user_entry() and the per-thread registry in
  * pal_arch_exception.c). See findings #9, #12, #13 in the aarch64 port log.

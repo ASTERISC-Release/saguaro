@@ -45,7 +45,7 @@ static void usage(const char* argv0) {
     INFO("  --verify, -V            (optional) Verify that input path matches PF's allowed paths\n");
     INFO("\n");
     INFO("NOTE: Files encrypted using the 'encrypt' mode embed the output path string, exactly\n");
-    INFO("      as specified in '-o PATH'. Therefore, the Gramine manifest must specify this\n");
+    INFO("      as specified in '-o PATH'. Therefore, the Saguaro manifest must specify this\n");
     INFO("      exact path in encrypted files list.\n");
 }
 

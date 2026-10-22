@@ -483,11 +483,11 @@ static inline void erase_memory(void* buffer, size_t size) {
 
 #elif defined(__riscv)
 /* Same logic as the aarch64 branch above (duplicated for the same reason: not touching the
- * already-ported paths while porting). The "last page" check is a property of Gramine's own
+ * already-ported paths while porting). The "last page" check is a property of Saguaro's own
  * address-space policy, not of x86_64: it refers to the top of the *userspace* VA range, which
  * on riscv64 sv48 ends at (1 << 47) - 1 -- well below the UINTPTR_MAX-ish `~(PAGE_SIZE-1)`
  * pattern matched here. riscv64 sv57 would in principle extend the unusable-top window, but
- * Gramine's own ARCH_HIGHEST_ADDR clamp (pal_host_arch.h) keeps mappings out of that region
+ * Saguaro's own ARCH_HIGHEST_ADDR clamp (pal_host_arch.h) keeps mappings out of that region
  * regardless, so the check stays both correct and conservative. */
 static inline bool __range_not_ok(uintptr_t addr, size_t size) {
     addr += size;

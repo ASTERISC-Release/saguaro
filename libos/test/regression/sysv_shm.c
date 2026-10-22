@@ -4,7 +4,7 @@
 /*
  * Regression tests for System V shared memory: shmget, shmat, shmdt, shmctl.
  *
- * The LTP cases that pass under Gramine cover the basics; this binary adds what they cannot
+ * The LTP cases that pass under Saguaro cover the basics; this binary adds what they cannot
  * check in one process without fork: the shared pages of two attaches, the `nattch`/timestamp
  * bookkeeping, deferred destruction on IPC_RMID while attached, the permission model exercised
  * with `seteuid` (no fork needed, so it also runs under the single-process VM PAL), the

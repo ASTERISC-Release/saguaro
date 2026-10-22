@@ -494,7 +494,7 @@ static int print_warnings_on_insecure_configs(PAL_HANDLE parent_process) {
 
     log_always("-------------------------------------------------------------------------------"
                "----------------------------------------");
-    log_always("Gramine detected the following insecure configurations:\n");
+    log_always("Saguaro detected the following insecure configurations:\n");
 
     if (sgx_debug)
         log_always("  - sgx.debug = true                           "
@@ -569,7 +569,7 @@ static void print_warnings_on_invalid_dns_host_conf(PAL_HANDLE parent_process) {
         }
         if (g_invalid_dns_host_conf.hostname != NULL) {
             log_warning("The hostname on the host \"%s\" seems to be invalid. "
-                        "The Gramine hostname will be set to \"localhost\".",
+                        "The Saguaro hostname will be set to \"localhost\".",
                         g_invalid_dns_host_conf.hostname);
         }
     }

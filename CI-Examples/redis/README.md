@@ -22,6 +22,6 @@ src/src/redis-benchmark
 
 ## Notes
 
-- The manifest starts Redis with `--save ''`: saving to disk uses `fork`, which is slow in Gramine.
+- The manifest starts Redis with `--save ''`: saving to disk uses `fork`, which is slow in Saguaro.
 - `make USE_SELECT=1` tests `select` instead of `epoll`.
 - Under VBS there are no RDB snapshots or append-only file, and Redis listens on `127.0.0.1:6379` only.

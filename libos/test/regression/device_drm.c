@@ -243,7 +243,7 @@ static void check_prime(int fd, uint32_t handle) {
     if (si.handle == 0 || si.fd != sh.fd)
         errx(1, "syncobj import: handle %u, fd %d (expected %d)", si.handle, si.fd, sh.fd);
     close(sh.fd);
-    /* an absolute CLOCK_MONOTONIC deadline 20 ms ahead (the kernel's clock is not Gramine's) */
+    /* an absolute CLOCK_MONOTONIC deadline 20 ms ahead (the kernel's clock is not Saguaro's) */
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     int64_t start = (int64_t)ts.tv_sec * 1000000000 + ts.tv_nsec;

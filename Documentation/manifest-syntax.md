@@ -2,7 +2,7 @@
 
 A \|~\| manifest file is an application-specific configuration text file that
 specifies the environment and resources for running an application inside
-Gramine. A \|~\| manifest file contains key-value pairs (as well as more
+Saguaro. A \|~\| manifest file contains key-value pairs (as well as more
 complicated table and array objects) in the TOML syntax. For the details of the
 TOML syntax, see [the official documentation](https://toml.io).
 
@@ -46,19 +46,19 @@ loader.log_level = "[none|error|warning|debug|trace|all]"
 loader.log_file = "[PATH]"
 ```
 
-This configures Gramine's debug log. The `log_level` option specifies what
+This configures Saguaro's debug log. The `log_level` option specifies what
 messages to enable (e.g. `loader.log_level = "debug"` will enable all messages
 of type `error`, `warning` and `debug`). By default, the messages are printed
 to the standard error. If `log_file` is specified, the messages will be
 appended to that file.
 
-Gramine outputs log messages of the following types:
+Saguaro outputs log messages of the following types:
 
-- `error`: A serious error preventing Gramine from operating properly (for
+- `error`: A serious error preventing Saguaro from operating properly (for
   example, error initializing one of the components).
 - `warning`: A non-fatal issue. Might mean that application is requesting
   something unsupported or poorly emulated.
-- `debug`: Detailed information about Gramine's operation and internals.
+- `debug`: Detailed information about Saguaro's operation and internals.
 - `trace`: More detailed information, such as all system calls requested by
   the application. Might contain a lot of noise.
 
@@ -73,7 +73,7 @@ loader.entrypoint = "[URI]"
 (Default: "<path to libsysdb.so>")
 ```
 
-This specifies the LibOS component that Gramine will load and run before loading
+This specifies the LibOS component that Saguaro will load and run before loading
 the first executable of the user application. **Note**: currently, there is only
 one LibOS implementation: `libsysdb.so`, and there is no need to specify this
 option explicitly.
@@ -91,16 +91,16 @@ libos.entrypoint = "[PATH]"
 ```
 
 This specifies the first executable of the user application which is to be
-started when spawning a Gramine instance from this manifest file. Needs to be a
-path inside Gramine pointing to a mounted file. Relative paths will be
+started when spawning a Saguaro instance from this manifest file. Needs to be a
+path inside Saguaro pointing to a mounted file. Relative paths will be
 interpreted as starting from the current working directory (i.e. from `/` by
 default, or `fs.start_dir` if specified).
 
 The recommended usage is to provide an absolute path of the executable. This
-executable must also be in the Gramine's filesystem, either directly mounted or
+executable must also be in the Saguaro's filesystem, either directly mounted or
 within a directory that is mounted. For example, if one wishes to execute the
 Python 3.8 interpreter, one would specify it as the entrypoint and mount the
-Python executable at the expected path within the Gramine filesystem:
+Python executable at the expected path within the Saguaro filesystem:
 
 ```
 libos.entrypoint = "/usr/bin/python3.8"
@@ -171,13 +171,13 @@ This option will generate the following extra configuration:
 The functionality is achieved by taking the host's configuration via various
 APIs and reading the host's configuration files. In the case of Linux PAL,
 most information comes from the host's `/etc`. The gathered information is
-used to create `/etc` files inside Gramine's filesystem, or change Gramine
-process configuration. For security-enforcing modes (such as SGX), Gramine
+used to create `/etc` files inside Saguaro's filesystem, or change Saguaro
+process configuration. For security-enforcing modes (such as SGX), Saguaro
 additionally sanitizes the information gathered from the host. Invalid host's
 configuration is reported as an error (e.g. invalid hostname, or invalid IPv4
 address in `nameserver` keyword).
 
-Note that Gramine supports only a subset of the configuration.
+Note that Saguaro supports only a subset of the configuration.
 Refer to the list of supported keywords.
 
 This option takes precedence over `fs.mounts`.
@@ -274,8 +274,8 @@ loader.gid = [NUM]
 (Default: 0)
 ```
 
-This specifies the initial, Gramine emulated user/group ID and effective
-user/group ID. It must be non-negative. By default, Gramine emulates the
+This specifies the initial, Saguaro emulated user/group ID and effective
+user/group ID. It must be non-negative. By default, Saguaro emulates the
 user/group ID and effective user/group ID as the root user (uid = gid = 0).
 
 ### Disabling ASLR
@@ -298,7 +298,7 @@ libos.check_invalid_pointers = [true|false]
 
 This specifies whether to enable checks of invalid pointers on syscall
 invocations. In particular, when this manifest option is set to `true`,
-Gramine's LibOS will return an EFAULT error code if a user-supplied buffer
+Saguaro's LibOS will return an EFAULT error code if a user-supplied buffer
 points to an invalid memory region. Setting this manifest option to `false`
 may improve performance for certain workloads but may also generate
 `SIGSEGV/SIGBUS` exceptions for some applications that specifically use
@@ -311,7 +311,7 @@ sys.stack.size = "[SIZE]"
 (default: "256K")
 ```
 
-This specifies the stack size of each thread in each Gramine process. The
+This specifies the stack size of each thread in each Saguaro process. The
 default value is determined by the library OS. Units like `K` \|~\| (KiB),
 `M` \|~\| (MiB), and `G` \|~\| (GiB) can be appended to the values for
 convenience. For example, `sys.stack.size = "1M"` indicates a 1 \|~\| MiB stack
@@ -324,7 +324,7 @@ sys.brk.max_size = "[SIZE]"
 (default: "256K")
 ```
 
-This specifies the maximal program break (brk) size in each Gramine process.
+This specifies the maximal program break (brk) size in each Saguaro process.
 The default value of the program break size is determined by the library OS.
 Units like `K` (KiB), `M` (MiB), and `G` (GiB) can be appended to the
 values for convenience. For example, `sys.brk.max_size = "1M"` indicates
@@ -337,7 +337,7 @@ sys.insecure__allow_eventfd = [true|false]
 (Default: false)
 ```
 
-By default, Gramine implements eventfd in a secure but restricted way: currently
+By default, Saguaro implements eventfd in a secure but restricted way: currently
 this secure implementation only works when eventfd usage is confined to a single
 process (note that application may still be multi-process and spawn child
 processes, but eventfds created in parent will be invalid in children).
@@ -355,7 +355,7 @@ sys.enable_sigterm_injection = [true|false]
 ```
 
 This specifies whether to allow for a one-time injection of <span class="title-ref">SIGTERM</span> signal
-into Gramine. Could be useful to handle graceful shutdown.
+into Saguaro. Could be useful to handle graceful shutdown.
 Be careful! In SGX environment, the untrusted host could inject that signal in
 an arbitrary moment. Examine what your application's <span class="title-ref">SIGTERM</span> handler does and
 whether it poses any security threat.
@@ -396,7 +396,7 @@ fs.root.uri  = "[URI]"
 ```
 
 This syntax specifies the root filesystem to be mounted inside the library OS.
-Both parameters are optional. If not specified, then Gramine mounts the current
+Both parameters are optional. If not specified, then Saguaro mounts the current
 working directory as the root.
 
 ### FS mount points
@@ -435,11 +435,11 @@ The `type` parameter specifies the mount point type. If omitted, it defaults
 to `"chroot"`. The `path` parameter must be an absolute path (i.e., must
 begin with `/`).
 
-Gramine currently supports the following types of mount points:
+Saguaro currently supports the following types of mount points:
 
 - `chroot` (default): Host-backed files. All host files and sub-directories
-  found under `[URI]` are forwarded to the Gramine instance and placed under
-  `[PATH]`. For example, with a host-level path specified as `uri = "file:/one/path/"` and forwarded to Gramine via `path = "/another/path"`, a
+  found under `[URI]` are forwarded to the Saguaro instance and placed under
+  `[PATH]`. For example, with a host-level path specified as `uri = "file:/one/path/"` and forwarded to Saguaro via `path = "/another/path"`, a
   host-level file `/one/path/file` is visible to graminized application as
   `/another/path/file`. This concept is similar to FreeBSD's chroot and to
   Docker's named volumes. Files under `chroot` mount points support mmap and
@@ -453,7 +453,7 @@ Gramine currently supports the following types of mount points:
 
 - `tmpfs`: Temporary in-memory-only files. These files are *not* backed by
   host-level files. The tmpfs files are created under `[PATH]` (this path is
-  empty on Gramine instance startup) and are destroyed when a Gramine instance
+  empty on Saguaro instance startup) and are destroyed when a Saguaro instance
   terminates. The `[URI]` parameter is always ignored and can be omitted.
 
   `tmpfs` is especially useful in trusted environments (like Intel SGX) for
@@ -476,7 +476,7 @@ up, so a link looks like its target and `readlink()` fails with `EINVAL`.
 With `host_symlinks = true`, `readlink()` (and therefore `realpath()`) of
 a path under this mount returns the target of the host's symbolic link; path
 lookup is unchanged. libdrm needs this for the links under `/sys/dev/char`,
-for example `{ path = "/sys", type = "chroot", uri = "file:/sys", host_symlinks = true }`. A relative target is resolved inside Gramine's file
+for example `{ path = "/sys", type = "chroot", uri = "file:/sys", host_symlinks = true }`. A relative target is resolved inside Saguaro's file
 system, an absolute one too, so it must be mounted at the same path. Only the
 Linux PAL (`saguaro-direct`) supports it; with other PALs `readlink()`
 still fails.
@@ -488,7 +488,7 @@ fs.start_dir = "[URI]"
 ```
 
 This syntax specifies the start (current working) directory. If not specified,
-then Gramine sets the root directory as the start directory (see `fs.root`).
+then Saguaro sets the root directory as the start directory (see `fs.root`).
 
 ### Allowed IOCTLs
 
@@ -500,14 +500,14 @@ sys.allowed_ioctls = [
 ]
 ```
 
-By default, Gramine disables all device-backed and socket IOCTLs. This syntax
+By default, Saguaro disables all device-backed and socket IOCTLs. This syntax
 allows to explicitly allow a set of IOCTLs on devices (devices must be
 explicitly mounted via `fs.mounts` manifest syntax) and sockets (e.g. for
 `SIOCGIFCONF` and `SIOCGIFHWADDR`). Only IOCTLs with the `request_code`
 argument found among the manifest-listed IOCTLs are allowed to pass-through to
 the host. Each IOCTL entry may also contain a reference to an IOCTL struct in
 the `struct` field, in case the third IOCTL argument is intended to be
-translated by Gramine.
+translated by Saguaro.
 
 Available IOCTL structs are described via `sys.ioctl_structs`. Each IOCTL
 struct describes the memory layout of the third argument to the `ioctl` system
@@ -516,13 +516,13 @@ Description of the memory layout is required for a deep copy of the IOCTL
 struct. Here we use the term *memory region* to denote a separate contiguous
 region of memory and the term *sub-region of a memory region* to denote a part
 of the memory region that has properties different from other sub-regions in the
-same memory region (e.g., should it be copied in or out of Gramine memory, is it
+same memory region (e.g., should it be copied in or out of Saguaro memory, is it
 a pointer to another memory region, etc.). For example, a C struct can be
 considered one memory region, and fields of this C struct can be considered
 sub-regions of this memory region.
 
-We also use the terms *Gramine memory* and *host memory*. This distinction is
-currently relevant only for SGX environments: Gramine memory means
+We also use the terms *Saguaro memory* and *host memory*. This distinction is
+currently relevant only for SGX environments: Saguaro memory means
 in-SGX-enclave memory and host memory means outside-of-SGX-enclave untrusted
 memory.
 
@@ -554,7 +554,7 @@ keys:
   `adjustment = -8` results in a total size of 4B.
 - `direction = "none" | "out" | "in" | "inout"` is an optional direction of
   copy for this sub-region (from the app point of view). For example,
-  `direction = "out"` denotes a sub-region to be copied out of Gramine memory
+  `direction = "out"` denotes a sub-region to be copied out of Saguaro memory
   to host memory, i.e., this sub-region is an input to the host device. The
   default value is `none` which is useful for e.g. padding of structs. This
   field must be ommitted if the `ptr` field is specified for this sub-region
@@ -563,7 +563,7 @@ keys:
 - `ptr = inlined-memory-region` or `ptr = "another-ioctl-struct"`
   specifies a pointer to another, nested memory region. This field is required
   when describing complex IOCTL structs. Such pointer memory region always has
-  the implicit size of 8B, and the pointer value is always rewired by Gramine to
+  the implicit size of 8B, and the pointer value is always rewired by Saguaro to
   the memory region in host memory (containing a corresponding nested memory
   region). If `ptr` is specified together with `array_len`, it describes an
   array of pointers to these memory regions. (In other words, `ptr` is an
@@ -584,8 +584,8 @@ Consider this simple C snippet:
 
 ``` c
 struct ioctl_read {
-    size_t buf_size;                /* copied from Gramine to device */
-    char* buf;                      /* copied from device to Gramine */
+    size_t buf_size;                /* copied from Saguaro to device */
+    char* buf;                      /* copied from device to Saguaro */
 } __attribute__((aligned(0x1000))); /* alignment just for illustration */
 ```
 
@@ -612,9 +612,9 @@ sys.ioctl_structs.ioctl_read = [
 
 The above example specifies a root struct (first memory region) that consists of
 two sub-regions: the first one contains an 8-byte size value, the second one is
-an 8-byte pointer value. This pointer points to another memory region in Gramine
+an 8-byte pointer value. This pointer points to another memory region in Saguaro
 memory that contains a single sub-region of size `buf_size`. This nested
-sub-region is copied from the device into the Gramine memory.
+sub-region is copied from the device into the Saguaro memory.
 
 IOCTLs that use the above struct in a third argument are defined like this:
 
@@ -648,9 +648,9 @@ unchanged: the application's argument pointer goes to the host kernel as it is,
 without `sys.ioctl_structs` and `sys.allowed_ioctls` being consulted. This
 works because under `saguaro-direct` the application and the host kernel
 share one address space; it is what GPU drivers need, whose IOCTLs carry nested
-pointers that cannot practically be described in the manifest. Gramine logs a
+pointers that cannot practically be described in the manifest. Saguaro logs a
 warning on the first such IOCTL. Other PALs ignore the key. File descriptors
-inside the arguments of known IOCTLs are translated between Gramine fds and
+inside the arguments of known IOCTLs are translated between Saguaro fds and
 host fds: DRM PRIME and syncobj, dma-buf sync files, and the NVIDIA driver's
 IOCTLs on its character devices (major 195) that carry an fd.
 
@@ -659,7 +659,7 @@ IOCTLs on its character devices (major 195) that carry an fd.
 > is not a sandbox, and with this option the application can issue any IOCTL
 > to the devices it can open, with any pointers in the argument; for a GPU
 > this means submitting commands to it. File descriptors inside IOCTL arguments
-> are host file descriptors unless Gramine knows the IOCTL and translates them.
+> are host file descriptors unless Saguaro knows the IOCTL and translates them.
 
 ### Host UNIX sockets (`saguaro-direct`)
 
@@ -668,14 +668,14 @@ sys.insecure__host_unix_sockets = ["[HOST PATH]", ...]
 (Default: [])
 ```
 
-Gramine's UNIX sockets connect Gramine processes to each other; they cannot
+Saguaro's UNIX sockets connect Saguaro processes to each other; they cannot
 reach a socket of the host. With this list, a `connect()` of a UNIX stream
 socket to one of these paths (exactly as written, for example the X server's
 `"/tmp/.X11-unix/X0"`) connects to the host socket itself, through the Linux
 PAL. File descriptors passed with `SCM_RIGHTS` on such a socket are
 translated: an fd the application sends becomes the host fd behind it (files,
 devices, sockets, ends of a `socketpair()`, and fds returned by device
-IOCTLs), and an fd received from the host becomes a new Gramine fd. A
+IOCTLs), and an fd received from the host becomes a new Saguaro fd. A
 `socketpair()` end whose peer end was sent to the host also receives fds that
 the host process sends back through it. `SCM_CREDENTIALS` is not supported. With
 other PALs the paths are ignored (the connection fails).
@@ -695,7 +695,7 @@ sys.experimental__enable_flock = [true|false]
 (Default: false)
 ```
 
-This syntax enables the `flock` system call in Gramine.
+This syntax enables the `flock` system call in Saguaro.
 
 > [!WARNING]
 > This syscall is still under development and may contain security
@@ -844,7 +844,7 @@ vbs.build = "$VBS_CC_STATIC -o helloworld helloworld.c"
 
 ## SGX syntax
 
-If Gramine is *not* running with SGX, the SGX-specific syntax is ignored. All
+If Saguaro is *not* running with SGX, the SGX-specific syntax is ignored. All
 keys in the SGX-specific syntax are optional.
 
 ### Debug/production enclave
@@ -865,20 +865,20 @@ sgx.edmm_enable = [true|false]
 ```
 
 This setting enables the `EDMM` feature (after-enclave-creation memory
-management). If set to `true`, Gramine will refuse to start on CPUs which do
+management). If set to `true`, Saguaro will refuse to start on CPUs which do
 not support `EDMM` feature.
 
-When this feature is enabled, Gramine does not add heap pages (uninitialized
+When this feature is enabled, Saguaro does not add heap pages (uninitialized
 memory) to the enclave at creation time. Instead, memory is added to the enclave
 on demand. This can greatly reduce startup time for bigger enclaves, reduce
 the `EPC` usage (as only actually allocated memory is used) and allow for
-changing memory permissions (without this Gramine allocates all dynamic memory
+changing memory permissions (without this Saguaro allocates all dynamic memory
 as RWX). Unfortunately it can negatively impact performance, as adding a page
 to the enclave at runtime is a more expensive operation than adding the page
 before enclave creation (because it involves more enclave exits and syscalls).
 
 When this feature is enabled, it is not necessary to specify
-`sgx.enclave_size` (Gramine will automatically set it to 1TB which should be
+`sgx.enclave_size` (Saguaro will automatically set it to 1TB which should be
 enough for any application). However if `sgx.enclave_size` is specified, this
 explicit value will take precedence.
 
@@ -902,7 +902,7 @@ application memory itself: application's code, stack, heap, loaded application
 libraries, etc. The application cannot allocate memory that exceeds this limit.
 
 Be careful when setting the enclave size to large values: when creating enclaves
-which do not have the `EDMM` feature enabled, Gramine not only reserves
+which do not have the `EDMM` feature enabled, Saguaro not only reserves
 `sgx.enclave_size` bytes of virtual address space but also *commits* them to
 the backing store (EPC, RAM and/or swap file). For example, if
 `sgx.enclave_size = "4G"`, then 4GB of EPC/RAM will be immediately allocated
@@ -949,11 +949,11 @@ specifies the number of pre-allocated thread slots (must be at least `1`).
 However, the maximum number of threads can exceed this limit during enclave
 execution, by dynamically allocating new thread slots.
 
-Note that Gramine uses several helper threads internally:
+Note that Saguaro uses several helper threads internally:
 
 - The IPC thread to facilitate inter-process communication. This thread is
-  always spawned at Gramine startup. Its activity depends on the communication
-  patterns among Gramine processes; if there is only one Gramine process, the
+  always spawned at Saguaro startup. Its activity depends on the communication
+  patterns among Saguaro processes; if there is only one Saguaro process, the
   IPC thread always sleeps.
 - The Async thread to implement timers and other asynchronous
   events/notifications. This thread is spawned on demand. It terminates itself
@@ -995,7 +995,7 @@ especially if there are many blocking system calls by other enclave threads.
 The Exitless feature *may be detrimental for performance*. It trades slow
 OCALLs/ECALLs for fast shared-memory communication at the cost of occupying
 more CPU cores and burning more CPU cycles. For example, a single-threaded
-Redis instance on Linux becomes 5-threaded on Gramine with Exitless. Thus,
+Redis instance on Linux becomes 5-threaded on Saguaro with Exitless. Thus,
 Exitless may negatively impact throughput but may improve latency.
 
 This feature is currently marked as insecure, because it reads and writes to
@@ -1019,8 +1019,8 @@ Otherwise (set to `false`), the behavior depends on
 `sgx.insecure__allow_memfaults_without_exinfo`:
 
 - If `sgx.insecure__allow_memfaults_without_exinfo` is unset (default), then
-  Gramine terminates with an error, to prevent a possible attack.
-- Otherwise the exception is allowed and Gramine forwards it to the application,
+  Saguaro terminates with an error, to prevent a possible attack.
+- Otherwise the exception is allowed and Saguaro forwards it to the application,
   and the faulting address is provided as `0`.
 
 The default value for `sgx.use_exinfo` is `false` because some
@@ -1047,7 +1047,7 @@ sgx.cpu_features.pkru   = "[disabled|required]"
 (Default: "disabled")
 ```
 
-For the SGX threat model, Gramine divides CPU features in two subsets:
+For the SGX threat model, Saguaro divides CPU features in two subsets:
 not-security-hardening features (currently AVX, AVX512 and AMX) and
 security-hardening features (MPX and PKRU).
 
@@ -1073,7 +1073,7 @@ for the enclave. If such option is set in the manifest but the CPU feature is
 unavailable on the platform, enclave initialization will fail.
 
 When in doubt, it is recommended to keep the default values for these features.
-In this case, Gramine auto-detects the corresponding not-security-hardening CPU
+In this case, Saguaro auto-detects the corresponding not-security-hardening CPU
 features on the platform and enables them if available, and disables
 security-hardening CPU features. This allows the SGX enclave to be executed on
 the widest range of platforms.
@@ -1082,7 +1082,7 @@ At the technical level, the mapping from CPU features to SGX fields is as
 follows:
 
 - `"unspecified"`: `SIGSTRUCT.ATTRIBUTEMASK[feature] = 0`. The untrusted
-  loader of Gramine sets `SECS.ATTRIBUTES[feature] = 0` if it can't detect the
+  loader of Saguaro sets `SECS.ATTRIBUTES[feature] = 0` if it can't detect the
   feature on the platform, and `SECS.ATTRIBUTES[feature] = 1` otherwise.
 - `"required"`: `SIGSTRUCT.ATTRIBUTEMASK[feature] = 1` and
   `SIGSTRUCT.ATTRIBUTES[feature] = 1`.
@@ -1185,12 +1185,12 @@ fs.insecure__keys.[KEY_NAME] = "[32-character hex value]"
 ```
 
 This syntax allows mounting files that are encrypted on disk and transparently
-decrypted when accessed by Gramine or by application running inside Gramine.
+decrypted when accessed by Saguaro or by application running inside Saguaro.
 Encrypted files guarantee data confidentiality and integrity (tamper
 resistance), as well as file swap protection (an encrypted file can only be
 accessed when in a specific host path).
 
-Encrypted files were previously known as *protected files*, and some Gramine
+Encrypted files were previously known as *protected files*, and some Saguaro
 tools might still use the old name.
 
 URI can be a file or a directory. If a directory is mounted, all existing
@@ -1202,7 +1202,7 @@ mount are also automatically treated as encrypted.
 > The current implementation assumes that `type = "encrypted"` mounts do not
 > overlap on host, i.e. there are no host files reachable through more than one
 > `type = "encrypted"` mount. Otherwise, changes made to such files might not
-> be correctly persisted by Gramine.
+> be correctly persisted by Saguaro.
 
 Note that path size of an encrypted file is limited to 512 bytes and filename
 size is limited to 260 bytes.
@@ -1223,7 +1223,7 @@ directly in manifest. This option must be used only for debugging purposes.
 > Secret Provisioning interface (see `attestation`).
 
 Key names beginning with underscore (`_`) denote special keys provided by
-Gramine:
+Saguaro:
 
 - `"_sgx_mrenclave"` (SGX only) is the SGX sealing key based on the MRENCLAVE
   identity of the enclave. This is useful to allow only the same enclave (on the
@@ -1253,8 +1253,8 @@ fs.mounts = [
 ```
 
 This syntax allows mounting shared memory objects that are accessible by both
-the application running inside Gramine and by other host software/hardware (host
-OS, other host processes, devices connected to the host). In Gramine, untrusted
+the application running inside Saguaro and by other host software/hardware (host
+OS, other host processes, devices connected to the host). In Saguaro, untrusted
 shared memory applies to files which must be mapped into application address
 space with the `MAP_SHARED` flag.
 
@@ -1269,7 +1269,7 @@ itself) need to be explicitly listed as `allowed_files` to be accessed. See
 
 Typically, you should mount the directory `/dev/shm/` (it is used for sharing
 data between processes and devices) and allow specific files in it. When this
-directory is mounted, the Gramine application may create the files -- called
+directory is mounted, the Saguaro application may create the files -- called
 "shared memory objects" in POSIX -- under this directory (for example, this is
 how `shm_open()` Glibc function works). It is not recommended to allow a
 directory unless the application creates shared memory objects with
@@ -1289,7 +1289,7 @@ listed as `trusted_files` and files or devices explicitly listed as
 `allowed_files` are allowed for access.
 
 If the file check policy is `allow_all_but_log`, all files and devices other
-than trusted and allowed are allowed for access, and Gramine emits a warning
+than trusted and allowed are allowed for access, and Saguaro emits a warning
 message for every such file/device. Effectively, this policy operates on all
 unknown files and devices as if they were listed as `allowed_files`. (However,
 this policy still does not allow writing/creating files specified as trusted.)
@@ -1325,7 +1325,7 @@ sgx.preheat_enclave = [true|false]
 (Default: false)
 ```
 
-When enabled, this option instructs Gramine to pre-fault all heap pages during
+When enabled, this option instructs Saguaro to pre-fault all heap pages during
 initialization. This has a negative impact on the total run time, but shifts the
 `EPC` page faults cost to the initialization phase, which can be useful in
 a scenario where a server starts and receives connections / work packages only
@@ -1362,7 +1362,7 @@ This syntax specifies whether to enable SGX enclave-specific statistics:
 > [!WARNING]
 > This option is insecure and cannot be used with production enclaves
 > (`sgx.debug = false`). If a production enclave is started with this option
-> set, Gramine will fail initialization of the enclave.
+> set, Saguaro will fail initialization of the enclave.
 
 ### SGX profiling
 
@@ -1371,7 +1371,7 @@ sgx.profile.enable = ["none"|"main"|"all"]
 (Default: "none")
 ```
 
-This syntax specifies whether to enable SGX profiling. Gramine must be compiled
+This syntax specifies whether to enable SGX profiling. Saguaro must be compiled
 with `--buildtype=debug` or `--buildtype=debugoptimized` for this option to
 work (the latter is advised). In addition, the manifest must contain
 `sgx.debug = true`.
@@ -1387,7 +1387,7 @@ See `sgx-profile` for more information.
 > [!WARNING]
 > This option is insecure and cannot be used with production enclaves
 > (`sgx.debug = false`). If a production enclave is started with this option
-> set, Gramine will fail initialization of the enclave.
+> set, Saguaro will fail initialization of the enclave.
 
 ```
 sgx.profile.mode = ["aex"|"ocall_inner"|"ocall_outer"]
@@ -1439,7 +1439,7 @@ sgx.vtune_profile = [true|false]
 ```
 
 This syntax specifies whether to enable SGX profiling with Intel VTune Profiler.
-Gramine must be compiled with `--buildtype=debug` or
+Saguaro must be compiled with `--buildtype=debug` or
 `--buildtype=debugoptimized` for this option to work (the latter is advised).
 In addition, the application manifest must also contain `sgx.debug = true`.
 

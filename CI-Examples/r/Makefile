@@ -1,7 +1,7 @@
 # Copyright (C) 2024 Gramine contributors
 # SPDX-License-Identifier: BSD-3-Clause
 
-# Installation location of R. By default, Gramine will run the system R executable.
+# Installation location of R. By default, Saguaro will run the system R executable.
 R_HOME ?= /usr/lib/R
 R_EXEC = $(R_HOME)/bin/exec/R
 

@@ -5,7 +5,7 @@
  * System V message queues (msgget/msgsnd/msgrcv/msgctl).
  *
  * The queue table is process-local, like the System V shared memory and semaphore tables
- * (`libos_sysv_shm.c`, `libos_sem.c`): threads of one Gramine process share every queue, but a
+ * (`libos_sysv_shm.c`, `libos_sem.c`): threads of one Saguaro process share every queue, but a
  * child process (direct PAL `fork`) starts with an empty table, so a queue cannot carry messages
  * between processes. This limit is recorded in dev docs: libos-syscalls/TODO.md.
  *

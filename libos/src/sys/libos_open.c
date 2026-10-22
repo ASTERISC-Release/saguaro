@@ -307,7 +307,7 @@ int graphics_drop_stale_host_handle(int fd) {
 long libos_syscall_register_host_identity_fd(int fd) {
     struct libos_handle* hdl;
     long ret;
-    log_always("Registering host fd=%d with Gramine", fd);
+    log_always("Registering host fd=%d with Saguaro", fd);
 
     /* Get a new handle for the provided fd*/
     hdl = get_new_handle();

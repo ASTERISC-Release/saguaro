@@ -57,12 +57,12 @@ static_assert(offsetof(PAL_TCB, stack_protector_canary) == 0x8,
  * aarch64 has no such spare register -- TPIDR_EL0 is the one EL0-writable register, and the
  * real ABI requires it to hold the application's own libc TLS pointer (errno, locale data,
  * etc. all depend on it, even in trivial programs), and unlike x86_64's `arch_prctl`, setting
- * it is a plain unprivileged `msr`, not a syscall Gramine could intercept. So for now PAL_TCB is
+ * it is a plain unprivileged `msr`, not a syscall Saguaro could intercept. So for now PAL_TCB is
  * a single process-wide global (`g_pal_tcb_singleton`, defined in
  * pal/src/host/linux/arch/aarch64/pal_arch_exception.c) instead of per-thread register state --
  * correct for exactly one thread, and explicitly not yet a multi-threaded design. Fixing this
  * properly means patching the libc build (musl, not glibc: see the Milestone A plan notes) to
- * reserve one pointer field inside its own TCB struct for Gramine's use, populated at
+ * reserve one pointer field inside its own TCB struct for Saguaro's use, populated at
  * thread-creation time and reached via TPIDR_EL0 plus that fixed offset.
  */
 /*
@@ -108,7 +108,7 @@ bool libos_tcb_registry_scan(PAL_TCB** out_tcb);
  * so as long as a thread's own TPIDR_EL0 still holds what pal_set_tcb() put there (tagged with
  * bit 0 set -- real PAL_TCB pointers are always at least 8-byte aligned, so that bit is otherwise
  * always 0), reading it back directly gives that exact thread's own PAL_TCB with no cross-thread
- * interference at all. That covers Gramine's own internal threads (the IPC worker, the async
+ * interference at all. That covers Saguaro's own internal threads (the IPC worker, the async
  * worker) completely: they never run application code, so nothing else ever touches their
  * TPIDR_EL0 after pal_set_tcb() sets it.
  *
@@ -122,7 +122,7 @@ bool libos_tcb_registry_scan(PAL_TCB** out_tcb);
  * this thread's own setup is done but before application code (and thus its TLS takeover) has
  * run. This is still exactly the single-threaded-*application* stopgap the aarch64 port
  * documents elsewhere: the fallback only ever needs to be correct for the one thread that enters
- * the application, same limitation as before, just no longer broken by Gramine's own unrelated
+ * the application, same limitation as before, just no longer broken by Saguaro's own unrelated
  * internal threads along the way.
  */
 static inline bool pal_tcb_from_tagged_tpidr(PAL_TCB** out_tcb) {
@@ -209,7 +209,7 @@ static inline PAL_TCB* pal_get_tcb(void) {
  * thread's application TLS pointer (TPIDR_EL0, installed by set_tls() for clone/fork children --
  * which register themselves right there) keys its own PAL_TCB. A scan miss can only be the main
  * thread -- the one thread whose TLS pointer its own libc (ld.so's TLS_INIT_TP, or static
- * startup's) plants directly, with no Gramine hook to register it -- so for the miss path the
+ * startup's) plants directly, with no Saguaro hook to register it -- so for the miss path the
  * g_pal_tcb_singleton fallback *is* the correct answer, and we lazily self-register the main
  * thread so later scans hit (idempotent: same key + same TCB; concurrent first syscalls from
  * several never-registered threads cannot occur for the reasons above). The GOT-indirect read of
@@ -274,7 +274,7 @@ static inline void pal_tcb_singleton_snapshot_before_user_entry(void) {
  * another thread's registration; a stale entry would let that thread hijack this one's (soon
  * freed) PAL_TCB. The deletion is ownership-checked against \p tcb: a new thread born after the
  * region's mmap reuse may already have re-registered this key, and that binding must survive.
- * Tagged (Gramine-internal) threads have no registry entry, so they are skipped. */
+ * Tagged (Saguaro-internal) threads have no registry entry, so they are skipped. */
 static inline void pal_arch_thread_exit_release_tcb(PAL_TCB* tcb) {
     uintptr_t exit_tp;
     __asm__("mrs %0, tpidr_el0" : "=r"(exit_tp));
@@ -314,7 +314,7 @@ struct pal_cpu_info {
  * registers) -- unlike x86_64, where PAL_FPSTATE is a from-scratch struct that PAL's own
  * exception machinery fully owns, aarch64's `context->fpregs` (see ucontext_to_pal_context() in
  * linux/ucontext.h) is a pointer taken directly from inside the real kernel-delivered sigcontext
- * record, so this layout is dictated by the kernel ABI, not a Gramine design choice. There is no
+ * record, so this layout is dictated by the kernel ABI, not a Saguaro design choice. There is no
  * magic-number/feature-bitmap validation scheme the way x86_64's XSAVE area has one (the
  * magic/size pair here just identifies which kind of record this is within the kernel's
  * extensible `__reserved[]` chain), and (for now, scope of the aarch64 port) no SVE/SVE2
@@ -340,7 +340,7 @@ typedef struct {
  * `regs`/`sp`/`pc`/`pstate` deliberately mirror the layout of the real Linux aarch64
  * `struct user_pt_regs` / `mcontext_t.regs[]` (regs[0..30] == x0..x30), rather than inventing
  * named GPR fields the way the x86_64 PAL_CONTEXT does -- this is the kernel's own convention on
- * this architecture, not a Gramine-specific choice.
+ * this architecture, not a Saguaro-specific choice.
  */
 struct PAL_CONTEXT {
     uint64_t regs[31]; /* x0..x30; x8 carries the syscall number on entry, x0 the return value */

@@ -193,7 +193,7 @@ if (( command_confirmed == 0 )); then
     exit 1
 fi
 
-# A one-vCPU Gramine run can finish class selection while the Map Info overlay
+# A one-vCPU Saguaro run can finish class selection while the Map Info overlay
 # is still visible. Return closes that residual panel and is inert in gameplay.
 xdotool key "${key_arguments[@]}" Return 2>/dev/null
 

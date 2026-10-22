@@ -9,7 +9,7 @@
 //
 //*********************************************************
 //
-// Gramine phase-0 spike (step 0): the VBS enclave of Microsoft's "VbsEnclave" sample, reduced to
+// Saguaro phase-0 spike (step 0): the VBS enclave of Microsoft's "VbsEnclave" sample, reduced to
 // the two test functions. Derived from the sample in Windows-classic-samples (MIT).
 
 #include <winenclave.h>

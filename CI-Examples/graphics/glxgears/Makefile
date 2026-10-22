@@ -4,7 +4,7 @@
 # glxgears under saguaro-vm with the Tirith graphics redirection (x86_64). See
 # dev docs: graphics/ for the host setup (QEMU fork, X proxy).
 
-# The graphics preload library is built and installed with Gramine (-Dgraphics=enabled and a
+# The graphics preload library is built and installed with Saguaro (-Dgraphics=enabled and a
 # VM-type PAL); the manifest refers to it as saguaro.libgraphics.
 GRAPHICS_LIB = $(shell python3 -c "import graminelibos; print(graminelibos._CONFIG_PKGLIBDIR)")/libgraphics.so
 
@@ -40,7 +40,7 @@ glxgears.manifest: glxgears.manifest.template FORCE
 		$< $@
 	saguaro-manifest-check $@
 
-# Without Gramine: the preload library presents through its own X connection.
+# Without Saguaro: the preload library presents through its own X connection.
 .PHONY: run-native
 run-native: all
 	LD_PRELOAD=$(GRAPHICS_LIB) EGL_DISCRETE=$${EGL_DISCRETE:-0} ./glxgears

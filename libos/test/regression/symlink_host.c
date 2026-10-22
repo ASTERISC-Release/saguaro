@@ -2,7 +2,7 @@
 /* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /*
- * Symbolic links created on the host before Gramine started (the test harness makes them) are
+ * Symbolic links created on the host before Saguaro started (the test harness makes them) are
  * seen as links: lstat() reports S_IFLNK, readlink() returns the target, and a dangling link is
  * found by lstat() although stat() fails with ENOENT.
  *

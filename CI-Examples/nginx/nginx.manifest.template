@@ -11,9 +11,9 @@ loader.env.LD_LIBRARY_PATH = "/lib:{{ arch_libdir }}:/usr/{{ arch_libdir }}"
 
 loader.argv_src_file = "file:nginx_args"
 
-# Gramine by default reports the root user (uid = 0) to applications. This default behavior forces
+# Saguaro by default reports the root user (uid = 0) to applications. This default behavior forces
 # Nginx to attempt to drop privileges and assume some non-privileged user ID via setuid(), which is
-# meaningless in Gramine. Instead, we set up a dummy user (uid = 1000); this is irrelevant for
+# meaningless in Saguaro. Instead, we set up a dummy user (uid = 1000); this is irrelevant for
 # consequent Nginx execution anyway.
 loader.uid = 1000
 loader.gid = 1000

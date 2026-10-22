@@ -12,7 +12,7 @@
  * (multi-letter) extensions into AT_HWCAP through an internal `riscv_isa_ext` mapping that is
  * deliberately not part of the header and is unstable across kernel versions -- so we decode
  * only the single-letter bits here and never guess the rest. This is lossless in practice:
- * the full, authoritative extension list is the /proc/cpuinfo `isa` line, which Gramine
+ * the full, authoritative extension list is the /proc/cpuinfo `isa` line, which Saguaro
  * renders verbatim (vector-masked) from the host kernel's own cpuinfo (see
  * pal/src/arch/riscv64/pal_cpuid.c).
  *
@@ -50,7 +50,7 @@ static const struct hwcap_flag g_hwcap_flags[] = {
 #define AT_HWCAP 16
 
 /* Reads AT_HWCAP out of /proc/self/auxv. Falls back to the rv64gc baseline (i m a f d c --
- * Ubuntu riscv64's whole userspace is built for it and Gramine's own manifests mount that
+ * Ubuntu riscv64's whole userspace is built for it and Saguaro's own manifests mount that
  * userspace) if the read fails for any reason: this feeds a cosmetic /proc/cpuinfo feature,
  * not worth failing process startup over. */
 static uint64_t read_hwcap(void) {

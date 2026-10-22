@@ -171,7 +171,7 @@ endif
 # -- because the tree is compiled for the baseline riscv ISA (the toolchain's
 # default `-march`, rv64imafdc_zicsr_zifencei, has no byte-swap instruction; the
 # Zbb extension that provides them is not part of the default -- even where the
-# test guest's CPU implements it, see the Phase 0 log). Gramine links libsysdb.so
+# test guest's CPU implements it, see the Phase 0 log). Saguaro links libsysdb.so
 # with -nostdlib, which excludes even libgcc.a -- so it must be linked explicitly. This pulls in only the few
 # helper objects actually referenced (static archive semantics); it does not drag
 # in any libc (libgcc.a is compiler-internal, has no libc dependencies). x86_64 and

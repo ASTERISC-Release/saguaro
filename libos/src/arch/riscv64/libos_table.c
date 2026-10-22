@@ -23,14 +23,14 @@
  * lstat, access, poll, select, dup2, fork, vfork, pipe, getdents, alarm, time, creat, link,
  * unlink, symlink, readlink, chmod, chown, lchown, rename, utime, utimes, mkdir, rmdir, mknod,
  * getpgrp, eventfd, epoll_wait, arch_prctl, or umount2 -- every one of those has a modern
- * replacement that Gramine already implements as a real handler (see libos_table.c on x86_64),
+ * replacement that Saguaro already implements as a real handler (see libos_table.c on x86_64),
  * and the x86_64-only concepts with no riscv analog at all (arch_prctl, iopl, ioperm,
  * modify_ldt, set_thread_area) are dropped outright: riscv64 TLS is set through the threaded
  * pointer (`tp`) with no syscall involved (see pal_arch.h's TCB registry discussion). vfork has
  * no number either -- same story as aarch64 (finding #3): the PAL's clone-based vfork emulation
  * backs the fork()-family dispatch.
  *
- * Entries stubbed to 0 mirror the aarch64 table's own "not implemented in Gramine" set -- these
+ * Entries stubbed to 0 mirror the aarch64 table's own "not implemented in Saguaro" set -- these
  * are feature gaps independent of CPU architecture, not an riscv64 port limitation.
  */
 
@@ -296,9 +296,9 @@ libos_syscall_t libos_syscall_table[LIBOS_SYSCALL_BOUND] = {
     [__NR_accept4]                    = (libos_syscall_t)libos_syscall_accept4,
     [__NR_recvmmsg]                   = (libos_syscall_t)libos_syscall_recvmmsg,
     /* riscv64-only syscalls (258/259 were holes in the generic ABI before the riscv
-     * port took them). Not implemented in Gramine: hwprobe is the modern CPU-feature
+     * port took them). Not implemented in Saguaro: hwprobe is the modern CPU-feature
      * probe (glibc 2.39 -- the runtime our test apps are linked against -- never calls
-     * it; exposing Gramine's faked cpuinfo through it is a feature, see libos_cpuid.c's
+     * it; exposing Saguaro's faked cpuinfo through it is a feature, see libos_cpuid.c's
      * riscv64 TODO), and flush_icache is only needed for self-modifying code --
      * apps get -ENOSYS. */
     [__NR_riscv_hwprobe]            = (libos_syscall_t)0, // libos_syscall_riscv_hwprobe

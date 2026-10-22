@@ -3,7 +3,7 @@
 #                    Michał Kowalczyk <mkow@invisiblethingslab.com>
 #                    Paweł Marczewski <pawel@invisiblethingslab.com>
 
-# Commands for temporarily changing pagination state. Used by other Gramine GDB scripts in
+# Commands for temporarily changing pagination state. Used by other Saguaro GDB scripts in
 # situation where we produce a lot of noise and we don't want to repeatedly prompt user for
 # continuation.
 

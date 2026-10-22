@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
-# gdb helper: symbolize Gramine riscv64 crashes inside private (pal_rtld) mappings.
+# gdb helper: symbolize Saguaro riscv64 crashes inside private (pal_rtld) mappings.
 #
-# libsysdb.so and the riscv libpal.so are mapped by Gramine's own pal_rtld, so gdb has no
+# libsysdb.so and the riscv libpal.so are mapped by Saguaro's own pal_rtld, so gdb has no
 # symbol files for them; libsysdb also ships no unwind info, so `bt` dies at frame 1. This
 # probe loads the *build-tree* (unstripped, identical .text) copies at their runtime bases
 # and prints a return-address-scanning pseudo-backtrace: every stack qword landing in an

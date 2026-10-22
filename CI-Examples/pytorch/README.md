@@ -24,4 +24,4 @@ saguaro-direct ./pytorch ./pytorchexample.py     # or saguaro-vm, saguaro-sev, s
 cat result.txt          # first entry: Labrador retriever
 ```
 
-`python3 pytorchexample.py` runs the workload without Gramine.
+`python3 pytorchexample.py` runs the workload without Saguaro.

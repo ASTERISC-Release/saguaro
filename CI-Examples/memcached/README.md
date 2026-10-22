@@ -23,4 +23,4 @@ memtier_benchmark --port=11211 --protocol=memcache_binary --hide-histogram
 ```
 
 `make check` starts the server, talks to it and stops it (`make SGX=1`, `make VBS=1` for those backends).
-`make start-native-server` runs Memcached without Gramine.
+`make start-native-server` runs Memcached without Saguaro.

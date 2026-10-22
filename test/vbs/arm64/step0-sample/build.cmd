@@ -1,5 +1,5 @@
 @echo off
-rem Gramine phase-0 spike, step 0: build, protect (veiid) and test-sign the sample enclave and its
+rem Saguaro phase-0 spike, step 0: build, protect (veiid) and test-sign the sample enclave and its
 rem host with explicit compiler and linker commands. Usage: build.cmd [arm64|x64]
 setlocal
 set ARCH=%1

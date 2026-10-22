@@ -139,7 +139,7 @@ QEMU_MACHINE="-machine virt,gic-version=3,highmem-ecam=off"
 # everything that shapes the DTB; the dump and the boot must agree on all of it
 QEMU_SHAPE="-accel $ACCEL -cpu $CPU -m $QEMU_MEM_SIZE -smp $QEMU_CPU_NUM"
 
-# Gramine VM id: names the virtiofs socket (and the vsock guest-cid), so two instances can run
+# Saguaro VM id: names the virtiofs socket (and the vsock guest-cid), so two instances can run
 # side by side. Claimed atomically with mkdir.
 # A lock whose owner is gone (killed -9, e.g. by a test harness timeout) is reclaimed.
 SAGUARO_VM_ID=${SAGUARO_VM_ID_BASE:-10}

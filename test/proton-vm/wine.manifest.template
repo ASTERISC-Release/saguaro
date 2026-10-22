@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 # GE-Proton's 64-bit Wine under saguaro-direct / saguaro-vm (phase 0 (d) of
-# dev docs: proton-vm/PLAN.md): the cheapest end-to-end try, no Gramine changes.
+# dev docs: proton-vm/PLAN.md): the cheapest end-to-end try, no Saguaro changes.
 # The entry point is the `wine` loader itself (WINELOADERNOEXEC=1 stops it from re-executing
 # through wine-preloader, a static binary that maps ld.so by hand); the Proton files and the prefix
 # that `proton run` created natively are reached through the host paths (virtiofs root in the VM).

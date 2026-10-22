@@ -235,7 +235,7 @@ static int build_envs(const char** orig_envp, bool propagate, const char*** out_
         assert(exists);
         if (!env_val && !passthrough) {
             log_error("Detected environment variable '%s' with `passthrough = false`. For security"
-                      " reasons, Gramine doesn't allow this. Please see documentation on"
+                      " reasons, Saguaro doesn't allow this. Please see documentation on"
                       " 'loader.env' for details.", toml_env_key);
             return -PAL_ERROR_DENIED;
         }
@@ -459,7 +459,7 @@ noreturn void pal_main(uint64_t instance_id,       /* current instance id */
         if (!parent_process) {
             /* argv[0] in host cmdline args is the name of manifest, but app expects the entrypoint */
             if (!arguments[0])
-                INIT_FAIL("Gramine started with no arguments, this is unsupported");
+                INIT_FAIL("Saguaro started with no arguments, this is unsupported");
             arguments[0] = argv0_override;
         }
     } else if (manifest_argv_cnt > 0) {

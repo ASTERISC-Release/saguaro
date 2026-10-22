@@ -1,5 +1,5 @@
 @echo off
-rem Gramine x64 phase-0 spike (step g): link enclave objects compiled on Linux by clang
+rem Saguaro x64 phase-0 spike (step g): link enclave objects compiled on Linux by clang
 rem (xcompile.sh) with the MSVC linker, veiid and sign them. Run ..\probe\build.cmd and
 rem ..\elf-in-image\build.cmd first (their ml64 objects and elf_blob.obj are reused), and copy
 rem enclave_clang.obj and elf_enclave_clang.obj into out\ here.

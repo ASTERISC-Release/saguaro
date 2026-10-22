@@ -33,7 +33,7 @@ _fs_base = (
     },
     {
         Required('type'): 'tmpfs',
-        'uri': str, # not _uri, this field is ignored by Gramine
+        'uri': str, # not _uri, this field is ignored by Saguaro
     },
     {
         Required('type'): 'untrusted_shm',

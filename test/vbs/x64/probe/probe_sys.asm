@@ -1,5 +1,5 @@
 ; Copyright (C) 2026 The ASTERISC Research Lab
-; Gramine x64 phase-0 spike: the Linux system call instructions, linked into the enclave only (a
+; Saguaro x64 phase-0 spike: the Linux system call instructions, linked into the enclave only (a
 ; host executable that contains a raw syscall instruction is more likely to be refused by Smart App
 ; Control's reputation check).
 

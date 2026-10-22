@@ -1,9 +1,9 @@
 loader.entrypoint = "file:{{ saguaro.libos }}"
 libos.entrypoint = "{{ entrypoint }}"
 
-# Gramine optionally provides patched OpenMP runtime library that runs faster inside SGX enclaves
+# Saguaro optionally provides patched OpenMP runtime library that runs faster inside SGX enclaves
 # (add `-Dlibgomp=enabled` when configuring the build). This library will replace the native one
-# because Gramine's Runtime path has priority in LD_LIBRARY_PATH.
+# because Saguaro's Runtime path has priority in LD_LIBRARY_PATH.
 
 loader.env.LD_LIBRARY_PATH = "/lib:/usr/{{ arch_libdir }}"
 

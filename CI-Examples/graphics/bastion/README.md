@@ -17,7 +17,7 @@ Backend and display setup: [`../README.md`](../README.md).
 ```sh
 make run-direct      # saguaro-direct on the host GPU with the host's Mesa
 make run             # saguaro-vm (QEMU_PATH exported, see ../README.md)
-make run-native      # without Gramine, with the preload library
+make run-native      # without Saguaro, with the preload library
 ```
 
 ## Notes

@@ -4,7 +4,7 @@
 # SuperTuxKart under saguaro-vm with the Tirith graphics redirection (x86_64). Build the game first
 # with ./install-stk.sh; see dev docs: graphics/ for the host setup.
 
-# The graphics preload library is built and installed with Gramine (-Dgraphics=enabled and a
+# The graphics preload library is built and installed with Saguaro (-Dgraphics=enabled and a
 # VM-type PAL); the manifest refers to it as saguaro.libgraphics.
 GRAPHICS_LIB = $(shell python3 -c "import graminelibos; print(graminelibos._CONFIG_PKGLIBDIR)")/libgraphics.so
 STK_DIR = $(abspath .)
@@ -51,7 +51,7 @@ supertuxkart-startup.manifest: supertuxkart.manifest.template $(STK_BIN) FORCE
 dirs:
 	mkdir -p $(HOME)/.config $(HOME)/.local/share $(HOME)/.cache
 
-# Without Gramine: the preload library presents through its own X connection. Run this once before
+# Without Saguaro: the preload library presents through its own X connection. Run this once before
 # the first VM run; it creates the game's configuration under ~/.config/supertuxkart.
 .PHONY: run-native
 run-native: $(STK_BIN) dirs
@@ -97,7 +97,7 @@ run-direct: supertuxkart-direct.manifest dirs
 run-direct-startup: supertuxkart-direct-startup.manifest dirs
 	saguaro-direct supertuxkart-direct-startup
 
-# The benchmark without Gramine and without the preload library (stock Mesa), for comparison.
+# The benchmark without Saguaro and without the preload library (stock Mesa), for comparison.
 .PHONY: run-native-stock-startup
 run-native-stock-startup: $(STK_BIN) dirs
 	cd $(dir $(STK_BIN)) && SDL_AUDIODRIVER=dummy vblank_mode=0 ./supertuxkart $(STK_STARTUP_ARGS)

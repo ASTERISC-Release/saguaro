@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
 
 /*
- * Regression tests for the credential syscalls under Gramine's single-user model:
+ * Regression tests for the credential syscalls under Saguaro's single-user model:
  * getresuid/getresgid, setresuid/setresgid, setreuid/setregid, setfsuid/setfsgid,
  * capget/capset, and the effect of the filesystem IDs on path permission checks.
  *

@@ -9,7 +9,7 @@
 //
 //*********************************************************
 //
-// Gramine phase-0 spike: host of the probe enclave. The enclave creation sequence follows
+// Saguaro phase-0 spike: host of the probe enclave. The enclave creation sequence follows
 // Microsoft's VbsEnclave sample (MIT). Usage: host.exe <test> [args]; see main().
 
 #include <windows.h>

@@ -9,7 +9,7 @@
 //
 //*********************************************************
 //
-// Gramine phase-0 spike (step h): runs a Linux AArch64 ELF program that was placed into the signed
+// Saguaro phase-0 spike (step h): runs a Linux AArch64 ELF program that was placed into the signed
 // enclave image at build time (elf.asm). The enclave configuration comes from Microsoft's
 // VbsEnclave sample (MIT).
 

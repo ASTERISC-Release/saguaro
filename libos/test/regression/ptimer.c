@@ -5,7 +5,7 @@
  * `timer_getoverrun` and `timer_delete` (the raw syscalls, as the kernel defines them; glibc's
  * `timer_*()` wrappers keep their own user-space bookkeeping around the ids).
  *
- * The signal waits go through `sigwaitinfo()` (a blocking syscall): like every other Gramine
+ * The signal waits go through `sigwaitinfo()` (a blocking syscall): like every other Saguaro
  * signal test, this test must not busy-wait for a signal, because the LibOS delivers pending
  * signals when a thread enters the kernel. */
 

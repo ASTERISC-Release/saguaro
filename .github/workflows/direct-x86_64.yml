@@ -45,7 +45,7 @@ jobs:
         if: ${{ inputs.suites != '' && inputs.suites != 'pal libos' }}
         run: INSTALL_RUSTUP=1 scripts/dependencies.sh
 
-      - name: Build and install Gramine (direct PAL)
+      - name: Build and install Saguaro (direct PAL)
         run: scripts/install.sh --prefix "$SAGUARO_PREFIX"
 
       - name: Check built binaries for writable+executable segments

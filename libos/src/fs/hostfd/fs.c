@@ -10,7 +10,7 @@
  * fds on the host side and LibOS fds on the application side, so this file translates them:
  * an input LibOS fd is replaced by the host fd of its handle for the duration of the call, and an
  * output host fd is wrapped into a new `TYPE_HOSTFD` handle whose LibOS fd is written back.
- * Absolute `CLOCK_MONOTONIC` deadlines (syncobj and amdgpu waits) are moved from Gramine's clock,
+ * Absolute `CLOCK_MONOTONIC` deadlines (syncobj and amdgpu waits) are moved from Saguaro's clock,
  * which is real time, to the host's monotonic clock: otherwise a "has it signaled?" query with a
  * deadline of "now" turns into a wait until the GPU is done.
  *
@@ -204,7 +204,7 @@ static int host_fd_of(int fd) {
     return host_fd;
 }
 
-/* An absolute deadline on Gramine's clock, moved to the host's CLOCK_MONOTONIC. 0 (no wait) and
+/* An absolute deadline on Saguaro's clock, moved to the host's CLOCK_MONOTONIC. 0 (no wait) and
  * INT64_MAX (no deadline) keep their meaning. */
 static int64_t host_deadline(int64_t deadline) {
     if (deadline <= 0 || deadline == INT64_MAX)

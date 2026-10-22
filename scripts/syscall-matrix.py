@@ -325,7 +325,7 @@ def aarch64_intro(native, original_vm, vm, mapped_count, unmapped_count, ctx):
         "\"test only for ix86\" on AArch64. Exit 134 counts as a guest panic even when it is the "
         "test's own abort (`timer_delete01`).", "",
         f"Scope: {len(native)} scenario entries, {mapped_count} mapped and {unmapped_count} "
-        "unmapped. `signal06` is an explicit TCONF under the Gramine loaders because it could "
+        "unmapped. `signal06` is an explicit TCONF under the Saguaro loaders because it could "
         "signal container PID 1. Each loader ran as " + "/".join(shards) + " parallel shards "
         "(`scripts/ltp-sharded.py`; VM shards one guest with one vCPU each), then every non-pass "
         "test was run again serially (one test at a time, one guest); the matrix uses the serial "

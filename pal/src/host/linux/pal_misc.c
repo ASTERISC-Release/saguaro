@@ -44,7 +44,7 @@ int _PalSystemTimeQuery(uint64_t* out_usec) {
     return 0;
 }
 
-/* the host's getrusage(): the Gramine process (RUSAGE_SELF) or the calling host thread
+/* the host's getrusage(): the Saguaro process (RUSAGE_SELF) or the calling host thread
  * (RUSAGE_THREAD); the layout is the kernel's struct rusage */
 int _PalGetCpuTime(bool thread, uint64_t* out_user_us, uint64_t* out_sys_us) {
     struct {

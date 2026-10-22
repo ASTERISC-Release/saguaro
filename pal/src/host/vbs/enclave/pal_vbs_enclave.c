@@ -4,7 +4,7 @@
 /*
  * Enclave side of the Windows VBS-enclave PAL (phase 1 skeleton).
  *
- * This is a signed ARM64 enclave DLL. It is NOT yet wired to Gramine's common PAL sources or the
+ * This is a signed ARM64 enclave DLL. It is NOT yet wired to Saguaro's common PAL sources or the
  * LibOS (that needs the phase-2 packer and loader changes); phase 1 proves the host<->enclave
  * boundary: the PAL entry (E_PalMain ECALL), the Windows<->System-V ABI thunk with x18 preserved,
  * an SEH exception hook, console/time/exit via OCALLs, an RW memory allocator and random.

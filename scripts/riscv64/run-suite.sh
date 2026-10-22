@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
-# run-suite.sh -- run a Gramine regression suite for riscv64 in the test guest.
+# run-suite.sh -- run a Saguaro regression suite for riscv64 in the test guest.
 #
 # Usage (inside the cross container, guest started, build installed and manifests rendered with
 # render-test-manifests.sh):

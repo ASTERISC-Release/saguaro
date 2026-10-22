@@ -358,7 +358,7 @@ long libos_syscall_clone(unsigned long flags, unsigned long user_stack_addr, int
          * which is slow) and apps do not rely on insane Linux-specific semantics of vfork().  */
         log_warning(
             "vfork was called by the application, implemented as an alias to fork in "
-            "Gramine");
+            "Saguaro");
         flags &= ~(CLONE_VFORK | CLONE_VM);
     }
 

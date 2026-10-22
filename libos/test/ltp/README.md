@@ -5,7 +5,7 @@ work on Linux-SGX PAL.
 
 ## Building
 
-- Install Gramine with tests (`-Dtests=enabled`).
+- Install Saguaro with tests (`-Dtests=enabled`).
 - Clone the LTP sources into `src` (`git clone https://github.com/linux-test-project/ltp src`, run
   in `libos/test/ltp/`). `scripts/fetch-ltp.sh` builds the same pinned revision (`da2f3402`) outside
   this directory, under `.ltp-src` and `.ltp-install`; that install is the one the syscall
@@ -49,12 +49,12 @@ re-sign the manifest using `saguaro-test build`.
 necessary, `saguaro-test build -f` will rebuild the manifests from scratch).
 
 You can also use GDB: `GDB=1 saguaro-{direct|sgx} <TEST_BINARY>`. You should
-compile Gramine in debug mode so that you can see the symbols inside Gramine.
+compile Saguaro in debug mode so that you can see the symbols inside Saguaro.
 
 ## `ltp.cfg`
 
-Currently, we run only a subset of tests with Gramine. Many tests are skipped
-because Gramine doesn't yet provide required functionality, or because they're
+Currently, we run only a subset of tests with Saguaro. Many tests are skipped
+because Saguaro doesn't yet provide required functionality, or because they're
 very Linux-specific. The exact configuration (i.e. which LTP tests are skipped)
 is written in `ltp.cfg`.
 
@@ -87,7 +87,7 @@ in the headers (see `signal03` for example).
 Another config file path can be specified by overriding the `LTP_CONFIG`
 environment variable. Run `python3 test_ltp.py` for more options.
 
-A lot of LTP tests cause problems in Gramine. The ones we've already analyzed
+A lot of LTP tests cause problems in Saguaro. The ones we've already analyzed
 should have an appropriate comment in the `ltp.cfg` file.
 
 ## Running all the cases

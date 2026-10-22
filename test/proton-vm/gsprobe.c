@@ -72,7 +72,7 @@ int main(void) {
     setvbuf(stdout, NULL, _IONBF, 0);
     g_teb.self = &g_teb;
 
-    /* where the vDSO is (Gramine's, in a build with the VM PAL, issues `syscall` and never jumps
+    /* where the vDSO is (Saguaro's, in a build with the VM PAL, issues `syscall` and never jumps
      * through %gs: libos/src/vdso/arch/x86_64/meson.build) */
     printf("INFO AT_SYSINFO_EHDR = %p\n", (void*)getauxval(AT_SYSINFO_EHDR));
     long r = raw(SYS_arch_prctl, ARCH_SET_GS, (long)&g_teb, 0);

@@ -5,7 +5,7 @@
  * The device ioctls whose argument carries file descriptors or absolute deadlines, and where in the
  * argument they are. Used by the raw device ioctls of saguaro-direct (fs/hostfd/fs.c) and by the
  * forwarded ioctls of the VM graphics redirection (sys/libos_ioctl.c), which both translate those
- * fields between the application's view (LibOS fds, Gramine's clock) and the host's.
+ * fields between the application's view (LibOS fds, Saguaro's clock) and the host's.
  */
 #pragma once
 
@@ -35,7 +35,7 @@ enum field_kind {
     FD_IN,     /* int32_t LibOS fd, read by the kernel */
     FD_OUT,    /* int32_t host fd, written by the kernel */
     /* int64_t absolute CLOCK_MONOTONIC deadline in ns, read by the kernel. The application computed
-     * it from Gramine's clock (real time), so it is moved to the host's clock for the call. */
+     * it from Saguaro's clock (real time), so it is moved to the host's clock for the call. */
     TIME_ABS,
 };
 

@@ -61,7 +61,7 @@ jobs:
           ls -l /dev/kvm || echo "no /dev/kvm (expected): QEMU runs with TCG"
           uname -r
 
-      - name: Build and install Gramine (aarch64 vm PAL)
+      - name: Build and install Saguaro (aarch64 vm PAL)
         run: scripts/install.sh --vm --prefix "$SAGUARO_PREFIX" -j "$(nproc)"
 
       - name: Smoke test - helloworld under saguaro-vm (TCG)

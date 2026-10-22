@@ -2,7 +2,7 @@
 /* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /* Phase 2 check of the riscv64 port (dev docs: riscv/PLAN.md): the hand-written
- * assembly and inline-asm helpers of the `common/` layer, exercised directly (no Gramine
+ * assembly and inline-asm helpers of the `common/` layer, exercised directly (no Saguaro
  * runtime):
  *
  *   - ct_memequal()   (common/src/arch/<arch>/{ct_memequal.nasm,ct_memequal.S}) against a
@@ -34,7 +34,7 @@
 #include "cpu.h"
 
 /* The two hand-written assembly entry points (declared, not included, to keep this driver
- * out of the api.h/log.h dependency web: nothing here may pull Gramine's logging in). */
+ * out of the api.h/log.h dependency web: nothing here may pull Saguaro's logging in). */
 bool ct_memequal(const void* lhs, const void* rhs, size_t count);
 void probe_stack(size_t pages_count);
 
@@ -198,7 +198,7 @@ static void test_rdrand(void) {
     check(differs, "rdrand produces distinct values");
 
     /* x86_64's RDRAND must also have set the carried value sanely on other archs; all we
-     * promise anywhere in Gramine is "some bits came out", checked by 1000 calls not
+     * promise anywhere in Saguaro is "some bits came out", checked by 1000 calls not
      * crashing and being observed changing above. */
 }
 

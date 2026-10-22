@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Copyright (C) 2026 The ASTERISC Research Lab
-"""Gramine x64 phase-0 spike (step h): write the two PT_LOAD segments of app.elf into elf_blob.c as
+"""Saguaro x64 phase-0 spike (step h): write the two PT_LOAD segments of app.elf into elf_blob.c as
 arrays in an executable read-only section (.gxelft, padded to a fixed 64 KiB so that the image
 layout does not depend on the program) and a writable section (.gxelfd); check that the program
 needs no relocation; write the entry offsets of _start and _start_ms into elf_blob.h."""

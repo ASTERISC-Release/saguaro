@@ -24,7 +24,7 @@
 #                    The other suites run under saguaro-direct in either case.
 #
 # The script is architecture-neutral and also runs on x86_64 for parity
-# testing, given a Gramine install built for that host (set SAGUARO_PREFIX to
+# testing, given a Saguaro install built for that host (set SAGUARO_PREFIX to
 # point at it). Example binaries/manifests are per-arch build artifacts; if an
 # example binary is missing, foreign-arch, or its manifest embeds the other
 # arch's triple, the script rebuilds it via that example's own Makefile.
@@ -177,7 +177,7 @@ ensure_example() {
     else
         local libos
         if libos=$(drop_stale_manifest "$dir/$man"); then
-            need="manifest $1/$man was rendered for another Gramine install or libc mode ($libos)"
+            need="manifest $1/$man was rendered for another Saguaro install or libc mode ($libos)"
         fi
     fi
     if [ -n "$need" ]; then
@@ -207,7 +207,7 @@ kill_strays() {
     # (comm "loader"), after re-exec (comm "exe", cmdline ".../direct/loader ..."),
     # and forked host processes of fork()-using apps like nginx (comm "libpal.so",
     # cmdline ".../direct/libpal.so ..."). pkill -x demonstrably missed the latter
-    # two families in battery runs, so match the Gramine-specific command lines
+    # two families in battery runs, so match the Saguaro-specific command lines
     # (bracketed so this script's own text can never match the patterns it runs).
     pkill -9 -x loader 2>/dev/null
     pkill -9 -f "/saguaro/direct/[l]oader " 2>/dev/null
@@ -273,7 +273,7 @@ run_pytest() {
     return $rc
 }
 
-echo "=== Gramine $HOST_ARCH test battery — suites: ${RUN[*]} ==="
+echo "=== Saguaro $HOST_ARCH test battery — suites: ${RUN[*]} ==="
 
 for suite in "${RUN[@]}"; do
 echo
@@ -447,7 +447,7 @@ sqlite)
     ;;
 
 python)
-    # run-tests.sh (via `make check`): helloworld, HTTP server + Gramine client +
+    # run-tests.sh (via `make check`): helloworld, HTTP server + Saguaro client +
     # host-wget round-trip equality on 8005, numpy dot, scipy cholesky. Uses the host
     # python3; numpy/scipy may be distro packages or a pip --user install (the manifest
     # re-adds the user site directory via loader.env.PYTHONPATH because the guest
@@ -460,7 +460,7 @@ python)
     # `make` does not render an existing manifest again, so one left by a run against another
     # install (for example the VM examples script) would make saguaro-direct load that LibOS.
     if stale=$(drop_stale_manifest "$REPO/CI-Examples/python/python.manifest"); then
-        echo "  python.manifest was rendered for another Gramine install or libc mode ($stale); rendering it again"
+        echo "  python.manifest was rendered for another Saguaro install or libc mode ($stale); rendering it again"
     fi
     ( cd "$REPO/CI-Examples/python" && make >/dev/null 2>&1
       timeout -s KILL 900 make check >"$LOGDIR/python.log" 2>&1 )

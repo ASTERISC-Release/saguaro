@@ -34,7 +34,7 @@ class TestConfig:
       tests)
 
     - `binary_dir`: path to test binaries, passed as `binary_dir` to manifest templates; expands
-      @GRAMINE_PKGLIBDIR@ to library directory of Gramine's installation
+      @GRAMINE_PKGLIBDIR@ to library directory of Saguaro's installation
 
     - `libc`: name of the libc to build against, currently supported: 'glibc' (default), 'musl'
 

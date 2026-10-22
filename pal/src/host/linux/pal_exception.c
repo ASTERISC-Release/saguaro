@@ -100,7 +100,7 @@ static void handle_sync_signal(int signum, siginfo_t* info, struct ucontext* uc)
         is_seccomp_trap = true;
         if (FIRST_TIME()) {
             log_always("Emulating a raw system/supervisor call. This degrades performance, consider"
-                       " patching your application to use Gramine syscall API.");
+                       " patching your application to use Saguaro syscall API.");
         }
     }
 
@@ -119,7 +119,7 @@ static void handle_sync_signal(int signum, siginfo_t* info, struct ucontext* uc)
          * above, by ucontext_revert_syscall(), to restore context->pc to it). Passing the raw,
          * unrelated si_addr in this case made illegal_upcall()'s lookup_vma(addr) look up the
          * wrong (effectively arbitrary) address, almost always failing to find a VMA and thus
-         * treating a perfectly ordinary guest syscall as fatal "Gramine internal" corruption --
+         * treating a perfectly ordinary guest syscall as fatal "Saguaro internal" corruption --
          * latent on every architecture, but only ever exercised on one that (like aarch64's
          * Milestone A, with no patched libc) actually relies on this seccomp-trap emulation path
          * for ordinary syscalls rather than hitting it in rare corner cases. `rip` above is

@@ -27,7 +27,7 @@
  * applications must not print a Bogomips line either (see libos/src/arch/riscv64/fs_proc/info.c).
  *
  * Only the *first* hart's block is consulted: heterogeneous SoCs exist (SiFive, Spacemit), and
- * Gramine's contract with the application is one coherent CPU description, so the boot hart's
+ * Saguaro's contract with the application is one coherent CPU description, so the boot hart's
  * answer is what every vCPU reports -- the same choice the kernel itself makes for cpu0.
  */
 

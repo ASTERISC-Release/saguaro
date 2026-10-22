@@ -46,7 +46,7 @@ header() {
     say "cpu:     ${model:--} x$NCPU  (vendor: $(lscpu | sed -n 's/^Vendor ID:[[:space:]]*//p' | head -1))"
     say "mem:     $(awk '/MemTotal/ {printf "%.1f GiB", $2/1048576}' /proc/meminfo)"
     say "os:      $(. /etc/os-release; echo "$PRETTY_NAME")"
-    say "gramine: direct PAL (syscall-site rewriting per the manifest default unless noted)"
+    say "saguaro: direct PAL (syscall-site rewriting per the manifest default unless noted)"
     say "--------------------------------------------------------------"
 }
 

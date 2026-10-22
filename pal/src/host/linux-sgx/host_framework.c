@@ -155,7 +155,7 @@ bool is_wrfsbase_supported(void) {
     if (!(cpuinfo[1] & 0x1)) {
         log_error(
             "{RD,WR}{FS,GS}BASE instructions are not permitted on this platform. Please check the "
-            "instructions under \"Building with SGX support\" from Gramine documentation.");
+            "instructions under \"Building with SGX support\" from Saguaro documentation.");
         return false;
     }
 

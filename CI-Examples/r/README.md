@@ -26,4 +26,4 @@ saguaro-direct ./R --slave --vanilla -f scripts/R-benchmark-25.R
 
 ## Notes
 
-- R needs `--vanilla` or `--no-save` under Gramine.
+- R needs `--vanilla` or `--no-save` under Saguaro.

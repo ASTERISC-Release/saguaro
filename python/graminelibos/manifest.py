@@ -7,7 +7,7 @@
 #                    Wojtek Porczyk <woju@invisiblethingslab.com>
 
 """
-Gramine manifest management and rendering
+Saguaro manifest management and rendering
 """
 
 import errno

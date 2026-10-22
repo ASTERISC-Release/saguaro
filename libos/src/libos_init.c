@@ -380,7 +380,7 @@ noreturn void libos_init(const char* const* argv, const char* const* envp) {
     call_init_array();
 
     extern const char g_gramine_commit_hash[];
-    log_debug("Gramine was built from commit: %s", g_gramine_commit_hash);
+    log_debug("Saguaro was built from commit: %s", g_gramine_commit_hash);
 
     log_debug("Host: %s", g_pal_public_state->host_type);
 

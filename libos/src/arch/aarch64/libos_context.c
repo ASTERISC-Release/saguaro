@@ -144,14 +144,14 @@ bool aarch64_signal_frame_fits(PAL_CONTEXT* context, bool should_use_altstack) {
  * frame and points LR at it -- verified empirically on a native arm64 box: LR inside a plain
  * handler holds the frame's address and its first words are exactly 0xd2801168/0xd4000001.
  * The arm64 glibc correspondingly does *not* inject a restorer the way the x86_64 glibc
- * sigaction() wrapper does (whose `sa_restorer` points into libc .text and which Gramine x86
- * faithfully uses) -- Gramine's aarch64 port inherited that mechanism-less design and so set
+ * sigaction() wrapper does (whose `sa_restorer` points into libc .text and which Saguaro x86
+ * faithfully uses) -- Saguaro's aarch64 port inherited that mechanism-less design and so set
  * LR to NULL: every delivered guest handler executed `ret` to address 0. That single gap
  * accounts for the signal-cluster test failures (itimer, sigaltstack, sigprocmask_pending,
  * sighandler_sigpipe, syscall_restart test 2, ...).
  * We provide the same trampoline in libsysdb's own executable .text rather than inside the
  * frame: the arm64 kernel writes it in-frame only because its page mapping is already
- * executable for the stack; Gramine's guest stacks are non-executable and making them
+ * executable for the stack; Saguaro's guest stacks are non-executable and making them
  * executable per signal (or in general) would be a real security regression for zero benefit.
  * Execution happens with the application's live SP, which is all `rt_sigreturn` actually
  * consumes (same as the real kernel's trampoline: the instructions' own address is never
@@ -394,8 +394,8 @@ bool maybe_emulate_syscall(PAL_CONTEXT* context) {
  * thread's getcontext() snapshot with swapcontext() -- die with SIGILL even on native
  * Linux; keys do not travel outside fork()).
  *
- * Gramine emulates fork() without a host fork(): the child's register state is checkpointed
- * and later resumed by `return_from_syscall()` on a Gramine host thread -- architecturally
+ * Saguaro emulates fork() without a host fork(): the child's register state is checkpointed
+ * and later resumed by `return_from_syscall()` on a Saguaro host thread -- architecturally
  * the swapcontext case above, so every subsequent `autiasp` in the child authenticates a
  * pre-fork signature against different per-task keys and kills the application (this is
  * invisible in locally-built test binaries unless they too are compiled with branch
@@ -409,7 +409,7 @@ bool maybe_emulate_syscall(PAL_CONTEXT* context) {
  *
  * The repair is intentionally narrow: only the two SP-modifier encodings gcc/clang emit
  * for pac-ret (they differ in one bit selecting APIA vs APIB; both authenticate x30), and
- * only on the app-delivery path of `illegal_upcall()` -- Gramine-internal SIGILLs stay
+ * only on the app-delivery path of `illegal_upcall()` -- Saguaro-internal SIGILLs stay
  * fatal and SIGILLs at any other instruction are delivered to the application unchanged.
  */
 bool libos_arch_repair_illegal_insn(PAL_CONTEXT* context) {
@@ -437,15 +437,15 @@ bool libos_arch_repair_illegal_insn(PAL_CONTEXT* context) {
 }
 
 bool libos_arch_is_intentional_internal_insn(uintptr_t addr) {
-    /* One Gramine-internal `svc` site is intentional: the restorer trampoline that
+    /* One Saguaro-internal `svc` site is intentional: the restorer trampoline that
      * prepare_sigframe() installs as every guest signal handler's return address lives in
      * libsysdb's own text (there's no SA_RESTORER-style libc restorer to point at on this
      * architecture -- see rt_sigreturn_trampoline()'s comment in arch/aarch64/libos_context.c).
      * The trap's PC is already reverted to the trapping instruction (see the SIGSYS rip fix
      * in the PAL), so whitelist precisely: address of the `svc` word inside the trampoline,
      * discovered by checking the trampoline's own second word rather than hardcoding an
-     * instruction-size offset. Anything else in Gramine-internal memory taking an illegal
-     * instruction remains a Gramine bug. */
+     * instruction-size offset. Anything else in Saguaro-internal memory taking an illegal
+     * instruction remains a Saguaro bug. */
     void* tramp = libos_rt_sigreturn_trampoline_addr();
     return addr >= (uintptr_t)tramp && addr < (uintptr_t)tramp + 16
            && ((uint32_t*)addr)[0] == 0xd4000001 /* svc #0 */;

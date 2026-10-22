@@ -13,7 +13,7 @@
  *
  * FP access must be enabled at EL1 *and* EL0 (CPACR_EL1.FPEN) before any FP instruction can
  * execute; that is the role of xsave_init(). (QEMU virt and Cortex-A cores trap EL0 FP to EL1
- * when FPEN=0; Gramine's vm kernel would then have to emulate, so we simply never disable it.)
+ * when FPEN=0; Saguaro's vm kernel would then have to emulate, so we simply never disable it.)
  */
 
 #include <stdint.h>

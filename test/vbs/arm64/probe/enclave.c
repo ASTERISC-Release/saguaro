@@ -9,7 +9,7 @@
 //
 //*********************************************************
 //
-// Gramine phase-0 spike: the probe enclave. The enclave configuration and DLL skeleton come from
+// Saguaro phase-0 spike: the probe enclave. The enclave configuration and DLL skeleton come from
 // Microsoft's VbsEnclave sample (MIT); the probes are new. Every export takes a PROBE_IO pointer in
 // host memory and writes its results there.
 

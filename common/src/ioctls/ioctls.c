@@ -18,7 +18,7 @@ static int copy_value_to_uint64(void* addr, size_t size, uint64_t* out_value) {
 
 #if defined(__x86_64__) || defined(__aarch64__) || (defined(__riscv) && __riscv_xlen == 64)
     /* the copy below assumes little-endian machines (x86_64, aarch64 and riscv64 all are, in the
-     * configurations Gramine targets) */
+     * configurations Saguaro targets) */
     *out_value = 0;
     memcpy(out_value, addr, size);
     return 0;

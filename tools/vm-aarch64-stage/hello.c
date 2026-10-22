@@ -53,7 +53,7 @@ int main(int argc, char** argv) {
     /* Opaque NULL (the compiler cannot fold `argc < 0`): a plain store + real continuation, no
      * constant-NULL trap folding (see bad_addr's comment). */
     bad_addr = argc < 0 ? (volatile int*)&counter : NULL;
-    printf("Hello world from Gramine VM-PAL on aarch64!\n");
+    printf("Hello world from Saguaro VM-PAL on aarch64!\n");
     fflush(stdout);
 
     /* B3/B4 acceptance: spend some time executing in EL0 so the 100ms periodic timer tick

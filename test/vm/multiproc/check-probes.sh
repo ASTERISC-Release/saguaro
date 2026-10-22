@@ -85,7 +85,7 @@ check() {
             return 0
         fi
         echo "--- $name: output (filtered of VM launcher lines; full log $log)"
-        grep -v -e '^Configuring Gramine VM' -e '^REM_MEM_SIZE' -e '^\[boot\]' -e 'self-check' \
+        grep -v -e '^Configuring Saguaro VM' -e '^REM_MEM_SIZE' -e '^\[boot\]' -e 'self-check' \
             -e '^(PAL) Physical' -e 'rame pool' -e '^vm-relay' "$log" | tail -n 40
         cp "$log" "$log.$try"
         [ "$RERUN" = 1 ] || break

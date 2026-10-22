@@ -56,9 +56,9 @@ static_assert(offsetof(PAL_TCB, stack_protector_canary) == 0x8,
  * Same design as the aarch64 port (see findings #9, #12 and #13 in
  * dev docs: aarch64/direct/FINDINGS.md): the thread pointer belongs to the
  * application's libc, so PAL_TCB is reached through (in order) a tagged-`tp` fast path for
- * Gramine's own internal threads, the per-thread PAL_TCB registry keyed by the application TLS
+ * Saguaro's own internal threads, the per-thread PAL_TCB registry keyed by the application TLS
  * pointer, and finally this process-wide global `g_pal_tcb_singleton` -- the correct fallback for
- * exactly the one thread that runs the application (whose own libc plants `tp` with no Gramine
+ * exactly the one thread that runs the application (whose own libc plants `tp` with no Saguaro
  * hook to register it).
  */
 /*
@@ -106,7 +106,7 @@ bool libos_tcb_registry_scan(PAL_TCB** out_tcb);
  * long as a thread's own `tp` still holds what pal_set_tcb() put there (tagged with bit 0 set --
  * real PAL_TCB pointers are always at least 8-byte aligned, so that bit is otherwise always 0),
  * reading it back directly gives that exact thread's own PAL_TCB with no cross-thread
- * interference at all. That covers Gramine's own internal threads (the IPC worker, the async
+ * interference at all. That covers Saguaro's own internal threads (the IPC worker, the async
  * worker) completely: they never run application code, so nothing else ever touches their `tp`
  * after pal_set_tcb() sets it.
  *
@@ -186,7 +186,7 @@ static inline PAL_TCB* pal_get_tcb(void) {
  * registry: the thread's application TLS pointer (`tp`, installed by set_tls() for clone/fork
  * children -- which register themselves right there) keys its own PAL_TCB. A scan miss can only
  * be the main thread -- the one thread whose TLS pointer its own libc (ld.so's TLS setup or
- * static startup's) plants directly, with no Gramine hook to register it -- so for the miss path
+ * static startup's) plants directly, with no Saguaro hook to register it -- so for the miss path
  * the g_pal_tcb_singleton fallback *is* the correct answer, and we lazily self-register the main
  * thread so later scans hit (idempotent: same key + same TCB; concurrent first syscalls from
  * several never-registered threads cannot occur for the reasons above). The GOT-indirect read of
@@ -248,7 +248,7 @@ static inline void pal_tcb_singleton_snapshot_before_user_entry(void) {
 
 /* Called by _PalThreadExit() as the last moment this thread's own PAL_TCB is needed (it was
  * resolved through the registry just before): drop the thread's registry entry, which is keyed by
- * its app TLS pointer. Tagged (Gramine-internal) threads have no registry entry, so they are
+ * its app TLS pointer. Tagged (Saguaro-internal) threads have no registry entry, so they are
  * skipped. */
 static inline void pal_arch_thread_exit_release_tcb(PAL_TCB* tcb) {
     uintptr_t exit_tp;
@@ -295,7 +295,7 @@ struct pal_cpu_info {
  * the 32-bit fcsr) at that fixed offset whenever F/D are present, which on lp64d is always. Only
  * the *optional* vector state uses the extensible `__riscv_ctx_hdr` {magic, size} scheme
  * (RISCV_V_MAGIC record appended after it). So PAL_FPSTATE here is a plain mirror of the d-state
- * -- dictated by the kernel ABI, not a Gramine design choice -- and there is no record header to
+ * -- dictated by the kernel ABI, not a Saguaro design choice -- and there is no record header to
  * carry. Vector state is out of scope for now (see dev docs: riscv/PLAN.md decisions);
  * when it is added, `context->fpregs` keeps aliasing the d-state and the V record rides along
  * untouched inside the frame.
@@ -321,14 +321,14 @@ typedef struct {
  * aarch64's regs[31]+sp+pc layout, sp lives in regs[2] (riscv has no separate stack-pointer
  * save/restore instruction to justify carving it out), and `pc`/`pstate` stay as separate fields
  * for shape parity with the other architectures: `pstate` has no architectural counterpart on
- * riscv64 (there are no condition-code flags) and exists purely as a Gramine-internal tag holder
+ * riscv64 (there are no condition-code flags) and exists purely as a Saguaro-internal tag holder
  * (see PAL_PSTATE_EXACT_CONTEXT below).
  */
 struct PAL_CONTEXT {
     uint64_t regs[32]; /* x0..x31; x0 is architecturally zero, regs[10] carries the return value,
                           regs[17] the syscall number on entry */
     uint64_t pc;
-    uint64_t pstate;   /* Gramine-internal flags only (no riscv64 condition flags exist) */
+    uint64_t pstate;   /* Saguaro-internal flags only (no riscv64 condition flags exist) */
     uint64_t fault_address; /* from siginfo's si_addr; riscv64 sigcontext carries no faulting
                                address (no FAR-equivalent), see handle_sync_signal's addr arg */
     uint64_t esr;           /* reserved, always 0: no exception-syndrome-register equivalent */
@@ -369,7 +369,7 @@ typedef struct PAL_CONTEXT PAL_CONTEXT;
  * (the breakpoint exception), exactly like aarch64's `brk`.
  *
  * Contexts that came from the host (ucontext_to_pal_context()) are tagged with
- * PAL_PSTATE_EXACT_CONTEXT in `pstate` (a Gramine-only field on riscv64, so no RES0 games needed);
+ * PAL_PSTATE_EXACT_CONTEXT in `pstate` (a Saguaro-only field on riscv64, so no RES0 games needed);
  * contexts built by the syscall-entry path have pstate == 0 and keep the fast path.
  */
 #define PAL_PSTATE_EXACT_CONTEXT (1ULL << 62)

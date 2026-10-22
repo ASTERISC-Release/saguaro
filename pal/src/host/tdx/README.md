@@ -16,11 +16,11 @@
 
 - Ring-3 / ring-0 separation
 
-- GS segment register is used by Gramine kernel to store a software threads's
+- GS segment register is used by Saguaro kernel to store a software threads's
   TCB, assumed to never be used by user app (FS segment register is used by user
   app for its software thread's TCB/TLS)
 
-- GS-KERNEL segment register is used by Gramine kernel to store per-CPU
+- GS-KERNEL segment register is used by Saguaro kernel to store per-CPU
   information, such as the interrupt stack and XSAVE area addresses
 
 - Paging: flat single shared address space, no switching, all pages always
@@ -61,7 +61,7 @@
     from e.g. a file)
 
 - Files: shared root directory, uses virtio-fs driver
-  - on the host side, Gramine starts `virtiofsd --shared-dir /`
+  - on the host side, Saguaro starts `virtiofsd --shared-dir /`
 
 - Networking: uses virtio-vsock driver
   - may need to load the Linux kernel module: `sudo modprobe vhost_vsock`

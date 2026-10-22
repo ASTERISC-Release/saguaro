@@ -1,4 +1,4 @@
-; Gramine phase-0 spike (step h): the two segments of the Linux program (linux/app.elf), placed
+; Saguaro phase-0 spike (step h): the two segments of the Linux program (linux/app.elf), placed
 ; into the enclave image at build time: the text segment (ELF headers, .text, .rodata) in an
 ; executable read-only section, the data segment (.data, .bss) in a writable section that the
 ; linker is expected to place directly after it (checked at run time).

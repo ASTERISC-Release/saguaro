@@ -5,11 +5,11 @@
  * System V shared memory (shmget/shmat/shmctl/shmdt).
  *
  * Each segment is backed by a host file (the same /dev/shm-then-/tmp backing as `memfd_create`,
- * see `libos_memfd.c`), unlinked at creation so a killed Gramine process leaves no file behind.
+ * see `libos_memfd.c`), unlinked at creation so a killed Saguaro process leaves no file behind.
  * `shmat()` maps that file `MAP_SHARED` through the ordinary `mmap` path, so two attaches of the
  * same segment share pages inside one process, and — on the direct PAL, whose `fork` is a host
  * fork — with the process's children too, since both map the same host file. Segment bookkeeping
- * (the id table) is process-local: a separate Gramine process starts with an empty table, so the
+ * (the id table) is process-local: a separate Saguaro process starts with an empty table, so the
  * key namespace and the permissions of `shmctl` are only enforced within one process tree. This
  * matches how the System V semaphores are emulated (`libos_sem.c`) and is recorded in
  * dev docs: libos-syscalls/TODO.md.

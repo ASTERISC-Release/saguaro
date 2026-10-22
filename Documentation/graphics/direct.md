@@ -13,7 +13,7 @@ a TCP relay), and host symlinks for libdrm's sysfs queries. The LibOS translates
 between the application's view and the host's: file descriptors inside DRM, dma-buf and sync-file
 ioctl arguments (prime handles, syncobjs, sync files) become LibOS handles, and absolute
 `CLOCK_MONOTONIC` deadlines inside syncobj and fence waits are moved to the host's clock, since
-Gramine's clock is real time. Stock Mesa with DRI3 is the default; the `libgraphics.so` preload
+Saguaro's clock is real time. Stock Mesa with DRI3 is the default; the `libgraphics.so` preload
 library of the VM route also works here (`PRELOAD=1`) and presents through its own X connection.
 NVIDIA's proprietary driver works through the same keys with its own device nodes.
 

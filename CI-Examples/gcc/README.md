@@ -1,6 +1,6 @@
 # GCC
 
-Runs the system `gcc` (with `as`, `cc1`, `collect2`, `ld`) inside Gramine to compile three sample programs (`test_files/`).
+Runs the system `gcc` (with `as`, `cc1`, `collect2`, `ld`) inside Saguaro to compile three sample programs (`test_files/`).
 
 ## Prerequisites
 

@@ -1233,7 +1233,7 @@ int PalHostUnixConnect(const char* path, pal_stream_options_t options, PAL_HANDL
 /*!
  * \brief Read the host's `CLOCK_MONOTONIC`.
  *
- * Gramine's own clocks (#PalSystemTimeQuery) are all real time; device interfaces that take
+ * Saguaro's own clocks (#PalSystemTimeQuery) are all real time; device interfaces that take
  * absolute `CLOCK_MONOTONIC` deadlines (DRM syncobj waits) need the host's clock instead.
  *
  * \param[out] out_nsec  Nanoseconds.

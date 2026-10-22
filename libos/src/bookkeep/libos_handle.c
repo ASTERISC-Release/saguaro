@@ -111,7 +111,7 @@ int init_exec_handle(const char* const* argv, char*** out_new_argv) {
     if (strstartswith(exec_path, URI_PREFIX_FILE)) {
         /* Technically we could skip this check, but it's something easy to confuse with
          * loader.entrypoint, so better to have this handled nicely for the users. */
-        log_error("'libos.entrypoint' should be an in-Gramine path, not URI.");
+        log_error("'libos.entrypoint' should be an in-Saguaro path, not URI.");
         ret = -EINVAL;
         goto out;
     }

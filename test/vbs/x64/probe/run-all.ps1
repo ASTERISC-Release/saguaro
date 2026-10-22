@@ -1,5 +1,5 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
-# Gramine x64 phase-0 spike: run every probe test (after build.cmd) and keep each output in
+# Saguaro x64 phase-0 spike: run every probe test (after build.cmd) and keep each output in
 # results\<test>.txt; the contention test starts many fsspin processes at once.
 # Usage: powershell -NoProfile -ExecutionPolicy Bypass -File run-all.ps1 [-Only name,name] [-Procs 24]
 param([string[]]$Only = @(), [int]$Procs = 24)

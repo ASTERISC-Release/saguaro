@@ -47,7 +47,7 @@ jobs:
           podman --version
           container/run.sh --target riscv64 'riscv64-linux-gnu-gcc --version | head -1; qemu-system-riscv64 --version | head -1'
 
-      - name: Cross-build and install Gramine (direct PAL, riscv64)
+      - name: Cross-build and install Saguaro (direct PAL, riscv64)
         run: |
           container/run.sh --target riscv64 \
             'scripts/install.sh --target riscv64 --prefix "$PWD/build-riscv64/prefix" -j "$(nproc)"'

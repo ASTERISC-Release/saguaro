@@ -8,7 +8,7 @@ prefix=${SAGUARO_PREFIX:-"$HOME/.local/saguaro-vm"}
 ltp_root=${LTP_PREFIX:-"$repo_root/.ltp-install"}
 test_dir="$repo_root/libos/test/ltp"
 # LTP_HARNESS_DIR: build the manifests in another directory, a copy of libos/test/ltp's harness
-# files, for a second Gramine install whose manifests differ (on aarch64 the direct PAL and the vm
+# files, for a second Saguaro install whose manifests differ (on aarch64 the direct PAL and the vm
 # PAL are separate installs, each rendering its own libsysdb.so path into the manifests).
 harness_dir=${LTP_HARNESS_DIR:-"$test_dir"}
 if [[ "$(realpath -m "$harness_dir")" != "$test_dir" ]]; then
@@ -22,7 +22,7 @@ fi
     exit 1
 }
 [[ -x "$prefix/bin/saguaro-test" ]] || {
-    echo "Gramine test tools not installed under $prefix" >&2
+    echo "Saguaro test tools not installed under $prefix" >&2
     exit 1
 }
 if [[ -e "$test_dir/install" && ! -L "$test_dir/install" ]]; then
