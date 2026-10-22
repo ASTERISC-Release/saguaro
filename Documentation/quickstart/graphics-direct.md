@@ -76,7 +76,7 @@ Vulkan programs run as they are, on the host's Vulkan drivers:
 - **Which GPU (x86_64)**: Mesa renders on the X server's GPU. `DRI_PRIME=pci-0000_03_00_0` (the
   name from `ls /dev/dri/by-path`) selects another one; the manifests pass the host
   environment.
-- **NVIDIA (AArch64)**: the driver passes file descriptors inside its ioctls; Gramine translates
+- **NVIDIA (AArch64)**: the driver passes file descriptors inside its ioctls; Saguaro translates
   the ones of the driver's known ioctls (and those the X server sends back) to the application's
   own files, but does not check the requests themselves. The driver ignores `vblank_mode`; the
   manifests set `__GL_SYNC_TO_VBLANK=0`.

@@ -29,7 +29,7 @@ All the requirements from [VM quickstart](vm.md) apply, and:
 # 1. Build and install
 
 The container is opened as in [direct.md](direct.md), section 1. Two steps build the SEV tools and
-Gramine. QEMU 11.1.2 with `sev-snp-guest` and IGVM (including a local patch for plain SEV),
+Saguaro. QEMU 11.1.2 with `sev-snp-guest` and IGVM (including a local patch for plain SEV),
 `snpguest`, `sevctl` and `sev-snp-measure` are built once into `sev-tools/`, next to the checkout
 (it survives the recreation of the container):
 

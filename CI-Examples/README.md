@@ -1,7 +1,7 @@
 # Example Integrations
 
 This folder contains application integration examples. Each subdirectory has a `README.md` with
-instructions to build and run the application under Gramine.
+instructions to build and run the application under Saguaro.
 
 # Testing
 

@@ -111,8 +111,8 @@ a build directory of its own, for the patched glibc. On aarch64 the direct PAL n
 `container/run.sh` is the single entry point. It detects the machine's architecture, builds the
 matching image if it is missing or its Containerfile changed, creates a long-lived container and opens a
 shell in it. The repository is mounted at `/root/<checkout folder>` (`/root/saguaro` for a
-checkout named `saguaro`); builds and install prefixes live
-in the container's home. You need `podman`, and for `gramine-vm` a native host of the same
+checkout named `saguaro`, as `git clone git@github.com:ASTERISC-Release/saguaro.git` makes); builds
+and install prefixes live in the container's home. You need `podman`, and for `gramine-vm` a native host of the same
 architecture with `/dev/kvm`.
 
     container/run.sh                      # shell in the container for this machine

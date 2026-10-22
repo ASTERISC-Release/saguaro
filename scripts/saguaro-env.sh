@@ -4,7 +4,7 @@
 # Shared environment for the test/benchmark/stress scripts (source this file; do not execute it).
 #
 # Inputs (environment):
-#   SAGUARO_PREFIX   install prefix of the Gramine build under test (default: ~/.local/saguaro)
+#   SAGUARO_PREFIX   install prefix of the Saguaro build under test (default: ~/.local/saguaro)
 #   LOGDIR           where scripts write per-test logs (default: ${TMPDIR:-/tmp}/saguaro-tests)
 #
 # Effects: puts $SAGUARO_PREFIX/bin on PATH and the prefix's python site-packages on PYTHONPATH

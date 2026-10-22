@@ -13,7 +13,7 @@ they say that they run on the host.
 ## SGX
 
 `gramine-sgx` runs an unmodified application in an Intel SGX enclave. The enclave is built and
-signed from the application's manifest; the Gramine runtime, the library OS and the application are
+signed from the application's manifest; the Saguaro runtime, the library OS and the application are
 measured into it.
 
 ### Requirements
@@ -52,7 +52,7 @@ Log in again so that the group applies, then check:
     is-sgx-available
 
 `container/run.sh` passes `/dev/sgx_enclave` and `/dev/sgx_provision` into the container, bound with
-the `exec` option (Gramine maps the enclave device with `PROT_EXEC`). `scripts/install.sh --sgx` has its own build
+the `exec` option (Saguaro maps the enclave device with `PROT_EXEC`). `scripts/install.sh --sgx` has its own build
 directory and prefix, so it does not touch a direct install. On a host with SGX2 and flexible launch
 control, `is-sgx-available` prints, among others:
 
@@ -102,7 +102,7 @@ In a fresh container, `blender`, `mongodb`, `nodejs`, `openjdk` and `r` first st
   Recreate the container with `container/run.sh down` on the host, then repeat section 2 (the install inside it is discarded).
 - `no read/write access to /dev/sgx_enclave (group sgx)`: the user is not in the `sgx` group (section 1).
 - `error: Permission denied on mapping enclave. You may need to set sysctl vm.mmap_min_addr to zero`,
-  `Allocation of EPC memory failed: Operation not permitted (EPERM)`: Gramine's message for any `EPERM`
+  `Allocation of EPC memory failed: Operation not permitted (EPERM)`: Saguaro's message for any `EPERM`
   of the `PROT_EXEC` mapping of `/dev/sgx_enclave`. In a rootless container it was the `noexec` mount that
   `--device` gives the node; the container of this `container/run.sh` binds it with `exec`. Check
   `findmnt -T /dev/sgx_enclave` in the container (no `noexec`), and recreate a container that was created earlier.

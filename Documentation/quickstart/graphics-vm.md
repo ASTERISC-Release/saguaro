@@ -44,7 +44,7 @@ If the container already existed without `DISPLAY` or without the fork, recreate
 
 A window with the gears opens; the program prints a frame-rate report once a minute. Stop it with
 Ctrl-C. `gramine-vm` starts and stops the X relay (`socat`) by itself. `make run-native` runs
-the same preload library without the VM, to tell a GPU problem from a Gramine one.
+the same preload library without the VM, to tell a GPU problem from a Saguaro one.
 
 ## 3. Quake II (OpenGL and Vulkan)
 

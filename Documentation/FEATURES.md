@@ -1,6 +1,6 @@
 # Features
 
-What this tree adds to [gramine-tdx](https://github.com/gramineproject/gramine-tdx) (Intel's Gramine
+What Saguaro adds to [gramine-tdx](https://github.com/gramineproject/gramine-tdx) (Intel's Gramine
 with TDX and virtual-machine backends). One or two lines each; the plan, log,
 open items and test results of every feature are in the development notes (a private repository),
 under the topic named at its end (`dev docs: <topic>`).

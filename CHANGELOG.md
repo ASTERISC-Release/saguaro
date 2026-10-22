@@ -1,6 +1,6 @@
 # Changelog
 
-This tree extends [gramine-tdx](https://github.com/gramineproject/gramine-tdx), the Intel TDX and
+Saguaro extends [gramine-tdx](https://github.com/gramineproject/gramine-tdx), the Intel TDX and
 virtual-machine fork of Gramine, with additional platform adaptation layers (PALs), architectures and
 tooling. This document lists what the tree adds, grouped by area. Each area states the contribution, the
 design decisions that matter, the findings worth recording, how to use it and its limits. Status words: *done*
@@ -44,7 +44,7 @@ regression 28 passed and 8 skipped, and twelve example suites pass.
 Design decisions:
 - The syscall table is indexed by the generic Linux numbers; the legacy x86-only calls are absent, as in the
   AArch64 kernel.
-- A thread's `PAL_TCB` is found through a tag bit in `TPIDR_EL0` for Gramine's own threads and otherwise
+- A thread's `PAL_TCB` is found through a tag bit in `TPIDR_EL0` for the library OS's own threads and otherwise
   through a 128-entry registry keyed on the application's TLS pointer. An application can change `TPIDR_EL0`
   without a trap, so there is nothing to intercept.
 - Application syscalls are caught by seccomp (`SIGSYS`). The resume address travels in `x16`, because `svc`

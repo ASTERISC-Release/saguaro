@@ -1,6 +1,6 @@
 # Running the system: instructions for AI agents
 
-This file tells a coding agent (and a person) how to build and run this tree in each of its modes. How to
+This file tells a coding agent (and a person) how to build and run this tree (Saguaro) in each of its modes. How to
 **develop** here (parallel checkouts, plans, testing rules, reporting) is in
 [`Documentation/AGENTS.md`](Documentation/AGENTS.md); read it before changing code. Everything is experimental.
 Platform status: [`README.md`](README.md). Measured results of the examples: [`CI-Examples/RESULTS.md`](CI-Examples/RESULTS.md).

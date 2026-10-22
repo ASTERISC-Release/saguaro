@@ -12,8 +12,9 @@
  *     libos/include/libos_graphics.h,
  *   - the guest preload library, through libos/src/graphics/common.h,
  *   - the QEMU host listener, whose build resolves this header from the
- *     sibling gramine-multiarch checkout (tirith-build.sh exports
- *     GRAMINE_ABI_DIR; see qemu-tirith's README.tirith.md).
+ *     sibling checkout of this repository (qemu-tirith's tirith-build.sh
+ *     looks for it at ../gramine-multiarch, or at GRAMINE_ABI_ROOT, and
+ *     exports GRAMINE_ABI_DIR; see qemu-tirith's README.tirith.md).
  *
  * The per-buffer render state (`struct graphics_buffer`, aka `check`) is
  * defined in each tree's own graphics headers (common.h and include/qemu/sg.h)

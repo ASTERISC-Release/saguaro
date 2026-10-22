@@ -3,10 +3,10 @@ Gramine itself is licensed under the LGPL-3.0-or-later.
 Examples (the `CI-Examples` subdirectory) are licensed under BSD-3-Clause,
 except for several C files. See each file for its license.
 
-Code added by the ASTERISC Research Lab (Arizona State University) to Gramine
-and gramine-tdx is copyright (C) 2026 The ASTERISC Research Lab and is licensed
-under the same terms as the part of the tree it belongs to: LGPL-3.0-or-later
-outside `CI-Examples`, BSD-3-Clause inside it. This covers, among others, the
+Code added by the ASTERISC Research Lab (Arizona State University) in Saguaro,
+its derivative of Gramine and gramine-tdx, is copyright (C) 2026 The ASTERISC
+Research Lab and is licensed under the same terms as the part of the tree it
+belongs to: LGPL-3.0-or-later outside `CI-Examples`, BSD-3-Clause inside it. This covers, among others, the
 vm, SEV, SEV-SNP and VBS PALs, the AArch64 and RISC-V ports, the graphics
 redirection, the tools under `scripts/` and `tools/`, and the `exec.sh`
 scripts of the examples. 

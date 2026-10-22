@@ -1,7 +1,7 @@
 # Quickstart: Containerized Userspace (`gramine-direct`)
 
 `gramine-direct` runs an unmodified Linux application as a container-like Linux process on top
-of the Gramine LibOS.
+of the Saguaro LibOS.
 
 All guides use one route: the development container of `container/run.sh`. Building and installing
 on the host is not described.
@@ -21,8 +21,9 @@ Symbols as in [README.md](../../README.md):
 - A Linux host of the architecture to be tested (Intel x86_64, AMD64 or AArch64). The direct PAL
   needs no device: it also works inside a virtual machine or another container. RISC-V is covered
   by [riscv.md](riscv.md).
-- Checkout location: a folder `saguaro-<name>/saguaro` (see `Documentation/AGENTS.md`) keeps the
-  container names of several checkouts apart.
+- A checkout (`git clone https://github.com/ASTERISC-Release/saguaro`) in a folder
+  `saguaro-<name>/saguaro` (see `Documentation/AGENTS.md`) keeps the container names of several
+  checkouts apart.
 
 # 1. Container and install
 

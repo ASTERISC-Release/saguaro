@@ -37,7 +37,7 @@ applicable.
 
 ## Which one do I need?
 
-- **Trying Gramine, or developing it**: [direct.md](direct.md). It needs only
+- **Trying Saguaro, or developing it**: [direct.md](direct.md). It needs only
   `podman` and works anywhere, also in a VM or a container.
 - **The application should not run on the host's kernel**: [vm.md](vm.md). It needs a
   physical Linux machine of the same architecture with KVM.

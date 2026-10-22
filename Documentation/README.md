@@ -1,6 +1,6 @@
 # Documentation
 
-This directory has two kinds of documents: those written for this tree, and reference pages
+This directory has two kinds of documents: those written for Saguaro, and reference pages
 inherited from upstream Gramine. The upstream Sphinx site is no longer built here; the inherited
 pages were converted to Markdown, and a few traces of Sphinx markup remain in them.
 Upstream's own documentation is at <https://gramine.readthedocs.io>.

@@ -1,7 +1,7 @@
 # Enabling VBS on a Windows machine
 
 The `vbs` PAL runs applications inside a Windows *virtualization-based security* (VBS) enclave. This page lists the
-one-time steps that prepare a Windows 11 machine (ARM64 or x64) for it. None of them is done by the Gramine tools:
+one-time steps that prepare a Windows 11 machine (ARM64 or x64) for it. None of them is done by the Saguaro tools:
 each changes the machine and is the administrator's decision. When the machine is ready, continue with
 [vbs-windows.md](vbs-windows.md).
 

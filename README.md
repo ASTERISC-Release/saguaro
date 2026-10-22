@@ -1,15 +1,20 @@
-# Gramine Library OS with Multi-Architectural Support
+# Saguaro
 
-*A Linux-compatible library OS (LibOS) for multi-process applications, on Intel x86_64, AMD64,
-AArch64 and RISC-V.*
+*A library OS for sandboxed and confidential workloads, derived from Gramine.*
 
-Gramine (formerly *Graphene*) runs an unmodified Linux application in an isolated environment, with its own
+Saguaro is a Linux-compatible library OS (LibOS) for multi-process applications, on Intel x86_64, AMD64,
+AArch64 and RISC-V. It runs an unmodified Linux application in an isolated environment, with its own
 implementation of the Linux (POSIX) system call interface (the *LibOS*) on top of a small host abstraction
-layer (the *PAL*). It was initially designed and built by a diverse group of researchers
-and engineers from universities and industry to run on Intel x86 platforms. Please see the
-[Acknowledgements](#acknowledgements) section.
+layer (the *PAL*).
 
-Keeping [upstream](https://github.com/gramineproject/gramine-tdx)'s full history, this Gramine fork has been extended to provide wide-support for additional backends, namely
+Saguaro is a derivative of [Gramine](https://github.com/gramineproject/gramine) (formerly *Graphene*)
+and its fork [gramine-tdx](https://github.com/gramineproject/gramine-tdx). It is not affiliated with or
+endorsed by the Gramine project or LF Projects. Gramine was initially designed and built by a diverse group
+of researchers and engineers from universities and industry to run on Intel x86 platforms. Please see the
+[Acknowledgements](#acknowledgement) section. The command-line tools keep their upstream names for now
+(`gramine-direct`, `gramine-vm`, `gramine-sgx`, `gramine-manifest`, ...).
+
+Keeping [upstream](https://github.com/gramineproject/gramine-tdx)'s full history, Saguaro extends Gramine to provide wide support for additional backends, namely
 
 - Containerized userspace (`direct`)
 - Isolated userspace (`sgx`)
@@ -38,7 +43,7 @@ and make them available for research and teaching.
 There are three main use-cases of this project:
 
 **(1) Sandboxing untrusted Linux applications (e.g., AI agents and games):** An application runs
-on Gramine's own system call interface rather than directly on the host kernel, reducing the
+on Saguaro's own system call interface rather than directly on the host kernel, reducing the
 host interface that the application can reach. The `direct` PAL runs it as a lightweight
 container-like environment. The `vm` PAL runs it in a minimal virtual machine that holds only
 the application, the library OS and a small kernel. Graphics-intensive applications are supported through
@@ -87,6 +92,10 @@ Per-cell details, build options and verification status are in the development n
 
 ## Getting Started
 
+Get the source with
+
+    git clone git@github.com:ASTERISC-Release/saguaro.git      # or https://github.com/ASTERISC-Release/saguaro
+
 Each quickstart guide goes from a checkout to a running example:
 
 - **Containerized userspace** (`direct`): [Documentation/quickstart/direct.md](Documentation/quickstart/direct.md)
@@ -106,14 +115,15 @@ for building and installing, on a host or in the supplied containers.
 
 ## Contributing
 
-Bug reports and pull requests are welcome through the GitHub repository. By
+Bug reports and pull requests are welcome through the GitHub repository
+([ASTERISC-Release/saguaro](https://github.com/ASTERISC-Release/saguaro)). By
 submitting a contribution you agree that it is licensed under the license of the
 file it modifies or adds (LGPL-3.0-or-later, or BSD-3-Clause for files under
 `CI-Examples/`), and that you have the right to submit it under that license.
 
 ## License
 
-Gramine is licensed under the LGPL-3.0-or-later (see `LICENSE.txt`); the
+Saguaro, like Gramine, is licensed under the LGPL-3.0-or-later (see `LICENSE.txt`); the
 examples in `CI-Examples/` are BSD-3-Clause unless a file says otherwise (see
 `LICENSE.addendum.txt`). The code added by the ASTERISC Research Lab (Arizona State
 University) is copyright (C) 2026 The ASTERISC Research Lab and is licensed under the
@@ -136,6 +146,6 @@ If you find this project useful, we request that you cite our work.
 
 ## Acknowledgement
 
-This work builds on [Gramine](https://github.com/gramineproject/gramine) and its
+Saguaro builds on [Gramine](https://github.com/gramineproject/gramine) and its
 Intel TDX and virtual-machine fork [gramine-tdx](https://github.com/gramineproject/gramine-tdx). We thank the Gramine and gramine-tdx authors and contributors; the organizations and individuals are listed in
 [ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md).
