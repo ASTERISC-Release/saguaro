@@ -21,7 +21,7 @@ import pathlib
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 # The syscall-compat and syscall-profile data live in the private development-documents repository, checked out
 # next to this one (SAGUARO_DEV_DOCS names another place).
-DEV_DOCS = pathlib.Path(os.environ.get("SAGUARO_DEV_DOCS", ROOT.parent / "gramine-multiarch-docs"))
+DEV_DOCS = pathlib.Path(os.environ.get("SAGUARO_DEV_DOCS", ROOT.parent / "saguaro-docs"))
 COMPAT = DEV_DOCS / "syscall-compat"
 STATUSES = ("pass", "fail", "conf", "broken", "timeout", "guest_panic", "runner_error")
 LETTERS = dict(zip(STATUSES, "PFCBTXE"))

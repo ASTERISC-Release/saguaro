@@ -27,8 +27,8 @@ Several people or agents can work at once, each on their own branch. What makes 
 
 ## How to work
 
-- **Development documents are in a separate private repository**, `gramine-multiarch-docs`, checked out
-  next to this one (`../gramine-multiarch-docs`; `SAGUARO_DEV_DOCS` names another place for the tools that read it).
+- **Development documents are in a separate private repository**, `saguaro-docs`, checked out
+  next to this one (`../saguaro-docs`; `SAGUARO_DEV_DOCS` names another place for the tools that read it).
   Comments in the code that say "dev docs: <topic>/<file>" mean that checkout.
 - **Plan first.** Before a development task, write `<topic>/PLAN.md` there (scope, phases with exit criteria,
   decisions with a recommendation, risks) and get it agreed. A topic also has `FINDINGS.md` (the dated log,
@@ -60,4 +60,4 @@ not check. If a test fails, give the output. When something is done and verified
 - Running each mode: `AGENTS.md` (top level). Building, containers and the RISC-V test guest: `INSTALL.md`.
 - Platform matrix: `README.md`; results of the examples: `CI-Examples/RESULTS.md`; open items: `Documentation/TODO.md`.
 - Development documents of every topic, build options, how to test, implementing a system call: the
-  `gramine-multiarch-docs` checkout (`multiarch.md`, `syscall-workflow.md`).
+  `saguaro-docs` checkout (`multiarch.md`, `syscall-workflow.md`).
