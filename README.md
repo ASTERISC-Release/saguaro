@@ -6,27 +6,15 @@
 
 *A library OS for sandboxed and confidential workloads, derived from Gramine.*
 
-<div align="justify">
-
 Saguaro is a Linux-compatible library OS (LibOS) for multi-process applications, on Intel x86_64, AMD64, AArch64 and RISC-V. It runs an unmodified Linux application in an isolated environment, with its own implementation of the Linux (POSIX) system call interface (the *LibOS*) on top of a small host abstraction layer (the *PAL*).
-
-</div>
-
-<div align="justify">
 
 Saguaro is a derivative of [Gramine](https://github.com/gramineproject/gramine) (formerly *Graphene*), an 
 excellent Library OS designed and built by a diverse group of researchers and engineers from universities and industry 
 to run on Intel x86 platforms. Our work is not affiliated with or endorsed by the Gramine project or LF Projects. Please 
 see the [Acknowledgements](#acknowledgement) section. 
 
-</div>
-
-<div align="justify">
-
 Keeping [upstream](https://github.com/gramineproject/gramine-tdx)'s full history, Saguaro extends Gramine to provide wide support 
 for additional backends, namely
-
-</div>
 
 - Containerized userspace (`direct`)
 - Isolated userspace (`sgx`)
@@ -41,14 +29,8 @@ Additionally, several quality-of-life [features](Documentation/FEATURES.md) have
   - Even allows us to play Windows games using Wine and Proton in the `vm` PAL.
 - **Richer system call coverage:** including multi-process (e.g., fork, clone), signaling, and network.
 
-<div align="justify">
-
 These features and backends are the result of published and upcoming work by the [ASU Trusted, Reliable, and Secure Computing
 (ASTERISC) Research Lab](https://asteriscresearchlab.com/). Refer to this [section](#citation) for details and how to cite our work.
-
-</div>
-
-<div align="justify">
 
 
 > **Disclaimer:** The current work is **experimental** and should not be used in production environments. Although all design decisions were made by our team, 
@@ -56,13 +38,9 @@ an AI agent (namely our lab's *riscy* agent) was heavily-involved in the develop
 Our rationale for using AI agents was to easily prototype and merge together disjoint artifacts from different research projects
 and make them available for research and teaching.
 
-</div>
-
 ## Use-Cases
 
 There are three main use-cases of this project:
-
-<div align="justify">
 
 **(1) Sandboxing untrusted Linux applications (e.g., AI agents and games):** An application runs
 on Saguaro's own system call interface rather than directly on the host kernel, reducing the
@@ -71,26 +49,16 @@ container-like environment. The `vm` PAL runs it in a minimal virtual machine th
 the application, the library OS and a small kernel. Graphics-intensive applications are supported through
 redirection to the host GPU in an efficient manner.
 
-</div>
-
-<div align="justify">
-
 **(2) Running unmodified Linux applications in diverse protected contexts:** The same library OS
 runs an application inside hardware-protected environments, so that it is protected from the
 platform that hosts it: Intel SGX enclaves (`sgx`), Intel TDX and AMD SEV confidential virtual
 machines (`tdx`, `sev`) and Windows VBS enclaves (`vbs`). The application does not need to be modified
 or ported to a different enclave interface. Remote attestation lets a remote party verify what is running.
 
-</div>
-
-<div align="justify">
-
 **(3) Teaching Linux-inspired operating system implementations on different architectures:** The
 library OS and the small bare-metal kernel of the `vm` PAL (page tables, scheduler, interrupts,
 and virtio drivers) are compact and readable. The same Linux-compatible interface is implemented
 on x86_64, AArch64 and RISC-V, so that the architecture-specific parts can be compared directly.
-
-</div>
 
 ## Platform Support
 
@@ -120,11 +88,7 @@ on x86_64, AArch64 and RISC-V, so that the architecture-specific parts can be co
 | `sev` (AMD SEV)                 | –           | ◐    | –      | –            |
 | `vbs` (Windows VBS enclaves)    | ◐           | ◐    | ◐      | –            |
 
-<div align="justify">
-
 Per-cell details, build options and verification status are in the development notes (a private repository; see [CHANGELOG.md](CHANGELOG.md) and [TODO.md](Documentation/TODO.md) for the public summary).
-
-</div>
 
 ## Getting Started
 
@@ -140,26 +104,16 @@ Each quickstart guide goes from a checkout to a running example:
 - **Intel TDX and SGX** (`tdx`, `sgx`): [Documentation/quickstart/tdx-sgx.md](Documentation/quickstart/tdx-sgx.md)
 - **AMD SEV-SNP** (`sev`): [Documentation/quickstart/sev.md](Documentation/quickstart/sev.md)
 
-<div align="justify">
-
 Guides for graphics and for the RISC-V cross-build are listed in the [quickstart index](Documentation/quickstart/README.md).
-
-</div>
-
-<div align="justify">
 
 [INSTALL.md](INSTALL.md) is the complete reference
 for building and installing, on a host or in the supplied containers.
 [Documentation/README.md](Documentation/README.md) lists the documents of this tree, and
 [AGENTS.md](AGENTS.md) says how to build and run each mode (for people and coding agents).
 
-</div>
-
 `CI-Examples/` contains ready-made applications.
 
 ## Contributing
-
-<div align="justify">
 
 Bug reports and pull requests are welcome through the GitHub repository
 ([ASTERISC-Release/saguaro](https://github.com/ASTERISC-Release/saguaro)). By
@@ -167,11 +121,7 @@ submitting a contribution you agree that it is licensed under the license of the
 file it modifies or adds (LGPL-3.0-or-later, or BSD-3-Clause for files under
 `CI-Examples/`), and that you have the right to submit it under that license.
 
-</div>
-
 ## License
-
-<div align="justify">
 
 Saguaro, like Gramine, is licensed under the LGPL-3.0-or-later (see `LICENSE.txt`); the
 examples in `CI-Examples/` are BSD-3-Clause unless a file says otherwise (see
@@ -181,16 +131,10 @@ same terms as the part of the tree it belongs to; the addendum lists the third-p
 material this tree added. The copyright notices of upstream Gramine and gramine-tdx
 are retained.
 
-</div>
-
 ## Citation
-
-<div align="justify">
 
 We are in the process of releasing a whitepaper to Arxiv detailing the current project. For now, we refer 
 you to the following published work by our lab (out of which this work is born):
-
-</div>
 
 - You Shall Not Pass into Ring-0! A User Privacy-Friendly Anti-Cheat Architecture for Personal Computers (ACM CCS'26)
 - Reducio: Optimized Confidential Serverless Cloud Deployments for Enterprise Customers (Arxiv)
@@ -202,11 +146,6 @@ If you find this project useful, we request that you cite our work.
 
 ## Acknowledgement
 
-<div align="justify">
-
 Saguaro builds on [Gramine](https://github.com/gramineproject/gramine) and its
 Intel TDX and virtual-machine fork [gramine-tdx](https://github.com/gramineproject/gramine-tdx). We thank the Gramine and gramine-tdx authors and contributors; the organizations and individuals are listed in
 [ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md).
-
-
-</div>
