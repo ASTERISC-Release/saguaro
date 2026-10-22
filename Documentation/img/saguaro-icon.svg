@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Saguaro LibOS icon">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1b1646"/>
+      <stop offset="0.55" stop-color="#6b2d6e"/>
+      <stop offset="1" stop-color="#f97316"/>
+    </linearGradient>
+    <linearGradient id="cactus" gradientUnits="userSpaceOnUse" x1="150" y1="0" x2="362" y2="0">
+      <stop offset="0" stop-color="#3f9e6a"/>
+      <stop offset="1" stop-color="#256b48"/>
+    </linearGradient>
+    <clipPath id="clip"><rect width="512" height="512" rx="96"/></clipPath>
+  </defs>
+
+  <g clip-path="url(#clip)">
+    <rect width="512" height="512" fill="url(#sky)"/>
+
+    <!-- sun -->
+    <circle cx="256" cy="330" r="130" fill="#fbbf24" opacity="0.95"/>
+    <circle cx="256" cy="330" r="160" fill="#fb923c" opacity="0.25"/>
+
+    <!-- asterisk stars (nod to ASTERISC) -->
+    <g stroke="#fde68a" stroke-width="4" stroke-linecap="round">
+      <g transform="translate(92 92)"><line x1="-10" y1="0" x2="10" y2="0"/><line x1="-5" y1="-8.7" x2="5" y2="8.7"/><line x1="5" y1="-8.7" x2="-5" y2="8.7"/></g>
+      <g transform="translate(420 78) scale(0.8)"><line x1="-10" y1="0" x2="10" y2="0"/><line x1="-5" y1="-8.7" x2="5" y2="8.7"/><line x1="5" y1="-8.7" x2="-5" y2="8.7"/></g>
+      <g transform="translate(450 168) scale(0.6)"><line x1="-10" y1="0" x2="10" y2="0"/><line x1="-5" y1="-8.7" x2="5" y2="8.7"/><line x1="5" y1="-8.7" x2="-5" y2="8.7"/></g>
+      <g transform="translate(60 190) scale(0.6)"><line x1="-10" y1="0" x2="10" y2="0"/><line x1="-5" y1="-8.7" x2="5" y2="8.7"/><line x1="5" y1="-8.7" x2="-5" y2="8.7"/></g>
+    </g>
+
+    <!-- saguaro cactus -->
+    <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <!-- arms -->
+      <path d="M256 305 H342 V198" stroke="url(#cactus)" stroke-width="42"/>
+      <path d="M256 352 H170 V268" stroke="url(#cactus)" stroke-width="42"/>
+      <!-- trunk -->
+      <line x1="256" y1="430" x2="256" y2="150" stroke="url(#cactus)" stroke-width="66"/>
+      <!-- ribs -->
+      <g stroke="#1b4d34" stroke-width="3" opacity="0.55">
+        <line x1="238" y1="140" x2="238" y2="430"/>
+        <line x1="256" y1="125" x2="256" y2="430"/>
+        <line x1="274" y1="140" x2="274" y2="430"/>
+        <path d="M256 305 H342 V190"/>
+        <path d="M256 352 H170 V260"/>
+      </g>
+    </g>
+
+    <!-- blossoms -->
+    <g fill="#fff7ed">
+      <circle cx="256" cy="116" r="9"/>
+      <circle cx="342" cy="164" r="7"/>
+      <circle cx="170" cy="234" r="7"/>
+    </g>
+
+    <!-- desert ground -->
+    <path d="M0 412 Q120 394 256 410 T512 404 V512 H0 Z" fill="#2a120d"/>
+    <path d="M0 450 Q150 436 300 450 T512 444 V512 H0 Z" fill="#1a0a08"/>
+  </g>
+</svg>
