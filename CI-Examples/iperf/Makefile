@@ -111,16 +111,16 @@ vbs-build/libgcc_s.so.1:
 
 .PHONY: check
 check: all
-	GRAMINE="$(GRAMINE)" ./vbs-check.sh
+	SAGUARO="$(SAGUARO)" ./vbs-check.sh
 endif
 
 ifneq ($(VBS),1)
-# the server under $(GRAMINE), the native client on the host's loopback (check.sh)
-GRAMINE ?= saguaro-direct
+# the server under $(SAGUARO), the native client on the host's loopback (check.sh)
+SAGUARO ?= saguaro-direct
 
 .PHONY: check
 check: all
-	GRAMINE="$(GRAMINE)" ./check.sh
+	SAGUARO="$(SAGUARO)" ./check.sh
 endif
 
 ################################## CLEANUP ####################################

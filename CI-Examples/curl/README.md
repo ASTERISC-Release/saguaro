@@ -25,4 +25,4 @@ make check              # serves test-docroot on 127.0.0.1:19111, fetches it wit
 
 ## Notes
 
-- Under the VM and SEV the guest cannot reach the host's loopback: use `make check GRAMINE=saguaro-vm HTTP_ADDR=<host address>` (`exec.sh` does this for you).
+- Under the VM and SEV the guest cannot reach the host's loopback: use `make check SAGUARO=saguaro-vm HTTP_ADDR=<host address>` (`exec.sh` does this for you).

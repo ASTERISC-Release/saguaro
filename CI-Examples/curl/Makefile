@@ -62,11 +62,11 @@ sgx_sign: curl.manifest
 		--output $<.sgx
 
 ifeq ($(VBS),1)
-# GRAMINE is saguaro-vbs (Makefile.vbs)
+# SAGUARO is saguaro-vbs (Makefile.vbs)
 else ifeq ($(SGX),)
-GRAMINE = saguaro-direct
+SAGUARO = saguaro-direct
 else
-GRAMINE = saguaro-sgx
+SAGUARO = saguaro-sgx
 endif
 
 ifeq ($(VBS),1)
@@ -104,13 +104,13 @@ vbs-build/curl: vbs-build/src/Makefile
 
 .PHONY: check
 check: all
-	GRAMINE="$(GRAMINE)" ./vbs-check.sh
+	SAGUARO="$(SAGUARO)" ./vbs-check.sh
 else
 .PHONY: check
 check: all
 	(cd test-docroot; exec python3 -m http.server -b $(HTTP_ADDR) 19111) & httpd_pid=$$!; \
 	../common_tools/wait_for_server 5 $(HTTP_ADDR) 19111; \
-	$(GRAMINE) ./curl http://$(HTTP_ADDR):19111/ > OUTPUT; rc=$$?; \
+	$(SAGUARO) ./curl http://$(HTTP_ADDR):19111/ > OUTPUT; rc=$$?; \
 	kill $$httpd_pid; exit $$rc
 
 	@grep -q "Hello World" OUTPUT && echo "[ Success 1/1 ]"

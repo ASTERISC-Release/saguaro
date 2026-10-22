@@ -20,7 +20,7 @@ By hand:
 
 ```sh
 make                    # make SGX=1 for SGX; for another R: make R_HOME=<install path>/lib/R
-make check              # runs scripts/sample.r, prints [ Success 1/1 ]; GRAMINE=saguaro-vm etc., SGX=1 for SGX
+make check              # runs scripts/sample.r, prints [ Success 1/1 ]; SAGUARO=saguaro-vm etc., SGX=1 for SGX
 saguaro-direct ./R --slave --vanilla -f scripts/R-benchmark-25.R
 ```
 

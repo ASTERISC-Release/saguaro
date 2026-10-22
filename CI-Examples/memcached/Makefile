@@ -71,7 +71,7 @@ vbs-build/memcached: vbs-build/libevent/lib/libevent.a | $(VBS_RUNTIME_STAMP)
 
 .PHONY: check
 check: all
-	GRAMINE="$(GRAMINE)" ./vbs-check.sh
+	SAGUARO="$(SAGUARO)" ./vbs-check.sh
 endif
 
 memcached.manifest: memcached.manifest.template
@@ -100,22 +100,22 @@ start-native-server: all
 	./memcached
 
 ifeq ($(VBS),1)
-# GRAMINE is saguaro-vbs (Makefile.vbs)
+# SAGUARO is saguaro-vbs (Makefile.vbs)
 else ifeq ($(SGX),)
-GRAMINE = saguaro-direct
+SAGUARO = saguaro-direct
 else
-GRAMINE = saguaro-sgx
+SAGUARO = saguaro-sgx
 endif
 
 .PHONY: start-saguaro-server
 start-saguaro-server: all
-	$(GRAMINE) memcached
+	$(SAGUARO) memcached
 
 ifneq ($(VBS),1)
-# the server under $(GRAMINE), a client on the host's loopback (check.sh)
+# the server under $(SAGUARO), a client on the host's loopback (check.sh)
 .PHONY: check
 check: all
-	GRAMINE="$(GRAMINE)" ./check.sh
+	SAGUARO="$(SAGUARO)" ./check.sh
 endif
 
 .PHONY: clean

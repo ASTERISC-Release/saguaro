@@ -58,7 +58,7 @@ vmfilter() {  # drop the VM launcher/PAL lines that the single guest console mix
 
 # bash: the example's own 7 checks (its Makefile already renders and runs bash.manifest; checks
 # 2..7 run "bash bash_test.sh", a second process)
-( cd "$E/bash" && rm -f OUTPUT; timeout -s KILL 300 make regression GRAMINE=saguaro-vm ) > "$OUT/bash.log" 2>&1
+( cd "$E/bash" && rm -f OUTPUT; timeout -s KILL 300 make regression SAGUARO=saguaro-vm ) > "$OUT/bash.log" 2>&1
 n=$(grep -ac '^\[ Success [0-9]*/7 \]' "$OUT/bash.log"); [ "$n" = 7 ] && res PASS bash "$n/7" || res FAIL bash "$n/7"
 
 # sqlite: the example's create/update/select scripts, the output compared without VM console lines
@@ -70,7 +70,7 @@ n=$(grep -ac '^\[ Success [0-9]*/7 \]' "$OUT/bash.log"); [ "$n" = 7 ] && res PAS
     && res PASS sqlite "create/update/select" || res FAIL sqlite "see $OUT/sqlite.log"
 
 # python: run-tests.sh in its VM mode (server reached through the relay on 8005)
-( cd "$E/python" && GRAMINE=saguaro-vm SAGUARO_VM=1 SAGUARO_VM_INBOUND=8005:8005 \
+( cd "$E/python" && SAGUARO=saguaro-vm SAGUARO_VM=1 SAGUARO_VM_INBOUND=8005:8005 \
       timeout -s KILL 900 ./run-tests.sh > TEST_STDOUT 2> TEST_STDERR ) > "$OUT/python.log" 2>&1
 n=$(grep -ac '^\[ Success [0-9]*/4 \]' "$E/python/TEST_STDOUT" 2>/dev/null); [ "$n" = 4 ] && res PASS python "$n/4" || res FAIL python "$n/4"
 

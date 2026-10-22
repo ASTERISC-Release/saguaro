@@ -18,7 +18,7 @@ By hand, the server in one terminal and the client in another:
 
 ```sh
 make
-make start-saguaro-server       # VM and SEV: add GRAMINE=saguaro-vm (or saguaro-sev) SAGUARO_VM_INBOUND=11211:11211
+make start-saguaro-server       # VM and SEV: add SAGUARO=saguaro-vm (or saguaro-sev) SAGUARO_VM_INBOUND=11211:11211
 memtier_benchmark --port=11211 --protocol=memcache_binary --hide-histogram
 ```
 

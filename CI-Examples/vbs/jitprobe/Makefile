@@ -19,7 +19,7 @@ endif
 
 .PHONY: check
 check: all
-	$(GRAMINE) jitprobe
+	$(SAGUARO) jitprobe
 
 .PHONY: clean
 clean:

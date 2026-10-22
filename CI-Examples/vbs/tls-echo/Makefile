@@ -61,4 +61,4 @@ vbs-build/tls-echo: tls-echo.c ../common/vbs-ratls.c ../common/vbs-ratls.h $(MBE
 # the check also builds the debuggable variant (for the "debug enclave" test)
 check: all
 	$(MAKE) VBS_DEBUG=1 all
-	GRAMINE="$(GRAMINE)" ./vbs-check.sh
+	SAGUARO="$(SAGUARO)" ./vbs-check.sh

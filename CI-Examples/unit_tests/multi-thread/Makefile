@@ -80,16 +80,16 @@ sgx_sign: helloworld.manifest helloworld
 	saguaro-manifest-check $<.sgx
 
 ifeq ($(SGX),)
-GRAMINE = saguaro-direct
+SAGUARO = saguaro-direct
 else
-GRAMINE = saguaro-sgx
+SAGUARO = saguaro-sgx
 endif
 
 .PHONY: check
 check: all
-	$(GRAMINE) thread-tls
-	$(GRAMINE) thread-rwlock
-	$(GRAMINE) thread-stress
+	$(SAGUARO) thread-tls
+	$(SAGUARO) thread-rwlock
+	$(SAGUARO) thread-stress
 	@echo "[ Success ]"
 
 .PHONY: clean

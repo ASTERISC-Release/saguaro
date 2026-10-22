@@ -4,14 +4,14 @@
 #
 # `make VBS=1 check`: single BusyBox applets, one enclave each: echo, cat and ls of a packed file,
 # grep, a shell with builtins only, and wget over plain HTTP from a server that runs natively in WSL
-# on 127.0.0.1 (Windows forwards its loopback to WSL). GRAMINE is saguaro-vbs.
+# on 127.0.0.1 (Windows forwards its loopback to WSL). SAGUARO is saguaro-vbs.
 set -euo pipefail
-: "${GRAMINE:=../../scripts/vbs/saguaro-vbs}"
+: "${SAGUARO:=../../scripts/vbs/saguaro-vbs}"
 PORT=${BUSYBOX_PORT:-19112}
 
 expect() {  # expect "<wanted output>" applet args...
     want=$1; shift
-    got=$("$GRAMINE" busybox "$@" | tr -d '\r')
+    got=$("$SAGUARO" busybox "$@" | tr -d '\r')
     if [ "$got" != "$want" ]; then
         echo "FAIL: busybox $* -> '$got' (wanted '$want')"; exit 1
     fi
@@ -22,7 +22,7 @@ expect "Hello" echo Hello
 expect "$(cat helper-files/hosts)" cat /etc/hosts
 expect "3" sh -c 'x=1; echo $((x+2))'
 expect "$(grep -c localhost helper-files/hosts)" grep -c localhost /etc/hosts
-"$GRAMINE" busybox ls /etc | tr -d '\r' | grep -qx hosts && echo "ok: busybox ls /etc (hosts listed)"
+"$SAGUARO" busybox ls /etc | tr -d '\r' | grep -qx hosts && echo "ok: busybox ls /etc (hosts listed)"
 
 (cd helper-files; exec python3 -m http.server -b 127.0.0.1 "$PORT") > httpd.log 2>&1 &
 httpd_pid=$!

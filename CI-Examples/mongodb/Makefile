@@ -34,10 +34,10 @@ sgx_sign: mongod.manifest
 		--manifest $< \
 		--output $<.sgx
 
-# mongod under $(GRAMINE), the pymongo client test on the host's loopback (check.sh)
+# mongod under $(SAGUARO), the pymongo client test on the host's loopback (check.sh)
 .PHONY: check
 check: all
-	GRAMINE="$(GRAMINE)" ./check.sh
+	SAGUARO="$(SAGUARO)" ./check.sh
 
 .PHONY: clean
 clean:

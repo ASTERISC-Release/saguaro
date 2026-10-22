@@ -43,14 +43,14 @@ sgx_sign: R.manifest
 		--output $<.sgx
 
 ifeq ($(SGX),)
-GRAMINE = saguaro-direct
+SAGUARO = saguaro-direct
 else
-GRAMINE = saguaro-sgx
+SAGUARO = saguaro-sgx
 endif
 
 .PHONY: check
 check: all
-	$(GRAMINE) ./R --slave --vanilla -f scripts/sample.r > OUTPUT 2> /dev/null
+	$(SAGUARO) ./R --slave --vanilla -f scripts/sample.r > OUTPUT 2> /dev/null
 	@grep -q "success" OUTPUT && echo "[ Success 1/1 ]"
 	@$(RM) OUTPUT
 

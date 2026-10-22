@@ -65,16 +65,16 @@ sgx_sign: helloworld.manifest helloworld
 	saguaro-manifest-check $<.sgx
 
 ifeq ($(VBS),1)
-# GRAMINE is saguaro-vbs (Makefile.vbs)
+# SAGUARO is saguaro-vbs (Makefile.vbs)
 else ifeq ($(SGX),)
-GRAMINE = saguaro-direct
+SAGUARO = saguaro-direct
 else
-GRAMINE = saguaro-sgx
+SAGUARO = saguaro-sgx
 endif
 
 .PHONY: check
 check: all
-	$(GRAMINE) helloworld > OUTPUT
+	$(SAGUARO) helloworld > OUTPUT
 	echo "Hello, world" | diff OUTPUT -
 	@echo "[ Success ]"
 

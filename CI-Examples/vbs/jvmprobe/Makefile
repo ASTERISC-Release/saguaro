@@ -36,7 +36,7 @@ endif
 
 .PHONY: check
 check: all
-	$(GRAMINE) jvmprobe
+	$(SAGUARO) jvmprobe
 
 .PHONY: clean
 clean:

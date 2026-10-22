@@ -18,7 +18,7 @@ By hand, the server in one terminal and the client in another:
 
 ```sh
 make
-make start-saguaro-server       # VM and SEV: add GRAMINE=saguaro-vm (or saguaro-sev) SAGUARO_VM_INBOUND=8002:8002,8444:8444
+make start-saguaro-server       # VM and SEV: add SAGUARO=saguaro-vm (or saguaro-sev) SAGUARO_VM_INBOUND=8002:8002,8444:8444
 curl -s http://127.0.0.1:8002/random/10K.1.html | wc -c      # 10240
 curl -sk https://127.0.0.1:8444/random/10K.1.html | wc -c    # HTTPS
 ```

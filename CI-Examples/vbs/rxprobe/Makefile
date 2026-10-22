@@ -18,7 +18,7 @@ endif
 
 .PHONY: check
 check: all
-	$(GRAMINE) rxprobe
+	$(SAGUARO) rxprobe
 
 .PHONY: clean
 clean:

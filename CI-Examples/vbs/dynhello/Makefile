@@ -19,7 +19,7 @@ endif
 
 .PHONY: check
 check: all
-	$(GRAMINE) dynhello > OUTPUT
+	$(SAGUARO) dynhello > OUTPUT
 	grep -q "sorted 1 3 5 7 9" OUTPUT
 	grep -q "cos(0) = 1" OUTPUT
 	@echo "[ Success ]"

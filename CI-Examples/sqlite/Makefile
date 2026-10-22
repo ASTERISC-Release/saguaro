@@ -54,11 +54,11 @@ sgx_sign: sqlite3.manifest
 		--output $<.sgx
 
 ifeq ($(VBS),1)
-# GRAMINE is saguaro-vbs (Makefile.vbs)
+# SAGUARO is saguaro-vbs (Makefile.vbs)
 else ifeq ($(SGX),)
-GRAMINE = saguaro-direct
+SAGUARO = saguaro-direct
 else
-GRAMINE = saguaro-sgx
+SAGUARO = saguaro-sgx
 endif
 
 # Note that command-line arguments are hardcoded in the manifest file.
@@ -66,14 +66,14 @@ endif
 regression: all
 	@$(RM) db/*
 
-	$(GRAMINE) sqlite3 < scripts/create.sql
+	$(SAGUARO) sqlite3 < scripts/create.sql
 	@echo "[ Success 1/3 ]"
 
-	$(GRAMINE) sqlite3 < scripts/update.sql
+	$(SAGUARO) sqlite3 < scripts/update.sql
 	@echo "[ Success 2/3 ]"
 
-	$(GRAMINE) sqlite3 < scripts/select.sql > OUTPUT
-ifneq ($(filter saguaro-vm saguaro-sev,$(GRAMINE)),)
+	$(SAGUARO) sqlite3 < scripts/select.sql > OUTPUT
+ifneq ($(filter saguaro-vm saguaro-sev,$(SAGUARO)),)
 	# The VM and SEV launchers print console lines to stdout; drop them before the diff. The
 	# patterns are those of vmfilter() in test/vm/multiproc/vm-examples.sh, plus the line the PAL
 	# added later ('Application address space').
@@ -105,7 +105,7 @@ vbs-build/sqlite3: sqlite-amalgamation.zip | $(VBS_RUNTIME_STAMP)
 
 .PHONY: check
 check: all
-	GRAMINE="$(GRAMINE)" ./vbs-check.sh
+	SAGUARO="$(SAGUARO)" ./vbs-check.sh
 endif
 
 .PHONY: clean

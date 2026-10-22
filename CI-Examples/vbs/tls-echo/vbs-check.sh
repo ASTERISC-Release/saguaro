@@ -6,7 +6,7 @@
 # attestation before it sends anything (saguaro-vbs tls-client). The positive case, then the
 # negative ones: each must be refused (exit 1, "REFUSED").
 set -uo pipefail
-: "${GRAMINE:=../../../scripts/vbs/saguaro-vbs}"
+: "${SAGUARO:=../../../scripts/vbs/saguaro-vbs}"
 PORT=${TLS_PORT:-4433}
 FAMILY=7361677561726f2d7662732d746c7300
 IMAGE=746c732d6563686f0000000000000001
@@ -16,15 +16,15 @@ pins=(--verifier tls-echo.vbs --family-id $FAMILY --image-id $IMAGE --min-svn 1)
 start() {  # image args...
     local app=$1; shift
     # (with loader.insecure__use_cmdline_argv the host must pass at least one argument)
-    "$GRAMINE" "$app" --port "$PORT" "$@" > "OUTPUT-$app" 2>&1 &
+    "$SAGUARO" "$app" --port "$PORT" "$@" > "OUTPUT-$app" 2>&1 &
     pid=$!
-    "$GRAMINE" net wait "$PORT" 120 > /dev/null || { echo "FAIL: server did not start"; exit 1; }
+    "$SAGUARO" net wait "$PORT" 120 > /dev/null || { echo "FAIL: server did not start"; exit 1; }
 }
 stop() { kill $pid 2>/dev/null; wait $pid 2>/dev/null; sleep 1; }
 trap 'kill $pid 2>/dev/null || true' EXIT
 expect() {  # expect accept|refuse "label" client-args...
     local want=$1 label=$2; shift 2
-    out=$("$GRAMINE" tls-client "$PORT" "$@" 2>&1 | tr -d '\r')
+    out=$("$SAGUARO" tls-client "$PORT" "$@" 2>&1 | tr -d '\r')
     rc=$?
     if { [ "$want" = accept ] && [ $rc -eq 0 ] && grep -q '^echo: ' <<<"$out"; } ||
        { [ "$want" = refuse ] && [ $rc -ne 0 ] && grep -q '^REFUSED' <<<"$out" && ! grep -q '^echo: ' <<<"$out"; }; then

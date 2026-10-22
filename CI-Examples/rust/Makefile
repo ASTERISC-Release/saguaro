@@ -64,11 +64,11 @@ sgx_sign: rust-hyper-http-server.manifest $(SELF_EXE)
 		--output $<.sgx
 
 ifeq ($(VBS),1)
-# GRAMINE is saguaro-vbs (Makefile.vbs)
+# SAGUARO is saguaro-vbs (Makefile.vbs)
 else ifeq ($(SGX),)
-GRAMINE = saguaro-direct
+SAGUARO = saguaro-direct
 else
-GRAMINE = saguaro-sgx
+SAGUARO = saguaro-sgx
 endif
 
 ifeq ($(VBS),1)
@@ -92,18 +92,18 @@ vbs-build/rust-hyper-http-server: Cargo.toml $(wildcard src/*.rs) | $(VBS_RUNTIM
 
 .PHONY: check
 check: all
-	GRAMINE="$(GRAMINE)" ./vbs-check.sh
+	SAGUARO="$(SAGUARO)" ./vbs-check.sh
 endif
 
 .PHONY: start-saguaro-server
 start-saguaro-server: all
-	$(GRAMINE) rust-hyper-http-server
+	$(SAGUARO) rust-hyper-http-server
 
 ifneq ($(VBS),1)
-# the server under $(GRAMINE), curl on the host's loopback (check.sh)
+# the server under $(SAGUARO), curl on the host's loopback (check.sh)
 .PHONY: check
 check: all
-	GRAMINE="$(GRAMINE)" ./check.sh
+	SAGUARO="$(SAGUARO)" ./check.sh
 endif
 
 .PHONY: clean

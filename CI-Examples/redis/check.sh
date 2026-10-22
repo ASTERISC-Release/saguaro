@@ -2,12 +2,12 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 # SPDX-License-Identifier: BSD-3-Clause
 #
-# `make check` (direct, vm and sev): redis-server runs under $GRAMINE and a TCP client on the host
+# `make check` (direct, vm and sev): redis-server runs under $SAGUARO and a TCP client on the host
 # checks PING, SET, GET and 20 round trips (the checks of test/direct/test-direct.sh).
 set -uo pipefail
-: "${GRAMINE:=saguaro-direct}"
+: "${SAGUARO:=saguaro-direct}"
 . ../common_tools/server-check.sh
-server_start 6379:6379 "$GRAMINE" redis-server
+server_start 6379:6379 "$SAGUARO" redis-server
 python3 - <<'PYEOF'
 import socket, time, sys
 # Ready = a full PING round trip (the port is open before the server answers)

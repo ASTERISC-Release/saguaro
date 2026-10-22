@@ -98,7 +98,7 @@ $(VBS_ROOT)/html/random/%.html: $(VBS_ROOT)/sbin/nginx
 
 .PHONY: check
 check: all
-	GRAMINE="$(GRAMINE)" LISTEN_PORT=$(LISTEN_PORT) ./vbs-check.sh
+	SAGUARO="$(SAGUARO)" LISTEN_PORT=$(LISTEN_PORT) ./vbs-check.sh
 endif
 
 nginx.manifest: nginx.manifest.template
@@ -174,22 +174,22 @@ start-native-server: all
 	$(INSTALL_DIR)/sbin/nginx -c conf/nginx-saguaro.conf
 
 ifeq ($(VBS),1)
-# GRAMINE is saguaro-vbs (Makefile.vbs)
+# SAGUARO is saguaro-vbs (Makefile.vbs)
 else ifeq ($(SGX),)
-GRAMINE = saguaro-direct
+SAGUARO = saguaro-direct
 else
-GRAMINE = saguaro-sgx
+SAGUARO = saguaro-sgx
 endif
 
 .PHONY: start-saguaro-server
 start-saguaro-server: all
-	$(GRAMINE) ./nginx
+	$(SAGUARO) ./nginx
 
 ifneq ($(VBS),1)
-# the server under $(GRAMINE), a client on the host's loopback (check.sh)
+# the server under $(SAGUARO), a client on the host's loopback (check.sh)
 .PHONY: check
 check: all
-	GRAMINE="$(GRAMINE)" ./check.sh
+	SAGUARO="$(SAGUARO)" ./check.sh
 endif
 
 .PHONY: clean

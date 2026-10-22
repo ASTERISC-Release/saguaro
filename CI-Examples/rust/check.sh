@@ -2,12 +2,12 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 # SPDX-License-Identifier: BSD-3-Clause
 #
-# `make check` (direct, vm and sev): the hyper server runs under $GRAMINE and curl on the host fetches
+# `make check` (direct, vm and sev): the hyper server runs under $SAGUARO and curl on the host fetches
 # its page from port 3000 ("Hello, World").
 set -uo pipefail
-: "${GRAMINE:=saguaro-direct}"
+: "${SAGUARO:=saguaro-direct}"
 . ../common_tools/server-check.sh
-server_start 3000:3000 "$GRAMINE" rust-hyper-http-server
+server_start 3000:3000 "$SAGUARO" rust-hyper-http-server
 fetch() { curl -sf --max-time 5 http://127.0.0.1:3000/ -o fetched.html && grep -q "Hello, World" fetched.html; }
 retry 120 fetch
 rc=$?

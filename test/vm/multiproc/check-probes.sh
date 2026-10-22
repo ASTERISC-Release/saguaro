@@ -238,7 +238,7 @@ check_examples() {
     ( cd "$E/python" && vm "$log" 600 saguaro-vm python scripts/helloworld.py )
     expect_sub "$log" "Hello World" || rc=1
     # bash: the example's own checks; 2..7 start a second bash (a new process)
-    ( cd "$E/bash" && rm -f OUTPUT && timeout -s KILL $(( 600 * SCALE )) make regression GRAMINE=saguaro-vm ) \
+    ( cd "$E/bash" && rm -f OUTPUT && timeout -s KILL $(( 600 * SCALE )) make regression SAGUARO=saguaro-vm ) \
         2>&1 | tr -d '\r' >> "$log"
     n=$(grep -c '^\[ Success [0-9]*/7 \]' "$log")
     echo "  bash example: $n/7"

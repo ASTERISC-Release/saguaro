@@ -2,12 +2,12 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 # SPDX-License-Identifier: BSD-3-Clause
 #
-# `make check` (direct, vm and sev): memcached runs under $GRAMINE and a TCP client on the host
+# `make check` (direct, vm and sev): memcached runs under $SAGUARO and a TCP client on the host
 # checks counters and 100 set/get round trips (the checks of test/direct/test-direct.sh).
 set -uo pipefail
-: "${GRAMINE:=saguaro-direct}"
+: "${SAGUARO:=saguaro-direct}"
 . ../common_tools/server-check.sh
-server_start 11211:11211 "$GRAMINE" memcached
+server_start 11211:11211 "$SAGUARO" memcached
 python3 - <<'PYEOF'
 import socket, time, sys
 # Ready = a full "version" round trip (the port is open before the server answers)

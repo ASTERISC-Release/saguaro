@@ -2,20 +2,20 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 # SPDX-License-Identifier: BSD-3-Clause
 #
-# `make check` (direct, vm and sev): the iperf3 server runs under $GRAMINE (its manifest sets the server
+# `make check` (direct, vm and sev): the iperf3 server runs under $SAGUARO (its manifest sets the server
 # mode) and the native iperf3 client of the same build measures it over the loopback of the host.
 # Under the vm and sev the port is forwarded to the guest through the relay (SAGUARO_VM_INBOUND).
 #
 # The script does not probe the port first: iperf3 counts a connection that closes without a test as an
 # error. The client is retried instead, until the server is up.
 set -uo pipefail
-: "${GRAMINE:=saguaro-direct}"
+: "${SAGUARO:=saguaro-direct}"
 PORT=${IPERF_PORT:-5201}
 SECONDS_=${IPERF_SECONDS:-2}
 TRIES=${IPERF_TRIES:-60}
 
 . ../common_tools/server-check.sh
-server_start "$PORT:$PORT" "$GRAMINE" iperf3
+server_start "$PORT:$PORT" "$SAGUARO" iperf3
 trap 'server_stop; rm -f client.log server.log' EXIT
 
 for i in $(seq "$TRIES"); do

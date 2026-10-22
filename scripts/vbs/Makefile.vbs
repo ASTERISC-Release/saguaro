@@ -21,7 +21,7 @@
 # (saguaro-vbs copies the objects to a Windows folder; see saguaro-vbs --help for
 # SAGUARO_VBS_WINDOWS_BASE); elsewhere on the Windows machine named by SAGUARO_VBS_WINDOWS (ssh);
 # with SAGUARO_VBS_WINDOWS=none or no Windows only the Linux half is built (`make VBS=1 vbs-sign`
-# later). $(GRAMINE) runs the application like saguaro-direct: `$(GRAMINE) $(VBS_APP) args`.
+# later). $(SAGUARO) runs the application like saguaro-direct: `$(SAGUARO) $(VBS_APP) args`.
 #
 # The runtime (the vbs glibc, PAL and LibOS) is not built here: `scripts/install.sh --vbs` builds it
 # once per checkout (and again when its sources change), and `make VBS=1` stops with a message when
@@ -31,7 +31,7 @@ VBS_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 SAGUARO_VBS_REPO ?= $(abspath $(VBS_DIR)/../..)
 
 SAGUARO_VBS := $(VBS_DIR)/saguaro-vbs
-GRAMINE = $(SAGUARO_VBS)
+SAGUARO = $(SAGUARO_VBS)
 VBS_SYSROOT := $(SAGUARO_VBS_REPO)/build-vbs-glibc
 VBS_GCC := $(VBS_DIR)/vbs-gcc
 VBS_CC_STATIC := env SYSROOT=$(VBS_SYSROOT) $(VBS_DIR)/cc-static-pie.sh

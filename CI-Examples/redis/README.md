@@ -14,7 +14,7 @@ By hand, the server in one terminal and the client in another:
 
 ```sh
 make                    # make SGX=1 for SGX; make VBS=1 in WSL for VBS
-make start-saguaro-server       # VM and SEV: add GRAMINE=saguaro-vm (or saguaro-sev) SAGUARO_VM_INBOUND=6379:6379
+make start-saguaro-server       # VM and SEV: add SAGUARO=saguaro-vm (or saguaro-sev) SAGUARO_VM_INBOUND=6379:6379
 src/src/redis-benchmark
 ```
 

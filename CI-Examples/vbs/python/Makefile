@@ -19,7 +19,7 @@ endif
 
 .PHONY: check
 check: all
-	$(GRAMINE) python > OUTPUT
+	$(SAGUARO) python > OUTPUT
 	grep -q "Python 3.12.7" OUTPUT
 	@echo "[ Success ]"
 

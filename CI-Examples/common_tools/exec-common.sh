@@ -13,7 +13,7 @@
 #   EXAMPLE_ARCHES     host arches it runs on (default: "x86_64 aarch64")
 #   EXAMPLE_BACKENDS   backends it supports (default: "direct vm sev"; set it empty for none)
 #   EXAMPLE_MODE       "run" (default): build the binary and run it with its args, and check the output
-#                      "check": run the example's own `make check` with GRAMINE set to the backend
+#                      "check": run the example's own `make check` with SAGUARO set to the backend
 #   EXAMPLE_EXPECT_FILE  file the program writes instead of printing: EXAMPLE_EXPECT is searched in it, not in
 #                      the output (it is deleted before the run)
 #   EXAMPLE_SKIP_UNSUPPORTED  1: a backend the example does not support is a SKIP, not a FAIL (the drivers over
@@ -209,7 +209,7 @@ exec_one() {
     mtarget=${mtarget:-$manifest}
 
     if [ "$mode" = check ]; then
-        # the example's own `make check`, with this backend as its GRAMINE
+        # the example's own `make check`, with this backend as its SAGUARO
         { echo "== $EXAMPLE_NAME $b on $(exec_host_arch), $(date -Is), mode check$accel_tag"
           echo "+ rm -f $manifest; make $mtarget"
           rm -f "$manifest" "$manifest.sgx"; make "$mtarget"; } 2>&1 | tee "$log"
@@ -218,8 +218,8 @@ exec_one() {
         # exec.sh may define example_check_args <backend>: extra make variables for `make check`
         local -a check_args=()
         if declare -F example_check_args >/dev/null; then check_args=($(example_check_args "$base")); fi
-        echo "+ make ${EXAMPLE_CHECK_TARGET:-check} GRAMINE=$runner ${check_args[*]}" | tee -a "$log"
-        timeout -s KILL "$EXEC_TIMEOUT" make "${EXAMPLE_CHECK_TARGET:-check}" GRAMINE="$runner" "${check_args[@]}" 2>&1 </dev/null | tee "$out"
+        echo "+ make ${EXAMPLE_CHECK_TARGET:-check} SAGUARO=$runner ${check_args[*]}" | tee -a "$log"
+        timeout -s KILL "$EXEC_TIMEOUT" make "${EXAMPLE_CHECK_TARGET:-check}" SAGUARO="$runner" "${check_args[@]}" 2>&1 </dev/null | tee "$out"
         rc=${PIPESTATUS[0]}
         cat "$out" >>"$log"
     else

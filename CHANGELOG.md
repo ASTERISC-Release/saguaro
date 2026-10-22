@@ -294,8 +294,10 @@ The tree was renamed to Saguaro. What an upgrader has to change (there are no al
   `saguaro-vbs.cmd` in `%USERPROFILE%\saguaro-vbs`), and the inherited tools `saguaro-manifest`,
   `saguaro-manifest-check`, `saguaro-test`, `saguaro-gen-depend`, `saguaro-argv-serializer`, `saguaro-ratls` and
   `saguaro-sgx-<tool>` (`-sign`, `-get-token`, `-gen-private-key`, `-sigstruct-view`, `-quote-view`, `-ias-request`,
-  `-ias-verify-report`, `-pf-crypt`, `-pf-tamper`). The example Makefiles keep the variable `GRAMINE` (now
-  `GRAMINE=saguaro-vm` etc.); their target `start-gramine-server` is `start-saguaro-server`.
+  `-ias-verify-report`, `-pf-crypt`, `-pf-tamper`). The example Makefiles keep the variable `SAGUARO` (now
+  `SAGUARO=saguaro-vm` etc.); their target `start-gramine-server` is `start-saguaro-server`.
+- **The Make variable** `GRAMINE` of the example Makefiles (`GRAMINE ?= saguaro-direct`, `make check GRAMINE=saguaro-vm`) is
+  `SAGUARO`; update own Makefiles and command lines with `sed -i 's/\bGRAMINE\b/SAGUARO/g'`.
 - **Environment variables** `GRAMINE_<X>` of the scripts and launchers are `SAGUARO_<X>`; install prefixes
   `~/.local/gramine*` are `~/.local/saguaro*`. Reinstall with `scripts/install.sh`; an old prefix and a
   `~/.local/bin/gramine-vbs` link of `--vbs` are not removed.
@@ -331,7 +333,7 @@ The tree was renamed to Saguaro. What an upgrader has to change (there are no al
 - **Unchanged**: the RA-TLS and mbedtls package names (`ra_tls_gramine`, `secret_prov_gramine`, `mbedtls_gramine`,
   `libra_tls_verify_dcap_gramine.so`, headers under `include/gramine/`), the manifest syntax, the C macros of the
   LibOS ABI and their header guard (`GRAMINE_CALL_*`, `GRAMINE_SYSCALL*`, ...), the C functions of the entry API
-  that patched libcs call (`gramine_register_library`, ...), the example Makefile variable `GRAMINE`, the legacy
+  that patched libcs call (`gramine_register_library`, ...), the example Makefile variable `SAGUARO`, the legacy
   fallbacks (`~/.config/gramine/enclave-key.pem`, `gramine-<name>` workspace folders) and the names qemu-tirith
   reads: the launcher exports `GRAMINE_RAM_BASES` and `GRAMINE_DATA_ADDR` for it (next to the `SAGUARO_` ones),
   its build uses `GRAMINE_ABI_ROOT`/`GRAMINE_ABI_DIR`, and `libos/src/graphics/xcb.c` (with `in_gramine_vm`) is

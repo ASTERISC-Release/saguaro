@@ -5,19 +5,19 @@
 
 set -e
 
-# VBS=1: GRAMINE is scripts/vbs/saguaro-vbs (make VBS=1 check); the servers listen on Windows, so
+# VBS=1: SAGUARO is scripts/vbs/saguaro-vbs (make VBS=1 check); the servers listen on Windows, so
 # the port is awaited and fetched on the Windows side (saguaro-vbs net / win)
-if test -z "${GRAMINE:-}"; then
+if test -z "${SAGUARO:-}"; then
     if test -n "$SGX"; then
-        GRAMINE=saguaro-sgx
+        SAGUARO=saguaro-sgx
     else
-        GRAMINE=saguaro-direct
+        SAGUARO=saguaro-direct
     fi
 fi
 
 # === helloworld ===
 echo -e "\n\nRunning helloworld.py:"
-$GRAMINE ./python scripts/helloworld.py > OUTPUT
+$SAGUARO ./python scripts/helloworld.py > OUTPUT
 grep -q "Hello World" OUTPUT && echo "[ Success 1/4 ]"
 rm OUTPUT
 
@@ -38,14 +38,14 @@ stop_http_server() {
 }
 if test "${SAGUARO_VM:-0}" = 1; then
     # Keep the VM launcher in its own process group so the guest and relay can be stopped together.
-    setsid "$GRAMINE" ./python scripts/dummy-web-server.py "$GUEST_HTTP_PORT" &
+    setsid "$SAGUARO" ./python scripts/dummy-web-server.py "$GUEST_HTTP_PORT" &
 else
-    "$GRAMINE" ./python scripts/dummy-web-server.py "$GUEST_HTTP_PORT" &
+    "$SAGUARO" ./python scripts/dummy-web-server.py "$GUEST_HTTP_PORT" &
 fi
 echo $! > server.PID
 trap stop_http_server EXIT INT TERM
 if test -n "${VBS:-}"; then
-    "$GRAMINE" net wait "$HTTP_PORT" 300
+    "$SAGUARO" net wait "$HTTP_PORT" 300
 else
     ../../scripts/wait_for_server 300 127.0.0.1 "$HTTP_PORT"
 fi
@@ -66,10 +66,10 @@ if test "${SAGUARO_VM:-0}" = 1; then
     done
     test "$http_ok" = 1 || python3 scripts/test-http.py 127.0.0.1 "$HTTP_PORT" > OUTPUT1
 else
-    "$GRAMINE" ./python scripts/test-http.py 127.0.0.1 "$GUEST_HTTP_PORT" > OUTPUT1
+    "$SAGUARO" ./python scripts/test-http.py 127.0.0.1 "$GUEST_HTTP_PORT" > OUTPUT1
 fi
 if test -n "${VBS:-}"; then
-    "$GRAMINE" win curl.exe -s "http://127.0.0.1:$HTTP_PORT/" > OUTPUT2
+    "$SAGUARO" win curl.exe -s "http://127.0.0.1:$HTTP_PORT/" > OUTPUT2
 else
     wget -q "http://127.0.0.1:$HTTP_PORT/" -O OUTPUT2
 fi
@@ -85,12 +85,12 @@ rm -f OUTPUT1 OUTPUT2
 # === numpy ===
 # (not packed in the aarch64 VBS example: Makefile)
 if test -z "${VBS_NO_NUMPY:-}"; then
-$GRAMINE ./python scripts/test-numpy.py > OUTPUT
+$SAGUARO ./python scripts/test-numpy.py > OUTPUT
 grep -q "dot: " OUTPUT && echo "[ Success 3/4 ]"
 rm OUTPUT
 
 # === scipy ===
-$GRAMINE ./python scripts/test-scipy.py > OUTPUT
+$SAGUARO ./python scripts/test-scipy.py > OUTPUT
 grep -q "cholesky: " OUTPUT && echo "[ Success 4/4 ]"
 rm OUTPUT
 fi
@@ -98,14 +98,14 @@ fi
 # === SGX quote ===
 if test -n "$SGX"
 then
-    $GRAMINE ./python scripts/sgx-report.py > OUTPUT
+    $SAGUARO ./python scripts/sgx-report.py > OUTPUT
     grep -q "Generated SGX report" OUTPUT && echo "[ Success SGX report ]"
     rm OUTPUT
 
     # the quote needs remote attestation (RA_TYPE=dcap, the AESM service and a PCCS)
     if test "${RA_TYPE:-none}" != none
     then
-        $GRAMINE ./python scripts/sgx-quote.py > OUTPUT
+        $SAGUARO ./python scripts/sgx-quote.py > OUTPUT
         grep -q "Extracted SGX quote" OUTPUT && echo "[ Success SGX quote ]"
         rm OUTPUT
     fi

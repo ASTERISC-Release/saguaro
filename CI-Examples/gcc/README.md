@@ -20,5 +20,5 @@ By hand:
 
 ```sh
 make
-make check              # compiles helloworld.c, bzip2.c and gzip.c and tests the results; GRAMINE=saguaro-vm etc., SGX=1 for SGX
+make check              # compiles helloworld.c, bzip2.c and gzip.c and tests the results; SAGUARO=saguaro-vm etc., SGX=1 for SGX
 ```

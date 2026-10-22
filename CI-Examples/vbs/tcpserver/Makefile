@@ -19,7 +19,7 @@ endif
 
 .PHONY: check
 check: all
-	GRAMINE="$(GRAMINE)" ./vbs-check.sh
+	SAGUARO="$(SAGUARO)" ./vbs-check.sh
 
 .PHONY: clean
 clean:

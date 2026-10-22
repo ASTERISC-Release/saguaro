@@ -52,9 +52,9 @@ sgx_sign: align_test.manifest align_test
 	saguaro-manifest-check $<.sgx
 
 ifeq ($(SGX),)
-GRAMINE = saguaro-direct
+SAGUARO = saguaro-direct
 else
-GRAMINE = saguaro-sgx
+SAGUARO = saguaro-sgx
 endif
 
 # align_test is a manual probe (it prints pointers and then sleeps), not a test: there is no `check`.

@@ -85,7 +85,7 @@ $(VBS_ROOT)/html/random/%.html: $(VBS_ROOT)/sbin/lighttpd
 
 .PHONY: check
 check: all
-	GRAMINE="$(GRAMINE)" PORT=$(PORT) ./vbs-check.sh
+	SAGUARO="$(SAGUARO)" PORT=$(PORT) ./vbs-check.sh
 endif
 
 lighttpd.manifest: lighttpd.manifest.template
@@ -142,23 +142,23 @@ start-native-server: all
 	$(INSTALL_DIR)/sbin/lighttpd -D -m $(INSTALL_DIR)/lib -f lighttpd.conf
 
 ifeq ($(VBS),1)
-# GRAMINE is saguaro-vbs (Makefile.vbs)
+# SAGUARO is saguaro-vbs (Makefile.vbs)
 else ifeq ($(SGX),)
-GRAMINE = saguaro-direct
+SAGUARO = saguaro-direct
 else
-GRAMINE = saguaro-sgx
+SAGUARO = saguaro-sgx
 endif
 
 # Note that command-line arguments are hardcoded in the manifest file.
 .PHONY: start-saguaro-server
 start-saguaro-server: all
-	$(GRAMINE) ./lighttpd
+	$(SAGUARO) ./lighttpd
 
 ifneq ($(VBS),1)
-# the server under $(GRAMINE), a client on the host's loopback (check.sh)
+# the server under $(SAGUARO), a client on the host's loopback (check.sh)
 .PHONY: check
 check: all
-	GRAMINE="$(GRAMINE)" ./check.sh
+	SAGUARO="$(SAGUARO)" ./check.sh
 endif
 
 .PHONY: clean

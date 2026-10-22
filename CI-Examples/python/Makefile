@@ -120,7 +120,7 @@ sgx_sign: python.manifest
 .PHONY: check
 check: all
 ifeq ($(VBS),1)
-	GRAMINE="$(GRAMINE)" VBS=1 $(if $(filter x86_64,$(shell uname -m)),,VBS_NO_NUMPY=1) ./run-tests.sh > TEST_STDOUT 2> TEST_STDERR
+	SAGUARO="$(SAGUARO)" VBS=1 $(if $(filter x86_64,$(shell uname -m)),,VBS_NO_NUMPY=1) ./run-tests.sh > TEST_STDOUT 2> TEST_STDERR
 	@grep -q "Success 1/4" TEST_STDOUT
 	@grep -q "Success 2/4" TEST_STDOUT
 ifeq ($(shell uname -m),x86_64)

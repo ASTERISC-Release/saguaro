@@ -19,7 +19,7 @@ endif
 
 .PHONY: check
 check: all
-	$(GRAMINE) helloworld > OUTPUT
+	$(SAGUARO) helloworld > OUTPUT
 	grep -q "^Hello, world from a VBS enclave (pid [0-9]*, 0 arguments)$$" OUTPUT
 	@echo "[ Success ]"
 

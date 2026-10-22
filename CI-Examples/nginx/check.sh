@@ -2,19 +2,19 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 # SPDX-License-Identifier: BSD-3-Clause
 #
-# `make check` (direct, vm and sev): nginx runs under $GRAMINE and curl on the host fetches the 10 KiB
+# `make check` (direct, vm and sev): nginx runs under $SAGUARO and curl on the host fetches the 10 KiB
 # test page over HTTP (8002) and HTTPS (8444, self-signed); both must be byte-identical to the file.
 # Under the vm and sev nginx runs as one process: the guest cannot create worker processes, so
 # `master_process off;` is added to the installed configuration.
 set -uo pipefail
-: "${GRAMINE:=saguaro-direct}"
+: "${SAGUARO:=saguaro-direct}"
 . ../common_tools/server-check.sh
-case $GRAMINE in
+case $SAGUARO in
     saguaro-vm|saguaro-sev)
         grep -q '^master_process' install/conf/nginx-saguaro.conf \
             || sed -i '1i master_process off;' install/conf/nginx-saguaro.conf ;;
 esac
-server_start 8002:8002,8444:8444 "$GRAMINE" ./nginx
+server_start 8002:8002,8444:8444 "$SAGUARO" ./nginx
 fetch() {
     curl -sf --max-time 5 http://127.0.0.1:8002/random/10K.1.html -o fetched-http.html \
         && curl -sfk --max-time 5 https://127.0.0.1:8444/random/10K.1.html -o fetched-https.html

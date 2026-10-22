@@ -58,11 +58,11 @@ sgx_sign: nodejs.manifest
 		--output $<.sgx
 
 ifeq ($(VBS),1)
-# GRAMINE is saguaro-vbs (Makefile.vbs)
+# SAGUARO is saguaro-vbs (Makefile.vbs)
 else ifeq ($(SGX),)
-GRAMINE = saguaro-direct
+SAGUARO = saguaro-direct
 else
-GRAMINE = saguaro-sgx
+SAGUARO = saguaro-sgx
 endif
 
 ifeq ($(VBS),1)
@@ -91,11 +91,11 @@ vbs-build/lib/libgcc_s.so.1:
 
 .PHONY: check
 check: all
-	GRAMINE="$(GRAMINE)" ./vbs-check.sh
+	SAGUARO="$(SAGUARO)" ./vbs-check.sh
 else
 .PHONY: check
 check: all
-	$(GRAMINE) ./nodejs helloworld.js > OUTPUT
+	$(SAGUARO) ./nodejs helloworld.js > OUTPUT
 	@grep -q "Hello World" OUTPUT && echo "[ Success 1/1 ]"
 	@rm OUTPUT
 endif
