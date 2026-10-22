@@ -81,7 +81,7 @@ def run(ctx, force, verbose, name, args):
     name = strip_suffix(name)
 
     rebuild(sgx, ctx.obj['conf_file_name'], name, force=force, verbose=verbose)
-    util_tests.exec_gramine(sgx, name, args)
+    util_tests.exec_saguaro(sgx, name, args)
 
 
 # NOTE: We do not accept the `-v/-q` short options in the below command, because Pytest accepts the

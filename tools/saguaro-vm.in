@@ -323,7 +323,7 @@ fi
 # same time on the same machine. They are used as IDs for the virtiofs and the vsock guest-cid.
 # SAGUARO_VM_ID_BASE: set per workspace by container/run.sh, so that containers of different
 # checkouts do not pick the same (host-global) guest CID.
-DEFAULT_GRAMINE_VM_ID=${SAGUARO_VM_ID_BASE:-10}
+DEFAULT_SAGUARO_VM_ID=${SAGUARO_VM_ID_BASE:-10}
 SAGUARO_VM_ID=$(python3 -c "
 import psutil
 import re
@@ -348,7 +348,7 @@ for process in qemu_processes:
         used_cids.add(guest_cid)
 
 # Identify the next available Saguaro VM ID based on the uniquely assigned vsock guest-cid.
-cid = "$DEFAULT_GRAMINE_VM_ID"
+cid = "$DEFAULT_SAGUARO_VM_ID"
 while cid in used_cids:
     cid += 1
 

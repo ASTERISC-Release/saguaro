@@ -1,11 +1,11 @@
-gramine_vcs_tag = vcs_tag(
+saguaro_vcs_tag = vcs_tag(
     command: ['git', 'rev-parse', '--verify', 'HEAD'],
     input: 'vcs_tag.in',
     output: 'vcs_tag',
 )
 
 common_render_defines = [
-    '--config', gramine_vcs_tag,
+    '--config', saguaro_vcs_tag,
     '-D', 'VERSION=@0@'.format(meson.project_version()),
     '-D', 'PREFIX=@0@'.format(get_option('prefix')),
     '-D', 'BINDIR=@0@'.format(get_option('bindir')),
@@ -58,11 +58,11 @@ endif
 
 if vm
     hostpalpath_vm = join_paths(get_option('prefix'), pkglibdir, 'vm')
-    conf_gramine_vm = configuration_data()
-    conf_gramine_vm.merge_from(conf)
-    conf_gramine_vm.set_quoted('HOST_PAL_PATH', hostpalpath_vm)
-    conf_gramine_vm.set_quoted('BIOS_PATH', join_paths(hostpalpath_vm, 'bios'))
-    conf_gramine_vm.set_quoted('LIBPAL_PATH', join_paths(hostpalpath_vm, 'pal'))
+    conf_saguaro_vm = configuration_data()
+    conf_saguaro_vm.merge_from(conf)
+    conf_saguaro_vm.set_quoted('HOST_PAL_PATH', hostpalpath_vm)
+    conf_saguaro_vm.set_quoted('BIOS_PATH', join_paths(hostpalpath_vm, 'bios'))
+    conf_saguaro_vm.set_quoted('LIBPAL_PATH', join_paths(hostpalpath_vm, 'pal'))
 
     # The x86 launcher (q35, BIOS blob, NUMA DIMMs, vhost-vsock) cannot work on aarch64: the
     # arm one boots the kernel under QEMU `virt` with a dumped DTB. Both install as `saguaro-vm`.
@@ -72,7 +72,7 @@ if vm
     configure_file(
         input: host_machine.cpu_family() == 'aarch64' ? 'saguaro-vm-aarch64.in' : 'saguaro-vm.in',
         output: 'saguaro-vm',
-        configuration: conf_gramine_vm,
+        configuration: conf_saguaro_vm,
         install_dir: get_option('bindir'),
         install_mode: 'rwxr-xr-x',
     )
@@ -81,20 +81,20 @@ endif
 if sev
     # saguaro-sev is saguaro-vm.in with the paths of the SEV build of the vm PAL (pal/src/host/vm/sev)
     hostpalpath_sev = join_paths(get_option('prefix'), pkglibdir, 'sev')
-    conf_gramine_sev = configuration_data()
-    conf_gramine_sev.merge_from(conf)
-    conf_gramine_sev.set_quoted('HOST_PAL_PATH', hostpalpath_sev)
-    conf_gramine_sev.set_quoted('BIOS_PATH', join_paths(hostpalpath_sev, 'bios'))
-    conf_gramine_sev.set_quoted('LIBPAL_PATH', join_paths(hostpalpath_sev, 'pal'))
-    conf_gramine_sev.set_quoted('SEV_IGVM_PATH', join_paths(hostpalpath_sev, 'saguaro-sev.igvm'))
-    conf_gramine_sev.set_quoted('SEV_QEMU_PATH', get_option('sev_qemu'))
+    conf_saguaro_sev = configuration_data()
+    conf_saguaro_sev.merge_from(conf)
+    conf_saguaro_sev.set_quoted('HOST_PAL_PATH', hostpalpath_sev)
+    conf_saguaro_sev.set_quoted('BIOS_PATH', join_paths(hostpalpath_sev, 'bios'))
+    conf_saguaro_sev.set_quoted('LIBPAL_PATH', join_paths(hostpalpath_sev, 'pal'))
+    conf_saguaro_sev.set_quoted('SEV_IGVM_PATH', join_paths(hostpalpath_sev, 'saguaro-sev.igvm'))
+    conf_saguaro_sev.set_quoted('SEV_QEMU_PATH', get_option('sev_qemu'))
 
     install_data('saguaro-vm-relay.sh', install_dir: hostpalpath_sev, rename: 'vm-relay.sh')
 
     configure_file(
         input: 'saguaro-vm.in',
         output: 'saguaro-sev',
-        configuration: conf_gramine_sev,
+        configuration: conf_saguaro_sev,
         install_dir: get_option('bindir'),
         install_mode: 'rwxr-xr-x',
     )
@@ -102,9 +102,9 @@ endif
 
 if tdx
     hostpalpath_tdx = join_paths(get_option('prefix'), pkglibdir, 'tdx')
-    conf_gramine_tdx = configuration_data()
-    conf_gramine_tdx.merge_from(conf)
-    conf_gramine_tdx.set_quoted('TDSHIM_PAL_PATH', join_paths(hostpalpath_tdx, 'tdshim-pal'))
+    conf_saguaro_tdx = configuration_data()
+    conf_saguaro_tdx.merge_from(conf)
+    conf_saguaro_tdx.set_quoted('TDSHIM_PAL_PATH', join_paths(hostpalpath_tdx, 'tdshim-pal'))
 
     # saguaro-tdx is saguaro-vm.in with the TDX paths: it sources the same relay library
     install_data('saguaro-vm-relay.sh', install_dir: hostpalpath_tdx, rename: 'vm-relay.sh')
@@ -112,7 +112,7 @@ if tdx
     configure_file(
         input: 'saguaro-vm.in',
         output: 'saguaro-tdx',
-        configuration: conf_gramine_tdx,
+        configuration: conf_saguaro_tdx,
         install_dir: get_option('bindir'),
     )
 endif

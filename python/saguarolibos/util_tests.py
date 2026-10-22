@@ -67,7 +67,7 @@ class TestConfig:
 
         self.libc = data.get('libc', 'glibc')
 
-        self.no_check = data.get('gramine-manifest-no-check', False)
+        self.no_check = data.get('saguaro-manifest-no-check', False)
 
         self.arch_libdir = _CONFIG_SYSLIBDIR
 
@@ -246,7 +246,7 @@ def run_ninja(args):
     subprocess.check_call(argv)
 
 
-def exec_gramine(sgx, name, args):
+def exec_saguaro(sgx, name, args):
     prog = ('saguaro-sgx' if sgx else
             'saguaro-vm' if os.environ.get('SAGUARO_VM') == '1' else 'saguaro-direct')
     argv = [prog, name] + list(args)

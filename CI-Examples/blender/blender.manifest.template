@@ -7,14 +7,14 @@ libos.entrypoint = "/blender/blender"
 
 loader.log_level = "{{ log_level }}"
 
-loader.env.LD_LIBRARY_PATH = "/gramine_lib:/blender_lib:/usr/{{ arch_libdir }}:{{ arch_libdir }}"
+loader.env.LD_LIBRARY_PATH = "/saguaro_lib:/blender_lib:/usr/{{ arch_libdir }}:{{ arch_libdir }}"
 loader.env.HOME = "/home/user"
 loader.env.PWD = ""
 
 loader.insecure__use_cmdline_argv = true
 
 fs.mounts = [
-  { path = "/gramine_lib", uri = "file:{{ saguaro.runtimedir() }}" },
+  { path = "/saguaro_lib", uri = "file:{{ saguaro.runtimedir() }}" },
   { path = "/blender_lib", uri = "file:{{ blender_dir }}/lib" },
   { path = "{{ arch_libdir }}", uri = "file:{{ arch_libdir }}" },
   { path = "/usr/{{ arch_libdir }}", uri = "file:/usr/{{ arch_libdir }}" },

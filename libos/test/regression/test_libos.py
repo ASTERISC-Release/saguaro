@@ -804,8 +804,8 @@ class TC_30_Syscall(RegressionTestCase):
         self.assertIn('Test was successful', stdout)
 
     def test_030_fopen(self):
-        if os.path.exists("tmp/filecreatedbygramine"):
-            os.remove("tmp/filecreatedbygramine")
+        if os.path.exists("tmp/filecreatedbysaguaro"):
+            os.remove("tmp/filecreatedbysaguaro")
         stdout, _ = self.run_binary(['fopen_cornercases'])
 
         # fopen corner cases
