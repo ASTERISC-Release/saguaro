@@ -3,7 +3,7 @@
 
 # Redis manifest file example
 
-################################## GRAMINE ####################################
+################################## SAGUARO ####################################
 
 # Entrypoint binary which Saguaro invokes.
 libos.entrypoint = "/redis-server"
