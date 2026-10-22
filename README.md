@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="Documentation/img/saguaro-icon.svg" alt="Saguaro icon: a saguaro cactus against a desert sunset" width="144">
+</p>
+
 # Saguaro
 
 *A library OS for sandboxed and confidential workloads, derived from Gramine.*
