@@ -5,6 +5,7 @@
 
 import click
 import voluptuous
+from jinja2.exceptions import UndefinedError
 
 try:
     from tomllib import TOMLDecodeError
@@ -39,6 +40,9 @@ def main(ctx, string, define, infile, outfile, check):
         manifest = Manifest.from_template(template, define)
     except TOMLDecodeError as err:
         click.echo(f'ERROR: failed to parse manifest template: {err!s}', err=True)
+        ctx.exit(1)
+    except UndefinedError as err:
+        click.echo(f'ERROR: failed to render manifest template: {err!s}', err=True)
         ctx.exit(1)
 
     if check:
