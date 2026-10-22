@@ -28,11 +28,11 @@
 #   EXAMPLE_NOTE       why it is skipped on this host when no backend applies (printed with the SKIP)
 #
 # Backends and where they are installed (scripts/install.sh; override with the env vars):
-#   direct   $SAGUARO_DIRECT_PREFIX (default ~/.local/gramine)      gramine-direct
-#   vm       $SAGUARO_VM_PREFIX     (default ~/.local/gramine-vm)   gramine-vm, needs /dev/kvm
+#   direct   $SAGUARO_DIRECT_PREFIX (default ~/.local/saguaro)      gramine-direct
+#   vm       $SAGUARO_VM_PREFIX     (default ~/.local/saguaro-vm)   gramine-vm, needs /dev/kvm
 #   sev      $SAGUARO_VM_PREFIX     (same install as vm, --sev)     gramine-sev, x86_64 with SEV; plain SEV
 #   sev-snp  (same install and runner as sev)                        gramine-sev in SEV-SNP mode
-#   sgx      $SAGUARO_SGX_PREFIX    (default ~/.local/gramine-sgx)   gramine-sgx, x86_64 with SGX (/dev/sgx_enclave);
+#   sgx      $SAGUARO_SGX_PREFIX    (default ~/.local/saguaro-sgx)   gramine-sgx, x86_64 with SGX (/dev/sgx_enclave);
 #            scripts/install.sh --sgx; make SGX=1 signs the enclave with ~/.config/gramine/enclave-key.pem
 #   vbs      scripts/install.sh --vbs, in WSL on a Windows machine   Windows VBS enclave (make VBS=1); an
 #            with VBS enclaves                                       example offers it when it has a
@@ -54,14 +54,14 @@
 # Exit status: 0 when nothing failed, 1 when a backend failed or cannot run here (the reason is
 # printed), 2 for a usage error.
 # Environment: EXEC_TIMEOUT (seconds per run, default 300; EXEC_BUILD_TIMEOUT, default 3600, for the build
-# of a vbs image), EXEC_LOG_DIR (default /tmp/gramine-exec),
+# of a vbs image), EXEC_LOG_DIR (default /tmp/saguaro-exec),
 # The backend sets SAGUARO_SEV_MODE for gramine-sev: sev for --sev, snp for --sev-snp.
 
 # EXEC_DIR (the directory to build and run in) and EXAMPLE_NAME default to the exec.sh's own directory;
 # unit_tests/exec.sh sets them to run each test of its subdirectories
 EXEC_DIR=${EXEC_DIR:-$(cd "$(dirname "$(readlink -f "$0")")" && pwd)}
 EXAMPLE_NAME=${EXAMPLE_NAME:-$(basename "$EXEC_DIR")}
-EXEC_LOG_DIR=${EXEC_LOG_DIR:-/tmp/gramine-exec}
+EXEC_LOG_DIR=${EXEC_LOG_DIR:-/tmp/saguaro-exec}
 EXEC_TIMEOUT=${EXEC_TIMEOUT:-300}
 
 exec_host_arch() { uname -m; }
@@ -77,9 +77,9 @@ backend_base() {
 # backend_prefix <backend>
 backend_prefix() {
     case $(backend_base "$1") in
-        direct) echo "${SAGUARO_DIRECT_PREFIX:-$HOME/.local/gramine}" ;;
-        vm|sev) echo "${SAGUARO_VM_PREFIX:-$HOME/.local/gramine-vm}" ;;
-        sgx)    echo "${SAGUARO_SGX_PREFIX:-$HOME/.local/gramine-sgx}" ;;
+        direct) echo "${SAGUARO_DIRECT_PREFIX:-$HOME/.local/saguaro}" ;;
+        vm|sev) echo "${SAGUARO_VM_PREFIX:-$HOME/.local/saguaro-vm}" ;;
+        sgx)    echo "${SAGUARO_SGX_PREFIX:-$HOME/.local/saguaro-sgx}" ;;
     esac
 }
 

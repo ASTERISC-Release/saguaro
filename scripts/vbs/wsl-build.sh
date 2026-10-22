@@ -11,7 +11,7 @@
 #       Files with CRLF line ends (a checkout made with core.autocrlf=true) get LF line ends and
 #       files starting with #! the executable bit (NTFS keeps none); modification times are kept,
 #       so unchanged files do not rebuild. Files of the previous sync that are no longer in the
-#       tar are removed (the list is in GV_DEST/.gramine-vbs-synced).
+#       tar are removed (the list is in GV_DEST/.saguaro-vbs-synced).
 #   wsl-build.sh objs      compile the Windows enclave runtime and host (build-objs.sh)
 #       GV_PACK  pack.py output folder in the distribution (empty: no packed objects)
 #   wsl-build.sh manifest  the whole Linux side for a manifest: the vbs glibc and the meson build of
@@ -26,7 +26,7 @@
 #       GV_HDRTAR    tar (translated) of the SDK's um, shared, ucrt and MSVC's include folders; only
 #                    needed when the headers of GV_HDRID are not cached yet (exit code 10 asks)
 #
-# The headers are unpacked once per GV_HDRID into ~/.cache/gramine-vbs/winhdr/<id> (the
+# The headers are unpacked once per GV_HDRID into ~/.cache/saguaro-vbs/winhdr/<id> (the
 # case-insensitive name shims of build-objs.sh need a writable copy in a case-sensitive file
 # system; a tar made by tar.exe on Windows and unpacked here takes 4 s, `cp -r` from /mnt/c 26 s).
 # Exit codes: 10 headers needed, 11 tools missing (wsl-setup.sh), others: a failed step.
@@ -34,7 +34,7 @@ set -e
 
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../.." && pwd)
-TOOLS=${SAGUARO_VBS_TOOLS:-$HOME/.local/share/gramine-vbs/tools}
+TOOLS=${SAGUARO_VBS_TOOLS:-$HOME/.local/share/saguaro-vbs/tools}
 [ -f "$TOOLS/env.sh" ] && . "$TOOLS/env.sh"
 MODE=${1:-}
 
@@ -70,7 +70,7 @@ if n:
     print(f'[wsl] {n} files had Windows (CRLF) line ends: converted to LF')
 # files of the previous sync that are gone on Windows are removed here too (build outputs, which
 # were never synced, stay)
-lst = os.path.join(dest, '.gramine-vbs-synced')
+lst = os.path.join(dest, '.saguaro-vbs-synced')
 try:
     old = set(open(lst).read().splitlines())
 except OSError:
@@ -93,7 +93,7 @@ case "$MODE" in objs|manifest) ;; *) echo "usage: wsl-build.sh sync|objs|manifes
 : "${GV_OUT:?}" "${GV_HDRID:?}"
 sh "$HERE/wsl-setup.sh" check clang >/dev/null || { sh "$HERE/wsl-setup.sh" check clang; exit 11; }
 
-HDR=${SAGUARO_VBS_HEADERS:-$HOME/.cache/gramine-vbs/winhdr/$GV_HDRID}
+HDR=${SAGUARO_VBS_HEADERS:-$HOME/.cache/saguaro-vbs/winhdr/$GV_HDRID}
 if [ ! -f "$HDR/.complete" ]; then
     [ -n "$GV_HDRTAR" ] && [ -f "$GV_HDRTAR" ] || exit 10
     log "unpacking the Windows SDK and MSVC headers ($GV_HDRID) into $HDR"

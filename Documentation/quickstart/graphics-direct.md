@@ -28,7 +28,7 @@ checkout has to be removed first (`container/run.sh down`, which discards the in
 it). Then, inside:
 
     scripts/install.sh                 # the direct PAL
-    . ~/.local/gramine/env.sh
+    . ~/.local/saguaro/env.sh
     mkdir -p ~/.cache                  # the -direct manifests mount it
 
 On AArch64 the container image lacks the games' build dependencies; inside the container (as its

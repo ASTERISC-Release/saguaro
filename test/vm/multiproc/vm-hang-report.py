@@ -11,7 +11,7 @@ Usage: vm-hang-report.py <monitor-socket> [--quit] [--samples N]
 import argparse, bisect, glob, os, re, socket, subprocess, time
 
 def pal_symbols():
-    prefix = os.environ.get('SAGUARO_PREFIX', os.path.expanduser('~/.local/gramine-vm'))
+    prefix = os.environ.get('SAGUARO_PREFIX', os.path.expanduser('~/.local/saguaro-vm'))
     pals = glob.glob(os.path.join(prefix, 'lib', '*', 'gramine', 'vm', 'pal'))
     if not pals:
         return [], []

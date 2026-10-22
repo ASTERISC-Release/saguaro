@@ -14,8 +14,8 @@
 #   test/direct/test-direct.sh --no-build      # skip manifest rebuilds of the pytest suites
 #
 # Environment overrides:
-#   SAGUARO_PREFIX   install prefix (default: ~/.local/gramine)
-#   LOGDIR           per-test log directory (default: ${TMPDIR:-/tmp}/gramine-multiarch-tests)
+#   SAGUARO_PREFIX   install prefix (default: ~/.local/saguaro)
+#   LOGDIR           per-test log directory (default: ${TMPDIR:-/tmp}/saguaro-tests)
 #   SAGUARO_RUNNER   gramine-direct (default) or gramine-vm: run the server examples (redis, memcached,
 #                    lighttpd, nginx, rust) and `networks` under the VM PAL instead. The install must be
 #                    a --vm build; each server's guest port is forwarded to the same port on 127.0.0.1
@@ -54,7 +54,7 @@
 #   #    (Keep the vm/tdx PALs disabled for this direct-PAL test battery.)
 #   meson setup build-$(uname -m) -Dbuildtype=release -Ddirect=enabled \
 #       -Dsgx=disabled -Dvm=disabled -Dtdx=disabled -Dtests=enabled \
-#       -Dlibc=glibc -Dprefix="$HOME/.local/gramine"
+#       -Dlibc=glibc -Dprefix="$HOME/.local/saguaro"
 #   ninja -C build-$(uname -m)
 #   ninja -C build-$(uname -m) install
 #
@@ -90,7 +90,7 @@
 set -u
 
 REPO="$(cd "$(dirname "$(readlink -f "$0")")/../.." && pwd)"
-. "$REPO/scripts/gramine-env.sh"   # SAGUARO_PREFIX, PATH, PYTHONPATH, LOGDIR
+. "$REPO/scripts/saguaro-env.sh"   # SAGUARO_PREFIX, PATH, PYTHONPATH, LOGDIR
 mkdir -p "$LOGDIR"
 
 ALL_SUITES=(pal libos helloworld multithread busybox bash redis memcached \

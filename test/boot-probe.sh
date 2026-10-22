@@ -13,7 +13,7 @@ HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 REPO_ROOT=$(dirname "$HERE")
 cd "$REPO_ROOT/CI-Examples/graphics/glxgears"
 
-. ~/.local/gramine-vm/env.sh
+. ~/.local/saguaro-vm/env.sh
 export QEMU_PATH=${QEMU_PATH:-/root/qemu-tirith/build/qemu-system-x86_64}
 export SAGUARO_RAM_SIZE=$RAM
 

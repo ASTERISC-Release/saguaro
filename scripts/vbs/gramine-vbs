@@ -43,7 +43,7 @@ Settings (options override the environment):
   --runtime DIR / SAGUARO_VBS_RUNTIME     the meson build directory of `-Dvbs=enabled` (or a folder
                                           with libpal.so, libsysdb.so and vdso.so)
   --headers DIR / SAGUARO_VBS_HEADERS     the copied Windows headers (default
-                                          ~/.cache/gramine-vbs/winhdr; see setup-headers)
+                                          ~/.cache/saguaro-vbs/winhdr; see setup-headers)
   --windows HOST / SAGUARO_VBS_WINDOWS    ssh destination of the Windows machine; "local": the
                                           Windows of this machine, from WSL through interop
                                           (powershell.exe and /mnt paths; the default in WSL
@@ -305,9 +305,9 @@ class Build:
 
 
 def default_headers():
-    """~/.cache/gramine-vbs/winhdr (setup-headers), or the newest copy that gramine-vbs.ps1 left
-    in ~/.cache/gramine-vbs/winhdr/<SDK>-<MSVC> (a WSL distribution used by the Windows tool)"""
-    base = os.path.expanduser('~/.cache/gramine-vbs/winhdr')
+    """~/.cache/saguaro-vbs/winhdr (setup-headers), or the newest copy that gramine-vbs.ps1 left
+    in ~/.cache/saguaro-vbs/winhdr/<SDK>-<MSVC> (a WSL distribution used by the Windows tool)"""
+    base = os.path.expanduser('~/.cache/saguaro-vbs/winhdr')
     if os.path.isdir(os.path.join(base, 'sdk', 'um')):
         return base
     try:
@@ -881,7 +881,7 @@ exit $LASTEXITCODE
 def cmd_setup_headers(args):
     host = windows_host(args)
     hdr = setting(args, 'headers', 'SAGUARO_VBS_HEADERS',
-                  os.path.expanduser('~/.cache/gramine-vbs/winhdr'))
+                  os.path.expanduser('~/.cache/saguaro-vbs/winhdr'))
     work = windows_dir(args, host, 'headers', explicit=getattr(args, 'cmd', '') == 'setup-headers')
     log(f'collecting the Windows SDK and MSVC headers on {host} (in {work})')
     rc, out = ps(host, f'$t = {psq(work)}\n' + r'''
@@ -915,7 +915,7 @@ def tools_env():
     """Re-executes with the user-level build tools of `wsl-setup.sh user` (env.sh) in the
     environment, so that make and scripts can call gramine-vbs directly."""
     tools = os.environ.get('SAGUARO_VBS_TOOLS',
-                           os.path.expanduser('~/.local/share/gramine-vbs/tools'))
+                           os.path.expanduser('~/.local/share/saguaro-vbs/tools'))
     envsh = os.path.join(tools, 'env.sh')
     if os.path.isfile(envsh) and not os.environ.get('SAGUARO_VBS_TOOLS_ENV'):
         os.environ['SAGUARO_VBS_TOOLS_ENV'] = '1'

@@ -37,10 +37,10 @@ Gramine. QEMU 11.1.2 with `sev-snp-guest` and IGVM (including a local patch for 
     container/run.sh "container/sev/build-sev-tools.sh all"
     container/run.sh "scripts/install.sh --sev --graphics disabled"   # vm PAL + SEV PAL + gramine-sev
 
-`--sev` builds the normal vm PAL as well, into `~/.local/gramine-vm` (the same prefix as
+`--sev` builds the normal vm PAL as well, into `~/.local/saguaro-vm` (the same prefix as
 `--vm`); `gramine-sev` uses the QEMU of `sev-tools/` when `QEMU_PATH` is not set.
 `--graphics disabled` leaves out the graphics paths, which the SEV guest does not use.
-`container/run.sh` loads `~/.local/gramine-vm/env.sh` by itself, so the commands below need no
+`container/run.sh` loads `~/.local/saguaro-vm/env.sh` by itself, so the commands below need no
 environment step.
 
 # 2. Example: Hello World
@@ -100,8 +100,8 @@ server) and its measurement against the IGVM file:
     export PATH=/root/sev-tools/prefix/bin:$PATH
     snpguest fetch ca pem /tmp/certs milan -e vcek
     snpguest fetch vcek pem /tmp/certs /tmp/report.bin
-    python3 ~/.local/gramine-vm/lib/x86_64-linux-gnu/gramine/sev/gramine-sev-igvm.py verify-snp \
-        ~/.local/gramine-vm/lib/x86_64-linux-gnu/gramine/sev/gramine-sev.igvm /tmp/report.bin \
+    python3 ~/.local/saguaro-vm/lib/x86_64-linux-gnu/gramine/sev/gramine-sev-igvm.py verify-snp \
+        ~/.local/saguaro-vm/lib/x86_64-linux-gnu/gramine/sev/gramine-sev.igvm /tmp/report.bin \
         --vcpus 1 --certs /tmp/certs
 
 which ends with `ok   signature by the VCEK` and `OK`. The measurement covers the PAL and its

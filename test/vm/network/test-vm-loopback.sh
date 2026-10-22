@@ -16,12 +16,12 @@
 #   SAGUARO_VM_LAUNCHER=gramine-vm             or gramine-sev (dev docs: sev/)
 #
 # Prerequisite: a vm build installed with `scripts/install.sh --vm` (default prefix
-# ~/.local/gramine-vm). Run it where /dev/kvm and /dev/vhost-vsock exist (the container).
+# ~/.local/saguaro-vm). Run it where /dev/kvm and /dev/vhost-vsock exist (the container).
 set -u
 set -o pipefail
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 REPO=$(cd "$HERE/../../.." && pwd)
-PREFIX=${SAGUARO_PREFIX:-$HOME/.local/gramine-vm}
+PREFIX=${SAGUARO_PREFIX:-$HOME/.local/saguaro-vm}
 SEQUENTIAL=${SEQUENTIAL:-100}
 CONCURRENT=${CONCURRENT:-16}
 SIZE=${SIZE:-8192}

@@ -8,7 +8,7 @@
 # What the PAL allocates at startup (paths, the manifest, the environment) decides where its heap
 # runs out of free slots. A LibOS that allocates PAL handles at the wrong moment of its start then
 # fails only for some lengths of the install path (dev docs: vm-multiproc/FINDINGS.md,
-# 2026-10-15: 036a982b faulted with the default prefix ~/.local/gramine, 20 characters, and not with
+# 2026-10-15: 036a982b faulted with the default prefix ~/.local/saguaro, 20 characters, and not with
 # the CI prefix). This sweep makes such a fault show up whatever prefix the developer or CI uses.
 #
 # The copies are hard links (cp -al; plain copies when SWEEP_DIR is on another file system) under
@@ -16,12 +16,12 @@
 # libos/test/regression/fork_and_exec.manifest (run `test/direct/test-direct.sh libos` once first).
 #
 # Usage: test/direct/direct-prefix-sweep.sh
-# Environment: SAGUARO_PREFIX (default ~/.local/gramine), SWEEP_DIR (default /tmp/gps), MAX (longest
+# Environment: SAGUARO_PREFIX (default ~/.local/saguaro), SWEEP_DIR (default /tmp/gps), MAX (longest
 # path, default 72).
 set -euo pipefail
 
 REPO=$(cd "$(dirname "$(readlink -f "$0")")/../.." && pwd)
-PREFIX=$(readlink -f "${SAGUARO_PREFIX:-$HOME/.local/gramine}")
+PREFIX=$(readlink -f "${SAGUARO_PREFIX:-$HOME/.local/saguaro}")
 SWEEP_DIR=${SWEEP_DIR:-/tmp/gps}
 MAX=${MAX:-72}
 REG=$REPO/libos/test/regression

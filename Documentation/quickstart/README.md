@@ -25,10 +25,10 @@ applicable.
   The one exception is the Windows VBS enclave ([vbs-windows.md](vbs-windows.md)), which runs in
   WSL on a Windows machine.
 - **Installation is `scripts/install.sh`** (there is no top-level `install.sh`). No option installs
-  the direct backend into `~/.local/gramine`; `--vm` the vm PAL into `~/.local/gramine-vm`;
+  the direct backend into `~/.local/saguaro`; `--vm` the vm PAL into `~/.local/saguaro-vm`;
   `--sev --graphics disabled` the vm PAL with the SEV PAL and `gramine-sev`; `--sgx` the SGX backend into
-  `~/.local/gramine-sgx`; `--vbs` the WSL side of
-  the VBS tooling and runtime. `container/run.sh` loads `~/.local/gramine-vm/env.sh` itself when
+  `~/.local/saguaro-sgx`; `--vbs` the WSL side of
+  the VBS tooling and runtime. `container/run.sh` loads `~/.local/saguaro-vm/env.sh` itself when
   it exists.
 - **Examples run through `./exec.sh`** in the directory of the example under `CI-Examples/`:
   `./exec.sh --direct | --vm | --sev | --sev-snp | --sgx | --vbs`. A backend is required. See the

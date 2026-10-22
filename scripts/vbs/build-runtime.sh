@@ -10,7 +10,7 @@ set -e
 
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../.." && pwd)
-TOOLS=${SAGUARO_VBS_TOOLS:-$HOME/.local/share/gramine-vbs/tools}
+TOOLS=${SAGUARO_VBS_TOOLS:-$HOME/.local/share/saguaro-vbs/tools}
 [ -f "$TOOLS/env.sh" ] && . "$TOOLS/env.sh"
 PREFIX=${SAGUARO_VBS_LOG_PREFIX:-[vbs-runtime]}
 

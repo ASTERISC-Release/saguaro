@@ -74,7 +74,7 @@ vm_relay_start() {
         return 1
     fi
 
-    RELAY_LOG=$(mktemp /tmp/gramine-vm-relay.XXXXXX)
+    RELAY_LOG=$(mktemp /tmp/saguaro-vm-relay.XXXXXX)
     IFS=, read -ra rules <<< "${SAGUARO_VM_INBOUND:-}"
     for rule in "${rules[@]}"; do
         [ -n "$rule" ] && args+=(--inbound "$rule")

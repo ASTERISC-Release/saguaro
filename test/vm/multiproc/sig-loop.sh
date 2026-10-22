@@ -14,7 +14,7 @@
 set -u
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 REPO=$(cd "$HERE/../../.." && pwd)
-PREFIX=${SAGUARO_PREFIX:-$HOME/.local/gramine-vm}
+PREFIX=${SAGUARO_PREFIX:-$HOME/.local/saguaro-vm}
 . "$PREFIX/env.sh"
 export SAGUARO_CPU_NUM=${SAGUARO_CPU_NUM:-2}
 N=${1:-100}

@@ -365,10 +365,10 @@ fi
 
 # The console is stdio, with a log copy so the guest's exit code can be recovered afterwards: the
 # guest ends with a triple fault, so QEMU's own exit status says nothing about the application.
-CONSOLE_LOG=$(mktemp /tmp/gramine-vm-console.XXXXXX)
+CONSOLE_LOG=$(mktemp /tmp/saguaro-vm-console.XXXXXX)
 # The serial port (COM1) gets what the guest logs before its console is up (boot stamps, early
 # errors); it is shown only when the guest ends without reporting an exit code.
-SERIAL_LOG=$(mktemp /tmp/gramine-vm-serial.XXXXXX)
+SERIAL_LOG=$(mktemp /tmp/saguaro-vm-serial.XXXXXX)
 XPROXY_LOG=
 cleanup() {
     rm -f "$CONSOLE_LOG" "$SERIAL_LOG" ${XPROXY_LOG:+"$XPROXY_LOG"}
@@ -478,7 +478,7 @@ if [ -n "$X_DISPLAY_NUM" ] && [ "${SAGUARO_VM_X_PROXY:-1}" != "0" ]; then
             echo "Error: the X socket $HOST_X_SOCKET does not exist (DISPLAY='$HOST_DISPLAY')." >&2
             exit 2
         fi
-        XPROXY_LOG=$(mktemp /tmp/gramine-vm-xproxy.XXXXXX)
+        XPROXY_LOG=$(mktemp /tmp/saguaro-vm-xproxy.XXXXXX)
         socat -b 1048576 "VSOCK-LISTEN:$XPROXY_PORT,fork,reuseaddr,max-children=50" \
             "UNIX-CONNECT:$HOST_X_SOCKET" >"$XPROXY_LOG" 2>&1 &
         XPROXY_PID=$!

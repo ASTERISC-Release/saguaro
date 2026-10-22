@@ -17,7 +17,7 @@ In WSL, in a checkout of the repository. No sudo; nothing on Windows is changed:
     cd <repo-home>
     scripts/install.sh --vbs
 
-This installs the missing build packages under `~/.local/share/gramine-vbs` (meson, ninja, clang, ...),
+This installs the missing build packages under `~/.local/share/saguaro-vbs` (meson, ninja, clang, ...),
 puts `gramine-vbs` in `~/.local/bin`, builds the vbs glibc, PAL and LibOS (a few minutes, once), and
 checks the Windows side: it ends with `the Windows side is ready`, or lists the one-time Windows steps
 that are missing. 

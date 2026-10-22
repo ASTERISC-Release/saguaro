@@ -126,7 +126,7 @@ workers and Redis `BGSAVE` run at 1, 2 and 4 vCPUs on x86_64 and on AArch64.
 - AArch64 needed a frame pool, per-process translation roots, a root switch at context change and demand-zero
   faults. A thousand forks at 4 vCPUs take 32 to 42 s instead of up to 480 s after interruptible waits were added.
 - Findings: a process's startup allocations can be freed while a child still shares them (a hang in a signals
-  probe); a startup fault appeared only at some install-path lengths, for example `~/.local/gramine`, and is
+  probe); a startup fault appeared only at some install-path lengths, for example `~/.local/saguaro`, and is
   covered by a prefix-sweep test; and a timer interrupt arriving before the IDT is installed caused a boot flake
   under host load in CI.
 - AArch64 FP/SIMD state at system-call return, and the application's `x16`, had to be preserved across `svc` and

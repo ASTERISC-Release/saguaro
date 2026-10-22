@@ -7,7 +7,7 @@
 # (from GCC) and libz.so.1 (zlib). x18 is the enclave TEB on Windows ARM64, so packed code must
 # never use it (pack.py refuses it; dev docs: vbs-enclave/X18-SCAN.md).
 #
-# Everything goes under PREFIX (default ~/.local/share/gramine-vbs/x18-runtime): the sources, the
+# Everything goes under PREFIX (default ~/.local/share/saguaro-vbs/x18-runtime): the sources, the
 # build trees, the GCC that builds the libraries and the result in PREFIX/lib. Nothing is installed
 # system-wide and no root is needed. Network: the two source tarballs (checked by SHA-256 below) and
 # the Ubuntu gmp/mpfr/mpc packages (apt-get download, no root; the headers GCC needs to build).
@@ -24,7 +24,7 @@ set -eu
 ZLIB_ONLY=
 [ "${1:-}" = --zlib-only ] && { ZLIB_ONLY=1; shift; }
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
-PREFIX=$(realpath -m "${1:-$HOME/.local/share/gramine-vbs/x18-runtime}")
+PREFIX=$(realpath -m "${1:-$HOME/.local/share/saguaro-vbs/x18-runtime}")
 [ "$(uname -m)" = aarch64 ] || { echo "aarch64 only" >&2; exit 1; }
 case "$PREFIX" in "$HOME"/*) ;; *) echo "PREFIX must be under \$HOME" >&2; exit 1;; esac
 

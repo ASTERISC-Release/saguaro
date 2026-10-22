@@ -22,7 +22,7 @@
 set -uo pipefail
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 DIR=${DIR:-$HERE/../libos/test/regression}
-. "$HERE/gramine-env.sh"   # SAGUARO_PREFIX, PATH, PYTHONPATH
+. "$HERE/saguaro-env.sh"   # SAGUARO_PREFIX, PATH, PYTHONPATH
 FAILDIR=${FAILDIR:-/tmp/rewrite-stress-fail}
 N=40; MODE=""; SCEN=(); TMO=${TMO:-30}
 while [ $# -gt 0 ]; do

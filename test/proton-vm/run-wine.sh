@@ -20,7 +20,7 @@ TESTS=${TESTS:-$ROOT/.proton-vm/tests}
 WORK=${WORK:-$ROOT/.proton-vm/wine-vm}
 LOADER=${1:-vm}; shift || true
 [ $# -gt 0 ] || set -- --version
-. "${SAGUARO_PREFIX:-$HOME/.local/gramine-vm}/env.sh"
+. "${SAGUARO_PREFIX:-$HOME/.local/saguaro-vm}/env.sh"
 [ -n "${QEMU_PATH:-}" ] || { [ -x /root/qemu-tirith/build/qemu-system-x86_64 ] && export QEMU_PATH=/root/qemu-tirith/build/qemu-system-x86_64; }
 mkdir -p "$WORK/tmp" "$WORK/home" "$WORK/shm" && cd "$WORK"
 FFMPEG_LIBS=${FFMPEG_LIBS:-/opt/ffmpeg8/lib}; [ -d "$FFMPEG_LIBS" ] || FFMPEG_LIBS=

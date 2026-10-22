@@ -71,9 +71,9 @@ runcmd:
   - mkdir -p $REPO
   - mount $REPO || true
   # large_mmap maps more than the guest's RAM; the default heuristic overcommit refuses that.
-  - echo 'vm.overcommit_memory = 1' > /etc/sysctl.d/90-gramine-tests.conf
+  - echo 'vm.overcommit_memory = 1' > /etc/sysctl.d/90-saguaro-tests.conf
   - sysctl -w vm.overcommit_memory=1
-  - touch /var/lib/gramine-guest-ready
+  - touch /var/lib/saguaro-guest-ready
 USERDATA
         printf 'instance-id: gramine-riscv64-%s\nlocal-hostname: riscv64-guest\n' "$(date +%s)" \
             > "$DIR/meta-data"
@@ -103,7 +103,7 @@ start() {
         -daemonize -pidfile "$PIDFILE"
     echo ">>> guest started (pid $(cat "$PIDFILE")); waiting for ssh on port $PORT (console: $CONSOLE)"
     local waited=0 limit=${RISCV_GUEST_BOOT_TIMEOUT:-1800}
-    until ssh "${SSH_OPTS[@]}" root@127.0.0.1 'test -e /var/lib/gramine-guest-ready' 2>/dev/null; do
+    until ssh "${SSH_OPTS[@]}" root@127.0.0.1 'test -e /var/lib/saguaro-guest-ready' 2>/dev/null; do
         running || { echo "guest exited during boot; see $CONSOLE" >&2; tail -5 "$CONSOLE" >&2; return 1; }
         sleep 10; waited=$((waited + 10))
         [ "$waited" -lt "$limit" ] || { echo "guest not ready after ${limit}s; see $CONSOLE" >&2; return 1; }

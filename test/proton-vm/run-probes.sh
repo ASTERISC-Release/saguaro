@@ -10,7 +10,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../.." && pwd)
 WORK=${WORK:-$ROOT/.proton-vm/probes}
 LOADER=${1:-vm}; shift || true
-. "${SAGUARO_PREFIX:-$HOME/.local/gramine-vm}/env.sh"
+. "${SAGUARO_PREFIX:-$HOME/.local/saguaro-vm}/env.sh"
 [ -n "${QEMU_PATH:-}" ] || { [ -x /root/qemu-tirith/build/qemu-system-x86_64 ] && export QEMU_PATH=/root/qemu-tirith/build/qemu-system-x86_64; }
 mkdir -p "$WORK/tmp" && cd "$WORK"
 gcc -O1 -g -pthread -fno-stack-protector -o probes "${PROBES_SRC:-$HERE/probes.c}" 2>&1 | grep -v "Wunused-result\|^ *|\|^ *[0-9]* |\|^ *\^\|In function"

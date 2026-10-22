@@ -28,7 +28,7 @@ Symbols as in [README.md](../../README.md):
 
 The container is opened as in [direct.md](direct.md), section 1 (`container/run.sh` for a shell,
 `container/run.sh '<command>'` for one command). The vm backend is installed with
-`scripts/install.sh --vm` into `~/.local/gramine-vm`:
+`scripts/install.sh --vm` into `~/.local/saguaro-vm`:
 
     cd <repo-home>
     container/run.sh 'scripts/install.sh --vm'
@@ -37,9 +37,9 @@ On x86_64 `--vm` builds the direct PAL too, and the graphics paths ([graphics-vm
 `--graphics disabled` leaves them out. On AArch64 it builds only the vm PAL. The vm install uses its
 own build directory (`build-vm-<arch>`) and prefix, so it never overwrites a direct install.
 
-`container/run.sh` loads `~/.local/gramine-vm/env.sh` itself when it exists, so `gramine-vm` is on
+`container/run.sh` loads `~/.local/saguaro-vm/env.sh` itself when it exists, so `gramine-vm` is on
 `PATH` in every shell and every one-shot command of the container. A shell that was not opened by
-`container/run.sh` sources it by hand: `. ~/.local/gramine-vm/env.sh`.
+`container/run.sh` sources it by hand: `. ~/.local/saguaro-vm/env.sh`.
 
 # 2. Example: Hello World
 

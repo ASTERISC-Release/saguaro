@@ -11,7 +11,7 @@ GRAPHICS_LIB = $(shell python3 -c "import graminelibos; print(graminelibos._CONF
 GAME_DIR = $(abspath bastion_game)
 GAME_BIN = bastion_game/Bastion.bin.x86_64
 # Save games and settings (guest /root/.local/share and /root/.config)
-DATA_DIR ?= $(HOME)/.local/share/gramine-bastion
+DATA_DIR ?= $(HOME)/.local/share/saguaro-bastion
 
 # Input goes through the shared-memory ring in the comm page; 0 falls back to the X connection.
 SHARED_INPUT ?= 1

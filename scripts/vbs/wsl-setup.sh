@@ -12,7 +12,7 @@
 #                               yourself with sudo; nothing is installed by this script)
 #   wsl-setup.sh user           no sudo: download the same Ubuntu packages with `apt-get download`
 #                               and unpack them into a user prefix ($SAGUARO_VBS_TOOLS, default
-#                               ~/.local/share/gramine-vbs/tools); env.sh there sets PATH etc.
+#                               ~/.local/share/saguaro-vbs/tools); env.sh there sets PATH etc.
 #   wsl-setup.sh env            print the path of env.sh (source it before building)
 #
 # With a second argument `clang`, clang is included (the Windows objects compiled in WSL).
@@ -20,7 +20,7 @@
 # Packages: the build part of container/Containerfile.vm-aarch64 that the vbs build uses.
 set -e
 
-TOOLS=${SAGUARO_VBS_TOOLS:-$HOME/.local/share/gramine-vbs/tools}
+TOOLS=${SAGUARO_VBS_TOOLS:-$HOME/.local/share/saguaro-vbs/tools}
 # package -> a command or Python module that shows it is usable
 PKGS="gcc:gcc make:make patch:patch git:git gawk:gawk bison:bison m4:m4 pkgconf:pkg-config
       meson:meson ninja-build:ninja python3:python3 python3-click:py.click
@@ -104,8 +104,8 @@ env)
     echo "$TOOLS/env.sh"
     ;;
 missing)
-    # the missing packages, into /tmp/gramine-vbs-missing (read by gramine-vbs.ps1 setup)
-    missing | tee /tmp/gramine-vbs-missing; echo
+    # the missing packages, into /tmp/saguaro-vbs-missing (read by gramine-vbs.ps1 setup)
+    missing | tee /tmp/saguaro-vbs-missing; echo
     ;;
 *)
     sed -n '5,19p' "$0"; exit 2 ;;

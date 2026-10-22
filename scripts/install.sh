@@ -9,9 +9,9 @@
 #   scripts/install.sh [options] [suite...]
 #
 # Options:
-#   --prefix DIR           install prefix (no root needed). Default: $HOME/.local/gramine;
-#                          $HOME/.local/gramine-vm with --vm or --sev; $HOME/.local/gramine-sgx
-#                          with --sgx (without --vm); $HOME/.local/gramine-riscv64 with --target
+#   --prefix DIR           install prefix (no root needed). Default: $HOME/.local/saguaro;
+#                          $HOME/.local/saguaro-vm with --vm or --sev; $HOME/.local/saguaro-sgx
+#                          with --sgx (without --vm); $HOME/.local/saguaro-riscv64 with --target
 #   --target ARCH          cross-build for ARCH instead of the build machine's own
 #                          architecture (riscv64; see dev docs: riscv/PLAN.md).
 #                          Requires the matching cross toolchain to be installed -- for
@@ -49,7 +49,7 @@
 # of the shell that started it, so use the install in your current shell with
 #     . <prefix>/env.sh
 # (or pass --add-to-profile to get it in every new shell). test/direct/test-direct.sh and the other scripts
-# in this directory find the install by themselves (SAGUARO_PREFIX, default ~/.local/gramine).
+# in this directory find the install by themselves (SAGUARO_PREFIX, default ~/.local/saguaro).
 #
 # --vm builds the vm-PAL unikernel ("the correct vm version for this machine"): the default build
 # dir becomes build-vm-<arch> so it never reconfigures a direct-PAL build dir, and on aarch64 the
@@ -82,7 +82,7 @@ script_dir=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 REPO=$(dirname "$script_dir")
 cd "$REPO"
 
-PREFIX="$HOME/.local/gramine"
+PREFIX="$HOME/.local/saguaro"
 PREFIX_EXPLICIT=0
 TESTS_PIE=false
 TARGET_ARCH=""
@@ -138,7 +138,7 @@ if [ -n "$TARGET_ARCH" ]; then
     fi
     if [ "$PREFIX_EXPLICIT" = 0 ]; then
         # ...and never overwrite a native install either (same file names)
-        PREFIX="$HOME/.local/gramine-riscv64"
+        PREFIX="$HOME/.local/saguaro-riscv64"
     fi
     CROSS_ARGS=(--cross-file "$script_dir/riscv64/meson-cross.ini")
 fi
@@ -147,10 +147,10 @@ fi
 # (PREFIX is normalized below, after the vm default is applied.)
 
 # --sgx (without --vm): never share a direct-PAL build dir or install either; the SGX build has its own
-# (build-sgx, ~/.local/gramine-sgx), which also holds gramine-direct and the tools.
+# (build-sgx, ~/.local/saguaro-sgx), which also holds gramine-direct and the tools.
 if [ "$SGX" = enabled ] && [ "$VM" != enabled ]; then
     if [ "$BUILDDIR_EXPLICIT" = 0 ]; then BUILDDIR="build-sgx"; fi
-    if [ "$PREFIX_EXPLICIT" = 0 ]; then PREFIX="$HOME/.local/gramine-sgx"; fi
+    if [ "$PREFIX_EXPLICIT" = 0 ]; then PREFIX="$HOME/.local/saguaro-sgx"; fi
 fi
 
 # --vm: build the vm-PAL unikernel ("the correct vm version" for this machine).
@@ -163,7 +163,7 @@ if [ "$VM" = enabled ]; then
     fi
     # ...and never overwrite a direct-PAL install either (same file names, different PAL)
     if [ "$PREFIX_EXPLICIT" = 0 ]; then
-        PREFIX="$HOME/.local/gramine-vm"
+        PREFIX="$HOME/.local/saguaro-vm"
     fi
     if [ "$ARCH" = aarch64 ]; then
         # aarch64 recipe (dev docs: vm.md): the vm kernel *is* the PAL here; the direct PAL and
@@ -283,11 +283,13 @@ echo ">>> wrote $PREFIX/env.sh"
 if [ "$ADD_TO_PROFILE" = 1 ]; then
     PROFILE="$HOME/.bashrc"
     touch "$PROFILE"
-    sed -i '/# >>> gramine-multiarch >>>/,/# <<< gramine-multiarch <<</d' "$PROFILE"
+    # remove an earlier block, also one written under the old name (gramine-multiarch)
+    sed -i -e '/# >>> saguaro >>>/,/# <<< saguaro <<</d' \
+           -e '/# >>> gramine-multiarch >>>/,/# <<< gramine-multiarch <<</d' "$PROFILE"
     {
-        echo "# >>> gramine-multiarch >>>"
+        echo "# >>> saguaro >>>"
         echo ". \"$PREFIX/env.sh\""
-        echo "# <<< gramine-multiarch <<<"
+        echo "# <<< saguaro <<<"
     } >> "$PROFILE"
     echo ">>> added $PREFIX/env.sh to $PROFILE (open a new shell, or run:  . \"$PREFIX/env.sh\")"
 fi

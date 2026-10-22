@@ -31,7 +31,7 @@ case "$SUITE" in
 esac
 RUN="$BUILD/run/$SUITE/regression"
 [ -d "$RUN" ] || { echo "missing $RUN: run scripts/riscv64/render-test-manifests.sh $SUITE first" >&2; exit 1; }
-LOCAL="/var/tmp/gramine-run/$SUITE/regression"
+LOCAL="/var/tmp/saguaro-run/$SUITE/regression"
 
 ARGS=""
 for a in "$@"; do ARGS+=" $(printf '%q' "$a")"; done

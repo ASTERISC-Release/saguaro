@@ -29,7 +29,7 @@ Inside the container:
     export QEMU_PATH=/root/qemu-tirith/build/qemu-system-x86_64
     mkdir -p ~/.cache
 
-`container/run.sh` loads `~/.local/gramine-vm/env.sh` in the container shell, so no environment step
+`container/run.sh` loads `~/.local/saguaro-vm/env.sh` in the container shell, so no environment step
 is needed. The graphics examples are started by hand (their `exec.sh` lists no backend: it needs a
 display), so `./exec.sh` does not apply to them.
 

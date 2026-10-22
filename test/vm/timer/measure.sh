@@ -11,7 +11,7 @@
 set -u
 ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 cd "$ROOT"
-export SAGUARO_PREFIX=${SAGUARO_PREFIX:-$HOME/.local/gramine-vm}
+export SAGUARO_PREFIX=${SAGUARO_PREFIX:-$HOME/.local/saguaro-vm}
 # probes.c is x86-only; on aarch64 the three timer probes alone build
 if [ "$(uname -m)" = aarch64 ]; then
     export PROBES_SRC=${PROBES_SRC:-$ROOT/test/vm/timer/timerprobes.c}

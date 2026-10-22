@@ -10,7 +10,7 @@
 #
 # Usage (aarch64 Linux, the build container or WSL):
 #   scripts/vbs/build-python.sh [--if-needed] [--sci] [Python-X.Y.Z.tgz] [DESTDIR]
-# Without a tarball, Python 3.12.7 is downloaded from python.org into ~/.cache/gramine-vbs/dist
+# Without a tarball, Python 3.12.7 is downloaded from python.org into ~/.cache/saguaro-vbs/dist
 # and checked against its SHA-256. With --if-needed nothing is done when DESTDIR already holds a
 # build of the same tarball against the same sysroot (the stamp file DESTDIR/.vbs-python); the
 # Python example's vbs.build uses it.
@@ -24,7 +24,7 @@ VERSION=3.12.7
 SHA256=73ac8fe780227bf371add8373c3079f42a0dc62deff8d612cd15a618082ab623
 TARBALL=$1
 if [ -z "$TARBALL" ]; then
-    TARBALL=$HOME/.cache/gramine-vbs/dist/Python-$VERSION.tgz
+    TARBALL=$HOME/.cache/saguaro-vbs/dist/Python-$VERSION.tgz
     if [ ! -f "$TARBALL" ]; then
         mkdir -p "$(dirname "$TARBALL")"
         echo "downloading Python-$VERSION.tgz from python.org"
@@ -52,7 +52,7 @@ mkdir -p "$WORK"
 tar -C "$WORK" -xzf "$TARBALL"
 ZCONF=
 if [ -n "$WITH_ZLIB" ]; then
-    ZTAR=$HOME/.cache/gramine-vbs/dist/zlib-$ZLIB_VERSION.tar.gz
+    ZTAR=$HOME/.cache/saguaro-vbs/dist/zlib-$ZLIB_VERSION.tar.gz
     if [ ! -f "$ZTAR" ]; then
         mkdir -p "$(dirname "$ZTAR")"
         echo "downloading zlib-$ZLIB_VERSION.tar.gz"
@@ -65,7 +65,7 @@ if [ -n "$WITH_ZLIB" ]; then
     (cd "$WORK"/zlib-$ZLIB_VERSION && CC="$ROOT/scripts/vbs/vbs-gcc" CFLAGS="-O2 -fPIC" \
         ./configure --static --prefix="$WORK/zlib" && make -j"$(nproc)" && make install) \
         >"$WORK/zlib.log" 2>&1 || { tail -20 "$WORK/zlib.log"; exit 1; }
-    FTAR=$HOME/.cache/gramine-vbs/dist/libffi-$FFI_VERSION.tar.gz
+    FTAR=$HOME/.cache/saguaro-vbs/dist/libffi-$FFI_VERSION.tar.gz
     if [ ! -f "$FTAR" ]; then
         echo "downloading libffi-$FFI_VERSION.tar.gz"
         curl -sSfL -o "$FTAR.part" "https://github.com/libffi/libffi/releases/download/v$FFI_VERSION/libffi-$FFI_VERSION.tar.gz"

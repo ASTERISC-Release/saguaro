@@ -22,6 +22,6 @@ make run-native      # without Gramine, with the preload library
 
 ## Notes
 
-- `DATA_DIR` (default `~/.local/share/gramine-bastion`) holds save games and settings. `BASTION_ARGS` (default `-windowed`) and `PRELOAD=1` apply to `run-direct`. `SYSTEM_SDL=0` uses the game's bundled SDL2. `SHARED_INPUT=0` takes input over the X connection.
+- `DATA_DIR` (default `~/.local/share/saguaro-bastion`) holds save games and settings. `BASTION_ARGS` (default `-windowed`) and `PRELOAD=1` apply to `run-direct`. `SYSTEM_SDL=0` uses the game's bundled SDL2. `SHARED_INPUT=0` takes input over the X connection.
 - `MULTIPROC=1` adds `sys.experimental__multiprocess = true` and a `/bin` mount (FMOD runs `/bin/sh`).
 - Without a profile the game draws at the desktop size; set Help & Options, Resolution, 1920x1080 in the game (stored in `DATA_DIR`) if a smaller window shows only a corner.

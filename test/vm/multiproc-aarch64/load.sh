@@ -8,7 +8,7 @@
 set -euo pipefail
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 REPO=$(cd "$HERE/../../.." && pwd)
-PREFIX=${SAGUARO_PREFIX:-$HOME/.local/gramine-vm}
+PREFIX=${SAGUARO_PREFIX:-$HOME/.local/saguaro-vm}
 CPUS=${SAGUARO_CPU_NUM:-2}
 WORK=${WORK:-$REPO/.mp-load-aarch64}
 mkdir -p "$WORK"

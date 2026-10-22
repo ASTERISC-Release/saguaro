@@ -7,7 +7,7 @@ set -u
 set -o pipefail
 
 REPO=$(cd "$(dirname "$(readlink -f "$0")")/../../.." && pwd)
-PREFIX=${SAGUARO_PREFIX:-$HOME/.local/gramine-vm}
+PREFIX=${SAGUARO_PREFIX:-$HOME/.local/saguaro-vm}
 GUEST_PORT=${REDIS_GUEST_PORT:-6379}
 HOST_PORT=${REDIS_HOST_PORT:-16379}
 OUT=${OUT:-/tmp/vm-redis}

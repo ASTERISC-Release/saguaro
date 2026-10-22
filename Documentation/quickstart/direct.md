@@ -37,15 +37,15 @@ a shell. The repository is mounted at `/root/gramine-multiarch`. Three forms exi
 
 The commands in the next sections run in the container shell, in the repository, or are given as
 `container/run.sh '<command>'` from the host. `scripts/install.sh` without an option builds the
-direct backend and installs it into `~/.local/gramine`:
+direct backend and installs it into `~/.local/saguaro`:
 
     container/run.sh 'scripts/install.sh'
 
 The `~` is the home directory of the container's root user; it stays when the container is
 stopped and is discarded when the container is recreated (the builds inside the repository
 survive). Re-running the script is cheap: meson and ninja rebuild only what changed.
-`container/run.sh` loads only the environment of the vm install (`~/.local/gramine-vm/env.sh`), so
-`gramine-direct` of this install is not on `PATH` by itself: `. ~/.local/gramine/env.sh` sets `PATH` and
+`container/run.sh` loads only the environment of the vm install (`~/.local/saguaro-vm/env.sh`), so
+`gramine-direct` of this install is not on `PATH` by itself: `. ~/.local/saguaro/env.sh` sets `PATH` and
 `PYTHONPATH` in the current shell, and `scripts/install.sh --add-to-profile` does it for every new shell.
 
 # 2. Example: Hello World
@@ -58,13 +58,13 @@ chosen backend and checks the output. In the container shell:
 
 A backend is required (`--direct`, `--vm`, `--sev`, `--sev-snp`, `--sgx`, `--vbs`); without one the script
 lists the backends and whether this host can run each. The script prints each command it runs
-(lines that start with `+`) and writes the log to `/tmp/gramine-exec/`. The exit status is 0 on a
+(lines that start with `+`) and writes the log to `/tmp/saguaro-exec/`. The exit status is 0 on a
 pass. The run ends with the output `Hello, world`.
 
 The same steps by hand, which show what `exec.sh` does (the program is built, `helloworld.manifest`
 is rendered from its template, and `gramine-direct` runs the program on the LibOS):
 
-    . ~/.local/gramine/env.sh             # gramine-direct and the tools on PATH
+    . ~/.local/saguaro/env.sh             # gramine-direct and the tools on PATH
     cd CI-Examples/helloworld
     make                                  # builds the program and renders helloworld.manifest
     gramine-direct helloworld
@@ -76,18 +76,18 @@ AArch64; `blender` runs on x86_64 only.
 
 # 3. Regression Tests
 
-The test scripts find the install through `SAGUARO_PREFIX` (default `~/.local/gramine`):
+The test scripts find the install through `SAGUARO_PREFIX` (default `~/.local/saguaro`):
 
     test/direct/test-direct.sh --list                       # the suites
     test/direct/test-direct.sh pal libos helloworld python  # a quick selection, under a minute
     test/direct/test-direct.sh                              # everything: PAL, LibOS, 12 example suites
 
-Each suite ends with a `PASS` or `FAIL` line. Logs are stored in `/tmp/gramine-multiarch-tests`.
+Each suite ends with a `PASS` or `FAIL` line. Logs are stored in `/tmp/saguaro-tests`.
 `scripts/install.sh --run-tests pal libos` builds and runs the tests in one step.
 
 # 4. Troubleshooting
 
-- `gramine-direct: command not found`: run `. ~/.local/gramine/env.sh` in that shell
+- `gramine-direct: command not found`: run `. ~/.local/saguaro/env.sh` in that shell
   (`container/run.sh` loads only the vm install's environment), or `scripts/install.sh --add-to-profile` once.
 - `exec.sh` reports that a backend is not installed: run `scripts/install.sh` (direct) or
   `scripts/install.sh --vm` (vm) in the container, as in section 1.

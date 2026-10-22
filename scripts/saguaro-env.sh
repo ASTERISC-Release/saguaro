@@ -4,14 +4,14 @@
 # Shared environment for the test/benchmark/stress scripts (source this file; do not execute it).
 #
 # Inputs (environment):
-#   SAGUARO_PREFIX   install prefix of the Gramine build under test (default: ~/.local/gramine)
-#   LOGDIR           where scripts write per-test logs (default: ${TMPDIR:-/tmp}/gramine-multiarch-tests)
+#   SAGUARO_PREFIX   install prefix of the Gramine build under test (default: ~/.local/saguaro)
+#   LOGDIR           where scripts write per-test logs (default: ${TMPDIR:-/tmp}/saguaro-tests)
 #
 # Effects: puts $SAGUARO_PREFIX/bin on PATH and the prefix's python site-packages on PYTHONPATH
 # (whichever python3.X directory exists, preferring the running python3's version), so the
 # scripts work with any Python version and any install prefix.
 
-SAGUARO_PREFIX="${SAGUARO_PREFIX:-$HOME/.local/gramine}"
+SAGUARO_PREFIX="${SAGUARO_PREFIX:-$HOME/.local/saguaro}"
 export SAGUARO_PREFIX
 export PATH="$SAGUARO_PREFIX/bin:$PATH"
 
@@ -28,4 +28,4 @@ if [ -n "$_gramine_sp" ]; then
 fi
 unset _gramine_py_ver _gramine_sp _d
 
-export LOGDIR="${LOGDIR:-${TMPDIR:-/tmp}/gramine-multiarch-tests}"
+export LOGDIR="${LOGDIR:-${TMPDIR:-/tmp}/saguaro-tests}"

@@ -20,7 +20,7 @@
 set -u
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 REPO=$(cd "$HERE/../.." && pwd)
-PREFIX=${SAGUARO_PREFIX:-$HOME/.local/gramine-vm}
+PREFIX=${SAGUARO_PREFIX:-$HOME/.local/saguaro-vm}
 OUT=${OUT:-/tmp/test-sev-all}
 CPUS=${CPUS-"1 2 4"}   # CPUS= (empty) skips the suite
 export SAGUARO_RAM_SIZE=${SAGUARO_RAM_SIZE:-8G}

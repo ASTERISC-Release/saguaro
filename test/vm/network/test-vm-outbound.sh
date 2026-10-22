@@ -8,7 +8,7 @@ set -u
 set -o pipefail
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 REPO=$(cd "$HERE/../../.." && pwd)
-PREFIX=${SAGUARO_PREFIX:-$HOME/.local/gramine-vm}
+PREFIX=${SAGUARO_PREFIX:-$HOME/.local/saguaro-vm}
 REQUESTS=${REQUESTS:-5000}
 CPU_NUM=${SAGUARO_CPU_NUM:-2}
 OUT=${OUT:-/tmp/vsock-outbound}

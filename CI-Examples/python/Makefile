@@ -45,7 +45,7 @@ $(VBS_PYTHON_STAMP): $(VBS_DIR)/build-python.sh | $(VBS_RUNTIME_STAMP)
 # libz: not in the vbs sysroot; their GLIBC symbols are within the sysroot's 2.39)
 # The runtime libraries from build-x18-runtime.sh (used when present; the host's copies name x18
 # and do not pack)
-VBS_X18_RUNTIME ?= $(HOME)/.local/share/gramine-vbs/x18-runtime/lib
+VBS_X18_RUNTIME ?= $(HOME)/.local/share/saguaro-vbs/x18-runtime/lib
 
 # The wheel files are those of the machine's architecture (the x86_64 wheels do not run, and do not
 # pack, on AArch64).

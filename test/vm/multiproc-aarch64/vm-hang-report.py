@@ -9,7 +9,7 @@ or a loop; a vCPU in `wfi` (thread_idle_run) is idle.
 
 Usage: vm-hang-report.py <monitor-socket> [--quit] [--samples N]
 --quit ends QEMU afterwards (the launcher then reports the guest's end and its console output).
-SAGUARO_PREFIX selects the install whose `pal` is symbolized (default ~/.local/gramine-vm)."""
+SAGUARO_PREFIX selects the install whose `pal` is symbolized (default ~/.local/saguaro-vm)."""
 
 import argparse
 import bisect
@@ -22,7 +22,7 @@ import time
 
 
 def pal_symbols():
-    prefix = os.environ.get('SAGUARO_PREFIX', os.path.expanduser('~/.local/gramine-vm'))
+    prefix = os.environ.get('SAGUARO_PREFIX', os.path.expanduser('~/.local/saguaro-vm'))
     pals = glob.glob(os.path.join(prefix, 'lib', '*', 'gramine', 'vm', 'pal'))
     if not pals:
         return [], []

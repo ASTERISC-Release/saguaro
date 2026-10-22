@@ -20,14 +20,14 @@
 # keeps temporaries in x18).
 # Needs the compiler and gfortran built by scripts/vbs/build-x18-runtime.sh (run it first).
 #
-# Everything is under PREFIX (default ~/.local/share/gramine-vbs/x18-runtime): sources, build,
+# Everything is under PREFIX (default ~/.local/share/saguaro-vbs/x18-runtime): sources, build,
 # the result in PREFIX/openblas-lib. No root; network for the source tarball only.
 # The default make target also runs OpenBLAS's own BLAS/LAPACK tests; a failure stops the script.
 # Usage: scripts/vbs/build-x18-openblas.sh [PREFIX]
 set -eu
 
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
-PREFIX=$(realpath -m "${1:-$HOME/.local/share/gramine-vbs/x18-runtime}")
+PREFIX=$(realpath -m "${1:-$HOME/.local/share/saguaro-vbs/x18-runtime}")
 [ "$(uname -m)" = aarch64 ] || { echo "aarch64 only" >&2; exit 1; }
 case "$PREFIX" in "$HOME"/*) ;; *) echo "PREFIX must be under \$HOME" >&2; exit 1;; esac
 GCCP=$PREFIX/gcc

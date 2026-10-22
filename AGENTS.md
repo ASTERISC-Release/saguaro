@@ -12,10 +12,10 @@ Platform status: [`README.md`](README.md). Measured results of the examples: [`C
   RISC-V cross container, and `container/run.sh down` removes the container (**the install inside it is lost**).
   Nothing is built or installed on the host. The one exception is Windows VBS, which runs in WSL.
 - **Install with `scripts/install.sh`** (there is no top-level `install.sh`). Options: none = the direct backend into
-  `~/.local/gramine`; `--vm` = also the vm PAL (`~/.local/gramine-vm`); `--sev --graphics disabled` = the vm PAL with
-  the SEV PAL and `gramine-sev`; `--sgx` (`~/.local/gramine-sgx`); `--vbs` = the WSL side of the VBS tooling;
+  `~/.local/saguaro`; `--vm` = also the vm PAL (`~/.local/saguaro-vm`); `--sev --graphics disabled` = the vm PAL with
+  the SEV PAL and `gramine-sev`; `--sgx` (`~/.local/saguaro-sgx`); `--vbs` = the WSL side of the VBS tooling;
   `--target riscv64` = a cross build; `-j N` limits parallelism (use `-j4` on a small board). `scripts/install.sh --help`
-  lists the rest. Load the environment with `. <prefix>/env.sh`; `container/run.sh` loads `~/.local/gramine-vm/env.sh`
+  lists the rest. Load the environment with `. <prefix>/env.sh`; `container/run.sh` loads `~/.local/saguaro-vm/env.sh`
   itself.
 - **Run an example with `./exec.sh --<backend>`** in its directory under `CI-Examples/`. A backend is required. It says
   why a backend cannot run, prints the command under test, streams the logs, and ends with the example's check; the

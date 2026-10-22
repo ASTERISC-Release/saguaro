@@ -157,7 +157,7 @@ while true; do
     SAGUARO_VM_ID=$((SAGUARO_VM_ID + 1))
 done
 VHOSTFS_SOCKET=/tmp/gramine_vhostfs_$SAGUARO_VM_ID
-WORK=$(mktemp -d /tmp/gramine-vm.XXXXXX)
+WORK=$(mktemp -d /tmp/saguaro-vm.XXXXXX)
 VIRTIOFSD_PID=
 cleanup() {
     vm_relay_stop

@@ -19,7 +19,7 @@ the example and runs it under one backend. Run it in the directory of the exampl
   to run.
 - The script prints each command it runs, including the command under test (lines starting with
   `+`), and shows the output as it is produced. The output is also written to `$EXEC_LOG_DIR`
-  (default `/tmp/gramine-exec/`). `--keep` keeps the program output of a passing run.
+  (default `/tmp/saguaro-exec/`). `--keep` keeps the program output of a passing run.
 - The exit status is 0 on a pass, 1 on a failure or a backend that cannot run, and 2 on a usage error.
 
 # Results

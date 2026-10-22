@@ -21,7 +21,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 TREE=${TREE:-$(cd "$HERE/../../.." && pwd)}
 KIND=${1:?kind}; N=${2:?vcpus}; OUT=${3:?outdir}; PERIOD=${4:-0}
 mkdir -p "$OUT"
-. "${SAGUARO_PREFIX:-$HOME/.local/gramine-vm}/env.sh"
+. "${SAGUARO_PREFIX:-$HOME/.local/saguaro-vm}/env.sh"
 export QEMU_PATH=${QEMU_PATH:-/root/sev-tools/prefix/bin/qemu-system-x86_64}
 export SAGUARO_SEV_MODE=snp SAGUARO_RAM_SIZE=${SAGUARO_RAM_SIZE:-4G} SAGUARO_CPU_NUM=$N
 echo "## $(date -u +%Y-%m-%dT%H:%M:%SZ) $KIND vcpus=$N tree=$(git -c safe.directory='*' -C "$TREE" rev-parse --short HEAD) $(uptime | sed 's/.*load/load/')"

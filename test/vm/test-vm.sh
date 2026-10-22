@@ -16,12 +16,12 @@
 #   guest-loopback guest IPv4/IPv6 TCP and UDP loopback through the relay
 #
 # Usage: test/vm/test-vm.sh [--prefix DIR] [--build-dir DIR] [suite...]   (default: all)
-# Prerequisite: a vm build installed with `scripts/install.sh --vm` (default prefix ~/.local/gramine-vm,
+# Prerequisite: a vm build installed with `scripts/install.sh --vm` (default prefix ~/.local/saguaro-vm,
 # build dir build-vm-<arch>; it builds the PIE test binaries the libos suite needs).
 set -u
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 REPO=$(cd "$HERE/../.." && pwd)
-PREFIX=${SAGUARO_PREFIX:-$HOME/.local/gramine-vm}
+PREFIX=${SAGUARO_PREFIX:-$HOME/.local/saguaro-vm}
 BUILD=build-vm-$(uname -m)
 SUITES=()
 while [ $# -gt 0 ]; do

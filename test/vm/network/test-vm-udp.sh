@@ -6,7 +6,7 @@
 set -u
 set -o pipefail
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
-PREFIX=${SAGUARO_PREFIX:-$HOME/.local/gramine-vm}
+PREFIX=${SAGUARO_PREFIX:-$HOME/.local/saguaro-vm}
 DNS_NAME=${DNS_NAME:-example.com}
 CPU_NUM=${SAGUARO_CPU_NUM:-2}
 OUT=${OUT:-/tmp/vsock-udp}

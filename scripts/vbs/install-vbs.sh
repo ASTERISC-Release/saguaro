@@ -6,7 +6,7 @@
 # the WSL2 Ubuntu distribution of the Windows machine, as a normal user (no sudo):
 #
 #   1. installs the missing build packages user-level (wsl-setup.sh user: Ubuntu packages unpacked
-#      into ~/.local/share/gramine-vbs/tools; nothing is installed system-wide);
+#      into ~/.local/share/saguaro-vbs/tools; nothing is installed system-wide);
 #   2. puts `gramine-vbs` on the PATH (a link in ~/.local/bin);
 #   3. builds the vbs glibc, PAL and LibOS (once per checkout; `make VBS=1` does not build them and
 #      stops when they are missing; run this again after changing the PAL or the LibOS);
@@ -31,8 +31,8 @@ fi
 
 echo ">>> build packages (user-level, no sudo)"
 if sh "$HERE/wsl-setup.sh" check clang >/dev/null 2>&1 || \
-        { [ -f "${SAGUARO_VBS_TOOLS:-$HOME/.local/share/gramine-vbs/tools}/env.sh" ] && \
-          (. "${SAGUARO_VBS_TOOLS:-$HOME/.local/share/gramine-vbs/tools}/env.sh"; \
+        { [ -f "${SAGUARO_VBS_TOOLS:-$HOME/.local/share/saguaro-vbs/tools}/env.sh" ] && \
+          (. "${SAGUARO_VBS_TOOLS:-$HOME/.local/share/saguaro-vbs/tools}/env.sh"; \
            sh "$HERE/wsl-setup.sh" check clang >/dev/null 2>&1); }; then
     echo "all present"
 else

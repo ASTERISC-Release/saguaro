@@ -25,14 +25,14 @@ image already has QEMU, `virtiofsd` and the toolchain.
 From the repository root:
 
     scripts/dependencies.sh           # host packages (apt, uses sudo); --build-only for just the build
-    scripts/install.sh                # build and install into ~/.local/gramine
-    . ~/.local/gramine/env.sh         # put the install on PATH / PYTHONPATH (this shell)
+    scripts/install.sh                # build and install into ~/.local/saguaro
+    . ~/.local/saguaro/env.sh         # put the install on PATH / PYTHONPATH (this shell)
 
 `scripts/install.sh` is safe to re-run. The main options (`--help` lists all):
 
 |  |  |
 |----|----|
-| `--prefix DIR` | install prefix, no root needed; default `~/.local/gramine`, `~/.local/gramine-vm` with `--vm` or `--sev`, `~/.local/gramine-sgx` with `--sgx` (without `--vm`), `~/.local/gramine-riscv64` with `--target riscv64` |
+| `--prefix DIR` | install prefix, no root needed; default `~/.local/saguaro`, `~/.local/saguaro-vm` with `--vm` or `--sev`, `~/.local/saguaro-sgx` with `--sgx` (without `--vm`), `~/.local/saguaro-riscv64` with `--target riscv64` |
 | `--build-dir DIR` | meson build directory; default `build-<arch>`, `build-vm-<arch>` with `--vm`, `build-sgx` with `--sgx` (without `--vm`), `build-riscv64` with `--target riscv64` |
 | `--vm`, `--tdx`, `--sgx` | also build that PAL (the direct PAL is always built, except by `--vm` on aarch64) |
 | `--sev` | `--vm` plus the AMD SEV build of the vm PAL and `gramine-sev` (x86_64) |
@@ -62,8 +62,8 @@ aarch64:
 
     sudo apt install qemu-system-arm virtiofsd device-tree-compiler    # stock Ubuntu QEMU (8.2.x)
     scripts/dependencies.sh --build-only
-    scripts/install.sh --vm           # into ~/.local/gramine-vm, build dir build-vm-aarch64
-    . ~/.local/gramine-vm/env.sh
+    scripts/install.sh --vm           # into ~/.local/saguaro-vm, build dir build-vm-aarch64
+    . ~/.local/saguaro-vm/env.sh
     test/vm/test-vm.sh                   # LibOS suite under gramine-vm, example apps, hello soak test
 
 On aarch64 `--vm` builds *only* the vm PAL (no direct PAL, SGX or TDX), builds without graphics (the
@@ -171,7 +171,7 @@ installed by `.github/workflows/direct-riscv64-emulated.yml`). Design, status an
 `scripts/install.sh` wraps `meson`. For the direct PAL:
 
     meson setup build -Dbuildtype=release -Ddirect=enabled -Dsgx=disabled -Dvm=disabled -Dtdx=disabled \
-        -Dtests=enabled -Dlibc=glibc --prefix="$HOME/.local/gramine"
+        -Dtests=enabled -Dlibc=glibc --prefix="$HOME/.local/saguaro"
     ninja -C build install
 
 The aarch64 vm PAL recipe is in `dev docs: vm.md`. All options are in `meson_options.txt`. Called directly, meson defaults to `-Dlibc=glibc`; the

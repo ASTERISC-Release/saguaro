@@ -15,9 +15,9 @@ NGINX_VERSION=1.22.0
 OPENSSL_VERSION=1.1.1w
 PCRE_VERSION=8.45
 # Needs the Gramine tools on PATH (gramine-manifest for the final `make`); otherwise pick them up
-# from SAGUARO_PREFIX (default ~/.local/gramine) like the other scripts do.
+# from SAGUARO_PREFIX (default ~/.local/saguaro) like the other scripts do.
 if ! command -v gramine-manifest >/dev/null; then
-  . "$THIS_DIR/../../scripts/gramine-env.sh"
+  . "$THIS_DIR/../../scripts/saguaro-env.sh"
 fi
 cd "$THIS_DIR"
 NGINX_SRC="$THIS_DIR/nginx-$NGINX_VERSION"

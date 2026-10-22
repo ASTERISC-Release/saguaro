@@ -16,7 +16,7 @@
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
 N=${1:-2}
-. "${SAGUARO_PREFIX:-$HOME/.local/gramine-vm}/env.sh"
+. "${SAGUARO_PREFIX:-$HOME/.local/saguaro-vm}/env.sh"
 [ -n "${QEMU_PATH:-}" ] || { [ -x /root/qemu-tirith/build/qemu-system-x86_64 ] && export QEMU_PATH=/root/qemu-tirith/build/qemu-system-x86_64; }
 export EGL_DISCRETE=${EGL_DISCRETE:-1}
 cd "$HERE" || exit 2

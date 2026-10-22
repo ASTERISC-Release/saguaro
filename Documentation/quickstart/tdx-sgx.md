@@ -47,8 +47,8 @@ Log in again so that the group applies, then check:
 
     cd <repo-home>                     # a checkout in a folder gramine-<name>/gramine-multiarch
     container/run.sh                   # shell in the container; it gets /dev/sgx_enclave
-    scripts/install.sh --sgx           # builds in build-sgx, installs to ~/.local/gramine-sgx
-    . ~/.local/gramine-sgx/env.sh
+    scripts/install.sh --sgx           # builds in build-sgx, installs to ~/.local/saguaro-sgx
+    . ~/.local/saguaro-sgx/env.sh
     is-sgx-available
 
 `container/run.sh` passes `/dev/sgx_enclave` and `/dev/sgx_provision` into the container, bound with

@@ -21,7 +21,7 @@ REPO_ROOT=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
 BUILD=${BUILD:-build-vm-aarch64}
 PAL=${PAL:-$REPO_ROOT/$BUILD/pal/src/host/vm/pal}
 RUN_TIMEOUT=${RUN_TIMEOUT:-8} # override to tune boot window
-WORK=$(mktemp -d /tmp/gramine-vm-aarch64.XXXXXX)
+WORK=$(mktemp -d /tmp/saguaro-vm-aarch64.XXXXXX)
 TAIL_PID=
 cleanup() {
     kill $(jobs -p) 2>/dev/null || true

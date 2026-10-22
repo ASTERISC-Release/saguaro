@@ -18,7 +18,7 @@
 #   redis     redis BGSAVE (a forked child writes dump.rdb); needs CI-Examples/redis built
 #
 # Usage: test/vm/multiproc/check-probes.sh [check...]   (default: spawn signals forks misc sysv)
-# Environment: SAGUARO_PREFIX (install prefix, default ~/.local/gramine-vm), SAGUARO_CPU_NUM
+# Environment: SAGUARO_PREFIX (install prefix, default ~/.local/saguaro-vm), SAGUARO_CPU_NUM
 # (default 2), WORK (scratch dir, default <repo>/.mp-probes), LOGDIR (default $WORK/logs),
 # TIMEOUT_SCALE (multiplies every timeout, default 1), RERUN (default 1: rerun a failed check once),
 # MP (default 1; MP=0 renders the probe manifests without the key, as a negative check),
@@ -27,7 +27,7 @@
 set -u
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 REPO=$(cd "$HERE/../../.." && pwd)
-PREFIX=${SAGUARO_PREFIX:-$HOME/.local/gramine-vm}
+PREFIX=${SAGUARO_PREFIX:-$HOME/.local/saguaro-vm}
 [ -f "$PREFIX/env.sh" ] || { echo "no $PREFIX/env.sh: set SAGUARO_PREFIX to the install prefix" >&2; exit 2; }
 . "$PREFIX/env.sh"
 command -v gramine-vm >/dev/null || { echo "gramine-vm not on PATH after $PREFIX/env.sh" >&2; exit 2; }

@@ -1,7 +1,7 @@
 #!/bin/bash
 # nginx with master process and 4 workers under gramine-vm (experimental multiprocess)
 set -u
-. ~/.local/gramine-vm/env.sh
+. ~/.local/saguaro-vm/env.sh
 cd ${REPO:-/root/gramine-multiarch}/CI-Examples/nginx
 cp install/conf/nginx-gramine.conf /tmp/nginx-conf.bak
 cp nginx.manifest /tmp/nginx-manifest.bak

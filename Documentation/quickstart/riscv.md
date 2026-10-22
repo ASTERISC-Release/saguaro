@@ -71,7 +71,7 @@ helloworld` passes once `build-essential` is installed in the guest.
 On a riscv64 machine the same PAL builds and runs without the cross container and the guest:
 
     scripts/install.sh -j4                    # native build and install; keep -j low on a small board
-    export SAGUARO_PREFIX="$HOME/.local/gramine" LOGDIR="$HOME/gramine-logs"
+    export SAGUARO_PREFIX="$HOME/.local/saguaro" LOGDIR="$HOME/gramine-logs"
     test/direct/test-direct.sh                # PAL, LibOS and the example suites (or name suites: libos pal redis)
 
 Results: the PAL regression passes 27 tests (9 skipped); the LibOS regression 190 (40 skipped, 3 failed); all 12
