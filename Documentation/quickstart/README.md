@@ -3,18 +3,18 @@
 One guide per platform, each from a checkout to a running example. The complete instructions are in [INSTALL.md](../../INSTALL.md); the platform table
 and status of this tree are in [README.md](../../README.md).
 
-Symbols as in `README.md`: ✅ supported, ⚠️ experimental, 🛫 planned, ❌ not supported, ➖ not
+Symbols as in `README.md`: ✓ supported, ◐ experimental, ○ planned, ✗ not supported, – not
 applicable.
 
 | What | Intel x86_64 | AMD64 | AArch64 | RISC-V (RV64) | Guide |
 |----|----|----|----|----|----|
-| `saguaro-direct`: an ordinary Linux process; hello world, regression tests | ✅ | ✅ | ✅ | ⚠️ [riscv.md](riscv.md) | [direct.md](direct.md) |
-| `saguaro-vm`: a microVM under KVM; processes, VM size, networking | ✅ | ⚠️ | ⚠️ | 🛫 | [vm.md](vm.md) |
-| `saguaro-direct` with the host GPU: glxgears, Quake II, Vulkan | ⚠️ | ⚠️ | ⚠️ (NVIDIA) | ❌ | [graphics-direct.md](graphics-direct.md) |
-| `saguaro-vm` with graphics redirection: glxgears, Quake II (OpenGL, Vulkan) | ⚠️ | ⚠️ | 🛫 | ❌ | [graphics-vm.md](graphics-vm.md) |
-| Windows VBS enclaves (`saguaro-vbs`): hello world, Python, attestation | ⚠️ (Windows 11 x64) | ⚠️ (Windows 11 x64) | ⚠️ (Windows 11 ARM64) | ➖ | [vbs-windows.md](vbs-windows.md); machine setup: [vbs-enable.md](vbs-enable.md) |
-| AMD SEV-SNP (`saguaro-sev`): hello world, regression tests, attestation | ➖ | ⚠️ | ➖ | ➖ | [sev.md](sev.md) |
-| Intel SGX and TDX | ⚠️ | ➖ | ➖ | ➖ | [tdx-sgx.md](tdx-sgx.md) |
+| `saguaro-direct`: an ordinary Linux process; hello world, regression tests | ✓ | ✓ | ✓ | ◐ [riscv.md](riscv.md) | [direct.md](direct.md) |
+| `saguaro-vm`: a microVM under KVM; processes, VM size, networking | ✓ | ◐ | ◐ | ○ | [vm.md](vm.md) |
+| `saguaro-direct` with the host GPU: glxgears, Quake II, Vulkan | ◐ | ◐ | ◐ (NVIDIA) | ✗ | [graphics-direct.md](graphics-direct.md) |
+| `saguaro-vm` with graphics redirection: glxgears, Quake II (OpenGL, Vulkan) | ◐ | ◐ | ○ | ✗ | [graphics-vm.md](graphics-vm.md) |
+| Windows VBS enclaves (`saguaro-vbs`): hello world, Python, attestation | ◐ (Windows 11 x64) | ◐ (Windows 11 x64) | ◐ (Windows 11 ARM64) | – | [vbs-windows.md](vbs-windows.md); machine setup: [vbs-enable.md](vbs-enable.md) |
+| AMD SEV-SNP (`saguaro-sev`): hello world, regression tests, attestation | – | ◐ | – | – | [sev.md](sev.md) |
+| Intel SGX and TDX | ◐ | – | – | – | [tdx-sgx.md](tdx-sgx.md) |
 
 ## The route of all guides
 

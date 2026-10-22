@@ -11,7 +11,7 @@ Symbols as in [README.md](../../README.md):
 
 | Configuration           | Intel x86_64 | AMD64 | AArch64 | RISC-V (RV64) |
 |-------------------------|--------------|-------|---------|---------------|
-| `saguaro-sev` (SEV-SNP) | ➖           | ⚠️    | ➖      | ➖            |
+| `saguaro-sev` (SEV-SNP) | –           | ◐    | –      | –            |
 
 Plain SEV/SEV-ES is also available: `./exec.sh --sev`, or `SAGUARO_SEV_MODE=sev` by hand.
 

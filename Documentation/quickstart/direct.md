@@ -12,8 +12,8 @@ Symbols as in [README.md](../../README.md):
 
 | Configuration | Intel x86_64 | AMD64 | AArch64 | RISC-V (RV64) |
 |----|----|----|----|----|
-| `saguaro-direct` | ✅ | ✅ | ✅ | ⚠️ |
-| `saguaro-direct` with redirected graphics | ⚠️ | ⚠️ | ⚠️ | ❌ |
+| `saguaro-direct` | ✓ | ✓ | ✓ | ◐ |
+| `saguaro-direct` with redirected graphics | ◐ | ◐ | ◐ | ✗ |
 
 ## Requirements
 

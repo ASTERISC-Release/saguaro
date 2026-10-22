@@ -4,7 +4,7 @@ This tree keeps the confidential-computing back ends of upstream [gramine-tdx](h
 in an SGX enclave) and `saguaro-tdx` (the `vm` unikernel in a TDX trust domain). The examples that run on
 SEV also run on TDX.
 
-Status (as in [README.md](../../README.md)): Intel x86_64 ⚠️ for SGX and for TDX; AMD64, AArch64 and RISC-V ➖.
+Status (as in [README.md](../../README.md)): Intel x86_64 ◐ for SGX and for TDX; AMD64, AArch64 and RISC-V –.
 
 As in the other guides, the build runs in the container of `container/run.sh` (see
 [direct.md](direct.md), section 1); the commands below run in its shell, in the repository, unless

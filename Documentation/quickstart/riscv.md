@@ -6,7 +6,7 @@ emulation; user-mode emulation cannot run it, because it has no seccomp). It als
 RISC-V board (see [Native build on a board](#native-build-on-a-board)). Details: the RISC-V section of [INSTALL.md](../../INSTALL.md) and
 `dev docs: riscv/PLAN.md`.
 
-Status (as in [README.md](../../README.md)): `direct` ⚠️; `vm` 🛫; graphics ❌.
+Status (as in [README.md](../../README.md)): `direct` ◐; `vm` ○; graphics ✗.
 
 Requirements: an x86_64 Linux machine with `podman` and about 2 GB of free disk for the guest; no
 root and no KVM. Everything below runs in the cross-development container, `container/run.sh --target riscv64` (a

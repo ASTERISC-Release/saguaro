@@ -4,8 +4,8 @@ Saguaro extends [gramine-tdx](https://github.com/gramineproject/gramine-tdx), th
 virtual-machine fork of Gramine, with additional platform adaptation layers (PALs), architectures and
 tooling. This document lists what the tree adds, grouped by area. Each area states the contribution, the
 design decisions that matter, the findings worth recording, how to use it and its limits. Status words: *done*
-(works and is tested here; ✅ in [README.md](README.md)), *experimental* (works in the tested setups, with known
-gaps; ⚠️), *planned* (🛫). The whole tree is experimental and not for production use. Open items are in
+(works and is tested here; ✓ in [README.md](README.md)), *experimental* (works in the tested setups, with known
+gaps; ◐), *planned* (○). The whole tree is experimental and not for production use. Open items are in
 [Documentation/TODO.md](Documentation/TODO.md); measured results of the examples are in [CI-Examples/RESULTS.md](CI-Examples/RESULTS.md).
 
 ## Platform support
