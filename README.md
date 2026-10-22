@@ -29,14 +29,14 @@ Additionally, several quality-of-life [features](Documentation/FEATURES.md) have
   - Even allows us to play Windows games using Wine and Proton in the `vm` PAL.
 - **Richer system call coverage:** including multi-process (e.g., fork, clone), signaling, and network.
 
-These features and backends are the result of published and upcoming work by the [ASU Trusted, Reliable, and Secure Computing
-(ASTERISC) Research Lab](https://asteriscresearchlab.com/). Refer to this [section](#citation) for details and how to cite our work.
+These features and backends are the result of published (and upcoming) work by the ASU Trusted, Reliable, and Secure Computing
+([ASTERISC](https://asteriscresearchlab.com/)) Research Lab. Refer to this [section](#citation) for details.
 
 
 > **Disclaimer:** The current work is **experimental** and should not be used in production environments. Although all design decisions were made by our team, 
-an AI agent (namely our lab's *riscy* agent) was heavily-involved in the development of this project (as evident from the commit history).
-Our rationale for using AI agents was to easily prototype and merge together disjoint artifacts from different research projects
-and make them available for research and teaching.
+an AI agent (namely our lab's *riscy* agent) was heavily-involved in the development of this project as evident from the commit history.
+Our rationale for using AI agents was to easily prototype and merge together disjoint artifacts from different research projects and ideas, in order 
+to make them available for research and teaching.
 
 ## Use-Cases
 
@@ -62,7 +62,7 @@ on x86_64, AArch64 and RISC-V, so that the architecture-specific parts can be co
 
 ## Platform Support
 
-|  |  |
+| Symbol | Brief Description |
 |:---:|:---:|
 | ✓ | supported: works and is covered by tests |
 | ◐ | experimental: runs, but incomplete, with known limits, or not yet fully validated |
@@ -88,13 +88,13 @@ on x86_64, AArch64 and RISC-V, so that the architecture-specific parts can be co
 | `sev` (AMD SEV)                 | –           | ◐    | –      | –            |
 | `vbs` (Windows VBS enclaves)    | ◐           | ◐    | ◐      | –            |
 
-Per-cell details, build options and verification status are in the development notes (a private repository; see [CHANGELOG.md](CHANGELOG.md) and [TODO.md](Documentation/TODO.md) for the public summary).
+Please see [CHANGELOG.md](CHANGELOG.md) and [TODO.md](Documentation/TODO.md) for a summary.
 
 ## Getting Started
 
-Get the source with
+Get the source:
 
-    git clone git@github.com:ASTERISC-Release/saguaro.git      # or https://github.com/ASTERISC-Release/saguaro
+    git clone https://github.com/ASTERISC-Release/saguaro
 
 Each quickstart guide goes from a checkout to a running example:
 
@@ -104,14 +104,12 @@ Each quickstart guide goes from a checkout to a running example:
 - **Intel TDX and SGX** (`tdx`, `sgx`): [Documentation/quickstart/tdx-sgx.md](Documentation/quickstart/tdx-sgx.md)
 - **AMD SEV-SNP** (`sev`): [Documentation/quickstart/sev.md](Documentation/quickstart/sev.md)
 
-Guides for graphics and for the RISC-V cross-build are listed in the [quickstart index](Documentation/quickstart/README.md).
+Other important guides include: 
 
-[INSTALL.md](INSTALL.md) is the complete reference
-for building and installing, on a host or in the supplied containers.
-[Documentation/README.md](Documentation/README.md) lists the documents of this tree, and
-[AGENTS.md](AGENTS.md) says how to build and run each mode (for people and coding agents).
-
-`CI-Examples/` contains ready-made applications.
+- Support for running graphical applications under [userspace](https://github.com/ASTERISC-Release/saguaro/blob/main/Documentation/quickstart/graphics-direct.md) 
+and [microVM](https://github.com/ASTERISC-Release/saguaro/blob/main/Documentation/quickstart/graphics-vm.md) 
+- Cross-building RISC-V [userspace](https://github.com/ASTERISC-Release/saguaro/blob/main/Documentation/quickstart/riscv.md) under an emulated guest environment 
+- The complete reference for [building and installing](INSTALL.md), on a host or in the supplied containers
 
 ## Contributing
 
