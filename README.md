@@ -11,8 +11,9 @@ Saguaro is a derivative of [Gramine](https://github.com/gramineproject/gramine) 
 and its fork [gramine-tdx](https://github.com/gramineproject/gramine-tdx). It is not affiliated with or
 endorsed by the Gramine project or LF Projects. Gramine was initially designed and built by a diverse group
 of researchers and engineers from universities and industry to run on Intel x86 platforms. Please see the
-[Acknowledgements](#acknowledgement) section. The command-line tools keep their upstream names for now
-(`saguaro-direct`, `saguaro-vm`, `saguaro-sgx`, `saguaro-manifest`, ...).
+[Acknowledgements](#acknowledgement) section. The command-line tools are named `saguaro-<name>`
+(`saguaro-direct`, `saguaro-vm`, `saguaro-sgx`, `saguaro-manifest`, ...); the earlier `gramine-<name>` names are mapped
+in [CHANGELOG.md](CHANGELOG.md#names).
 
 Keeping [upstream](https://github.com/gramineproject/gramine-tdx)'s full history, Saguaro extends Gramine to provide wide support for additional backends, namely
 

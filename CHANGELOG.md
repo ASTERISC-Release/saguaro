@@ -285,6 +285,26 @@ memory and message queues, `faccessat2`, `getresuid`, more `prctl` options, file
 - **Documentation.** `scripts/check-docs.py` verifies the paths and links of the documents. Workflows cover direct
   x86_64, direct AArch64, emulated RISC-V, VM x86_64 and SEV.
 
+## Names
+
+The tree was renamed to Saguaro. What an upgrader has to change (there are no aliases for the old names):
+
+- **Commands**: every `gramine-<name>` of this tree is now `saguaro-<name>`: the launchers `saguaro-direct`,
+  `saguaro-vm`, `saguaro-sev`, `saguaro-sgx`, `saguaro-tdx` and `saguaro-vbs` (on Windows `saguaro-vbs.ps1` and
+  `saguaro-vbs.cmd` in `%USERPROFILE%\saguaro-vbs`), and the inherited tools `saguaro-manifest`,
+  `saguaro-manifest-check`, `saguaro-test`, `saguaro-gen-depend`, `saguaro-argv-serializer`, `saguaro-ratls` and
+  `saguaro-sgx-<tool>` (`-sign`, `-get-token`, `-gen-private-key`, `-sigstruct-view`, `-quote-view`, `-ias-request`,
+  `-ias-verify-report`, `-pf-crypt`, `-pf-tamper`). The example Makefiles keep the variable `GRAMINE` (now
+  `GRAMINE=saguaro-vm` etc.); their target `start-gramine-server` is `start-saguaro-server`.
+- **Environment variables** `GRAMINE_<X>` of the scripts and launchers are `SAGUARO_<X>`; install prefixes
+  `~/.local/gramine*` are `~/.local/saguaro*`. Reinstall with `scripts/install.sh`; an old prefix and a
+  `~/.local/bin/gramine-vbs` link of `--vbs` are not removed.
+- **The SGX signing key** defaults to `~/.config/saguaro/enclave-key.pem`; a key at `~/.config/gramine/` is still used
+  when it is the only one.
+- **Unchanged**: the Python package `graminelibos`, the meson project and library names (`libgramine*`,
+  `lib/<triple>/gramine/`), the manifest syntax, the launcher-to-guest strings (`-gramine-args`, the fw_cfg items `opt/gramine/<name>`)
+  and the LibOS's own file names (`/dev/shm/.gramine-*`), so that old and new installs coexist on one host.
+
 ## Inherited from upstream
 
 The manifest syntax, the TDX backend of gramine-tdx and the SGX tooling are inherited; the SGX documentation is
