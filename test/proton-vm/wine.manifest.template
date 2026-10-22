@@ -86,7 +86,7 @@ loader.env.EGL_VULKAN_PRESENT = "1"
 loader.env.EGL_VULKAN_PRESENT_DISABLE = "1"
 {% endif %}
 loader.env.NODEVICE_SELECT = "1"
-loader.env.XDG_DATA_HOME = "/gramine-xdg"
+loader.env.XDG_DATA_HOME = "/saguaro-xdg"
 loader.env.EGL_EAGER_SESSION = "{{ gpu_eager }}"
 loader.env.EGL_GRAMINE = "1"
 loader.env.EGL_DISCRETE = "{{ egl_discrete }}"
@@ -135,7 +135,7 @@ fs.mounts = [
 {% endif %}
 {% if gpu|string == "1" %}
   { path = "/libgraphics.so", uri = "file:{{ gramine.libgraphics }}" },
-  { path = "/gramine-xdg/vulkan", uri = "file:{{ layer_dir }}" },
+  { path = "/saguaro-xdg/vulkan", uri = "file:{{ layer_dir }}" },
   { path = "/sys", type = "chroot", uri = "file:/sys" },
   { path = "/sys/dev", type = "chroot", uri = "file:/sys/dev" },
   { path = "/sys/devices", type = "chroot", uri = "file:/sys/devices" },

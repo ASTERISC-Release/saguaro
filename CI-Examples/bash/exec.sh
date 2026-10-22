@@ -5,8 +5,8 @@
 EXAMPLE_BINARY=bash
 EXAMPLE_BUILD=""
 EXAMPLE_MANIFEST=bash.manifest
-EXAMPLE_ARGS=(-c "echo gramine-exec-ok")
-EXAMPLE_EXPECT="gramine-exec-ok"
+EXAMPLE_ARGS=(-c "echo saguaro-exec-ok")
+EXAMPLE_EXPECT="saguaro-exec-ok"
 EXAMPLE_ARCHES="x86_64 aarch64"
 EXAMPLE_BACKENDS="direct vm sev"
 

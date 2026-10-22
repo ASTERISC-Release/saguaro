@@ -95,8 +95,8 @@ check: all
 	GRAMINE="$(GRAMINE)" ./vbs-check.sh
 endif
 
-.PHONY: start-gramine-server
-start-gramine-server: all
+.PHONY: start-saguaro-server
+start-saguaro-server: all
 	$(GRAMINE) rust-hyper-http-server
 
 ifneq ($(VBS),1)

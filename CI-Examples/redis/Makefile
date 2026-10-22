@@ -151,8 +151,8 @@ GRAMINE = saguaro-sgx
 endif
 
 # Note that command-line arguments are hardcoded in the manifest file.
-.PHONY: start-gramine-server
-start-gramine-server: all
+.PHONY: start-saguaro-server
+start-saguaro-server: all
 	$(GRAMINE) redis-server
 
 ################################## CLEANUP ####################################

@@ -20,7 +20,7 @@ By hand, the server in one terminal and the client in another:
 
 ```sh
 make                    # make SGX=1 for SGX; make VBS=1 in WSL for VBS
-make start-gramine-server       # VM and SEV: add GRAMINE=saguaro-vm (or saguaro-sev) SAGUARO_VM_INBOUND=3000:3000
+make start-saguaro-server       # VM and SEV: add GRAMINE=saguaro-vm (or saguaro-sev) SAGUARO_VM_INBOUND=3000:3000
 curl http://127.0.0.1:3000      # Hello, World
 ```
 

@@ -181,8 +181,8 @@ else
 GRAMINE = saguaro-sgx
 endif
 
-.PHONY: start-gramine-server
-start-gramine-server: all
+.PHONY: start-saguaro-server
+start-saguaro-server: all
 	$(GRAMINE) ./nginx
 
 ifneq ($(VBS),1)
