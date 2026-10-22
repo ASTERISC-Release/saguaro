@@ -11,14 +11,14 @@ AArch64 and RISC-V. It runs an unmodified Linux application in an isolated envir
 implementation of the Linux (POSIX) system call interface (the *LibOS*) on top of a small host abstraction
 layer (the *PAL*).
 
-Saguaro is a derivative of [Gramine](https://github.com/gramineproject/gramine) (formerly *Graphene*)
-and its fork [gramine-tdx](https://github.com/gramineproject/gramine-tdx). It is not affiliated with or
-endorsed by the Gramine project or LF Projects. Gramine was initially designed and built by a diverse group
-of researchers and engineers from universities and industry to run on Intel x86 platforms. Please see the
-[Acknowledgements](#acknowledgement) section. The command-line tools keep their upstream names for now
+Saguaro is a derivative of [Gramine](https://github.com/gramineproject/gramine) (formerly *Graphene*), an 
+excellent Library OS designed and built by a diverse group of researchers and engineers from universities and industry 
+to run on Intel x86 platforms. Our work is not affiliated with or endorsed by the Gramine project or LF Projects. Please 
+see the [Acknowledgements](#acknowledgement) section. The command-line tools keep their upstream names for now
 (`gramine-direct`, `gramine-vm`, `gramine-sgx`, `gramine-manifest`, ...).
 
-Keeping [upstream](https://github.com/gramineproject/gramine-tdx)'s full history, Saguaro extends Gramine to provide wide support for additional backends, namely
+Keeping [upstream](https://github.com/gramineproject/gramine-tdx)'s full history, Saguaro extends Gramine to provide wide support 
+for additional backends, namely
 
 - Containerized userspace (`direct`)
 - Isolated userspace (`sgx`)
