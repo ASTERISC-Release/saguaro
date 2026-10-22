@@ -108,7 +108,7 @@ static noreturn int thread_handshake_func(void* param) {
  *
  * \returns 0 on success, negative PAL error code otherwise.
  *
- * An abstract UNIX socket with name "/gramine/<pipename>" is opened for listening. A corresponding
+ * An abstract UNIX socket with name "/saguaro/<pipename>" is opened for listening. A corresponding
  * PAL handle with type `pipesrv` is created. This PAL handle typically serves only as an
  * intermediate step to connect two ends of the pipe (`pipecli` and `pipe`). As soon as the other
  * end of the pipe connects to this listening socket, a new accepted socket and the corresponding
@@ -239,7 +239,7 @@ out_err:
  * \returns 0 on success, negative PAL error code otherwise.
  *
  * This function connects to the other end of the pipe, represented as an abstract UNIX socket
- * "/gramine/<pipename>" opened for listening. When the connection succeeds, a new `pipe` PAL
+ * "/saguaro/<pipename>" opened for listening. When the connection succeeds, a new `pipe` PAL
  * handle is created with the corresponding underlying socket and is returned in `handle`.
  * The other end of the pipe is typically of type `pipecli`.
  */

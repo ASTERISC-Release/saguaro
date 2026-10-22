@@ -10,7 +10,7 @@ fs.root.uri = "file:/"
 sys.rewrite_syscalls = false
 
 vbs.debug = false
-vbs.family_id = "6772616d696e652d7662732d74657374"  # "gramine-vbs-test"
+vbs.family_id = "7361677561726f2d7662732d74657374"  # "saguaro-vbs-test"
 vbs.image_id = "61747465737400000000000000000002"
 vbs.isv_svn = 1
 vbs.build = "$VBS_CC_STATIC -o attest $SAGUARO_REPO/pal/src/host/vbs/test/attest/attest.c"

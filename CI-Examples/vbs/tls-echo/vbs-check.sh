@@ -8,7 +8,7 @@
 set -uo pipefail
 : "${GRAMINE:=../../../scripts/vbs/saguaro-vbs}"
 PORT=${TLS_PORT:-4433}
-FAMILY=6772616d696e652d7662732d746c7300
+FAMILY=7361677561726f2d7662732d746c7300
 IMAGE=746c732d6563686f0000000000000001
 fails=0
 pins=(--verifier tls-echo.vbs --family-id $FAMILY --image-id $IMAGE --min-svn 1)
@@ -38,7 +38,7 @@ start tls-echo
 expect accept "genuine server, all pins" "${pins[@]}" --message "hello through TLS"
 expect refuse "wrong image id pinned" --verifier tls-echo.vbs --family-id $FAMILY \
     --image-id 746c732d6563686f0000000000000002 --min-svn 1
-expect refuse "wrong family id pinned" --verifier tls-echo.vbs --family-id 6772616d696e652d7662732d746c7301 --image-id $IMAGE
+expect refuse "wrong family id pinned" --verifier tls-echo.vbs --family-id 7361677561726f2d7662732d746c7301 --image-id $IMAGE
 expect refuse "SVN below the minimum" --verifier tls-echo.vbs --min-svn 2
 stop
 

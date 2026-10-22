@@ -267,8 +267,8 @@ static bool is_graphics_host_path(const char* path) {
      * graphics session started was mapped through the GEM arena, and llvmpipe's first store into
      * Mesa's XShm image there never completed (The Witcher 1 on GPU=1, proton-vm/FINDINGS.md
      * 2026-10-18); one created before it could not be attached after it. */
-    static const char gramine_shm_prefix[] = "/dev/shm/.gramine-";
-    if (!strncmp(path, gramine_shm_prefix, sizeof(gramine_shm_prefix) - 1))
+    static const char saguaro_shm_prefix[] = "/dev/shm/.saguaro-";
+    if (!strncmp(path, saguaro_shm_prefix, sizeof(saguaro_shm_prefix) - 1))
         return false;
 
     static const char* const roots[] = {"/dev", "/sys", "/root/.cache"};

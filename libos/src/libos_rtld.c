@@ -1061,7 +1061,7 @@ static int vdso_map_init(void) {
 
     /* The vDSO cannot be copied into fresh memory and made executable here: use the packed copy,
      * or run without a vDSO (glibc then makes the system calls itself). */
-    if (!vbs_take_packed_object("file:/gramine/vdso.so", &vdso_base, &vdso_size)) {
+    if (!vbs_take_packed_object("file:/saguaro/vdso.so", &vdso_base, &vdso_size)) {
         log_debug("vbs: no packed vDSO, running without one");
         g_vdso_addr = NULL;
         return 0;

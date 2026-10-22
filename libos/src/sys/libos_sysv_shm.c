@@ -104,7 +104,7 @@ static int shm_pick_backing_dir(uint64_t probe_id) {
     int creatable = -1; /* a directory we may create in, even if the mapping probe failed there */
     for (size_t i = 0; i < ARRAY_SIZE(g_backing_dirs); i++) {
         char path[96];
-        int n = snprintf(path, sizeof(path), "%s/.gramine-sysv-shm-probe-%llu",
+        int n = snprintf(path, sizeof(path), "%s/.saguaro-sysv-shm-probe-%llu",
                          g_backing_dirs[i], (unsigned long long)probe_id);
         if (n < 0 || (size_t)n >= sizeof(path))
             continue;
@@ -222,7 +222,7 @@ long libos_syscall_shmget(int key, size_t size, int shmflg) {
         size_t i = (size_t)dir + attempt < ARRAY_SIZE(g_backing_dirs)
                        ? (size_t)dir + attempt
                        : (size_t)dir + attempt - ARRAY_SIZE(g_backing_dirs);
-        int n = snprintf(path, sizeof(path), "%s/.gramine-sysv-shm-%u-%llu", g_backing_dirs[i],
+        int n = snprintf(path, sizeof(path), "%s/.saguaro-sysv-shm-%u-%llu", g_backing_dirs[i],
                          g_process.pid, (unsigned long long)id);
         if (n < 0 || (size_t)n >= sizeof(path)) {
             unlock(&g_sysv_shm_lock);

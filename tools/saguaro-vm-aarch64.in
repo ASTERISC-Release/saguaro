@@ -144,25 +144,25 @@ QEMU_SHAPE="-accel $ACCEL -cpu $CPU -m $QEMU_MEM_SIZE -smp $QEMU_CPU_NUM"
 # A lock whose owner is gone (killed -9, e.g. by a test harness timeout) is reclaimed.
 SAGUARO_VM_ID=${SAGUARO_VM_ID_BASE:-10}
 while true; do
-    LOCK=/tmp/gramine_vm_$SAGUARO_VM_ID.lock
+    LOCK=/tmp/saguaro_vm_$SAGUARO_VM_ID.lock
     if mkdir "$LOCK" 2>/dev/null; then
         echo $$ > "$LOCK/pid"
         break
     fi
     OWNER=$(cat "$LOCK/pid" 2>/dev/null)
     if [ -n "$OWNER" ] && ! kill -0 "$OWNER" 2>/dev/null; then
-        rm -rf "$LOCK" "/tmp/gramine_vhostfs_$SAGUARO_VM_ID" "/tmp/gramine_vhostfs_$SAGUARO_VM_ID.pid"
+        rm -rf "$LOCK" "/tmp/saguaro_vhostfs_$SAGUARO_VM_ID" "/tmp/saguaro_vhostfs_$SAGUARO_VM_ID.pid"
         continue
     fi
     SAGUARO_VM_ID=$((SAGUARO_VM_ID + 1))
 done
-VHOSTFS_SOCKET=/tmp/gramine_vhostfs_$SAGUARO_VM_ID
+VHOSTFS_SOCKET=/tmp/saguaro_vhostfs_$SAGUARO_VM_ID
 WORK=$(mktemp -d /tmp/saguaro-vm.XXXXXX)
 VIRTIOFSD_PID=
 cleanup() {
     vm_relay_stop
     [ -n "$VIRTIOFSD_PID" ] && kill "$VIRTIOFSD_PID" 2>/dev/null
-    rm -rf "$WORK" "$VHOSTFS_SOCKET" "$VHOSTFS_SOCKET.pid" "/tmp/gramine_vm_$SAGUARO_VM_ID.lock"
+    rm -rf "$WORK" "$VHOSTFS_SOCKET" "$VHOSTFS_SOCKET.pid" "/tmp/saguaro_vm_$SAGUARO_VM_ID.lock"
 }
 trap cleanup EXIT
 trap 'exit 130' INT TERM
@@ -205,11 +205,11 @@ fi
 
 # The guest splits this string on whitespace but keeps "double-quoted" tokens whole (no escapes), so
 # quote every argument: `saguaro-vm app -c "echo hi"` must reach the app as two arguments.
-SAGUARO_ARGS="-gramine-args init \"$APPLICATION\""
+SAGUARO_ARGS="-saguaro-args init \"$APPLICATION\""
 for arg in "$@"; do
     SAGUARO_ARGS+=" \"$arg\""
 done
-SAGUARO_ARGS+=" -gramine-args-end"
+SAGUARO_ARGS+=" -saguaro-args-end"
 # Due to QEMU syntax, commas in the QEMU cmdline need to be escaped using an additional comma.
 SAGUARO_ARGS=${SAGUARO_ARGS//","/",,"}
 SAGUARO_ENVS=$(python3 -c "
@@ -219,7 +219,7 @@ for name, value in os.environ.items():
     env_str += ('\"{0}={1}\" '.format(name, value).replace(',', ',,'))
 print(env_str)
 ")
-SAGUARO_ENVS="-gramine-envs $SAGUARO_ENVS -gramine-envs-end"
+SAGUARO_ENVS="-saguaro-envs $SAGUARO_ENVS -saguaro-envs-end"
 
 # console: stdio, with a log copy so the guest's exit code can be recovered afterwards
 CONSOLE_LOG=$WORK/console.log
@@ -227,7 +227,7 @@ QEMU_VIRTIO_CONSOLE="-device virtio-serial-pci,iommu_platform=off,romfile= \
 -chardev stdio,id=virtioconsole0,logfile=$CONSOLE_LOG \
 -device virtconsole,chardev=virtioconsole0"
 QEMU_VIRTIO_FS="-chardev socket,path=$VHOSTFS_SOCKET,id=vhostfs \
--device vhost-user-fs-pci,iommu_platform=off,queue-size=1024,chardev=vhostfs,tag=graminefs,romfile="
+-device vhost-user-fs-pci,iommu_platform=off,queue-size=1024,chardev=vhostfs,tag=saguarofs,romfile="
 QEMU_VIRTIO_VSOCK=
 if [ "$SAGUARO_VSOCK" = 1 ]; then
     QEMU_VIRTIO_VSOCK="-device vhost-vsock-pci,iommu_platform=off,guest-cid=$SAGUARO_VM_ID,id=vsockdev"
@@ -248,10 +248,10 @@ $QEMU_PATH $QEMU_GDB $QEMU_MACHINE $QEMU_SHAPE $QEMU_RAM -nic none \
     -display none $QEMU_MONITOR $QEMU_SERIAL -no-reboot \
     $QEMU_VIRTIO_CONSOLE $QEMU_VIRTIO_FS $QEMU_VIRTIO_VSOCK \
     -kernel "$LIBPAL_PATH" -device loader,file="$WORK/virt-packed.dtb",addr=0x40000000 \
-    -fw_cfg name=opt/gramine/pwd,string="$PWD" \
-    -fw_cfg name=opt/gramine/args,string="$SAGUARO_ARGS" \
-    -fw_cfg name=opt/gramine/envs,string="$SAGUARO_ENVS" \
-    -fw_cfg name=opt/gramine/unixtime_s,string="$EPOCHSECONDS"
+    -fw_cfg name=opt/saguaro/pwd,string="$PWD" \
+    -fw_cfg name=opt/saguaro/args,string="$SAGUARO_ARGS" \
+    -fw_cfg name=opt/saguaro/envs,string="$SAGUARO_ENVS" \
+    -fw_cfg name=opt/saguaro/unixtime_s,string="$EPOCHSECONDS"
 QEMU_RC=$?
 
 [ -n "$SAGUARO_VM_CONSOLE_LOG" ] && cp "$CONSOLE_LOG" "$SAGUARO_VM_CONSOLE_LOG" 2>/dev/null

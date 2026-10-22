@@ -34,7 +34,7 @@
  *
  * \returns 0 on success, negative PAL error code otherwise.
  *
- * An abstract UNIX socket with name "/gramine/<pipename>" is opened for listening. A corresponding
+ * An abstract UNIX socket with name "/saguaro/<pipename>" is opened for listening. A corresponding
  * PAL handle with type `pipesrv` is created. This PAL handle typically serves only as an
  * intermediate step to connect two ends of the pipe (`pipecli` and `pipe`). As soon as the other
  * end of the pipe connects to this listening socket, a new accepted socket and the corresponding
@@ -131,7 +131,7 @@ static int pipe_waitforclient(PAL_HANDLE handle, PAL_HANDLE* client, pal_stream_
  * \returns 0 on success, negative PAL error code otherwise.
  *
  * This function connects to the other end of the pipe, represented as an abstract UNIX socket
- * "/gramine/<pipename>" opened for listening. When the connection succeeds, a new `pipe` PAL handle
+ * "/saguaro/<pipename>" opened for listening. When the connection succeeds, a new `pipe` PAL handle
  * is created with the corresponding underlying socket and is returned in `handle`. The other end of
  * the pipe is typically of type `pipecli`.
  */
@@ -344,7 +344,7 @@ static int64_t pipe_writehandles(PAL_HANDLE handle, const void* buffer, size_t c
     if (meta_size)
         memcpy(cur, meta, meta_size);
 
-    int memfd = DO_SYSCALL(memfd_create, "gramine-pipe-handles", MFD_CLOEXEC);
+    int memfd = DO_SYSCALL(memfd_create, "saguaro-pipe-handles", MFD_CLOEXEC);
     if (memfd < 0) {
         ret = unix_to_pal_error(memfd);
         goto out_blob;

@@ -43,7 +43,7 @@ def dump_sockets(when):
 
 
 def find_guest_cid(app, timeout=120):
-    """CID of the single QEMU whose cmdline carries `app` in its -gramine-args fw_cfg item."""
+    """CID of the single QEMU whose cmdline carries `app` in its -saguaro-args fw_cfg item."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         cids = []
@@ -58,7 +58,7 @@ def find_guest_cid(app, timeout=120):
             if not any(b'qemu' in p for p in parts[:1]):
                 continue
             cmdline = b' '.join(parts).decode('utf-8', 'replace')
-            if f'-gramine-args init "{app}"' not in cmdline:
+            if f'-saguaro-args init "{app}"' not in cmdline:
                 continue
             m = re.search(r'guest-cid=(\d+)', cmdline)
             if m:
@@ -103,11 +103,11 @@ def find_child_guest_cid(app, ancestor_pid, timeout=120):
             while chain and chain != 1:
                 if chain == ancestor:
                     cmdline = b' '.join(parts).decode('utf-8', 'replace')
-                    if '-gramine-args' not in cmdline:
+                    if '-saguaro-args' not in cmdline:
                         # not the guest yet: the AArch64 launcher first runs a short QEMU that only
                         # dumps the machine's device tree; keep scanning for the real one
                         break
-                    if f'-gramine-args init "{app}"' not in cmdline:
+                    if f'-saguaro-args init "{app}"' not in cmdline:
                         sys.exit(f'QEMU under pid {ancestor} runs a different application')
                     m = re.search(r'guest-cid=(\d+)', cmdline)
                     if not m:

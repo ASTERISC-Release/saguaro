@@ -32,7 +32,7 @@ hand (the commands used for the phase-2 hello world):
 
    ```sh
    scripts/vbs/pack.py --out PACK --obj pal:libpal:libpal.so \
-       --obj pal:libsysdb:libsysdb.so:/libsysdb.so --obj user:vdso:vdso.so:/gramine/vdso.so \
+       --obj pal:libsysdb:libsysdb.so:/libsysdb.so --obj user:vdso:vdso.so:/saguaro/vdso.so \
        --obj user:app:hello:/hello --file manifest:hello.manifest:/hello.manifest --no-svc libpal \
        --x18-allow libsysdb:libos_syscall_entry,_return_from_syscall
    ```

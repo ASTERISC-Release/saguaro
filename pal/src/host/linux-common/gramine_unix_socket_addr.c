@@ -16,7 +16,7 @@ int get_gramine_unix_socket_addr(const char* name, struct sockaddr_un* out_addr)
      * buffer (i.e. do *not* consider the rest of the buffer as null-terminated C string, but rather
      * a fixed length byte array). */
     memset(out_addr->sun_path, 0, sizeof(out_addr->sun_path));
-    int ret = snprintf(out_addr->sun_path + 1, sizeof(out_addr->sun_path) - 1, "/gramine/%s", name);
+    int ret = snprintf(out_addr->sun_path + 1, sizeof(out_addr->sun_path) - 1, "/saguaro/%s", name);
     if (ret < 0) {
         return ret;
     }

@@ -75,7 +75,7 @@ VM_PID=$!
 # so also kill the QEMU of this test by its fw_cfg args signature; do not kill the process group,
 # it is this script's own.
 kill_guest() {
-    pkill -f 'qemu-system.*-gramine-args init .vsock_echo_server' 2>/dev/null
+    pkill -f 'qemu-system.*-saguaro-args init .vsock_echo_server' 2>/dev/null
     kill "$VM_PID" 2>/dev/null
 }
 trap 'kill_guest' EXIT INT TERM

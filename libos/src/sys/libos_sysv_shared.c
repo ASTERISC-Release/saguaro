@@ -11,7 +11,7 @@
  * libos_sysv_shared.h). The semantics follow those files (the kernel's check order, identifiers,
  * `ipcperms()`, the IPC_STAT/INFO layouts and limits); what differs is where the state lives:
  *
- *   - One area in the guest's POSIX shared-memory store (`dev:/dev/shm/.gramine-sysv-ipc`, served
+ *   - One area in the guest's POSIX shared-memory store (`dev:/dev/shm/.saguaro-sysv-ipc`, served
  *     by the VM PAL in guest RAM and shared by every process) holds all tables. Each process maps
  *     it at its own address at first use, so the area holds no pointers: lists and variable-size
  *     data (messages, semaphore arrays) are offsets into a small heap at its end.
@@ -67,7 +67,7 @@
 
 #define SYSV_SHARED_HEAP_SIZE (6UL * 1024 * 1024)
 #define SYSV_SHARED_MAGIC     0x5359535653484152UL /* "SYSVSHAR" */
-#define SYSV_SHARED_URI       "dev:/dev/shm/.gramine-sysv-ipc"
+#define SYSV_SHARED_URI       "dev:/dev/shm/.saguaro-sysv-ipc"
 
 /* semctl commands and flags (the process-local file defines them itself) */
 #define SEM_UNDO     010000
@@ -488,7 +488,7 @@ static int shm_create_file(size_t size, char* path, size_t path_size) {
     uint64_t gen = __atomic_add_fetch(&g_area->next_file, 1, __ATOMIC_RELAXED);
     long ret = -ENOENT;
     for (size_t i = 0; i < ARRAY_SIZE(dirs); i++) {
-        snprintf(path, path_size, "%s/.gramine-sysv-shm-%08x-%llu", dirs[i], g_area->token,
+        snprintf(path, path_size, "%s/.saguaro-sysv-shm-%08x-%llu", dirs[i], g_area->token,
                  (unsigned long long)gen);
         long fd = libos_openat_internal(AT_FDCWD, path, O_RDWR | O_CREAT | O_EXCL, 0666);
         if (fd < 0) {

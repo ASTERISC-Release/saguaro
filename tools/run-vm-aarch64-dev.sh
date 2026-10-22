@@ -107,15 +107,15 @@ fi
 
 timeout ${RUN_TIMEOUT:-20} qemu-system-aarch64 $M "$@" -accel "$ACCEL" -cpu "$CPU" -m 2G -smp "$SMP" -nic none \
     -object memory-backend-memfd,id=ram1,size=2G,share=on -machine memory-backend=ram1 \
-    -fw_cfg name=opt/gramine/unixtime_s,string="$(date +%s)" \
-    -fw_cfg name=opt/gramine/args,string="-gramine-args init /bin/hello -gramine-args-end" \
-    -fw_cfg name=opt/gramine/envs,string="-gramine-envs -gramine-envs-end" \
-    -fw_cfg name=opt/gramine/pwd,string="/" \
+    -fw_cfg name=opt/saguaro/unixtime_s,string="$(date +%s)" \
+    -fw_cfg name=opt/saguaro/args,string="-saguaro-args init /bin/hello -saguaro-args-end" \
+    -fw_cfg name=opt/saguaro/envs,string="-saguaro-envs -saguaro-envs-end" \
+    -fw_cfg name=opt/saguaro/pwd,string="/" \
     -device virtio-serial-pci,iommu_platform=off,romfile= \
     -chardev file,path="$WORK/virtconsole.log",id=virtioconsole0 \
     -device virtconsole,chardev=virtioconsole0 \
     -chardev socket,path="$WORK/vhostfs",id=vhostfs \
-    -device vhost-user-fs-pci,iommu_platform=off,queue-size=1024,chardev=vhostfs,tag=graminefs,romfile= \
+    -device vhost-user-fs-pci,iommu_platform=off,queue-size=1024,chardev=vhostfs,tag=saguarofs,romfile= \
     -kernel "$PAL" -device loader,file="$WORK/virt-packed.dtb",addr=0x40000000 \
     -nographic -monitor none 2>"$WORK/qemu.err" &
 QPid=$!

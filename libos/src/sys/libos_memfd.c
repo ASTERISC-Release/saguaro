@@ -81,7 +81,7 @@ long libos_syscall_memfd_create(const char* name, unsigned int flags) {
     for (unsigned int attempt = 0; attempt < 32; attempt++) {
         uint64_t id = __atomic_add_fetch(&next_memfd_id, 1, __ATOMIC_RELAXED);
         for (size_t i = 0; i < ARRAY_SIZE(backing_dirs); i++) {
-            int n = snprintf(path, sizeof(path), "%s/.gramine-memfd-%u-%llu", backing_dirs[i],
+            int n = snprintf(path, sizeof(path), "%s/.saguaro-memfd-%u-%llu", backing_dirs[i],
                              g_process.pid, (unsigned long long)id);
             if (n < 0 || (size_t)n >= sizeof(path))
                 return -ENAMETOOLONG;

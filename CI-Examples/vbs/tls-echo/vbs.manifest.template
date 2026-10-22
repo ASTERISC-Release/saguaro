@@ -16,7 +16,7 @@ sys.rewrite_syscalls = false
 
 # the identity a client pins (vbs-tls-client --family-id/--image-id/--min-svn)
 vbs.debug = {{ debug }}
-vbs.family_id = "6772616d696e652d7662732d746c7300"  # "gramine-vbs-tls"
+vbs.family_id = "7361677561726f2d7662732d746c7300"  # "saguaro-vbs-tls"
 vbs.image_id = "746c732d6563686f0000000000000001"   # "tls-echo", 1
 vbs.isv_svn = 1
 vbs.max_threads = 4

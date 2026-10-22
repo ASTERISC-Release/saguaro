@@ -214,7 +214,7 @@ kill_strays() {
     pkill -9 -f "/saguaro/direct/[l]ibpal[.]so " 2>/dev/null
     # saguaro-vm: SIGKILL of the launcher leaves its QEMU running until the guest ends, and a server
     # guest never ends
-    [ "$RUNNER" = saguaro-vm ] && pkill -9 -f "[q]emu-system-.* -gramine-args init" 2>/dev/null
+    [ "$RUNNER" = saguaro-vm ] && pkill -9 -f "[q]emu-system-.* -saguaro-args init" 2>/dev/null
     sleep 0.3
 }
 trap kill_strays EXIT INT TERM

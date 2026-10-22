@@ -70,7 +70,7 @@ static int cmdline_read_common(enum cmdline_parse_type type, const char* input, 
         goto out;
     }
 
-    /* do not count the end_str (e.g. `-gramine-args-end`) and everything after it as arguments */
+    /* do not count the end_str (e.g. `-saguaro-args-end`) and everything after it as arguments */
     *p_end = '\0';
 
     p += strlen(begin_str);
@@ -178,7 +178,7 @@ int cmdline_init_args(char* cmdline_args, size_t cmdline_args_size) {
 
     uint16_t fw_cfg_selector;
     uint32_t fw_cfg_size;
-    int ret = find_fw_cfg_selector("opt/gramine/args", &fw_cfg_selector, &fw_cfg_size);
+    int ret = find_fw_cfg_selector("opt/saguaro/args", &fw_cfg_selector, &fw_cfg_size);
     if (ret < 0)
         return ret;
 
@@ -202,7 +202,7 @@ int cmdline_init_envs(char* cmdline_envs, size_t cmdline_envs_size) {
 
     uint16_t fw_cfg_selector;
     uint32_t fw_cfg_size;
-    int ret = find_fw_cfg_selector("opt/gramine/envs", &fw_cfg_selector, &fw_cfg_size);
+    int ret = find_fw_cfg_selector("opt/saguaro/envs", &fw_cfg_selector, &fw_cfg_size);
     if (ret < 0)
         return ret;
 
@@ -224,7 +224,7 @@ int cmdline_init_envs(char* cmdline_envs, size_t cmdline_envs_size) {
 int graphics_data_size_init(uint64_t* out_graphics_data_size) {
     uint16_t fw_cfg_selector;
     uint32_t fw_cfg_size;
-    int ret = find_fw_cfg_selector("opt/gramine/graphics_data_size", &fw_cfg_selector,
+    int ret = find_fw_cfg_selector("opt/saguaro/graphics_data_size", &fw_cfg_selector,
                                    &fw_cfg_size);
     if (ret < 0)
         return ret;
@@ -258,7 +258,7 @@ int graphics_data_size_init(uint64_t* out_graphics_data_size) {
 int graphics_huge_addr_init(uint64_t* out_graphics_huge_addr) {
     uint16_t fw_cfg_selector;
     uint32_t fw_cfg_size;
-    int ret = find_fw_cfg_selector("opt/gramine/graphics_huge_addr", &fw_cfg_selector,
+    int ret = find_fw_cfg_selector("opt/saguaro/graphics_huge_addr", &fw_cfg_selector,
                                    &fw_cfg_size);
     if (ret < 0)
         return ret;
@@ -290,7 +290,7 @@ int graphics_huge_addr_init(uint64_t* out_graphics_huge_addr) {
 int graphics_data_addr_init(uint64_t* out_graphics_data_addr) {
     uint16_t fw_cfg_selector;
     uint32_t fw_cfg_size;
-    int ret = find_fw_cfg_selector("opt/gramine/graphics_data_addr", &fw_cfg_selector,
+    int ret = find_fw_cfg_selector("opt/saguaro/graphics_data_addr", &fw_cfg_selector,
                                    &fw_cfg_size);
     if (ret < 0)
         return ret;
@@ -322,7 +322,7 @@ int graphics_data_addr_init(uint64_t* out_graphics_data_addr) {
 int host_pwd_init(void) {
     uint16_t fw_cfg_selector;
     uint32_t fw_cfg_size;
-    int ret = find_fw_cfg_selector("opt/gramine/pwd", &fw_cfg_selector, &fw_cfg_size);
+    int ret = find_fw_cfg_selector("opt/saguaro/pwd", &fw_cfg_selector, &fw_cfg_size);
     if (ret < 0)
         return ret;
 
@@ -346,7 +346,7 @@ int unixtime_init(char* unixtime_s, size_t unixtime_size) {
 
     uint16_t fw_cfg_selector;
     uint32_t fw_cfg_size;
-    int ret = find_fw_cfg_selector("opt/gramine/unixtime_s", &fw_cfg_selector, &fw_cfg_size);
+    int ret = find_fw_cfg_selector("opt/saguaro/unixtime_s", &fw_cfg_selector, &fw_cfg_size);
     if (ret < 0)
         return ret;
 

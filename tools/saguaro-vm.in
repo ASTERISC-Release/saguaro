@@ -390,17 +390,17 @@ trap 'exit 130' INT TERM
 QEMU_VIRTIO_CONSOLE="-device virtio-serial,iommu_platform=off,romfile= \
 -chardev stdio,id=virtioconsole0,logfile=$CONSOLE_LOG \
 -device virtconsole,chardev=virtioconsole0 -serial file:$SERIAL_LOG"
-QEMU_VIRTIO_FS="-chardev socket,path=/tmp/gramine_vhostfs_"$SAGUARO_VM_ID",id=vhostfs \
--device vhost-user-fs-pci,iommu_platform=off,queue-size=1024,chardev=vhostfs,tag=graminefs"
+QEMU_VIRTIO_FS="-chardev socket,path=/tmp/saguaro_vhostfs_"$SAGUARO_VM_ID",id=vhostfs \
+-device vhost-user-fs-pci,iommu_platform=off,queue-size=1024,chardev=vhostfs,tag=saguarofs"
 QEMU_VIRTIO_VSOCK="-device vhost-vsock-pci,iommu_platform=off,guest-cid="$SAGUARO_VM_ID",id=vsockdev"
 
 # The guest splits this string on whitespace but keeps "double-quoted" tokens whole (no escapes), so
 # quote every argument: `saguaro-vm app -c "echo hi"` must reach the app as two arguments.
-SAGUARO_ARGS="-gramine-args init \"$APPLICATION\""
+SAGUARO_ARGS="-saguaro-args init \"$APPLICATION\""
 for arg in "$@"; do
     SAGUARO_ARGS+=" \"$arg\""
 done
-SAGUARO_ARGS+=" -gramine-args-end"
+SAGUARO_ARGS+=" -saguaro-args-end"
 # Due to QEMU syntax, commas in the QEMU cmdline need to be escaped using an additional comma.
 SAGUARO_ARGS=${SAGUARO_ARGS//","/",,"}
 
@@ -415,23 +415,23 @@ for name, value in os.environ.items():
     env_str += ('\"{0}={1}\" '.format(name, value).replace(',', ',,'))
 print(env_str)
 ")
-SAGUARO_ENVS="-gramine-envs $SAGUARO_ENVS -gramine-envs-end"
+SAGUARO_ENVS="-saguaro-envs $SAGUARO_ENVS -saguaro-envs-end"
 
 CMD=("${ENVS[@]}")
 CMD+=("${PREFIX[@]}")
 CMD+=($QEMU_PATH $QEMU_GDB $QEMU_VM $QEMU_OPTS $QEMU_MACHINE
     $QEMU_VIRTIO_CONSOLE $QEMU_VIRTIO_FS $QEMU_VIRTIO_VSOCK $QEMU_BINARIES
-    -fw_cfg name=opt/gramine/pwd,string="$PWD"
-    -fw_cfg name=opt/gramine/args,string="$SAGUARO_ARGS"
-    -fw_cfg name=opt/gramine/envs,string="$SAGUARO_ENVS"
--fw_cfg name=opt/gramine/unixtime_s,string="$EPOCHSECONDS")
+    -fw_cfg name=opt/saguaro/pwd,string="$PWD"
+    -fw_cfg name=opt/saguaro/args,string="$SAGUARO_ARGS"
+    -fw_cfg name=opt/saguaro/envs,string="$SAGUARO_ENVS"
+-fw_cfg name=opt/saguaro/unixtime_s,string="$EPOCHSECONDS")
 
 # The graphics data-arena size, passed to the PAL over fw_cfg so that the arenas are reserved
 # before the guest's boot-time allocator runs (the manifest is not readable that early).
 if [ -n "$GRAPHICS_DATA_BYTES" ]; then
-    CMD+=("-fw_cfg" "name=opt/gramine/graphics_data_size,string=$GRAPHICS_DATA_BYTES")
-    CMD+=("-fw_cfg" "name=opt/gramine/graphics_data_addr,string=$GRAPHICS_DATA_ADDR")
-    CMD+=("-fw_cfg" "name=opt/gramine/graphics_huge_addr,string=$GRAPHICS_HUGE_ADDR")
+    CMD+=("-fw_cfg" "name=opt/saguaro/graphics_data_size,string=$GRAPHICS_DATA_BYTES")
+    CMD+=("-fw_cfg" "name=opt/saguaro/graphics_data_addr,string=$GRAPHICS_DATA_ADDR")
+    CMD+=("-fw_cfg" "name=opt/saguaro/graphics_huge_addr,string=$GRAPHICS_HUGE_ADDR")
 fi
 
 # X proxy for graphics applications. A manifest that sets `loader.env.DISPLAY = "2:N"` points the
@@ -516,8 +516,8 @@ fi
 vm_relay_start "$SAGUARO_VM_ID" "$SAGUARO_MANIFEST" || exit 2
 
 # Check if the Saguaro vhostfs pid file is already in use by another process
-if lsof /tmp/gramine_vhostfs_"$SAGUARO_VM_ID".pid 2>/dev/null; then
-    echo "Error: /tmp/gramine_vhostfs_"$SAGUARO_VM_ID".pid is already in use."
+if lsof /tmp/saguaro_vhostfs_"$SAGUARO_VM_ID".pid 2>/dev/null; then
+    echo "Error: /tmp/saguaro_vhostfs_"$SAGUARO_VM_ID".pid is already in use."
     exit 2
 fi
 # A stripped environment (the LibOS regression tests pass `env=`, which wipes PATH) leaves bash's
@@ -532,13 +532,13 @@ if [ -z "$VIRTIOFSD" ] || [ ! -x "$VIRTIOFSD" ]; then
 fi
 # --xattr: extended attributes of host files reach the guest (the PAL's FUSE_*XATTR requests);
 # without it virtiofsd answers ENOSYS and the xattr calls report EOPNOTSUPP.
-"$VIRTIOFSD" --socket-path /tmp/gramine_vhostfs_"$SAGUARO_VM_ID" --shared-dir / --log-level error \
+"$VIRTIOFSD" --socket-path /tmp/saguaro_vhostfs_"$SAGUARO_VM_ID" --shared-dir / --log-level error \
 --sandbox none --no-announce-submounts --xattr &
 VIRTIOFSD_PID=$!
 # bounded, so a virtiofsd that died at startup is an error here and not a hang until the test timeout
-for _ in $(seq 100); do [ -e /tmp/gramine_vhostfs_"$SAGUARO_VM_ID" ] && break; sleep 0.1; done
-if [ ! -e /tmp/gramine_vhostfs_"$SAGUARO_VM_ID" ]; then
-    echo "Error: virtiofsd ($VIRTIOFSD) did not create its socket /tmp/gramine_vhostfs_$SAGUARO_VM_ID." >&2
+for _ in $(seq 100); do [ -e /tmp/saguaro_vhostfs_"$SAGUARO_VM_ID" ] && break; sleep 0.1; done
+if [ ! -e /tmp/saguaro_vhostfs_"$SAGUARO_VM_ID" ]; then
+    echo "Error: virtiofsd ($VIRTIOFSD) did not create its socket /tmp/saguaro_vhostfs_$SAGUARO_VM_ID." >&2
     kill "$VIRTIOFSD_PID" 2>/dev/null
     exit 2
 fi

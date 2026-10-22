@@ -51,7 +51,7 @@ static int count_segment_files(void) {
             continue;
         struct dirent* e;
         while ((e = readdir(d)))
-            n += !strncmp(e->d_name, ".gramine-sysv-shm-", 18);
+            n += !strncmp(e->d_name, ".saguaro-sysv-shm-", 18);
         closedir(d);
     }
     return n;

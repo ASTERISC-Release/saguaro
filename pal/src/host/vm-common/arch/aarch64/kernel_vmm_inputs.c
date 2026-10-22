@@ -9,7 +9,7 @@
  * data FIFO at +0x08 and DMA at +0x10. The byte-stream semantics and the big-endian file
  * directory format are identical to the x86 interface, so only the three accessor primitives
  * differ; everything below them (argument/env parsing, file lookup) is copied from x86 so both
- * architectures keep seeing exactly the same "opt/gramine/*" inputs injected by the launcher.
+ * architectures keep seeing exactly the same "opt/saguaro/*" inputs injected by the launcher.
  */
 
 #include <stdint.h>
@@ -39,7 +39,7 @@ char g_envs[MAX_ENVS_SIZE];
  *     (MEMTX_ERROR -> external abort at EL1).
  *   - data @ +0: 8-byte-wide FIFO; every read pops bytes, byte reads are returned as-is, so a
  *     sequential byte-pop loop (stlrh sel, ldarb data...) is the correct pattern.
- *   - DMA block @ +16: unused here; our fw_cfg files ("opt/gramine/*") are KB-sized and the
+ *   - DMA block @ +16: unused here; our fw_cfg files ("opt/saguaro/*") are KB-sized and the
  *     x86 flavor never used DMA on this path either. */
 #define FW_CFG_MMIO_BASE   0x09020000UL
 #define FW_CFG_MMIO_SEL    (FW_CFG_MMIO_BASE + 0x08) /* u16 big-endian write-only selector */
@@ -107,7 +107,7 @@ static int cmdline_read_common(enum cmdline_parse_type type, const char* input, 
         goto out;
     }
 
-    /* do not count the end_str (e.g. `-gramine-args-end`) and everything after it as arguments */
+    /* do not count the end_str (e.g. `-saguaro-args-end`) and everything after it as arguments */
     *p_end = '\0';
 
     p += strlen(begin_str);
@@ -232,7 +232,7 @@ static int fw_cfg_read_file(const char* name, char* buf, size_t buf_size) {
 }
 
 int cmdline_init_args(char* cmdline_args, size_t cmdline_args_size) {
-    int ret = fw_cfg_read_file("opt/gramine/args", cmdline_args, cmdline_args_size);
+    int ret = fw_cfg_read_file("opt/saguaro/args", cmdline_args, cmdline_args_size);
     if (ret < 0)
         return ret;
     if (strlen(cmdline_args) >= MAX_ARGV_SIZE)
@@ -241,7 +241,7 @@ int cmdline_init_args(char* cmdline_args, size_t cmdline_args_size) {
 }
 
 int cmdline_init_envs(char* cmdline_envs, size_t cmdline_envs_size) {
-    int ret = fw_cfg_read_file("opt/gramine/envs", cmdline_envs, cmdline_envs_size);
+    int ret = fw_cfg_read_file("opt/saguaro/envs", cmdline_envs, cmdline_envs_size);
     if (ret < 0)
         return ret;
     if (strlen(cmdline_envs) >= MAX_ENVS_SIZE)
@@ -250,11 +250,11 @@ int cmdline_init_envs(char* cmdline_envs, size_t cmdline_envs_size) {
 }
 
 int host_pwd_init(void) {
-    return fw_cfg_read_file("opt/gramine/pwd", g_host_pwd, sizeof(g_host_pwd));
+    return fw_cfg_read_file("opt/saguaro/pwd", g_host_pwd, sizeof(g_host_pwd));
 }
 
 int unixtime_init(char* unixtime_s, size_t unixtime_size) {
-    int ret = fw_cfg_read_file("opt/gramine/unixtime_s", unixtime_s, unixtime_size);
+    int ret = fw_cfg_read_file("opt/saguaro/unixtime_s", unixtime_s, unixtime_size);
     if (ret < 0)
         return ret;
     if (strlen(unixtime_s) >= TIME_S_STR_MAX)

@@ -16,19 +16,19 @@
  * The E820 table is also read from fw_cfg QEMU pseudo-device and uses the hard-coded selector
  * "etc/e820" (file). Note that another selector FW_CFG_E820_TABLE was deprecated since QEMU v7.2.
  *
- * The selector with command-line args has the name "opt/gramine/args".
- * The selector with environment variables has the name "opt/gramine/envs".
- * The selector with PWD has the name "opt/gramine/pwd".
- * The selector with initial UNIX time has the name "opt/gramine/unixtime_s".
+ * The selector with command-line args has the name "opt/saguaro/args".
+ * The selector with environment variables has the name "opt/saguaro/envs".
+ * The selector with PWD has the name "opt/saguaro/pwd".
+ * The selector with initial UNIX time has the name "opt/saguaro/unixtime_s".
  *
  * For details, see:
  *   - qemu.org/docs/master/specs/fw_cfg.html
  *   - wiki.osdev.org/QEMU_fw_cfg
  *
  * The arguments must be in the following format:
- *    "-gramine-args init argv0 argv1 ... -gramine-args-end"
+ *    "-saguaro-args init argv0 argv1 ... -saguaro-args-end"
   * The environment variables must be in the following format:
- *    "-gramine-envs "KEY1=VAL1" "KEY2=VAL2" ... -gramine-envs-end"
+ *    "-saguaro-envs "KEY1=VAL1" "KEY2=VAL2" ... -saguaro-envs-end"
  */
 
 #pragma once
@@ -38,13 +38,13 @@
 #define FW_CFG_PORT_SEL   0x510
 #define FW_CFG_FILE_DIR   0x19
 
-#define GRAMINE_ARGS_BEGIN_STR "-gramine-args"
-#define GRAMINE_ARGS_END_STR   "-gramine-args-end"
+#define GRAMINE_ARGS_BEGIN_STR "-saguaro-args"
+#define GRAMINE_ARGS_END_STR   "-saguaro-args-end"
 #define MAX_ARGV_SIZE 4096 /* maximum size of Gramine arguments' string */
 #define MAX_ARGV_CNT  128  /* maximum number of Gramine arguments */
 
-#define GRAMINE_ENVS_BEGIN_STR "-gramine-envs"
-#define GRAMINE_ENVS_END_STR   "-gramine-envs-end"
+#define GRAMINE_ENVS_BEGIN_STR "-saguaro-envs"
+#define GRAMINE_ENVS_END_STR   "-saguaro-envs-end"
 #define MAX_ENVS_SIZE 16384 /* maximum size of environment variables' string */
 #define MAX_ENVS_CNT  256   /* maximum number of environment variables */
 
@@ -83,17 +83,17 @@ int cmdline_read_gramine_envs(const char* envs, int* out_envp_cnt, const char** 
 int cmdline_init_envs(char* cmdline_envs, size_t cmdline_envs_size);
 
 /* Size of the graphics GEM data arena in bytes, from the VMM's
- * opt/gramine/graphics_data_size fw_cfg file. Fails when absent (deployments
+ * opt/saguaro/graphics_data_size fw_cfg file. Fails when absent (deployments
  * without graphics). */
 int graphics_data_size_init(uint64_t* out_graphics_data_size);
 
 /* Guest physical address of the graphics hugepage arena, from the VMM's
- * opt/gramine/graphics_huge_addr fw_cfg file (a hugepages deployment points it
+ * opt/saguaro/graphics_huge_addr fw_cfg file (a hugepages deployment points it
  * at the dedicated hugetlb bucket backend). Fails when absent. */
 int graphics_huge_addr_init(uint64_t* out_graphics_huge_addr);
 
 /* Guest physical address of the graphics data arena, from the VMM's
- * opt/gramine/graphics_data_addr fw_cfg file. Fails when absent. */
+ * opt/saguaro/graphics_data_addr fw_cfg file. Fails when absent. */
 int graphics_data_addr_init(uint64_t* out_graphics_data_addr);
 
 int unixtime_init(char* unixtime_s, size_t unixtime_size);

@@ -247,9 +247,9 @@ def remove_guest_files(cid):
     """Remove only this run's stale virtiofs files after its QEMU is gone."""
     if cid is None:
         return
-    paths = [pathlib.Path(f"/tmp/gramine_vhostfs_{cid}"),
-             pathlib.Path(f"/tmp/gramine_vhostfs_{cid}.pid"),
-             pathlib.Path(f"/tmp/gramine_vm_{cid}.lock")]
+    paths = [pathlib.Path(f"/tmp/saguaro_vhostfs_{cid}"),
+             pathlib.Path(f"/tmp/saguaro_vhostfs_{cid}.pid"),
+             pathlib.Path(f"/tmp/saguaro_vm_{cid}.lock")]
     if psutil:
         for process in psutil.process_iter(["cmdline"]):
             try:

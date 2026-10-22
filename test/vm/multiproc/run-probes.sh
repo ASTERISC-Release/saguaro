@@ -31,7 +31,7 @@ for what in "$@"; do
         forks)   run 600 saguaro-vm forks 1000 1; run 600 saguaro-vm forks 64 8 ;;
         nginx)   "$HERE"/nginx-workers.sh ;;
         redis)   "$HERE"/redis-bgsave.sh ;;
-        misc)    mkdir -p "$WORK/scratch" "$WORK/tmp"; rm -f "$WORK"/scratch/mf-* "$WORK"/tmp/.gramine-*
+        misc)    mkdir -p "$WORK/scratch" "$WORK/tmp"; rm -f "$WORK"/scratch/mf-* "$WORK"/tmp/.saguaro-*
                  run 120 saguaro-vm misc-fork /probe/scratch ;;
     esac
 done

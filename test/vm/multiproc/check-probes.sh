@@ -162,7 +162,7 @@ check_forks() {
 check_misc() {
     local log=$1 rc=0
     build_probes
-    rm -f "$WORK"/scratch/mf-* "$WORK"/tmp/.gramine-*
+    rm -f "$WORK"/scratch/mf-* "$WORK"/tmp/.saguaro-*
     ( cd "$WORK" && vm "$log" 240 saguaro-vm misc-fork /probe/scratch )
     expect "$log" "misc-fork done" || rc=1
     local l

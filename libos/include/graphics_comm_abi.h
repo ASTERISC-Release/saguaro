@@ -140,7 +140,7 @@ typedef enum graphics_request {
 
 /* Compiled fallbacks for the arena geometry; the runtime values arrive from the
  * launcher (SAGUARO_DATA_ADDR / SAGUARO_DATA_SIZE / SAGUARO_HUGEPAGE_ADDR as
- * environment, the same over the opt/gramine/graphics_{data_addr,data_size,
+ * environment, the same over the opt/saguaro/graphics_{data_addr,data_size,
  * huge_addr} fw_cfg files), and the guest still ships the geometry to the
  * listener in the comm-page setup (c->p1..p3). */
 #define GRAPHICS_GEM_DATA_START      0x100000000ULL

@@ -631,8 +631,8 @@ noreturn void pal_start_c(void) {
     if (ret < 0)
         INIT_FAIL("Failed to initialize preloaded ranges");
 
-    /* Graphics GEM arenas: geometry from the VMM (opt/gramine/graphics_data_size and
-     * opt/gramine/graphics_huge_addr, absent without graphics). Reserved NOW -- before zero_out
+    /* Graphics GEM arenas: geometry from the VMM (opt/saguaro/graphics_data_size and
+     * opt/saguaro/graphics_huge_addr, absent without graphics). Reserved NOW -- before zero_out
      * and all kernel init -- so that no boot-time allocation can ever claim pages inside the
      * arenas. The manifest itself is only readable once virtio-fs is up, so the geometry travels
      * through fw_cfg instead. */

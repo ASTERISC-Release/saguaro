@@ -84,7 +84,7 @@ ELF_MACHINE = 62 if ARCH == 'x86_64' else 183
 RUNTIME = [
     ('libpal', 'pal', 'libpal.so', ['pal/src/host/vbs/libpal.so'], None),
     ('libsysdb', 'pal', 'libsysdb.so', ['libos/src/libsysdb.so'], '/libsysdb.so'),
-    ('vdso', 'user', 'vdso.so', [f'libos/src/vdso/arch/{ARCH}/vdso.so'], '/gramine/vdso.so'),
+    ('vdso', 'user', 'vdso.so', [f'libos/src/vdso/arch/{ARCH}/vdso.so'], '/saguaro/vdso.so'),
 ]
 # functions of the vbs glibc (scripts/vbs/build-glibc.sh) that may use x18: they save and restore
 # it or run only where the TEB is not needed (see FINDINGS.md of dev docs: vbs-enclave)

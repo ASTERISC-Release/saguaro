@@ -8,7 +8,7 @@ sys.rewrite_syscalls = false
 
 # a production-like image: not debuggable, with its own identity in the report
 vbs.debug = false
-vbs.family_id = "6772616d696e652d7662732d74657374"  # "gramine-vbs-test"
+vbs.family_id = "7361677561726f2d7662732d74657374"  # "saguaro-vbs-test"
 vbs.image_id = "61747465737400000000000000000001"
 vbs.isv_svn = 3
 vbs.max_threads = 4
