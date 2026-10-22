@@ -12,7 +12,7 @@ syscall_bench: syscall_bench.c
 
 .PHONY: syscall_bench.manifest
 syscall_bench.manifest: syscall_bench.manifest.template
-	gramine-manifest -Dlog_level=error -Darch_libdir=$(ARCH_LIBDIR) -Drewrite=$(REWRITE) $< $@
+	saguaro-manifest -Dlog_level=error -Darch_libdir=$(ARCH_LIBDIR) -Drewrite=$(REWRITE) $< $@
 
 .PHONY: bench
 bench: all

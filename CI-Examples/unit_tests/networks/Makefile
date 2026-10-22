@@ -36,13 +36,13 @@ udp.o: udp.c
 
 # Correct manifest generation
 nw.manifest: nw.manifest.template
-	gramine-manifest \
+	saguaro-manifest \
 		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Dentrypoint="/udp" \
 		-Denclave_size="256M" \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		$< $@
-	gramine-manifest-check $@
+	saguaro-manifest-check $@
 
 .PHONY: clean
 clean:

@@ -179,7 +179,7 @@ exec_one() {
     log=$EXEC_LOG_DIR/$EXAMPLE_NAME-$b-$(exec_host_arch).log
     out=$EXEC_LOG_DIR/$EXAMPLE_NAME-$b-$(exec_host_arch).out
     start=$(date +%s)
-    # only this shell sees the backend's gramine-manifest and runner: source the install's env.sh
+    # only this shell sees the backend's saguaro-manifest and runner: source the install's env.sh
     # (scripts/install.sh writes it; it sets PATH and PYTHONPATH), or just put its bin first
     if [ -r "$prefix/env.sh" ]; then . "$prefix/env.sh"; else export PATH="$prefix/bin:$PATH"; fi
     # sgx: the Makefiles build the signed enclave manifest with SGX=1 (the target `all`, not only the manifest);
@@ -189,7 +189,7 @@ exec_one() {
         sev)     export SAGUARO_SEV_MODE=sev ;;
         sev-snp) export SAGUARO_SEV_MODE=snp ;;
         sgx)     export SGX=1; mtarget=all
-                 [ -e "${SGX_SIGNER_KEY:-$HOME/.config/gramine/enclave-key.pem}" ] || gramine-sgx-gen-private-key ;;
+                 [ -e "${SGX_SIGNER_KEY:-$HOME/.config/gramine/enclave-key.pem}" ] || saguaro-sgx-gen-private-key ;;
     esac
     cd "$EXEC_DIR" || return 1
     # QEMU software emulation is much slower than KVM: say so (the log header repeats it)

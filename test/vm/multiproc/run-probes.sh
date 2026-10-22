@@ -19,7 +19,7 @@ for entry in /usr/bin/sh /usr/bin/bash "$WORK/spawn" "$WORK/forks" "$WORK/misc-f
     name=$(basename "$entry")
     case $entry in "$WORK"/*) e=/probe/$name ;; *) e=$entry ;; esac
     template=manifest.template; [ "$name" = misc-fork ] && template=misc-fork.manifest.template
-    gramine-manifest -Darch_libdir=/lib/x86_64-linux-gnu -Dentry="$e" -Dprobedir="$WORK" \
+    saguaro-manifest -Darch_libdir=/lib/x86_64-linux-gnu -Dentry="$e" -Dprobedir="$WORK" \
         "$template" "$name.manifest" 2>/dev/null
 done
 run() { SAGUARO_CPU_NUM=${CPUS:-2} timeout -s KILL "$@" 2>&1 | grep -v "self-check\|Frame-pool\|boot\]\|Physical\|Configuring\|REM_MEM\|vm-relay\|frame pool\|child exited"; }

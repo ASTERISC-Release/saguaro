@@ -117,6 +117,6 @@ if tdx
     )
 endif
 
-executable('gramine-argv-serializer',
+executable('saguaro-argv-serializer',
     'argv_serializer.c',
     install: true)

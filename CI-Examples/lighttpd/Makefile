@@ -89,7 +89,7 @@ check: all
 endif
 
 lighttpd.manifest: lighttpd.manifest.template
-	gramine-manifest \
+	saguaro-manifest \
 		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		-Dinstall_dir=$(abspath $(INSTALL_DIR)) \
@@ -102,7 +102,7 @@ lighttpd.manifest.sgx lighttpd.sig: sgx_sign
 
 .INTERMEDIATE: sgx_sign
 sgx_sign: lighttpd.manifest $(INSTALL_DIR)/sbin/lighttpd
-	gramine-sgx-sign \
+	saguaro-sgx-sign \
 		--manifest $< \
 		--output $<.sgx
 

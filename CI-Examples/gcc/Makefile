@@ -35,7 +35,7 @@ all: gcc.manifest.sgx gcc.sig
 endif
 
 gcc.manifest: gcc.manifest.template
-	gramine-manifest \
+	saguaro-manifest \
 		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		-Dgcc_lib_path=$(GCC_LIB_PATH) \
@@ -52,7 +52,7 @@ gcc.manifest.sgx gcc.sig: sgx_sign
 
 .INTERMEDIATE: sgx_sign
 sgx_sign: gcc.manifest
-	gramine-sgx-sign \
+	saguaro-sgx-sign \
 		--manifest $< \
 		--output $<.sgx
 

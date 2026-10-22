@@ -30,7 +30,7 @@ echo "## $(date -u +%Y-%m-%dT%H:%M:%SZ) $KIND vcpus=$N tree=$(git -c safe.direct
 # (the frame pool of that key does not fit in 4G)
 prog_manifest() {  # <workdir> <program>
     mkdir -p "$1/tmp"
-    ( cd "$1" && gramine-manifest -Darch_libdir=/lib/x86_64-linux-gnu -Dentry=/probe/$2 -Dprobedir="$1" \
+    ( cd "$1" && saguaro-manifest -Darch_libdir=/lib/x86_64-linux-gnu -Dentry=/probe/$2 -Dprobedir="$1" \
         -Dlog_level=error "$TREE/test/proton-vm/probes.manifest.template" $2.manifest &&
       sed -i '/experimental__multiprocess/d' $2.manifest )
 }
@@ -39,7 +39,7 @@ FILTER="self-check\|Frame-pool\|boot\]\|Physical\|Configuring\|REM_MEM\|vm-relay
 case $KIND in
 libos)
     cd "$TREE/libos/test/regression" || exit 2
-    SAGUARO_VM=1 SAGUARO_VM_LAUNCHER=saguaro-sev gramine-test pytest -- -q -rfEsxX --tb=short \
+    SAGUARO_VM=1 SAGUARO_VM_LAUNCHER=saguaro-sev saguaro-test pytest -- -q -rfEsxX --tb=short \
         -p no:cacheprovider --durations=0 --junitxml="$OUT/libos-$N.xml" test_libos.py \
         > "$OUT/libos-$N.log" 2>&1
     echo "exit $?"; grep -E "[0-9]+ (passed|failed)" "$OUT/libos-$N.log" | tail -n 1 ;;

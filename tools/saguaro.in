@@ -84,7 +84,7 @@ if [ "$SGX" == "1" ] \
 && [ -f "$APPLICATION".sig ] \
 && [ -z "$SAGUARO_NO_AUTO_GET_TOKEN" ]
 then
-    @PREFIX@/@BINDIR@/gramine-sgx-get-token \
+    @PREFIX@/@BINDIR@/saguaro-sgx-get-token \
         --output "$APPLICATION".token \
         --sig "$APPLICATION".sig \
     >&2

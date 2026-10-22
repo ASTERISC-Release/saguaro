@@ -26,7 +26,7 @@ command -v saguaro-vm >/dev/null || { echo "saguaro-vm not on PATH (prefix $PREF
 DIR=$(cd "$HERE/../vsock-loopback" && pwd)
 mkdir -p "$OUT"
 make -C "$DIR" -s || exit 1
-(cd "$DIR" && SAGUARO_VM=1 gramine-test build -f vsock_guest_loopback) \
+(cd "$DIR" && SAGUARO_VM=1 saguaro-test build -f vsock_guest_loopback) \
     >"$OUT/manifest.log" 2>&1 || { cat "$OUT/manifest.log"; exit 1; }
 
 cd "$DIR"

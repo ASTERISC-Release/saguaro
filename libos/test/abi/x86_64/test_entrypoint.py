@@ -23,7 +23,7 @@ class TC_00_Entrypoint(RegressionTestCase):
 
     def test_060_arg(self):
         args = ['stack_arg', 'foo', 'bar']
-        result = subprocess.check_output(['gramine-argv-serializer'] + args)
+        result = subprocess.check_output(['saguaro-argv-serializer'] + args)
         with open('stack_arg_argv_input', 'wb') as f:
             f.write(result)
         try:

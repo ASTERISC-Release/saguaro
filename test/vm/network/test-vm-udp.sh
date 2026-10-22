@@ -32,7 +32,7 @@ case $HOST_IP in 127.*|0.0.0.0) echo "not a routable container address: $HOST_IP
 DIR=$(cd "$HERE/../vsock-loopback" && pwd)
 mkdir -p "$OUT"
 make -C "$DIR" -s || exit 1
-(cd "$DIR" && SAGUARO_VM=1 gramine-test build -f vsock_udp_client) \
+(cd "$DIR" && SAGUARO_VM=1 saguaro-test build -f vsock_udp_client) \
     >"$OUT/manifest.log" 2>&1 || { cat "$OUT/manifest.log"; exit 1; }
 
 SERVER_PID=

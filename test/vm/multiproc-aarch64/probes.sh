@@ -45,7 +45,7 @@ for entry in /usr/bin/sh /usr/bin/bash "$WORK/spawn" "$WORK/forks" "$WORK/eintr"
     case $entry in "$WORK"/*) e=/probe/$name ;; *) e=$entry ;; esac
     template=manifest.template
     [ "$name" = shared ] && template=sysv-fork.manifest.template
-    gramine-manifest -Darch_libdir="$LIBDIR" -Dentry="$e" -Dprobedir="$WORK" \
+    saguaro-manifest -Darch_libdir="$LIBDIR" -Dentry="$e" -Dprobedir="$WORK" \
         "$template" "$name.manifest" 2>/dev/null || exit 2
 done
 run() {

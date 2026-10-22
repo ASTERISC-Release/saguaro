@@ -24,7 +24,7 @@ Commands:
   saguaro-vbs verify <program|dir> <report> [verifier options]   (report: a Windows path, or
                                             relative to the host root, e.g. data/out/report.bin)
   saguaro-vbs manifest [-Dk=v ...] <template> [out]   render a manifest template (Jinja, as
-                                            gramine-manifest, with the vbs.* globals)
+                                            saguaro-manifest, with the vbs.* globals)
   saguaro-vbs runtime                       build the vbs glibc and the vbs PAL and LibOS when
                                             missing, then ninja (scripts/vbs/build-runtime.sh)
   saguaro-vbs net <wait|req|redis|bench> ...   a Winsock client on Windows (scripts/vbs/win/
@@ -678,7 +678,7 @@ def cmd_stop(args):
 # ---- rendering a manifest template ----
 
 def jinja_env():
-    """The Jinja environment of gramine-manifest (python/graminelibos/gen_jinja_env.py), loaded from
+    """The Jinja environment of saguaro-manifest (python/graminelibos/gen_jinja_env.py), loaded from
     this source tree so that no installed Gramine is needed, plus the vbs.* globals."""
     import importlib.util  # pylint: disable=import-outside-toplevel
     import types  # pylint: disable=import-outside-toplevel

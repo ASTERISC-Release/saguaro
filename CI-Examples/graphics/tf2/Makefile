@@ -35,7 +35,7 @@ fps_metrics.so: fps_metrics.c
 FORCE:
 
 tf2.manifest: tf2.manifest.template fps_metrics.so FORCE
-	gramine-manifest \
+	saguaro-manifest \
 		-Dtf2_dir="$(realpath $(TF2_DIR))" \
 		-Dsteam_home="$(realpath $(TF2_STEAM_HOME))" \
 		-Dintegration_dir="$(CURDIR)" \
@@ -44,7 +44,7 @@ tf2.manifest: tf2.manifest.template fps_metrics.so FORCE
 		-Dheight="$(TF2_HEIGHT)" \
 		-Dshared_input="$(SHARED_INPUT)" \
 		$< $@
-	gramine-manifest-check $@
+	saguaro-manifest-check $@
 
 .PHONY: run
 run: check-install

@@ -16,14 +16,14 @@ all: bash.manifest.sgx bash.sig
 endif
 
 bash.manifest: manifest.template
-	gramine-manifest \
+	saguaro-manifest \
 		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Dexecdir=$(shell dirname $(shell which bash)) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		$< >$@
 
 bash.manifest.sgx: bash.manifest
-	gramine-sgx-sign \
+	saguaro-sgx-sign \
 		--manifest bash.manifest \
 		--output $@
 

@@ -174,7 +174,7 @@ jobs:
           . "$SAGUARO_PREFIX/env.sh"
           cd libos/test/regression
           sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" SAGUARO_VM=1 \
-            gramine-test pytest -- -q -rfEsxX --tb=short -p no:cacheprovider test_libos.py \
+            saguaro-test pytest -- -q -rfEsxX --tb=short -p no:cacheprovider test_libos.py \
             2>&1 | tee ../../../vm-libos.log
 
       # Multi-process checks (the `multiprocess` input), after the default-manifest steps so that

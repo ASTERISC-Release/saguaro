@@ -38,14 +38,14 @@ $(STK_BIN):
 	@echo "SuperTuxKart is not built: run ./install-stk.sh first" >&2; exit 1
 
 supertuxkart.manifest: supertuxkart.manifest.template $(STK_BIN) FORCE
-	gramine-manifest $(MANIFEST_ARGS) $< $@
-	gramine-manifest-check $@
+	saguaro-manifest $(MANIFEST_ARGS) $< $@
+	saguaro-manifest-check $@
 
 # Automatic race of PROFILE_TIME seconds that prints the frame-rate statistics and exits.
 .PHONY: FORCE
 supertuxkart-startup.manifest: supertuxkart.manifest.template $(STK_BIN) FORCE
-	gramine-manifest $(MANIFEST_ARGS) -Dstartup_probe=1 $< $@
-	gramine-manifest-check $@
+	saguaro-manifest $(MANIFEST_ARGS) -Dstartup_probe=1 $< $@
+	saguaro-manifest-check $@
 
 .PHONY: dirs
 dirs:
@@ -84,12 +84,12 @@ DIRECT_MANIFEST_ARGS = $(MANIFEST_ARGS) -Ddisplay=$(X_DISPLAY_NUM) -Darch_libdir
 	-Degl_discrete=$${EGL_DISCRETE:-0}
 
 supertuxkart-direct.manifest: supertuxkart-direct.manifest.template $(STK_BIN) FORCE
-	gramine-manifest $(DIRECT_MANIFEST_ARGS) $< $@
-	gramine-manifest-check $@
+	saguaro-manifest $(DIRECT_MANIFEST_ARGS) $< $@
+	saguaro-manifest-check $@
 
 supertuxkart-direct-startup.manifest: supertuxkart-direct.manifest.template $(STK_BIN) FORCE
-	gramine-manifest $(DIRECT_MANIFEST_ARGS) -Dstartup_probe=1 $< $@
-	gramine-manifest-check $@
+	saguaro-manifest $(DIRECT_MANIFEST_ARGS) -Dstartup_probe=1 $< $@
+	saguaro-manifest-check $@
 
 .PHONY: run-direct run-direct-startup
 run-direct: supertuxkart-direct.manifest dirs

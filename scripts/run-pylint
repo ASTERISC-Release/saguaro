@@ -24,9 +24,9 @@ find . -name \*.py \
     -and -not -name ninja_syntax.py \
 | sed 's/./\\&/g' \
 | xargs "${PYLINT}" "$@" \
-    python/gramine-gen-depend \
-    python/gramine-manifest \
-    python/gramine-sgx-get-token \
-    python/gramine-sgx-sign \
-    python/gramine-sgx-sigstruct-view \
-    python/gramine-test
+    python/saguaro-gen-depend \
+    python/saguaro-manifest \
+    python/saguaro-sgx-get-token \
+    python/saguaro-sgx-sign \
+    python/saguaro-sgx-sigstruct-view \
+    python/saguaro-test

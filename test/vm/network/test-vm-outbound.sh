@@ -49,7 +49,7 @@ trap clean EXIT INT TERM
 
 render_manifest() {
     (cd "$DIR" && SAGUARO_VM=1 SAGUARO_VM_OUTBOUND="$1" SAGUARO_VM_DENY="${2:-}" \
-        gramine-test build -f vsock_outbound_client) >"$OUT/manifest.log" 2>&1 || {
+        saguaro-test build -f vsock_outbound_client) >"$OUT/manifest.log" 2>&1 || {
         cat "$OUT/manifest.log"; return 1;
     }
 }

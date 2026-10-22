@@ -34,13 +34,13 @@ $(MT_BIN):
 
 .PHONY: FORCE
 minetest.manifest: minetest.manifest.template $(MT_BIN) FORCE
-	gramine-manifest \
+	saguaro-manifest \
 		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Dmt_dir=$(MT_DIR) \
 		-Dhome=$(HOME) \
 		-Dshared_input=$(SHARED_INPUT) \
 		$< $@
-	gramine-manifest-check $@
+	saguaro-manifest-check $@
 
 .PHONY: dirs
 dirs: $(MT_BIN)
@@ -68,7 +68,7 @@ NVIDIA ?= $(if $(wildcard /dev/nvidiactl),1,0)
 X_DISPLAY_NUM = $(patsubst :%,%,$(firstword $(subst ., ,$(DISPLAY))))
 
 minetest-direct.manifest: minetest-direct.manifest.template $(MT_BIN) FORCE
-	gramine-manifest \
+	saguaro-manifest \
 		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Dmt_dir=$(MT_DIR) \
 		-Ddisplay=$(X_DISPLAY_NUM) \
@@ -77,7 +77,7 @@ minetest-direct.manifest: minetest-direct.manifest.template $(MT_BIN) FORCE
 		-Dpreload=$(PRELOAD) \
 		-Degl_discrete=$${EGL_DISCRETE:-0} \
 		$< $@
-	gramine-manifest-check $@
+	saguaro-manifest-check $@
 
 .PHONY: run-direct
 run-direct: minetest-direct.manifest dirs

@@ -36,7 +36,7 @@ $(INSTALLDIR)/INSTALL_SUCCESS: $(BUILDDIR)/BUILD_SUCCESS
 
 .PHONY: manifests
 manifests: $(INSTALLDIR)/INSTALL_SUCCESS
-	gramine-test build
+	saguaro-test build
 
 etc/nsswitch.conf:
 	mkdir -p etc
@@ -58,7 +58,7 @@ regression: manifests
 
 .PHONY: clean
 clean:
-	if test -f $(INSTALLDIR)/INSTALL_SUCCESS; then gramine-test clean; fi
+	if test -f $(INSTALLDIR)/INSTALL_SUCCESS; then saguaro-test clean; fi
 	$(MAKE) -C $(SRCDIR) clean
 	$(RM) -r \
 		$(BUILDDIR) \

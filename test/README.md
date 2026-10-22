@@ -40,7 +40,7 @@ display).
 | `test/vm/network/test-vm-guest-loopback.sh` | vm | vm suite `guest-loopback` |
 | `test/vm/network/test-vm-redis.sh` | vm | not a suite of `test-vm.sh`; called by `vm-x86_64.yml` |
 | `test/vm/network/test-vm-relay.py` | vm | relay handshake and policy checks; the runner that calls it: not confirmed |
-| `test/vm/vsock-loopback/` | vm | programs and servers of the VM network tests; `tests.toml` for `gramine-test` |
+| `test/vm/vsock-loopback/` | vm | programs and servers of the VM network tests; `tests.toml` for `saguaro-test` |
 
 ### Other single files
 

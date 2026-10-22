@@ -66,7 +66,7 @@ $(SRCDIR)/busybox: $(SRCDIR)/.config
 	$(MAKE) -C $(SRCDIR)
 
 busybox.manifest: busybox.manifest.template
-	gramine-manifest \
+	saguaro-manifest \
 		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		-Dra_type=$(RA_TYPE) \
@@ -81,7 +81,7 @@ busybox.manifest.sgx busybox.sig: sgx_sign
 
 .INTERMEDIATE: sgx_sign
 sgx_sign: busybox.manifest busybox
-	gramine-sgx-sign \
+	saguaro-sgx-sign \
 		--manifest $< \
 		--output $<.sgx
 

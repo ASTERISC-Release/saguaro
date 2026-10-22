@@ -42,7 +42,7 @@ endif
 endif
 
 curl.manifest: curl.manifest.template
-	gramine-manifest \
+	saguaro-manifest \
 		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Dhome=$(HOME) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
@@ -57,7 +57,7 @@ curl.manifest.sgx curl.sig: sgx_sign
 
 .INTERMEDIATE: sgx_sign
 sgx_sign: curl.manifest
-	gramine-sgx-sign \
+	saguaro-sgx-sign \
 		--manifest $< \
 		--output $<.sgx
 

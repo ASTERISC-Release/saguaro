@@ -104,15 +104,15 @@ endif
 # The template file is a Jinja2 template and contains almost all necessary
 # information to run Redis under Gramine / Gramine-SGX. We create
 # redis-server.manifest (to be run under non-SGX Gramine) by replacing variables
-# in the template file using the "gramine-manifest" script.
+# in the template file using the "saguaro-manifest" script.
 
 redis-server.manifest: redis-server.manifest.template
-	gramine-manifest \
+	saguaro-manifest \
 		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		$< > $@
 
-# Manifest for Gramine-SGX requires special "gramine-sgx-sign" procedure. This
+# Manifest for Gramine-SGX requires special "saguaro-sgx-sign" procedure. This
 # procedure measures all Redis trusted files, adds the measurement to the
 # resulting manifest.sgx file (among other, less important SGX options) and
 # creates redis-server.sig (SIGSTRUCT object).
@@ -124,7 +124,7 @@ redis-server.sig redis-server.manifest.sgx: sgx_outputs
 
 .INTERMEDIATE: sgx_outputs
 sgx_outputs: redis-server.manifest $(SRCDIR)/src/redis-server
-	gramine-sgx-sign \
+	saguaro-sgx-sign \
 		--manifest redis-server.manifest \
 		--output redis-server.manifest.sgx
 

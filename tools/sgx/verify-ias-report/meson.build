@@ -1,4 +1,4 @@
-executable('gramine-sgx-ias-verify-report',
+executable('saguaro-sgx-ias-verify-report',
     'verify_ias_report.c',
 
     dependencies: [

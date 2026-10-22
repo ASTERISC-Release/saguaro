@@ -16,7 +16,7 @@ FS subsystem:
 How to execute
 --------------
 
-- `gramine-test pytest -v`
+- `saguaro-test pytest -v`
 
 Encrypted file tests assume that Gramine was built with SGX enabled (see comment
 in `test_enc.py`).

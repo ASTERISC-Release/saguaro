@@ -16,7 +16,7 @@ all: mongod.manifest.sgx mongod.sig
 endif
 
 mongod.manifest: mongod.manifest.template
-	gramine-manifest \
+	saguaro-manifest \
 		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		-Dexecdir=$(shell dirname $(shell which mongod)) \
@@ -30,7 +30,7 @@ mongod.sig mongod.manifest.sgx: sgx_sign
 
 .INTERMEDIATE: sgx_sign
 sgx_sign: mongod.manifest
-	gramine-sgx-sign \
+	saguaro-sgx-sign \
 		--manifest $< \
 		--output $<.sgx
 

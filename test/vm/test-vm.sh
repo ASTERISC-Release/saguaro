@@ -45,7 +45,7 @@ for s in "${SUITES[@]}"; do
     libos)
         [ -z "${PYTEST_K:-}${PYTEST_ARGS:-}" ] || echo "pytest selection: -k '${PYTEST_K:-}' ${PYTEST_ARGS:-}"
         (cd "$REPO/libos/test/regression" && SAGUARO_VM=1 SAGUARO_CPU_NUM=${SAGUARO_CPU_NUM:-2} \
-            gramine-test pytest -- -q -rfEsxX --tb=short -p no:cacheprovider test_libos.py ${PYTEST_K:+-k "$PYTEST_K"} ${PYTEST_ARGS:-}) || rc=1 ;;
+            saguaro-test pytest -- -q -rfEsxX --tb=short -p no:cacheprovider test_libos.py ${PYTEST_K:+-k "$PYTEST_K"} ${PYTEST_ARGS:-}) || rc=1 ;;
     examples)
         "$REPO/tools/run-vm-aarch64-examples.sh" || rc=1 ;;
     hello)

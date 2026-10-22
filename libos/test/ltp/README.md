@@ -42,11 +42,11 @@ tests might fail due to limited EPC size.
 
 To enable debugging output, edit a manifest for a test case (`*.manifest`) to
 set `loader.log_level = "trace"`. When running under SGX, you will need to
-re-sign the manifest using `gramine-test build`.
+re-sign the manifest using `saguaro-test build`.
 
 (NOTE: the manifests are all built from a single template,
 `manifest.template`, but you can edit the generated manifests anyway. If
-necessary, `gramine-test build -f` will rebuild the manifests from scratch).
+necessary, `saguaro-test build -f` will rebuild the manifests from scratch).
 
 You can also use GDB: `GDB=1 saguaro-{direct|sgx} <TEST_BINARY>`. You should
 compile Gramine in debug mode so that you can see the symbols inside Gramine.
@@ -97,7 +97,7 @@ test results, including the tests that are currently skipped, you can use the
 `ltp_all.cfg` configuration.
 
 - Build all the manifests: temporarily edit `tests.toml` to change `ltp.cfg`
-  to `ltp_all.cfg`, and invoke `gramine-test build`.
+  to `ltp_all.cfg`, and invoke `saguaro-test build`.
 
   (To save time, we build manifests only for those tests that are not skipped).
 

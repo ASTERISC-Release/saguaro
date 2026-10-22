@@ -102,7 +102,7 @@ check: all
 endif
 
 nginx.manifest: nginx.manifest.template
-	gramine-manifest \
+	saguaro-manifest \
 		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		-Dinstall_dir=$(INSTALL_DIR) \
@@ -119,7 +119,7 @@ sgx_sign: nginx.manifest $(INSTALL_DIR)/sbin/nginx \
 		$(INSTALL_DIR)/conf/nginx-gramine.conf \
 		$(TEST_DATA) \
 		$(INSTALL_DIR)/conf/server.crt
-	gramine-sgx-sign \
+	saguaro-sgx-sign \
 		--manifest $< \
 		--output $<.sgx
 
@@ -167,7 +167,7 @@ $(INSTALL_DIR)/conf/server.crt: ssl/ca_config.conf $(INSTALL_DIR)/sbin/nginx
 ssldata: $(INSTALL_DIR)/conf/server.crt
 
 nginx_args:
-	gramine-argv-serializer "nginx" "-c" "conf/nginx-gramine.conf" > $@
+	saguaro-argv-serializer "nginx" "-c" "conf/nginx-gramine.conf" > $@
 
 .PHONY: start-native-server
 start-native-server: all

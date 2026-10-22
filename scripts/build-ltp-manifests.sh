@@ -21,7 +21,7 @@ fi
     echo "LTP not installed under $ltp_root; run scripts/fetch-ltp.sh first" >&2
     exit 1
 }
-[[ -x "$prefix/bin/gramine-test" ]] || {
+[[ -x "$prefix/bin/saguaro-test" ]] || {
     echo "Gramine test tools not installed under $prefix" >&2
     exit 1
 }
@@ -33,7 +33,7 @@ ln -sfn "$(realpath --relative-to="$test_dir" "$ltp_root")" "$test_dir/install"
 export PATH="$prefix/bin:$PATH"
 export PYTHONPATH="$prefix/lib/python3.12/site-packages${PYTHONPATH:+:$PYTHONPATH}"
 cd "$test_dir"
-LTP_CONFIG=ltp_all.cfg gramine-test build
+LTP_CONFIG=ltp_all.cfg saguaro-test build
 
 # The splice02 scenario is a pipeline, so upstream's manifest builder does not discover
 # its test binary. Its sibling uses the same template and runtime files.
@@ -54,7 +54,7 @@ fi
 
 # Process-syscall measurements must opt in explicitly while the VM PAL implementation is
 # experimental. Set or clear this option even in unchanged generated manifests, because
-# gramine-test build leaves up-to-date manifest files alone.
+# saguaro-test build leaves up-to-date manifest files alone.
 python3 - "$test_dir" "${LTP_VM_MULTIPROCESS:-0}" <<'PY'
 from pathlib import Path
 import sys

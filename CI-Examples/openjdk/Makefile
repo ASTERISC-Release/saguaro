@@ -24,7 +24,7 @@ all: java.manifest.sgx java.sig
 endif
 
 java.manifest: java.manifest.template
-	gramine-manifest \
+	saguaro-manifest \
 		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		-Dentrypoint=$(realpath $(shell sh -c "command -v java")) \
@@ -38,7 +38,7 @@ java.manifest.sgx java.sig: sgx_sign
 
 .INTERMEDIATE: sgx_sign
 sgx_sign: java.manifest
-	gramine-sgx-sign \
+	saguaro-sgx-sign \
 		--manifest $< \
 		--output $<.sgx
 

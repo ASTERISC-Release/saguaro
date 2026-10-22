@@ -1,4 +1,4 @@
-executable('gramine-sgx-pf-crypt',
+executable('saguaro-sgx-pf-crypt',
     'pf_crypt.c',
 
     dependencies: [

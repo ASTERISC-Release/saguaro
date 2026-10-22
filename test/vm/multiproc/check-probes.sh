@@ -111,7 +111,7 @@ build_probes() {
         case $entry in "$WORK"/*) e=/probe/$name ;; *) e=$entry ;; esac
         template=manifest.template; [ "$name" = misc-fork ] && template=misc-fork.manifest.template
         [ "$name" = sysv-fork ] && template=sysv-fork.manifest.template
-        ( cd "$WORK" && gramine-manifest -Darch_libdir="$ARCH_LIBDIR" -Dentry="$e" -Dprobedir="$WORK" \
+        ( cd "$WORK" && saguaro-manifest -Darch_libdir="$ARCH_LIBDIR" -Dentry="$e" -Dprobedir="$WORK" \
               "$template" "$name.manifest" ) 2>> "$LOGDIR/manifests.log" || { echo "manifest $name failed" >&2; exit 2; }
         [ "$MP" = 1 ] || sed -i '/^experimental__multiprocess = /d' "$WORK/$name.manifest"
     done
@@ -189,8 +189,8 @@ check_libos() {
     local log=$1 rc=0 m
     (
         cd "$REPO/libos/test/regression" || exit 1
-        # --force: gramine-test leaves up-to-date manifests alone, so the key must be re-rendered
-        SAGUARO_VM_MULTIPROCESS=1 gramine-test build --force >> "$log" 2>&1 || exit 1
+        # --force: saguaro-test leaves up-to-date manifests alone, so the key must be re-rendered
+        SAGUARO_VM_MULTIPROCESS=1 saguaro-test build --force >> "$log" 2>&1 || exit 1
         for m in fork_and_exec vfork_and_exec; do
             grep -qx 'experimental__multiprocess = true' "$m.manifest" \
                 || { echo "  $m.manifest does not set the key" | tee -a "$log"; exit 1; }
@@ -200,7 +200,7 @@ check_libos() {
             -k "vfork_and_exec or fork_and_exec" 2>&1 | tr -d '\r' >> "$log"
     ) || rc=1
     # render the manifests again without the key, so that later runs of the suite are unchanged
-    ( cd "$REPO/libos/test/regression" && gramine-test build --force > /dev/null 2>&1 ) \
+    ( cd "$REPO/libos/test/regression" && saguaro-test build --force > /dev/null 2>&1 ) \
         || echo "  warning: re-rendering the regression manifests without the key failed"
     tail -n 3 "$log" | sed 's/^/  /'
     grep -Eq '^[0-9]+ passed' "$log" && ! grep -Eq '[0-9]+ (failed|error)' "$log" || rc=1

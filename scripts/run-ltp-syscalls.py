@@ -491,7 +491,7 @@ def main():
         missing = sorted({ltp_test_command(scenarios[name]) for name in active
                           if not (args.harness_dir / f"{ltp_test_command(scenarios[name])}.manifest").exists()})
         if missing:
-            parser.error("manifests missing; build them with gramine-test build first: " + ", ".join(missing[:10]))
+            parser.error("manifests missing; build them with saguaro-test build first: " + ", ".join(missing[:10]))
         # Under a Gramine loader the binary comes from the manifests' `install` symlink, not from
         # --ltp-root: point the symlink at --ltp-root so the two cannot disagree (they once did, and
         # an "unmodified" run measured the no-fork build). The manifests do not depend on which

@@ -1,4 +1,4 @@
-executable('gramine-sgx-pf-tamper',
+executable('saguaro-sgx-pf-tamper',
     'pf_tamper.c',
 
     dependencies: [

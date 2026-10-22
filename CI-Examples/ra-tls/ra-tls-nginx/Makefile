@@ -14,8 +14,8 @@ endif
 all: nginx.manifest.sgx nginx.sig
 
 %.manifest: %.manifest.template
-	gramine-manifest \
-		-Dentrypoint=$$(command -v gramine-ratls) \
+	saguaro-manifest \
+		-Dentrypoint=$$(command -v saguaro-ratls) \
 		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Dra_type=$(RA_TYPE) \
 		-Dra_client_spid=$(RA_CLIENT_SPID) \
@@ -28,7 +28,7 @@ all: nginx.manifest.sgx nginx.sig
 
 .INTERMEDIATE: sgx-sign-%
 sgx-sign-%: %.manifest
-	gramine-sgx-sign \
+	saguaro-sgx-sign \
 		--manifest $< \
 		--output $<.sgx
 

@@ -47,10 +47,10 @@ mkdir -p "$OUT"
 
 echo "== vsock-loopback: building the guest server"
 make -C "$DIR" -s || exit 1
-# render the manifest exactly the way the libos regression suite does (gramine-test + ninja);
+# render the manifest exactly the way the libos regression suite does (saguaro-test + ninja);
 # `-f` forces a rerender, because `SAGUARO_LOG_LEVEL` reaches the template through the environment
 # and ninja cannot see that change.
-(cd "$DIR" && SAGUARO_VM=1 gramine-test build -f vsock_echo_server) >"$OUT/manifest.log" 2>&1 || {
+(cd "$DIR" && SAGUARO_VM=1 saguaro-test build -f vsock_echo_server) >"$OUT/manifest.log" 2>&1 || {
     cat "$OUT/manifest.log"; echo "manifest build failed" >&2; exit 1; }
 
 VM_LOG=$OUT/guest.log

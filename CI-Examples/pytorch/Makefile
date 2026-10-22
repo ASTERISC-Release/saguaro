@@ -33,7 +33,7 @@ $(VENV_DIR)/.INSTALLATION_OK:
 	&& touch $@
 
 pytorch.manifest: pytorch.manifest.template $(VENV_DIR)/.INSTALLATION_OK
-	gramine-manifest \
+	saguaro-manifest \
 		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		-Dentrypoint=$(abspath $(ENTRYPOINT)) \
@@ -48,7 +48,7 @@ pytorch.manifest.sgx pytorch.sig: sgx_sign
 
 .INTERMEDIATE: sgx_sign
 sgx_sign: pytorch.manifest
-	gramine-sgx-sign \
+	saguaro-sgx-sign \
 		--manifest $< \
 		--output $<.sgx
 

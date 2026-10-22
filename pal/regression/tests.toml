@@ -1,6 +1,6 @@
 binary_dir = "@GRAMINE_PKGLIBDIR@/tests/pal"
 
-# Disable checking manifest for conformance with official schema (`gramine-manifest --no-check`).
+# Disable checking manifest for conformance with official schema (`saguaro-manifest --no-check`).
 # Official schema includes mandatory manifest entries for official libos (libsysdb.so), but what we
 # do here is, we run libos replacements and manifests for those don't include entries that are
 # normally required by libsysdb. Therefore we need to disable schema checking.

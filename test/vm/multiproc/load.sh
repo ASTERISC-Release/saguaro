@@ -123,7 +123,7 @@ bash_load() {
     local work=${WORK:-$REPO/.mp-probes}
     mkdir -p "$work" && cd "$work"
     cp "$HERE"/manifest.template .
-    gramine-manifest -Darch_libdir=/lib/x86_64-linux-gnu -Dentry=/usr/bin/bash -Dprobedir="$work" \
+    saguaro-manifest -Darch_libdir=/lib/x86_64-linux-gnu -Dentry=/usr/bin/bash -Dprobedir="$work" \
         manifest.template bash.manifest 2>/dev/null
     # a script file, so that the pipeline needs no quoting through the saguaro-vm command line
     mkdir -p tmp

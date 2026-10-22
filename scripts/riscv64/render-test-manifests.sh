@@ -4,7 +4,7 @@
 #
 # Render direct-PAL test manifests for the riscv64 cross build.
 #
-# A native build runs `gramine-test build` inside the suite directory: it generates a
+# A native build runs `saguaro-test build` inside the suite directory: it generates a
 # build.ninja that compiles the test binaries *and* renders each test's manifest from its
 # template (falling back to the suite's shared `manifest.template`) next to the binary, and
 # pytest then runs with that directory as CWD (test binaries are invoked by bare name, so
@@ -14,7 +14,7 @@
 # exist in the meson build tree. So this script -- run inside the build container --
 # creates a per-suite *run directory* under the build tree, symlinks the cross-built
 # binaries (and any committed data files) into it, and renders the manifests there with
-# the same gramine-manifest invocation and the same variable set that
+# the same saguaro-manifest invocation and the same variable set that
 # `graminelibos.util_tests._gen_rules` uses. pytest is then run in the guest with CWD =
 # run directory and the test file given by path.
 #
@@ -62,7 +62,7 @@ rm -rf "$RUN"
 mkdir -p "$RUN"
 
 export PYTHONPATH="$PREFIX/lib/python3.12/site-packages"
-MANIFEST="$PREFIX/bin/gramine-manifest"
+MANIFEST="$PREFIX/bin/saguaro-manifest"
 
 rendered=0
 for bin in "$BINS"/* "$BINS"/.[!.]* "$BINS"/..?*; do

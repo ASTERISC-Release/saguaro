@@ -35,7 +35,7 @@ fs.mounts = [
   { path = "/probe", uri = "file:{{ probedir }}" },
 ]
 EOF
-gramine-manifest -Darch_libdir=/lib/$(gcc -dumpmachine) -Dprobedir="$WORK" hello.manifest.template \
+saguaro-manifest -Darch_libdir=/lib/$(gcc -dumpmachine) -Dprobedir="$WORK" hello.manifest.template \
     hello.manifest 2>/dev/null || exit 2
 
 LOAD_PIDS=()

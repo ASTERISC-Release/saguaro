@@ -20,7 +20,7 @@ case ${1:-} in
         cd "$WORK"
         mkdir -p tmp
         cp "$REPO/test/vm/multiproc/manifest.template" .
-        gramine-manifest -Darch_libdir="/lib/$(gcc -dumpmachine)" -Dentry=/usr/bin/bash \
+        saguaro-manifest -Darch_libdir="/lib/$(gcc -dumpmachine)" -Dentry=/usr/bin/bash \
             -Dprobedir="$WORK" manifest.template bash.manifest
         cat > pipeline.sh <<'SH'
 [ -d /probe/tmp ] && export TMPDIR=/probe/tmp
@@ -82,7 +82,7 @@ PY
         fi
         sed -i 's|^#error_log  logs/error.log  notice;|error_log  logs/error.log  notice;|' \
             "$D/install/conf/nginx-gramine.conf"
-        gramine-argv-serializer nginx -p "$D/install/" -c conf/nginx-gramine.conf \
+        saguaro-argv-serializer nginx -p "$D/install/" -c conf/nginx-gramine.conf \
             > "$D/nginx_args"
         error_log=$D/install/logs/error.log
         before=0

@@ -24,8 +24,8 @@ A typical integer entry looks similar to the above but without double quotes:
 Comments can be inlined in a \|~\| manifest by starting them with a \|~\| hash sign
 (`# comment...`).
 
-There is also a \|~\| preprocessor available: `gramine-manifest
-<gramine-manifest>`, which renders manifests from Jinja templates.
+There is also a \|~\| preprocessor available: `saguaro-manifest
+<saguaro-manifest>`, which renders manifests from Jinja templates.
 
 ## Common syntax
 
@@ -130,7 +130,7 @@ of the three mutually exclusive options:
   argument is typically the program name and the actual arguments start with
   the second array item; see [this link](https://unix.stackexchange.com/questions/315812) for an explanation),
 - point `loader.argv_src_file` to a file
-  containing output of `gramine-argv-serializer<gramine-argv-serializer>`.
+  containing output of `saguaro-argv-serializer<saguaro-argv-serializer>`.
 
 If none of the above arguments-handling manifest options is specified in the
 manifest, the application will get `argv = [ <libos.entrypoint value> ]`.
@@ -246,7 +246,7 @@ value or be a passthrough.
 
 `loader.env_src_file` allows to specify a URI to a file containing serialized
 environment, which can be generated using
-`gramine-argv-serializer<gramine-argv-serializer>`. This option is intended
+`saguaro-argv-serializer<saguaro-argv-serializer>`. This option is intended
 to point to either a trusted file or an encrypted file. The former allows to
 securely hardcode environments (in a more flexible way than
 `loader.env.[ENVIRON]` option), the latter allows the environments to be

@@ -43,8 +43,8 @@ $(Q2_BIN):
 .PHONY: FORCE
 quake2.manifest: quake2.manifest.template $(Q2_BIN) FORCE
 	mkdir -p ~/.yq2 
-	gramine-manifest $(MANIFEST_ARGS) $< $@
-	gramine-manifest-check $@
+	saguaro-manifest $(MANIFEST_ARGS) $< $@
+	saguaro-manifest-check $@
 
 .PHONY: dirs
 dirs:
@@ -80,7 +80,7 @@ X_DISPLAY_NUM = $(patsubst :%,%,$(firstword $(subst ., ,$(DISPLAY))))
 
 quake2-direct.manifest: quake2-direct.manifest.template $(Q2_BIN) FORCE
 		mkdir -p ~/.yq2
-		gramine-manifest \
+		saguaro-manifest \
 		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Ddisplay=$(X_DISPLAY_NUM) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
@@ -88,7 +88,7 @@ quake2-direct.manifest: quake2-direct.manifest.template $(Q2_BIN) FORCE
 		-Dpreload=$(PRELOAD) \
 		-Degl_discrete=$${EGL_DISCRETE:-0} \
 		$< $@
-	gramine-manifest-check $@
+	saguaro-manifest-check $@
 
 .PHONY: run-direct
 run-direct: quake2-direct.manifest dirs

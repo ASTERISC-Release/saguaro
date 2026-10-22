@@ -3,12 +3,12 @@
 
 .PHONY: all
 all:
-	@echo "Use gramine-test for running tests."
+	@echo "Use saguaro-test for running tests."
 
 # TODO: Python tests should not produce leftovers
 .PHONY: clean
 clean:
-	gramine-test clean
+	saguaro-test clean
 	$(RM) -r \
 		.pytest_cache \
 		__pycache__ \

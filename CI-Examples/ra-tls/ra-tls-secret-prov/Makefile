@@ -78,7 +78,7 @@ secret_prov_pf/client: secret_prov_pf/client.c
 #       should be relative to the manifest, not to current dir) - drop `cd` and `notdir`.
 secret_prov_minimal/client.manifest: secret_prov_minimal/client.manifest.template
 	cd secret_prov_minimal && \
-	gramine-manifest \
+	saguaro-manifest \
 		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		-Dra_type=$(RA_TYPE) \
@@ -94,7 +94,7 @@ secret_prov_minimal/client.manifest.sgx secret_prov_minimal/client.sig: sgx_sign
 .INTERMEDIATE: sgx_sign_secret_prov_minimal_client
 sgx_sign_secret_prov_minimal_client: secret_prov_minimal/client.manifest secret_prov_minimal/client
 	cd secret_prov_minimal && \
-	gramine-sgx-sign \
+	saguaro-sgx-sign \
 		--manifest $(notdir $<) \
 		--output $(notdir $<.sgx)
 
@@ -102,7 +102,7 @@ sgx_sign_secret_prov_minimal_client: secret_prov_minimal/client.manifest secret_
 
 secret_prov/client.manifest: secret_prov/client.manifest.template
 	cd secret_prov && \
-	gramine-manifest \
+	saguaro-manifest \
 		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		-Dra_type=$(RA_TYPE) \
@@ -116,7 +116,7 @@ secret_prov/client.manifest.sgx secret_prov/client.sig: sgx_sign_secret_prov_cli
 .INTERMEDIATE: sgx_sign_secret_prov_client
 sgx_sign_secret_prov_client: secret_prov/client.manifest secret_prov/client
 	cd secret_prov && \
-	gramine-sgx-sign \
+	saguaro-sgx-sign \
 		--manifest $(notdir $<) \
 		--output $(notdir $<.sgx)
 
@@ -124,7 +124,7 @@ sgx_sign_secret_prov_client: secret_prov/client.manifest secret_prov/client
 
 secret_prov_pf/client.manifest: secret_prov_pf/client.manifest.template
 	cd secret_prov_pf && \
-	gramine-manifest \
+	saguaro-manifest \
 		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		-Dra_type=$(RA_TYPE) \
@@ -138,7 +138,7 @@ secret_prov_pf/client.manifest.sgx secret_prov_pf/client.sig: sgx_sign_secret_pr
 .INTERMEDIATE: sgx_sign_secret_prov_pf_client
 sgx_sign_secret_prov_pf_client: secret_prov_pf/client.manifest secret_prov_pf/client
 	cd secret_prov_pf && \
-	gramine-sgx-sign \
+	saguaro-sgx-sign \
 		--manifest $(notdir $<) \
 		--output $(notdir $<.sgx)
 
@@ -149,7 +149,7 @@ secret_prov_pf/wrap_key:
 
 secret_prov_pf/enc_files/input.txt: secret_prov_pf/wrap_key secret_prov_pf/plain_files/input.txt
 	cd secret_prov_pf && \
-	gramine-sgx-pf-crypt encrypt -w wrap_key -i plain_files/input.txt -o enc_files/input.txt
+	saguaro-sgx-pf-crypt encrypt -w wrap_key -i plain_files/input.txt -o enc_files/input.txt
 
 ############################# SGX CHECKS FOR CI ###############################
 

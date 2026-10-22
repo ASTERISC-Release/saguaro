@@ -1,4 +1,4 @@
-executable('gramine-sgx-quote-view',
+executable('saguaro-sgx-quote-view',
     'quote_view.c',
 
     dependencies: [

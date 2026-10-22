@@ -45,7 +45,7 @@ fi
 DIR=$(cd "$HERE/../vsock-loopback" && pwd)
 echo "== vsock-epoll: building guest echo server"
 make -C "$DIR" -s || exit 1
-(cd "$DIR" && SAGUARO_VM=1 gramine-test build -f vsock_echo_server) >"$OUT/manifest.log" 2>&1 || {
+(cd "$DIR" && SAGUARO_VM=1 saguaro-test build -f vsock_echo_server) >"$OUT/manifest.log" 2>&1 || {
     cat "$OUT/manifest.log"; echo "manifest build failed" >&2; exit 1; }
 
 VM_LOG=$OUT/saguaro-vm.log

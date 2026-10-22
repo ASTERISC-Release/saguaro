@@ -214,7 +214,7 @@ static int get_enclave_token(sgx_arch_token_t* enclave_token, sgx_sigstruct_t* e
 
     token_fd = DO_SYSCALL(open, token_path, O_RDONLY | O_CLOEXEC, 0);
     if (token_fd < 0) {
-        log_error("Cannot open token %s. Use gramine-sgx-get-token on the runtime host to create "
+        log_error("Cannot open token %s. Use saguaro-sgx-get-token on the runtime host to create "
                   "the token file.", token_path);
         ret = -EINVAL;
         goto out;

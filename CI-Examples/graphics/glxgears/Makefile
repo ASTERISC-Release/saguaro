@@ -34,11 +34,11 @@ glxgears.o: main.c
 
 .PHONY: FORCE
 glxgears.manifest: glxgears.manifest.template FORCE
-	gramine-manifest \
+	saguaro-manifest \
 		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Dshared_input=$(SHARED_INPUT) \
 		$< $@
-	gramine-manifest-check $@
+	saguaro-manifest-check $@
 
 # Without Gramine: the preload library presents through its own X connection.
 .PHONY: run-native
@@ -61,7 +61,7 @@ NVIDIA ?= $(if $(wildcard /dev/nvidiactl),1,0)
 X_DISPLAY_NUM = $(patsubst :%,%,$(firstword $(subst ., ,$(DISPLAY))))
 
 glxgears-direct.manifest: glxgears-direct.manifest.template FORCE
-	gramine-manifest \
+	saguaro-manifest \
 		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Ddisplay=$(X_DISPLAY_NUM) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
@@ -69,7 +69,7 @@ glxgears-direct.manifest: glxgears-direct.manifest.template FORCE
 		-Dpreload=$(PRELOAD) \
 		-Degl_discrete=$${EGL_DISCRETE:-0} \
 		$< $@
-	gramine-manifest-check $@
+	saguaro-manifest-check $@
 
 .PHONY: run-direct
 run-direct: glxgears glxgears-direct.manifest

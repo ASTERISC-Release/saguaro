@@ -57,7 +57,7 @@ iperf_build: $(IPERF_DIR)/configure
 	$(MAKE) -C $(IPERF_DIR)
 
 iperf3.manifest: iperf3.manifest.template install/iperf3 install/libiperf.so.0
-	gramine-manifest \
+	saguaro-manifest \
 		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		$< > $@
@@ -70,7 +70,7 @@ iperf3.sig iperf3.manifest.sgx: sgx_sign
 
 .INTERMEDIATE: sgx_sign
 sgx_sign: iperf3.manifest
-	gramine-sgx-sign \
+	saguaro-sgx-sign \
 		--manifest $< \
 		--output $<.sgx
 

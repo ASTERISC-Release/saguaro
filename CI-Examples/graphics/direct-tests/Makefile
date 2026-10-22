@@ -55,8 +55,8 @@ egl_readback: egl_readback.c
 	$(CC) $(CFLAGS) $(shell pkg-config --cflags gbm egl glesv2) $< -o $@ $(LDLIBS_egl_readback)
 
 %.manifest: direct-tests.manifest.template FORCE
-	gramine-manifest -Dlog_level=$(SAGUARO_LOG_LEVEL) -Darch_libdir=$(ARCH_LIBDIR) -Dnvidia=$(NVIDIA) -Ddisplay=$(X_DISPLAY_NUM) -Dentrypoint=$* $< $@
-	gramine-manifest-check $@
+	saguaro-manifest -Dlog_level=$(SAGUARO_LOG_LEVEL) -Darch_libdir=$(ARCH_LIBDIR) -Dnvidia=$(NVIDIA) -Ddisplay=$(X_DISPLAY_NUM) -Dentrypoint=$* $< $@
+	saguaro-manifest-check $@
 
 .PHONY: FORCE
 
@@ -72,8 +72,8 @@ eglinfo: eglinfo.manifest
 	saguaro-direct eglinfo -B
 
 eglinfo.manifest: direct-tests.manifest.template FORCE
-	gramine-manifest -Dlog_level=$(SAGUARO_LOG_LEVEL) -Darch_libdir=$(ARCH_LIBDIR) -Dnvidia=$(NVIDIA) -Ddisplay=$(X_DISPLAY_NUM) -Dentrypoint=/usr/bin/eglinfo $< $@
-	gramine-manifest-check $@
+	saguaro-manifest -Dlog_level=$(SAGUARO_LOG_LEVEL) -Darch_libdir=$(ARCH_LIBDIR) -Dnvidia=$(NVIDIA) -Ddisplay=$(X_DISPLAY_NUM) -Dentrypoint=/usr/bin/eglinfo $< $@
+	saguaro-manifest-check $@
 
 .PHONY: clean
 clean:

@@ -33,7 +33,7 @@ if [ "$GPU" = 1 ]; then
     export SAGUARO_VM_GRAPHICS=1
     mkdir -p "$WORK/home/.cache"
 fi
-gramine-manifest -Dproton="$PROTON" -Dprefix="$PREFIX" -Dtests="$TESTS" -Dwork="$WORK" \
+saguaro-manifest -Dproton="$PROTON" -Dprefix="$PREFIX" -Dtests="$TESTS" -Dwork="$WORK" \
     -Dlog_level="${LOG_LEVEL:-error}" -Dwinedebug="${WINEDEBUG:--all}" -Dsync="${SYNC:-0}" \
     -Dgame="${GAME:-}" -Ddisplay="${DISPLAY_NUM:-}" -Dffmpeg="$FFMPEG_LIBS" \
     -Dvk_icd="${VK_ICD:-/usr/share/vulkan/icd.d/lvp_icd.json}" -Ddxvk_device="${DXVK_DEVICE:-llvmpipe}" \

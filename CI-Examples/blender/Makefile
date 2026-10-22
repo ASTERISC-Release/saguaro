@@ -42,7 +42,7 @@ $(RUN_DIR):
 	mkdir -p $@
 
 blender.manifest: blender.manifest.template | $(RUN_DIR)
-	gramine-manifest \
+	saguaro-manifest \
 		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		-Ddata_dir=$(DATA_DIR) \
@@ -57,7 +57,7 @@ blender.sig blender.manifest.sgx: sgx_outputs
 
 .INTERMEDIATE: sgx_outputs
 sgx_outputs: $(BLENDER_DIR)/blender blender.manifest | $(RUN_DIR)
-	gramine-sgx-sign \
+	saguaro-sgx-sign \
 		--output blender.manifest.sgx \
 		--manifest blender.manifest
 

@@ -78,7 +78,7 @@ def run_target(work, name, binary, args):
     shutil.copy(binary, run_dir / prog)
     argv = ", ".join('"%s"' % a for a in ["/" + prog, *args])
     (run_dir / f"{prog}.manifest.template").write_text(TEMPLATE)
-    subprocess.run(["gramine-manifest", "-Dargv=" + argv, "-Dprog=" + prog,
+    subprocess.run(["saguaro-manifest", "-Dargv=" + argv, "-Dprog=" + prog,
                     f"{prog}.manifest.template", f"{prog}.manifest"], cwd=run_dir, check=True)
     run = subprocess.run(["saguaro-direct", prog], cwd=run_dir, capture_output=True, text=True,
                          timeout=120)

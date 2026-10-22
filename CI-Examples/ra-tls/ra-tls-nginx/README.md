@@ -1,6 +1,6 @@
 # RA-TLS with Nginx
 
-Attests a generic TLS server with RA-TLS: `gramine-ratls` writes the certificate and key to a tmpfs inside Gramine and then `execve()`s Nginx, which uses them. SGX only (it does not run under direct, VM, SEV or VBS).
+Attests a generic TLS server with RA-TLS: `saguaro-ratls` writes the certificate and key to a tmpfs inside Gramine and then `execve()`s Nginx, which uses them. SGX only (it does not run under direct, VM, SEV or VBS).
 
 ## Prerequisites
 

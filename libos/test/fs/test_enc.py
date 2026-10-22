@@ -9,8 +9,8 @@ import test_fs
 
 from graminelibos import _CONFIG_SGX_ENABLED
 
-# TODO: While encrypted files are no longer SGX-only, the related tools (gramine-sgx-pf-crypt,
-# gramine-sgx-pf-tamper) are still part of Linux-SGX PAL. As a result, we are able to run the tests
+# TODO: While encrypted files are no longer SGX-only, the related tools (saguaro-sgx-pf-crypt,
+# saguaro-sgx-pf-tamper) are still part of Linux-SGX PAL. As a result, we are able to run the tests
 # with other PALs, but only if Gramine was built with SGX enabled.
 
 @unittest.skipUnless(_CONFIG_SGX_ENABLED, 'Encrypted files tests require SGX to be enabled')
@@ -19,8 +19,8 @@ class TC_50_EncryptedFiles(test_fs.TC_00_FileSystem):
     def setUpClass(cls):
         super().setUpClass()
 
-        cls.PF_CRYPT = 'gramine-sgx-pf-crypt'
-        cls.PF_TAMPER = 'gramine-sgx-pf-tamper'
+        cls.PF_CRYPT = 'saguaro-sgx-pf-crypt'
+        cls.PF_TAMPER = 'saguaro-sgx-pf-tamper'
         cls.WRAP_KEY = os.path.join(cls.TEST_DIR, 'wrap-key')
         # CONST_WRAP_KEY must match the one in manifest
         cls.CONST_WRAP_KEY = [0xff, 0xee, 0xdd, 0xcc, 0xbb, 0xaa, 0x99, 0x88,

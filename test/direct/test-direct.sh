@@ -120,7 +120,7 @@ fi
 
 RUNNER=${SAGUARO_RUNNER:-saguaro-direct}
 case "$RUNNER" in saguaro-direct|saguaro-vm) ;; *) echo "ERROR: SAGUARO_RUNNER must be saguaro-direct or saguaro-vm"; exit 1 ;; esac
-for bin in "$RUNNER" gramine-test gramine-manifest; do
+for bin in "$RUNNER" saguaro-test saguaro-manifest; do
     command -v "$bin" >/dev/null || { echo "ERROR: $bin not on PATH (set SAGUARO_PREFIX?)"; exit 1; }
 done
 python3 -c 'import graminelibos' 2>/dev/null || { echo "ERROR: graminelibos not on PYTHONPATH"; exit 1; }
@@ -263,7 +263,7 @@ wait_port_free() {
 run_pytest() {
     local suite=$1 dir=$2 detail
     if [ "$DO_BUILD" = 1 ]; then
-        ( cd "$dir" && gramine-test build >"$LOGDIR/$suite-build.log" 2>&1 ) \
+        ( cd "$dir" && saguaro-test build >"$LOGDIR/$suite-build.log" 2>&1 ) \
             || echo "  warning: manifest build failed; running pytest with existing manifests"
     fi
     ( cd "$dir" && timeout -s KILL 1500 python3 -m pytest -q >"$LOGDIR/$suite.log" 2>&1 )

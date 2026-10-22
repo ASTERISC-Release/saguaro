@@ -12,7 +12,7 @@ and its fork [gramine-tdx](https://github.com/gramineproject/gramine-tdx). It is
 endorsed by the Gramine project or LF Projects. Gramine was initially designed and built by a diverse group
 of researchers and engineers from universities and industry to run on Intel x86 platforms. Please see the
 [Acknowledgements](#acknowledgement) section. The command-line tools keep their upstream names for now
-(`saguaro-direct`, `saguaro-vm`, `saguaro-sgx`, `gramine-manifest`, ...).
+(`saguaro-direct`, `saguaro-vm`, `saguaro-sgx`, `saguaro-manifest`, ...).
 
 Keeping [upstream](https://github.com/gramineproject/gramine-tdx)'s full history, Saguaro extends Gramine to provide wide support for additional backends, namely
 

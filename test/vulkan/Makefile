@@ -53,9 +53,9 @@ prog_binary = $(if $(filter vk-headless vk-mt vk-two gfx-fdpass clock-probe,$(1)
 
 .PHONY: FORCE
 direct-%.manifest: vk-direct.manifest.template FORCE
-	gramine-manifest -Dlog_level=$(SAGUARO_LOG_LEVEL) -Ddisplay=$(X_DISPLAY_NUM) \
+	saguaro-manifest -Dlog_level=$(SAGUARO_LOG_LEVEL) -Ddisplay=$(X_DISPLAY_NUM) \
 		-Detc_vulkan=$(ETC_VULKAN) -Dentrypoint=/$* -Dbinary=$(call prog_binary,$*) $< $@
-	gramine-manifest-check $@
+	saguaro-manifest-check $@
 
 # saguaro-vm: `make vm-<prog>.manifest` (EGL_DISCRETE=1 for renderD129; EAGER=1 for programs that
 # dlopen the Vulkan loader; SHIM=1 for the phase-0 shim; PRESENT=1 for windows through the layer;
@@ -63,11 +63,11 @@ direct-%.manifest: vk-direct.manifest.template FORCE
 # processes; TWO=1 also mounts /vk-headless for them), then
 # `QEMU_PATH=<qemu-tirith>/build/qemu-system-x86_64 saguaro-vm vm-<prog> [args]`.
 vm-%.manifest: vk-vm.manifest.template vk-session-shim.so FORCE
-	gramine-manifest -Dlog_level=$(SAGUARO_LOG_LEVEL) -Degl_discrete=$${EGL_DISCRETE:-0} \
+	saguaro-manifest -Dlog_level=$(SAGUARO_LOG_LEVEL) -Degl_discrete=$${EGL_DISCRETE:-0} \
 		-Deager=$(EAGER) -Dshim=$(SHIM) -Dpresent=$(PRESENT) -Dlayer_dir=$(LAYER_DIR) \
 		-Dmultiprocess=$${MULTIPROCESS:-0} -Dtwo=$${TWO:-0} \
 		-Detc_vulkan=$(ETC_VULKAN) -Dentrypoint=/$* -Dbinary=$(call prog_binary,$*) $< $@
-	gramine-manifest-check $@ || echo "(gramine-manifest-check failed; see TESTING.md)"
+	saguaro-manifest-check $@ || echo "(saguaro-manifest-check failed; see TESTING.md)"
 
 .PHONY: clean
 clean:

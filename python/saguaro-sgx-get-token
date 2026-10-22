@@ -15,7 +15,7 @@ def main(sig, output, verbose):
     if not is_oot():
         import warnings # pylint: disable=import-outside-toplevel
         warnings.warn(
-            'gramine-sgx-get-token is deprecated on upstream SGX driver, '
+            'saguaro-sgx-get-token is deprecated on upstream SGX driver, '
             'and calling it will be a hard error in the future',
             DeprecationWarning)
         return

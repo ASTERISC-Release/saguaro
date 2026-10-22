@@ -233,8 +233,8 @@ pkgconfig.generate(
     ],
 )
 
-executable('gramine-ratls',
-    'gramine-ratls.c',
+executable('saguaro-ratls',
+    'saguaro-ratls.c',
     link_with: libra_tls_attest,
     dependencies: [
         sgx_util_dep,

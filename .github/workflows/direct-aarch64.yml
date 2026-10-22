@@ -135,4 +135,4 @@ jobs:
       - name: Render and check a VM manifest (helloworld)
         run: |
           . "$SAGUARO_PREFIX/env.sh"
-          make -C CI-Examples/helloworld helloworld helloworld.manifest   # also runs gramine-manifest-check
+          make -C CI-Examples/helloworld helloworld helloworld.manifest   # also runs saguaro-manifest-check

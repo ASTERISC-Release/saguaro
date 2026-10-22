@@ -7,8 +7,8 @@ loader.insecure__use_cmdline_argv = true
 {% if env.get('REWRITE') %}sys.rewrite_syscalls = {{ env.get('REWRITE') }}{% endif %}
 
 # The VM PAL's processes (x86_64 and aarch64 saguaro-vm; see dev docs: vm-multiproc/) are
-# on by default. SAGUARO_VM_MULTIPROCESS=0 turns them off for a control run. gramine-test keeps
-# up-to-date manifests, so change it with `gramine-test build --force`.
+# on by default. SAGUARO_VM_MULTIPROCESS=0 turns them off for a control run. saguaro-test keeps
+# up-to-date manifests, so change it with `saguaro-test build --force`.
 {% if env.get('SAGUARO_VM_MULTIPROCESS') == '0' %}sys.experimental__multiprocess = false{% endif %}
 
 # for flock_lock test

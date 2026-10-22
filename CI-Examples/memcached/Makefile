@@ -75,7 +75,7 @@ check: all
 endif
 
 memcached.manifest: memcached.manifest.template
-	gramine-manifest \
+	saguaro-manifest \
 		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		$< > $@
@@ -87,7 +87,7 @@ memcached.manifest.sgx memcached.sig: sgx_sign
 
 .INTERMEDIATE: sgx_sign
 sgx_sign: memcached.manifest memcached
-	gramine-sgx-sign \
+	saguaro-sgx-sign \
 		--manifest $< \
 		--output $<.sgx
 

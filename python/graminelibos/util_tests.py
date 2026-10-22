@@ -122,7 +122,7 @@ class TestConfig:
 
         ninja.rule(
             name='manifest',
-            command=('gramine-manifest '
+            command=('saguaro-manifest '
                      '-Darch_libdir=$ARCH_LIBDIR '
                      '-Dcoreutils_libdir=$COREUTILS_LIBDIR '
                      '-Dentrypoint=$ENTRYPOINT '
@@ -136,7 +136,7 @@ class TestConfig:
 
         ninja.rule(
             name='sgx-sign',
-            command=('gramine-sgx-sign --quiet --manifest $in --key $KEY --depfile $out.d '
+            command=('saguaro-sgx-sign --quiet --manifest $in --key $KEY --depfile $out.d '
                      '--output $out'),
             depfile='$out.d',
             description='SGX sign: $out',
@@ -145,14 +145,14 @@ class TestConfig:
 
         ninja.rule(
             name='sgx-get-token',
-            command='gramine-sgx-get-token --quiet --sig $in --output $out',
+            command='saguaro-sgx-get-token --quiet --sig $in --output $out',
             description='SGX token: $out',
         )
         ninja.newline()
 
         ninja.rule(
             name='regenerate',
-            command='gramine-test regenerate',
+            command='saguaro-test regenerate',
             description='Regenerating build file',
             generator=True,
         )

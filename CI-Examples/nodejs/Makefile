@@ -38,7 +38,7 @@ endif
 endif
 
 nodejs.manifest: nodejs.manifest.template helloworld.js
-	gramine-manifest \
+	saguaro-manifest \
 		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		-Dnodejs_dir=$(NODEJS_DIR) \
@@ -53,7 +53,7 @@ nodejs.manifest.sgx nodejs.sig: sgx_sign
 
 .INTERMEDIATE: sgx_sign
 sgx_sign: nodejs.manifest
-	gramine-sgx-sign \
+	saguaro-sgx-sign \
 		--manifest $< \
 		--output $<.sgx
 

@@ -36,7 +36,7 @@ endif
 endif
 
 sqlite3.manifest: manifest.template
-	gramine-manifest \
+	saguaro-manifest \
 		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Dexecdir=$(shell dirname $(shell which sqlite3)) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
@@ -49,7 +49,7 @@ sqlite3.manifest.sgx sqlite3.sig: sgx_sign
 
 .INTERMEDIATE: sgx_sign
 sgx_sign: sqlite3.manifest
-	gramine-sgx-sign \
+	saguaro-sgx-sign \
 		--manifest $< \
 		--output $<.sgx
 

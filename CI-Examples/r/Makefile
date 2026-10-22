@@ -23,7 +23,7 @@ all: R.manifest.sgx R.sig
 endif
 
 R.manifest: R.manifest.template
-	gramine-manifest \
+	saguaro-manifest \
 		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		-Dr_home=$(R_HOME) \
@@ -38,7 +38,7 @@ R.manifest.sgx R.sig: sgx_sign
 
 .INTERMEDIATE: sgx_sign
 sgx_sign: R.manifest
-	gramine-sgx-sign \
+	saguaro-sgx-sign \
 		--manifest $< \
 		--output $<.sgx
 

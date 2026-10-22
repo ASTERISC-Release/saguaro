@@ -1,4 +1,4 @@
-executable('gramine-sgx-ias-request',
+executable('saguaro-sgx-ias-request',
     'ias_request.c',
 
     dependencies: [

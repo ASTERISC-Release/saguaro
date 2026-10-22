@@ -149,7 +149,7 @@ class Sigstruct:
                     sig[key] = int(f'{struct.unpack_from(fmt, buffer, offset)[0]:x}')
                 except ValueError:
                     print(f'Misencoded {key} in SIGSTRUCT! '
-                          f'Please consider generating a new SIGSTRUCT with "gramine-sgx-sign".',
+                          f'Please consider generating a new SIGSTRUCT with "saguaro-sgx-sign".',
                           file=sys.stderr)
                     raise
                 continue

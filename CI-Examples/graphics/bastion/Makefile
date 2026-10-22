@@ -45,8 +45,8 @@ $(GAME_BIN):
 
 .PHONY: FORCE
 bastion.manifest: bastion.manifest.template $(GAME_BIN) FORCE
-	gramine-manifest $(MANIFEST_ARGS) $< $@
-	gramine-manifest-check $@
+	saguaro-manifest $(MANIFEST_ARGS) $< $@
+	saguaro-manifest-check $@
 
 .PHONY: dirs
 dirs:
@@ -72,9 +72,9 @@ PRELOAD ?= 0
 X_DISPLAY_NUM = $(patsubst :%,%,$(firstword $(subst ., ,$(DISPLAY))))
 
 bastion-direct.manifest: bastion-direct.manifest.template $(GAME_BIN) FORCE
-	gramine-manifest $(MANIFEST_ARGS) -Ddisplay=$(X_DISPLAY_NUM) -Dpreload=$(PRELOAD) \
+	saguaro-manifest $(MANIFEST_ARGS) -Ddisplay=$(X_DISPLAY_NUM) -Dpreload=$(PRELOAD) \
 		-Degl_discrete=$${EGL_DISCRETE:-0} $< $@
-	gramine-manifest-check $@
+	saguaro-manifest-check $@
 
 .PHONY: run-direct
 run-direct: bastion-direct.manifest dirs

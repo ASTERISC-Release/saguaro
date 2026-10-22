@@ -46,7 +46,7 @@ $(SELF_EXE): Cargo.toml
 	cargo build --release
 
 rust-hyper-http-server.manifest: rust-hyper-http-server.manifest.template
-	gramine-manifest \
+	saguaro-manifest \
 		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		-Dself_exe=$(SELF_EXE) \
@@ -59,7 +59,7 @@ rust-hyper-http-server.manifest.sgx rust-hyper-http-server.sig: sgx_sign
 
 .INTERMEDIATE: sgx_sign
 sgx_sign: rust-hyper-http-server.manifest $(SELF_EXE)
-	gramine-sgx-sign \
+	saguaro-sgx-sign \
 		--manifest $< \
 		--output $<.sgx
 

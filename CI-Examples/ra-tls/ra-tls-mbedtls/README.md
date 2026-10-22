@@ -19,7 +19,7 @@ Plain TLS without SGX: `make app && ./server & ./client native`. `make check_epi
 
 ## Notes
 
-- Get the enclave values with `gramine-sgx-sigstruct-view server.sig`. Without `RA_TLS_*` values pass them as four arguments: `./client dcap <MRENCLAVE> <MRSIGNER> <ISV_PROD_ID> <ISV_SVN>`.
+- Get the enclave values with `saguaro-sgx-sigstruct-view server.sig`. Without `RA_TLS_*` values pass them as four arguments: `./client dcap <MRENCLAVE> <MRSIGNER> <ISV_PROD_ID> <ISV_SVN>`.
 - EPID also needs `RA_TLS_EPID_API_KEY=<key>` for the client.
 - The enclaves are debug enclaves, so set `RA_TLS_ALLOW_DEBUG_ENCLAVE_INSECURE=1`, and `RA_TLS_ALLOW_OUTDATED_TCB_INSECURE=1`, `RA_TLS_ALLOW_HW_CONFIG_NEEDED=1`, `RA_TLS_ALLOW_SW_HARDENING_NEEDED=1` if Intel advisories are not addressed. Never use these in production.
 - The client can also run in SGX: `saguaro-sgx ./client_dcap dcap <...>` (build `make app dcap`), or `./client_epid epid` after `make app epid`.
