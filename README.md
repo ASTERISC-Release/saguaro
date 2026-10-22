@@ -6,17 +6,12 @@
 
 *A library OS for sandboxed and confidential workloads, derived from Gramine.*
 
-Saguaro is a Linux-compatible library OS (LibOS) for multi-process applications, on Intel x86_64, AMD64,
-AArch64 and RISC-V. It runs an unmodified Linux application in an isolated environment, with its own
-implementation of the Linux (POSIX) system call interface (the *LibOS*) on top of a small host abstraction
-layer (the *PAL*).
+Saguaro is a Linux-compatible library OS (LibOS) for multi-process applications, on Intel x86_64, AMD64, AArch64 and RISC-V. It runs an unmodified Linux application in an isolated environment, with its own implementation of the Linux (POSIX) system call interface (the *LibOS*) on top of a small host abstraction layer (the *PAL*).
 
 Saguaro is a derivative of [Gramine](https://github.com/gramineproject/gramine) (formerly *Graphene*), an 
 excellent Library OS designed and built by a diverse group of researchers and engineers from universities and industry 
 to run on Intel x86 platforms. Our work is not affiliated with or endorsed by the Gramine project or LF Projects. Please 
-see the [Acknowledgements](#acknowledgement) section. The command-line tools are named `saguaro-<name>`
-(`saguaro-direct`, `saguaro-vm`, `saguaro-sgx`, `saguaro-manifest`, ...); the earlier `gramine-<name>` names are mapped
-in [CHANGELOG.md](CHANGELOG.md#names).
+see the [Acknowledgements](#acknowledgement) section. 
 
 Keeping [upstream](https://github.com/gramineproject/gramine-tdx)'s full history, Saguaro extends Gramine to provide wide support 
 for additional backends, namely
