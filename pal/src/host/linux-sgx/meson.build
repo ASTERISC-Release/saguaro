@@ -223,8 +223,8 @@ if debug
     )
 
     install_data(
-        'gdb_integration/gramine_sgx.gdb',
-        'gdb_integration/gramine_sgx_gdb.py',
+        'gdb_integration/saguaro_sgx.gdb',
+        'gdb_integration/saguaro_sgx_gdb.py',
         install_dir: pkglibdir / 'sgx/gdb_integration',
     )
 endif

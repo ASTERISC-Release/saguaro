@@ -7,7 +7,7 @@
 
 #include <stdio.h>
 
-#include "gramine_entry_api.h"
+#include "saguaro_entry_api.h"
 
 int main(int argc, char** argv) {
     if (argc != 2) {

@@ -21,10 +21,10 @@ if [ "$GDB" == "1" ]; then
         PREFIX+=("-i=mi")
     fi
     if [ 0"$SGX" -gt 0 ]; then
-        PREFIX+=("-x" "$HOST_PAL_PATH/gdb_integration/gramine_sgx_gdb.py")
+        PREFIX+=("-x" "$HOST_PAL_PATH/gdb_integration/saguaro_sgx_gdb.py")
         ENVS+=("LD_PRELOAD=$HOST_PAL_PATH/gdb_integration/sgx_gdb.so:$LD_PRELOAD")
     else
-        PREFIX+=("-x" "$HOST_PAL_PATH/gdb_integration/gramine_linux_gdb.py")
+        PREFIX+=("-x" "$HOST_PAL_PATH/gdb_integration/saguaro_linux_gdb.py")
     fi
     if [ "$GDB_SCRIPT" != "" ]; then
         # Run a script in batch mode, and without TTY (so that it can be piped, redirected etc.)

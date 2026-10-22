@@ -167,7 +167,7 @@ if dcap
 
     libra_tls_verify_dcap_gramine = shared_library('ra_tls_verify_dcap_gramine',
         'ra_tls_verify_dcap.c',
-        'ra_tls_verify_dcap_gramine.c',
+        'ra_tls_verify_dcap_saguaro.c',
 
         link_args: ra_tls_link_args,
         dependencies: [

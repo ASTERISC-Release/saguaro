@@ -209,11 +209,11 @@ class RegressionTestCase(unittest.TestCase):
         prefix = ['gdb', '-q']
         env = os.environ.copy()
         if HAS_SGX:
-            prefix += ['-x', fspath(self.pal_path / 'gdb_integration/gramine_sgx_gdb.py')]
+            prefix += ['-x', fspath(self.pal_path / 'gdb_integration/saguaro_sgx_gdb.py')]
             sgx_gdb = fspath(self.pal_path / 'gdb_integration/sgx_gdb.so')
             env['LD_PRELOAD'] = sgx_gdb + ':' + env.get('LD_PRELOAD', '')
         else:
-            prefix += ['-x', fspath(self.pal_path / 'gdb_integration/gramine_linux_gdb.py')]
+            prefix += ['-x', fspath(self.pal_path / 'gdb_integration/saguaro_linux_gdb.py')]
 
         # Override TTY, as apparently os.setpgrp() confuses GDB and causes it to hang.
         prefix += ['-x', gdb_script, '-batch', '-tty=/dev/null']

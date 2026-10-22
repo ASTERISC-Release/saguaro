@@ -56,7 +56,7 @@ PY
         cp "$D/nginx.manifest" "$WORK/nginx.manifest.orig"
         rm -f "$WORK/nginx_args.orig"
         cp "$D/nginx_args" "$WORK/nginx_args.orig" 2>/dev/null || true
-        cp "$D/install/conf/nginx-gramine.conf" "$WORK/nginx.conf.orig"
+        cp "$D/install/conf/nginx-saguaro.conf" "$WORK/nginx.conf.orig"
         server_pid=
         cleanup() {
             if [ -n "$server_pid" ]; then
@@ -64,7 +64,7 @@ PY
                 wait "$server_pid" 2>/dev/null || true
             fi
             cp "$WORK/nginx.manifest.orig" "$D/nginx.manifest"
-            cp "$WORK/nginx.conf.orig" "$D/install/conf/nginx-gramine.conf"
+            cp "$WORK/nginx.conf.orig" "$D/install/conf/nginx-saguaro.conf"
             if [ -f "$WORK/nginx_args.orig" ]; then
                 cp "$WORK/nginx_args.orig" "$D/nginx_args"
             else
@@ -73,16 +73,16 @@ PY
         }
         trap cleanup EXIT
         # test/direct/test-direct.sh leaves `master_process off;` in the installed configuration
-        sed -i '/^master_process off;$/d' "$D/install/conf/nginx-gramine.conf"
+        sed -i '/^master_process off;$/d' "$D/install/conf/nginx-saguaro.conf"
         if [ "${MP:-1}" = 0 ]; then
-            sed -i '1i master_process off;' "$D/install/conf/nginx-gramine.conf"
+            sed -i '1i master_process off;' "$D/install/conf/nginx-saguaro.conf"
         else
             sed -i '/^enable_sigterm_injection = true$/a experimental__multiprocess = true' \
                 "$D/nginx.manifest"
         fi
         sed -i 's|^#error_log  logs/error.log  notice;|error_log  logs/error.log  notice;|' \
-            "$D/install/conf/nginx-gramine.conf"
-        saguaro-argv-serializer nginx -p "$D/install/" -c conf/nginx-gramine.conf \
+            "$D/install/conf/nginx-saguaro.conf"
+        saguaro-argv-serializer nginx -p "$D/install/" -c conf/nginx-saguaro.conf \
             > "$D/nginx_args"
         error_log=$D/install/logs/error.log
         before=0

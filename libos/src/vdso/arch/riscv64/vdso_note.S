@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
 /* Copyright (C) 2026 The ASTERISC Research Lab */
-#include "gramine_hash.h"
+#include "saguaro_hash.h"
 
     /* This .note section informs dynamic linker about vDSO */
     .section .note.Linux, "a", @note

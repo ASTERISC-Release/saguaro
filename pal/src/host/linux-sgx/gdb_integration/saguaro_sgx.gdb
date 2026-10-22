@@ -40,10 +40,10 @@ commands
     push-pagination off
 
     if *(uint16_t*)$rip == 0xa20f
-        echo [gramine_sgx.gdb] Passing SIGILL caused by CPUID to the enclave\n
+        echo [saguaro_sgx.gdb] Passing SIGILL caused by CPUID to the enclave\n
     end
     if *(uint16_t*)$rip == 0x310f
-        echo [gramine_sgx.gdb] Passing SIGILL caused by RDTSC to the enclave\n
+        echo [saguaro_sgx.gdb] Passing SIGILL caused by RDTSC to the enclave\n
     end
 
     pop-pagination

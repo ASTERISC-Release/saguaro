@@ -16,9 +16,9 @@ CPUS=${CPUS:-2}
 
 nginx_load() {
     cd "$REPO/CI-Examples/nginx"
-    cp install/conf/nginx-gramine.conf /tmp/nginx-conf.bak
+    cp install/conf/nginx-saguaro.conf /tmp/nginx-conf.bak
     cp nginx.manifest /tmp/nginx-manifest.bak
-    sed -i '/^master_process off;$/d' install/conf/nginx-gramine.conf
+    sed -i '/^master_process off;$/d' install/conf/nginx-saguaro.conf
     sed -i 's/^enable_sigterm_injection = true$/enable_sigterm_injection = true\nexperimental__multiprocess = true/' nginx.manifest
     SAGUARO_CPU_NUM=$CPUS SAGUARO_VM_INBOUND="8002:8002,8444:8444" setsid timeout -s KILL 300 \
         saguaro-vm nginx > /tmp/nginx-load.log 2>&1 &
@@ -48,7 +48,7 @@ print(f"nginx: {good}/{total} identical with {clients} concurrent clients in {to
       f"({total / took:.0f} req/s)")
 PY
     kill -KILL -$pid 2>/dev/null; sleep 1
-    cp /tmp/nginx-conf.bak install/conf/nginx-gramine.conf
+    cp /tmp/nginx-conf.bak install/conf/nginx-saguaro.conf
     cp /tmp/nginx-manifest.bak nginx.manifest
     grep -iE "panic|emerg|alert|internal memory fault" /tmp/nginx-load.log | head -5
 }

@@ -97,7 +97,7 @@ if debug
     )
 
     install_data(
-        'gdb_integration/gramine_linux_gdb.py',
+        'gdb_integration/saguaro_linux_gdb.py',
         install_dir: pkglibdir / 'direct/gdb_integration',
     )
 endif

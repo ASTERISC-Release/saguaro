@@ -1,11 +1,9 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2020 Intel Corporation
 #                    Michał Kowalczyk <mkow@invisiblethingslab.com>
-#                    Paweł Marczewski <pawel@invisiblethingslab.com>
 
 import os
-
-import gdb # pylint: disable=import-error
+import gdb  # pylint: disable=import-error
 
 def main():
     common_path = '../../gdb_integration/'
@@ -13,13 +11,11 @@ def main():
             common_path + 'language_gdb.py',
             common_path + 'pagination_gdb.py',
             common_path + 'debug_map_gdb.py',
-            common_path + 'gramine.gdb',
-            'gramine_sgx.gdb',
+            common_path + 'saguaro.gdb',
     ]:
-        print('[%s] Loading %s...' % (os.path.basename(__file__), filename))
+        print("[%s] Loading %s..." % (os.path.basename(__file__), filename))
         path = os.path.join(os.path.dirname(__file__), filename)
-        gdb.execute('source ' + path)
-
+        gdb.execute("source " + path)
 
 if __name__ == '__main__':
     main()

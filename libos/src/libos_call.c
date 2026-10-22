@@ -9,7 +9,7 @@
 
 #include "api.h"
 #include "asan.h"
-#include "gramine_entry_api.h"
+#include "saguaro_entry_api.h"
 #include "libos_entry.h"
 #include "libos_rwlock.h"
 #include "libos_utils.h"

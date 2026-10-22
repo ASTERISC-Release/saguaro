@@ -116,7 +116,7 @@ nginx.manifest.sgx nginx.sig: sgx_sign
 
 .INTERMEDIATE: sgx_sign
 sgx_sign: nginx.manifest $(INSTALL_DIR)/sbin/nginx \
-		$(INSTALL_DIR)/conf/nginx-gramine.conf \
+		$(INSTALL_DIR)/conf/nginx-saguaro.conf \
 		$(TEST_DATA) \
 		$(INSTALL_DIR)/conf/server.crt
 	saguaro-sgx-sign \
@@ -125,9 +125,9 @@ sgx_sign: nginx.manifest $(INSTALL_DIR)/sbin/nginx \
 
 # Nginx configuration and test data
 .PHONY: config
-config: $(INSTALL_DIR)/conf/nginx-gramine.conf
+config: $(INSTALL_DIR)/conf/nginx-saguaro.conf
 
-$(INSTALL_DIR)/conf/nginx-gramine.conf: nginx-gramine.conf.template $(INSTALL_DIR)/sbin/nginx
+$(INSTALL_DIR)/conf/nginx-saguaro.conf: nginx-saguaro.conf.template $(INSTALL_DIR)/sbin/nginx
 	sed -e 's|$$(LISTEN_PORT)|'"$(LISTEN_PORT)"'|g' \
 		-e 's|$$(LISTEN_SSL_PORT)|'"$(LISTEN_SSL_PORT)"'|g' \
 		-e 's|$$(LISTEN_HOST)|'"$(LISTEN_HOST)"'|g' \
@@ -167,11 +167,11 @@ $(INSTALL_DIR)/conf/server.crt: ssl/ca_config.conf $(INSTALL_DIR)/sbin/nginx
 ssldata: $(INSTALL_DIR)/conf/server.crt
 
 nginx_args:
-	saguaro-argv-serializer "nginx" "-c" "conf/nginx-gramine.conf" > $@
+	saguaro-argv-serializer "nginx" "-c" "conf/nginx-saguaro.conf" > $@
 
 .PHONY: start-native-server
 start-native-server: all
-	$(INSTALL_DIR)/sbin/nginx -c conf/nginx-gramine.conf
+	$(INSTALL_DIR)/sbin/nginx -c conf/nginx-saguaro.conf
 
 ifeq ($(VBS),1)
 # GRAMINE is saguaro-vbs (Makefile.vbs)

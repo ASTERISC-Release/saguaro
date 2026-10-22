@@ -26,7 +26,7 @@
 #if defined(_M_X64)
 /* where the PAL_TCB of a thread lives in its TEB on x64 (PLAN-x64.md, X2; must match
  * pal/include/arch/x86_64/pal_tcb_gs.h), and the offset in it of the LibOS's syscall entry
- * (GRAMINE_SYSCALL_OFFSET of libos/include/arch/x86_64/gramine_entry_api.h) */
+ * (GRAMINE_SYSCALL_OFFSET of libos/include/arch/x86_64/saguaro_entry_api.h) */
 #define PAL_VBS_TEB_TCB_OFFSET    0x800
 #define PAL_VBS_TCB_SYSCALL_ENTRY 24
 #endif

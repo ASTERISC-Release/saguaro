@@ -44,7 +44,7 @@ static int pipe_listen(PAL_HANDLE* handle, const char* name, pal_stream_options_
     int ret;
 
     struct sockaddr_un addr;
-    ret = get_gramine_unix_socket_addr(name, &addr);
+    ret = get_saguaro_unix_socket_addr(name, &addr);
     if (ret < 0)
         return -PAL_ERROR_DENIED;
 
@@ -139,7 +139,7 @@ static int pipe_connect(PAL_HANDLE* handle, const char* name, pal_stream_options
     int ret;
 
     struct sockaddr_un addr;
-    ret = get_gramine_unix_socket_addr(name, &addr);
+    ret = get_saguaro_unix_socket_addr(name, &addr);
     if (ret < 0)
         return -PAL_ERROR_DENIED;
 
@@ -186,11 +186,11 @@ static int pipe_connect(PAL_HANDLE* handle, const char* name, pal_stream_options
  * Depending on the combination of `type` and `uri`, the following PAL handles are created:
  *
  * - `type` is URI_TYPE_PIPE_SRV: create `pipesrv` handle (intermediate listening socket) with
- *                                the name created by `get_gramine_unix_socket_addr`. Caller is
+ *                                the name created by `get_saguaro_unix_socket_addr`. Caller is
  *                                expected to call pipe_waitforclient() afterwards.
  *
  * - `type` is URI_TYPE_PIPE: create `pipe` handle (connecting socket) with the name created by
- *                            `get_gramine_unix_socket_addr`.
+ *                            `get_saguaro_unix_socket_addr`.
  */
 static int pipe_open(PAL_HANDLE* handle, const char* type, const char* uri, enum pal_access access,
                      pal_share_flags_t share, enum pal_create_mode create,

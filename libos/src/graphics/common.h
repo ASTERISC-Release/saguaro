@@ -111,7 +111,7 @@ bool graphics_ensure_session(void);
 #define SYS_COMMS_ADDR 0xf00000ULL
 #define SYS_COMMS_SIZE 4096
 
-/* Fallback arena geometry (the runtime values are computed in gramine.c from
+/* Fallback arena geometry (the runtime values are computed in saguaro.c from
  * the launcher's env); the hugepage arena follows the data arena unless
  * SAGUARO_HUGEPAGE_ADDR relocates it. */
 static const size_t DATA_SIZE = GRAPHICS_GEM_DATA_SIZE;

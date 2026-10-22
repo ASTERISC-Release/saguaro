@@ -3,9 +3,9 @@
 set -u
 . ~/.local/saguaro-vm/env.sh
 cd "${REPO:-$(cd "$(dirname "$(readlink -f "$0")")/../../.." && pwd)}"/CI-Examples/nginx
-cp install/conf/nginx-gramine.conf /tmp/nginx-conf.bak
+cp install/conf/nginx-saguaro.conf /tmp/nginx-conf.bak
 cp nginx.manifest /tmp/nginx-manifest.bak
-sed -i '/^master_process off;$/d' install/conf/nginx-gramine.conf
+sed -i '/^master_process off;$/d' install/conf/nginx-saguaro.conf
 [ -n "${LOGLVL:-}" ] && sed -i "s/^log_level = .*/log_level = \"$LOGLVL\"/" nginx.manifest
 sed -i 's/^enable_sigterm_injection = true$/enable_sigterm_injection = true\nexperimental__multiprocess = true/' nginx.manifest
 SAGUARO_CPU_NUM=${CPUS:-2} SAGUARO_VM_INBOUND="8002:8002,8444:8444" setsid timeout -s KILL 120 saguaro-vm nginx > /tmp/nginx-mp.log 2>&1 &
@@ -23,6 +23,6 @@ fi
 echo "http first=$ok, 50 sequential fetches identical: $good"
 grep -c "VM child exited\|nginx: worker" /tmp/nginx-mp.log
 kill -KILL -$pid 2>/dev/null; sleep 1
-cp /tmp/nginx-conf.bak install/conf/nginx-gramine.conf
+cp /tmp/nginx-conf.bak install/conf/nginx-saguaro.conf
 cp /tmp/nginx-manifest.bak nginx.manifest
 grep -iE "error|panic|emerg|alert" /tmp/nginx-mp.log | head -5

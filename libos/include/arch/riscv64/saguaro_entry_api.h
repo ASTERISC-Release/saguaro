@@ -5,7 +5,7 @@
  */
 
 /*
- * riscv64 port of the x86_64 gramine_entry_api.h.
+ * riscv64 port of the x86_64 saguaro_entry_api.h.
  *
  * The riscv64 direct-PAL port does not patch any libc -- all syscall interception goes through
  * the generic seccomp-trap path (maybe_emulate_syscall() in libos_context.c), not through this

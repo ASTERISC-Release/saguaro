@@ -12,7 +12,7 @@
 #include <unistd.h>
 
 #include "common.h"
-#include "gramine_entry_api.h"
+#include "saguaro_entry_api.h"
 
 #define CHECK_IF_TRUE(x) CHECK((x) ? 0 : -1)
 

@@ -8,7 +8,7 @@
 #include "api.h"
 #include "linux_utils.h"
 
-int get_gramine_unix_socket_addr(const char* name, struct sockaddr_un* out_addr) {
+int get_saguaro_unix_socket_addr(const char* name, struct sockaddr_un* out_addr) {
     /* Apparently there is no way to get this define without including whole "sys/socket.h". */
     out_addr->sun_family = /*AF_UNIX*/1;
 

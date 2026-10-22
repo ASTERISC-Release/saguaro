@@ -4,7 +4,7 @@
  */
 #pragma once
 
-#include "gramine_entry_api.h"
+#include "saguaro_entry_api.h"
 #include "pal_tcb_gs.h"
 
 #ifdef ASAN

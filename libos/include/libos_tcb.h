@@ -2,7 +2,7 @@
 
 #include "api.h"
 #include "assert.h"
-#include "gramine_entry_api.h"
+#include "saguaro_entry_api.h"
 #include "libos_entry.h"
 #include "libos_tcb_arch.h"
 #include "pal.h"

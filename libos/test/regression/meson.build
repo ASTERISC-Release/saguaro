@@ -130,14 +130,14 @@ tests = {
     'renameat2': {},
     'run_test': {
         'include_directories': include_directories(
-            # for `gramine_entry_api.h`
+            # for `saguaro_entry_api.h`
             '../../include/arch' / host_machine.cpu_family(),
         ),
     },
     'rewrite_stress': {},
     'rwlock': {
         'include_directories': include_directories(
-            # for `gramine_entry_api.h`
+            # for `saguaro_entry_api.h`
             '../../include/arch' / host_machine.cpu_family(),
         ),
     },

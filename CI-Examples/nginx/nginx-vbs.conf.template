@@ -1,7 +1,7 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 # SPDX-License-Identifier: BSD-3-Clause
 
-# NGINX configuration for a Windows VBS enclave (`make VBS=1`): nginx-gramine.conf.template without
+# NGINX configuration for a Windows VBS enclave (`make VBS=1`): nginx-saguaro.conf.template without
 # what a VBS enclave cannot do. One process: no master process (it would fork the workers) and one
 # worker; no daemon. HTTP only (the vbs build has no OpenSSL). Files that NGINX writes go to /tmp
 # (a tmpfs inside the enclave); the error log goes to stderr.

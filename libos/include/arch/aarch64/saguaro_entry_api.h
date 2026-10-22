@@ -5,7 +5,7 @@
  */
 
 /*
- * aarch64 port of the x86_64 gramine_entry_api.h.
+ * aarch64 port of the x86_64 saguaro_entry_api.h.
  *
  * Milestone A (single-threaded stopgap, see pal_arch.h's g_pal_tcb_singleton comment) does not
  * patch any libc for aarch64 -- all syscall interception goes through the generic seccomp-trap

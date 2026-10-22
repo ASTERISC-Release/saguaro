@@ -511,8 +511,8 @@ nginx)
     wait_port_free 8002 || echo "  warning: port 8002 still busy"
     if [ "$RUNNER" = saguaro-vm ]; then
         # the VM PAL cannot create worker processes: run nginx as a single process
-        grep -q '^master_process' "$REPO/CI-Examples/nginx/install/conf/nginx-gramine.conf" \
-            || sed -i '1i master_process off;' "$REPO/CI-Examples/nginx/install/conf/nginx-gramine.conf"
+        grep -q '^master_process' "$REPO/CI-Examples/nginx/install/conf/nginx-saguaro.conf" \
+            || sed -i '1i master_process off;' "$REPO/CI-Examples/nginx/install/conf/nginx-saguaro.conf"
     fi
     start_server nginx 120 "$REPO/CI-Examples/nginx" "$RUNNER" nginx
     rc=1

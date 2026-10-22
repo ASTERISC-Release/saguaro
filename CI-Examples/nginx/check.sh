@@ -11,8 +11,8 @@ set -uo pipefail
 . ../common_tools/server-check.sh
 case $GRAMINE in
     saguaro-vm|saguaro-sev)
-        grep -q '^master_process' install/conf/nginx-gramine.conf \
-            || sed -i '1i master_process off;' install/conf/nginx-gramine.conf ;;
+        grep -q '^master_process' install/conf/nginx-saguaro.conf \
+            || sed -i '1i master_process off;' install/conf/nginx-saguaro.conf ;;
 esac
 server_start 8002:8002,8444:8444 "$GRAMINE" ./nginx
 fetch() {

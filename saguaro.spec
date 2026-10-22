@@ -1,6 +1,6 @@
 # Copyright (c) 2021-2022 Wojtek Porczyk <woju@invisiblethingslab.com>
 
-Name: gramine
+Name: saguaro
 Version: 1.7post~UNRELEASED
 Release: 1%{?dist}
 Group: Development Tools
@@ -60,7 +60,7 @@ unset PKG_CONFIG_PATH
 # assert correct version
 if ! test "$(meson introspect --projectinfo "%{_vpath_builddir}" | jq -r .version)" = %{version}
 then
-    echo mismatched version: make sure that version in gramine.spec matches meson.build >&2
+    echo mismatched version: make sure that version in saguaro.spec matches meson.build >&2
     exit 1
 fi
 
@@ -89,11 +89,11 @@ install -t %{buildroot}/%{_licensedir}/%{name} LICENSE*.txt
 %dir %{_libdir}/%{name}/runtime
 %{_libdir}/%{name}/runtime/glibc
 
-%{_libdir}/pkgconfig/mbedtls_%{name}.pc
-%{_libdir}/pkgconfig/ra_tls_%{name}.pc
-%{_libdir}/pkgconfig/secret_prov_%{name}.pc
+%{_libdir}/pkgconfig/mbedtls_gramine.pc
+%{_libdir}/pkgconfig/ra_tls_gramine.pc
+%{_libdir}/pkgconfig/secret_prov_gramine.pc
 
-%{_libdir}/libmbed{crypto,tls,x509}_%{name}.{so*,a}
+%{_libdir}/libmbed{crypto,tls,x509}_gramine.{so*,a}
 
 %{_libdir}/libra_tls*.so*
 %{_libdir}/libra_tls_verify.a

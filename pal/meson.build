@@ -9,7 +9,7 @@ endif
 
 if debug
     install_data(
-        'gdb_integration/gramine.gdb',
+        'gdb_integration/saguaro.gdb',
         'gdb_integration/debug_map_gdb.py',
         'gdb_integration/language_gdb.py',
         'gdb_integration/pagination_gdb.py',

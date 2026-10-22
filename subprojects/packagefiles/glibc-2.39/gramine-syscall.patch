@@ -41,7 +41,7 @@ index ce8fdea3024359b0d4f4aea90a49796003aeaa1d..58392a372fdb3ebb66b85b8963ccdb01
  #include <dl-prop.h>
  #include <not-cancel.h>
  
-+#include "gramine_entry_api.h"
++#include "saguaro_entry_api.h"
 +
  #include <endian.h>
  #if BYTE_ORDER == BIG_ENDIAN
@@ -185,7 +185,7 @@ index a2b021bd86f5d47284958eed11d6024a4027b698..690362d270c90a46968a9bcfc3afb294
  /* Defines RTLD_PRIVATE_ERRNO.  */
  #include <dl-sysdep.h>
  
-+#include "gramine_entry_api.h"
++#include "saguaro_entry_api.h"
 +
  /* For Linux we can use the system call table in the header file
  	/usr/include/asm/unistd.h
@@ -309,7 +309,7 @@ index 876889bed4bf2bc97779f1ab0593403d33648aeb..25f5aa07ab24bc22aab66d1065d10275
  # include <kernel-features.h>
  # include <dl-dtv.h>
  
-+# include "gramine_entry_api.h"
++# include "saguaro_entry_api.h"
 +
  /* Replacement type for __m128 since this file is included by ld.so,
     which is compiled with -mno-sse.  It must not change the alignment
