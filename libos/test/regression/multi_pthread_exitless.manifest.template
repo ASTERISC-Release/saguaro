@@ -1,10 +1,10 @@
-loader.entrypoint = "file:{{ gramine.libos }}"
+loader.entrypoint = "file:{{ saguaro.libos }}"
 libos.entrypoint = "multi_pthread"
 
 loader.env.LD_LIBRARY_PATH = "/lib"
 
 fs.mounts = [
-  { path = "/lib", uri = "file:{{ gramine.runtimedir(libc) }}" },
+  { path = "/lib", uri = "file:{{ saguaro.runtimedir(libc) }}" },
   { path = "/multi_pthread", uri = "file:{{ binary_dir }}/multi_pthread" },
 ]
 
@@ -17,7 +17,7 @@ sgx.edmm_enable = {{ 'true' if env.get('EDMM', '0') == '1' else 'false' }}
 sgx.enable_stats = true
 
 sgx.trusted_files = [
-  "file:{{ gramine.libos }}",
-  "file:{{ gramine.runtimedir(libc) }}/",
+  "file:{{ saguaro.libos }}",
+  "file:{{ saguaro.runtimedir(libc) }}/",
   "file:{{ binary_dir }}/multi_pthread",
 ]

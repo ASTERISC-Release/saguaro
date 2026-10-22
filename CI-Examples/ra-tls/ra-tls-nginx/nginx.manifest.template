@@ -22,7 +22,7 @@ fs.mounts = [
 
     { path = "/lib", uri = "file:/lib" },
     { path = "/usr/lib", uri = "file:/usr/lib" },
-    { path = "/usr/local/lib", uri = "file:{{ gramine.runtimedir() }}" },
+    { path = "/usr/local/lib", uri = "file:{{ saguaro.runtimedir() }}" },
 
     { path = "/tmp", type = "tmpfs" },
 
@@ -50,7 +50,7 @@ sys.enable_sigterm_injection = true
 sgx.debug = true
 
 sgx.trusted_files = [
-    "file:{{ gramine.runtimedir() }}/",
+    "file:{{ saguaro.runtimedir() }}/",
 
     "file:{{ entrypoint }}",
     "file:/usr/sbin/nginx",

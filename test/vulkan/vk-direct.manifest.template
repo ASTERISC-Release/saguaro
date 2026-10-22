@@ -23,7 +23,7 @@ sys.insecure__host_unix_sockets = ["/tmp/.X11-unix/X{{ display }}"]
 
 fs.mounts = [
   { path = "{{ entrypoint }}", uri = "file:{{ binary }}" },
-  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "/lib", uri = "file:{{ saguaro.runtimedir() }}" },
   { path = "/usr", type = "chroot", uri = "file:/usr" },
   { path = "/etc/ld.so.cache", uri = "file:/etc/ld.so.cache" },
 {% if etc_vulkan|string != "0" %}

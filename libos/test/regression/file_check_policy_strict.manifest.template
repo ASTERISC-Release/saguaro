@@ -1,6 +1,6 @@
 {% set entrypoint = "file_check_policy" -%}
 
-loader.entrypoint = "file:{{ gramine.libos }}"
+loader.entrypoint = "file:{{ saguaro.libos }}"
 libos.entrypoint = "{{ entrypoint }}"
 
 loader.env.LD_LIBRARY_PATH = "/lib"
@@ -9,7 +9,7 @@ loader.insecure__use_cmdline_argv = true
 loader.log_level = "warning"
 
 fs.mounts = [
-  { path = "/lib", uri = "file:{{ gramine.runtimedir(libc) }}" },
+  { path = "/lib", uri = "file:{{ saguaro.runtimedir(libc) }}" },
   { path = "/{{ entrypoint }}", uri = "file:{{ binary_dir }}/{{ entrypoint }}" },
 ]
 
@@ -19,8 +19,8 @@ sgx.edmm_enable = {{ 'true' if env.get('EDMM', '0') == '1' else 'false' }}
 sgx.file_check_policy = "strict"
 
 sgx.trusted_files = [
-  "file:{{ gramine.libos }}",
-  "file:{{ gramine.runtimedir(libc) }}/",
+  "file:{{ saguaro.libos }}",
+  "file:{{ saguaro.runtimedir(libc) }}/",
 
   # test TOML inline table syntax without `sha256`
   { uri = "file:{{ binary_dir }}/{{ entrypoint }}" },

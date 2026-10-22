@@ -340,7 +340,7 @@ class Manifest:
         # `sgx.trusted_files = [ <loader.entrypoint file name> ]`; replace with the default LibOS
         loader = manifest.setdefault('loader', {})
         if 'entrypoint' not in loader:
-            loader['entrypoint'] = f'file:{_env.globals["gramine"]["libos"]}'
+            loader['entrypoint'] = f'file:{_env.globals["saguaro"]["libos"]}'
             trusted_files.append({'uri': loader['entrypoint']})
 
         sgx['trusted_files'] = trusted_files

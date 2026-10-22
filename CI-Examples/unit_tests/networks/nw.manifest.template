@@ -25,7 +25,7 @@ loader.env.HOME = "/root"
 
 fs.mounts = [
   # Core system dirs
-  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "/lib", uri = "file:{{ saguaro.runtimedir() }}" },
   { path = "/usr/lib", uri = "file:/usr/lib" },
   { path = "{{ arch_libdir }}", uri = "file:{{ arch_libdir }}" },
 ]
@@ -34,6 +34,6 @@ sgx.edmm_enable = {{ 'true' if env.get('EDMM', '0') == '1' else 'false' }}
 
 sgx.trusted_files = [
   "file:./glxg",
-  "file:{{ gramine.runtimedir() }}/",
+  "file:{{ saguaro.runtimedir() }}/",
 ]
 

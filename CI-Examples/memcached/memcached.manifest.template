@@ -21,7 +21,7 @@ sys.enable_sigterm_injection = true
 
 fs.mounts = [
   { path = "/memcached", uri = "file:memcached" },
-  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "/lib", uri = "file:{{ saguaro.runtimedir() }}" },
   { path = "/usr/{{ arch_libdir }}", uri = "file:/usr/{{ arch_libdir }}" },
 ]
 
@@ -37,6 +37,6 @@ sgx.enclave_size = "1024M"
 
 sgx.trusted_files = [
   "file:memcached",
-  "file:{{ gramine.runtimedir() }}/",
+  "file:{{ saguaro.runtimedir() }}/",
   "file:/usr/{{ arch_libdir }}/",
 ]

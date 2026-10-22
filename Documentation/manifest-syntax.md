@@ -26,6 +26,14 @@ Comments can be inlined in a \|~\| manifest by starting them with a \|~\| hash s
 
 There is also a \|~\| preprocessor available: `saguaro-manifest
 <saguaro-manifest>`, which renders manifests from Jinja templates.
+Templates refer to the installation through the variable `saguaro`:
+`{{ saguaro.runtimedir() }}` (the directory of the bundled libc, or of the host's
+libc in a `libc=none` build; `saguaro.runtimedir('musl')` for musl),
+`{{ saguaro.libos }}` (the LibOS, `libsysdb.so`), `{{ saguaro.libgraphics }}`
+(the graphics library) and `{{ saguaro.pkglibdir }}` (`<prefix>/lib/<arch>/saguaro`).
+Before the rename this variable was called `gramine`; a template that still
+uses it fails with a hint, and `sed -i 's/{{ *gramine\./{{ saguaro./g' <file>`
+updates it.
 
 ## Common syntax
 

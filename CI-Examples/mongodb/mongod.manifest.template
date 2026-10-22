@@ -11,7 +11,7 @@ loader.env.LD_LIBRARY_PATH = "/lib:/usr/{{ arch_libdir }}"
 loader.env.PATH = "{{ execdir }}"
 
 fs.mounts = [
-  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "/lib", uri = "file:{{ saguaro.runtimedir() }}" },
   { path = "{{ execdir }}/mongod", uri = "file:{{ execdir }}/mongod" },
   { path = "/usr/{{ arch_libdir }}", uri = "file:/usr/{{ arch_libdir }}" },
   { path = "/data/db", uri = "file:data/db" },
@@ -23,7 +23,7 @@ sgx.max_threads = {{ '1' if env.get('EDMM', '0') == '1' else '64' }}
 
 sgx.trusted_files = [
   "file:{{ execdir }}/mongod",
-  "file:{{ gramine.runtimedir() }}/",
+  "file:{{ saguaro.runtimedir() }}/",
   "file:/usr/{{ arch_libdir }}/",
 ]
 

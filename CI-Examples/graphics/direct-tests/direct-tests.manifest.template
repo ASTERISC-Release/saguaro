@@ -22,7 +22,7 @@ fs.mounts = [
 {% if not host_binary %}
   { path = "/{{ entrypoint }}", uri = "file:{{ entrypoint }}" },
 {% endif %}
-  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "/lib", uri = "file:{{ saguaro.runtimedir() }}" },
   { path = "/usr", type = "chroot", uri = "file:/usr" },
   { path = "/etc/ld.so.cache", uri = "file:/etc/ld.so.cache" },
   { path = "/dev/dri", type = "chroot", uri = "file:/dev/dri" },

@@ -21,7 +21,7 @@ loader.insecure__use_cmdline_argv = true
 sys.enable_sigterm_injection = true
 
 fs.mounts = [
-  { uri = "file:{{ gramine.runtimedir() }}", path = "/lib" },
+  { uri = "file:{{ saguaro.runtimedir() }}", path = "/lib" },
   { uri = "file:{{ arch_libdir }}", path = "{{ arch_libdir }}" },
   { uri = "file:/usr", path = "/usr" },
   { uri = "file:/bin", path = "/bin" },
@@ -41,7 +41,7 @@ sgx.use_exinfo = {{ 'true' if env.get('EDMM', '0') == '1' else 'false' }}
 
 sgx.trusted_files = [
   "file:{{ r_exec }}",
-  "file:{{ gramine.runtimedir() }}/",
+  "file:{{ saguaro.runtimedir() }}/",
   "file:{{ arch_libdir }}/",
   "file:/usr/{{ arch_libdir }}/",
   "file:{{ r_home }}/",

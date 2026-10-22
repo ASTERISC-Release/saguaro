@@ -14,7 +14,7 @@ loader.argv = ["lighttpd", "-D", "-m", "{{ install_dir }}/lib", "-f", "lighttpd.
 sys.enable_sigterm_injection = true
 
 fs.mounts = [
-  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "/lib", uri = "file:{{ saguaro.runtimedir() }}" },
   { path = "{{ arch_libdir }}", uri = "file:{{ arch_libdir }}" },
   { path = "{{ install_dir }}", uri = "file:{{ install_dir }}" },
 
@@ -27,7 +27,7 @@ sgx.enclave_size = "256M"
 sgx.max_threads = {{ '1' if env.get('EDMM', '0') == '1' else '3' }}
 
 sgx.trusted_files = [
-  "file:{{ gramine.runtimedir() }}/",
+  "file:{{ saguaro.runtimedir() }}/",
   "file:{{ install_dir }}/",
   "file:{{ arch_libdir }}/",
   "file:lighttpd.conf",

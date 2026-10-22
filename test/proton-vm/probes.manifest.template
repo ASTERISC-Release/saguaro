@@ -13,7 +13,7 @@ sys.experimental__multiprocess = true
 sys.insecure__allow_eventfd = true
 sys.stack.size = "8M"
 fs.mounts = [
-  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "/lib", uri = "file:{{ saguaro.runtimedir() }}" },
   { path = "{{ arch_libdir }}", uri = "file:{{ arch_libdir }}" },
   { path = "/usr", uri = "file:/usr" },
   { path = "/bin", uri = "file:/bin" },

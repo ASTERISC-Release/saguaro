@@ -1,13 +1,13 @@
 {% set entrypoint = "bootstrap" -%}
 
-loader.entrypoint = "file:{{ gramine.libos }}"
+loader.entrypoint = "file:{{ saguaro.libos }}"
 libos.entrypoint = "{{ entrypoint }}"
 
 loader.env.LD_LIBRARY_PATH = "/lib"
 loader.env_src_file = "file:env_test_input"
 
 fs.mounts = [
-  { path = "/lib", uri = "file:{{ gramine.runtimedir(libc) }}" },
+  { path = "/lib", uri = "file:{{ saguaro.runtimedir(libc) }}" },
   { path = "/{{ entrypoint }}", uri = "file:{{ binary_dir }}/{{ entrypoint }}" },
 ]
 
@@ -19,7 +19,7 @@ sgx.allowed_files = [
 ]
 
 sgx.trusted_files = [
-  "file:{{ gramine.libos }}",
-  "file:{{ gramine.runtimedir(libc) }}/",
+  "file:{{ saguaro.libos }}",
+  "file:{{ saguaro.runtimedir(libc) }}/",
   "file:{{ binary_dir }}/{{ entrypoint }}",
 ]

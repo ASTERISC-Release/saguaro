@@ -30,7 +30,7 @@ libos.entrypoint = "/probe/hello"
 loader.log_level = "error"
 loader.env.LD_LIBRARY_PATH = "/lib:{{ arch_libdir }}"
 fs.mounts = [
-  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "/lib", uri = "file:{{ saguaro.runtimedir() }}" },
   { path = "{{ arch_libdir }}", uri = "file:{{ arch_libdir }}" },
   { path = "/probe", uri = "file:{{ probedir }}" },
 ]

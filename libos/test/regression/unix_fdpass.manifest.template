@@ -1,4 +1,4 @@
-loader.entrypoint = "file:{{ gramine.libos }}"
+loader.entrypoint = "file:{{ saguaro.libos }}"
 # the generic manifest plus host eventfds: a passed eventfd must be one the host holds
 sys.insecure__allow_eventfd = true
 
@@ -18,7 +18,7 @@ loader.insecure__use_cmdline_argv = true
 sys.experimental__enable_flock = true
 
 fs.mounts = [
-  { path = "/lib", uri = "file:{{ gramine.runtimedir(libc) }}" },
+  { path = "/lib", uri = "file:{{ saguaro.runtimedir(libc) }}" },
   { path = "/{{ entrypoint }}", uri = "file:{{ binary_dir }}/{{ entrypoint }}" },
   { path = "/exec_victim", uri = "file:{{ binary_dir }}/exec_victim" },
   { path = "{{ arch_libdir }}", uri = "file:{{ arch_libdir }}" },
@@ -43,8 +43,8 @@ sgx.allowed_files = [
 ]
 
 sgx.trusted_files = [
-  "file:{{ gramine.libos }}",
-  "file:{{ gramine.runtimedir(libc) }}/",
+  "file:{{ saguaro.libos }}",
+  "file:{{ saguaro.runtimedir(libc) }}/",
   "file:{{ arch_libdir }}/libgcc_s.so.1",
   "file:/usr{{ arch_libdir }}/libstdc++.so.6",
   "file:{{ binary_dir }}/{{ entrypoint }}",

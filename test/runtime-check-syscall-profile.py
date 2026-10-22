@@ -53,7 +53,7 @@ loader.log_level = "warning"
 loader.env.LD_LIBRARY_PATH = "/lib"
 loader.argv = [{{ argv }}]
 fs.mounts = [
-  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "/lib", uri = "file:{{ saguaro.runtimedir() }}" },
   { path = "/{{ prog }}", uri = "file:{{ prog }}" },
 ]
 '''

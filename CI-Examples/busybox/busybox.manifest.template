@@ -13,7 +13,7 @@ loader.insecure__use_cmdline_argv = true
 
 fs.mounts = [
   { path = "/busybox", uri = "file:busybox" },
-  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "/lib", uri = "file:{{ saguaro.runtimedir() }}" },
 
   # hardcoded mappings of local hostnames to IP addresses, required by e.g. `hostname` applet
   { path = "/etc/hosts", uri = "file:helper-files/hosts" },
@@ -31,5 +31,5 @@ sgx.ra_client_linkable = {{ 'true' if ra_client_linkable == '1' else 'false' }}
 
 sgx.trusted_files = [
   "file:busybox",
-  "file:{{ gramine.runtimedir() }}/",
+  "file:{{ saguaro.runtimedir() }}/",
 ]

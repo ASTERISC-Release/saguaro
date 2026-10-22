@@ -11,7 +11,7 @@ loader.env.GLIBC_TUNABLES = "glibc.pthread.rseq=0"
 loader.env.LD_LIBRARY_PATH = "/lib"
 
 fs.mounts = [
-  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "/lib", uri = "file:{{ saguaro.runtimedir() }}" },
   { path = "/helloworld", uri = "file:helloworld" },
 ]
 
@@ -20,5 +20,5 @@ sgx.edmm_enable = {{ 'true' if env.get('EDMM', '0') == '1' else 'false' }}
 
 sgx.trusted_files = [
   "file:helloworld",
-  "file:{{ gramine.runtimedir() }}/",
+  "file:{{ saguaro.runtimedir() }}/",
 ]

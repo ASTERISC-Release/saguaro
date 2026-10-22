@@ -1,4 +1,4 @@
-loader.entrypoint = "file:{{ gramine.libos }}"
+loader.entrypoint = "file:{{ saguaro.libos }}"
 libos.entrypoint = "{{ entrypoint }}"
 
 loader.env.LD_LIBRARY_PATH = "/lib:{{ arch_libdir }}:/usr/lib:/usr/lib64"
@@ -11,7 +11,7 @@ fs.root.uri = "file:{{ binary_dir }}"
 
 fs.mounts = [
   { path = "/etc", uri = "file:/etc" },
-  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "/lib", uri = "file:{{ saguaro.runtimedir() }}" },
   { path = "{{ arch_libdir }}", uri = "file:{{ arch_libdir }}" },
   { path = "/usr", uri = "file:/usr" },
   { path = "/tmp", uri = "file:/tmp" },
@@ -36,14 +36,14 @@ sgx.allowed_files = [
 ]
 
 sgx.trusted_files = [
-  "file:{{ gramine.libos }}",
+  "file:{{ saguaro.libos }}",
   "file:{{ binary_dir }}/{{ entrypoint }}",
-  "file:{{ gramine.runtimedir() }}/ld-linux-x86-64.so.2",
-  "file:{{ gramine.runtimedir() }}/libc.so.6",
-  "file:{{ gramine.runtimedir() }}/libdl.so.2",
-  "file:{{ gramine.runtimedir() }}/libm.so.6",
-  "file:{{ gramine.runtimedir() }}/libpthread.so.0",
-  "file:{{ gramine.runtimedir() }}/librt.so.1",
+  "file:{{ saguaro.runtimedir() }}/ld-linux-x86-64.so.2",
+  "file:{{ saguaro.runtimedir() }}/libc.so.6",
+  "file:{{ saguaro.runtimedir() }}/libdl.so.2",
+  "file:{{ saguaro.runtimedir() }}/libm.so.6",
+  "file:{{ saguaro.runtimedir() }}/libpthread.so.0",
+  "file:{{ saguaro.runtimedir() }}/librt.so.1",
   "file:{{ coreutils_libdir }}/libstdbuf.so",
 ]
 

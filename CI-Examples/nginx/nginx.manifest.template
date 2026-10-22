@@ -21,7 +21,7 @@ loader.gid = 1000
 sys.enable_sigterm_injection = true
 
 fs.mounts = [
-  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "/lib", uri = "file:{{ saguaro.runtimedir() }}" },
   { path = "{{ arch_libdir }}", uri = "file:{{ arch_libdir }}" },
   { path = "/usr{{ arch_libdir }}", uri = "file:/usr{{ arch_libdir }}" },
   { path = "{{ install_dir_abspath }}", uri = "file:{{ install_dir }}" },
@@ -36,7 +36,7 @@ sgx.trusted_files = [
   "file:{{ install_dir }}/sbin/nginx",
   "file:{{ install_dir }}/conf/",
   "file:{{ install_dir }}/html/",
-  "file:{{ gramine.runtimedir() }}/",
+  "file:{{ saguaro.runtimedir() }}/",
   "file:{{ arch_libdir }}/",
   "file:/usr/{{ arch_libdir }}/",
   "file:nginx_args",

@@ -9,6 +9,6 @@ loader.insecure__use_cmdline_argv = true  # benchmark only: iterations come from
 loader.env.LD_LIBRARY_PATH = "/lib:/lib/{{ arch_libdir }}"
 
 fs.mounts = [
-  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "/lib", uri = "file:{{ saguaro.runtimedir() }}" },
   { path = "/syscall_bench", uri = "file:syscall_bench" },
 ]

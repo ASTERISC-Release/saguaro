@@ -1,4 +1,4 @@
-loader.entrypoint = "file:{{ gramine.libos }}"
+loader.entrypoint = "file:{{ saguaro.libos }}"
 libos.entrypoint = "{{ binary_dir }}/{{ entrypoint }}"
 
 loader.env.LD_LIBRARY_PATH = "/lib"
@@ -6,7 +6,7 @@ loader.env.LD_LIBRARY_PATH = "/lib"
 fs.root.uri = "file:/"
 
 fs.mounts = [
-  { path = "/lib", uri = "file:{{ gramine.runtimedir(libc) }}" },
+  { path = "/lib", uri = "file:{{ saguaro.runtimedir(libc) }}" },
   # overwrite host "/etc" - we don't want host-level configuration files, e.g. dynamic loader caches
   { type = "tmpfs", path = "/etc" },
 ]
@@ -15,7 +15,7 @@ sgx.debug = true
 sgx.edmm_enable = {{ 'true' if env.get('EDMM', '0') == '1' else 'false' }}
 
 sgx.trusted_files = [
-  "file:{{ gramine.libos }}",
-  "file:{{ gramine.runtimedir(libc) }}/",
+  "file:{{ saguaro.libos }}",
+  "file:{{ saguaro.runtimedir(libc) }}/",
   "file:{{ binary_dir }}/{{ entrypoint }}",
 ]

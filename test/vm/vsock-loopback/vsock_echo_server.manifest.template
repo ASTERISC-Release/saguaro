@@ -4,7 +4,7 @@
 # Manifest for the vsock-loopback regression server (an AF_INET TCP echo server inside the VM that
 # the host connects *into*; see test/vm/test-vm.sh suite `loopback`).
 
-loader.entrypoint = "file:{{ gramine.libos }}"
+loader.entrypoint = "file:{{ saguaro.libos }}"
 libos.entrypoint = "/vsock_echo_server"
 
 loader.log_level = "{{ env.get('SAGUARO_LOG_LEVEL', 'error') }}"
@@ -12,7 +12,7 @@ loader.env.LD_LIBRARY_PATH = "/lib:{{ arch_libdir }}:/usr/{{ arch_libdir }}"
 loader.insecure__use_cmdline_argv = true
 
 fs.mounts = [
-  { path = "/lib", uri = "file:{{ gramine.runtimedir(libc) }}" },
+  { path = "/lib", uri = "file:{{ saguaro.runtimedir(libc) }}" },
   { path = "/vsock_echo_server", uri = "file:{{ binary_dir }}/vsock_echo_server" },
   { path = "{{ arch_libdir }}", uri = "file:{{ arch_libdir }}" },
   { path = "/usr/{{ arch_libdir }}", uri = "file:/usr/{{ arch_libdir }}" },

@@ -1,13 +1,13 @@
 {% set entrypoint = "open_file" -%}
 
-loader.entrypoint = "file:{{ gramine.libos }}"
+loader.entrypoint = "file:{{ saguaro.libos }}"
 libos.entrypoint = "{{ entrypoint }}"
 
 loader.env.LD_LIBRARY_PATH = "/lib"
 loader.argv = [ "{{ entrypoint }}", "/proc/test/nested/dirs/exec" ]
 
 fs.mounts = [
-  { path = "/lib", uri = "file:{{ gramine.runtimedir(libc) }}" },
+  { path = "/lib", uri = "file:{{ saguaro.runtimedir(libc) }}" },
   { path = "/{{ entrypoint }}", uri = "file:{{ binary_dir }}/{{ entrypoint }}" },
 
   # Let's shadow some file in /proc as it is a pseudo fs.
@@ -18,7 +18,7 @@ sgx.debug = true
 sgx.edmm_enable = {{ 'true' if env.get('EDMM', '0') == '1' else 'false' }}
 
 sgx.trusted_files = [
-  "file:{{ gramine.libos }}",
+  "file:{{ saguaro.libos }}",
   "file:{{ binary_dir }}/{{ entrypoint }}",
-  "file:{{ gramine.runtimedir(libc) }}/",
+  "file:{{ saguaro.runtimedir(libc) }}/",
 ]

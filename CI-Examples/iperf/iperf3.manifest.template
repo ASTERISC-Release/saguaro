@@ -15,7 +15,7 @@ loader.env.LD_LIBRARY_PATH = "/install:/lib:{{ arch_libdir }}:/usr/{{ arch_libdi
 sys.enable_sigterm_injection = true
 
 fs.mounts = [
-  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "/lib", uri = "file:{{ saguaro.runtimedir() }}" },
   { path = "{{ arch_libdir }}", uri = "file:{{ arch_libdir }}" },
   { path = "/usr/{{ arch_libdir }}", uri = "file:/usr/{{ arch_libdir }}" },
   { type = "tmpfs", path = "/tmp"},
@@ -39,7 +39,7 @@ sgx.use_exinfo = {{ 'true' if env.get('EDMM', '0') == '1' else 'false' }}
 sgx.trusted_files = [
   "file:install/iperf3",
   "file:install/libiperf.so.0",
-  "file:{{ gramine.runtimedir() }}/",
+  "file:{{ saguaro.runtimedir() }}/",
   "file:{{ arch_libdir }}/",
   "file:/usr/{{ arch_libdir }}/",
 ]

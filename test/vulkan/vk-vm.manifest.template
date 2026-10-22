@@ -49,7 +49,7 @@ fs.mounts = [
 {% if two|string == "1" %}
   { path = "/vk-headless", uri = "file:vk-headless" },
 {% endif %}
-  { path = "/libgraphics.so", uri = "file:{{ gramine.libgraphics }}" },
+  { path = "/libgraphics.so", uri = "file:{{ saguaro.libgraphics }}" },
 {% if present|string == "1" %}
   { path = "/saguaro-xdg/vulkan", uri = "file:{{ layer_dir }}" },
 {% endif %}

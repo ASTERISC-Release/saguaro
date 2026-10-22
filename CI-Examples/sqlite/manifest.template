@@ -15,7 +15,7 @@ loader.env.PATH = "{{ execdir }}"
 loader.env.HOME = "/"
 
 fs.mounts = [
-  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "/lib", uri = "file:{{ saguaro.runtimedir() }}" },
   { path = "{{ arch_libdir }}", uri = "file:{{ arch_libdir }}" },
   { path = "{{ execdir }}/sqlite3", uri = "file:{{ execdir }}/sqlite3" },
 
@@ -35,7 +35,7 @@ sgx.max_threads = {{ '1' if env.get('EDMM', '0') == '1' else '4' }}
 
 sgx.trusted_files = [
   "file:{{ execdir }}/sqlite3",
-  "file:{{ gramine.runtimedir() }}/",
+  "file:{{ saguaro.runtimedir() }}/",
   "file:{{ arch_libdir }}/",
   "file:scripts/",
 ]

@@ -79,7 +79,7 @@ sgx.debug = true
 sgx.edmm_enable = {{ 'true' if env.get('EDMM', '0') == '1' else 'false' }}
 
 fs.mounts = [
-  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "/lib", uri = "file:{{ saguaro.runtimedir() }}" },
   { path = "/usr", type = "chroot", uri = "file:/usr" },
   { path = "/etc/ld.so.cache", uri = "file:/etc/ld.so.cache" },
   { path = "/etc/localtime", uri = "file:/etc/localtime" },
@@ -88,7 +88,7 @@ fs.mounts = [
   { path = "/var/cache/fontconfig", type = "chroot", uri = "file:/var/cache/fontconfig" },
   { path = "/tmp", type = "tmpfs" },
 
-  { path = "/libgraphics.so", uri = "file:{{ gramine.libgraphics }}" },
+  { path = "/libgraphics.so", uri = "file:{{ saguaro.libgraphics }}" },
   { path = "/fps_metrics.so", uri = "file:{{ integration_dir }}/fps_metrics.so" },
 
   { path = "/sys", type = "chroot", uri = "file:/sys" },

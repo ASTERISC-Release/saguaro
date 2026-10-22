@@ -98,7 +98,7 @@ needed. x86_64 keeps its patched glibc.
 
 With `libc=none`, no glibc is built and applications run on the host's. It is the default for VM builds and for
 the direct AArch64 and RISC-V builds; x86_64 direct and SGX keep the bundled glibc. The VM build step in CI went
-from 5 min 45 s to 1 min 19 s with identical test results. `gramine.runtimedir()` finds the host directory when the
+from 5 min 45 s to 1 min 19 s with identical test results. `saguaro.runtimedir()` finds the host directory when the
 manifest is rendered.
 
 ## VM PAL (`saguaro-vm`)

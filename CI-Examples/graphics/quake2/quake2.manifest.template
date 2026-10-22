@@ -55,8 +55,8 @@ loader.env.VK_ICD_FILENAMES = "/usr/share/vulkan/icd.d/{{ 'radeon' if egl_discre
 loader.env.EGL_SHARED_INPUT = "{{ '0' if shared_input|string == '0' else '1' }}"
 
 fs.mounts = [
-  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
-  { path = "/libgraphics.so", uri = "file:{{ gramine.libgraphics }}" },
+  { path = "/lib", uri = "file:{{ saguaro.runtimedir() }}" },
+  { path = "/libgraphics.so", uri = "file:{{ saguaro.libgraphics }}" },
 {% if vulkan|string == "1" %}
   { path = "/saguaro-xdg/vulkan", uri = "file:{{ layer_dir }}" },
 {% endif %}

@@ -48,7 +48,7 @@ sys.enable_sigterm_injection = true
 fs.mounts = [
   # Mount on-host directory to Gramine glibc/runtime libraries (in 'uri') into
   # in-Gramine visible directory /lib (in 'path').
-  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "/lib", uri = "file:{{ saguaro.runtimedir() }}" },
 
   # Mount redis-server executable (located in the current directory) under the
   # in-Gramine visible root directory.
@@ -112,5 +112,5 @@ sgx.max_threads = {{ '1' if env.get('EDMM', '0') == '1' else '8' }}
 # that this happens on the deployment machine.
 sgx.trusted_files = [
   "file:redis-server",
-  "file:{{ gramine.runtimedir() }}/",
+  "file:{{ saguaro.runtimedir() }}/",
 ]

@@ -5,7 +5,7 @@ loader.env.PATH = "/usr/bin:/bin"
 loader.insecure__use_cmdline_argv = true
 sys.experimental__multiprocess = true
 fs.mounts = [
-  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "/lib", uri = "file:{{ saguaro.runtimedir() }}" },
   { path = "{{ arch_libdir }}", uri = "file:{{ arch_libdir }}" },
   { path = "/usr", uri = "file:/usr" },
   { path = "/bin", uri = "file:/bin" },

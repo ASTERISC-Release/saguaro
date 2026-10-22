@@ -14,7 +14,7 @@ loader.insecure__use_host_env = true
 
 fs.mounts = [
   { type = "tmpfs", path = "/tmp" },
-  { uri = "file:{{ gramine.runtimedir() }}", path = "/lib" },
+  { uri = "file:{{ saguaro.runtimedir() }}", path = "/lib" },
   { uri = "file:{{ arch_libdir }}", path = "{{ arch_libdir }}" },
   { uri = "file:/usr/{{ arch_libdir }}", path = "/usr/{{ arch_libdir }}" },
   { uri = "file:{{ nodejs_dir }}/nodejs", path = "{{ nodejs_dir }}/nodejs" },
@@ -38,7 +38,7 @@ sgx.trusted_files = [
 {%- if nodejs_usr_share_dir %}
   "file:{{ nodejs_usr_share_dir }}/",
 {%- endif %}
-  "file:{{ gramine.runtimedir() }}/",
+  "file:{{ saguaro.runtimedir() }}/",
   "file:{{ arch_libdir }}/",
   "file:/usr/{{ arch_libdir }}/",
   "file:helloworld.js",

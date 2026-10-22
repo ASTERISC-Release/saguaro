@@ -2,13 +2,13 @@
 
 {% set entrypoint = "helloworld" -%}
 
-loader.entrypoint = "file:{{ gramine.libos }}"
+loader.entrypoint = "file:{{ saguaro.libos }}"
 libos.entrypoint = "{{ entrypoint }}"
 
 loader.env.LD_LIBRARY_PATH = "/lib"
 
 fs.mounts = [
-  { path = "/lib", uri = "file:{{ gramine.runtimedir(libc) }}" },
+  { path = "/lib", uri = "file:{{ saguaro.runtimedir(libc) }}" },
   { path = "/{{ entrypoint }}", uri = "file:{{ binary_dir }}/{{ entrypoint }}" },
 ]
 
@@ -25,10 +25,10 @@ sgx.seal_key.misc_mask  = "0xffffffff"
 
 # below format of sgx.trusted_files is to test TOML-table syntax without `sha256`
 [[sgx.trusted_files]]
-uri = "file:{{ gramine.libos }}"
+uri = "file:{{ saguaro.libos }}"
 
 [[sgx.trusted_files]]
-uri = "file:{{ gramine.runtimedir(libc) }}/"
+uri = "file:{{ saguaro.runtimedir(libc) }}/"
 
 [[sgx.trusted_files]]
 uri = "file:{{ binary_dir }}/{{ entrypoint }}"

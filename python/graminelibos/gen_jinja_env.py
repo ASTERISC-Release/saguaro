@@ -105,8 +105,8 @@ class Runtimedir:
     def __truediv__(self, other):
         return self() / other
 
-def add_globals_from_gramine(env):
-    env.globals['gramine'] = {
+def add_globals_from_saguaro(env):
+    env.globals['saguaro'] = {
         'libos': pathlib.Path(_CONFIG_PKGLIBDIR) / 'libsysdb.so',
         'pkglibdir': pathlib.Path(_CONFIG_PKGLIBDIR),
         # the graphics preload library; installed only with -Dgraphics=enabled and a VM-type PAL
@@ -119,7 +119,7 @@ def add_globals_from_gramine(env):
     except ImportError: # no SGX gramine installed, skipping
         pass
     else:
-        env.globals['gramine'].update(
+        env.globals['saguaro'].update(
             (k, v) for k, v in offsets.__dict__.items()
             if not k.startswith('_'))
 
@@ -127,13 +127,23 @@ def add_globals_misc(env):
     env.globals['env'] = os.environ
     env.globals['ldd'] = ldd
 
+class _Undefined(jinja2.StrictUndefined):
+    """StrictUndefined, with a hint for templates that still use the old variable name."""
+    def _fail_with_undefined_error(self, *args, **kwargs):
+        if self._undefined_name == 'gramine' and self._undefined_obj is jinja2.utils.missing:
+            raise self._undefined_exception(
+                "'gramine' is undefined: the template variable is now called 'saguaro' "
+                "(for example {{ saguaro.runtimedir() }}); update a template with "
+                "sed -i 's/{{ *gramine\\./{{ saguaro./g' <file>")
+        return super()._fail_with_undefined_error(*args, **kwargs)
+
 def make_env():
 
     # Jinja's autoescape feature escapes HTML sequences but we're rendering TOML, hence explicitly
     # setting autoescape to False
-    env = jinja2.Environment(undefined=jinja2.StrictUndefined, keep_trailing_newline=True,
+    env = jinja2.Environment(undefined=_Undefined, keep_trailing_newline=True,
                              autoescape=False)
-    add_globals_from_gramine(env)
+    add_globals_from_saguaro(env)
     add_globals_from_python(env)
     add_globals_misc(env)
     return env

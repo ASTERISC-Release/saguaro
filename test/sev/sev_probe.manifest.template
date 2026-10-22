@@ -10,7 +10,7 @@ loader.insecure__use_cmdline_argv = true
 sys.experimental__multiprocess = false
 
 fs.mounts = [
-  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "/lib", uri = "file:{{ saguaro.runtimedir() }}" },
   { path = "/sev_probe", uri = "file:sev_probe" },
   { path = "/tmp", uri = "file:/tmp" },
 ]

@@ -16,7 +16,7 @@ loader.insecure__use_cmdline_argv = true
 loader.insecure__use_host_env = true
 
 fs.mounts = [
-  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "/lib", uri = "file:{{ saguaro.runtimedir() }}" },
   { path = "/usr/local/lib", uri = "file:/usr/local/lib" },
   { path = "{{ arch_libdir }}", uri = "file:{{ arch_libdir }}" },
   { path = "/usr{{ arch_libdir }}", uri = "file:/usr{{ arch_libdir }}" },
@@ -33,7 +33,7 @@ sgx.max_threads = {{ '1' if env.get('EDMM', '0') == '1' else '4' }}
 
 sgx.trusted_files = [
   "file:client",
-  "file:{{ gramine.runtimedir() }}/",
+  "file:{{ saguaro.runtimedir() }}/",
   "file:/usr/local/lib/",
   "file:{{ arch_libdir }}/",
   "file:/usr{{ arch_libdir }}/",

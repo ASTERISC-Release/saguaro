@@ -6,7 +6,7 @@ loader.env.LD_LIBRARY_PATH = "/lib"
 loader.insecure__use_cmdline_argv = true
 
 fs.mounts = [
-  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "/lib", uri = "file:{{ saguaro.runtimedir() }}" },
   { path = "/sev_attest", uri = "file:sev_attest" },
   { path = "/tmp", uri = "file:/tmp" },
 ]

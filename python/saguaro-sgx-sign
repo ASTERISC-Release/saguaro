@@ -25,12 +25,12 @@ else:
     from pkg_resources import iter_entry_points as entry_points
 
 def list_sgx_sign_plugins():
-    return tuple(ep.name for ep in entry_points(group='gramine.sgx_sign'))
+    return tuple(ep.name for ep in entry_points(group='saguaro.sgx_sign'))
 
 _sgx_sign_plugins = list_sgx_sign_plugins()
 
 def get_sgx_sign_plugin(name):
-    for ep in entry_points(group='gramine.sgx_sign'):
+    for ep in entry_points(group='saguaro.sgx_sign'):
         if ep.name == name:
             return ep.load()
     raise KeyError(name)

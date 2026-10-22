@@ -5,7 +5,7 @@
 # dev docs: graphics/ for the host setup (QEMU fork, X proxy).
 
 # The graphics preload library is built and installed with Gramine (-Dgraphics=enabled and a
-# VM-type PAL); the manifest refers to it as gramine.libgraphics.
+# VM-type PAL); the manifest refers to it as saguaro.libgraphics.
 GRAPHICS_LIB = $(shell python3 -c "import graminelibos; print(graminelibos._CONFIG_PKGLIBDIR)")/libgraphics.so
 
 CFLAGS = -Wall -Wextra

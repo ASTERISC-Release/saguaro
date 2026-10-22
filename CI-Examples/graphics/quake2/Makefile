@@ -5,7 +5,7 @@
 # first with ./setup-quake.sh; see dev docs: graphics/ for the host setup.
 
 # The graphics preload library is built and installed with Gramine (-Dgraphics=enabled and a
-# VM-type PAL); the manifest refers to it as gramine.libgraphics.
+# VM-type PAL); the manifest refers to it as saguaro.libgraphics.
 GRAPHICS_LIB = $(shell python3 -c "import graminelibos; print(graminelibos._CONFIG_PKGLIBDIR)")/libgraphics.so
 Q2_DIR = $(abspath quake2_bin)
 Q2_BIN = quake2_bin/release/quake2

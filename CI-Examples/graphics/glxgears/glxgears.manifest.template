@@ -59,7 +59,7 @@ fs.mounts = [
   { path = "/glxgears", uri = "file:glxgears" },
 
   # Core system dirs
-  { path = "/libgraphics.so", uri = "file:{{ gramine.libgraphics }}" },
+  { path = "/libgraphics.so", uri = "file:{{ saguaro.libgraphics }}" },
 
   # Stock Mesa, glibc and X libraries from the host root
   { path = "/usr", type = "chroot", uri = "file:/usr"},

@@ -1,6 +1,6 @@
 {% set entrypoint = "file_check_policy" -%}
 
-loader.entrypoint = "file:{{ gramine.libos }}"
+loader.entrypoint = "file:{{ saguaro.libos }}"
 libos.entrypoint = "{{ entrypoint }}"
 
 loader.env.LD_LIBRARY_PATH = "/lib"
@@ -9,7 +9,7 @@ loader.insecure__use_cmdline_argv = true
 loader.log_level = "warning"
 
 fs.mounts = [
-  { path = "/lib", uri = "file:{{ gramine.runtimedir(libc) }}" },
+  { path = "/lib", uri = "file:{{ saguaro.runtimedir(libc) }}" },
   { path = "/{{ entrypoint }}", uri = "file:{{ binary_dir }}/{{ entrypoint }}" },
 ]
 
@@ -18,7 +18,7 @@ sgx.edmm_enable = {{ 'true' if env.get('EDMM', '0') == '1' else 'false' }}
 
 sgx.file_check_policy = "allow_all_but_log"
 
-# there are no "file:{{ gramine.libos }}" and "file:{{ gramine.runtimedir() }}/"
+# there are no "file:{{ saguaro.libos }}" and "file:{{ saguaro.runtimedir() }}/"
 # entries in `sgx.trusted_files` -- this is on purpose; we want to test that
 # `allow_all_but_log` also applies to Gramine-runtime files (e.g., LibOS binary)
 

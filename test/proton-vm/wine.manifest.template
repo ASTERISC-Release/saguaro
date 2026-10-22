@@ -116,7 +116,7 @@ sys.insecure__allow_eventfd = true
 sys.stack.size = "8M"
 sys.enable_sigterm_injection = true
 fs.mounts = [
-  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "/lib", uri = "file:{{ saguaro.runtimedir() }}" },
   { path = "/lib/x86_64-linux-gnu", uri = "file:/lib/x86_64-linux-gnu" },
   # wine64-preloader (the services) loads ld.so by its absolute path
   { path = "/lib64", uri = "file:/lib64" },
@@ -134,7 +134,7 @@ fs.mounts = [
   { path = "{{ game }}", uri = "file:{{ game }}" },
 {% endif %}
 {% if gpu|string == "1" %}
-  { path = "/libgraphics.so", uri = "file:{{ gramine.libgraphics }}" },
+  { path = "/libgraphics.so", uri = "file:{{ saguaro.libgraphics }}" },
   { path = "/saguaro-xdg/vulkan", uri = "file:{{ layer_dir }}" },
   { path = "/sys", type = "chroot", uri = "file:/sys" },
   { path = "/sys/dev", type = "chroot", uri = "file:/sys/dev" },

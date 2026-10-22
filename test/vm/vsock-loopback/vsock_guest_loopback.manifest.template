@@ -3,13 +3,13 @@
 #
 # Single-process threaded guest TCP server/client regression for loopback through the VM relay.
 
-loader.entrypoint = "file:{{ gramine.libos }}"
+loader.entrypoint = "file:{{ saguaro.libos }}"
 libos.entrypoint = "/vsock_guest_loopback"
 loader.log_level = "{{ env.get('SAGUARO_LOG_LEVEL', 'error') }}"
 loader.env.LD_LIBRARY_PATH = "/lib:{{ arch_libdir }}:/usr/{{ arch_libdir }}"
 
 fs.mounts = [
-  { path = "/lib", uri = "file:{{ gramine.runtimedir(libc) }}" },
+  { path = "/lib", uri = "file:{{ saguaro.runtimedir(libc) }}" },
   { path = "/vsock_guest_loopback", uri = "file:{{ binary_dir }}/vsock_guest_loopback" },
   { path = "{{ arch_libdir }}", uri = "file:{{ arch_libdir }}" },
   { path = "/usr/{{ arch_libdir }}", uri = "file:/usr/{{ arch_libdir }}" },

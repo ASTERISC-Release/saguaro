@@ -51,8 +51,8 @@ loader.env.EGL_DISCRETE = "0"
 loader.env.EGL_SHARED_INPUT = "{{ '0' if shared_input|string == '0' else '1' }}"
 
 fs.mounts = [
-  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
-  { path = "/libgraphics.so", uri = "file:{{ gramine.libgraphics }}" },
+  { path = "/lib", uri = "file:{{ saguaro.runtimedir() }}" },
+  { path = "/libgraphics.so", uri = "file:{{ saguaro.libgraphics }}" },
 
   # Stock Mesa, SDL and X libraries from the host root
   { path = "/usr", type = "chroot", uri = "file:/usr" },

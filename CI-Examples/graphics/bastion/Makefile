@@ -6,7 +6,7 @@
 # README.md here and dev docs: graphics/ for the host setup.
 
 # The graphics preload library is built and installed with Gramine (-Dgraphics=enabled and a
-# VM-type PAL); the manifest refers to it as gramine.libgraphics.
+# VM-type PAL); the manifest refers to it as saguaro.libgraphics.
 GRAPHICS_LIB = $(shell python3 -c "import graminelibos; print(graminelibos._CONFIG_PKGLIBDIR)")/libgraphics.so
 GAME_DIR = $(abspath bastion_game)
 GAME_BIN = bastion_game/Bastion.bin.x86_64
