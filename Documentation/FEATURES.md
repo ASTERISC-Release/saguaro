@@ -118,7 +118,7 @@ production use.
   `--sgx` or `--vbs`: it explains why a backend cannot run, prints the command under test, streams the logs and ends
   with the example's check. The shared helpers (`CI-Examples/common_tools/`) also start and stop the server examples.
   Results per backend: [CI-Examples/README.md](../CI-Examples/README.md), [CI-Examples/RESULTS.md](../CI-Examples/RESULTS.md).
-- **Test batteries** (done). `test/direct/test-direct.sh` (PAL, LibOS, 12 example suites; `GRAMINE_RUNNER=gramine-vm`
+- **Test batteries** (done). `test/direct/test-direct.sh` (PAL, LibOS, 12 example suites; `SAGUARO_RUNNER=gramine-vm`
   runs the server examples under the VM), the `test/test-vm*.sh` scripts, `test/sev/test-sev.sh` and the VM skip list.
   `dev docs: multiarch.md`
 - **CI workflows** (done). Manual workflows for direct x86_64, direct AArch64, emulated RISC-V, the x86_64

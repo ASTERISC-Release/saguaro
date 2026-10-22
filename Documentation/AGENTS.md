@@ -15,7 +15,7 @@ Several people or agents can work at once, each on their own branch. What makes 
 - **Name the folder `gramine-<name>`** (for example `gramine-graphics/gramine-multiarch`). Then
   `container/run.sh` names the container after the folder, gives it its own guest-CID base, and
   refuses a container that mounts a different checkout. Without such a folder it falls back to the
-  default shared names, which suit one checkout only. `GRAMINE_WORKSPACE` sets the name by hand.
+  default shared names, which suit one checkout only. `SAGUARO_WORKSPACE` sets the name by hand.
 - **A QEMU fork** that a branch needs (see dev docs: `graphics/`) sits next to the
   checkout as `qemu-tirith/`, or wherever `QEMU_TIRITH_DIR` points.
 - **Push only your own branch.** Do not force-push or rewrite history that is already pushed. Leave
@@ -27,7 +27,7 @@ Several people or agents can work at once, each on their own branch. What makes 
 ## How to work
 
 - **Development documents are in a separate private repository**, `gramine-multiarch-docs`, checked out
-  next to this one (`../gramine-multiarch-docs`; `GRAMINE_DEV_DOCS` names another place for the tools that read it).
+  next to this one (`../gramine-multiarch-docs`; `SAGUARO_DEV_DOCS` names another place for the tools that read it).
   Comments in the code that say "dev docs: <topic>/<file>" mean that checkout.
 - **Plan first.** Before a development task, write `<topic>/PLAN.md` there (scope, phases with exit criteria,
   decisions with a recommendation, risks) and get it agreed. A topic also has `FINDINGS.md` (the dated log,

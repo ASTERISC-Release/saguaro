@@ -8,7 +8,7 @@ cp nginx.manifest /tmp/nginx-manifest.bak
 sed -i '/^master_process off;$/d' install/conf/nginx-gramine.conf
 [ -n "${LOGLVL:-}" ] && sed -i "s/^log_level = .*/log_level = \"$LOGLVL\"/" nginx.manifest
 sed -i 's/^enable_sigterm_injection = true$/enable_sigterm_injection = true\nexperimental__multiprocess = true/' nginx.manifest
-GRAMINE_CPU_NUM=${CPUS:-2} GRAMINE_VM_INBOUND="8002:8002,8444:8444" setsid timeout -s KILL 120 gramine-vm nginx > /tmp/nginx-mp.log 2>&1 &
+SAGUARO_CPU_NUM=${CPUS:-2} SAGUARO_VM_INBOUND="8002:8002,8444:8444" setsid timeout -s KILL 120 gramine-vm nginx > /tmp/nginx-mp.log 2>&1 &
 pid=$!
 ok=0
 for i in $(seq 1 60); do

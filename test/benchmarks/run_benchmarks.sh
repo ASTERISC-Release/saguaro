@@ -11,7 +11,7 @@
 #   RESULT=/path/out.txt ./run_benchmarks.sh   # override the results file
 #
 # Environment:
-#   GRAMINE_PREFIX   install prefix (default: ~/.local/gramine)
+#   SAGUARO_PREFIX   install prefix (default: ~/.local/gramine)
 #   ITERS / REPS     syscall benchmark iterations / repetitions (default 300000 / 7)
 #   REDIS_N / REDIS_C   redis-benchmark requests / clients (default 200000 / 50)
 #   SERVER_CPU / CLIENT_CPUS   taskset CPU lists (default: 2 / 4-7, if that many CPUs exist)
@@ -24,7 +24,7 @@
 set -uo pipefail
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 ROOT=$(dirname "$(dirname "$HERE")")
-. "$ROOT/scripts/gramine-env.sh"   # GRAMINE_PREFIX, PATH, PYTHONPATH
+. "$ROOT/scripts/gramine-env.sh"   # SAGUARO_PREFIX, PATH, PYTHONPATH
 ITERS=${ITERS:-300000}; REPS=${REPS:-7}
 REDIS_N=${REDIS_N:-200000}; REDIS_C=${REDIS_C:-50}
 RESULT=${RESULT:-$HERE/results/$(date +%F)_$(uname -m).txt}

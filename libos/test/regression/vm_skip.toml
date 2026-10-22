@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 
-# Tests that do not apply to / do not yet pass on the VM PAL (applied by conftest.py when GRAMINE_VM=1).
+# Tests that do not apply to / do not yet pass on the VM PAL (applied by conftest.py when SAGUARO_VM=1).
 # kind = skip: platform limitation; kind = xfail: known failure, cause not yet understood.
 # Test ids are <class>::<method>. A group may carry `arch = "x86_64"` (or "aarch64"): it then applies only there.
 

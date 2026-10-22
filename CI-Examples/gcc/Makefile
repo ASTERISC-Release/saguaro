@@ -16,9 +16,9 @@ GZIP_MIRRORS ?= \
 GZIP_HASH ?= 7ec7d87822e6497648580064756f64e47dbd085727910ebbc52a7c240a88dc27
 
 ifeq ($(DEBUG),1)
-GRAMINE_LOG_LEVEL = debug
+SAGUARO_LOG_LEVEL = debug
 else
-GRAMINE_LOG_LEVEL = error
+SAGUARO_LOG_LEVEL = error
 endif
 
 # awk '{print $NF}' ...  print last field.
@@ -36,7 +36,7 @@ endif
 
 gcc.manifest: gcc.manifest.template
 	gramine-manifest \
-		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
+		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		-Dgcc_lib_path=$(GCC_LIB_PATH) \
 		-Dgcc_libexec_path=$(GCC_LIBEXEC_PATH) \

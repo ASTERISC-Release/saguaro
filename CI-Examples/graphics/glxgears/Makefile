@@ -16,10 +16,10 @@ SHARED_INPUT ?= 1
 
 
 ifeq ($(DEBUG),1)
-GRAMINE_LOG_LEVEL = debug
+SAGUARO_LOG_LEVEL = debug
 CFLAGS += -g
 else
-GRAMINE_LOG_LEVEL = error
+SAGUARO_LOG_LEVEL = error
 CFLAGS += -O3
 endif
 
@@ -35,7 +35,7 @@ glxgears.o: main.c
 .PHONY: FORCE
 glxgears.manifest: glxgears.manifest.template FORCE
 	gramine-manifest \
-		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
+		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Dshared_input=$(SHARED_INPUT) \
 		$< $@
 	gramine-manifest-check $@
@@ -62,7 +62,7 @@ X_DISPLAY_NUM = $(patsubst :%,%,$(firstword $(subst ., ,$(DISPLAY))))
 
 glxgears-direct.manifest: glxgears-direct.manifest.template FORCE
 	gramine-manifest \
-		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
+		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Ddisplay=$(X_DISPLAY_NUM) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		-Dnvidia=$(NVIDIA) \

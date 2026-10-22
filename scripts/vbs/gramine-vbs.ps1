@@ -15,7 +15,7 @@
 #
 # DIR is a package folder: the signed <name>.dll, pal_vbs_host.exe (and objects for `sign`); <name> is
 # the folder's name without ".vbs", or -Name. Options for all commands: -Distro NAME (default
-# $env:GRAMINE_VBS_DISTRO or Ubuntu-24.04), -CertName SUBJECT (default $env:GRAMINE_VBS_CERT_NAME or
+# $env:SAGUARO_VBS_DISTRO or Ubuntu-24.04), -CertName SUBJECT (default $env:SAGUARO_VBS_CERT_NAME or
 # TheDefaultTestEnclaveCertName). The earlier form `run|sign|verify -Dir <folder> -Name <name>` still works.
 # Arguments are parsed here (no param block): `--` must reach the script when it is started with
 # powershell -File (gramine-vbs.cmd), where a param block would refuse it.
@@ -48,8 +48,8 @@ $Threads = [int]$Threads
 # the application's arguments of `run`, from gramine-vbs in WSL: JSON in base64 in the environment
 # (no quoting layer in between), each one quoted for CommandLineToArgvW; Windows PowerShell 5.1
 # passes a native command's arguments without escaping embedded quotes
-if ($env:GRAMINE_VBS_ARGS) {
-    $json = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($env:GRAMINE_VBS_ARGS))
+if ($env:SAGUARO_VBS_ARGS) {
+    $json = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($env:SAGUARO_VBS_ARGS))
     $Rest = @()
     $items = ConvertFrom-Json $json
     foreach ($x in $items) {
@@ -62,9 +62,9 @@ if ($env:GRAMINE_VBS_ARGS) {
 $ErrorActionPreference = 'Continue'
 $ProgressPreference = 'SilentlyContinue'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
-if (-not $Distro) { $Distro = if ($env:GRAMINE_VBS_DISTRO) { $env:GRAMINE_VBS_DISTRO } else { 'Ubuntu-24.04' } }
+if (-not $Distro) { $Distro = if ($env:SAGUARO_VBS_DISTRO) { $env:SAGUARO_VBS_DISTRO } else { 'Ubuntu-24.04' } }
 if (-not $CertName) {
-    $CertName = if ($env:GRAMINE_VBS_CERT_NAME) { $env:GRAMINE_VBS_CERT_NAME } else { 'TheDefaultTestEnclaveCertName' }
+    $CertName = if ($env:SAGUARO_VBS_CERT_NAME) { $env:SAGUARO_VBS_CERT_NAME } else { 'TheDefaultTestEnclaveCertName' }
 }
 
 # a full path relative to PowerShell's location (not the process's current directory)
@@ -264,7 +264,7 @@ function Do-Setup {
     $env:WSL_UTF8 = '1'
     $list = (& wsl.exe -l -q) -replace "`0", '' | ForEach-Object { $_.Trim() } | Where-Object { $_ }
     $has = $list -contains $Distro
-    Check $has "distribution $Distro" "wsl --install -d $Distro (or give -Distro / GRAMINE_VBS_DISTRO)"
+    Check $has "distribution $Distro" "wsl --install -d $Distro (or give -Distro / SAGUARO_VBS_DISTRO)"
     if (-not $has) { exit 1 }
     $arch = (& wsl.exe -d $Distro -e uname -m | Select-Object -Last 1)
     Check ($arch -eq $LinuxArch) "$Distro is $LinuxArch ($arch)" "a $LinuxArch distribution (Windows installs one of its own architecture by default)"

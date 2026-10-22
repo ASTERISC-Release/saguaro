@@ -692,8 +692,8 @@ class TC_04_Attestation(RegressionTestCase):
         self.assertIn("Test quote interface... SUCCESS", stdout)
 
 @unittest.skipUnless(USE_GRAMINE_VM and VM_LAUNCHER == 'gramine-sev'
-                     and os.environ.get('GRAMINE_SEV_MODE') == 'snp',
-    'SEV-SNP attestation: only under gramine-sev with GRAMINE_SEV_MODE=snp')
+                     and os.environ.get('SAGUARO_SEV_MODE') == 'snp',
+    'SEV-SNP attestation: only under gramine-sev with SAGUARO_SEV_MODE=snp')
 class TC_04_AttestationSevSnp(RegressionTestCase):
     def test_000_attestation_sev_snp(self):
         stdout, _ = self.run_binary(['attestation_sev_snp'], timeout=120)

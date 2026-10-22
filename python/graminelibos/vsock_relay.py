@@ -248,7 +248,7 @@ def vsock_connect(cid, guest_port):
     return sock
 
 
-DEBUG = bool(os.environ.get('GRAMINE_VM_RELAY_DEBUG'))
+DEBUG = bool(os.environ.get('SAGUARO_VM_RELAY_DEBUG'))
 # a monotonic clock origin for the debug trace (the relay's own startup; no wall time needed)
 _T0 = time.monotonic()
 

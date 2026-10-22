@@ -15,7 +15,7 @@ sys.rewrite_syscalls = false
 vbs.debug = false
 vbs.max_threads = 8
 vbs.enclave_size = "512M"
-vbs.build = "sh $GRAMINE_REPO/scripts/vbs/build-python.sh --if-needed"
+vbs.build = "sh $SAGUARO_REPO/scripts/vbs/build-python.sh --if-needed"
 vbs.packed_files = [
   { path = "/usr/bin/python3.12", uri = "file:{{ vbs.python }}/usr/bin/python3.12" },
   # the standard library without its tests, the IDE and Tk parts, and the static library

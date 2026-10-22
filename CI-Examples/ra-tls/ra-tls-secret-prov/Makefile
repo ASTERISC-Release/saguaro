@@ -4,10 +4,10 @@
 ARCH_LIBDIR ?= /lib/$(shell $(CC) -dumpmachine)
 
 ifeq ($(DEBUG),1)
-GRAMINE_LOG_LEVEL = debug
+SAGUARO_LOG_LEVEL = debug
 CFLAGS += -O0 -ggdb3
 else
-GRAMINE_LOG_LEVEL = error
+SAGUARO_LOG_LEVEL = error
 CFLAGS += -O2
 endif
 
@@ -79,7 +79,7 @@ secret_prov_pf/client: secret_prov_pf/client.c
 secret_prov_minimal/client.manifest: secret_prov_minimal/client.manifest.template
 	cd secret_prov_minimal && \
 	gramine-manifest \
-		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
+		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		-Dra_type=$(RA_TYPE) \
 		-Dra_client_spid=$(RA_CLIENT_SPID) \
@@ -103,7 +103,7 @@ sgx_sign_secret_prov_minimal_client: secret_prov_minimal/client.manifest secret_
 secret_prov/client.manifest: secret_prov/client.manifest.template
 	cd secret_prov && \
 	gramine-manifest \
-		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
+		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		-Dra_type=$(RA_TYPE) \
 		-Dra_client_spid=$(RA_CLIENT_SPID) \
@@ -125,7 +125,7 @@ sgx_sign_secret_prov_client: secret_prov/client.manifest secret_prov/client
 secret_prov_pf/client.manifest: secret_prov_pf/client.manifest.template
 	cd secret_prov_pf && \
 	gramine-manifest \
-		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
+		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		-Dra_type=$(RA_TYPE) \
 		-Dra_client_spid=$(RA_CLIENT_SPID) \

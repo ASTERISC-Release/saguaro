@@ -49,7 +49,7 @@ fi
 # We enforce a 1GB lower limit for VM memory because (a) Gramine VM kernel reserves ~512MB for
 # shared virtio-queues memory, page tables, PAL binary, etc. and (b) for simplicity we want to reuse
 # already-existing SGX manifests, thus we don't want to bump `sgx.enclave_size` to 1GB explicitly.
-export GRAMINE_MANIFEST=$APPLICATION.manifest
+export SAGUARO_MANIFEST=$APPLICATION.manifest
 QEMU_MEM_SIZE=$(python3 -c "
 import os
 import re
@@ -57,8 +57,8 @@ import sys
 from graminelibos import Manifest
 
 manifests = {
-    'tdx': os.environ['GRAMINE_MANIFEST'] + '.tdx',
-    'sgx': os.environ['GRAMINE_MANIFEST'] + '.sgx',
+    'tdx': os.environ['SAGUARO_MANIFEST'] + '.tdx',
+    'sgx': os.environ['SAGUARO_MANIFEST'] + '.sgx',
 }
 
 size_str = ''
@@ -88,17 +88,17 @@ try:
 except Exception:
     sys.exit(1)
 ")
-# If file parsing fails, then try the config from environment variable `GRAMINE_RAM_SIZE`.
-QEMU_MEM_SIZE=${QEMU_MEM_SIZE:-$GRAMINE_RAM_SIZE}
+# If file parsing fails, then try the config from environment variable `SAGUARO_RAM_SIZE`.
+QEMU_MEM_SIZE=${QEMU_MEM_SIZE:-$SAGUARO_RAM_SIZE}
 # If both file and envvar parsing fail, then fall back to the default value of 8GB.
 QEMU_MEM_SIZE=${QEMU_MEM_SIZE:-"8G"}
 
-# Try the config from environment variable `GRAMINE_CPU_NUM`, then fall back to default of 1.
-QEMU_CPU_NUM=${QEMU_CPU_NUM:-$GRAMINE_CPU_NUM}
+# Try the config from environment variable `SAGUARO_CPU_NUM`, then fall back to default of 1.
+QEMU_CPU_NUM=${QEMU_CPU_NUM:-$SAGUARO_CPU_NUM}
 QEMU_CPU_NUM=${QEMU_CPU_NUM:-"1"}
 
-# GRAMINE_CPU_NUM="7"
-# QEMU_CPU_NUM=$GRAMINE_CPU_NUM
+# SAGUARO_CPU_NUM="7"
+# QEMU_CPU_NUM=$SAGUARO_CPU_NUM
 
 # QEMU: QEMU_PATH in the environment, else a stock qemu-system-x86_64 from PATH. TDX and the graphics
 # redirection need a QEMU fork built outside this repository (see dev docs: graphics/).
@@ -110,37 +110,37 @@ QEMU_PATH=${QEMU_PATH:-$(command -v qemu-system-x86_64 || echo qemu-system-x86_6
 QEMU_VM="-cpu host,host-phys-bits,-kvm-steal-time,pmu=off,+tsc-deadline,+invtsc \
 -m $QEMU_MEM_SIZE -smp $QEMU_CPU_NUM"
 QEMU_OPTS="-enable-kvm -vga none -display none -no-reboot -monitor none "
-# GRAMINE_VM_MONITOR=<path>: the QEMU monitor on a unix socket, so that a hung guest can be looked
+# SAGUARO_VM_MONITOR=<path>: the QEMU monitor on a unix socket, so that a hung guest can be looked
 # at from outside (test/vm/multiproc/vm-hang-report.py)
-[ -n "$GRAMINE_VM_MONITOR" ] && \
-    QEMU_OPTS="${QEMU_OPTS/-monitor none/-monitor unix:$GRAMINE_VM_MONITOR,server=on,wait=off}"
-# GRAMINE_VM_QMP=<path>: a QMP socket (e.g. for query-sev-launch-measure under gramine-sev)
-[ -n "$GRAMINE_VM_QMP" ] && QEMU_OPTS+="-qmp unix:$GRAMINE_VM_QMP,server=on,wait=off "
+[ -n "$SAGUARO_VM_MONITOR" ] && \
+    QEMU_OPTS="${QEMU_OPTS/-monitor none/-monitor unix:$SAGUARO_VM_MONITOR,server=on,wait=off}"
+# SAGUARO_VM_QMP=<path>: a QMP socket (e.g. for query-sev-launch-measure under gramine-sev)
+[ -n "$SAGUARO_VM_QMP" ] && QEMU_OPTS+="-qmp unix:$SAGUARO_VM_QMP,server=on,wait=off "
 
 RAW_MEM_SIZE=$(echo $QEMU_MEM_SIZE | tr -d 'G')
 REM_MEM_SIZE=$((RAW_MEM_SIZE - 4))
 
 # Graphics applications (see dev docs: graphics/): a manifest with loader.env.DISPLAY
 # set to the host ("2:N") marks one. The GEM arenas -- the data arena (size from
-# GRAMINE_DATA_SIZE, default 1G) plus the fixed 1G hugepage arena -- start at guest physical 4G
+# SAGUARO_DATA_SIZE, default 1G) plus the fixed 1G hugepage arena -- start at guest physical 4G
 # and must fit inside guest RAM: data + 1G <= 2G (ram1) + REM, i.e. RAM >= 3G + data, and at
 # least 5G so that a non-empty huge2 backs the application itself. (The rendered manifest lists
 # the environment keys inside the [loader.env] table, hence the bare DISPLAY match.)
-# GRAMINE_VM_GRAPHICS=0 keeps the X relay (below) but configures no arenas: for an X11 application
+# SAGUARO_VM_GRAPHICS=0 keeps the X relay (below) but configures no arenas: for an X11 application
 # that renders in software and needs the demand-paged address space instead of the identity-mapped
 # first process the arenas imply (Wine, dev docs: proton-vm/).
-if [ "${GRAMINE_VM_GRAPHICS:-1}" != 0 ] && grep -Eq '^DISPLAY[^=]*=[[:space:]]*"2:' "$GRAMINE_MANIFEST" 2>/dev/null; then
-    GRAPHICS_DATA_SIZE=${GRAMINE_DATA_SIZE:-1G}
+if [ "${SAGUARO_VM_GRAPHICS:-1}" != 0 ] && grep -Eq '^DISPLAY[^=]*=[[:space:]]*"2:' "$SAGUARO_MANIFEST" 2>/dev/null; then
+    GRAPHICS_DATA_SIZE=${SAGUARO_DATA_SIZE:-1G}
     # Where the data arena starts. 4G is the anchor today; an explicit override relocates it
     # (the arena and the hugepage arena after it must still be backed by guest RAM, which lives
     # at [0-2G) and [4G; ...) -- below-4G placements are rejected here, and C2 makes the whole
     # backend map (and this constraint) dynamic.
-    GRAPHICS_DATA_ADDR=${GRAMINE_DATA_ADDR:-4294967296}
+    GRAPHICS_DATA_ADDR=${SAGUARO_DATA_ADDR:-4294967296}
     case "$GRAPHICS_DATA_ADDR" in
-        *[!0-9]*)   echo "Error: GRAMINE_DATA_ADDR must be a byte address in decimal (got '$GRAPHICS_DATA_ADDR')."; exit 2 ;;
+        *[!0-9]*)   echo "Error: SAGUARO_DATA_ADDR must be a byte address in decimal (got '$GRAPHICS_DATA_ADDR')."; exit 2 ;;
     esac
     if [ "$GRAPHICS_DATA_ADDR" -lt 4294967296 ]; then
-        echo "Error: GRAMINE_DATA_ADDR must be at least guest physical 4G (got $GRAPHICS_DATA_ADDR); guest RAM between 2G and 4G is the PCI hole."
+        echo "Error: SAGUARO_DATA_ADDR must be at least guest physical 4G (got $GRAPHICS_DATA_ADDR); guest RAM between 2G and 4G is the PCI hole."
         exit 2
     fi
     case "$GRAPHICS_DATA_SIZE" in
@@ -153,7 +153,7 @@ if [ "${GRAMINE_VM_GRAPHICS:-1}" != 0 ] && grep -Eq '^DISPLAY[^=]*=[[:space:]]*"
     # default anchor (hugepages deployments need 5G: the bucket is the third fixed backend).
     NEED_RAM=$(( (GRAPHICS_DATA_ADDR + GRAPHICS_DATA_BYTES + 1073741824 - 2147483648 + 1073741823) / 1073741824 ))
     MIN_FLOOR=4
-    [ "${GRAMINE_HUGEPAGES:-0}" = "1" ] && MIN_FLOOR=5
+    [ "${SAGUARO_HUGEPAGES:-0}" = "1" ] && MIN_FLOOR=5
     if [ "$NEED_RAM" -lt "$MIN_FLOOR" ]; then NEED_RAM=$MIN_FLOOR; fi
     if [ "$RAW_MEM_SIZE" -lt "$NEED_RAM" ]; then
         echo "Error: this graphics application needs at least ${NEED_RAM}G of guest RAM for data" \
@@ -165,16 +165,16 @@ if [ "${GRAMINE_VM_GRAPHICS:-1}" != 0 ] && grep -Eq '^DISPLAY[^=]*=[[:space:]]*"
     # backend map dynamic); in a normal deployment it follows the data arena. The PAL gets all
     # three numbers over fw_cfg and the guest library over its environment, so they are exported
     # for exactly one knob in.
-    if [ "${GRAMINE_HUGEPAGES:-0}" = "1" ]; then
+    if [ "${SAGUARO_HUGEPAGES:-0}" = "1" ]; then
         if [ "$GRAPHICS_DATA_ADDR" != 4294967296 ]; then
             echo "Error: hugepages deployments keep the data arena at guest physical 4G" \
-                 "(the dedicated 1G hugetlb bucket sits at 6G); GRAMINE_DATA_ADDR=$GRAPHICS_DATA_ADDR is not supported. Unset GRAMINE_HUGEPAGES to relocate, or wait for C2."
+                 "(the dedicated 1G hugetlb bucket sits at 6G); SAGUARO_DATA_ADDR=$GRAPHICS_DATA_ADDR is not supported. Unset SAGUARO_HUGEPAGES to relocate, or wait for C2."
             exit 2
         fi
         if [ "$GRAPHICS_DATA_BYTES" -gt 2147483648 ]; then
-            echo "Error: GRAMINE_HUGEPAGES=1 serves the hugepage GEM bucket from a dedicated 1G" \
-                 "hugetlb backend at guest 6G, so GRAMINE_DATA_SIZE must be at most 2G (got" \
-                 "$GRAPHICS_DATA_SIZE). Reduce it or unset GRAMINE_HUGEPAGES."
+            echo "Error: SAGUARO_HUGEPAGES=1 serves the hugepage GEM bucket from a dedicated 1G" \
+                 "hugetlb backend at guest 6G, so SAGUARO_DATA_SIZE must be at most 2G (got" \
+                 "$GRAPHICS_DATA_SIZE). Reduce it or unset SAGUARO_HUGEPAGES."
             exit 2
         fi
         GRAPHICS_HUGE_ADDR=6442450944          # guest physical 6G
@@ -182,15 +182,15 @@ if [ "${GRAMINE_VM_GRAPHICS:-1}" != 0 ] && grep -Eq '^DISPLAY[^=]*=[[:space:]]*"
         GRAPHICS_HUGE_ADDR=$((GRAPHICS_DATA_ADDR + GRAPHICS_DATA_BYTES))   # follows the data arena
     fi
     echo "Graphics data arena: $GRAPHICS_DATA_SIZE at 0x$(printf %x $GRAPHICS_DATA_ADDR) ($GRAPHICS_DATA_BYTES bytes; guest RAM floor ${NEED_RAM}G; hugepage arena at 0x$(printf %x $GRAPHICS_HUGE_ADDR))"
-    GRAMINE_HUGEPAGE_ADDR=$GRAPHICS_HUGE_ADDR
-    GRAMINE_DATA_SIZE=$GRAPHICS_DATA_SIZE
+    SAGUARO_HUGEPAGE_ADDR=$GRAPHICS_HUGE_ADDR
+    SAGUARO_DATA_SIZE=$GRAPHICS_DATA_SIZE
 fi
-[ -n "${GRAPHICS_HUGE_ADDR:-}" ] && export GRAMINE_HUGEPAGE_ADDR
-[ -n "${GRAPHICS_DATA_SIZE:-}" ] && export GRAMINE_DATA_SIZE
-[ -n "${GRAPHICS_DATA_ADDR:-}" ] && export GRAMINE_DATA_ADDR
+[ -n "${GRAPHICS_HUGE_ADDR:-}" ] && export SAGUARO_HUGEPAGE_ADDR
+[ -n "${GRAPHICS_DATA_SIZE:-}" ] && export SAGUARO_DATA_SIZE
+[ -n "${GRAPHICS_DATA_ADDR:-}" ] && export SAGUARO_DATA_ADDR
 GRAPHICS_BACKEND_ARGS=""
 
-if [ "$GRAMINE_HUGEPAGES" == "1" ]; then
+if [ "$SAGUARO_HUGEPAGES" == "1" ]; then
     # echo "Configuring Gramine VM with hugepages support."
     if [ "$RAW_MEM_SIZE" -lt 5 ]; then
         echo "Error: hugepages deployments need at least 5G of guest RAM (2G hugetlb below" \
@@ -203,7 +203,7 @@ if [ "$GRAMINE_HUGEPAGES" == "1" ]; then
     # sequentially from 4G. 2G hugetlb below 4G (kernel+app), 2G normal at 4-6G (the data
     # arena), the dedicated 1G hugetlb bucket at 6-7G (the hugepage GEM arena -- the only
     # hugetlb memory), and normal pages for the rest: only the 3G of fixed backends is
-    # committed up front. GRAMINE_RAM_BASES carries the guest base of each memfd backend,
+    # committed up front. SAGUARO_RAM_BASES carries the guest base of each memfd backend,
     # in -object order, to the QEMU fork's identity-mapped placement.
     RAM_BASES=0,4294967296,6442450944
     GRAPHICS_BACKEND_ARGS+="-object memory-backend-memfd,id=huge0,size=2G,hugetlb=on,hugetlbsize=2M \
@@ -250,14 +250,14 @@ fi
 QEMU_OPTS+="$GRAPHICS_BACKEND_ARGS"
 # The bases go to the QEMU fork's placement logic (per-backend identity mapping) as env -- the
 # guest never sees this one.
-export GRAMINE_RAM_BASES=$RAM_BASES
+export SAGUARO_RAM_BASES=$RAM_BASES
 
 if [ -n "$SEV_IGVM_PATH" ]; then
     # AMD SEV (dev docs: sev/): the IGVM file holds the PAL and its boot stub, QEMU
     # encrypts and measures every page of it at launch; no -kernel, no BIOS loader.
-    # GRAMINE_SEV_MODE (or the manifest's `sev.mode`): snp (SEV-SNP, the default), sev (plain SEV)
+    # SAGUARO_SEV_MODE (or the manifest's `sev.mode`): snp (SEV-SNP, the default), sev (plain SEV)
     # or native (the same image without encryption, for debugging the boot path; the PAL then
-    # refuses to run). GRAMINE_SEV_POLICY (or `sev.policy`): the guest policy (SNP 0x30000, SEV 0x1). GRAMINE_SEV_SESSION=<prefix>: the
+    # refuses to run). SAGUARO_SEV_POLICY (or `sev.policy`): the guest policy (SNP 0x30000, SEV 0x1). SAGUARO_SEV_SESSION=<prefix>: the
     # launch session of `sevctl session` (<prefix>_godh.b64, <prefix>_session.b64), whose TIK
     # verifies the launch measurement.
     # The manifest may choose them too (`sev.mode`, `sev.policy`); the environment wins.
@@ -273,29 +273,29 @@ try:
 except Exception:
     sev = {}
 print(sev.get('mode', ''), sev.get('policy', ''))
-" "$GRAMINE_MANIFEST" 2>/dev/null)
+" "$SAGUARO_MANIFEST" 2>/dev/null)
     read -r SEV_MANIFEST_MODE SEV_MANIFEST_POLICY <<<"$SEV_MANIFEST"
-    SEV_MODE=${GRAMINE_SEV_MODE:-${SEV_MANIFEST_MODE:-snp}}
-    GRAMINE_SEV_POLICY=${GRAMINE_SEV_POLICY:-$SEV_MANIFEST_POLICY}
-    SEV_CBITPOS=${GRAMINE_SEV_CBITPOS:-$(python3 "$HOST_PAL_PATH/gramine-sev-igvm.py" cbitpos)}
+    SEV_MODE=${SAGUARO_SEV_MODE:-${SEV_MANIFEST_MODE:-snp}}
+    SAGUARO_SEV_POLICY=${SAGUARO_SEV_POLICY:-$SEV_MANIFEST_POLICY}
+    SEV_CBITPOS=${SAGUARO_SEV_CBITPOS:-$(python3 "$HOST_PAL_PATH/gramine-sev-igvm.py" cbitpos)}
     case "$SEV_MODE" in
         sev)
-            SEV_OBJECT="sev-guest,id=sev0,cbitpos=$SEV_CBITPOS,reduced-phys-bits=1,policy=${GRAMINE_SEV_POLICY:-0x1}"
-            [ -n "$GRAMINE_SEV_SESSION" ] && \
-                SEV_OBJECT+=",dh-cert-file=${GRAMINE_SEV_SESSION}_godh.b64,session-file=${GRAMINE_SEV_SESSION}_session.b64"
+            SEV_OBJECT="sev-guest,id=sev0,cbitpos=$SEV_CBITPOS,reduced-phys-bits=1,policy=${SAGUARO_SEV_POLICY:-0x1}"
+            [ -n "$SAGUARO_SEV_SESSION" ] && \
+                SEV_OBJECT+=",dh-cert-file=${SAGUARO_SEV_SESSION}_godh.b64,session-file=${SAGUARO_SEV_SESSION}_session.b64"
             QEMU_MACHINE="-M q35,kernel_irqchip=on,confidential-guest-support=sev0,igvm-cfg=igvm0 \
             -object $SEV_OBJECT" ;;
         snp)
             # KVM offers no TSC-deadline timer to SEV-ES/SNP guests (the PAL uses the one-shot
             # LAPIC timer instead), so do not ask for it
             QEMU_VM=${QEMU_VM/,+tsc-deadline/}
-            SEV_OBJECT="sev-snp-guest,id=sev0,cbitpos=$SEV_CBITPOS,reduced-phys-bits=1,policy=${GRAMINE_SEV_POLICY:-0x30000}"
+            SEV_OBJECT="sev-snp-guest,id=sev0,cbitpos=$SEV_CBITPOS,reduced-phys-bits=1,policy=${SAGUARO_SEV_POLICY:-0x30000}"
             QEMU_MACHINE="-M q35,kernel_irqchip=on,confidential-guest-support=sev0,igvm-cfg=igvm0 \
             -object $SEV_OBJECT" ;;
         native)
             QEMU_MACHINE="-M q35,kernel_irqchip=on,igvm-cfg=igvm0" ;;
         *)
-            echo "Error: GRAMINE_SEV_MODE must be sev, snp or native (got '$SEV_MODE')." >&2
+            echo "Error: SAGUARO_SEV_MODE must be sev, snp or native (got '$SEV_MODE')." >&2
             exit 2 ;;
     esac
     QEMU_MACHINE+=" -object igvm-cfg,id=igvm0,file=$SEV_IGVM_PATH"
@@ -318,10 +318,10 @@ fi
 
 # We need to specify a Gramine VM ID to be able to run two independent Gramine instances at the
 # same time on the same machine. They are used as IDs for the virtiofs and the vsock guest-cid.
-# GRAMINE_VM_ID_BASE: set per workspace by container/run.sh, so that containers of different
+# SAGUARO_VM_ID_BASE: set per workspace by container/run.sh, so that containers of different
 # checkouts do not pick the same (host-global) guest CID.
-DEFAULT_GRAMINE_VM_ID=${GRAMINE_VM_ID_BASE:-10}
-GRAMINE_VM_ID=$(python3 -c "
+DEFAULT_GRAMINE_VM_ID=${SAGUARO_VM_ID_BASE:-10}
+SAGUARO_VM_ID=$(python3 -c "
 import psutil
 import re
 
@@ -359,7 +359,7 @@ EXIT_STATUS=$?
 
 if [ $EXIT_STATUS -ne 0 ]; then
     echo "Error: Python script for determining the Gramine-VM ID exited with a non-zero status: $EXIT_STATUS"
-    echo "Error message: $GRAMINE_VM_ID"
+    echo "Error message: $SAGUARO_VM_ID"
     exit $EXIT_STATUS
 fi
 
@@ -387,40 +387,40 @@ trap 'exit 130' INT TERM
 QEMU_VIRTIO_CONSOLE="-device virtio-serial,iommu_platform=off,romfile= \
 -chardev stdio,id=virtioconsole0,logfile=$CONSOLE_LOG \
 -device virtconsole,chardev=virtioconsole0 -serial file:$SERIAL_LOG"
-QEMU_VIRTIO_FS="-chardev socket,path=/tmp/gramine_vhostfs_"$GRAMINE_VM_ID",id=vhostfs \
+QEMU_VIRTIO_FS="-chardev socket,path=/tmp/gramine_vhostfs_"$SAGUARO_VM_ID",id=vhostfs \
 -device vhost-user-fs-pci,iommu_platform=off,queue-size=1024,chardev=vhostfs,tag=graminefs"
-QEMU_VIRTIO_VSOCK="-device vhost-vsock-pci,iommu_platform=off,guest-cid="$GRAMINE_VM_ID",id=vsockdev"
+QEMU_VIRTIO_VSOCK="-device vhost-vsock-pci,iommu_platform=off,guest-cid="$SAGUARO_VM_ID",id=vsockdev"
 
 # The guest splits this string on whitespace but keeps "double-quoted" tokens whole (no escapes), so
 # quote every argument: `gramine-vm app -c "echo hi"` must reach the app as two arguments.
-GRAMINE_ARGS="-gramine-args init \"$APPLICATION\""
+SAGUARO_ARGS="-gramine-args init \"$APPLICATION\""
 for arg in "$@"; do
-    GRAMINE_ARGS+=" \"$arg\""
+    SAGUARO_ARGS+=" \"$arg\""
 done
-GRAMINE_ARGS+=" -gramine-args-end"
+SAGUARO_ARGS+=" -gramine-args-end"
 # Due to QEMU syntax, commas in the QEMU cmdline need to be escaped using an additional comma.
-GRAMINE_ARGS=${GRAMINE_ARGS//","/",,"}
+SAGUARO_ARGS=${SAGUARO_ARGS//","/",,"}
 
 # Size (in bytes) of the graphics GEM data arena; set and validated in the graphics block above,
 # empty for non-graphics applications.
 GRAPHICS_DATA_BYTES=${GRAPHICS_DATA_BYTES:-""}
 
-GRAMINE_ENVS=$(python3 -c "
+SAGUARO_ENVS=$(python3 -c "
 import os
 env_str = ''
 for name, value in os.environ.items():
     env_str += ('\"{0}={1}\" '.format(name, value).replace(',', ',,'))
 print(env_str)
 ")
-GRAMINE_ENVS="-gramine-envs $GRAMINE_ENVS -gramine-envs-end"
+SAGUARO_ENVS="-gramine-envs $SAGUARO_ENVS -gramine-envs-end"
 
 CMD=("${ENVS[@]}")
 CMD+=("${PREFIX[@]}")
 CMD+=($QEMU_PATH $QEMU_GDB $QEMU_VM $QEMU_OPTS $QEMU_MACHINE
     $QEMU_VIRTIO_CONSOLE $QEMU_VIRTIO_FS $QEMU_VIRTIO_VSOCK $QEMU_BINARIES
     -fw_cfg name=opt/gramine/pwd,string="$PWD"
-    -fw_cfg name=opt/gramine/args,string="$GRAMINE_ARGS"
-    -fw_cfg name=opt/gramine/envs,string="$GRAMINE_ENVS"
+    -fw_cfg name=opt/gramine/args,string="$SAGUARO_ARGS"
+    -fw_cfg name=opt/gramine/envs,string="$SAGUARO_ENVS"
 -fw_cfg name=opt/gramine/unixtime_s,string="$EPOCHSECONDS")
 
 # The graphics data-arena size, passed to the PAL over fw_cfg so that the arenas are reserved
@@ -434,8 +434,8 @@ fi
 # X proxy for graphics applications. A manifest that sets `loader.env.DISPLAY = "2:N"` points the
 # application at the X server of the host (vsock CID 2), which the guest reaches on vsock port
 # 6000+N. Relay that port to the X socket named by this launcher's own DISPLAY for as long as the VM
-# runs. GRAMINE_VM_X_PROXY=0 disables this (e.g. when the relay runs elsewhere), and
-# GRAMINE_VM_X_DISPLAY names another local display. A listener that is already there is reused and
+# runs. SAGUARO_VM_X_PROXY=0 disables this (e.g. when the relay runs elsewhere), and
+# SAGUARO_VM_X_DISPLAY names another local display. A listener that is already there is reused and
 # left running.
 X_DISPLAY_NUM=$(python3 -c "
 import os, re, sys
@@ -444,7 +444,7 @@ try:
 except ImportError:
     import tomllib
 try:
-    with open(os.environ['GRAMINE_MANIFEST'], 'rb') as f:
+    with open(os.environ['SAGUARO_MANIFEST'], 'rb') as f:
         display = tomllib.load(f).get('loader', {}).get('env', {}).get('DISPLAY', '')
 except Exception:
     sys.exit(0)
@@ -454,14 +454,14 @@ m = re.fullmatch(r'2:(\\d+)(\\.\\d+)?', str(display))
 if m:
     print(m.group(1))
 " 2>/dev/null)
-if [ -n "$X_DISPLAY_NUM" ] && [ "${GRAMINE_VM_X_PROXY:-1}" != "0" ]; then
+if [ -n "$X_DISPLAY_NUM" ] && [ "${SAGUARO_VM_X_PROXY:-1}" != "0" ]; then
     XPROXY_PORT=$((6000 + X_DISPLAY_NUM))
-    HOST_DISPLAY=${GRAMINE_VM_X_DISPLAY:-$DISPLAY}
+    HOST_DISPLAY=${SAGUARO_VM_X_DISPLAY:-$DISPLAY}
     if [[ ! "$HOST_DISPLAY" =~ ^(unix)?:([0-9]+)(\.[0-9]+)?$ ]]; then
         echo "Error: the manifest uses the host display (DISPLAY=2:$X_DISPLAY_NUM) but this" \
              "environment has no local X display (DISPLAY='$HOST_DISPLAY')." >&2
-        echo "Set DISPLAY or GRAMINE_VM_X_DISPLAY to a local display such as :0, or set" \
-             "GRAMINE_VM_X_PROXY=0 and provide the vsock relay yourself." >&2
+        echo "Set DISPLAY or SAGUARO_VM_X_DISPLAY to a local display such as :0, or set" \
+             "SAGUARO_VM_X_PROXY=0 and provide the vsock relay yourself." >&2
         exit 2
     fi
     HOST_X_SOCKET=/tmp/.X11-unix/X${BASH_REMATCH[2]}
@@ -502,19 +502,19 @@ fi
 # The vsock relay (dev docs: CHANGELOG.md): one relay process per VM, listening on vsock
 # port 65536+CID, started here (after the guest CID is known) and stopped with the VM. It handles
 # outbound destination handshakes and static inbound forwarding. Every `vm.net.inbound` rule of the
-# manifest (or every rule in the colon-separated GRAMINE_VM_INBOUND="guest:host,..." convenience
+# manifest (or every rule in the colon-separated SAGUARO_VM_INBOUND="guest:host,..." convenience
 # variable, for drivers that cannot edit the manifest) gets a host (container) TCP listener bridged
 # into the guest. The manifest is passed to the relay for vm.net.outbound and vm.net.deny policy.
-# GRAMINE_VM_RELAY=0 disables the relay entirely. A host port that cannot be bound is an error and
+# SAGUARO_VM_RELAY=0 disables the relay entirely. A host port that cannot be bound is an error and
 # fails the run, as agreed in the plan.
 # The relay does not touch the graphics direct port mapping (guest TCP port N == host vsock port
 # N, ports 6000+N and friends): that mapping needs no listener on the host side at all -- the host
 # connects directly to the guest's vsock port, the way the X proxy above does.
-vm_relay_start "$GRAMINE_VM_ID" "$GRAMINE_MANIFEST" || exit 2
+vm_relay_start "$SAGUARO_VM_ID" "$SAGUARO_MANIFEST" || exit 2
 
 # Check if the Gramine vhostfs pid file is already in use by another process
-if lsof /tmp/gramine_vhostfs_"$GRAMINE_VM_ID".pid 2>/dev/null; then
-    echo "Error: /tmp/gramine_vhostfs_"$GRAMINE_VM_ID".pid is already in use."
+if lsof /tmp/gramine_vhostfs_"$SAGUARO_VM_ID".pid 2>/dev/null; then
+    echo "Error: /tmp/gramine_vhostfs_"$SAGUARO_VM_ID".pid is already in use."
     exit 2
 fi
 # A stripped environment (the LibOS regression tests pass `env=`, which wipes PATH) leaves bash's
@@ -529,13 +529,13 @@ if [ -z "$VIRTIOFSD" ] || [ ! -x "$VIRTIOFSD" ]; then
 fi
 # --xattr: extended attributes of host files reach the guest (the PAL's FUSE_*XATTR requests);
 # without it virtiofsd answers ENOSYS and the xattr calls report EOPNOTSUPP.
-"$VIRTIOFSD" --socket-path /tmp/gramine_vhostfs_"$GRAMINE_VM_ID" --shared-dir / --log-level error \
+"$VIRTIOFSD" --socket-path /tmp/gramine_vhostfs_"$SAGUARO_VM_ID" --shared-dir / --log-level error \
 --sandbox none --no-announce-submounts --xattr &
 VIRTIOFSD_PID=$!
 # bounded, so a virtiofsd that died at startup is an error here and not a hang until the test timeout
-for _ in $(seq 100); do [ -e /tmp/gramine_vhostfs_"$GRAMINE_VM_ID" ] && break; sleep 0.1; done
-if [ ! -e /tmp/gramine_vhostfs_"$GRAMINE_VM_ID" ]; then
-    echo "Error: virtiofsd ($VIRTIOFSD) did not create its socket /tmp/gramine_vhostfs_$GRAMINE_VM_ID." >&2
+for _ in $(seq 100); do [ -e /tmp/gramine_vhostfs_"$SAGUARO_VM_ID" ] && break; sleep 0.1; done
+if [ ! -e /tmp/gramine_vhostfs_"$SAGUARO_VM_ID" ]; then
+    echo "Error: virtiofsd ($VIRTIOFSD) did not create its socket /tmp/gramine_vhostfs_$SAGUARO_VM_ID." >&2
     kill "$VIRTIOFSD_PID" 2>/dev/null
     exit 2
 fi
@@ -544,8 +544,8 @@ fi
 env "${CMD[@]}"
 QEMU_RC=$?
 
-[ -n "$GRAMINE_VM_CONSOLE_LOG" ] && cp "$CONSOLE_LOG" "$GRAMINE_VM_CONSOLE_LOG" 2>/dev/null
-[ -n "$GRAMINE_VM_SERIAL_LOG" ] && cp "$SERIAL_LOG" "$GRAMINE_VM_SERIAL_LOG" 2>/dev/null
+[ -n "$SAGUARO_VM_CONSOLE_LOG" ] && cp "$CONSOLE_LOG" "$SAGUARO_VM_CONSOLE_LOG" 2>/dev/null
+[ -n "$SAGUARO_VM_SERIAL_LOG" ] && cp "$SERIAL_LOG" "$SAGUARO_VM_SERIAL_LOG" 2>/dev/null
 
 # `_PalProcessExit` logs "[ VM exited with code N ]" just before the guest triple-faults (QEMU then
 # exits 0 because of -no-reboot, whatever the application did).

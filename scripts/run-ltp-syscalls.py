@@ -34,7 +34,7 @@ def ltp_test_command(command):
 
 def build_argv(command, loader, binary):
     """Build an argv for a test, including the occasional LTP shell pipeline."""
-    loader_program = {"direct": "gramine-direct", "vm": os.environ.get("GRAMINE_VM_LAUNCHER", "gramine-vm")}.get(loader)
+    loader_program = {"direct": "gramine-direct", "vm": os.environ.get("SAGUARO_VM_LAUNCHER", "gramine-vm")}.get(loader)
     if "|" not in command:
         if loader == "native":
             return [str(binary), *command[1:]]
@@ -199,7 +199,7 @@ def allocate_guest_cids(count):
                 used.add(int(match.group(1)))
         except psutil.Error:
             continue
-    base = int(os.environ.get("GRAMINE_VM_ID_BASE", "10"))
+    base = int(os.environ.get("SAGUARO_VM_ID_BASE", "10"))
     result = []
     cid = base
     while len(result) < count:
@@ -354,7 +354,7 @@ def run_one(name, command, args, per_test_timeout, reserved_cid=None):
     token = f"{os.getpid()}:{name}"
     env[RUN_TOKEN_VAR] = token
     if args.loader == "vm":
-        env["GRAMINE_VM_ID_BASE"] = str(reserved_cid)
+        env["SAGUARO_VM_ID_BASE"] = str(reserved_cid)
     argv = build_argv(command, args.loader, binary)
     existing_pids = set(psutil.pids()) if psutil else set()
     start = time.monotonic()

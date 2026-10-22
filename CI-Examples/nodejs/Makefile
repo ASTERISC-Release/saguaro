@@ -16,9 +16,9 @@ NODEJS_DIR ?= /usr/bin
 ARCH_LIBDIR ?= /lib/$(shell $(CC) -dumpmachine)
 
 ifeq ($(DEBUG),1)
-GRAMINE_LOG_LEVEL = debug
+SAGUARO_LOG_LEVEL = debug
 else
-GRAMINE_LOG_LEVEL = error
+SAGUARO_LOG_LEVEL = error
 endif
 
 .PHONY: all
@@ -39,7 +39,7 @@ endif
 
 nodejs.manifest: nodejs.manifest.template helloworld.js
 	gramine-manifest \
-		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
+		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		-Dnodejs_dir=$(NODEJS_DIR) \
 		-Dnodejs_usr_share_dir=$(wildcard /usr/share/nodejs) \

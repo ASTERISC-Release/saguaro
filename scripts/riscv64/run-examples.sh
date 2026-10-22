@@ -27,7 +27,7 @@ for a in "$@"; do ARGS+=" $(printf '%q' "$a")"; done
 
 exec "$HERE/guest.sh" ssh "
     cd $DEST
-    export GRAMINE_PREFIX=$BUILD/prefix
+    export SAGUARO_PREFIX=$BUILD/prefix
     export LOGDIR=/srv/gramine-examples-logs
     test/direct/test-direct.sh $ARGS
 "

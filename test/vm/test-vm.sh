@@ -5,7 +5,7 @@
 # test-vm.sh — the aarch64 `vm` PAL test battery (run it where /dev/kvm and stock
 # qemu-system-aarch64 are available, e.g. the container from container/run.sh).
 #
-#   libos     the LibOS regression suite under gramine-vm (GRAMINE_VM=1, libos/test/regression/vm_skip.toml)
+#   libos     the LibOS regression suite under gramine-vm (SAGUARO_VM=1, libos/test/regression/vm_skip.toml)
 #   examples  CI-Examples applications (tools/run-vm-aarch64-examples.sh)
 #   hello     the bring-up soak test (tools/vm-aarch64-stage/hello.c, SMP=2 and SMP=4)
 #   loopback  host-initiated connections into a guest AF_INET TCP server (test/vm/network/test-vm-loopback.sh,
@@ -21,7 +21,7 @@
 set -u
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 REPO=$(cd "$HERE/../.." && pwd)
-PREFIX=${GRAMINE_PREFIX:-$HOME/.local/gramine-vm}
+PREFIX=${SAGUARO_PREFIX:-$HOME/.local/gramine-vm}
 BUILD=build-vm-$(uname -m)
 SUITES=()
 while [ $# -gt 0 ]; do
@@ -44,7 +44,7 @@ for s in "${SUITES[@]}"; do
     case $s in
     libos)
         [ -z "${PYTEST_K:-}${PYTEST_ARGS:-}" ] || echo "pytest selection: -k '${PYTEST_K:-}' ${PYTEST_ARGS:-}"
-        (cd "$REPO/libos/test/regression" && GRAMINE_VM=1 GRAMINE_CPU_NUM=${GRAMINE_CPU_NUM:-2} \
+        (cd "$REPO/libos/test/regression" && SAGUARO_VM=1 SAGUARO_CPU_NUM=${SAGUARO_CPU_NUM:-2} \
             gramine-test pytest -- -q -rfEsxX --tb=short -p no:cacheprovider test_libos.py ${PYTEST_K:+-k "$PYTEST_K"} ${PYTEST_ARGS:-}) || rc=1 ;;
     examples)
         "$REPO/tools/run-vm-aarch64-examples.sh" || rc=1 ;;

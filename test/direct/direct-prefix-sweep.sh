@@ -16,12 +16,12 @@
 # libos/test/regression/fork_and_exec.manifest (run `test/direct/test-direct.sh libos` once first).
 #
 # Usage: test/direct/direct-prefix-sweep.sh
-# Environment: GRAMINE_PREFIX (default ~/.local/gramine), SWEEP_DIR (default /tmp/gps), MAX (longest
+# Environment: SAGUARO_PREFIX (default ~/.local/gramine), SWEEP_DIR (default /tmp/gps), MAX (longest
 # path, default 72).
 set -euo pipefail
 
 REPO=$(cd "$(dirname "$(readlink -f "$0")")/../.." && pwd)
-PREFIX=$(readlink -f "${GRAMINE_PREFIX:-$HOME/.local/gramine}")
+PREFIX=$(readlink -f "${SAGUARO_PREFIX:-$HOME/.local/gramine}")
 SWEEP_DIR=${SWEEP_DIR:-/tmp/gps}
 MAX=${MAX:-72}
 REG=$REPO/libos/test/regression

@@ -30,7 +30,7 @@ For the VM, export `QEMU_PATH=<qemu checkout>/build/qemu-system-x86_64` first. T
 ## Notes
 
 - `DEBUG=1` sets the Gramine debug log level; `SHARED_INPUT=0` takes input over the X connection instead of the shared ring.
-- `GRAMINE_CPU_NUM` and `GRAMINE_RAM_SIZE` set the guest's vCPUs and memory (defaults 1 and 8G). A graphics guest needs at least 5G, and 3G plus `GRAMINE_DATA_SIZE` (default 1G).
+- `SAGUARO_CPU_NUM` and `SAGUARO_RAM_SIZE` set the guest's vCPUs and memory (defaults 1 and 8G). A graphics guest needs at least 5G, and 3G plus `SAGUARO_DATA_SIZE` (default 1G).
 - Quake II: `make run-direct-timedemo`. SuperTuxKart: `make run-startup PROFILE_TIME=<seconds>`, `make run-direct-startup`.
 - The `-direct` manifests enable insecure options (raw GPU ioctls, the X server's Unix socket): `gramine-direct` is not a sandbox here.
 - `direct-tests/` holds small test programs for the direct route (`make check`).

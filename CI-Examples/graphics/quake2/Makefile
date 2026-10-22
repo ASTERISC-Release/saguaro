@@ -20,13 +20,13 @@ LAYER_DIR = $(shell python3 -c "import graminelibos; print(graminelibos._CONFIG_
 
 
 ifeq ($(DEBUG),1)
-GRAMINE_LOG_LEVEL = debug
+SAGUARO_LOG_LEVEL = debug
 else
-GRAMINE_LOG_LEVEL = error
+SAGUARO_LOG_LEVEL = error
 endif
 
 MANIFEST_ARGS = \
-	-Dlog_level=$(GRAMINE_LOG_LEVEL) \
+	-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 	-Dq2_dir=$(Q2_DIR) \
 	-Dhome=$(HOME) \
 	-Dshared_input=$(SHARED_INPUT) \
@@ -81,7 +81,7 @@ X_DISPLAY_NUM = $(patsubst :%,%,$(firstword $(subst ., ,$(DISPLAY))))
 quake2-direct.manifest: quake2-direct.manifest.template $(Q2_BIN) FORCE
 		mkdir -p ~/.yq2
 		gramine-manifest \
-		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
+		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Ddisplay=$(X_DISPLAY_NUM) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		-Dnvidia=$(NVIDIA) \

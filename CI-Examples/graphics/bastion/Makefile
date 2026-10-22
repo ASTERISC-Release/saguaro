@@ -23,13 +23,13 @@ MULTIPROC ?= 0
 BASTION_ARGS ?= -windowed
 
 ifeq ($(DEBUG),1)
-GRAMINE_LOG_LEVEL = debug
+SAGUARO_LOG_LEVEL = debug
 else
-GRAMINE_LOG_LEVEL = error
+SAGUARO_LOG_LEVEL = error
 endif
 
 MANIFEST_ARGS = \
-	-Dlog_level=$(GRAMINE_LOG_LEVEL) \
+	-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 	-Dgame_dir=$(GAME_DIR) \
 	-Ddata_dir=$(DATA_DIR) \
 	-Dhome=$(HOME) \

@@ -17,10 +17,10 @@ INCLUDES = -I/usr/include/libdrm -I./
 ARCH_LIBDIR ?= /lib/$(shell $(CC) -dumpmachine)
 
 ifeq ($(DEBUG),1)
-GRAMINE_LOG_LEVEL = debug
+SAGUARO_LOG_LEVEL = debug
 CFLAGS += -g
 else
-GRAMINE_LOG_LEVEL = error
+SAGUARO_LOG_LEVEL = error
 CFLAGS += -O3
 endif
 
@@ -37,7 +37,7 @@ udp.o: udp.c
 # Correct manifest generation
 nw.manifest: nw.manifest.template
 	gramine-manifest \
-		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
+		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Dentrypoint="/udp" \
 		-Denclave_size="256M" \
 		-Darch_libdir=$(ARCH_LIBDIR) \

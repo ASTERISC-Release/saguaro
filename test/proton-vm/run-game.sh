@@ -7,7 +7,7 @@
 # processes and threads, the resident memory, a screenshot every few seconds, and the Wine
 # output. Usage (in the container):
 #   run-game.sh [-l native|vm] [-d :N] [-s SECONDS] [-o OUTDIR] [-g WxH] EXE [ARGS...]
-# -l vm runs the game under gramine-vm through run-wine.sh (GRAMINE_CPU_NUM, GRAMINE_RAM_SIZE,
+# -l vm runs the game under gramine-vm through run-wine.sh (SAGUARO_CPU_NUM, SAGUARO_RAM_SIZE,
 # WINEDEBUG... as there; the guest reaches the display through gramine-vm's vsock relay).
 # EXE is a Unix path; the game runs with its folder as the working directory. Defaults: display
 # :7 (an Xvfb of 1280x720x24 is started if the display is not up), 90 s, OUTDIR
@@ -61,11 +61,11 @@ if [ "$LOADER" = vm ]; then
                     "ABSTRACT-CONNECT:/tmp/.X11-unix/X${TARGET#:}" </dev/null >"$OUT/socat.log" 2>&1
             fi
         fi
-        export GRAMINE_VM_X_PROXY=0
+        export SAGUARO_VM_X_PROXY=0
         sleep 0.5
     fi
     # the X relay without the GEM arenas unless GPU=1 (run-wine.sh turns them on for the GPU)
-    [ "${GPU:-0}" = 1 ] || export GRAMINE_VM_GRAPHICS=${GRAMINE_VM_GRAPHICS:-0}
+    [ "${GPU:-0}" = 1 ] || export SAGUARO_VM_GRAPHICS=${SAGUARO_VM_GRAPHICS:-0}
     if [ "${TIMESTAMP:-0}" = 1 ]; then
         # each console line stamped with seconds since the start on arrival (the wineserver's
         # +server trace has no timestamps of its own); ms resolution, arrival order kept

@@ -4,19 +4,19 @@
 # Runs test/proton-vm/probes.c natively, under gramine-direct and under gramine-vm (in the
 # container, after scripts/install.sh --vm). Usage: run-probes.sh [native|direct|vm] [PROBE...]
 # (default: all probes). PROBES_SRC selects another source (test/vm/timer/timerprobes.c on aarch64). Output: the PROBE lines; WORK (default .proton-vm/probes) holds the
-# binary, the manifests and /tmp of the probes. GRAMINE_CPU_NUM and GRAMINE_RAM_SIZE apply to vm.
+# binary, the manifests and /tmp of the probes. SAGUARO_CPU_NUM and SAGUARO_RAM_SIZE apply to vm.
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../.." && pwd)
 WORK=${WORK:-$ROOT/.proton-vm/probes}
 LOADER=${1:-vm}; shift || true
-. "${GRAMINE_PREFIX:-$HOME/.local/gramine-vm}/env.sh"
+. "${SAGUARO_PREFIX:-$HOME/.local/gramine-vm}/env.sh"
 [ -n "${QEMU_PATH:-}" ] || { [ -x /root/qemu-tirith/build/qemu-system-x86_64 ] && export QEMU_PATH=/root/qemu-tirith/build/qemu-system-x86_64; }
 mkdir -p "$WORK/tmp" && cd "$WORK"
 gcc -O1 -g -pthread -fno-stack-protector -o probes "${PROBES_SRC:-$HERE/probes.c}" 2>&1 | grep -v "Wunused-result\|^ *|\|^ *[0-9]* |\|^ *\^\|In function"
 gramine-manifest -Darch_libdir=/lib/$(uname -m)-linux-gnu -Dentry=/probe/probes -Dprobedir="$WORK" \
     -Dlog_level="${LOG_LEVEL:-error}" "$HERE/probes.manifest.template" probes.manifest
-echo "# $(date -u +%Y-%m-%dT%H:%MZ) loader=$LOADER cpus=${GRAMINE_CPU_NUM:-1} ram=${GRAMINE_RAM_SIZE:-default} $(uptime | sed 's/.*load/load/')"
+echo "# $(date -u +%Y-%m-%dT%H:%MZ) loader=$LOADER cpus=${SAGUARO_CPU_NUM:-1} ram=${SAGUARO_RAM_SIZE:-default} $(uptime | sed 's/.*load/load/')"
 case $LOADER in
     native) timeout 300 ./probes "$@" ;;
     direct) timeout 300 gramine-direct probes "$@" ;;

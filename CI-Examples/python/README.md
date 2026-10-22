@@ -26,6 +26,6 @@ make check              # runs run-tests.sh, prints [ Success N/4 ]; SGX=1 or VB
 
 ## Notes
 
-- VM and SEV: `GRAMINE=gramine-vm GRAMINE_VM=1 GRAMINE_VM_INBOUND=8005:8005 ./run-tests.sh` (`GRAMINE_VM=1` makes the HTTP client run on the host through the relay).
+- VM and SEV: `GRAMINE=gramine-vm SAGUARO_VM=1 SAGUARO_VM_INBOUND=8005:8005 ./run-tests.sh` (`SAGUARO_VM=1` makes the HTTP client run on the host through the relay).
 - SGX: `scripts/sgx-quote.py` needs remote attestation: `make SGX=1 RA_TYPE=dcap` (DCAP set up first) or `RA_TYPE=epid RA_CLIENT_SPID=<spid> RA_CLIENT_LINKABLE=<0|1>`.
 - VBS: the first build compiles CPython 3.12.7 for the enclave (`scripts/vbs/build-python.sh`, kept in `build-vbs-python`); that build lacks zlib, OpenSSL and libffi modules. On ARM64, checks 3/4 and 4/4 (NumPy, SciPy) are skipped.

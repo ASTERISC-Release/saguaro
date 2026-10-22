@@ -41,7 +41,7 @@ frag_spv.h: tri.frag
 
 # gramine-direct: `make direct-<prog>.manifest` for vk-headless (this directory) or a program in
 # /usr/bin (vulkaninfo, vkcube, vkmark); then `gramine-direct direct-<prog> [args]`.
-GRAMINE_LOG_LEVEL ?= error
+SAGUARO_LOG_LEVEL ?= error
 EAGER ?= 0
 SHIM ?= 0
 # PRESENT=1: presentation through libgraphics.so's Vulkan layer (phase 2)
@@ -53,7 +53,7 @@ prog_binary = $(if $(filter vk-headless vk-mt vk-two gfx-fdpass clock-probe,$(1)
 
 .PHONY: FORCE
 direct-%.manifest: vk-direct.manifest.template FORCE
-	gramine-manifest -Dlog_level=$(GRAMINE_LOG_LEVEL) -Ddisplay=$(X_DISPLAY_NUM) \
+	gramine-manifest -Dlog_level=$(SAGUARO_LOG_LEVEL) -Ddisplay=$(X_DISPLAY_NUM) \
 		-Detc_vulkan=$(ETC_VULKAN) -Dentrypoint=/$* -Dbinary=$(call prog_binary,$*) $< $@
 	gramine-manifest-check $@
 
@@ -63,7 +63,7 @@ direct-%.manifest: vk-direct.manifest.template FORCE
 # processes; TWO=1 also mounts /vk-headless for them), then
 # `QEMU_PATH=<qemu-tirith>/build/qemu-system-x86_64 gramine-vm vm-<prog> [args]`.
 vm-%.manifest: vk-vm.manifest.template vk-session-shim.so FORCE
-	gramine-manifest -Dlog_level=$(GRAMINE_LOG_LEVEL) -Degl_discrete=$${EGL_DISCRETE:-0} \
+	gramine-manifest -Dlog_level=$(SAGUARO_LOG_LEVEL) -Degl_discrete=$${EGL_DISCRETE:-0} \
 		-Deager=$(EAGER) -Dshim=$(SHIM) -Dpresent=$(PRESENT) -Dlayer_dir=$(LAYER_DIR) \
 		-Dmultiprocess=$${MULTIPROCESS:-0} -Dtwo=$${TWO:-0} \
 		-Detc_vulkan=$(ETC_VULKAN) -Dentrypoint=/$* -Dbinary=$(call prog_binary,$*) $< $@

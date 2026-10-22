@@ -21,9 +21,9 @@ SHARED_INPUT ?= 1
 
 
 ifeq ($(DEBUG),1)
-GRAMINE_LOG_LEVEL = debug
+SAGUARO_LOG_LEVEL = debug
 else
-GRAMINE_LOG_LEVEL = error
+SAGUARO_LOG_LEVEL = error
 endif
 
 .PHONY: all
@@ -35,7 +35,7 @@ $(MT_BIN):
 .PHONY: FORCE
 minetest.manifest: minetest.manifest.template $(MT_BIN) FORCE
 	gramine-manifest \
-		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
+		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Dmt_dir=$(MT_DIR) \
 		-Dhome=$(HOME) \
 		-Dshared_input=$(SHARED_INPUT) \
@@ -69,7 +69,7 @@ X_DISPLAY_NUM = $(patsubst :%,%,$(firstword $(subst ., ,$(DISPLAY))))
 
 minetest-direct.manifest: minetest-direct.manifest.template $(MT_BIN) FORCE
 	gramine-manifest \
-		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
+		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Dmt_dir=$(MT_DIR) \
 		-Ddisplay=$(X_DISPLAY_NUM) \
 		-Darch_libdir=$(ARCH_LIBDIR) \

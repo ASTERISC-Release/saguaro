@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 """
-Under the VM PAL (`GRAMINE_VM=1`, see dev docs: vm.md) tests listed in `vm_skip.toml` are skipped
+Under the VM PAL (`SAGUARO_VM=1`, see dev docs: vm.md) tests listed in `vm_skip.toml` are skipped
 (platform limitation) or marked xfail (known failure, cause not yet understood), each with a reason
 category, so that the remaining result is a meaningful pass/fail signal for the VM PAL.
 """
@@ -44,11 +44,11 @@ def _load_vm_entries():
 
 
 def pytest_collection_modifyitems(config, items):  # pylint: disable=unused-argument
-    if os.environ.get('GRAMINE_VM') != '1':
+    if os.environ.get('SAGUARO_VM') != '1':
         return
-    # GRAMINE_VM_SKIPLIST=0 runs everything (raw pass/fail numbers, e.g. to compare architectures
+    # SAGUARO_VM_SKIPLIST=0 runs everything (raw pass/fail numbers, e.g. to compare architectures
     # or to see which listed tests have started passing)
-    if os.environ.get('GRAMINE_VM_SKIPLIST', '1') == '0':
+    if os.environ.get('SAGUARO_VM_SKIPLIST', '1') == '0':
         return
 
     entries = _load_vm_entries()

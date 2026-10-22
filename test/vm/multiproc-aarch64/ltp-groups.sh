@@ -32,7 +32,7 @@ cd "$REPO"
 HARNESS=$REPO/.ltp-harness-$TAG
 mp=0; [ "$KEY" = on ] && mp=1
 if [ $REBUILD = 1 ] || [ ! -d "$HARNESS" ]; then
-    GRAMINE_PREFIX=$PREFIX LTP_PREFIX=$REPO/.ltp-install LTP_HARNESS_DIR=$HARNESS \
+    SAGUARO_PREFIX=$PREFIX LTP_PREFIX=$REPO/.ltp-install LTP_HARNESS_DIR=$HARNESS \
         LTP_VM_TMPFS_SHM=1 LTP_VM_MULTIPROCESS=$mp scripts/build-ltp-manifests.sh \
         > "$HARNESS.build.log" 2>&1 || { echo "manifest build failed: $HARNESS.build.log"; exit 1; }
 fi
@@ -41,7 +41,7 @@ mkdir -p .ltp-results
 for g in "${GROUPS_[@]}"; do
     tests=$(python3 scripts/ltp-syscall.py "$g" --list)
     load=$(cut -d' ' -f1 /proc/loadavg)
-    GRAMINE_CPU_NUM=$CPUS python3 scripts/run-ltp-syscalls.py --loader vm --ltp-root .ltp-install \
+    SAGUARO_CPU_NUM=$CPUS python3 scripts/run-ltp-syscalls.py --loader vm --ltp-root .ltp-install \
         --harness-dir "$HARNESS" --jobs 1 --timeout-factor 2 \
         --results ".ltp-results/$g-$TAG-cpu$CPUS.json" $tests > ".ltp-results/$g-$TAG-cpu$CPUS.log" 2>&1
     python3 - "$g" ".ltp-results/$g-$TAG-cpu$CPUS.json" "$load" <<'PY'

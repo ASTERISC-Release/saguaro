@@ -4,10 +4,10 @@
 ARCH_LIBDIR ?= /lib/$(shell $(CC) -dumpmachine)
 
 ifeq ($(DEBUG),1)
-GRAMINE_LOG_LEVEL = debug
+SAGUARO_LOG_LEVEL = debug
 CFLAGS += -O0 -ggdb3
 else
-GRAMINE_LOG_LEVEL = error
+SAGUARO_LOG_LEVEL = error
 CFLAGS += -O2
 endif
 
@@ -58,7 +58,7 @@ client: src/client.c
 
 server.manifest: server.manifest.template
 	gramine-manifest \
-		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
+		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		-Dra_type=$(RA_TYPE) \
 		-Dra_client_spid=$(RA_CLIENT_SPID) \
@@ -80,7 +80,7 @@ sgx_sign_server: server.manifest server
 
 client_dcap.manifest: client.manifest.template
 	gramine-manifest \
-		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
+		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		$< >$@
 
@@ -97,7 +97,7 @@ sgx_sign_client_dcap: client_dcap.manifest client
 
 client_epid.manifest: client.manifest.template
 	gramine-manifest \
-		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
+		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		$< >$@
 

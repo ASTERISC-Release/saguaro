@@ -18,9 +18,9 @@ HOST ?= 127.0.0.1
 PORT ?= 8003
 
 ifeq ($(DEBUG),1)
-GRAMINE_LOG_LEVEL = debug
+SAGUARO_LOG_LEVEL = debug
 else
-GRAMINE_LOG_LEVEL = error
+SAGUARO_LOG_LEVEL = error
 endif
 
 CONF_FILES = lighttpd-server.conf lighttpd.conf
@@ -90,7 +90,7 @@ endif
 
 lighttpd.manifest: lighttpd.manifest.template
 	gramine-manifest \
-		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
+		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		-Dinstall_dir=$(abspath $(INSTALL_DIR)) \
 		$< >$@

@@ -34,7 +34,7 @@ all: vbs-all
 # MBEDTLS_AES_USE_HARDWARE_ONLY, about 3 times the software fallback's)
 MBEDTLS_VERSION = 3.6.0
 MBEDTLS_SHA256 = 3ecf94fcfdaacafb757786a01b7538a61750ebd85c4b024f56ff8ba1490fcd38
-MBEDTLS_CACHE = $(GRAMINE_VBS_REPO)/subprojects/packagecache/mbedtls-$(MBEDTLS_VERSION).tar.bz2
+MBEDTLS_CACHE = $(SAGUARO_VBS_REPO)/subprojects/packagecache/mbedtls-$(MBEDTLS_VERSION).tar.bz2
 MBEDTLS_DIR = vbs-build/mbedtls
 MBEDTLS_LIBS = $(MBEDTLS_DIR)/library/libmbedtls.a $(MBEDTLS_DIR)/library/libmbedx509.a \
 	$(MBEDTLS_DIR)/library/libmbedcrypto.a

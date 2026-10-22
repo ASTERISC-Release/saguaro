@@ -98,7 +98,7 @@ guest exit is reported as `[ VM exited with code N ]`.
 By default no glibc is built (`-Dlibc=none`, a much shorter build) for `--vm` builds and for direct
 aarch64 and riscv64 builds, unless `--sgx` or `--tdx` is set: applications run on the host's glibc.
 `gramine.runtimedir()` in the manifests then names the host directory that holds `libc.so.6` and the
-dynamic loader, found when the manifest is rendered; `GRAMINE_HOST_LIBC_DIR` overrides the search (the
+dynamic loader, found when the manifest is rendered; `SAGUARO_HOST_LIBC_DIR` overrides the search (the
 RISC-V test manifests, rendered in a container, set it to the guest's `/lib/riscv64-linux-gnu`).
 
 `--libc glibc` builds and uses the bundled glibc instead; SGX needs it. An x86_64 direct build without

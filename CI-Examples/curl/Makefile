@@ -20,9 +20,9 @@ ARCH_LIBDIR ?= /lib/$(shell $(CC) -dumpmachine)
 HTTP_ADDR ?= 127.0.0.1
 
 ifeq ($(DEBUG),1)
-GRAMINE_LOG_LEVEL = debug
+SAGUARO_LOG_LEVEL = debug
 else
-GRAMINE_LOG_LEVEL = error
+SAGUARO_LOG_LEVEL = error
 endif
 
 .PHONY: all
@@ -43,7 +43,7 @@ endif
 
 curl.manifest: curl.manifest.template
 	gramine-manifest \
-		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
+		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Dhome=$(HOME) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		-Dcurl_dir=$(CURL_DIR) \

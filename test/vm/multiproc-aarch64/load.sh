@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # AArch64 VM process qualification, in this checkout's container after a --vm install.
-# Usage: GRAMINE_PREFIX=... GRAMINE_CPU_NUM=1|2|4 test/vm/multiproc-aarch64/load.sh bash|nginx|redis
+# Usage: SAGUARO_PREFIX=... SAGUARO_CPU_NUM=1|2|4 test/vm/multiproc-aarch64/load.sh bash|nginx|redis
 # MP=0 (nginx only): without the multiprocess key, as one process (`master_process off`), the same
 # fetches and no worker check -- the key-off reference (test/direct/test-direct.sh needs curl).
 # Nginx and Redis must first be built in CI-Examples; host ports are checked before use.
 set -euo pipefail
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 REPO=$(cd "$HERE/../../.." && pwd)
-PREFIX=${GRAMINE_PREFIX:-$HOME/.local/gramine-vm}
-CPUS=${GRAMINE_CPU_NUM:-2}
+PREFIX=${SAGUARO_PREFIX:-$HOME/.local/gramine-vm}
+CPUS=${SAGUARO_CPU_NUM:-2}
 WORK=${WORK:-$REPO/.mp-load-aarch64}
 mkdir -p "$WORK"
 . "$PREFIX/env.sh"
-export GRAMINE_CPU_NUM=$CPUS
+export SAGUARO_CPU_NUM=$CPUS
 
 case ${1:-} in
     bash)
@@ -35,7 +35,7 @@ SH
         [ -f "$REPO/CI-Examples/redis/redis-server.manifest" ] || {
             echo "build CI-Examples/redis first" >&2; exit 2;
         }
-        GRAMINE_PREFIX=$PREFIX GRAMINE_CPU_NUM=$CPUS WORK=$WORK/redis-$CPUS \
+        SAGUARO_PREFIX=$PREFIX SAGUARO_CPU_NUM=$CPUS WORK=$WORK/redis-$CPUS \
             REDIS_HOST_PORT=${REDIS_HOST_PORT:-16379} RERUN=0 \
             "$REPO/test/vm/multiproc/check-probes.sh" redis ;;
     nginx)
@@ -87,7 +87,7 @@ PY
         error_log=$D/install/logs/error.log
         before=0
         [ ! -f "$error_log" ] || before=$(stat -c %s "$error_log")
-        (cd "$D" && GRAMINE_VM_INBOUND="8002:$PORT,8444:$TLS_PORT" \
+        (cd "$D" && SAGUARO_VM_INBOUND="8002:$PORT,8444:$TLS_PORT" \
             exec setsid timeout -s KILL 300 gramine-vm nginx \
             > "$WORK/nginx-$CPUS.log" 2>&1) &
         server_pid=$!

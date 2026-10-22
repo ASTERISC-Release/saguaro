@@ -6,7 +6,7 @@ loader.env.LD_LIBRARY_PATH = "/lib"
 # the test reads past the end of its mappings on purpose: a fixed layout makes the result
 # reproducible (with ASLR the application's mappings start at a random distance from the LibOS's)
 loader.insecure__disable_aslr = true
-{% if env.get('GRAMINE_VM_MULTIPROCESS') == '0' %}sys.experimental__multiprocess = false{% endif %}
+{% if env.get('SAGUARO_VM_MULTIPROCESS') == '0' %}sys.experimental__multiprocess = false{% endif %}
 
 fs.mounts = [
   { path = "/lib", uri = "file:{{ gramine.runtimedir(libc) }}" },

@@ -13,7 +13,7 @@ vbs.debug = false
 vbs.family_id = "6772616d696e652d7662732d74657374"  # "gramine-vbs-test"
 vbs.image_id = "61747465737400000000000000000002"
 vbs.isv_svn = 1
-vbs.build = "$VBS_CC_STATIC -o attest $GRAMINE_REPO/pal/src/host/vbs/test/attest/attest.c"
+vbs.build = "$VBS_CC_STATIC -o attest $SAGUARO_REPO/pal/src/host/vbs/test/attest/attest.c"
 vbs.packed_files = [
   { path = "/attest", uri = "file:attest" },
 ]

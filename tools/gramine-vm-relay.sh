@@ -19,16 +19,16 @@
 #       exit status 0 when the manifest has a `vm.net` table (it needs the vsock device and the relay).
 #   vm_relay_start <cid> <manifest>
 #       start the relay; sets RELAY_PID and RELAY_LOG. Returns 0 (also when the relay is disabled with
-#       GRAMINE_VM_RELAY=0), or 1 after printing why: the caller exits with status 2.
+#       SAGUARO_VM_RELAY=0), or 1 after printing why: the caller exits with status 2.
 #   vm_relay_stop
 #       stop the relay and print what it logged after startup; safe to call more than once. Meant for
 #       the launcher's EXIT trap.
 #
 # Environment:
-#   GRAMINE_VM_RELAY=0         do not start a relay
-#   GRAMINE_VM_INBOUND=g:h,... more inbound rules, "guest[:host]" each, for drivers that cannot edit the
+#   SAGUARO_VM_RELAY=0         do not start a relay
+#   SAGUARO_VM_INBOUND=g:h,... more inbound rules, "guest[:host]" each, for drivers that cannot edit the
 #                              manifest
-#   GRAMINE_VM_RELAY_DEBUG=1   relay debug trace and asyncio debug mode
+#   SAGUARO_VM_RELAY_DEBUG=1   relay debug trace and asyncio debug mode
 
 RELAY_PID=
 RELAY_LOG=
@@ -66,7 +66,7 @@ vm_relay_start() {
     local -a rules args=()
     RELAY_PID=
     RELAY_LOG=
-    [ "${GRAMINE_VM_RELAY:-1}" = "0" ] && return 0
+    [ "${SAGUARO_VM_RELAY:-1}" = "0" ] && return 0
 
     if ! python3 -c 'import graminelibos.vsock_relay' 2>/dev/null; then
         echo "Error: the VM's vsock relay needs the Python package graminelibos of this Gramine" \
@@ -75,13 +75,13 @@ vm_relay_start() {
     fi
 
     RELAY_LOG=$(mktemp /tmp/gramine-vm-relay.XXXXXX)
-    IFS=, read -ra rules <<< "${GRAMINE_VM_INBOUND:-}"
+    IFS=, read -ra rules <<< "${SAGUARO_VM_INBOUND:-}"
     for rule in "${rules[@]}"; do
         [ -n "$rule" ] && args+=(--inbound "$rule")
     done
     # PYTHONASYNCIODEBUG makes the relay log event-loop stalls ("Executing ... took 0.sss seconds"),
     # which is how a blocking vsock dial that freezes the other forwards shows up.
-    env PYTHONASYNCIODEBUG=${GRAMINE_VM_RELAY_DEBUG:+1} \
+    env PYTHONASYNCIODEBUG=${SAGUARO_VM_RELAY_DEBUG:+1} \
         python3 -m graminelibos.vsock_relay --cid "$cid" --config "$manifest" --die-with-parent \
         "${args[@]}" \
         >"$RELAY_LOG" 2>&1 &

@@ -20,10 +20,10 @@
 set -u
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 REPO=$(cd "$HERE/../.." && pwd)
-PREFIX=${GRAMINE_PREFIX:-$HOME/.local/gramine-vm}
+PREFIX=${SAGUARO_PREFIX:-$HOME/.local/gramine-vm}
 OUT=${OUT:-/tmp/test-sev-all}
 CPUS=${CPUS-"1 2 4"}   # CPUS= (empty) skips the suite
-export GRAMINE_RAM_SIZE=${GRAMINE_RAM_SIZE:-8G}
+export SAGUARO_RAM_SIZE=${SAGUARO_RAM_SIZE:-8G}
 mkdir -p "$OUT"
 rc=0
 step() { echo "=== $* ($(date -u +%H:%M:%S), $(cut -d' ' -f1-3 /proc/loadavg))"; }
@@ -39,25 +39,25 @@ fi
 
 for mode in sev snp; do
     step "test-sev.sh, $mode"
-    GRAMINE_SEV_MODE=$mode OUT=$OUT/test-sev-$mode "$HERE/test-sev.sh" --prefix "$PREFIX" \
+    SAGUARO_SEV_MODE=$mode OUT=$OUT/test-sev-$mode "$HERE/test-sev.sh" --prefix "$PREFIX" \
         > "$OUT/test-sev-$mode.log" 2>&1 || fail "test-sev.sh $mode"
     tail -n 1 "$OUT/test-sev-$mode.log"
 done
 
 for n in $CPUS; do
     step "LibOS suite under SNP, $n vCPUs"
-    GRAMINE_CPU_NUM=$n GRAMINE_VM_LAUNCHER=gramine-sev GRAMINE_SEV_MODE=snp \
+    SAGUARO_CPU_NUM=$n SAGUARO_VM_LAUNCHER=gramine-sev SAGUARO_SEV_MODE=snp \
         "$HERE/../vm/test-vm.sh" --prefix "$PREFIX" libos > "$OUT/libos-snp-$n.log" 2>&1
     grep -E "^FAILED|[0-9]+ (passed|failed)" "$OUT/libos-snp-$n.log" | tail -n 20
 done
 
 step "CI-Examples under SNP"
-export GRAMINE_SEV_MODE=snp
+export SAGUARO_SEV_MODE=snp
 ( cd CI-Examples/helloworld && make -s >/dev/null && timeout 300 gramine-sev helloworld ) \
     > "$OUT/ex-helloworld.log" 2>&1
 grep -q "Hello, world" "$OUT/ex-helloworld.log" && echo "helloworld: ok" || fail "helloworld"
 ( cd CI-Examples/unit_tests/multi-thread && make -s thread-tls thread-tls.manifest >/dev/null &&
-  GRAMINE_CPU_NUM=4 timeout 300 gramine-sev thread-tls ) > "$OUT/ex-threads.log" 2>&1
+  SAGUARO_CPU_NUM=4 timeout 300 gramine-sev thread-tls ) > "$OUT/ex-threads.log" 2>&1
 grep -q "(again)" "$OUT/ex-threads.log" && echo "thread-tls (4 vCPUs): ok" || fail "thread-tls"
 ( cd CI-Examples/python && make -s python.manifest >/dev/null &&
   timeout 600 gramine-sev python scripts/helloworld.py ) > "$OUT/ex-python.log" 2>&1
@@ -66,7 +66,7 @@ grep -q "Hello World" "$OUT/ex-python.log" && echo "python helloworld: ok" || fa
 if [ "${MP:-1}" != 0 ]; then
     step "multi-process checks under SNP"
     # the frame pool needs a free GB of RAM above 4G: 4G guests have none (as with gramine-vm)
-    GRAMINE_RAM_SIZE=${MP_RAM:-8G} GRAMINE_VM_LAUNCHER=gramine-sev WORK=$OUT/mp \
+    SAGUARO_RAM_SIZE=${MP_RAM:-8G} SAGUARO_VM_LAUNCHER=gramine-sev WORK=$OUT/mp \
         "$HERE/../vm/multiproc/check-probes.sh" \
         > "$OUT/multiproc.log" 2>&1 || fail "multi-process checks"
     tail -n 12 "$OUT/multiproc.log"

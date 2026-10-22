@@ -14,7 +14,7 @@ Run from the repository root. `test/run.sh` forwards to the runners with the arg
 |---|---|---|---|
 | direct | `test/direct/test-direct.sh [suite...]` or `test/run.sh direct [suite...]` | a direct install (`scripts/install.sh`) | `test/direct/test-direct.sh --list` |
 | vm | `test/vm/test-vm.sh [suite...]` or `test/run.sh vm [suite...]` | `/dev/kvm`, a vm install (`scripts/install.sh --vm`) | libos examples hello loopback epoll outbound udp guest-loopback |
-| vm, servers via the direct runner | `GRAMINE_RUNNER=gramine-vm test/direct/test-direct.sh redis` | a vm install | server suites and `networks` |
+| vm, servers via the direct runner | `SAGUARO_RUNNER=gramine-vm test/direct/test-direct.sh redis` | a vm install | server suites and `networks` |
 | sev | `test/sev/test-sev.sh [suite...]` or `test/run.sh sev [suite...]` | SEV host, container of `container/run.sh` | hello memory vsock measure attest |
 | sev, qualification | `test/sev/test-sev-all.sh` or `test/run.sh sev-all` | SEV-SNP host; builds with `scripts/install.sh --sev` | none (one run) |
 | vbs | none | Windows machine; steps are `.cmd` files in the folders | not confirmed |

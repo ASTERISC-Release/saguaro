@@ -54,7 +54,7 @@ static size_t parse_graphics_size(const char* value, size_t fallback) {
     char* end;
     unsigned long long v = strtoull(value, &end, 0);
     if (end == value || v == 0) {
-        fprintf(stderr, "[.] bad GRAMINE_DATA_SIZE '%s'; using the default %lu\n",
+        fprintf(stderr, "[.] bad SAGUARO_DATA_SIZE '%s'; using the default %lu\n",
                 value, (unsigned long)fallback);
         return fallback;
     }
@@ -69,7 +69,7 @@ static size_t parse_graphics_size(const char* value, size_t fallback) {
         end++;
     }
     if (*end != '\0') {
-        fprintf(stderr, "[.] bad GRAMINE_DATA_SIZE '%s'; using the default %lu\n",
+        fprintf(stderr, "[.] bad SAGUARO_DATA_SIZE '%s'; using the default %lu\n",
                 value, (unsigned long)fallback);
         return fallback;
     }
@@ -85,7 +85,7 @@ static uint64_t parse_graphics_u64(const char* value, uint64_t fallback) {
     char* end;
     uint64_t v = (uint64_t)strtoull(value, &end, 0);
     if (end == value || *end != '\0' || v == 0) {
-        fprintf(stderr, "[.] bad GRAMINE_HUGEPAGE_ADDR '%s'; ignoring it\n", value);
+        fprintf(stderr, "[.] bad SAGUARO_HUGEPAGE_ADDR '%s'; ignoring it\n", value);
         return fallback;
     }
     return v;
@@ -94,17 +94,17 @@ static uint64_t parse_graphics_u64(const char* value, uint64_t fallback) {
 void setup_syscall_comms(void) {
     fprintf(stderr, "\n========COMMS========\n");
 
-    /* Geometry, from the launcher environment: GRAMINE_DATA_SIZE sizes the data
+    /* Geometry, from the launcher environment: SAGUARO_DATA_SIZE sizes the data
      * arena (the launcher also passes it to the PAL over fw_cfg, so the PAL's
-     * reservation matches), GRAMINE_DATA_ADDR is where it starts (default: the
-     * compiled 4G anchor), and GRAMINE_HUGEPAGE_ADDR gives the hugepage
+     * reservation matches), SAGUARO_DATA_ADDR is where it starts (default: the
+     * compiled 4G anchor), and SAGUARO_HUGEPAGE_ADDR gives the hugepage
      * arena's guest physical address directly -- a hugepages deployment points
      * it at the dedicated hugetlb bucket backend; when unset the hugepage
      * arena follows the data arena. */
-    size_t data_size = parse_graphics_size(getenv("GRAMINE_DATA_SIZE"), DATA_SIZE);
-    uint64_t data_addr = parse_graphics_u64(getenv("GRAMINE_DATA_ADDR"), (uint64_t)(uintptr_t)DATA_REGION);
+    size_t data_size = parse_graphics_size(getenv("SAGUARO_DATA_SIZE"), DATA_SIZE);
+    uint64_t data_addr = parse_graphics_u64(getenv("SAGUARO_DATA_ADDR"), (uint64_t)(uintptr_t)DATA_REGION);
     DATA_REGION = (void *)data_addr;
-    uint64_t huge_addr = parse_graphics_u64(getenv("GRAMINE_HUGEPAGE_ADDR"), 0);
+    uint64_t huge_addr = parse_graphics_u64(getenv("SAGUARO_HUGEPAGE_ADDR"), 0);
     if (huge_addr && huge_addr >= (uint64_t)(uintptr_t)DATA_REGION + data_size) {
         HUGEPAGE_DATA_REGION = (void *)huge_addr;
     } else {

@@ -19,8 +19,8 @@
 #
 # Where the image is linked and signed: in WSL with interop, on the Windows of the same machine
 # (gramine-vbs copies the objects to a Windows folder; see gramine-vbs --help for
-# GRAMINE_VBS_WINDOWS_BASE); elsewhere on the Windows machine named by GRAMINE_VBS_WINDOWS (ssh);
-# with GRAMINE_VBS_WINDOWS=none or no Windows only the Linux half is built (`make VBS=1 vbs-sign`
+# SAGUARO_VBS_WINDOWS_BASE); elsewhere on the Windows machine named by SAGUARO_VBS_WINDOWS (ssh);
+# with SAGUARO_VBS_WINDOWS=none or no Windows only the Linux half is built (`make VBS=1 vbs-sign`
 # later). $(GRAMINE) runs the application like gramine-direct: `$(GRAMINE) $(VBS_APP) args`.
 #
 # The runtime (the vbs glibc, PAL and LibOS) is not built here: `scripts/install.sh --vbs` builds it
@@ -28,11 +28,11 @@
 # it is not there.
 
 VBS_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
-GRAMINE_VBS_REPO ?= $(abspath $(VBS_DIR)/../..)
+SAGUARO_VBS_REPO ?= $(abspath $(VBS_DIR)/../..)
 
-GRAMINE_VBS := $(VBS_DIR)/gramine-vbs
-GRAMINE = $(GRAMINE_VBS)
-VBS_SYSROOT := $(GRAMINE_VBS_REPO)/build-vbs-glibc
+SAGUARO_VBS := $(VBS_DIR)/gramine-vbs
+GRAMINE = $(SAGUARO_VBS)
+VBS_SYSROOT := $(SAGUARO_VBS_REPO)/build-vbs-glibc
 VBS_GCC := $(VBS_DIR)/vbs-gcc
 VBS_CC_STATIC := env SYSROOT=$(VBS_SYSROOT) $(VBS_DIR)/cc-static-pie.sh
 VBS_CC_DYNAMIC := env SYSROOT=$(VBS_SYSROOT) $(VBS_DIR)/cc-dynamic-pie.sh
@@ -47,9 +47,9 @@ VBS_MANIFEST := $(VBS_APP).manifest.vbs
 VBS_IMAGE := $(VBS_APP).vbs/image.stamp
 # written by `scripts/install.sh --vbs` (gramine-vbs runtime); it changes only when the runtime
 # objects, the vbs glibc or the sources of the Windows half changed, which rebuilds the images
-VBS_RUNTIME_STAMP := $(GRAMINE_VBS_REPO)/build-vbs/runtime.stamp
+VBS_RUNTIME_STAMP := $(SAGUARO_VBS_REPO)/build-vbs/runtime.stamp
 
-GRAMINE_LOG_LEVEL ?= error
+SAGUARO_LOG_LEVEL ?= error
 
 # the example's own `all` stays the default goal
 .DEFAULT_GOAL := all
@@ -60,13 +60,13 @@ vbs-all: $(VBS_IMAGE)
 # the runtime is installed by scripts/install.sh --vbs, not built by make: this only checks it
 vbs-runtime: $(VBS_RUNTIME_STAMP)
 $(VBS_RUNTIME_STAMP):
-	@echo "error: the VBS runtime (the vbs glibc, PAL and LibOS) is not installed in $(GRAMINE_VBS_REPO)." >&2
-	@echo "       Install it once with:  $(GRAMINE_VBS_REPO)/scripts/install.sh --vbs" >&2
+	@echo "error: the VBS runtime (the vbs glibc, PAL and LibOS) is not installed in $(SAGUARO_VBS_REPO)." >&2
+	@echo "       Install it once with:  $(SAGUARO_VBS_REPO)/scripts/install.sh --vbs" >&2
 	@exit 1
 
 $(VBS_MANIFEST): $(VBS_TEMPLATE)
-	$(GRAMINE_VBS) manifest \
-		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
+	$(SAGUARO_VBS) manifest \
+		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Darch_libdir=$(VBS_LIBDIR) \
 		$(VBS_DEFINES) \
 		$< $@
@@ -74,15 +74,15 @@ $(VBS_MANIFEST): $(VBS_TEMPLATE)
 # pack (gramine-vbs build), compile the Windows objects, and link and sign on Windows when one is
 # reachable; the stamp is written only when all of that succeeded
 $(VBS_IMAGE): $(VBS_MANIFEST) $(VBS_DEPS) $(VBS_RUNTIME_STAMP)
-	$(GRAMINE_VBS) build $<
+	$(SAGUARO_VBS) build $<
 	touch $@
 
 vbs-sign: $(VBS_IMAGE)
-	$(GRAMINE_VBS) sign $(VBS_APP).vbs
+	$(SAGUARO_VBS) sign $(VBS_APP).vbs
 
 # stop every enclave host of this image (servers started in the background)
 vbs-stop:
-	-$(GRAMINE_VBS) stop $(VBS_APP).vbs
+	-$(SAGUARO_VBS) stop $(VBS_APP).vbs
 
 # `make VBS=1 clean` also removes the VBS files (the Windows folder of the image stays)
 clean: vbs-clean

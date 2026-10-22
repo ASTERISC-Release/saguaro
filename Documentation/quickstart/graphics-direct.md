@@ -17,11 +17,11 @@ host's Mesa or NVIDIA libraries. No QEMU and no preload library are involved. De
 ## 1. Build (in the container)
 
 Create the container in a shell where `DISPLAY` is set: the container then gets the X socket and
-the render nodes. On AArch64 with NVIDIA also set `GRAMINE_CONTAINER_NVIDIA=1`, which passes the
+the render nodes. On AArch64 with NVIDIA also set `SAGUARO_CONTAINER_NVIDIA=1`, which passes the
 NVIDIA device nodes and mounts the host's NVIDIA libraries (they must match the kernel module):
 
     container/run.sh                                     # x86_64
-    DISPLAY=:1 GRAMINE_CONTAINER_NVIDIA=1 container/run.sh   # AArch64 with NVIDIA
+    DISPLAY=:1 SAGUARO_CONTAINER_NVIDIA=1 container/run.sh   # AArch64 with NVIDIA
 
 These variables only take effect when the container is created; an existing container of the
 checkout has to be removed first (`container/run.sh down`, which discards the install inside

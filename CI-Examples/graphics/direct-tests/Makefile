@@ -19,9 +19,9 @@ LDLIBS_gbm_map = $(shell pkg-config --libs gbm)
 LDLIBS_egl_readback = $(shell pkg-config --libs gbm egl glesv2)
 
 ifeq ($(DEBUG),1)
-GRAMINE_LOG_LEVEL = debug
+SAGUARO_LOG_LEVEL = debug
 else
-GRAMINE_LOG_LEVEL = error
+SAGUARO_LOG_LEVEL = error
 endif
 
 .PHONY: all
@@ -55,7 +55,7 @@ egl_readback: egl_readback.c
 	$(CC) $(CFLAGS) $(shell pkg-config --cflags gbm egl glesv2) $< -o $@ $(LDLIBS_egl_readback)
 
 %.manifest: direct-tests.manifest.template FORCE
-	gramine-manifest -Dlog_level=$(GRAMINE_LOG_LEVEL) -Darch_libdir=$(ARCH_LIBDIR) -Dnvidia=$(NVIDIA) -Ddisplay=$(X_DISPLAY_NUM) -Dentrypoint=$* $< $@
+	gramine-manifest -Dlog_level=$(SAGUARO_LOG_LEVEL) -Darch_libdir=$(ARCH_LIBDIR) -Dnvidia=$(NVIDIA) -Ddisplay=$(X_DISPLAY_NUM) -Dentrypoint=$* $< $@
 	gramine-manifest-check $@
 
 .PHONY: FORCE
@@ -72,7 +72,7 @@ eglinfo: eglinfo.manifest
 	gramine-direct eglinfo -B
 
 eglinfo.manifest: direct-tests.manifest.template FORCE
-	gramine-manifest -Dlog_level=$(GRAMINE_LOG_LEVEL) -Darch_libdir=$(ARCH_LIBDIR) -Dnvidia=$(NVIDIA) -Ddisplay=$(X_DISPLAY_NUM) -Dentrypoint=/usr/bin/eglinfo $< $@
+	gramine-manifest -Dlog_level=$(SAGUARO_LOG_LEVEL) -Darch_libdir=$(ARCH_LIBDIR) -Dnvidia=$(NVIDIA) -Ddisplay=$(X_DISPLAY_NUM) -Dentrypoint=/usr/bin/eglinfo $< $@
 	gramine-manifest-check $@
 
 .PHONY: clean

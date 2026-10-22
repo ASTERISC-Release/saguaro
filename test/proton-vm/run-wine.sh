@@ -5,7 +5,7 @@
 # (in the container, after run-native.sh -p made the prefix). Usage:
 #   run-wine.sh [direct|vm] [ARGS...]      default args: --version
 # Environment: WINEDEBUG (default -all), SYNC=1 (esync/fsync/ntsync on), LOG_LEVEL (default error),
-# GRAMINE_CPU_NUM, GRAMINE_RAM_SIZE for the VM. The manifest and its scratch dirs are in WORK
+# SAGUARO_CPU_NUM, SAGUARO_RAM_SIZE for the VM. The manifest and its scratch dirs are in WORK
 # (default .proton-vm/wine-vm). Games (step 2 of "Next phases"): GAME=<dir> mounts the game's folder,
 # DISPLAY_NUM=N gives the application the host X server :N through the vsock relay (the launcher's
 # own DISPLAY must then be :N too), VK_ICD (default lavapipe), DXVK_DEVICE (default llvmpipe),
@@ -20,7 +20,7 @@ TESTS=${TESTS:-$ROOT/.proton-vm/tests}
 WORK=${WORK:-$ROOT/.proton-vm/wine-vm}
 LOADER=${1:-vm}; shift || true
 [ $# -gt 0 ] || set -- --version
-. "${GRAMINE_PREFIX:-$HOME/.local/gramine-vm}/env.sh"
+. "${SAGUARO_PREFIX:-$HOME/.local/gramine-vm}/env.sh"
 [ -n "${QEMU_PATH:-}" ] || { [ -x /root/qemu-tirith/build/qemu-system-x86_64 ] && export QEMU_PATH=/root/qemu-tirith/build/qemu-system-x86_64; }
 mkdir -p "$WORK/tmp" "$WORK/home" "$WORK/shm" && cd "$WORK"
 FFMPEG_LIBS=${FFMPEG_LIBS:-/opt/ffmpeg8/lib}; [ -d "$FFMPEG_LIBS" ] || FFMPEG_LIBS=
@@ -30,7 +30,7 @@ if [ "$GPU" = 1 ]; then
     LAYER_DIR=$(python3 -c "import graminelibos; print(graminelibos._CONFIG_PKGLIBDIR)")/vulkan
     VK_ICD=${VK_ICD:-/usr/share/vulkan/icd.d/radeon_icd.json}
     DXVK_DEVICE=${DXVK_DEVICE:-AMD}
-    export GRAMINE_VM_GRAPHICS=1
+    export SAGUARO_VM_GRAPHICS=1
     mkdir -p "$WORK/home/.cache"
 fi
 gramine-manifest -Dproton="$PROTON" -Dprefix="$PREFIX" -Dtests="$TESTS" -Dwork="$WORK" \
@@ -40,7 +40,7 @@ gramine-manifest -Dproton="$PROTON" -Dprefix="$PREFIX" -Dtests="$TESTS" -Dwork="
     -Ddxvk_hud="${DXVK_HUD:-}" -Ddxvk_config="${DXVK_CONFIG:-}" -Ddxvk_log_level="${DXVK_LOG_LEVEL:-info}" -Drate_log="${EGL_VULKAN_RATE_LOG:-0}" -Drefresh="${EGL_VULKAN_REFRESH:-}" -Dmesa_wsi="${MESA_VK_WSI_DEBUG:-}" -Dgl_software="${GL_SOFTWARE:-0}" -Dlayer_disable="${LAYER_DISABLE:-0}" -Dextra_env="${EXTRA_ENV:-}" -Dnet="${NET:-allow}" \
     -Dwinearch="${WINEARCH:-}" -Dgpu="$GPU" -Dgpu_preload="${GPU_PRELOAD:-0}" -Dgpu_eager="${GPU_EAGER:-0}" -Dlayer_dir="${LAYER_DIR:-}" -Degl_discrete="${EGL_DISCRETE:-1}" \
     "$HERE/wine.manifest.template" wine.manifest || exit 1
-echo "# $(date -u +%Y-%m-%dT%H:%MZ) loader=$LOADER args: $* cpus=${GRAMINE_CPU_NUM:-1} ram=${GRAMINE_RAM_SIZE:-default} $(uptime | sed 's/.*load/load/')"
+echo "# $(date -u +%Y-%m-%dT%H:%MZ) loader=$LOADER args: $* cpus=${SAGUARO_CPU_NUM:-1} ram=${SAGUARO_RAM_SIZE:-default} $(uptime | sed 's/.*load/load/')"
 case $LOADER in
     direct) timeout "${TIMEOUT:-120}" gramine-direct wine "$@" ;;
     vm)     timeout "${TIMEOUT:-180}" gramine-vm wine "$@" 2>&1 | grep --line-buffered -v "self-check\|Frame-pool\|boot\]\|Physical\|Configuring\|REM_MEM\|vm-relay\|frame pool\|^(qemu)\|^qemu-system" ;;

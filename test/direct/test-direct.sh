@@ -14,17 +14,17 @@
 #   test/direct/test-direct.sh --no-build      # skip manifest rebuilds of the pytest suites
 #
 # Environment overrides:
-#   GRAMINE_PREFIX   install prefix (default: ~/.local/gramine)
+#   SAGUARO_PREFIX   install prefix (default: ~/.local/gramine)
 #   LOGDIR           per-test log directory (default: ${TMPDIR:-/tmp}/gramine-multiarch-tests)
-#   GRAMINE_RUNNER   gramine-direct (default) or gramine-vm: run the server examples (redis, memcached,
+#   SAGUARO_RUNNER   gramine-direct (default) or gramine-vm: run the server examples (redis, memcached,
 #                    lighttpd, nginx, rust) and `networks` under the VM PAL instead. The install must be
 #                    a --vm build; each server's guest port is forwarded to the same port on 127.0.0.1
-#                    by the VM's relay (GRAMINE_VM_INBOUND), so the clients are the ones of the direct run.
+#                    by the VM's relay (SAGUARO_VM_INBOUND), so the clients are the ones of the direct run.
 #                    nginx gets `master_process off;` (one process is enough for the check).
 #                    The other suites run under gramine-direct in either case.
 #
 # The script is architecture-neutral and also runs on x86_64 for parity
-# testing, given a Gramine install built for that host (set GRAMINE_PREFIX to
+# testing, given a Gramine install built for that host (set SAGUARO_PREFIX to
 # point at it). Example binaries/manifests are per-arch build artifacts; if an
 # example binary is missing, foreign-arch, or its manifest embeds the other
 # arch's triple, the script rebuilds it via that example's own Makefile.
@@ -58,7 +58,7 @@
 #   ninja -C build-$(uname -m)
 #   ninja -C build-$(uname -m) install
 #
-#   # 3. Run the battery (GRAMINE_PREFIX/PYTHONPATH are set by the script
+#   # 3. Run the battery (SAGUARO_PREFIX/PYTHONPATH are set by the script
 #   #    itself; export them manually only if you installed elsewhere):
 #   test/direct/test-direct.sh
 #
@@ -90,7 +90,7 @@
 set -u
 
 REPO="$(cd "$(dirname "$(readlink -f "$0")")/../.." && pwd)"
-. "$REPO/scripts/gramine-env.sh"   # GRAMINE_PREFIX, PATH, PYTHONPATH, LOGDIR
+. "$REPO/scripts/gramine-env.sh"   # SAGUARO_PREFIX, PATH, PYTHONPATH, LOGDIR
 mkdir -p "$LOGDIR"
 
 ALL_SUITES=(pal libos helloworld multithread busybox bash redis memcached \
@@ -118,10 +118,10 @@ else
     RUN=("${ALL_SUITES[@]}")
 fi
 
-RUNNER=${GRAMINE_RUNNER:-gramine-direct}
-case "$RUNNER" in gramine-direct|gramine-vm) ;; *) echo "ERROR: GRAMINE_RUNNER must be gramine-direct or gramine-vm"; exit 1 ;; esac
+RUNNER=${SAGUARO_RUNNER:-gramine-direct}
+case "$RUNNER" in gramine-direct|gramine-vm) ;; *) echo "ERROR: SAGUARO_RUNNER must be gramine-direct or gramine-vm"; exit 1 ;; esac
 for bin in "$RUNNER" gramine-test gramine-manifest; do
-    command -v "$bin" >/dev/null || { echo "ERROR: $bin not on PATH (set GRAMINE_PREFIX?)"; exit 1; }
+    command -v "$bin" >/dev/null || { echo "ERROR: $bin not on PATH (set SAGUARO_PREFIX?)"; exit 1; }
 done
 python3 -c 'import graminelibos' 2>/dev/null || { echo "ERROR: graminelibos not on PYTHONPATH"; exit 1; }
 
@@ -145,7 +145,7 @@ esac
 drop_stale_manifest() {
     local libos rt
     libos=$(sed -n 's/^entrypoint = "file:\(.*libsysdb\.so\)"$/\1/p' "$1" 2>/dev/null | head -1)
-    if [ -n "$libos" ] && { [ ! -f "$libos" ] || [ "${libos#"$GRAMINE_PREFIX"/}" = "$libos" ]; }; then
+    if [ -n "$libos" ] && { [ ! -f "$libos" ] || [ "${libos#"$SAGUARO_PREFIX"/}" = "$libos" ]; }; then
         rm -f "$1"
         echo "$libos"
         return 0
@@ -235,7 +235,7 @@ start_server() {
     local name=$1 tmo=$2 dir=$3; shift 3
     local inbound=
     [ "$RUNNER" = gramine-vm ] && inbound=${VM_INBOUND[$name]:-}
-    ( cd "$dir" && GRAMINE_VM_INBOUND="$inbound" setsid timeout -s KILL "$tmo" "$@" \
+    ( cd "$dir" && SAGUARO_VM_INBOUND="$inbound" setsid timeout -s KILL "$tmo" "$@" \
           >"$LOGDIR/$name.log" 2>&1 &
       echo $! >"$LOGDIR/$name.pid" )
 }

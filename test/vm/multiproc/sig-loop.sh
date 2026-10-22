@@ -4,19 +4,19 @@
 # the runs that miss a line or hang. Run in the container after `scripts/install.sh --vm`.
 #
 # Usage: test/vm/multiproc/sig-loop.sh [N]   (default 100)
-# Environment: GRAMINE_CPU_NUM (default 2), LOAD=<k> runs k busy loops on the host meanwhile,
+# Environment: SAGUARO_CPU_NUM (default 2), LOAD=<k> runs k busy loops on the host meanwhile,
 # RUN_TIMEOUT (seconds per run, default 60), ON_HANG (a shell command run when a guest is still
 # running at the timeout, after vm-hang-report.py and before the guest is stopped; the output of
 # both goes to $OUT/hang-<i>.txt), WORK (default <repo>/.mp-probes, shared with
-# check-probes.sh), OUT (default $WORK/sig-loop/<date-time>), GRAMINE_PREFIX. Each failing run's
+# check-probes.sh), OUT (default $WORK/sig-loop/<date-time>), SAGUARO_PREFIX. Each failing run's
 # output goes to $OUT/fail-<i>.log.
 # Exit status 0 only if every run passed.
 set -u
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 REPO=$(cd "$HERE/../../.." && pwd)
-PREFIX=${GRAMINE_PREFIX:-$HOME/.local/gramine-vm}
+PREFIX=${SAGUARO_PREFIX:-$HOME/.local/gramine-vm}
 . "$PREFIX/env.sh"
-export GRAMINE_CPU_NUM=${GRAMINE_CPU_NUM:-2}
+export SAGUARO_CPU_NUM=${SAGUARO_CPU_NUM:-2}
 N=${1:-100}
 export WORK=${WORK:-$REPO/.mp-probes}
 OUT=${OUT:-$WORK/sig-loop/$(date +%Y%m%d-%H%M%S)}
@@ -35,7 +35,7 @@ for i in $(seq 1 "$N"); do
     # the guest in the background with its QEMU monitor on a socket: a hung one is looked at
     # (vm-hang-report.py, then ON_HANG) and stopped through the monitor, so the launcher reports
     rm -f "$OUT/mon.sock"
-    GRAMINE_VM_MONITOR=$OUT/mon.sock setsid gramine-vm bash /probe/sig.sh > "$OUT/cur.log" 2>&1 < /dev/null &
+    SAGUARO_VM_MONITOR=$OUT/mon.sock setsid gramine-vm bash /probe/sig.sh > "$OUT/cur.log" 2>&1 < /dev/null &
     pid=$!
     for _ in $(seq 1 $(( ${RUN_TIMEOUT:-60} * 10 ))); do kill -0 $pid 2>/dev/null || break; sleep 0.1; done
     hung=0
@@ -61,6 +61,6 @@ for i in $(seq 1 "$N"); do
         [ -n "${MAX_FAILS:-}" ] && [ "$fails" -ge "$MAX_FAILS" ] && { N=$i; break; }
     fi
 done
-echo "sig-loop: $fails of $N runs failed, $hangs of them hung ($GRAMINE_CPU_NUM vCPUs," \
+echo "sig-loop: $fails of $N runs failed, $hangs of them hung ($SAGUARO_CPU_NUM vCPUs," \
      "load ${LOAD:-0}, $(( $(date +%s) - start )) s)"
 [ "$fails" = 0 ]

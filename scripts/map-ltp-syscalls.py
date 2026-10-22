@@ -12,8 +12,8 @@ import shlex
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 # The syscall-compat and syscall-profile data live in the private development-documents repository, checked out
-# next to this one (GRAMINE_DEV_DOCS names another place).
-DEV_DOCS = pathlib.Path(os.environ.get("GRAMINE_DEV_DOCS", ROOT.parent / "gramine-multiarch-docs"))
+# next to this one (SAGUARO_DEV_DOCS names another place).
+DEV_DOCS = pathlib.Path(os.environ.get("SAGUARO_DEV_DOCS", ROOT.parent / "gramine-multiarch-docs"))
 OVERRIDES = {
     "execl": ["execve"], "execle": ["execve"], "execlp": ["execve"],
     "execv": ["execve"], "execvp": ["execve"], "wait": ["wait4"],

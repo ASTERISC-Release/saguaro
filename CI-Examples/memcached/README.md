@@ -18,7 +18,7 @@ By hand, the server in one terminal and the client in another:
 
 ```sh
 make
-make start-gramine-server       # VM and SEV: add GRAMINE=gramine-vm (or gramine-sev) GRAMINE_VM_INBOUND=11211:11211
+make start-gramine-server       # VM and SEV: add GRAMINE=gramine-vm (or gramine-sev) SAGUARO_VM_INBOUND=11211:11211
 memtier_benchmark --port=11211 --protocol=memcache_binary --hide-histogram
 ```
 

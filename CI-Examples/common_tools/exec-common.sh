@@ -28,11 +28,11 @@
 #   EXAMPLE_NOTE       why it is skipped on this host when no backend applies (printed with the SKIP)
 #
 # Backends and where they are installed (scripts/install.sh; override with the env vars):
-#   direct   $GRAMINE_DIRECT_PREFIX (default ~/.local/gramine)      gramine-direct
-#   vm       $GRAMINE_VM_PREFIX     (default ~/.local/gramine-vm)   gramine-vm, needs /dev/kvm
-#   sev      $GRAMINE_VM_PREFIX     (same install as vm, --sev)     gramine-sev, x86_64 with SEV; plain SEV
+#   direct   $SAGUARO_DIRECT_PREFIX (default ~/.local/gramine)      gramine-direct
+#   vm       $SAGUARO_VM_PREFIX     (default ~/.local/gramine-vm)   gramine-vm, needs /dev/kvm
+#   sev      $SAGUARO_VM_PREFIX     (same install as vm, --sev)     gramine-sev, x86_64 with SEV; plain SEV
 #   sev-snp  (same install and runner as sev)                        gramine-sev in SEV-SNP mode
-#   sgx      $GRAMINE_SGX_PREFIX    (default ~/.local/gramine-sgx)   gramine-sgx, x86_64 with SGX (/dev/sgx_enclave);
+#   sgx      $SAGUARO_SGX_PREFIX    (default ~/.local/gramine-sgx)   gramine-sgx, x86_64 with SGX (/dev/sgx_enclave);
 #            scripts/install.sh --sgx; make SGX=1 signs the enclave with ~/.config/gramine/enclave-key.pem
 #   vbs      scripts/install.sh --vbs, in WSL on a Windows machine   Windows VBS enclave (make VBS=1); an
 #            with VBS enclaves                                       example offers it when it has a
@@ -55,7 +55,7 @@
 # printed), 2 for a usage error.
 # Environment: EXEC_TIMEOUT (seconds per run, default 300; EXEC_BUILD_TIMEOUT, default 3600, for the build
 # of a vbs image), EXEC_LOG_DIR (default /tmp/gramine-exec),
-# The backend sets GRAMINE_SEV_MODE for gramine-sev: sev for --sev, snp for --sev-snp.
+# The backend sets SAGUARO_SEV_MODE for gramine-sev: sev for --sev, snp for --sev-snp.
 
 # EXEC_DIR (the directory to build and run in) and EXAMPLE_NAME default to the exec.sh's own directory;
 # unit_tests/exec.sh sets them to run each test of its subdirectories
@@ -77,9 +77,9 @@ backend_base() {
 # backend_prefix <backend>
 backend_prefix() {
     case $(backend_base "$1") in
-        direct) echo "${GRAMINE_DIRECT_PREFIX:-$HOME/.local/gramine}" ;;
-        vm|sev) echo "${GRAMINE_VM_PREFIX:-$HOME/.local/gramine-vm}" ;;
-        sgx)    echo "${GRAMINE_SGX_PREFIX:-$HOME/.local/gramine-sgx}" ;;
+        direct) echo "${SAGUARO_DIRECT_PREFIX:-$HOME/.local/gramine}" ;;
+        vm|sev) echo "${SAGUARO_VM_PREFIX:-$HOME/.local/gramine-vm}" ;;
+        sgx)    echo "${SAGUARO_SGX_PREFIX:-$HOME/.local/gramine-sgx}" ;;
     esac
 }
 
@@ -159,10 +159,10 @@ exec_one_vbs() {
 }
 
 # exec_accel <backend>: for the vm backend on aarch64, the accelerator the launcher will use: kvm, or tcg
-# (QEMU software emulation: no usable /dev/kvm, or GRAMINE_ACCEL names tcg). Empty for everything else.
+# (QEMU software emulation: no usable /dev/kvm, or SAGUARO_ACCEL names tcg). Empty for everything else.
 exec_accel() {
     [ "$(backend_base "$1")" = vm ] && [ "$(uname -m)" = aarch64 ] || return 0
-    case ${GRAMINE_ACCEL:-} in
+    case ${SAGUARO_ACCEL:-} in
         kvm*) echo kvm ;;
         ?*)   echo tcg ;;
         *)    if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then echo kvm; else echo tcg; fi ;;
@@ -186,8 +186,8 @@ exec_one() {
     # the enclave signing key is created once if it does not exist
     local mtarget=
     case $b in
-        sev)     export GRAMINE_SEV_MODE=sev ;;
-        sev-snp) export GRAMINE_SEV_MODE=snp ;;
+        sev)     export SAGUARO_SEV_MODE=sev ;;
+        sev-snp) export SAGUARO_SEV_MODE=snp ;;
         sgx)     export SGX=1; mtarget=all
                  [ -e "${SGX_SIGNER_KEY:-$HOME/.config/gramine/enclave-key.pem}" ] || gramine-sgx-gen-private-key ;;
     esac

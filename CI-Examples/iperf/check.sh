@@ -4,7 +4,7 @@
 #
 # `make check` (direct, vm and sev): the iperf3 server runs under $GRAMINE (its manifest sets the server
 # mode) and the native iperf3 client of the same build measures it over the loopback of the host.
-# Under the vm and sev the port is forwarded to the guest through the relay (GRAMINE_VM_INBOUND).
+# Under the vm and sev the port is forwarded to the guest through the relay (SAGUARO_VM_INBOUND).
 #
 # The script does not probe the port first: iperf3 counts a connection that closes without a test as an
 # error. The client is retried instead, until the server is up.

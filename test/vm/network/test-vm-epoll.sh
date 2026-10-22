@@ -7,7 +7,7 @@ set -u
 set -o pipefail
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 REPO=$(cd "$HERE/../../.." && pwd)
-PREFIX=${GRAMINE_PREFIX:-$HOME/.local/gramine-vm}
+PREFIX=${SAGUARO_PREFIX:-$HOME/.local/gramine-vm}
 REQUESTS=${EPOLL_REQUESTS:-50000}
 SERVER_MODE=${EPOLL_SERVER_MODE:-epoll}
 TRANSPORT=${EPOLL_TRANSPORT:-vsock}
@@ -25,7 +25,7 @@ mkdir -p "$OUT"
 
 export PATH=$PREFIX/bin:$PATH
 export PYTHONPATH=$(ls -d "$PREFIX"/lib/python3*/site-packages 2>/dev/null | head -1)
-export GRAMINE_CPU_NUM=${GRAMINE_CPU_NUM:-2}
+export SAGUARO_CPU_NUM=${SAGUARO_CPU_NUM:-2}
 
 command -v gramine-vm >/dev/null || { echo "gramine-vm not on PATH (prefix $PREFIX?)" >&2; exit 1; }
 [ -e /dev/vhost-vsock ] || { echo "no /dev/vhost-vsock; this test needs it" >&2; exit 1; }
@@ -45,20 +45,20 @@ fi
 DIR=$(cd "$HERE/../vsock-loopback" && pwd)
 echo "== vsock-epoll: building guest echo server"
 make -C "$DIR" -s || exit 1
-(cd "$DIR" && GRAMINE_VM=1 gramine-test build -f vsock_echo_server) >"$OUT/manifest.log" 2>&1 || {
+(cd "$DIR" && SAGUARO_VM=1 gramine-test build -f vsock_echo_server) >"$OUT/manifest.log" 2>&1 || {
     cat "$OUT/manifest.log"; echo "manifest build failed" >&2; exit 1; }
 
 VM_LOG=$OUT/gramine-vm.log
 rm -f "$VM_LOG"
-echo "== vsock-epoll: starting ${GRAMINE_CPU_NUM}-vCPU guest in $SERVER_MODE mode, $REQUESTS synchronous requests"
+echo "== vsock-epoll: starting ${SAGUARO_CPU_NUM}-vCPU guest in $SERVER_MODE mode, $REQUESTS synchronous requests"
 cd "$DIR"
 if [ "$TRANSPORT" = tcp ]; then
-    GRAMINE_VM_INBOUND="$GUEST_PORT:$HOST_PORT" GRAMINE_VM_RELAY_DEBUG=1 \
-        GRAMINE_VM_CONSOLE_LOG=$VM_LOG \
+    SAGUARO_VM_INBOUND="$GUEST_PORT:$HOST_PORT" SAGUARO_VM_RELAY_DEBUG=1 \
+        SAGUARO_VM_CONSOLE_LOG=$VM_LOG \
         gramine-vm vsock_echo_server "$GUEST_PORT" "$SERVER_MODE" "$REQUESTS" \
         >"$OUT/gramine-vm.out" 2>&1 &
 else
-    GRAMINE_VM_CONSOLE_LOG=$VM_LOG gramine-vm vsock_echo_server "$GUEST_PORT" "$SERVER_MODE" \
+    SAGUARO_VM_CONSOLE_LOG=$VM_LOG gramine-vm vsock_echo_server "$GUEST_PORT" "$SERVER_MODE" \
         "$REQUESTS" >"$OUT/gramine-vm.out" 2>&1 &
 fi
 VM_PID=$!

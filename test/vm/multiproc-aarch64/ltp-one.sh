@@ -22,7 +22,7 @@ while [ $# -gt 0 ]; do
 done
 T=$1; shift
 . "$PREFIX/env.sh"
-export GRAMINE_PREFIX=$PREFIX
+export SAGUARO_PREFIX=$PREFIX
 H=$REPO/.ltp-harness-$TAG
 cd "$H/install/testcases/bin" 2>/dev/null || cd "$H"
 OUT=$REPO/.ltp-results/one
@@ -35,7 +35,7 @@ if [ -n "$LEVEL" ]; then
     app=$T-dbg
 fi
 cd "$H"
-[ -n "$MON" ] && export GRAMINE_VM_MONITOR=$MON
-GRAMINE_CPU_NUM=$CPUS GRAMINE_VM_SERIAL=$OUT/$T.serial \
+[ -n "$MON" ] && export SAGUARO_VM_MONITOR=$MON
+SAGUARO_CPU_NUM=$CPUS SAGUARO_VM_SERIAL=$OUT/$T.serial \
     timeout -s KILL ${RUN_TIMEOUT:-120} gramine-vm $app "$@" > "$OUT/$T.log" 2>&1
 echo "rc=$? log=$OUT/$T.log"

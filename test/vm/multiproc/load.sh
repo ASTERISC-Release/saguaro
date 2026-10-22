@@ -20,7 +20,7 @@ nginx_load() {
     cp nginx.manifest /tmp/nginx-manifest.bak
     sed -i '/^master_process off;$/d' install/conf/nginx-gramine.conf
     sed -i 's/^enable_sigterm_injection = true$/enable_sigterm_injection = true\nexperimental__multiprocess = true/' nginx.manifest
-    GRAMINE_CPU_NUM=$CPUS GRAMINE_VM_INBOUND="8002:8002,8444:8444" setsid timeout -s KILL 300 \
+    SAGUARO_CPU_NUM=$CPUS SAGUARO_VM_INBOUND="8002:8002,8444:8444" setsid timeout -s KILL 300 \
         gramine-vm nginx > /tmp/nginx-load.log 2>&1 &
     local pid=$!
     python3 - "${REQUESTS:-2000}" "${CLIENTS:-16}" <<'PY'
@@ -58,7 +58,7 @@ redis_load() {
     cp redis-server.manifest /tmp/redis-manifest.bak
     sed -i 's/^enable_sigterm_injection = true$/enable_sigterm_injection = true\nexperimental__multiprocess = true/' redis-server.manifest
     rm -f dump.rdb
-    GRAMINE_CPU_NUM=$CPUS GRAMINE_VM_INBOUND="6379:6379" setsid timeout -s KILL 300 \
+    SAGUARO_CPU_NUM=$CPUS SAGUARO_VM_INBOUND="6379:6379" setsid timeout -s KILL 300 \
         gramine-vm redis-server > /tmp/redis-load.log 2>&1 &
     local pid=$!
     python3 - "${CLIENTS:-4}" "${KEYS:-5000}" "${SAVES:-5}" <<'PY'
@@ -133,7 +133,7 @@ seq 1 200000 | awk '{print $1 % 977}' | sort -n | uniq -c | sort -rn | head -3 |
 SH
     local want got
     want=$(bash pipeline.sh)
-    got=$(GRAMINE_CPU_NUM=$CPUS timeout -s KILL 300 gramine-vm bash /probe/pipeline.sh 2>/dev/null | grep -- ' -$')
+    got=$(SAGUARO_CPU_NUM=$CPUS timeout -s KILL 300 gramine-vm bash /probe/pipeline.sh 2>/dev/null | grep -- ' -$')
     [ "$got" = "$want" ] && echo "bash: pipeline of 6 processes over 200,000 lines: identical" \
                          || echo "bash: pipeline output differs: '$got' vs '$want'"
 }

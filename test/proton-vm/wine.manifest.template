@@ -70,7 +70,7 @@ vm.net.outbound = "{{ net }}"
 loader.env.DISPLAY = ""
 {% endif %}
 {% if gpu|string == "1" %}
-# the GPU through the graphics redirection (design-gpu.md): the arenas (GRAMINE_VM_GRAPHICS=1),
+# the GPU through the graphics redirection (design-gpu.md): the arenas (SAGUARO_VM_GRAPHICS=1),
 # Mesa's driver in the guest with its DRM ioctls forwarded, the presentation layer
 # VK_LAYER_GRAMINE_present from libgraphics.so (found through XDG_DATA_HOME), Mesa's device
 # discovery through /sys

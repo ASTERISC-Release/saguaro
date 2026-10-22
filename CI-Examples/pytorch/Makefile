@@ -12,9 +12,9 @@ ENTRYPOINT := $(VENV_DIR)/bin/python3
 ARCH_LIBDIR ?= /lib/$(shell $(CC) -dumpmachine)
 
 ifeq ($(DEBUG),1)
-GRAMINE_LOG_LEVEL = debug
+SAGUARO_LOG_LEVEL = debug
 else
-GRAMINE_LOG_LEVEL = error
+SAGUARO_LOG_LEVEL = error
 endif
 
 .PHONY: all
@@ -34,7 +34,7 @@ $(VENV_DIR)/.INSTALLATION_OK:
 
 pytorch.manifest: pytorch.manifest.template $(VENV_DIR)/.INSTALLATION_OK
 	gramine-manifest \
-		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
+		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		-Dentrypoint=$(abspath $(ENTRYPOINT)) \
 		-Dvenv_dir=$(abspath $(VENV_DIR)) \

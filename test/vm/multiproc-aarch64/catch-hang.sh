@@ -31,7 +31,7 @@ for i in $(seq "$RUNS"); do
     while kill -0 $pid 2>/dev/null; do
         if [ -f "$LOG" ] && grep -qE "$PAT" "$LOG"; then
             echo "run $i: caught '$PAT'"
-            GRAMINE_PREFIX=$PREFIX python3 "$HERE/vm-hang-report.py" /tmp/mon-catch --samples 4
+            SAGUARO_PREFIX=$PREFIX python3 "$HERE/vm-hang-report.py" /tmp/mon-catch --samples 4
             grep -E "$PAT" "$LOG" | head -6
             caught=1
             break

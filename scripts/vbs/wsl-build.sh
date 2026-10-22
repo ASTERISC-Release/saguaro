@@ -34,7 +34,7 @@ set -e
 
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../.." && pwd)
-TOOLS=${GRAMINE_VBS_TOOLS:-$HOME/.local/share/gramine-vbs/tools}
+TOOLS=${SAGUARO_VBS_TOOLS:-$HOME/.local/share/gramine-vbs/tools}
 [ -f "$TOOLS/env.sh" ] && . "$TOOLS/env.sh"
 MODE=${1:-}
 
@@ -93,7 +93,7 @@ case "$MODE" in objs|manifest) ;; *) echo "usage: wsl-build.sh sync|objs|manifes
 : "${GV_OUT:?}" "${GV_HDRID:?}"
 sh "$HERE/wsl-setup.sh" check clang >/dev/null || { sh "$HERE/wsl-setup.sh" check clang; exit 11; }
 
-HDR=${GRAMINE_VBS_HEADERS:-$HOME/.cache/gramine-vbs/winhdr/$GV_HDRID}
+HDR=${SAGUARO_VBS_HEADERS:-$HOME/.cache/gramine-vbs/winhdr/$GV_HDRID}
 if [ ! -f "$HDR/.complete" ]; then
     [ -n "$GV_HDRTAR" ] && [ -f "$GV_HDRTAR" ] || exit 10
     log "unpacking the Windows SDK and MSVC headers ($GV_HDRID) into $HDR"
@@ -112,7 +112,7 @@ if [ "$MODE" = objs ]; then
         || { tail -30 "$OBJ.log"; exit 1; }
 else
     : "${GV_MANIFEST:?}"
-    GRAMINE_VBS_LOG_PREFIX=[wsl] sh "$HERE/build-runtime.sh"
+    SAGUARO_VBS_LOG_PREFIX=[wsl] sh "$HERE/build-runtime.sh"
     python3 -I "$HERE/gramine-vbs" build "$GV_MANIFEST" --no-sign --runtime "$ROOT/build-vbs" \
         --headers "$HDR"
     B=${GV_MANIFEST%.toml}

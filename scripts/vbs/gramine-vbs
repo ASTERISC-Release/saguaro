@@ -40,21 +40,21 @@ Building is `make VBS=1` (scripts/vbs/Makefile.vbs), which uses these internal s
   gramine-vbs sign   <manifest|build dir>   upload, link and sign on Windows
 
 Settings (options override the environment):
-  --runtime DIR / GRAMINE_VBS_RUNTIME     the meson build directory of `-Dvbs=enabled` (or a folder
+  --runtime DIR / SAGUARO_VBS_RUNTIME     the meson build directory of `-Dvbs=enabled` (or a folder
                                           with libpal.so, libsysdb.so and vdso.so)
-  --headers DIR / GRAMINE_VBS_HEADERS     the copied Windows headers (default
+  --headers DIR / SAGUARO_VBS_HEADERS     the copied Windows headers (default
                                           ~/.cache/gramine-vbs/winhdr; see setup-headers)
-  --windows HOST / GRAMINE_VBS_WINDOWS    ssh destination of the Windows machine; "local": the
+  --windows HOST / SAGUARO_VBS_WINDOWS    ssh destination of the Windows machine; "local": the
                                           Windows of this machine, from WSL through interop
                                           (powershell.exe and /mnt paths; the default in WSL
                                           when interop works); "none": no Windows side
-  --windows-dir DIR / GRAMINE_VBS_WINDOWS_DIR   folder on Windows (default
+  --windows-dir DIR / SAGUARO_VBS_WINDOWS_DIR   folder on Windows (default
                                           <base>\\<name>, and <base>\\<name>-<hash> for local)
-  GRAMINE_VBS_WINDOWS_BASE                the base of those folders (default
+  SAGUARO_VBS_WINDOWS_BASE                the base of those folders (default
                                           %USERPROFILE%\\gramine-vbs, local: ...\\gramine-vbs\\wsl)
-  --cert-name NAME / GRAMINE_VBS_CERT_NAME      signing certificate (current user's store; default
+  --cert-name NAME / SAGUARO_VBS_CERT_NAME      signing certificate (current user's store; default
                                           TheDefaultTestEnclaveCertName)
-  GRAMINE_VBS_SSH_OPTS                    extra ssh/scp options, e.g. "-o BatchMode=yes"
+  SAGUARO_VBS_SSH_OPTS                    extra ssh/scp options, e.g. "-o BatchMode=yes"
 """
 
 import argparse
@@ -75,8 +75,8 @@ import tomllib
 HERE = os.path.dirname(os.path.realpath(__file__))   # (gramine-vbs on PATH is a symlink)
 ROOT = os.path.dirname(os.path.dirname(HERE))
 # the architecture of the Linux side and of the enclave image: aarch64 (ARM64 Windows) or x86_64
-# (x64 Windows, dev docs: vbs-enclave/PLAN-x64.md); GRAMINE_VBS_ARCH overrides
-ARCH = os.environ.get('GRAMINE_VBS_ARCH') or ('x86_64' if platform.machine() in ('x86_64', 'AMD64')
+# (x64 Windows, dev docs: vbs-enclave/PLAN-x64.md); SAGUARO_VBS_ARCH overrides
+ARCH = os.environ.get('SAGUARO_VBS_ARCH') or ('x86_64' if platform.machine() in ('x86_64', 'AMD64')
                                               else 'aarch64')
 ELF_MACHINE = 62 if ARCH == 'x86_64' else 183
 
@@ -111,7 +111,7 @@ def setting(args, name, env, default=None):
 
 
 def ssh_opts():
-    return shlex.split(os.environ.get('GRAMINE_VBS_SSH_OPTS', ''))
+    return shlex.split(os.environ.get('SAGUARO_VBS_SSH_OPTS', ''))
 
 
 LOCAL = 'local'   # the Windows of this machine, reached from WSL through interop
@@ -134,7 +134,7 @@ def powershell_exe():
 
 def windows_target(args):
     """the configured Windows side: an ssh destination, LOCAL, or None"""
-    h = setting(args, 'windows', 'GRAMINE_VBS_WINDOWS')
+    h = setting(args, 'windows', 'SAGUARO_VBS_WINDOWS')
     if h == 'none':
         return None
     if h:
@@ -145,7 +145,7 @@ def windows_target(args):
 def windows_host(args):
     h = windows_target(args)
     if not h:
-        die('no Windows machine: give --windows HOST or set GRAMINE_VBS_WINDOWS (in WSL, the '
+        die('no Windows machine: give --windows HOST or set SAGUARO_VBS_WINDOWS (in WSL, the '
             'Windows of the same machine is used when interop works)')
     if h == LOCAL and not powershell_exe():
         die('--windows local needs WSL with interop (powershell.exe)')
@@ -211,8 +211,8 @@ def runner_popen(host, windir, argv):
                                  'Bypass', '-File', script, *argv], stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, text=True,
                                 errors='replace', cwd=os.path.dirname(exe))
-    env = f"$env:GRAMINE_VBS_ARGS = {psq(os.environ['GRAMINE_VBS_ARGS'])}\n" \
-        if os.environ.get('GRAMINE_VBS_ARGS') else ''
+    env = f"$env:SAGUARO_VBS_ARGS = {psq(os.environ['SAGUARO_VBS_ARGS'])}\n" \
+        if os.environ.get('SAGUARO_VBS_ARGS') else ''
     return ps_popen(host, env + '& powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass '
                           f'-File {psq(script)} ' + ' '.join(psq(a) for a in argv) +
                     '\nexit $LASTEXITCODE')
@@ -224,10 +224,10 @@ def psq(s):
 
 
 def windows_dir(args, host, name, b=None, explicit=True):
-    d = setting(args, 'windows_dir', 'GRAMINE_VBS_WINDOWS_DIR') if explicit else None
+    d = setting(args, 'windows_dir', 'SAGUARO_VBS_WINDOWS_DIR') if explicit else None
     if d:
         return d.rstrip('\\/')
-    base = os.environ.get('GRAMINE_VBS_WINDOWS_BASE')
+    base = os.environ.get('SAGUARO_VBS_WINDOWS_BASE')
     if not base:
         _, out = ps(host, 'Write-Output $env:USERPROFILE', capture=True)
         base = out.strip().splitlines()[-1] + '\\gramine-vbs' + ('\\wsl' if host == LOCAL else '')
@@ -383,11 +383,11 @@ def run_recipe(b, recipe):
     folder before packing, with the compilers for the enclave in the environment"""
     if not isinstance(recipe, str):
         die('vbs.build must be a string (a shell command)')
-    sysroot = os.environ.get('GRAMINE_VBS_SYSROOT', os.path.join(ROOT, 'build-vbs-glibc'))
+    sysroot = os.environ.get('SAGUARO_VBS_SYSROOT', os.path.join(ROOT, 'build-vbs-glibc'))
     if not os.path.isfile(os.path.join(sysroot, 'usr', 'lib', 'libc.so.6')):
         die(f'vbs.build needs the vbs glibc in {sysroot} (scripts/vbs/build-glibc.sh, or set '
-            f'GRAMINE_VBS_SYSROOT)')
-    env = dict(os.environ, SYSROOT=sysroot, GRAMINE_REPO=ROOT,
+            f'SAGUARO_VBS_SYSROOT)')
+    env = dict(os.environ, SYSROOT=sysroot, SAGUARO_REPO=ROOT,
                VBS_CC_STATIC=os.path.join(HERE, 'cc-static-pie.sh'),
                VBS_CC_DYNAMIC=os.path.join(HERE, 'cc-dynamic-pie.sh'),
                VBS_GCC=os.path.join(HERE, 'vbs-gcc'))
@@ -424,10 +424,10 @@ def cmd_build(args):
     if recipe:
         run_recipe(b, recipe)
 
-    rt = find_runtime(setting(args, 'runtime', 'GRAMINE_VBS_RUNTIME'))
-    hdr = setting(args, 'headers', 'GRAMINE_VBS_HEADERS') or default_headers()
+    rt = find_runtime(setting(args, 'runtime', 'SAGUARO_VBS_RUNTIME'))
+    hdr = setting(args, 'headers', 'SAGUARO_VBS_HEADERS') or default_headers()
     if not os.path.isdir(os.path.join(hdr, 'sdk', 'um')):
-        if not setting(args, 'headers', 'GRAMINE_VBS_HEADERS') and windows_target(args):
+        if not setting(args, 'headers', 'SAGUARO_VBS_HEADERS') and windows_target(args):
             log('no Windows headers yet: copying them from Windows (once)')
             cmd_setup_headers(args)
             hdr = default_headers()
@@ -543,7 +543,7 @@ def cmd_sign(args, b=None):
     files.append(hd)
     log(f'upload {len(files)} files to {host}:{windir}')
     upload(host, files, windir)
-    cert = setting(args, 'cert_name', 'GRAMINE_VBS_CERT_NAME', 'TheDefaultTestEnclaveCertName')
+    cert = setting(args, 'cert_name', 'SAGUARO_VBS_CERT_NAME', 'TheDefaultTestEnclaveCertName')
     log(f'link, veiid, sign with the certificate "{cert}" (current user store)')
     rc, out = ps(host, f'''
 Set-Location {psq(windir)}
@@ -568,8 +568,8 @@ def cmd_run(args):
     """Runs a packaged application (made by `make VBS=1`); never builds."""
     b = find_package(args.target)
     st = b.load()
-    host = setting(args, 'windows', 'GRAMINE_VBS_WINDOWS', st.get('windows'))
-    windir = setting(args, 'windows_dir', 'GRAMINE_VBS_WINDOWS_DIR', st.get('windows_dir'))
+    host = setting(args, 'windows', 'SAGUARO_VBS_WINDOWS', st.get('windows'))
+    windir = setting(args, 'windows_dir', 'SAGUARO_VBS_WINDOWS_DIR', st.get('windows_dir'))
     argv = ['run', windir, '-Name', b.name, '-Threads', str(int(args.threads)), '-PidLine']
     if args.root:
         argv += ['-Root', args.root]
@@ -579,10 +579,10 @@ def cmd_run(args):
     # command line: powershell.exe -File and the native-command rules of Windows PowerShell 5.1
     # would otherwise split and unquote them
     if args.args:
-        os.environ['GRAMINE_VBS_ARGS'] = base64.b64encode(json.dumps(args.args).encode()).decode()
+        os.environ['SAGUARO_VBS_ARGS'] = base64.b64encode(json.dumps(args.args).encode()).decode()
         if host == LOCAL:
             os.environ['WSLENV'] = ':'.join(filter(None, [os.environ.get('WSLENV'),
-                                                          'GRAMINE_VBS_ARGS']))
+                                                          'SAGUARO_VBS_ARGS']))
     # The runner names its own process first: SIGTERM or SIGINT here stops the host process (its
     # child) on Windows, so that scripts can stop a server with `kill` as with gramine-direct.
     pspid = []
@@ -604,7 +604,7 @@ def cmd_run(args):
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     # settings of the host process that are passed on from this environment (measurement)
-    for k in ('GRAMINE_VBS_HOSTCALL_STATS', 'GRAMINE_VBS_TIMER_RES'):
+    for k in ('SAGUARO_VBS_HOSTCALL_STATS', 'SAGUARO_VBS_TIMER_RES'):
         if os.environ.get(k) and host == LOCAL:
             os.environ['WSLENV'] = ':'.join(filter(None, [os.environ.get('WSLENV'), k]))
     if host == LOCAL:    # the runner of this checkout (a package signed earlier may hold an older one)
@@ -652,7 +652,7 @@ def cmd_check(args):
     host = windows_host(args)
     windir = windows_dir(args, host, 'runner')
     upload(host, [os.path.join(HERE, 'gramine-vbs.ps1')], windir)
-    cert = setting(args, 'cert_name', 'GRAMINE_VBS_CERT_NAME', 'TheDefaultTestEnclaveCertName')
+    cert = setting(args, 'cert_name', 'SAGUARO_VBS_CERT_NAME', 'TheDefaultTestEnclaveCertName')
     rc, _ = consume(runner_popen(host, windir, ['check', '-CertName', cert]), host, check=False)
     sys.exit(rc)
 
@@ -669,7 +669,7 @@ def cmd_stop(args):
     st = b.load()
     if not st or not st.get('windows_dir'):
         die(f'{b.dir} was not signed on Windows')
-    host = setting(args, 'windows', 'GRAMINE_VBS_WINDOWS', st.get('windows'))
+    host = setting(args, 'windows', 'SAGUARO_VBS_WINDOWS', st.get('windows'))
     ps(host, build_hosts_script(st['windows_dir']) +
        ' | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue; '
        '"stopped $($_.ProcessId)" }', check=False)
@@ -695,7 +695,7 @@ def jinja_env():
     env = mod.make_env()
     env.globals['vbs'] = {
         'repo': ROOT,                                          # the repository
-        'sysroot': os.environ.get('GRAMINE_VBS_SYSROOT',       # the vbs glibc
+        'sysroot': os.environ.get('SAGUARO_VBS_SYSROOT',       # the vbs glibc
                                   os.path.join(ROOT, 'build-vbs-glibc')),
         'python': os.path.join(ROOT, 'build-vbs-python'),      # scripts/vbs/build-python.sh
         # the dynamic loader of the vbs glibc (in /usr/lib of the sysroot and of the enclave)
@@ -863,8 +863,8 @@ def cmd_verify(args):
     st = b.load()
     if not st or not st.get('signed'):
         die(f'{b.dir} is not signed yet')
-    host = setting(args, 'windows', 'GRAMINE_VBS_WINDOWS', st.get('windows'))
-    windir = setting(args, 'windows_dir', 'GRAMINE_VBS_WINDOWS_DIR', st.get('windows_dir'))
+    host = setting(args, 'windows', 'SAGUARO_VBS_WINDOWS', st.get('windows'))
+    windir = setting(args, 'windows_dir', 'SAGUARO_VBS_WINDOWS_DIR', st.get('windows_dir'))
     extra = ' '.join(psq(x) for x in args.checks)
     report = args.report
     if ':' not in report and not report.startswith('\\\\'):    # relative: below the host root
@@ -880,7 +880,7 @@ exit $LASTEXITCODE
 
 def cmd_setup_headers(args):
     host = windows_host(args)
-    hdr = setting(args, 'headers', 'GRAMINE_VBS_HEADERS',
+    hdr = setting(args, 'headers', 'SAGUARO_VBS_HEADERS',
                   os.path.expanduser('~/.cache/gramine-vbs/winhdr'))
     work = windows_dir(args, host, 'headers', explicit=getattr(args, 'cmd', '') == 'setup-headers')
     log(f'collecting the Windows SDK and MSVC headers on {host} (in {work})')
@@ -914,11 +914,11 @@ Write-Output "$t\winhdr.tgz"
 def tools_env():
     """Re-executes with the user-level build tools of `wsl-setup.sh user` (env.sh) in the
     environment, so that make and scripts can call gramine-vbs directly."""
-    tools = os.environ.get('GRAMINE_VBS_TOOLS',
+    tools = os.environ.get('SAGUARO_VBS_TOOLS',
                            os.path.expanduser('~/.local/share/gramine-vbs/tools'))
     envsh = os.path.join(tools, 'env.sh')
-    if os.path.isfile(envsh) and not os.environ.get('GRAMINE_VBS_TOOLS_ENV'):
-        os.environ['GRAMINE_VBS_TOOLS_ENV'] = '1'
+    if os.path.isfile(envsh) and not os.environ.get('SAGUARO_VBS_TOOLS_ENV'):
+        os.environ['SAGUARO_VBS_TOOLS_ENV'] = '1'
         os.execvp('sh', ['sh', '-c', '. "$0"; exec "$@"', envsh, sys.executable,
                          os.path.abspath(__file__), *sys.argv[1:]])
 

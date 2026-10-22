@@ -21,9 +21,9 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 TREE=${TREE:-$(cd "$HERE/../../.." && pwd)}
 KIND=${1:?kind}; N=${2:?vcpus}; OUT=${3:?outdir}; PERIOD=${4:-0}
 mkdir -p "$OUT"
-. "${GRAMINE_PREFIX:-$HOME/.local/gramine-vm}/env.sh"
+. "${SAGUARO_PREFIX:-$HOME/.local/gramine-vm}/env.sh"
 export QEMU_PATH=${QEMU_PATH:-/root/sev-tools/prefix/bin/qemu-system-x86_64}
-export GRAMINE_SEV_MODE=snp GRAMINE_RAM_SIZE=${GRAMINE_RAM_SIZE:-4G} GRAMINE_CPU_NUM=$N
+export SAGUARO_SEV_MODE=snp SAGUARO_RAM_SIZE=${SAGUARO_RAM_SIZE:-4G} SAGUARO_CPU_NUM=$N
 echo "## $(date -u +%Y-%m-%dT%H:%M:%SZ) $KIND vcpus=$N tree=$(git -c safe.directory='*' -C "$TREE" rev-parse --short HEAD) $(uptime | sed 's/.*load/load/')"
 
 # a manifest for a program in $W, from the proton-vm probes template without the multi-process key
@@ -39,7 +39,7 @@ FILTER="self-check\|Frame-pool\|boot\]\|Physical\|Configuring\|REM_MEM\|vm-relay
 case $KIND in
 libos)
     cd "$TREE/libos/test/regression" || exit 2
-    GRAMINE_VM=1 GRAMINE_VM_LAUNCHER=gramine-sev gramine-test pytest -- -q -rfEsxX --tb=short \
+    SAGUARO_VM=1 SAGUARO_VM_LAUNCHER=gramine-sev gramine-test pytest -- -q -rfEsxX --tb=short \
         -p no:cacheprovider --durations=0 --junitxml="$OUT/libos-$N.xml" test_libos.py \
         > "$OUT/libos-$N.log" 2>&1
     echo "exit $?"; grep -E "[0-9]+ (passed|failed)" "$OUT/libos-$N.log" | tail -n 1 ;;
@@ -57,7 +57,7 @@ idle)
     gcc -O1 -o $W/idle "$HERE/idle.c" || exit 2
     cd $W
     Q=$OUT/idle-$N-p$PERIOD.qmp; rm -f "$Q"
-    GRAMINE_VM_QMP=$Q gramine-sev idle 50 $PERIOD > $OUT/idle-$N-p$PERIOD.guest 2>&1 &
+    SAGUARO_VM_QMP=$Q gramine-sev idle 50 $PERIOD > $OUT/idle-$N-p$PERIOD.guest 2>&1 &
     sleep 12; python3 "$HERE/qstats.py" "$Q" > $OUT/idle-$N-p$PERIOD.a.json
     sleep 30; python3 "$HERE/qstats.py" "$Q" > $OUT/idle-$N-p$PERIOD.b.json
     wait

@@ -19,13 +19,13 @@ STK_STARTUP_ARGS = --race-now --benchmark --profile-time=$(PROFILE_TIME) --scree
 	--windowed --seed=11 --track=abyss --kart=konqi
 
 ifeq ($(DEBUG),1)
-GRAMINE_LOG_LEVEL = debug
+SAGUARO_LOG_LEVEL = debug
 else
-GRAMINE_LOG_LEVEL = error
+SAGUARO_LOG_LEVEL = error
 endif
 
 MANIFEST_ARGS = \
-	-Dlog_level=$(GRAMINE_LOG_LEVEL) \
+	-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 	-Dstk_dir=$(STK_DIR) \
 	-Dhome=$(HOME) \
 	-Dprofile_time=$(PROFILE_TIME) \

@@ -20,9 +20,9 @@ BUSYBOX_MIRRORS ?= \
     https://packages.gramineproject.io/distfiles
 
 ifeq ($(DEBUG),1)
-GRAMINE_LOG_LEVEL = debug
+SAGUARO_LOG_LEVEL = debug
 else
-GRAMINE_LOG_LEVEL = error
+SAGUARO_LOG_LEVEL = error
 endif
 
 RA_TYPE ?= none
@@ -67,7 +67,7 @@ $(SRCDIR)/busybox: $(SRCDIR)/.config
 
 busybox.manifest: busybox.manifest.template
 	gramine-manifest \
-		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
+		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		-Dra_type=$(RA_TYPE) \
 		-Dra_client_spid=$(RA_CLIENT_SPID) \

@@ -17,13 +17,13 @@
 #
 # Environment: CONTAINER_NAME / IMAGE_NAME override the default names (container gramine-vm-<arch>,
 # image gramine-vm-<arch>:cf-<Containerfile hash>; see the image section below).
-# GRAMINE_CONTAINER_NVIDIA=1 (when the container is created) also passes the NVIDIA proprietary
+# SAGUARO_CONTAINER_NVIDIA=1 (when the container is created) also passes the NVIDIA proprietary
 # driver's devices and the host's NVIDIA userspace libraries (off by default).
 #
 # Workspaces (see Documentation/AGENTS.md): when the checkout sits in a folder named gramine-<name> (for example
 # .../gramine-<name>/gramine-multiarch), the container is named after that folder
 # (gramine-<name>-vm-x86_64, gramine-<name>-riscv64-cross), and gets its own base for the guest CIDs
-# (GRAMINE_VM_ID_BASE), so several checkouts can run side by side. GRAMINE_WORKSPACE sets the
+# (SAGUARO_VM_ID_BASE), so several checkouts can run side by side. SAGUARO_WORKSPACE sets the
 # name by hand. Workspaces with the same Containerfile share the image. A container whose mount of /root/gramine-multiarch
 # is a different checkout than this one is refused instead of being silently reused.
 #
@@ -56,7 +56,7 @@ case $TARGET in
         NAME=gramine-riscv64-cross ;;
     *) echo "unknown --target '$TARGET' (known: riscv64)" >&2; exit 1 ;;
 esac
-WORKSPACE=${GRAMINE_WORKSPACE:-}
+WORKSPACE=${SAGUARO_WORKSPACE:-}
 if [ -z "$WORKSPACE" ]; then
     case $(basename "$(dirname "$REPO_ROOT")") in
         gramine-*) WORKSPACE=$(basename "$(dirname "$REPO_ROOT")") ;;
@@ -176,11 +176,11 @@ if ! podman container exists "$CONTAINER"; then
     [ -d "$SEV_TOOLS" ] && GRAPHICS+=(-v "$SEV_TOOLS:/root/sev-tools:rw")
     # Intel SGX: the socket of the host's AESM service (remote attestation), when it runs
     [ -S /var/run/aesmd/aesm.socket ] && GRAPHICS+=(-v /var/run/aesmd:/var/run/aesmd)
-    # Opt-in (GRAMINE_CONTAINER_NVIDIA=1, see dev docs: graphics-aarch64/): the NVIDIA
+    # Opt-in (SAGUARO_CONTAINER_NVIDIA=1, see dev docs: graphics-aarch64/): the NVIDIA
     # proprietary driver's device nodes and the host's matching userspace (GLX/EGL vendor libraries,
     # libnvidia-*, GBM backend, vendor configuration files), read-only. The libraries must match the
     # host's kernel module, so they are taken from the host instead of being installed in the image.
-    if [ "${GRAMINE_CONTAINER_NVIDIA:-0}" = 1 ]; then
+    if [ "${SAGUARO_CONTAINER_NVIDIA:-0}" = 1 ]; then
         for d in /dev/nvidia[0-9]* /dev/nvidiactl /dev/nvidia-modeset /dev/nvidia-uvm \
                  /dev/nvidia-uvm-tools /dev/dri/card*; do
             [ -e "$d" ] && DEVICES+=(--device "$d:$d")
@@ -202,7 +202,7 @@ if ! podman container exists "$CONTAINER"; then
     command -v catatonit >/dev/null 2>&1 && INIT=(--init)
     podman run -d --name "$CONTAINER" ${INIT[@]+"${INIT[@]}"} --cap-add ALL --security-opt seccomp=unconfined \
         ${DEVICES[@]+"${DEVICES[@]}"} ${GRAPHICS[@]+"${GRAPHICS[@]}"} \
-        ${VM_ID_BASE:+-e "GRAMINE_VM_ID_BASE=$VM_ID_BASE"} \
+        ${VM_ID_BASE:+-e "SAGUARO_VM_ID_BASE=$VM_ID_BASE"} \
         -v "$REPO_ROOT:/root/gramine-multiarch:rw" \
         "$IMAGE" sleep infinity >/dev/null
 elif [ "$(podman container inspect "$CONTAINER" --format '{{.State.Running}}')" != true ]; then
@@ -213,9 +213,9 @@ fi
 # --- attach -----------------------------------------------------------------------------------------
 # Both modes load the Gramine environment of the vm install (scripts/install.sh --vm), when it exists:
 # gramine-vm and the Python tooling are then on PATH without sourcing env.sh by hand.
-GRAMINE_ENV='[ -f "$HOME/.local/gramine-vm/env.sh" ] && . "$HOME/.local/gramine-vm/env.sh"'
+SAGUARO_ENV='[ -f "$HOME/.local/gramine-vm/env.sh" ] && . "$HOME/.local/gramine-vm/env.sh"'
 if [ $# -gt 0 ]; then
-    exec podman exec -i -w /root/gramine-multiarch "$CONTAINER" bash -c "$GRAMINE_ENV; $*"
+    exec podman exec -i -w /root/gramine-multiarch "$CONTAINER" bash -c "$SAGUARO_ENV; $*"
 else
-    exec podman exec -it -w /root/gramine-multiarch "$CONTAINER" bash -c "$GRAMINE_ENV; exec bash"
+    exec podman exec -it -w /root/gramine-multiarch "$CONTAINER" bash -c "$SAGUARO_ENV; exec bash"
 fi

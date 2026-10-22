@@ -12,9 +12,9 @@ MEMCACHED_MIRRORS ?= \
 MEMCACHED_SHA256 ?= c788980efc417dd5d93c442b1c8b8769fb2018896c29de3887d22a2f143da2ee
 
 ifeq ($(DEBUG),1)
-GRAMINE_LOG_LEVEL = debug
+SAGUARO_LOG_LEVEL = debug
 else
-GRAMINE_LOG_LEVEL = error
+SAGUARO_LOG_LEVEL = error
 endif
 
 .PHONY: all
@@ -76,7 +76,7 @@ endif
 
 memcached.manifest: memcached.manifest.template
 	gramine-manifest \
-		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
+		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		$< > $@
 

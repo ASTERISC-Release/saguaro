@@ -3,7 +3,7 @@
 
 loader.entrypoint = "file:{{ gramine.libos }}"
 libos.entrypoint = "/vsock_udp_client"
-loader.log_level = "{{ env.get('GRAMINE_LOG_LEVEL', 'error') }}"
+loader.log_level = "{{ env.get('SAGUARO_LOG_LEVEL', 'error') }}"
 loader.env.LD_LIBRARY_PATH = "/lib:{{ arch_libdir }}:/usr/{{ arch_libdir }}"
 loader.insecure__use_cmdline_argv = true
 

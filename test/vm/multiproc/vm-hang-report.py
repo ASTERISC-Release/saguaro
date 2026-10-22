@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: LGPL-3.0-or-later
-"""Where the vCPUs of a hung gramine-vm guest are: started with GRAMINE_VM_MONITOR=<socket>, the
+"""Where the vCPUs of a hung gramine-vm guest are: started with SAGUARO_VM_MONITOR=<socket>, the
 guest's QEMU monitor is asked for every vCPU's registers a few times, and each RIP is named after
 the VM PAL function that contains it (an address outside the PAL is LibOS or application code).
 A RIP that stays in the same place across samples is a spin or a loop; HLT=1 is an idle vCPU.
@@ -11,7 +11,7 @@ Usage: vm-hang-report.py <monitor-socket> [--quit] [--samples N]
 import argparse, bisect, glob, os, re, socket, subprocess, time
 
 def pal_symbols():
-    prefix = os.environ.get('GRAMINE_PREFIX', os.path.expanduser('~/.local/gramine-vm'))
+    prefix = os.environ.get('SAGUARO_PREFIX', os.path.expanduser('~/.local/gramine-vm'))
     pals = glob.glob(os.path.join(prefix, 'lib', '*', 'gramine', 'vm', 'pal'))
     if not pals:
         return [], []

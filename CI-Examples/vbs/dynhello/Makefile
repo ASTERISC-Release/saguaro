@@ -8,7 +8,7 @@
 ifeq ($(VBS),1)
 VBS_APP = dynhello
 VBS_TEMPLATE = vbs.manifest.template
-VBS_DEPS = $(GRAMINE_VBS_REPO)/pal/src/host/vbs/test/dynhello/dynhello.c
+VBS_DEPS = $(SAGUARO_VBS_REPO)/pal/src/host/vbs/test/dynhello/dynhello.c
 VBS_CLEAN = dynhello
 include ../../../scripts/vbs/Makefile.vbs
 all: vbs-all

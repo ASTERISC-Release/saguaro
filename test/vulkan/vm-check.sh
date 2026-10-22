@@ -7,7 +7,7 @@
 # through vk-two, under gramine-vm with the multiprocess key on. Needs the GPU (EGL_DISCRETE=1
 # for renderD129, the AMD GPU; 0 for the first render node) and the QEMU fork with the listener.
 # Usage (in the container, after scripts/install.sh --vm):
-#   test/vulkan/vm-check.sh [N]        (default N=2; GRAMINE_PREFIX, QEMU_PATH, EGL_DISCRETE apply)
+#   test/vulkan/vm-check.sh [N]        (default N=2; SAGUARO_PREFIX, QEMU_PATH, EGL_DISCRETE apply)
 # The guest's Vulkan loader lists every GPU of the host and vk-headless picks device 0 unless
 # VKH_DEVICE names one (an index or a name substring); on a machine with an AMD and an Intel GPU
 #   VKH_DEVICE=Intel test/vulkan/vm-check.sh
@@ -16,7 +16,7 @@
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
 N=${1:-2}
-. "${GRAMINE_PREFIX:-$HOME/.local/gramine-vm}/env.sh"
+. "${SAGUARO_PREFIX:-$HOME/.local/gramine-vm}/env.sh"
 [ -n "${QEMU_PATH:-}" ] || { [ -x /root/qemu-tirith/build/qemu-system-x86_64 ] && export QEMU_PATH=/root/qemu-tirith/build/qemu-system-x86_64; }
 export EGL_DISCRETE=${EGL_DISCRETE:-1}
 cd "$HERE" || exit 2

@@ -7,7 +7,7 @@ set -u
 set -o pipefail
 
 REPO=$(cd "$(dirname "$(readlink -f "$0")")/../../.." && pwd)
-PREFIX=${GRAMINE_PREFIX:-$HOME/.local/gramine-vm}
+PREFIX=${SAGUARO_PREFIX:-$HOME/.local/gramine-vm}
 GUEST_PORT=${REDIS_GUEST_PORT:-6379}
 HOST_PORT=${REDIS_HOST_PORT:-16379}
 OUT=${OUT:-/tmp/vm-redis}
@@ -41,7 +41,7 @@ REDIS_BENCHMARK=$APP/src/src/redis-benchmark
 VM_LOG=$OUT/gramine-vm.log
 rm -f "$VM_LOG"
 cd "$APP"
-GRAMINE_VM_INBOUND="$GUEST_PORT:$HOST_PORT" GRAMINE_VM_CONSOLE_LOG=$VM_LOG \
+SAGUARO_VM_INBOUND="$GUEST_PORT:$HOST_PORT" SAGUARO_VM_CONSOLE_LOG=$VM_LOG \
     gramine-vm redis-server >"$OUT/gramine-vm.out" 2>&1 &
 VM_PID=$!
 

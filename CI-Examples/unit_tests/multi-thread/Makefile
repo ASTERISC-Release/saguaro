@@ -8,10 +8,10 @@ CFLAGS = -Wall -Wextra -O2 -rdynamic -g -std=c11 -pthread -D_FORTIFY_SOURCE=0
 LDFLAGS = 
 
 ifeq ($(DEBUG),1)
-GRAMINE_LOG_LEVEL = debug
+SAGUARO_LOG_LEVEL = debug
 CFLAGS += -g
 else
-GRAMINE_LOG_LEVEL = error
+SAGUARO_LOG_LEVEL = error
 CFLAGS += -O3
 endif
 
@@ -23,7 +23,7 @@ thread-stress: thread-stress.o
 thread-stress.o: thread-stress.c
 thread-stress.manifest: thread-stress.manifest.template
 	gramine-manifest \
-		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
+		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Dmultiarch=$(shell $(CC) -dumpmachine) \
 		$< $@
 	gramine-manifest-check $@
@@ -33,7 +33,7 @@ thread-rwlock: thread-rwlock.o
 thread-rwlock.o: thread-rwlock.c
 thread-rwlock.manifest: thread-rwlock.manifest.template
 	gramine-manifest \
-		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
+		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Dmultiarch=$(shell $(CC) -dumpmachine) \
 		$< $@
 	gramine-manifest-check $@
@@ -51,7 +51,7 @@ thread-tls: thread-tls.o
 thread-tls.o: thread-tls.c
 thread-tls.manifest: thread-tls.manifest.template
 	gramine-manifest \
-		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
+		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Dmultiarch=$(shell $(CC) -dumpmachine) \
 		$< $@
 	gramine-manifest-check $@

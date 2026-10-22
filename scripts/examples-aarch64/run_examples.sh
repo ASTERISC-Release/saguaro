@@ -9,7 +9,7 @@ PREREQS=0; [ "${1:-}" = "--prereqs" ] && { PREREQS=1; shift; }
 EX=${1:-$HERE/../../CI-Examples}
 export PATH="$HOME/.local/bin:$PATH"
 [ "$PREREQS" = 1 ] && "$EX/install-all-prereqs.sh"
-. "$HERE/../gramine-env.sh"   # GRAMINE_PREFIX, PATH, PYTHONPATH
+. "$HERE/../gramine-env.sh"   # SAGUARO_PREFIX, PATH, PYTHONPATH
 pass=0; fail=0
 run() { local name=$1; shift
   if ( cd "$EX/$name" && eval "$@" ) >/tmp/ex-$name.log 2>&1; then echo "PASS $name"; pass=$((pass+1)); else echo "FAIL $name (see /tmp/ex-$name.log)"; fail=$((fail+1)); fi; }

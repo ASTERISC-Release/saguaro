@@ -6,10 +6,10 @@
 # dev docs: vbs-enclave): builds the programs (build.sh), packs them into one image
 # (vbs.manifest.template), signs it on Windows, and runs every case of cases.txt in its own host
 # process with a 60 s watchdog (run-regress.ps1). Pass = exit code 0 and "TEST OK" in the output.
-# Usage: run-regress.sh OUTDIR [CASE-FILTER-REGEX]   (GRAMINE_REPO: another checkout to test)
+# Usage: run-regress.sh OUTDIR [CASE-FILTER-REGEX]   (SAGUARO_REPO: another checkout to test)
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
-ROOT=${GRAMINE_REPO:-$(cd "$HERE/../../../../../.." && pwd)}
+ROOT=${SAGUARO_REPO:-$(cd "$HERE/../../../../../.." && pwd)}
 OUT=$(realpath -m "$1")
 FILTER=${2:-.}
 G="$ROOT/scripts/vbs/gramine-vbs"

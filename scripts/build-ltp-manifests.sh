@@ -4,7 +4,7 @@
 set -euo pipefail
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-prefix=${GRAMINE_PREFIX:-"$HOME/.local/gramine-vm"}
+prefix=${SAGUARO_PREFIX:-"$HOME/.local/gramine-vm"}
 ltp_root=${LTP_PREFIX:-"$repo_root/.ltp-install"}
 test_dir="$repo_root/libos/test/ltp"
 # LTP_HARNESS_DIR: build the manifests in another directory, a copy of libos/test/ltp's harness

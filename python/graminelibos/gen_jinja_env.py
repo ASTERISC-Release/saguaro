@@ -72,10 +72,10 @@ def host_libc_dir():
     """Directory of the host's glibc and its dynamic loader.
 
     Used when Gramine was built without a bundled libc (meson option `libc=none`): applications then
-    run on the libc of the machine the manifest is rendered on. `GRAMINE_HOST_LIBC_DIR` overrides
+    run on the libc of the machine the manifest is rendered on. `SAGUARO_HOST_LIBC_DIR` overrides
     the search, for example when manifests for another machine are rendered.
     """
-    override = os.environ.get('GRAMINE_HOST_LIBC_DIR')
+    override = os.environ.get('SAGUARO_HOST_LIBC_DIR')
     if override:
         return pathlib.Path(override).resolve()
 
@@ -91,7 +91,7 @@ def host_libc_dir():
             return path.resolve()
 
     raise RuntimeError('This Gramine was built without a bundled libc (libc=none), but no glibc '
-                       'was found in ' + ', '.join(candidates) + '. Set GRAMINE_HOST_LIBC_DIR to '
+                       'was found in ' + ', '.join(candidates) + '. Set SAGUARO_HOST_LIBC_DIR to '
                        'the directory that holds libc.so.6 and the dynamic loader.')
 
 class Runtimedir:

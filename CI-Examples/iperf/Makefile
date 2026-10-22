@@ -18,9 +18,9 @@ IPERF_SRC ?= iperf-3.16.tar.gz
 IPERF_MIRRORS ?= https://github.com/esnet/iperf/releases/download/3.16
 
 ifeq ($(DEBUG),1)
-GRAMINE_LOG_LEVEL = debug
+SAGUARO_LOG_LEVEL = debug
 else
-GRAMINE_LOG_LEVEL = error
+SAGUARO_LOG_LEVEL = error
 endif
 
 .PHONY: all
@@ -58,7 +58,7 @@ iperf_build: $(IPERF_DIR)/configure
 
 iperf3.manifest: iperf3.manifest.template install/iperf3 install/libiperf.so.0
 	gramine-manifest \
-		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
+		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		$< > $@
 

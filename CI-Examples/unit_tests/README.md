@@ -26,7 +26,7 @@ gramine-direct helloworld       # mremap/
 gramine-direct align_test       # align_test/
 ```
 
-The `multi-thread` and `networks` suites also run from the repository root: `test/direct/test-direct.sh multithread` and `test/direct/test-direct.sh networks` (`GRAMINE_RUNNER=gramine-vm` for the VM).
+The `multi-thread` and `networks` suites also run from the repository root: `test/direct/test-direct.sh multithread` and `test/direct/test-direct.sh networks` (`SAGUARO_RUNNER=gramine-vm` for the VM).
 
 ## Notes
 

@@ -23,12 +23,12 @@ HAS_SGX = os.environ.get('SGX') == '1'
 IS_VM = os.environ.get('IS_VM') == '1'
 # Run the tests under the VM PAL (`gramine-vm`) instead of Linux-direct/SGX. Note this is not IS_VM,
 # which says the *test machine* is a VM.
-USE_GRAMINE_VM = os.environ.get('GRAMINE_VM') == '1'
+USE_GRAMINE_VM = os.environ.get('SAGUARO_VM') == '1'
 # the launcher of the VM runs: gramine-vm, or gramine-sev for the AMD SEV build of the vm PAL
 # (dev docs: sev/), whose PAL lives in <pkglibdir>/sev
-VM_LAUNCHER = os.environ.get('GRAMINE_VM_LAUNCHER', 'gramine-vm')
+VM_LAUNCHER = os.environ.get('SAGUARO_VM_LAUNCHER', 'gramine-vm')
 ON_X86 = os.uname().machine in ['x86_64']
-USES_MUSL = os.environ.get('GRAMINE_MUSL') == '1'
+USES_MUSL = os.environ.get('SAGUARO_MUSL') == '1'
 
 def expectedFailureIf(predicate):
     if predicate:
@@ -173,8 +173,8 @@ def run_command(cmd, *, timeout, open_fds_limit=None, can_fail=False, **kwds):
 
 class RegressionTestCase(unittest.TestCase):
     # The VM PAL boots a whole guest per run and services timed waits from a 100 ms tick, so its runs
-    # need more headroom; GRAMINE_TEST_TIMEOUT overrides any default.
-    DEFAULT_TIMEOUT = int(os.environ.get('GRAMINE_TEST_TIMEOUT',
+    # need more headroom; SAGUARO_TEST_TIMEOUT overrides any default.
+    DEFAULT_TIMEOUT = int(os.environ.get('SAGUARO_TEST_TIMEOUT',
                                          20 if HAS_SGX else 40 if USE_GRAMINE_VM else 10))
 
     def get_env(self, name):

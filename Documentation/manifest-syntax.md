@@ -828,7 +828,7 @@ Windows it runs inside the WSL distribution). Its environment has
 `SYSROOT` (the vbs glibc), `VBS_CC_STATIC` and `VBS_CC_DYNAMIC` (link a
 static or a dynamically linked PIE against it, `scripts/vbs/cc-*-pie.sh`),
 `VBS_GCC` (a `gcc` for configure scripts, `scripts/vbs/vbs-gcc`) and
-`GRAMINE_REPO`. For example:
+`SAGUARO_REPO`. For example:
 
 ```
 vbs.build = "$VBS_CC_STATIC -o helloworld helloworld.c"

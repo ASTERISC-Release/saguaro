@@ -18,9 +18,9 @@ LISTEN_PORT ?= 8002
 LISTEN_SSL_PORT ?= 8444
 
 ifeq ($(DEBUG),1)
-GRAMINE_LOG_LEVEL = debug
+SAGUARO_LOG_LEVEL = debug
 else
-GRAMINE_LOG_LEVEL = error
+SAGUARO_LOG_LEVEL = error
 endif
 
 .PHONY: all
@@ -103,7 +103,7 @@ endif
 
 nginx.manifest: nginx.manifest.template
 	gramine-manifest \
-		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
+		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		-Dinstall_dir=$(INSTALL_DIR) \
 		-Dinstall_dir_abspath=$(abspath $(INSTALL_DIR)) \

@@ -117,7 +117,7 @@ class TestConfig:
         ninja.variable('ARCH_LIBDIR', self.arch_libdir)
         ninja.variable('COREUTILS_LIBDIR', self.coreutils_libdir)
         ninja.variable('KEY', self.key)
-        ninja.variable('GRAMINE_LIBC', self.libc)
+        ninja.variable('SAGUARO_LIBC', self.libc)
         ninja.newline()
 
         ninja.rule(
@@ -127,7 +127,7 @@ class TestConfig:
                      '-Dcoreutils_libdir=$COREUTILS_LIBDIR '
                      '-Dentrypoint=$ENTRYPOINT '
                      '-Dbinary_dir=$BINARY_DIR '
-                     '-Dlibc=$GRAMINE_LIBC '
+                     '-Dlibc=$SAGUARO_LIBC '
                     f'{"--no-check " if self.no_check else ""}'
                      '$in $out'),
             description='manifest: $out'
@@ -248,7 +248,7 @@ def run_ninja(args):
 
 def exec_gramine(sgx, name, args):
     prog = ('gramine-sgx' if sgx else
-            'gramine-vm' if os.environ.get('GRAMINE_VM') == '1' else 'gramine-direct')
+            'gramine-vm' if os.environ.get('SAGUARO_VM') == '1' else 'gramine-direct')
     argv = [prog, name] + list(args)
     print(' '.join(argv))
     os.execvp(prog, argv)

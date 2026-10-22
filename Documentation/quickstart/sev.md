@@ -13,7 +13,7 @@ Symbols as in [README.md](../../README.md):
 |-------------------------|--------------|-------|---------|---------------|
 | `gramine-sev` (SEV-SNP) | ➖           | ⚠️    | ➖      | ➖            |
 
-Plain SEV/SEV-ES is also available: `./exec.sh --sev`, or `GRAMINE_SEV_MODE=sev` by hand.
+Plain SEV/SEV-ES is also available: `./exec.sh --sev`, or `SAGUARO_SEV_MODE=sev` by hand.
 
 ## Requirements
 
@@ -52,7 +52,7 @@ In the container shell, `exec.sh` runs the example under SEV-SNP (`--sev-snp`) o
     ./exec.sh --sev-snp
     ./exec.sh --sev
 
-The script builds the example, sets `GRAMINE_SEV_MODE` to `snp` or `sev` and runs `gramine-sev`.
+The script builds the example, sets `SAGUARO_SEV_MODE` to `snp` or `sev` and runs `gramine-sev`.
 The output contains:
 
     gramine-sev: snp launch digest of .../sev/gramine-sev.igvm on 1 vCPUs: <96 hex digits>
@@ -63,11 +63,11 @@ The steps by hand:
 
     cd CI-Examples/helloworld
     make
-    GRAMINE_SEV_MODE=snp gramine-sev helloworld
+    SAGUARO_SEV_MODE=snp gramine-sev helloworld
 
 The digest depends on the PAL build and vCPU count; the attestation report must contain this value.
 
-The guest's serial log (`GRAMINE_VM_SERIAL_LOG=<file>`) starts with `SEV: memory encryption active: SEV SEV-ES SEV-SNP (SEV_STATUS 0x7), C-bit 51`. The SEV PAL refuses to run without
+The guest's serial log (`SAGUARO_VM_SERIAL_LOG=<file>`) starts with `SEV: memory encryption active: SEV SEV-ES SEV-SNP (SEV_STATUS 0x7), C-bit 51`. The SEV PAL refuses to run without
 encryption.
 
 `./exec.sh --sev` and `./exec.sh --sev-snp` pass for every example that supports them
@@ -77,11 +77,11 @@ In a fresh container, `blender`, `mongodb`, `nodejs`, `openjdk` and `r` first st
 
 Note the following:
 
-- Set `GRAMINE_CPU_NUM` and `GRAMINE_RAM_SIZE` as for `gramine-vm`. The guest needs at least 6G
+- Set `SAGUARO_CPU_NUM` and `SAGUARO_RAM_SIZE` as for `gramine-vm`. The guest needs at least 6G
   (the launcher default and the scripts of `test/sev/` use 8G, which SEV pins at launch): `4G`
   no longer works, the guest stops with `Cannot initialize the multiprocess frame pool: Not enough memory`.
-- Mode can be selected with `GRAMINE_SEV_MODE` or `sev.mode` in the manifest (`snp` by default, or `sev`).
-- `GRAMINE_SEV_POLICY` or `sev.policy` sets the guest policy (default `0x30000` for SNP, with
+- Mode can be selected with `SAGUARO_SEV_MODE` or `sev.mode` in the manifest (`snp` by default, or `sev`).
+- `SAGUARO_SEV_POLICY` or `sev.policy` sets the guest policy (default `0x30000` for SNP, with
   debugging disabled).
 
 # 3. Attestation
@@ -92,7 +92,7 @@ Inside the guest, `/dev/attestation/attestation_type` reads `sev-snp`; write 64 
 this and writes the report to a host file:
 
     cd test/sev && make
-    GRAMINE_SEV_MODE=snp gramine-sev sev_attest $(head -c 64 /dev/urandom | od -An -tx1 | tr -d ' \n') /tmp/report.bin
+    SAGUARO_SEV_MODE=snp gramine-sev sev_attest $(head -c 64 /dev/urandom | od -An -tx1 | tr -d ' \n') /tmp/report.bin
 
 Check the report (in the container, where the SEV tools are): its signature against AMD's certificate chain (fetched from AMD's key
 server) and its measurement against the IGVM file:
@@ -110,12 +110,12 @@ are currently not measured.
 
 # 4. Regression Tests
 
-    GRAMINE_SEV_MODE=snp test/sev/test-sev.sh     # hello (1, 4 vCPUs), host-side memory check, vsock, attest
+    SAGUARO_SEV_MODE=snp test/sev/test-sev.sh     # hello (1, 4 vCPUs), host-side memory check, vsock, attest
     test/sev/test-sev.sh                          # the same under plain SEV, with the launch measurement
-    GRAMINE_VM_LAUNCHER=gramine-sev GRAMINE_SEV_MODE=snp GRAMINE_RAM_SIZE=8G test/vm/test-vm.sh libos
+    SAGUARO_VM_LAUNCHER=gramine-sev SAGUARO_SEV_MODE=snp SAGUARO_RAM_SIZE=8G test/vm/test-vm.sh libos
     test/sev/test-sev-all.sh                      # everything above, at 1, 2 and 4 vCPUs, plus examples
 
-`GRAMINE_SEV_MODE=snp test/sev/test-sev.sh` runs under SNP, `test/sev/test-sev.sh` under plain SEV
+`SAGUARO_SEV_MODE=snp test/sev/test-sev.sh` runs under SNP, `test/sev/test-sev.sh` under plain SEV
 (see the header of the script for the suites). `test/sev/test-sev.sh` passes in both modes
 ([RESULTS.md](../../CI-Examples/RESULTS.md)).
 
@@ -128,6 +128,6 @@ are currently not measured.
   kernel; plain SEV (`--sev`) may still work.
 - `gramine-sev` cannot find QEMU: `container/sev/build-sev-tools.sh all` has not run, or
   `sev-tools/` is not next to the checkout. Set `SEV_TOOLS_DIR` or `QEMU_PATH`.
-- `Cannot initialize the multiprocess frame pool: Not enough memory`: `GRAMINE_RAM_SIZE` is below
+- `Cannot initialize the multiprocess frame pool: Not enough memory`: `SAGUARO_RAM_SIZE` is below
   6G; unset it or use `8G`.
 - The signature check of an attestation report needs network access to AMD's key server.

@@ -6,9 +6,9 @@
 set -u
 set -o pipefail
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
-PREFIX=${GRAMINE_PREFIX:-$HOME/.local/gramine-vm}
+PREFIX=${SAGUARO_PREFIX:-$HOME/.local/gramine-vm}
 DNS_NAME=${DNS_NAME:-example.com}
-CPU_NUM=${GRAMINE_CPU_NUM:-2}
+CPU_NUM=${SAGUARO_CPU_NUM:-2}
 OUT=${OUT:-/tmp/vsock-udp}
 
 while [ $# -gt 0 ]; do
@@ -26,13 +26,13 @@ command -v gramine-vm >/dev/null || { echo "gramine-vm not on PATH (prefix $PREF
 test_host_ip() {
     python3 -c 'import socket; s=socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.connect(("1.1.1.1", 53)); print(s.getsockname()[0]); s.close()'
 }
-HOST_IP=${GRAMINE_VM_TEST_HOST_IP:-$(test_host_ip)}
+HOST_IP=${SAGUARO_VM_TEST_HOST_IP:-$(test_host_ip)}
 case $HOST_IP in 127.*|0.0.0.0) echo "not a routable container address: $HOST_IP" >&2; exit 1 ;; esac
 
 DIR=$(cd "$HERE/../vsock-loopback" && pwd)
 mkdir -p "$OUT"
 make -C "$DIR" -s || exit 1
-(cd "$DIR" && GRAMINE_VM=1 gramine-test build -f vsock_udp_client) \
+(cd "$DIR" && SAGUARO_VM=1 gramine-test build -f vsock_udp_client) \
     >"$OUT/manifest.log" 2>&1 || { cat "$OUT/manifest.log"; exit 1; }
 
 SERVER_PID=
@@ -53,7 +53,7 @@ PORT=$(cat "$READY")
 
 echo "== UDP echo to $HOST_IP and DNS $DNS_NAME, ${CPU_NUM} vCPUs"
 cd "$DIR"
-GRAMINE_CPU_NUM=$CPU_NUM GRAMINE_VM_CONSOLE_LOG="$OUT/guest.console" \
+SAGUARO_CPU_NUM=$CPU_NUM SAGUARO_VM_CONSOLE_LOG="$OUT/guest.console" \
     timeout --signal=TERM --kill-after=5s 120s gramine-vm vsock_udp_client \
     "$DNS_NAME" "$HOST_IP" "$PORT" >"$OUT/guest.log" 2>&1 || {
         cat "$OUT/guest.log" "$SERVER_LOG" >&2; exit 1;

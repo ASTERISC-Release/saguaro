@@ -10,7 +10,7 @@ sys.rewrite_syscalls = false
 
 vbs.debug = false
 vbs.max_threads = 4
-vbs.build = "$VBS_CC_DYNAMIC -o dynhello $GRAMINE_REPO/pal/src/host/vbs/test/dynhello/dynhello.c"
+vbs.build = "$VBS_CC_DYNAMIC -o dynhello $SAGUARO_REPO/pal/src/host/vbs/test/dynhello/dynhello.c"
 vbs.packed_files = [
   { path = "/dynhello", uri = "file:dynhello" },
   { path = "/usr/lib/{{ vbs.ldso }}", uri = "file:{{ vbs.sysroot }}/usr/lib/{{ vbs.ldso }}" },

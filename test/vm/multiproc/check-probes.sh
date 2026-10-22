@@ -12,26 +12,26 @@
 #   sysv      System V shared memory, queues and semaphores between a parent and forked children,
 #             IPC_RMID, SEM_UNDO, and a load of 2,000 messages from 4 children (sysv-fork.c)
 #   libos     the LibOS regressions fork_and_exec and vfork_and_exec, manifests rendered with
-#             GRAMINE_VM_MULTIPROCESS=1 (libos/test/regression/manifest.template)
+#             SAGUARO_VM_MULTIPROCESS=1 (libos/test/regression/manifest.template)
 #   examples  helloworld, thread-tls, python helloworld.py and the bash example's 7 checks, with the
 #             key added to their generated manifests (restored afterwards)
 #   redis     redis BGSAVE (a forked child writes dump.rdb); needs CI-Examples/redis built
 #
 # Usage: test/vm/multiproc/check-probes.sh [check...]   (default: spawn signals forks misc sysv)
-# Environment: GRAMINE_PREFIX (install prefix, default ~/.local/gramine-vm), GRAMINE_CPU_NUM
+# Environment: SAGUARO_PREFIX (install prefix, default ~/.local/gramine-vm), SAGUARO_CPU_NUM
 # (default 2), WORK (scratch dir, default <repo>/.mp-probes), LOGDIR (default $WORK/logs),
 # TIMEOUT_SCALE (multiplies every timeout, default 1), RERUN (default 1: rerun a failed check once),
 # MP (default 1; MP=0 renders the probe manifests without the key, as a negative check),
-# REDIS_HOST_PORT (default 16379), GRAMINE_VM_LAUNCHER (default gramine-vm; gramine-sev for AMD SEV,
+# REDIS_HOST_PORT (default 16379), SAGUARO_VM_LAUNCHER (default gramine-vm; gramine-sev for AMD SEV,
 # applies to the checks that run through vm()).
 set -u
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 REPO=$(cd "$HERE/../../.." && pwd)
-PREFIX=${GRAMINE_PREFIX:-$HOME/.local/gramine-vm}
-[ -f "$PREFIX/env.sh" ] || { echo "no $PREFIX/env.sh: set GRAMINE_PREFIX to the install prefix" >&2; exit 2; }
+PREFIX=${SAGUARO_PREFIX:-$HOME/.local/gramine-vm}
+[ -f "$PREFIX/env.sh" ] || { echo "no $PREFIX/env.sh: set SAGUARO_PREFIX to the install prefix" >&2; exit 2; }
 . "$PREFIX/env.sh"
 command -v gramine-vm >/dev/null || { echo "gramine-vm not on PATH after $PREFIX/env.sh" >&2; exit 2; }
-export GRAMINE_CPU_NUM=${GRAMINE_CPU_NUM:-2}
+export SAGUARO_CPU_NUM=${SAGUARO_CPU_NUM:-2}
 WORK=${WORK:-$REPO/.mp-probes}
 LOGDIR=${LOGDIR:-$WORK/logs}
 SCALE=${TIMEOUT_SCALE:-1}
@@ -48,11 +48,11 @@ FAILED=()
 vm() {
     local log=$1 t=$(( $2 * SCALE )) mon="$LOGDIR/qemu-monitor.sock" raw="$LOGDIR/vm-output.raw" pid rc i
     shift 2
-    # GRAMINE_VM_LAUNCHER=gramine-sev runs the checks under AMD SEV (dev docs: sev/)
-    [ "$1" = gramine-vm ] && [ -n "${GRAMINE_VM_LAUNCHER:-}" ] && set -- "$GRAMINE_VM_LAUNCHER" "${@:2}"
-    echo "+ $* (timeout ${t}s, $GRAMINE_CPU_NUM vCPUs)" >> "$log"
+    # SAGUARO_VM_LAUNCHER=gramine-sev runs the checks under AMD SEV (dev docs: sev/)
+    [ "$1" = gramine-vm ] && [ -n "${SAGUARO_VM_LAUNCHER:-}" ] && set -- "$SAGUARO_VM_LAUNCHER" "${@:2}"
+    echo "+ $* (timeout ${t}s, $SAGUARO_CPU_NUM vCPUs)" >> "$log"
     rm -f "$mon"
-    GRAMINE_VM_MONITOR=$mon setsid "$@" > "$raw" 2>&1 < /dev/null &
+    SAGUARO_VM_MONITOR=$mon setsid "$@" > "$raw" 2>&1 < /dev/null &
     pid=$!
     for ((i = 0; i < t * 10; i++)); do kill -0 "$pid" 2>/dev/null || break; sleep 0.1; done
     if kill -0 "$pid" 2>/dev/null; then
@@ -190,12 +190,12 @@ check_libos() {
     (
         cd "$REPO/libos/test/regression" || exit 1
         # --force: gramine-test leaves up-to-date manifests alone, so the key must be re-rendered
-        GRAMINE_VM_MULTIPROCESS=1 gramine-test build --force >> "$log" 2>&1 || exit 1
+        SAGUARO_VM_MULTIPROCESS=1 gramine-test build --force >> "$log" 2>&1 || exit 1
         for m in fork_and_exec vfork_and_exec; do
             grep -qx 'experimental__multiprocess = true' "$m.manifest" \
                 || { echo "  $m.manifest does not set the key" | tee -a "$log"; exit 1; }
         done
-        GRAMINE_VM=1 GRAMINE_VM_SKIPLIST=0 timeout -s KILL $(( 900 * SCALE )) \
+        SAGUARO_VM=1 SAGUARO_VM_SKIPLIST=0 timeout -s KILL $(( 900 * SCALE )) \
             python3 -m pytest -q -rfEsxX --tb=short -p no:cacheprovider test_libos.py \
             -k "vfork_and_exec or fork_and_exec" 2>&1 | tr -d '\r' >> "$log"
     ) || rc=1
@@ -254,7 +254,7 @@ check_redis() {
         || { echo "  host port $port is busy"; return 1; }
     : > "$list"; key_on "$D/redis-server.manifest" "$list"
     rm -f "$D/dump.rdb"
-    ( cd "$D" && GRAMINE_VM_INBOUND="6379:$port" exec setsid timeout -s KILL $(( 300 * SCALE )) gramine-vm redis-server \
+    ( cd "$D" && SAGUARO_VM_INBOUND="6379:$port" exec setsid timeout -s KILL $(( 300 * SCALE )) gramine-vm redis-server \
           > "$log.server" 2>&1 ) &
     pid=$!
     python3 - "$port" "$SCALE" >> "$log" 2>&1 <<'PY' || rc=1
@@ -308,8 +308,8 @@ for c in "$@"; do
     esac
 done
 if [ ${#FAILED[@]} = 0 ]; then
-    echo "ALL MULTIPROCESS CHECKS PASSED ($*; MP=$MP, $GRAMINE_CPU_NUM vCPUs)"
+    echo "ALL MULTIPROCESS CHECKS PASSED ($*; MP=$MP, $SAGUARO_CPU_NUM vCPUs)"
 else
-    echo "MULTIPROCESS CHECKS FAILED: ${FAILED[*]} (MP=$MP, $GRAMINE_CPU_NUM vCPUs)"
+    echo "MULTIPROCESS CHECKS FAILED: ${FAILED[*]} (MP=$MP, $SAGUARO_CPU_NUM vCPUs)"
     exit 1
 fi

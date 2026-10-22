@@ -6,8 +6,8 @@
 set -u
 set -o pipefail
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
-PREFIX=${GRAMINE_PREFIX:-$HOME/.local/gramine-vm}
-CPU_NUM=${GRAMINE_CPU_NUM:-2}
+PREFIX=${SAGUARO_PREFIX:-$HOME/.local/gramine-vm}
+CPU_NUM=${SAGUARO_CPU_NUM:-2}
 OUT=${OUT:-/tmp/vsock-guest-loopback}
 
 while [ $# -gt 0 ]; do
@@ -26,12 +26,12 @@ command -v gramine-vm >/dev/null || { echo "gramine-vm not on PATH (prefix $PREF
 DIR=$(cd "$HERE/../vsock-loopback" && pwd)
 mkdir -p "$OUT"
 make -C "$DIR" -s || exit 1
-(cd "$DIR" && GRAMINE_VM=1 gramine-test build -f vsock_guest_loopback) \
+(cd "$DIR" && SAGUARO_VM=1 gramine-test build -f vsock_guest_loopback) \
     >"$OUT/manifest.log" 2>&1 || { cat "$OUT/manifest.log"; exit 1; }
 
 cd "$DIR"
 echo "== guest loopback: TCP echo, async connect and socket names, UDP self-echo, ${CPU_NUM} vCPUs"
-GRAMINE_CPU_NUM=$CPU_NUM GRAMINE_VM_CONSOLE_LOG="$OUT/guest.console" \
+SAGUARO_CPU_NUM=$CPU_NUM SAGUARO_VM_CONSOLE_LOG="$OUT/guest.console" \
     timeout --signal=TERM --kill-after=5s 120s gramine-vm vsock_guest_loopback \
     >"$OUT/guest.log" 2>&1 || { cat "$OUT/guest.log" >&2; exit 1; }
 grep -q 'GUEST_LOOPBACK_OK tcp4=1000 tcp6=1000 nonblock4=1 nonblock6=1 udp4=1 udp6=1 rcvtimeo=2' "$OUT/guest.log" || {

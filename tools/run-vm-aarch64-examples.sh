@@ -6,7 +6,7 @@
 # with the VM build installed; see dev docs: vm.md) and check their output.
 #
 # Usage: tools/run-vm-aarch64-examples.sh [example ...]        (default: all below)
-#   GRAMINE_CPU_NUM=2   vCPUs per run          RUN_TIMEOUT=120   per-run timeout (s)
+#   SAGUARO_CPU_NUM=2   vCPUs per run          RUN_TIMEOUT=120   per-run timeout (s)
 #   VM_PREFIX=/tmp/vm-prefix                   OUT=/tmp/vm-examples (per-run logs)
 #
 # Each example's manifest is re-rendered with `make -B` against the VM install (so loader.entrypoint
@@ -21,7 +21,7 @@ ROOT=$(cd "$HERE/.." && pwd)
 VM_PREFIX=${VM_PREFIX:-/tmp/vm-prefix}
 export PATH=$VM_PREFIX/bin:$PATH
 export PYTHONPATH=$(ls -d "$VM_PREFIX"/lib/python3*/site-packages | head -1)
-export GRAMINE_CPU_NUM=${GRAMINE_CPU_NUM:-2}
+export SAGUARO_CPU_NUM=${SAGUARO_CPU_NUM:-2}
 RUN_TIMEOUT=${RUN_TIMEOUT:-120}
 OUT=${OUT:-/tmp/vm-examples}
 mkdir -p "$OUT"

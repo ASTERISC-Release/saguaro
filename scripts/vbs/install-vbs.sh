@@ -18,21 +18,21 @@
 set -e
 
 HERE=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)
-BIN=${GRAMINE_VBS_BIN:-$HOME/.local/bin}
+BIN=${SAGUARO_VBS_BIN:-$HOME/.local/bin}
 
 if [ "$(id -u)" = 0 ]; then
     echo "ERROR: run install.sh --vbs as your normal user; it never needs root"
     exit 1
 fi
 if ! grep -qi microsoft /proc/version 2>/dev/null; then
-    echo "note: this is not WSL; only the Linux half can be installed (GRAMINE_VBS_WINDOWS=user@host"
+    echo "note: this is not WSL; only the Linux half can be installed (SAGUARO_VBS_WINDOWS=user@host"
     echo "      names a Windows machine over ssh)."
 fi
 
 echo ">>> build packages (user-level, no sudo)"
 if sh "$HERE/wsl-setup.sh" check clang >/dev/null 2>&1 || \
-        { [ -f "${GRAMINE_VBS_TOOLS:-$HOME/.local/share/gramine-vbs/tools}/env.sh" ] && \
-          (. "${GRAMINE_VBS_TOOLS:-$HOME/.local/share/gramine-vbs/tools}/env.sh"; \
+        { [ -f "${SAGUARO_VBS_TOOLS:-$HOME/.local/share/gramine-vbs/tools}/env.sh" ] && \
+          (. "${SAGUARO_VBS_TOOLS:-$HOME/.local/share/gramine-vbs/tools}/env.sh"; \
            sh "$HERE/wsl-setup.sh" check clang >/dev/null 2>&1); }; then
     echo "all present"
 else

@@ -13,7 +13,7 @@ The native Linux Team Fortress 2 client under `gramine-vm` with the graphics red
 
 ```sh
 make
-make run                         # GRAMINE_RAM_SIZE=16G GRAMINE_CPU_NUM=1 ./run-vm.sh
+make run                         # SAGUARO_RAM_SIZE=16G SAGUARO_CPU_NUM=1 ./run-vm.sh
 ./run-vm.sh --res=1280x720 --bots
 ./run-native.sh 1 1              # without Gramine: <graphics library 0|1> <pin to one CPU 0|1>
 ```

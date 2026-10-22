@@ -48,8 +48,8 @@ tf2.manifest: tf2.manifest.template fps_metrics.so FORCE
 
 .PHONY: run
 run: check-install
-	GRAMINE_RAM_SIZE="$${GRAMINE_RAM_SIZE:-16G}" \
-	GRAMINE_CPU_NUM="$${GRAMINE_CPU_NUM:-1}" \
+	SAGUARO_RAM_SIZE="$${SAGUARO_RAM_SIZE:-16G}" \
+	SAGUARO_CPU_NUM="$${SAGUARO_CPU_NUM:-1}" \
 	./run-vm.sh
 
 .PHONY: clean

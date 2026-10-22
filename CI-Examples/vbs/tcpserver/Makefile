@@ -8,7 +8,7 @@
 ifeq ($(VBS),1)
 VBS_APP = tcpserver
 VBS_TEMPLATE = tcpserver.manifest
-VBS_DEPS = $(GRAMINE_VBS_REPO)/pal/src/host/vbs/test/tcpserver/tcpserver.c
+VBS_DEPS = $(SAGUARO_VBS_REPO)/pal/src/host/vbs/test/tcpserver/tcpserver.c
 VBS_CLEAN = tcpserver
 include ../../../scripts/vbs/Makefile.vbs
 all: vbs-all

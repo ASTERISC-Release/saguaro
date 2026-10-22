@@ -65,10 +65,10 @@ static DWORD WINAPI host_thread_proc(void* param) {
 }
 
 /*
- * Host-call statistics (measurement only; off unless GRAMINE_VBS_HOSTCALL_STATS is set):
- *   GRAMINE_VBS_HOSTCALL_STATS=1      print a table to stderr when the host process ends (normal
+ * Host-call statistics (measurement only; off unless SAGUARO_VBS_HOSTCALL_STATS is set):
+ *   SAGUARO_VBS_HOSTCALL_STATS=1      print a table to stderr when the host process ends (normal
  *                                     end, an enclave thread ending the process, Ctrl-C/Ctrl-Break)
- *   GRAMINE_VBS_HOSTCALL_STATS=<file> also rewrite <file> every 100 ms with the cumulative counters
+ *   SAGUARO_VBS_HOSTCALL_STATS=<file> also rewrite <file> every 100 ms with the cumulative counters
  *                                     ("kind count host_ns enclave_ns bytes" per line), so that a script
  *                                     can take the difference over a benchmark even when the host
  *                                     process is killed
@@ -161,7 +161,7 @@ static BOOL WINAPI stats_ctrl_handler(DWORD type) {
 }
 
 static void stats_init(void) {
-    const char* env = getenv("GRAMINE_VBS_HOSTCALL_STATS");
+    const char* env = getenv("SAGUARO_VBS_HOSTCALL_STATS");
     if (!env || !env[0] || !strcmp(env, "0"))
         return;
     LARGE_INTEGER f;
@@ -349,11 +349,11 @@ static int read_enclave_config(const wchar_t* image, uint64_t* size, uint32_t* t
 
 /* a 1 ms timer resolution for this process (Windows 11 applies timeBeginPeriod per process; it ends
  * with the process): the enclave's timed waits (WaitOnAddress) are otherwise rounded up to the
- * default 15.6 ms tick. GRAMINE_VBS_TIMER_RES=0 keeps the default. */
+ * default 15.6 ms tick. SAGUARO_VBS_TIMER_RES=0 keeps the default. */
 int pal_vbs_verify_main(void* enclave, int argc, char** argv);
 
 static void raise_timer_resolution(void) {
-    const char* env = getenv("GRAMINE_VBS_TIMER_RES");
+    const char* env = getenv("SAGUARO_VBS_TIMER_RES");
     if (env && !strcmp(env, "0"))
         return;
     HMODULE winmm = LoadLibraryW(L"winmm.dll");

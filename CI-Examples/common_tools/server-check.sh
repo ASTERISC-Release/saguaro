@@ -4,7 +4,7 @@
 # file from a check.sh, which runs in the example's directory:
 #
 #   server_start <inbound> <command...>   start the server in the background, its output in server.log;
-#                                         <inbound> is GRAMINE_VM_INBOUND, the ports the vm and sev
+#                                         <inbound> is SAGUARO_VM_INBOUND, the ports the vm and sev
 #                                         relay forwards to the guest (ignored by direct)
 #   server_stop                           stop it, with everything it started (also on exit)
 #   retry <seconds> <command...>          run the command until it succeeds or the time is up
@@ -16,7 +16,7 @@ SERVER_PID=
 
 server_start() {
     local inbound=$1; shift
-    GRAMINE_VM_INBOUND="$inbound" setsid timeout -s KILL "${SERVER_TIMEOUT:-300}" "$@" \
+    SAGUARO_VM_INBOUND="$inbound" setsid timeout -s KILL "${SERVER_TIMEOUT:-300}" "$@" \
         >server.log 2>&1 </dev/null &
     SERVER_PID=$!
     trap server_stop EXIT

@@ -76,7 +76,7 @@ AArch64; `blender` runs on x86_64 only.
 
 # 3. Regression Tests
 
-The test scripts find the install through `GRAMINE_PREFIX` (default `~/.local/gramine`):
+The test scripts find the install through `SAGUARO_PREFIX` (default `~/.local/gramine`):
 
     test/direct/test-direct.sh --list                       # the suites
     test/direct/test-direct.sh pal libos helloworld python  # a quick selection, under a minute
@@ -95,4 +95,4 @@ Each suite ends with a `PASS` or `FAIL` line. Logs are stored in `/tmp/gramine-m
   (`fs.mounts`); add the missing path, as the examples do. `make DEBUG=1` or
   `loader.log_level = "debug"` shows what the library OS looked for.
 - `container/run.sh` refuses a container that mounts a different checkout: name the folder
-  `gramine-<name>/gramine-multiarch` or set `GRAMINE_WORKSPACE` (see `Documentation/AGENTS.md`).
+  `gramine-<name>/gramine-multiarch` or set `SAGUARO_WORKSPACE` (see `Documentation/AGENTS.md`).

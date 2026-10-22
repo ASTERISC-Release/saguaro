@@ -138,7 +138,7 @@ typedef enum graphics_request {
 #define GRAPHICS_COMM_ABI_VERSION 2ULL
 
 /* Compiled fallbacks for the arena geometry; the runtime values arrive from the
- * launcher (GRAMINE_DATA_ADDR / GRAMINE_DATA_SIZE / GRAMINE_HUGEPAGE_ADDR as
+ * launcher (SAGUARO_DATA_ADDR / SAGUARO_DATA_SIZE / SAGUARO_HUGEPAGE_ADDR as
  * environment, the same over the opt/gramine/graphics_{data_addr,data_size,
  * huge_addr} fw_cfg files), and the guest still ships the geometry to the
  * listener in the comm-page setup (c->p1..p3). */

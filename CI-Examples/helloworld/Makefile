@@ -4,10 +4,10 @@
 CFLAGS = -Wall -Wextra
 
 ifeq ($(DEBUG),1)
-GRAMINE_LOG_LEVEL = debug
+SAGUARO_LOG_LEVEL = debug
 CFLAGS += -g
 else
-GRAMINE_LOG_LEVEL = error
+SAGUARO_LOG_LEVEL = error
 CFLAGS += -O3
 endif
 
@@ -37,7 +37,7 @@ helloworld.o: helloworld.c
 
 helloworld.manifest: helloworld.manifest.template
 	gramine-manifest \
-		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
+		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		$< $@
 	gramine-manifest-check $@
 

@@ -8,9 +8,9 @@ set -u
 set -o pipefail
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 REPO=$(cd "$HERE/../../.." && pwd)
-PREFIX=${GRAMINE_PREFIX:-$HOME/.local/gramine-vm}
+PREFIX=${SAGUARO_PREFIX:-$HOME/.local/gramine-vm}
 REQUESTS=${REQUESTS:-5000}
-CPU_NUM=${GRAMINE_CPU_NUM:-2}
+CPU_NUM=${SAGUARO_CPU_NUM:-2}
 OUT=${OUT:-/tmp/vsock-outbound}
 
 while [ $# -gt 0 ]; do
@@ -28,7 +28,7 @@ command -v gramine-vm >/dev/null || { echo "gramine-vm not on PATH (prefix $PREF
 test_host_ip() {
     python3 -c 'import socket; s=socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.connect(("1.1.1.1", 53)); print(s.getsockname()[0]); s.close()'
 }
-HOST_IP=${GRAMINE_VM_TEST_HOST_IP:-$(test_host_ip)}
+HOST_IP=${SAGUARO_VM_TEST_HOST_IP:-$(test_host_ip)}
 case $HOST_IP in 127.*|0.0.0.0) echo "not a routable container address: $HOST_IP" >&2; exit 1 ;; esac
 
 DIR=$(cd "$HERE/../vsock-loopback" && pwd)
@@ -48,7 +48,7 @@ clean() {
 trap clean EXIT INT TERM
 
 render_manifest() {
-    (cd "$DIR" && GRAMINE_VM=1 GRAMINE_VM_OUTBOUND="$1" GRAMINE_VM_DENY="${2:-}" \
+    (cd "$DIR" && SAGUARO_VM=1 SAGUARO_VM_OUTBOUND="$1" SAGUARO_VM_DENY="${2:-}" \
         gramine-test build -f vsock_outbound_client) >"$OUT/manifest.log" 2>&1 || {
         cat "$OUT/manifest.log"; return 1;
     }
@@ -57,7 +57,7 @@ render_manifest() {
 run_guest() {
     local logfile=$1; shift
     cd "$DIR"
-    GRAMINE_CPU_NUM=$CPU_NUM GRAMINE_VM_CONSOLE_LOG="$OUT/guest.console" \
+    SAGUARO_CPU_NUM=$CPU_NUM SAGUARO_VM_CONSOLE_LOG="$OUT/guest.console" \
         timeout --signal=TERM --kill-after=5s 120s gramine-vm vsock_outbound_client "$@" \
         >"$logfile" 2>&1
 }

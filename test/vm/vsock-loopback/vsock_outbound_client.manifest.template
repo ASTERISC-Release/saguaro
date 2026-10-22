@@ -3,7 +3,7 @@
 
 loader.entrypoint = "file:{{ gramine.libos }}"
 libos.entrypoint = "/vsock_outbound_client"
-loader.log_level = "{{ env.get('GRAMINE_LOG_LEVEL', 'error') }}"
+loader.log_level = "{{ env.get('SAGUARO_LOG_LEVEL', 'error') }}"
 loader.env.LD_LIBRARY_PATH = "/lib:{{ arch_libdir }}:/usr/{{ arch_libdir }}"
 loader.insecure__use_cmdline_argv = true
 
@@ -14,6 +14,6 @@ fs.mounts = [
   { path = "/usr/{{ arch_libdir }}", uri = "file:/usr/{{ arch_libdir }}" },
 ]
 
-vm.net.outbound = "{{ env.get('GRAMINE_VM_OUTBOUND', 'allow') }}"
-vm.net.deny = [{% if env.get('GRAMINE_VM_DENY') %}"{{ env['GRAMINE_VM_DENY'] }}"{% endif %}]
+vm.net.outbound = "{{ env.get('SAGUARO_VM_OUTBOUND', 'allow') }}"
+vm.net.deny = [{% if env.get('SAGUARO_VM_DENY') %}"{{ env['SAGUARO_VM_DENY'] }}"{% endif %}]
 vm.net.direct_vsock_ports = [6000]

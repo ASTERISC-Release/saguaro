@@ -18,7 +18,7 @@
 set -u
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 REPO=$(cd "$HERE/../../.." && pwd)
-PREFIX=${GRAMINE_PREFIX:-$HOME/.local/gramine-vm}
+PREFIX=${SAGUARO_PREFIX:-$HOME/.local/gramine-vm}
 CPUS=2
 WHAT=()
 while [ $# -gt 0 ]; do
@@ -29,7 +29,7 @@ while [ $# -gt 0 ]; do
     esac
 done
 [ ${#WHAT[@]} -gt 0 ] || WHAT=(sh spawn)
-export GRAMINE_PREFIX=$PREFIX
+export SAGUARO_PREFIX=$PREFIX
 . "$PREFIX/env.sh"
 WORK=${WORK:-$REPO/.mp-probes-aarch64}
 LOGS=${LOGS:-$WORK/logs}
@@ -52,7 +52,7 @@ run() {
     local tag=$1 t=$2; shift 2
     local load; load=$(cut -d' ' -f1 /proc/loadavg)
     local start; start=$(date +%s%N)
-    GRAMINE_CPU_NUM=$CPUS GRAMINE_VM_SERIAL=$LOGS/$tag.serial timeout -s KILL "$t" "$@" \
+    SAGUARO_CPU_NUM=$CPUS SAGUARO_VM_SERIAL=$LOGS/$tag.serial timeout -s KILL "$t" "$@" \
         > "$LOGS/$tag.log" 2>&1
     local rc=$?
     echo "== $tag: rc=$rc time=$(( ($(date +%s%N) - start) / 1000000 ))ms vcpus=$CPUS load1=$load"

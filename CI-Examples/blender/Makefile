@@ -20,9 +20,9 @@ RUN_DIR = $(PWD)/run_dir
 UBUNTU_VER = $(shell lsb_release --short --id)$(shell lsb_release --short --release)
 
 ifeq ($(DEBUG),1)
-GRAMINE_LOG_LEVEL = debug
+SAGUARO_LOG_LEVEL = debug
 else
-GRAMINE_LOG_LEVEL = error
+SAGUARO_LOG_LEVEL = error
 endif
 
 
@@ -43,7 +43,7 @@ $(RUN_DIR):
 
 blender.manifest: blender.manifest.template | $(RUN_DIR)
 	gramine-manifest \
-		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
+		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		-Ddata_dir=$(DATA_DIR) \
 		-Dblender_dir=$(BLENDER_DIR) \

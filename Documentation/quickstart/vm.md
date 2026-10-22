@@ -16,7 +16,7 @@ Symbols as in [README.md](../../README.md):
 
 - A **native** Linux machine of the same architecture with hardware virtualisation: `/dev/kvm`
   readable and writable by the user. On AArch64, without `/dev/kvm` the launcher falls back to QEMU's
-  software emulation (TCG, `-cpu max`; `GRAMINE_ACCEL` and `GRAMINE_CPU` override): the same suites pass, about
+  software emulation (TCG, `-cpu max`; `SAGUARO_ACCEL` and `SAGUARO_CPU` override): the same suites pass, about
   1.2 times slower for syscall-bound code and about 10 times slower for compute-bound code. On x86_64, KVM is required.
 - For guest networking: `/dev/vhost-vsock` (module `vhost_vsock`), also accessible to the user.
   - vsock is available on most recent Linux kernels; it is enabled with `sudo modprobe vhost_vsock`
@@ -76,15 +76,15 @@ lists the other suites.
 # 4. Other Information
 
 - Guest CPUs and size can be set using:
-  - `GRAMINE_CPU_NUM`: vCPUs, default 1.
-  - `GRAMINE_RAM_SIZE`: guest memory. x86_64: default `8G`; with `sys.experimental__multiprocess` (the
+  - `SAGUARO_CPU_NUM`: vCPUs, default 1.
+  - `SAGUARO_RAM_SIZE`: guest memory. x86_64: default `8G`; with `sys.experimental__multiprocess` (the
     default) it must be above `4G` (a 4G guest has no free GiB for the frame pool and fails to boot).
     AArch64: default `4G` with `sys.experimental__multiprocess`, `2G` without it.
     - `enclave_size` in `<manifest>.tdx` or `<manifest>.sgx`, when one of these files exists, overrides
-      `GRAMINE_RAM_SIZE` (never below `1G`).
+      `SAGUARO_RAM_SIZE` (never below `1G`).
     - Memory is allocated on demand, so this is the maximum.
 - By default the guest runs several processes (x86_64 and AArch64; the key `sys.experimental__multiprocess` defaults to `true`). `sys.experimental__multiprocess = false` gives the single-process guest, where `fork` fails with `Function not implemented`. The key enables `fork`, `vfork`, `execve`, pipes, signals and shared memory between processes.
-- The guest has no TCP/IP stack of its own: TCP and UDP sockets are carried over vsock to a relay that the launcher starts per VM (`vm-relay: cid=... listening ...`) and that opens the real sockets on the host side. Outbound connections work by default; a server in the guest is reached through an `inbound` forward in the manifest's `[vm.net]` table or `GRAMINE_VM_INBOUND`.
+- The guest has no TCP/IP stack of its own: TCP and UDP sockets are carried over vsock to a relay that the launcher starts per VM (`vm-relay: cid=... listening ...`) and that opens the real sockets on the host side. Outbound connections work by default; a server in the guest is reached through an `inbound` forward in the manifest's `[vm.net]` table or `SAGUARO_VM_INBOUND`.
 - Several checkouts on one machine each get their own container and their own range of guest CIDs
   when the folder is named `gramine-<name>/gramine-multiarch` (see `Documentation/AGENTS.md`).
 

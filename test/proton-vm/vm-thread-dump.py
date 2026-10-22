@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 """Every PAL thread of a running (or hung) gramine-vm guest, from outside, without a guest change:
-the guest is started with GRAMINE_VM_MONITOR=<socket>; this script asks the QEMU monitor to open
+the guest is started with SAGUARO_VM_MONITOR=<socket>; this script asks the QEMU monitor to open
 its gdb stub, attaches gdb in batch mode, walks the VM PAL's g_thread_list and prints, per thread,
 its state (STOPPED/RUNNABLE/BLOCKED/RUNNING), the PAL wait word it blocks on, whether it is a PAL helper,
 its user RIP at the last kernel entry and -- for threads of the address space the stopped vCPU
@@ -10,7 +10,7 @@ runs in -- the LibOS tid and the system call it is inside (number and first two 
 futex and its address). Threads of other processes show "(other address space)" for the LibOS part.
 
 Usage: vm-thread-dump.py <monitor-socket> <pal-elf> [--port N]
-  pal-elf: the installed VM PAL kernel, e.g. $GRAMINE_PREFIX/lib/x86_64-linux-gnu/gramine/vm/pal
+  pal-elf: the installed VM PAL kernel, e.g. $SAGUARO_PREFIX/lib/x86_64-linux-gnu/gramine/vm/pal
 
 The structure offsets below were measured on 2026-10-17 against this tree's headers (an offsets
 object compiled with the PAL's and the LibOS's own flags; see FINDINGS.md of that day). A change of

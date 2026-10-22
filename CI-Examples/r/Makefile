@@ -8,9 +8,9 @@ R_EXEC = $(R_HOME)/bin/exec/R
 ARCH_LIBDIR ?= /lib/$(shell $(CC) -dumpmachine)
 
 ifeq ($(DEBUG),1)
-GRAMINE_LOG_LEVEL = debug
+SAGUARO_LOG_LEVEL = debug
 else
-GRAMINE_LOG_LEVEL = error
+SAGUARO_LOG_LEVEL = error
 endif
 
 LD_LIBRARY_PATH := $(LD_LIBRARY_PATH):$(R_HOME)/lib
@@ -24,7 +24,7 @@ endif
 
 R.manifest: R.manifest.template
 	gramine-manifest \
-		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
+		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		-Dr_home=$(R_HOME) \
 		-Dr_exec=$(R_EXEC) \

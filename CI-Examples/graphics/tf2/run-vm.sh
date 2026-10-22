@@ -93,8 +93,8 @@ if [[ "${TF2_AUTOINPUT:-1}" != "0" ]]; then
 fi
 
 set +e
-export GRAMINE_RAM_SIZE="${GRAMINE_RAM_SIZE:-16G}"
-export GRAMINE_CPU_NUM="${GRAMINE_CPU_NUM:-1}"
+export SAGUARO_RAM_SIZE="${SAGUARO_RAM_SIZE:-16G}"
+export SAGUARO_CPU_NUM="${SAGUARO_CPU_NUM:-1}"
 gramine-vm tf2
 status=$?
 set -e

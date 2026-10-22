@@ -24,15 +24,15 @@
 #            gramine-sev-igvm.py computes from the IGVM file, with the session's TIK
 #
 # Usage: test/sev/test-sev.sh [--prefix DIR] [suite...]   (default: hello memory vsock)
-#   GRAMINE_SEV_MODE=sev     the gramine-sev mode: sev or snp (measure: sev only)
-#   GRAMINE_RAM_SIZE=8G      guest RAM (SEV pins all of it at launch, so smaller boots faster; the
+#   SAGUARO_SEV_MODE=sev     the gramine-sev mode: sev or snp (measure: sev only)
+#   SAGUARO_RAM_SIZE=8G      guest RAM (SEV pins all of it at launch, so smaller boots faster; the
 #                            multiprocess frame pool, on by default, needs more than 4G)
 #   COMPARE=1                memory: also run the probe under gramine-vm as the control
 set -u
 set -o pipefail
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 REPO=$(cd "$HERE/../.." && pwd)
-PREFIX=${GRAMINE_PREFIX:-$HOME/.local/gramine-vm}
+PREFIX=${SAGUARO_PREFIX:-$HOME/.local/gramine-vm}
 SUITES=()
 while [ $# -gt 0 ]; do
     case $1 in
@@ -42,7 +42,7 @@ while [ $# -gt 0 ]; do
         *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
 done
-[ ${#SUITES[@]} -gt 0 ] || if [ "${GRAMINE_SEV_MODE:-sev}" = snp ]; then
+[ ${#SUITES[@]} -gt 0 ] || if [ "${SAGUARO_SEV_MODE:-sev}" = snp ]; then
     [ ${#SUITES[@]} -gt 0 ] || SUITES=(hello memory vsock attest)
 else
     [ ${#SUITES[@]} -gt 0 ] || SUITES=(hello memory vsock measure)
@@ -51,9 +51,9 @@ fi
 export PATH=$PREFIX/bin:$PATH
 export PYTHONPATH=$(ls -d "$PREFIX"/lib/python3*/site-packages 2>/dev/null | head -1)
 export QEMU_PATH=${QEMU_PATH:-/root/sev-tools/prefix/bin/qemu-system-x86_64}
-export GRAMINE_RAM_SIZE=${GRAMINE_RAM_SIZE:-8G}
-export GRAMINE_SEV_MODE=${GRAMINE_SEV_MODE:-sev}
-RAM_GIB=${GRAMINE_RAM_SIZE%G}
+export SAGUARO_RAM_SIZE=${SAGUARO_RAM_SIZE:-8G}
+export SAGUARO_SEV_MODE=${SAGUARO_SEV_MODE:-sev}
+RAM_GIB=${SAGUARO_RAM_SIZE%G}
 OUT=${OUT:-/tmp/test-sev}
 mkdir -p "$OUT"
 command -v gramine-sev >/dev/null || { echo "gramine-sev not on PATH (prefix $PREFIX?)" >&2; exit 1; }
@@ -69,7 +69,7 @@ test_hello() {
     for cpus in 1 4; do
         local t0 out serial=$OUT/hello-$cpus.serial
         t0=$(now)
-        out=$(GRAMINE_CPU_NUM=$cpus GRAMINE_VM_SERIAL_LOG=$serial timeout 120 gramine-sev helloworld 2>&1)
+        out=$(SAGUARO_CPU_NUM=$cpus SAGUARO_VM_SERIAL_LOG=$serial timeout 120 gramine-sev helloworld 2>&1)
         local r=$? t
         t=$(elapsed "$t0")
         if [ $r -ne 0 ] || ! grep -q "Hello, world" <<<"$out"; then
@@ -77,7 +77,7 @@ test_hello() {
         elif ! grep -q "SEV: memory encryption active" "$serial"; then
             fail "hello at $cpus vCPUs: no 'SEV: memory encryption active' in $serial"
         else
-            echo "hello: $cpus vCPUs, ${GRAMINE_RAM_SIZE}: ok in $t s ($(grep -o 'SEV: memory encryption active.*' "$serial"))"
+            echo "hello: $cpus vCPUs, ${SAGUARO_RAM_SIZE}: ok in $t s ($(grep -o 'SEV: memory encryption active.*' "$serial"))"
         fi
     done
 }
@@ -95,7 +95,7 @@ s = 0
 for b in open(sys.argv[1], "rb").read():
     s = (s * 31 + b) & 0xffffffffffffffff
 print(f"len={len(open(sys.argv[1], "rb").read())} sum={s:016x}")' "$input")
-    (cd "$HERE" && GRAMINE_VM_MONITOR=$mon GRAMINE_CPU_NUM=1 \
+    (cd "$HERE" && SAGUARO_VM_MONITOR=$mon SAGUARO_CPU_NUM=1 \
         timeout 300 "$launcher" sev_probe "$input" "$done" >"$log" 2>&1) &
     local pid=$!
     for _ in $(seq 600); do
@@ -132,7 +132,7 @@ print(f"len={len(open(sys.argv[1], "rb").read())} sum={s:016x}")' "$input")
         # SNP: QEMU keeps the plaintext copy of the (public, measured) launch image in the shared
         # backing of guest_memfd RAM, so the PAL's ELF header stays readable there; the private
         # pages themselves are not accessible to the host
-        [ "$GRAMINE_SEV_MODE" = snp ] && elf=0
+        [ "$SAGUARO_SEV_MODE" = snp ] && elf=0
         [ "$plain" = 0 ] && [ "$elf" = 0 ] && [ "$hits" = 0 ] && [ "$shared" = 1 ] \
             || fail "$tag: the host sees private memory or not the shared region ($res)"
     else
@@ -148,7 +148,7 @@ test_memory() {
 }
 
 test_vsock() {
-    GRAMINE_VM_LAUNCHER=gramine-sev SEQUENTIAL=${SEQUENTIAL:-20} CONCURRENT=${CONCURRENT:-4} \
+    SAGUARO_VM_LAUNCHER=gramine-sev SEQUENTIAL=${SEQUENTIAL:-20} CONCURRENT=${CONCURRENT:-4} \
         OUT=$OUT/vsock "$HERE/../vm/network/test-vm-loopback.sh" --prefix "$PREFIX" 2>&1 | tail -n 3 \
         || fail "vsock loopback under gramine-sev"
 }
@@ -167,7 +167,7 @@ test_measure() {
     local qmp=$OUT/measure.qmp done=$OUT/measure.done log=$OUT/measure.out
     rm -f "$qmp" "$done"
     echo x > "$OUT/measure.input"
-    (cd "$HERE" && GRAMINE_SEV_SESSION=$OUT/gsev GRAMINE_VM_QMP=$qmp GRAMINE_CPU_NUM=1 \
+    (cd "$HERE" && SAGUARO_SEV_SESSION=$OUT/gsev SAGUARO_VM_QMP=$qmp SAGUARO_CPU_NUM=1 \
         timeout 300 gramine-sev sev_probe "$OUT/measure.input" "$done" >"$log" 2>&1) &
     local pid=$!
     for _ in $(seq 600); do
@@ -203,7 +203,7 @@ test_attest() {
     local data report=$OUT/attest-report.bin log=$OUT/attest.out
     data=$(head -c 64 /dev/urandom | od -An -tx1 | tr -d ' \n')
     rm -f "$report"
-    (cd "$HERE" && GRAMINE_CPU_NUM=1 timeout 300 gramine-sev sev_attest "$data" "$report" \
+    (cd "$HERE" && SAGUARO_CPU_NUM=1 timeout 300 gramine-sev sev_attest "$data" "$report" \
         >"$log" 2>&1) || { fail "attest: the guest failed: $(tail -n 5 "$log")"; return; }
     grep -q "attestation_type=sev-snp" "$log" || fail "attest: attestation_type is not sev-snp"
     [ -s "$report" ] || { fail "attest: no report"; return; }

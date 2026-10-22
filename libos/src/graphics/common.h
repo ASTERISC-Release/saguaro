@@ -113,7 +113,7 @@ bool graphics_ensure_session(void);
 
 /* Fallback arena geometry (the runtime values are computed in gramine.c from
  * the launcher's env); the hugepage arena follows the data arena unless
- * GRAMINE_HUGEPAGE_ADDR relocates it. */
+ * SAGUARO_HUGEPAGE_ADDR relocates it. */
 static const size_t DATA_SIZE = GRAPHICS_GEM_DATA_SIZE;
 static const size_t HUGE_DATA_SIZE = GRAPHICS_GEM_HUGEPAGE_SIZE;
 static void *DATA_REGION = (void *)GRAPHICS_GEM_DATA_START;

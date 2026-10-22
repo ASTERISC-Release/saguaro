@@ -37,7 +37,7 @@ Platform status: [`README.md`](README.md). Measured results of the examples: [`C
 | Graphics, direct | host GPU and X server | `scripts/install.sh` | `make run-direct` in `CI-Examples/graphics/<example>` | `Documentation/quickstart/graphics-direct.md` |
 | Graphics, vm (x86_64) | the QEMU fork `qemu-tirith` (outside this repository), `DISPLAY` set when the container is created | `scripts/install.sh --vm` | `make run` in `CI-Examples/graphics/<example>` with `QEMU_PATH` exported | `Documentation/quickstart/graphics-vm.md` |
 
-Tests: `test/direct/test-direct.sh` (PAL and LibOS regression and the example suites; `GRAMINE_PREFIX` and `LOGDIR`
+Tests: `test/direct/test-direct.sh` (PAL and LibOS regression and the example suites; `SAGUARO_PREFIX` and `LOGDIR`
 select the install and the logs), `test/test-vm*.sh` (the VM suites), `test/sev/test-sev.sh`, `scripts/stress_rewrite.sh`
 (syscall-site rewriting), `scripts/check-docs.py` (documents). Expected results and known failures are in
 `CI-Examples/RESULTS.md` (for example `test_020_cpuinfo` under SEV-SNP, `nodejs` under VBS, `unit_tests-mremap` under

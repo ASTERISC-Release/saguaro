@@ -15,8 +15,8 @@ import tomllib
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 # The syscall-compat and syscall-profile data live in the private development-documents repository, checked out
-# next to this one (GRAMINE_DEV_DOCS names another place).
-DEV_DOCS = pathlib.Path(os.environ.get("GRAMINE_DEV_DOCS", ROOT.parent / "gramine-multiarch-docs"))
+# next to this one (SAGUARO_DEV_DOCS names another place).
+DEV_DOCS = pathlib.Path(os.environ.get("SAGUARO_DEV_DOCS", ROOT.parent / "gramine-multiarch-docs"))
 MAPPING = DEV_DOCS / "syscall-compat/mapping.toml"
 
 
@@ -46,7 +46,7 @@ def main():
            "--results", str(ROOT / f".ltp-results/{args.syscall}-{args.loader}.json"),
            *args.runner_args, *tests]
     if args.loader == "vm":
-        os.environ.setdefault("GRAMINE_CPU_NUM", "1")
+        os.environ.setdefault("SAGUARO_CPU_NUM", "1")
     print(f"{len(tests)} tests of {args.syscall} under {args.loader}", file=sys.stderr)
     os.execv(sys.executable, cmd)
 

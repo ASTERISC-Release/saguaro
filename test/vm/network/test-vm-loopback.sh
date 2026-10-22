@@ -12,8 +12,8 @@
 #
 # Usage: test/vm/network/test-vm-loopback.sh [--prefix DIR]
 #   SEQUENTIAL=100  CONCURRENT=16  SIZE=8192   connection counts and payload size
-#   GRAMINE_CPU_NUM=2                          vCPUs for the VM
-#   GRAMINE_VM_LAUNCHER=gramine-vm             or gramine-sev (dev docs: sev/)
+#   SAGUARO_CPU_NUM=2                          vCPUs for the VM
+#   SAGUARO_VM_LAUNCHER=gramine-vm             or gramine-sev (dev docs: sev/)
 #
 # Prerequisite: a vm build installed with `scripts/install.sh --vm` (default prefix
 # ~/.local/gramine-vm). Run it where /dev/kvm and /dev/vhost-vsock exist (the container).
@@ -21,7 +21,7 @@ set -u
 set -o pipefail
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 REPO=$(cd "$HERE/../../.." && pwd)
-PREFIX=${GRAMINE_PREFIX:-$HOME/.local/gramine-vm}
+PREFIX=${SAGUARO_PREFIX:-$HOME/.local/gramine-vm}
 SEQUENTIAL=${SEQUENTIAL:-100}
 CONCURRENT=${CONCURRENT:-16}
 SIZE=${SIZE:-8192}
@@ -35,8 +35,8 @@ done
 
 export PATH=$PREFIX/bin:$PATH
 export PYTHONPATH=$(ls -d "$PREFIX"/lib/python3*/site-packages 2>/dev/null | head -1)
-export GRAMINE_CPU_NUM=${GRAMINE_CPU_NUM:-2}
-LAUNCHER=${GRAMINE_VM_LAUNCHER:-gramine-vm}
+export SAGUARO_CPU_NUM=${SAGUARO_CPU_NUM:-2}
+LAUNCHER=${SAGUARO_VM_LAUNCHER:-gramine-vm}
 
 command -v "$LAUNCHER" >/dev/null || { echo "$LAUNCHER not on PATH (prefix $PREFIX?)" >&2; exit 1; }
 [ -e /dev/vhost-vsock ] || { echo "no /dev/vhost-vsock; this test needs it" >&2; exit 1; }
@@ -48,27 +48,27 @@ mkdir -p "$OUT"
 echo "== vsock-loopback: building the guest server"
 make -C "$DIR" -s || exit 1
 # render the manifest exactly the way the libos regression suite does (gramine-test + ninja);
-# `-f` forces a rerender, because `GRAMINE_LOG_LEVEL` reaches the template through the environment
+# `-f` forces a rerender, because `SAGUARO_LOG_LEVEL` reaches the template through the environment
 # and ninja cannot see that change.
-(cd "$DIR" && GRAMINE_VM=1 gramine-test build -f vsock_echo_server) >"$OUT/manifest.log" 2>&1 || {
+(cd "$DIR" && SAGUARO_VM=1 gramine-test build -f vsock_echo_server) >"$OUT/manifest.log" 2>&1 || {
     cat "$OUT/manifest.log"; echo "manifest build failed" >&2; exit 1; }
 
 VM_LOG=$OUT/guest.log
 rm -f "$VM_LOG"
-echo "== vsock-loopback: starting the guest (RAM ${GRAMINE_RAM_SIZE:-default}, ${GRAMINE_CPU_NUM} vCPUs)"
+echo "== vsock-loopback: starting the guest (RAM ${SAGUARO_RAM_SIZE:-default}, ${SAGUARO_CPU_NUM} vCPUs)"
 # In relay mode, tell gramine-vm to run the per-VM vsock relay with one inbound forward
 # (host TCP $RELAY_HOST_PORT -> guest 7000). The launcher starts the relay and waits until it
 # listens, then boots the guest; it is stopped when the VM exits.
 RELAY_HOST_PORT=${RELAY_HOST_PORT:-17000}
 EXTRA_ENV=()
 if [ "${RELAY:-0}" = "1" ]; then
-    EXTRA_ENV=(GRAMINE_VM_INBOUND="7000:$RELAY_HOST_PORT")
+    EXTRA_ENV=(SAGUARO_VM_INBOUND="7000:$RELAY_HOST_PORT")
     echo "== vsock-loopback: relay mode, forwarding host 127.0.0.1:$RELAY_HOST_PORT -> guest 7000"
 fi
 # run from the test directory so the QEMU cmdline carries the bare name `vsock_echo_server`, which
 # vsock_host_client.py uses to find the guest CID of *this* VM
 cd "$DIR"
-env ${EXTRA_ENV[@]+"${EXTRA_ENV[@]}"} GRAMINE_VM_CONSOLE_LOG=$VM_LOG \
+env ${EXTRA_ENV[@]+"${EXTRA_ENV[@]}"} SAGUARO_VM_CONSOLE_LOG=$VM_LOG \
     "$LAUNCHER" vsock_echo_server >"$OUT/gramine-vm.out" 2>&1 &
 VM_PID=$!
 # cleanup note: killing `gramine-vm` does not kill its QEMU child (the launcher traps and exits),
@@ -117,7 +117,7 @@ if kill -0 "$VM_PID" 2>/dev/null; then
 fi
 wait "$VM_PID" 2>/dev/null
 guest_rc=$?
-# the console log: gramine-vm copies it to GRAMINE_VM_CONSOLE_LOG after QEMU exits
+# the console log: gramine-vm copies it to SAGUARO_VM_CONSOLE_LOG after QEMU exits
 if grep -q "DONE" "$VM_LOG" 2>/dev/null; then
     echo "== vsock-loopback: guest server handled $(grep -o 'DONE [0-9]*' "$VM_LOG" | tail -1)"
 elif [ $rc -eq 0 ]; then

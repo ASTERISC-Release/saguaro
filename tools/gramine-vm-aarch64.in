@@ -17,21 +17,21 @@
 #     guest's exit code is recovered from the "[ VM exited with code N ]" console line
 #
 # Environment knobs:
-#   GRAMINE_RAM_SIZE (default 2G, 4G with sys.experimental__multiprocess; a manifest's
+#   SAGUARO_RAM_SIZE (default 2G, 4G with sys.experimental__multiprocess; a manifest's
 #                    sgx/tdx.enclave_size wins, floor 1G)
-#   GRAMINE_CPU_NUM  (default 1)          GRAMINE_ACCEL (kvm)     GRAMINE_CPU (host)
+#   SAGUARO_CPU_NUM  (default 1)          SAGUARO_ACCEL (kvm)     SAGUARO_CPU (host)
 #   QEMU_PATH        (qemu-system-aarch64 from PATH)
-#   GRAMINE_VSOCK    1 (default) adds a vhost-vsock device (guest-cid = the VM id), which the guest's
+#   SAGUARO_VSOCK    1 (default) adds a vhost-vsock device (guest-cid = the VM id), which the guest's
 #                    TCP/UDP sockets and the per-VM relay below need; 0 leaves it out. Needs
 #                    /dev/vhost-vsock (module vhost_vsock) readable and writable by the user; without
 #                    it the VM boots without the device, unless the manifest has vm.net.* keys (error)
-#   GRAMINE_VM_ID_BASE  first VM id (= vsock guest-cid) to try, default 10; workspaces of the repository
+#   SAGUARO_VM_ID_BASE  first VM id (= vsock guest-cid) to try, default 10; workspaces of the repository
 #                    use different bases so their VMs and relay ports do not collide
-#   GRAMINE_VM_RELAY=0, GRAMINE_VM_INBOUND, GRAMINE_VM_RELAY_DEBUG: the vsock relay, see
+#   SAGUARO_VM_RELAY=0, SAGUARO_VM_INBOUND, SAGUARO_VM_RELAY_DEBUG: the vsock relay, see
 #                    tools/gramine-vm-relay.sh (the relay is started for every VM that has the device)
-#   GRAMINE_VM_CONSOLE_LOG=<file>  keep a copy of the console log
-#   GRAMINE_VM_MONITOR=<socket>    QEMU monitor on a unix socket (vm-hang-report.py reads vCPU states)
-#   GRAMINE_VM_SERIAL=<file>       the PL011 UART (early kernel/debug output) into a file
+#   SAGUARO_VM_CONSOLE_LOG=<file>  keep a copy of the console log
+#   SAGUARO_VM_MONITOR=<socket>    QEMU monitor on a unix socket (vm-hang-report.py reads vCPU states)
+#   SAGUARO_VM_SERIAL=<file>       the PL011 UART (early kernel/debug output) into a file
 #   GDB=1            -gdb tcp::9000 -S
 
 LIBPAL_PATH=@LIBPAL_PATH@
@@ -56,10 +56,10 @@ vm_relay_find_python "${BASH_SOURCE[0]}"
 shift
 
 # VM memory: the manifest's `<sgx|tdx>.enclave_size` (so existing manifests keep working), else
-# GRAMINE_RAM_SIZE, else 2G; never below 1G (the kernel reserves ~512MB for virtio queues, page
+# SAGUARO_RAM_SIZE, else 2G; never below 1G (the kernel reserves ~512MB for virtio queues, page
 # tables and the PAL itself). Parsing needs the `graminelibos` python package; without it we
 # silently fall back.
-export GRAMINE_MANIFEST=$APPLICATION.manifest
+export SAGUARO_MANIFEST=$APPLICATION.manifest
 QEMU_MEM_SIZE=$(python3 -c "
 import os
 import re
@@ -69,7 +69,7 @@ from graminelibos import Manifest
 size_str = ''
 for type, suffix in (('tdx', '.tdx'), ('sgx', '.sgx')):
     try:
-        with open(os.environ['GRAMINE_MANIFEST'] + suffix, 'rb') as f:
+        with open(os.environ['SAGUARO_MANIFEST'] + suffix, 'rb') as f:
             size_str = Manifest.loads(f.read().decode('utf-8'))[type]['enclave_size']
         break
     except Exception:
@@ -81,7 +81,7 @@ unit = {'G': 1 << 30, 'M': 1 << 20, 'K': 1 << 10}.get(size_str[-1:], 1)
 size = int(re.search(r'\d+', size_str).group())
 print(size_str if unit * size > (1 << 30) else '1G')
 " 2>/dev/null)
-QEMU_MEM_SIZE=${QEMU_MEM_SIZE:-$GRAMINE_RAM_SIZE}
+QEMU_MEM_SIZE=${QEMU_MEM_SIZE:-$SAGUARO_RAM_SIZE}
 # With the multiprocess key the default is 4G: the frame pool takes half of the free guest RAM out
 # of the application address space (dev docs: vm-multiproc-aarch64/FINDINGS.md), which
 # in 2G left too little room for a large mmap now and then. Guest RAM costs host memory only when
@@ -90,7 +90,7 @@ if [ -z "$QEMU_MEM_SIZE" ] && python3 -c "
 import os
 import sys
 from graminelibos import Manifest
-with open(os.environ['GRAMINE_MANIFEST'], 'rb') as f:
+with open(os.environ['SAGUARO_MANIFEST'], 'rb') as f:
     manifest = Manifest.loads(f.read().decode('utf-8'))
 # Manifest has no get(): index it, a missing table or key means on (the PAL's default)
 try:
@@ -102,7 +102,7 @@ sys.exit(0 if multiprocess else 1)
     QEMU_MEM_SIZE=4G
 fi
 QEMU_MEM_SIZE=${QEMU_MEM_SIZE:-"2G"}
-QEMU_CPU_NUM=${GRAMINE_CPU_NUM:-1}
+QEMU_CPU_NUM=${SAGUARO_CPU_NUM:-1}
 
 QEMU_PATH=${QEMU_PATH:-$(command -v qemu-system-aarch64)}
 if [ -z "$QEMU_PATH" ]; then
@@ -125,16 +125,16 @@ fi
 
 # KVM when /dev/kvm is usable, else TCG (software emulation: any aarch64 or x86_64 host, 10-100x
 # slower in theory; -cpu max because `host` needs KVM; the PAL needs at least ARMv8.1)
-if [ -z "${GRAMINE_ACCEL:-}" ]; then
+if [ -z "${SAGUARO_ACCEL:-}" ]; then
     if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
-        GRAMINE_ACCEL=kvm
+        SAGUARO_ACCEL=kvm
     else
-        GRAMINE_ACCEL=tcg,thread=multi
-        GRAMINE_CPU=${GRAMINE_CPU:-max}
+        SAGUARO_ACCEL=tcg,thread=multi
+        SAGUARO_CPU=${SAGUARO_CPU:-max}
     fi
 fi
-ACCEL=$GRAMINE_ACCEL
-case $ACCEL in kvm*) CPU=${GRAMINE_CPU:-host} ;; *) CPU=${GRAMINE_CPU:-max} ;; esac
+ACCEL=$SAGUARO_ACCEL
+case $ACCEL in kvm*) CPU=${SAGUARO_CPU:-host} ;; *) CPU=${SAGUARO_CPU:-max} ;; esac
 QEMU_MACHINE="-machine virt,gic-version=3,highmem-ecam=off"
 # everything that shapes the DTB; the dump and the boot must agree on all of it
 QEMU_SHAPE="-accel $ACCEL -cpu $CPU -m $QEMU_MEM_SIZE -smp $QEMU_CPU_NUM"
@@ -142,27 +142,27 @@ QEMU_SHAPE="-accel $ACCEL -cpu $CPU -m $QEMU_MEM_SIZE -smp $QEMU_CPU_NUM"
 # Gramine VM id: names the virtiofs socket (and the vsock guest-cid), so two instances can run
 # side by side. Claimed atomically with mkdir.
 # A lock whose owner is gone (killed -9, e.g. by a test harness timeout) is reclaimed.
-GRAMINE_VM_ID=${GRAMINE_VM_ID_BASE:-10}
+SAGUARO_VM_ID=${SAGUARO_VM_ID_BASE:-10}
 while true; do
-    LOCK=/tmp/gramine_vm_$GRAMINE_VM_ID.lock
+    LOCK=/tmp/gramine_vm_$SAGUARO_VM_ID.lock
     if mkdir "$LOCK" 2>/dev/null; then
         echo $$ > "$LOCK/pid"
         break
     fi
     OWNER=$(cat "$LOCK/pid" 2>/dev/null)
     if [ -n "$OWNER" ] && ! kill -0 "$OWNER" 2>/dev/null; then
-        rm -rf "$LOCK" "/tmp/gramine_vhostfs_$GRAMINE_VM_ID" "/tmp/gramine_vhostfs_$GRAMINE_VM_ID.pid"
+        rm -rf "$LOCK" "/tmp/gramine_vhostfs_$SAGUARO_VM_ID" "/tmp/gramine_vhostfs_$SAGUARO_VM_ID.pid"
         continue
     fi
-    GRAMINE_VM_ID=$((GRAMINE_VM_ID + 1))
+    SAGUARO_VM_ID=$((SAGUARO_VM_ID + 1))
 done
-VHOSTFS_SOCKET=/tmp/gramine_vhostfs_$GRAMINE_VM_ID
+VHOSTFS_SOCKET=/tmp/gramine_vhostfs_$SAGUARO_VM_ID
 WORK=$(mktemp -d /tmp/gramine-vm.XXXXXX)
 VIRTIOFSD_PID=
 cleanup() {
     vm_relay_stop
     [ -n "$VIRTIOFSD_PID" ] && kill "$VIRTIOFSD_PID" 2>/dev/null
-    rm -rf "$WORK" "$VHOSTFS_SOCKET" "$VHOSTFS_SOCKET.pid" "/tmp/gramine_vm_$GRAMINE_VM_ID.lock"
+    rm -rf "$WORK" "$VHOSTFS_SOCKET" "$VHOSTFS_SOCKET.pid" "/tmp/gramine_vm_$SAGUARO_VM_ID.lock"
 }
 trap cleanup EXIT
 trap 'exit 130' INT TERM
@@ -170,7 +170,7 @@ trap 'exit 130' INT TERM
 $QEMU_PATH $QEMU_MACHINE $QEMU_SHAPE -nic none -machine dumpdtb="$WORK/virt.dtb" >/dev/null 2>&1 \
     && dtc -I dtb -O dtb -o "$WORK/virt-packed.dtb" "$WORK/virt.dtb" 2>/dev/null
 if [ ! -s "$WORK/virt-packed.dtb" ]; then
-    echo "gramine-vm: could not generate the machine DTB (is /dev/kvm available? else set GRAMINE_ACCEL=tcg)" >&2
+    echo "gramine-vm: could not generate the machine DTB (is /dev/kvm available? else set SAGUARO_ACCEL=tcg)" >&2
     exit 2
 fi
 
@@ -190,36 +190,36 @@ fi
 # vsock device and relay. The device carries the guest's TCP/UDP sockets; the relay (one process per VM)
 # serves them on the host side. A VM that cannot get the device still boots (as before), except when its
 # manifest asks for networking.
-GRAMINE_VSOCK=${GRAMINE_VSOCK:-1}
-if [ "$GRAMINE_VSOCK" = 1 ] && ! { [ -r /dev/vhost-vsock ] && [ -w /dev/vhost-vsock ]; }; then
-    if vm_relay_manifest_wants_network "$GRAMINE_MANIFEST"; then
-        echo "gramine-vm: $GRAMINE_MANIFEST has vm.net.* keys, but /dev/vhost-vsock is not" \
+SAGUARO_VSOCK=${SAGUARO_VSOCK:-1}
+if [ "$SAGUARO_VSOCK" = 1 ] && ! { [ -r /dev/vhost-vsock ] && [ -w /dev/vhost-vsock ]; }; then
+    if vm_relay_manifest_wants_network "$SAGUARO_MANIFEST"; then
+        echo "gramine-vm: $SAGUARO_MANIFEST has vm.net.* keys, but /dev/vhost-vsock is not" \
              "readable and writable (load the vhost_vsock module and give this user access)" >&2
         exit 2
     fi
-    GRAMINE_VSOCK=0
+    SAGUARO_VSOCK=0
 fi
-if [ "$GRAMINE_VSOCK" = 1 ]; then
-    vm_relay_start "$GRAMINE_VM_ID" "$GRAMINE_MANIFEST" || exit 2
+if [ "$SAGUARO_VSOCK" = 1 ]; then
+    vm_relay_start "$SAGUARO_VM_ID" "$SAGUARO_MANIFEST" || exit 2
 fi
 
 # The guest splits this string on whitespace but keeps "double-quoted" tokens whole (no escapes), so
 # quote every argument: `gramine-vm app -c "echo hi"` must reach the app as two arguments.
-GRAMINE_ARGS="-gramine-args init \"$APPLICATION\""
+SAGUARO_ARGS="-gramine-args init \"$APPLICATION\""
 for arg in "$@"; do
-    GRAMINE_ARGS+=" \"$arg\""
+    SAGUARO_ARGS+=" \"$arg\""
 done
-GRAMINE_ARGS+=" -gramine-args-end"
+SAGUARO_ARGS+=" -gramine-args-end"
 # Due to QEMU syntax, commas in the QEMU cmdline need to be escaped using an additional comma.
-GRAMINE_ARGS=${GRAMINE_ARGS//","/",,"}
-GRAMINE_ENVS=$(python3 -c "
+SAGUARO_ARGS=${SAGUARO_ARGS//","/",,"}
+SAGUARO_ENVS=$(python3 -c "
 import os
 env_str = ''
 for name, value in os.environ.items():
     env_str += ('\"{0}={1}\" '.format(name, value).replace(',', ',,'))
 print(env_str)
 ")
-GRAMINE_ENVS="-gramine-envs $GRAMINE_ENVS -gramine-envs-end"
+SAGUARO_ENVS="-gramine-envs $SAGUARO_ENVS -gramine-envs-end"
 
 # console: stdio, with a log copy so the guest's exit code can be recovered afterwards
 CONSOLE_LOG=$WORK/console.log
@@ -229,32 +229,32 @@ QEMU_VIRTIO_CONSOLE="-device virtio-serial-pci,iommu_platform=off,romfile= \
 QEMU_VIRTIO_FS="-chardev socket,path=$VHOSTFS_SOCKET,id=vhostfs \
 -device vhost-user-fs-pci,iommu_platform=off,queue-size=1024,chardev=vhostfs,tag=graminefs,romfile="
 QEMU_VIRTIO_VSOCK=
-if [ "$GRAMINE_VSOCK" = 1 ]; then
-    QEMU_VIRTIO_VSOCK="-device vhost-vsock-pci,iommu_platform=off,guest-cid=$GRAMINE_VM_ID,id=vsockdev"
+if [ "$SAGUARO_VSOCK" = 1 ]; then
+    QEMU_VIRTIO_VSOCK="-device vhost-vsock-pci,iommu_platform=off,guest-cid=$SAGUARO_VM_ID,id=vsockdev"
 fi
 
 # virtiofsd needs shared guest RAM (vhost-user maps it)
 QEMU_RAM="-object memory-backend-memfd,id=ram1,size=$QEMU_MEM_SIZE,share=on -machine memory-backend=ram1"
 
 # `-serial none`/`-display none`: the only console is the virtconsole above.
-# GRAMINE_VM_MONITOR=<path>: the QEMU monitor on a unix socket, so that a hung guest can be looked
-# at from outside (test/vm/multiproc-aarch64/vm-hang-report.py); GRAMINE_VM_SERIAL=<file>: the
+# SAGUARO_VM_MONITOR=<path>: the QEMU monitor on a unix socket, so that a hung guest can be looked
+# at from outside (test/vm/multiproc-aarch64/vm-hang-report.py); SAGUARO_VM_SERIAL=<file>: the
 # PL011 UART (the kernel's early/debug output, debug_serial_io_write()) into a file.
 QEMU_MONITOR="-monitor none"
-[ -n "$GRAMINE_VM_MONITOR" ] && QEMU_MONITOR="-monitor unix:$GRAMINE_VM_MONITOR,server=on,wait=off"
+[ -n "$SAGUARO_VM_MONITOR" ] && QEMU_MONITOR="-monitor unix:$SAGUARO_VM_MONITOR,server=on,wait=off"
 QEMU_SERIAL="-serial none"
-[ -n "$GRAMINE_VM_SERIAL" ] && QEMU_SERIAL="-serial file:$GRAMINE_VM_SERIAL"
+[ -n "$SAGUARO_VM_SERIAL" ] && QEMU_SERIAL="-serial file:$SAGUARO_VM_SERIAL"
 $QEMU_PATH $QEMU_GDB $QEMU_MACHINE $QEMU_SHAPE $QEMU_RAM -nic none \
     -display none $QEMU_MONITOR $QEMU_SERIAL -no-reboot \
     $QEMU_VIRTIO_CONSOLE $QEMU_VIRTIO_FS $QEMU_VIRTIO_VSOCK \
     -kernel "$LIBPAL_PATH" -device loader,file="$WORK/virt-packed.dtb",addr=0x40000000 \
     -fw_cfg name=opt/gramine/pwd,string="$PWD" \
-    -fw_cfg name=opt/gramine/args,string="$GRAMINE_ARGS" \
-    -fw_cfg name=opt/gramine/envs,string="$GRAMINE_ENVS" \
+    -fw_cfg name=opt/gramine/args,string="$SAGUARO_ARGS" \
+    -fw_cfg name=opt/gramine/envs,string="$SAGUARO_ENVS" \
     -fw_cfg name=opt/gramine/unixtime_s,string="$EPOCHSECONDS"
 QEMU_RC=$?
 
-[ -n "$GRAMINE_VM_CONSOLE_LOG" ] && cp "$CONSOLE_LOG" "$GRAMINE_VM_CONSOLE_LOG" 2>/dev/null
+[ -n "$SAGUARO_VM_CONSOLE_LOG" ] && cp "$CONSOLE_LOG" "$SAGUARO_VM_CONSOLE_LOG" 2>/dev/null
 
 # The guest powers off with PSCI SYSTEM_OFF (QEMU exits 0 whatever happened), so the
 # exit code comes from the console: `_PalProcessExit` logs "[ VM exited with code N ]".

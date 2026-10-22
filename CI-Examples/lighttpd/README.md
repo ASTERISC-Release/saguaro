@@ -18,7 +18,7 @@ By hand, the server in one terminal and the client in another:
 
 ```sh
 make
-make start-gramine-server       # VM and SEV: add GRAMINE=gramine-vm (or gramine-sev) GRAMINE_VM_INBOUND=8003:8003
+make start-gramine-server       # VM and SEV: add GRAMINE=gramine-vm (or gramine-sev) SAGUARO_VM_INBOUND=8003:8003
 curl -s http://127.0.0.1:8003/random/10K.1.html | wc -c      # 10240
 ```
 

@@ -11,7 +11,7 @@
 set -u
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 REPO=$(cd "$HERE/../../.." && pwd)
-PREFIX=${GRAMINE_PREFIX:-$HOME/.local/gramine-vm}
+PREFIX=${SAGUARO_PREFIX:-$HOME/.local/gramine-vm}
 KEY=both
 CPUS=()
 while [ $# -gt 0 ]; do
@@ -24,7 +24,7 @@ done
 [ ${#CPUS[@]} -gt 0 ] || CPUS=(1 2 4)
 export PATH=$PREFIX/bin:$PATH
 export PYTHONPATH=$(ls -d "$PREFIX"/lib/python3*/site-packages 2>/dev/null | head -1)
-export GRAMINE_PREFIX=$PREFIX
+export SAGUARO_PREFIX=$PREFIX
 OUT=${OUT:-/tmp/mp-hello}
 mkdir -p "$OUT"
 
@@ -46,7 +46,7 @@ for n in "${CPUS[@]}"; do
         log=$OUT/hello-$k-cpu$n.log
         load=$(cut -d' ' -f1 /proc/loadavg)
         start=$(date +%s%N)
-        (cd "$W" && GRAMINE_CPU_NUM=$n GRAMINE_VM_SERIAL=$OUT/hello-$k-cpu$n.serial \
+        (cd "$W" && SAGUARO_CPU_NUM=$n SAGUARO_VM_SERIAL=$OUT/hello-$k-cpu$n.serial \
             timeout ${RUN_TIMEOUT:-120} gramine-vm $app > "$log" 2>&1)
         r=$?
         t=$(( ($(date +%s%N) - start) / 1000000 ))

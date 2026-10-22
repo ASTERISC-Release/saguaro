@@ -24,7 +24,7 @@ echo "# $NAME $LOADER :0 $(uptime | sed 's/.*load/load/')" > "$O/host.txt"
 if [ "$LOADER" = native ]; then
     container/run.sh "cd /root/gramine-multiarch && WOW64=${WOW64:-0} DXVK_HUD=fps WINEDEBUG=err+all timeout $((SECS + 60)) test/proton-vm/run-game.sh -d :0 -s $SECS -o /root/gramine-multiarch/$O /root/gramine-multiarch/$EXE ${EXTRA_ARGS:-} >/dev/null 2>&1; tail -1 /root/gramine-multiarch/$O/run.txt"
 else
-    container/run.sh "cd /root/gramine-multiarch && WOW64=${WOW64:-0} X_TARGET=:0 GPU=1 NET=deny DXVK_HUD=fps EGL_VULKAN_REFRESH=1000 EGL_VULKAN_RATE_LOG=10 GRAMINE_CPU_NUM=4 GRAMINE_RAM_SIZE=12G WINEDEBUG=err+all GRAMINE_PREFIX=/root/.local/gramine-vm timeout $((SECS + 100)) test/proton-vm/run-game.sh -l vm -d :1 -s $SECS -o /root/gramine-multiarch/$O /root/gramine-multiarch/$EXE ${EXTRA_ARGS:-} >/dev/null 2>&1; tail -1 /root/gramine-multiarch/$O/run.txt"
+    container/run.sh "cd /root/gramine-multiarch && WOW64=${WOW64:-0} X_TARGET=:0 GPU=1 NET=deny DXVK_HUD=fps EGL_VULKAN_REFRESH=1000 EGL_VULKAN_RATE_LOG=10 SAGUARO_CPU_NUM=4 SAGUARO_RAM_SIZE=12G WINEDEBUG=err+all SAGUARO_PREFIX=/root/.local/gramine-vm timeout $((SECS + 100)) test/proton-vm/run-game.sh -l vm -d :1 -s $SECS -o /root/gramine-multiarch/$O /root/gramine-multiarch/$EXE ${EXTRA_ARGS:-} >/dev/null 2>&1; tail -1 /root/gramine-multiarch/$O/run.txt"
 fi
 wait; hyprctl reload config-only >/dev/null
 echo "windows left: $(hyprctl clients -j | jq -r '.[].class' | grep -c steam_proton)"

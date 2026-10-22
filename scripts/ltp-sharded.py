@@ -9,7 +9,7 @@ merge the shard results into one results file, and optionally rerun every non-pa
 
 Shard K of N runs the tests whose index i in the selection has i % N == K - 1. Each shard is one
 runner process with its own process group, its own results file and log, its own TMPDIR (under
-/tmp, mode 1777) and, for the vm loader, its own guest CID (GRAMINE_VM_ID_BASE + 2 (K - 1));
+/tmp, mode 1777) and, for the vm loader, its own guest CID (SAGUARO_VM_ID_BASE + 2 (K - 1));
 native and direct shards run in their own IPC, UTS and network namespaces (`unshare`, loopback
 up) when the container allows it.
 The harness (install symlink, /dev/shm mounts) is prepared once before the shards start; shards
@@ -135,7 +135,7 @@ def summarize(results):
 
 
 def run_shards(args, runner_args, workdir):
-    base = int(os.environ.get("GRAMINE_VM_ID_BASE", "10"))
+    base = int(os.environ.get("SAGUARO_VM_ID_BASE", "10"))
     isolate = args.loader != "vm" and args.isolate == "auto" and namespaces_usable()
     if args.loader != "vm" and args.isolate == "auto" and not isolate:
         print("note: unshare --ipc --uts --net is not usable here; shards share those namespaces",
@@ -155,7 +155,7 @@ def run_shards(args, runner_args, workdir):
         env = os.environ.copy()
         env["TMPDIR"] = str(tmpdir)
         if args.loader == "vm":
-            env["GRAMINE_VM_ID_BASE"] = str(base + 2 * (k - 1))
+            env["SAGUARO_VM_ID_BASE"] = str(base + 2 * (k - 1))
         command = [sys.executable, str(RUNNER), "--loader", args.loader, "--ltp-root", str(args.ltp_root),
                    "--harness-dir", str(args.harness_dir), "--shard", f"{k}/{args.shards}",
                    "--results", str(out), *runner_args]

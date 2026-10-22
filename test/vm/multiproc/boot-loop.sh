@@ -8,15 +8,15 @@
 # reproduced the boot crash of dev docs: vm-multiproc/FINDINGS.md (2026-10-15).
 #
 # Usage: test/vm/multiproc/boot-loop.sh [N]   (default 200)
-# Environment: GRAMINE_CPU_NUM (default 2), LOAD=<k> runs k busy loops on the host meanwhile,
-# GAP=<seconds> sleeps between guests, WORK (default <repo>/.mp-probes/boot-loop), GRAMINE_PREFIX.
+# Environment: SAGUARO_CPU_NUM (default 2), LOAD=<k> runs k busy loops on the host meanwhile,
+# GAP=<seconds> sleeps between guests, WORK (default <repo>/.mp-probes/boot-loop), SAGUARO_PREFIX.
 # Each failing run's output goes to $WORK/fail-<i>.log. Exit status 0 only if every guest printed.
 set -u
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 REPO=$(cd "$HERE/../../.." && pwd)
-PREFIX=${GRAMINE_PREFIX:-$HOME/.local/gramine-vm}
+PREFIX=${SAGUARO_PREFIX:-$HOME/.local/gramine-vm}
 . "$PREFIX/env.sh"
-export GRAMINE_CPU_NUM=${GRAMINE_CPU_NUM:-2}
+export SAGUARO_CPU_NUM=${SAGUARO_CPU_NUM:-2}
 N=${1:-200}
 WORK=${WORK:-$REPO/.mp-probes/boot-loop}
 mkdir -p "$WORK" && cd "$WORK" && rm -f fail-*.log
@@ -54,6 +54,6 @@ for i in $(seq 1 "$N"); do
     fi
     [ -n "${GAP:-}" ] && sleep "$GAP"
 done
-echo "boot-loop: $fails of $N guests failed ($GRAMINE_CPU_NUM vCPUs, load ${LOAD:-0}," \
+echo "boot-loop: $fails of $N guests failed ($SAGUARO_CPU_NUM vCPUs, load ${LOAD:-0}," \
      "gap ${GAP:-0}s, $(( $(date +%s) - start )) s)"
 [ "$fails" = 0 ]

@@ -9,7 +9,7 @@
 libos.entrypoint = "/redis-server"
 
 # Verbosity of Gramine debug log (none/error/warning/debug/trace/all). Note
-# that GRAMINE_LOG_LEVEL macro is expanded in the Makefile as part of the
+# that SAGUARO_LOG_LEVEL macro is expanded in the Makefile as part of the
 # building process: the default is "error" for non-debug builds, and "debug"
 # for debug builds.
 loader.log_level = "{{ log_level }}"

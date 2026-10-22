@@ -32,9 +32,9 @@ endif
 endif
 
 ifeq ($(DEBUG),1)
-GRAMINE_LOG_LEVEL = debug
+SAGUARO_LOG_LEVEL = debug
 else
-GRAMINE_LOG_LEVEL = error
+SAGUARO_LOG_LEVEL = error
 endif
 
 # Note that we're compiling in release mode regardless of the DEBUG setting passed
@@ -47,7 +47,7 @@ $(SELF_EXE): Cargo.toml
 
 rust-hyper-http-server.manifest: rust-hyper-http-server.manifest.template
 	gramine-manifest \
-		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
+		-Dlog_level=$(SAGUARO_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		-Dself_exe=$(SELF_EXE) \
 		$< $@

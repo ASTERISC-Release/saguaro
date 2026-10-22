@@ -6,7 +6,7 @@
 # the Windows machine, against the examples built with `make VBS=1`: for each application of SUITE
 # (redis nginx memcached lighttpd) the server is started in its enclave and each load is run with
 # `gramine-vbs net bench`. With STATS=1 the host process counts its host calls
-# (GRAMINE_VBS_HOSTCALL_STATS) into STATS_FILE (a Windows path; default
+# (SAGUARO_VBS_HOSTCALL_STATS) into STATS_FILE (a Windows path; default
 # %USERPROFILE%\gramine-vbs\hostcall-stats.txt), and the calls per request by kind are printed, with
 # the calls an idle server makes outside the load subtracted. Results go to ~/vbsnet-logs/bench-TAG.
 # Request counts: N1 (one connection), N8 (eight), NP (pipelined), NM (100 KiB), NL (1 MiB).
@@ -64,7 +64,7 @@ run_load() {  # name port bench-args...
 start() {  # dir app port
   cd $R/CI-Examples/$1
   rm -f $LSTATS
-  if [ -n "${STATS:-}" ]; then export GRAMINE_VBS_HOSTCALL_STATS="$WSTATS"; else unset GRAMINE_VBS_HOSTCALL_STATS; fi
+  if [ -n "${STATS:-}" ]; then export SAGUARO_VBS_HOSTCALL_STATS="$WSTATS"; else unset SAGUARO_VBS_HOSTCALL_STATS; fi
   $G $2 > $OUTD/$1-server.log 2>&1 &
   SPID=$!
   $G net wait $3 120 > /dev/null
