@@ -28,7 +28,7 @@ AF_VSOCK sockets are created explicitly and handed to asyncio via create_server(
 create_connection(sock=...): the `family=`/`host=` fast paths of start_server/open_connection go
 through getaddrinfo, whose AF_VSOCK handling varies between Python versions.
 
-Usage: python3 -m graminelibos.vsock_relay --cid CID [--inbound RULE]... [--config MANIFEST]
+Usage: python3 -m saguarolibos.vsock_relay --cid CID [--inbound RULE]... [--config MANIFEST]
   --inbound  "guest=G[:host=H[:bind=B]]" or the short forms "G" / "G:H"
   --config   VM manifest or relay TOML config containing inbound rules and outbound policy
 

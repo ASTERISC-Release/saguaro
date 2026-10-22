@@ -6,7 +6,7 @@
 
 # The graphics preload library is built and installed with Saguaro (-Dgraphics=enabled and a
 # VM-type PAL); the manifest refers to it as saguaro.libgraphics.
-GRAPHICS_LIB = $(shell python3 -c "import graminelibos; print(graminelibos._CONFIG_PKGLIBDIR)")/libgraphics.so
+GRAPHICS_LIB = $(shell python3 -c "import saguarolibos; print(saguarolibos._CONFIG_PKGLIBDIR)")/libgraphics.so
 STK_DIR = $(abspath .)
 STK_BIN = stk-build/stk-code/cmake_build/bin/supertuxkart
 STK_ARGS ?= --race-now --screensize=1920x1080 --seed=11 --track=abyss --kart=konqi

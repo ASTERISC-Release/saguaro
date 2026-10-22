@@ -115,7 +115,7 @@ def add_globals_from_saguaro(env):
     }
 
     try:
-        import _graminelibos_offsets as offsets # pylint: disable=import-outside-toplevel
+        import _saguarolibos_offsets as offsets # pylint: disable=import-outside-toplevel
     except ImportError: # no SGX build installed, skipping
         pass
     else:

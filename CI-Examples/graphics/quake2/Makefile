@@ -6,7 +6,7 @@
 
 # The graphics preload library is built and installed with Saguaro (-Dgraphics=enabled and a
 # VM-type PAL); the manifest refers to it as saguaro.libgraphics.
-GRAPHICS_LIB = $(shell python3 -c "import graminelibos; print(graminelibos._CONFIG_PKGLIBDIR)")/libgraphics.so
+GRAPHICS_LIB = $(shell python3 -c "import saguarolibos; print(saguarolibos._CONFIG_PKGLIBDIR)")/libgraphics.so
 Q2_DIR = $(abspath quake2_bin)
 Q2_BIN = quake2_bin/release/quake2
 Q2_ARGS ?= +vid_maxfps 999 +toggleconsole
@@ -16,7 +16,7 @@ SHARED_INPUT ?= 1
 # VULKAN=1: the Vulkan renderer ref_vk (built by setup-quake.sh) under saguaro-vm, presented through
 # libgraphics.so's Vulkan layer (dev docs: vulkan/)
 VULKAN ?= 0
-LAYER_DIR = $(shell python3 -c "import graminelibos; print(graminelibos._CONFIG_PKGLIBDIR)")/vulkan
+LAYER_DIR = $(shell python3 -c "import saguarolibos; print(saguarolibos._CONFIG_PKGLIBDIR)")/vulkan
 
 
 ifeq ($(DEBUG),1)

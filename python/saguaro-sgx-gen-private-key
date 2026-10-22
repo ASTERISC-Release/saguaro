@@ -8,7 +8,7 @@ import pathlib
 
 import click
 
-from graminelibos import sgx_sign
+from saguarolibos import sgx_sign
 
 @click.command()
 @click.option('--force/--no-force', '-f/',

@@ -15,7 +15,7 @@
 # creates a per-suite *run directory* under the build tree, symlinks the cross-built
 # binaries (and any committed data files) into it, and renders the manifests there with
 # the same saguaro-manifest invocation and the same variable set that
-# `graminelibos.util_tests._gen_rules` uses. pytest is then run in the guest with CWD =
+# `saguarolibos.util_tests._gen_rules` uses. pytest is then run in the guest with CWD =
 # run directory and the test file given by path.
 #
 # Usage (in the container): render-test-manifests.sh <pal|libos>

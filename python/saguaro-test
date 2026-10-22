@@ -9,7 +9,7 @@ import sys
 
 import click
 
-from graminelibos import util_tests, _CONFIG_SGX_ENABLED
+from saguarolibos import util_tests, _CONFIG_SGX_ENABLED
 
 def change_dir(_ctx, _param, value):
     if value:

@@ -1,0 +1,2 @@
+[saguaro.sgx_sign]
+file = saguarolibos.sgx_sign:sign_with_file

@@ -57,7 +57,7 @@ display).
 
 | Folder | Backend | Content (from headers) |
 |---|---|---|
-| `test/unit/` | any | pytest unit tests of `graminelibos` (chroot, ldd parsing, sgx sign) |
+| `test/unit/` | any | pytest unit tests of `saguarolibos` (chroot, ldd parsing, sgx sign) |
 | `test/benchmarks/` | direct | `run_benchmarks.sh` and `syscall-bench`: native against saguaro-direct |
 | `test/sev/` | sev | `sev_probe`, `sev_attest`, `qmp.py`, `sev_memcheck.py`: used by `test-sev.sh` |
 | `test/vm/multiproc/` | vm | multi-process checks; `check-probes.sh` is called by `vm-x86_64.yml`; `run-probes.sh`, `load.sh`, `vm-examples.sh`, `boot-loop.sh`, `sig-loop.sh`, `nginx-workers.sh`, `redis-bgsave.sh` are run by hand |

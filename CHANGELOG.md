@@ -313,7 +313,7 @@ The tree was renamed to Saguaro. What an upgrader has to change (there are no al
   `VkLayer_saguaro_present.json`); the TF2 workload files are `saguaro_workload.cfg`, `saguaro_cp_badlands.cfg` and
   `saguaro_lock_points.nut` (log `saguaro_ready.log`); the supertuxkart patch is `disable-saguaro-udev-input.patch`
   (an STK checkout patched with the old one is reported as "failed to apply": re-fetch it).
-- **Unchanged**: the Python package and distribution `graminelibos`, the RA-TLS and mbedtls package names
+- **Unchanged**: the Python package and distribution `saguarolibos`, the RA-TLS and mbedtls package names
   (`ra_tls_gramine`, `secret_prov_gramine`, `mbedtls_gramine`, headers under `include/gramine/`), the manifest
   syntax, the launcher-to-guest strings (`-gramine-args`, the fw_cfg items `opt/gramine/<name>`, the virtio-fs tag
   `graminefs`), the LibOS's own file names (`/dev/shm/.gramine-*`), the C macros of the LibOS ABI

@@ -9,7 +9,7 @@ import string
 import subprocess
 import unittest
 
-from graminelibos.regression import (
+from saguarolibos.regression import (
     HAS_EDMM,
     HAS_SGX,
     ON_X86,

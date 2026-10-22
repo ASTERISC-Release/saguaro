@@ -12,7 +12,7 @@ import typing
 
 import click
 
-from graminelibos import (
+from saguarolibos import (
     Manifest, get_tbssigstruct, SGX_LIBPAL,
 )
 

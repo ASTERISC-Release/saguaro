@@ -24,7 +24,7 @@ from . import _CONFIG_PKGLIBDIR
 from .manifest import Manifest
 from .sigstruct import Sigstruct
 
-import _graminelibos_offsets as offs # pylint: disable=import-error,wrong-import-order
+import _saguarolibos_offsets as offs # pylint: disable=import-error,wrong-import-order
 
 # TODO after deprecating 20.04: remove backend wrt
 # https://cryptography.io/en/latest/faq/#what-happened-to-the-backend-argument
@@ -621,7 +621,7 @@ def sign_with_private_key(data, private_key):
 
     Function used to generate an RSA signature over provided data using a 3072-bit private key with
     the public exponent of 3 (hard Intel SGX requirement on the key size and the exponent).
-    Suitable to be used as a callback to :py:func:`graminelibos.Sigstruct.sign()`.
+    Suitable to be used as a callback to :py:func:`saguarolibos.Sigstruct.sign()`.
 
     Args:
         data (bytes): Data to calculate the signature over.
@@ -660,7 +660,7 @@ def sign_with_private_key_from_pem_file(data, file, passphrase=None):
 
     Function used to generate an RSA signature over provided data using a 3072-bit private key with
     the public exponent of 3 (hard Intel SGX requirement on the key size and the exponent).
-    Suitable to be used as a callback to :py:func:`graminelibos.Sigstruct.sign()`.
+    Suitable to be used as a callback to :py:func:`saguarolibos.Sigstruct.sign()`.
 
     Args:
         data (bytes): Data to calculate the signature over.
@@ -686,7 +686,7 @@ def sign_with_private_key_from_pem_path(data, path, passphrase=None):
 
     Function used to generate an RSA signature over provided data using a 3072-bit private key with
     the public exponent of 3 (hard Intel SGX requirement on the key size and the exponent).
-    Suitable to be used as a callback to :py:func:`graminelibos.Sigstruct.sign()`.
+    Suitable to be used as a callback to :py:func:`saguarolibos.Sigstruct.sign()`.
 
     Args:
         data (bytes): Data to calculate the signature over.

@@ -54,7 +54,7 @@ QEMU_MEM_SIZE=$(python3 -c "
 import os
 import re
 import sys
-from graminelibos import Manifest
+from saguarolibos import Manifest
 
 manifests = {
     'tdx': os.environ['SAGUARO_MANIFEST'] + '.tdx',

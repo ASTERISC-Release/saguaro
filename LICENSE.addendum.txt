@@ -16,7 +16,7 @@ Gramine also includes the following third party sources (and licenses):
 * curl/libcurl - MIT derivative
 * GCC/libgomp (built only optionally and not included by default) - GPL v3.0
 * Mbed TLS - Apache 2.0
-* Ninja (python/graminelibos/ninja_syntax.py) - Apache 2.0
+* Ninja (python/saguarolibos/ninja_syntax.py) - Apache 2.0
 * tomlc99 - MIT
 * uthash - BSD revised
 

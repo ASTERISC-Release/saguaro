@@ -1,4 +1,4 @@
-# Configuration for `saguaro-test` (see python/graminelibos/util_tests.py). These integration tests
+# Configuration for `saguaro-test` (see python/saguarolibos/util_tests.py). These integration tests
 # run under the VM PAL; client/server peers run on the host or in guest threads as appropriate.
 
 manifests = [

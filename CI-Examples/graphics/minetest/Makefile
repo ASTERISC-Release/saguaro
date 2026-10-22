@@ -6,7 +6,7 @@
 
 # The graphics preload library is built and installed with Saguaro (-Dgraphics=enabled and a
 # VM-type PAL); the manifest refers to it as saguaro.libgraphics.
-GRAPHICS_LIB = $(shell python3 -c "import graminelibos; print(graminelibos._CONFIG_PKGLIBDIR)")/libgraphics.so
+GRAPHICS_LIB = $(shell python3 -c "import saguarolibos; print(saguarolibos._CONFIG_PKGLIBDIR)")/libgraphics.so
 MT_DIR = $(abspath luanti-5.6.1)
 MT_BIN = luanti-5.6.1/bin/minetest
 # Start the prepared world directly, without the main menu.

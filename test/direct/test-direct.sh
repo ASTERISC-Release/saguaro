@@ -43,13 +43,13 @@
 #       python3-pytest python3-click python3-jinja2 python3-cryptography \
 #       python3-voluptuous python3-toml nasm procps iproute2 file linux-libc-dev
 #   (voluptuous from "pip3 install --user voluptuous" works as well; elftools and
-#    _graminelibos_offsets are only imported by the SGX-signing tools, which stay disabled.)
+#    _saguarolibos_offsets are only imported by the SGX-signing tools, which stay disabled.)
 #
 #   # 2. Configure, build, install into a private prefix (~3 min native build).
 #   #    Or just run scripts/install.sh, which automates this step (and optionally
 #   #    step 1 with --deps) and can chain into this script via --run-tests.
 #   #    `ninja install` places the CLI scripts in <prefix>/bin and the
-#   #    graminelibos package in <prefix>/lib/python3.X/site-packages — which
+#   #    saguarolibos package in <prefix>/lib/python3.X/site-packages — which
 #   #    is why the script exports PYTHONPATH for exactly that directory.
 #   #    (Keep the vm/tdx PALs disabled for this direct-PAL test battery.)
 #   meson setup build-$(uname -m) -Dbuildtype=release -Ddirect=enabled \
@@ -123,7 +123,7 @@ case "$RUNNER" in saguaro-direct|saguaro-vm) ;; *) echo "ERROR: SAGUARO_RUNNER m
 for bin in "$RUNNER" saguaro-test saguaro-manifest; do
     command -v "$bin" >/dev/null || { echo "ERROR: $bin not on PATH (set SAGUARO_PREFIX?)"; exit 1; }
 done
-python3 -c 'import graminelibos' 2>/dev/null || { echo "ERROR: graminelibos not on PYTHONPATH"; exit 1; }
+python3 -c 'import saguarolibos' 2>/dev/null || { echo "ERROR: saguarolibos not on PYTHONPATH"; exit 1; }
 
 # --- architecture plumbing (script is arch-neutral: works on x86_64 too) ----
 HOST_ARCH=$(uname -m)                    # "aarch64" | "x86_64" | "riscv64"

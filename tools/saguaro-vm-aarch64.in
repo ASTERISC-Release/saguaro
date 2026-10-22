@@ -57,14 +57,14 @@ shift
 
 # VM memory: the manifest's `<sgx|tdx>.enclave_size` (so existing manifests keep working), else
 # SAGUARO_RAM_SIZE, else 2G; never below 1G (the kernel reserves ~512MB for virtio queues, page
-# tables and the PAL itself). Parsing needs the `graminelibos` python package; without it we
+# tables and the PAL itself). Parsing needs the `saguarolibos` python package; without it we
 # silently fall back.
 export SAGUARO_MANIFEST=$APPLICATION.manifest
 QEMU_MEM_SIZE=$(python3 -c "
 import os
 import re
 import sys
-from graminelibos import Manifest
+from saguarolibos import Manifest
 
 size_str = ''
 for type, suffix in (('tdx', '.tdx'), ('sgx', '.sgx')):
@@ -89,7 +89,7 @@ QEMU_MEM_SIZE=${QEMU_MEM_SIZE:-$SAGUARO_RAM_SIZE}
 if [ -z "$QEMU_MEM_SIZE" ] && python3 -c "
 import os
 import sys
-from graminelibos import Manifest
+from saguarolibos import Manifest
 with open(os.environ['SAGUARO_MANIFEST'], 'rb') as f:
     manifest = Manifest.loads(f.read().decode('utf-8'))
 # Manifest has no get(): index it, a missing table or key means on (the PAL's default)

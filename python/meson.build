@@ -1,5 +1,5 @@
-subdir('graminelibos')
-subdir('graminelibos.dist-info')
+subdir('saguarolibos')
+subdir('saguarolibos.dist-info')
 
 install_data([
     'saguaro-gen-depend',

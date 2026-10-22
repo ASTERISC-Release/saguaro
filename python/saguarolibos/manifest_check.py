@@ -46,7 +46,7 @@ _fs_root = Any(*_fs_base)
 _fs_mount = Any(*({**d, Required('path'): str, **({'host_symlinks': bool} if d.get('type') == 'chroot' else {})}
                   for d in _fs_base))
 
-GramineManifestSchema = Schema({
+SaguaroManifestSchema = Schema({
     Required('fs'): {
         Required('mounts'): [_fs_mount],
         'root': _fs_root,

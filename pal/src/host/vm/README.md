@@ -30,7 +30,7 @@ its sources in `arch/aarch64/` here and in `../vm-common/arch/aarch64/`. User gu
 - Console (stdin, stdout) over virtio-console; files over virtio-fs (the launcher starts
   `virtiofsd` on the host's `/`).
 - Networking: the guest has no TCP/IP stack. Its TCP and UDP sockets are carried over virtio-vsock
-  to one relay process per VM on the host side (`python/graminelibos/vsock_relay.py`, started by the
+  to one relay process per VM on the host side (`python/saguarolibos/vsock_relay.py`, started by the
   launcher through `tools/saguaro-vm-relay.sh`), which opens the real sockets. The manifest's
   `vm.net` table sets the outbound policy and the inbound forwards. Needs `/dev/vhost-vsock`
   (`sudo modprobe vhost_vsock`).

@@ -10,7 +10,7 @@ import json
 import click
 import tomli_w
 
-from graminelibos import Sigstruct
+from saguarolibos import Sigstruct
 
 @click.command()
 @click.argument('sigfile', type=click.File('rb'), required=True)

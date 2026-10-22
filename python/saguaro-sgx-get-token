@@ -5,7 +5,7 @@
 
 import click
 
-from graminelibos import Sigstruct, get_token, is_oot
+from saguarolibos import Sigstruct, get_token, is_oot
 
 @click.command()
 @click.option('--sig', '-s', type=click.File('rb'), required=True, help='sigstruct file')

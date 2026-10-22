@@ -3,7 +3,7 @@
 import os
 import subprocess
 
-from graminelibos.regression import RegressionTestCase
+from saguarolibos.regression import RegressionTestCase
 
 class TC_00_Entrypoint(RegressionTestCase):
     def test_010_atexit_func(self):

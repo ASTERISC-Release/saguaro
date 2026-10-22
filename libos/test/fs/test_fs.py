@@ -3,7 +3,7 @@ import os
 import shutil
 import unittest
 
-from graminelibos.regression import (
+from saguarolibos.regression import (
     HAS_SGX,
     RegressionTestCase,
 )

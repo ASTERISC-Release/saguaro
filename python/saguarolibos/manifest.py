@@ -20,7 +20,7 @@ import tomli
 import tomli_w
 
 from . import _env
-from .manifest_check import GramineManifestSchema
+from .manifest_check import SaguaroManifestSchema
 
 DEFAULT_ENCLAVE_SIZE_NO_EDMM = '256M'
 DEFAULT_ENCLAVE_SIZE_WITH_EDMM = '1024G'  # 1TB; note that DebugInfo is at 1TB and ASan at 1.5TB
@@ -123,7 +123,7 @@ class TrustedFile:
         chroot (pathlib.Path or None): optional path to chroot, if being measured in chroot dir
 
     Raises:
-        graminelibos.ManifestError: on invalid URI values, or when *chroot* is not None and realpath
+        saguarolibos.ManifestError: on invalid URI values, or when *chroot* is not None and realpath
             is not absolute
     """
     def __init__(self, uri, sha256=None, *, chroot=None):
@@ -156,7 +156,7 @@ class TrustedFile:
             TrustedFile: a single instance of TrustedFile
 
         Raises:
-            graminelibos.ManifestError: on errors in data
+            saguarolibos.ManifestError: on errors in data
         """
         if isinstance(data, str):
             uri, sha256 = data, None
@@ -252,7 +252,7 @@ class TrustedFile:
             :py:class:`TrustedFile`: one object for each entry in the directory
 
         Raises:
-            graminelibos.ManifestError: On errors in URIs, e.g. when directory does not have ``/``
+            saguarolibos.ManifestError: On errors in URIs, e.g. when directory does not have ``/``
                 at the end or *vice versa*, or when directory has ``sha256`` value.
         """
         if self.uri.endswith('/'):
@@ -391,7 +391,7 @@ class Manifest:
             voluptuous.error.MultipleInvalid: when check fails
         """
 
-        return GramineManifestSchema(self._manifest)
+        return SaguaroManifestSchema(self._manifest)
 
     def expand_all_trusted_files(self, chroot=None):
         """Expand all trusted files entries.
@@ -406,7 +406,7 @@ class Manifest:
                 are expected to be found inside this directory, not in root of filesystem.
 
         Raises:
-            graminelibos.ManifestError: There was an error with the format of some trusted files in
+            saguarolibos.ManifestError: There was an error with the format of some trusted files in
                 the manifest or some of them could not be loaded from the filesystem.
 
         """
@@ -444,7 +444,7 @@ class Manifest:
             list(pathlib.Path): List of paths to the files this manifest depends on.
 
         Raises:
-            graminelibos.ManifestError: One of the found URIs is in an unsupported format.
+            saguarolibos.ManifestError: One of the found URIs is in an unsupported format.
         """
         deps = set()
 

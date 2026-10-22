@@ -15,7 +15,7 @@ import sys
 
 import pytest
 
-from graminelibos.regression import HAS_SGX, run_command
+from saguarolibos.regression import HAS_SGX, run_command
 
 DEFAULT_LTP_SCENARIO = 'install/runtest/syscalls'
 DEFAULT_LTP_CONFIG = 'ltp.cfg'

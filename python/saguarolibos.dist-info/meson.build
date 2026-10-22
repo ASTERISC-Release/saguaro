@@ -1,8 +1,6 @@
-install_dir = python3_platlib / 'graminelibos.dist-info'
+install_dir = python3_platlib / 'saguarolibos.dist-info'
 conf = configuration_data()
-# the Python distribution keeps its upstream name `graminelibos` (the package and this
-# dist-info directory are named so); it no longer follows the meson project name (`saguaro`)
-conf.set('NAME', 'gramine')
+conf.set('NAME', meson.project_name())
 conf.set('VERSION', meson.project_version())
 conf.set('LICENSE', ', '.join(meson.project_license()))
 

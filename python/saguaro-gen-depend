@@ -7,7 +7,7 @@ import os
 
 import click
 
-from graminelibos import Manifest, _CONFIG_PKGLIBDIR
+from saguarolibos import Manifest, _CONFIG_PKGLIBDIR
 
 @click.command()
 @click.option('--manifest', '-m', 'manifest_file', type=click.File('rb'), required=True,

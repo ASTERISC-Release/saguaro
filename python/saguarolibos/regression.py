@@ -11,7 +11,7 @@ import sys
 import time
 import unittest
 
-import graminelibos
+import saguarolibos
 
 fspath = getattr(os, 'fspath', str) # pylint: disable=invalid-name
 
@@ -188,7 +188,7 @@ class RegressionTestCase(unittest.TestCase):
         # pylint: disable=protected-access
         vm_host = 'sev' if VM_LAUNCHER == 'saguaro-sev' else 'vm'
         host = 'sgx' if HAS_SGX else vm_host if USE_SAGUARO_VM else 'direct'
-        return pathlib.Path(graminelibos._CONFIG_PKGLIBDIR) / host
+        return pathlib.Path(saguarolibos._CONFIG_PKGLIBDIR) / host
 
     @property
     def libpal_path(self):

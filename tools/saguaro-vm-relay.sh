@@ -9,10 +9,10 @@
 # One relay process runs per VM, in the launcher's container or host, started once the guest CID is
 # known and stopped with the VM. It listens on AF_VSOCK port 65536 + CID and handles the guest's
 # outbound destination handshakes, UDP/DNS, loopback hairpinning, and the static inbound forwards of the
-# manifest's `vm.net.inbound` (see python/graminelibos/vsock_relay.py).
+# manifest's `vm.net.inbound` (see python/saguarolibos/vsock_relay.py).
 #
 #   vm_relay_find_python <launcher>
-#       make `graminelibos` importable: when it is not, add <prefix>/lib/python3*/site-packages of the
+#       make `saguarolibos` importable: when it is not, add <prefix>/lib/python3*/site-packages of the
 #       installation that holds <launcher> (<prefix>/bin/saguaro-vm) to PYTHONPATH. Callers with a
 #       stripped environment (the LibOS regression tests pass `env=`) have no PYTHONPATH.
 #   vm_relay_manifest_wants_network <manifest>
@@ -35,12 +35,12 @@ RELAY_LOG=
 
 vm_relay_find_python() {
     local launcher=$1 prefix site
-    if python3 -c 'import graminelibos' 2>/dev/null; then
+    if python3 -c 'import saguarolibos' 2>/dev/null; then
         return 0
     fi
     prefix=$(cd "$(dirname "$(readlink -f "$launcher")")/.." && pwd)
     for site in "$prefix"/lib/python3*/site-packages; do
-        if [ -d "$site/graminelibos" ]; then
+        if [ -d "$site/saguarolibos" ]; then
             export PYTHONPATH="$site${PYTHONPATH:+:$PYTHONPATH}"
             return 0
         fi
@@ -68,8 +68,8 @@ vm_relay_start() {
     RELAY_LOG=
     [ "${SAGUARO_VM_RELAY:-1}" = "0" ] && return 0
 
-    if ! python3 -c 'import graminelibos.vsock_relay' 2>/dev/null; then
-        echo "Error: the VM's vsock relay needs the Python package graminelibos of this Saguaro" \
+    if ! python3 -c 'import saguarolibos.vsock_relay' 2>/dev/null; then
+        echo "Error: the VM's vsock relay needs the Python package saguarolibos of this Saguaro" \
              "installation (set PYTHONPATH to <prefix>/lib/python3*/site-packages)" >&2
         return 1
     fi
@@ -82,7 +82,7 @@ vm_relay_start() {
     # PYTHONASYNCIODEBUG makes the relay log event-loop stalls ("Executing ... took 0.sss seconds"),
     # which is how a blocking vsock dial that freezes the other forwards shows up.
     env PYTHONASYNCIODEBUG=${SAGUARO_VM_RELAY_DEBUG:+1} \
-        python3 -m graminelibos.vsock_relay --cid "$cid" --config "$manifest" --die-with-parent \
+        python3 -m saguarolibos.vsock_relay --cid "$cid" --config "$manifest" --die-with-parent \
         "${args[@]}" \
         >"$RELAY_LOG" 2>&1 &
     RELAY_PID=$!

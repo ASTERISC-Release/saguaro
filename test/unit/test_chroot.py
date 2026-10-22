@@ -1,5 +1,5 @@
 import pytest
-from graminelibos import manifest
+from saguarolibos import manifest
 
 
 # TODO: use tmp_path after deprecating *EL8

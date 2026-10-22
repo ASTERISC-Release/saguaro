@@ -13,7 +13,7 @@ import unittest
 import json
 import tomli
 
-from graminelibos.regression import (
+from saguarolibos.regression import (
     HAS_AVX,
     HAS_SGX,
     IS_VM,

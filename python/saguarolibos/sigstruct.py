@@ -5,7 +5,7 @@
 import struct
 import sys
 
-import _graminelibos_offsets as offs # pylint: disable=import-error
+import _saguarolibos_offsets as offs # pylint: disable=import-error
 
 
 class Sigstruct:

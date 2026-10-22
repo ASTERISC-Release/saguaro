@@ -3,7 +3,7 @@
 import platform
 import unittest
 
-from graminelibos.regression import (
+from saguarolibos.regression import (
     USES_MUSL,
     RegressionTestCase,
 )

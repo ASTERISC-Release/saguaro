@@ -678,17 +678,17 @@ def cmd_stop(args):
 # ---- rendering a manifest template ----
 
 def jinja_env():
-    """The Jinja environment of saguaro-manifest (python/graminelibos/gen_jinja_env.py), loaded from
+    """The Jinja environment of saguaro-manifest (python/saguarolibos/gen_jinja_env.py), loaded from
     this source tree so that no installed Saguaro is needed, plus the vbs.* globals."""
     import importlib.util  # pylint: disable=import-outside-toplevel
     import types  # pylint: disable=import-outside-toplevel
-    pkgdir = os.path.join(ROOT, 'python', 'graminelibos')
-    pkg = types.ModuleType('graminelibos')
+    pkgdir = os.path.join(ROOT, 'python', 'saguarolibos')
+    pkg = types.ModuleType('saguarolibos')
     pkg.__path__ = [pkgdir]
     pkg._CONFIG_LIBC = 'none'
     pkg._CONFIG_PKGLIBDIR = os.path.join(ROOT, 'build-vbs')
-    sys.modules['graminelibos'] = pkg
-    spec = importlib.util.spec_from_file_location('graminelibos.gen_jinja_env',
+    sys.modules['saguarolibos'] = pkg
+    spec = importlib.util.spec_from_file_location('saguarolibos.gen_jinja_env',
                                                   os.path.join(pkgdir, 'gen_jinja_env.py'))
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)

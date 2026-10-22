@@ -1,4 +1,4 @@
-from graminelibos.gen_jinja_env import parse_ldd
+from saguarolibos.gen_jinja_env import parse_ldd
 
 def test_parse_ldd():
     output = parse_ldd(

@@ -89,7 +89,7 @@ python3 = pythonmod.find_installation('python3')
 # -Dpython.platlibdir
 python3_platlib = run_command(
     python3, get_python_platlib_prog, get_option('prefix')).stdout()
-python3_pkgdir = python3_platlib / 'graminelibos'
+python3_pkgdir = python3_platlib / 'saguarolibos'
 
 pkgconfig = import('pkgconfig')
 

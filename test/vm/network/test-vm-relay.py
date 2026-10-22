@@ -13,7 +13,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
-from graminelibos.vsock_relay import (
+from saguarolibos.vsock_relay import (
     CONNECT_MAGIC,
     CONNECT_OP,
     CONNECT_STATUS_ERROR,
@@ -94,7 +94,7 @@ inbound = [{guest = 8080, host = 18080, bind = "127.0.0.1"}]
             host_reader.feed_eof()
             host_writer = FakeWriter(('192.0.2.9', 9000))
 
-            with patch('graminelibos.vsock_relay.asyncio.open_connection',
+            with patch('saguarolibos.vsock_relay.asyncio.open_connection',
                        new=AsyncMock(return_value=(host_reader, host_writer))) as connect:
                 await serve_guest_connection(guest_reader, guest_writer, 1510, Stats())
 
@@ -115,7 +115,7 @@ inbound = [{guest = 8080, host = 18080, bind = "127.0.0.1"}]
             guest_reader.feed_eof()
             guest_writer = FakeWriter((1510, 32100))
 
-            with patch('graminelibos.vsock_relay.asyncio.open_connection',
+            with patch('saguarolibos.vsock_relay.asyncio.open_connection',
                        new=AsyncMock()) as connect:
                 await serve_guest_connection(guest_reader, guest_writer, 1510, Stats(),
                                              NetworkPolicy(deny=['tcp:443']))

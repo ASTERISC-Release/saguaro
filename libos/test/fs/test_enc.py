@@ -7,7 +7,7 @@ import unittest
 # Named import, so that Pytest does not pick up TC_00_FileSystem as belonging to this module.
 import test_fs
 
-from graminelibos import _CONFIG_SGX_ENABLED
+from saguarolibos import _CONFIG_SGX_ENABLED
 
 # TODO: While encrypted files are no longer SGX-only, the related tools (saguaro-sgx-pf-crypt,
 # saguaro-sgx-pf-tamper) are still part of Linux-SGX PAL. As a result, we are able to run the tests

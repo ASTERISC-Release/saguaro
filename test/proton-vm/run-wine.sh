@@ -27,7 +27,7 @@ FFMPEG_LIBS=${FFMPEG_LIBS:-/opt/ffmpeg8/lib}; [ -d "$FFMPEG_LIBS" ] || FFMPEG_LI
 # GPU=1: the graphics redirection (design-gpu.md): AMD by default (EGL_DISCRETE=1, renderD129)
 GPU=${GPU:-0}
 if [ "$GPU" = 1 ]; then
-    LAYER_DIR=$(python3 -c "import graminelibos; print(graminelibos._CONFIG_PKGLIBDIR)")/vulkan
+    LAYER_DIR=$(python3 -c "import saguarolibos; print(saguarolibos._CONFIG_PKGLIBDIR)")/vulkan
     VK_ICD=${VK_ICD:-/usr/share/vulkan/icd.d/radeon_icd.json}
     DXVK_DEVICE=${DXVK_DEVICE:-AMD}
     export SAGUARO_VM_GRAPHICS=1
