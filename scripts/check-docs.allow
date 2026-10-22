@@ -25,6 +25,9 @@ vm-memory/
 ^\./bastion_game$
 ^patches/$
 runtime/glibc$
+# installed paths under <prefix>/lib/<triple>/saguaro and <prefix>/include/gramine
+^saguaro/(vm|direct|sev|sgx|tdx|vbs|runtime)/
+^include/gramine/$
 
 # kernel, sysfs, device-tree and guest paths; addresses and registers written like paths
 ^/

@@ -301,12 +301,27 @@ The tree was renamed to Saguaro. What an upgrader has to change (there are no al
   `~/.local/bin/gramine-vbs` link of `--vbs` are not removed.
 - **The SGX signing key** defaults to `~/.config/saguaro/enclave-key.pem`; a key at `~/.config/gramine/` is still used
   when it is the only one.
-- **Unchanged**: the Python package `graminelibos`, the meson project and library names (`libgramine*`,
-  `lib/<triple>/gramine/`), the manifest syntax, the launcher-to-guest strings (`-gramine-args`, the fw_cfg items `opt/gramine/<name>`)
-  and the LibOS's own file names (`/dev/shm/.gramine-*`), so that old and new installs coexist on one host.
+- **Manifest templates**: the Jinja variable `gramine` is `saguaro` (`{{ saguaro.runtimedir() }}`,
+  `{{ saguaro.libos }}`, `{{ saguaro.libgraphics }}`, `{{ saguaro.pkglibdir }}`). A template that still uses
+  `gramine.` fails with a hint; update one with `sed -i 's/{{ *gramine\./{{ saguaro./g' <file>`. The entry-point
+  group of `saguaro-sgx-sign` plugins is `saguaro.sgx_sign` (was `gramine.sgx_sign`).
+- **Install layout**: the meson project is `saguaro`, so the PALs, the LibOS and the runtime libc are under
+  `<prefix>/lib/<triple>/saguaro/` (was `lib/<triple>/gramine/`), for example `saguaro/vm/pal` and
+  `saguaro/runtime/glibc`. Reinstall; the old `lib/<triple>/gramine/` directory of an existing prefix is not removed.
+- **Other names**: the graphics manifest variables `EGL_GRAMINE` and `IVSHMEM_GRAMINE_VM` are `EGL_SAGUARO` and
+  `IVSHMEM_SAGUARO_VM`; the Vulkan layer `VK_LAYER_GRAMINE_present` is `VK_LAYER_SAGUARO_present` (manifest
+  `VkLayer_saguaro_present.json`); the TF2 workload files are `saguaro_workload.cfg`, `saguaro_cp_badlands.cfg` and
+  `saguaro_lock_points.nut` (log `saguaro_ready.log`); the supertuxkart patch is `disable-saguaro-udev-input.patch`
+  (an STK checkout patched with the old one is reported as "failed to apply": re-fetch it).
+- **Unchanged**: the Python package and distribution `graminelibos`, the RA-TLS and mbedtls package names
+  (`ra_tls_gramine`, `secret_prov_gramine`, `mbedtls_gramine`, headers under `include/gramine/`), the manifest
+  syntax, the launcher-to-guest strings (`-gramine-args`, the fw_cfg items `opt/gramine/<name>`, the virtio-fs tag
+  `graminefs`), the LibOS's own file names (`/dev/shm/.gramine-*`), the C macros of the LibOS ABI
+  (`GRAMINE_CALL_*`, `GRAMINE_SYSCALL*`) and the graphics names shared with qemu-tirith (`GRAMINE_ABI_ROOT`,
+  `GRAMINE_ABI_DIR`, `libos/src/graphics/xcb.c` with `in_gramine_vm` is kept byte-identical to its copy there).
 
 ## Inherited from upstream
 
 The manifest syntax, the TDX backend of gramine-tdx and the SGX tooling are inherited; the SGX documentation is
-unchanged except where noted above. The examples that run on SEV also run on TDX (`saguaro-tdx`, built with
+upstream's, with the names of this tree. The examples that run on SEV also run on TDX (`saguaro-tdx`, built with
 `scripts/install.sh --vm --tdx`); `exec.sh` has no TDX backend.
