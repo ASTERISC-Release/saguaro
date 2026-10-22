@@ -30,7 +30,7 @@ MAN=$REG/fork_and_exec.manifest
 [ -f "$MAN" ] || { echo "no $MAN: run test/direct/test-direct.sh libos first" >&2; exit 2; }
 grep -q "file:$PREFIX/" "$MAN" \
     || { echo "$MAN is rendered for another install: run test/direct/test-direct.sh libos" >&2; exit 2; }
-LIBDIR=$(cd "$PREFIX" && ls -d lib/*/gramine/direct | head -n 1)
+LIBDIR=$(cd "$PREFIX" && ls -d lib/*/saguaro/direct | head -n 1)
 LIBDIR=${LIBDIR%/direct}
 [ -n "$LIBDIR" ] || { echo "no direct PAL under $PREFIX" >&2; exit 2; }
 

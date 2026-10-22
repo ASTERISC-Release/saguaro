@@ -54,7 +54,7 @@ mkdir -p "$BUILDDIR"
     log "running configure..."
     ../configure \
         --prefix="$PREFIX" \
-        --libdir="$PREFIX"/"$LIBDIR"/gramine/runtime/glibc \
+        --libdir="$PREFIX"/"$LIBDIR"/saguaro/runtime/glibc \
         ${CONFIGURE_HOST:+--host="$CONFIGURE_HOST"} \
         --with-tls \
         --without-gd \

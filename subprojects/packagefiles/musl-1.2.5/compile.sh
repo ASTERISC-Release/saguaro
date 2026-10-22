@@ -53,7 +53,7 @@ mkdir -p "$BUILDDIR"
     log "running configure..."
     ../configure \
         --prefix="$PREFIX" \
-        --libdir="$PREFIX"/"$LIBDIR"/gramine/runtime/musl \
+        --libdir="$PREFIX"/"$LIBDIR"/saguaro/runtime/musl \
         --disable-static \
         $MUSL_CONFIGURE_FLAGS \
         >>"$BUILD_LOG" 2>&1

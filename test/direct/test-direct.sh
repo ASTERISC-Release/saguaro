@@ -150,8 +150,8 @@ drop_stale_manifest() {
         echo "$libos"
         return 0
     fi
-    # `file:<prefix>/lib/<multiarch>/gramine/runtime/glibc` in the manifest, but no such directory
-    rt=$(grep -o 'file:[^" ]*/gramine/runtime/glibc' "$1" 2>/dev/null | head -1)
+    # `file:<prefix>/lib/<multiarch>/saguaro/runtime/glibc` in the manifest, but no such directory
+    rt=$(grep -o 'file:[^" ]*/saguaro/runtime/glibc' "$1" 2>/dev/null | head -1)
     if [ -n "$rt" ] && [ ! -d "${rt#file:}" ]; then
         rm -f "$1"
         echo "${rt#file:} (missing: this install has no bundled libc)"
@@ -210,8 +210,8 @@ kill_strays() {
     # two families in battery runs, so match the Gramine-specific command lines
     # (bracketed so this script's own text can never match the patterns it runs).
     pkill -9 -x loader 2>/dev/null
-    pkill -9 -f "/gramine/direct/[l]oader " 2>/dev/null
-    pkill -9 -f "/gramine/direct/[l]ibpal[.]so " 2>/dev/null
+    pkill -9 -f "/saguaro/direct/[l]oader " 2>/dev/null
+    pkill -9 -f "/saguaro/direct/[l]ibpal[.]so " 2>/dev/null
     # saguaro-vm: SIGKILL of the launcher leaves its QEMU running until the guest ends, and a server
     # guest never ends
     [ "$RUNNER" = saguaro-vm ] && pkill -9 -f "[q]emu-system-.* -gramine-args init" 2>/dev/null

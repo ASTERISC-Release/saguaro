@@ -38,5 +38,5 @@ gcc = custom_target('gcc',
     console: true,
 
     install: true,
-    install_dir: get_option('libdir') / 'gramine/runtime/glibc',
+    install_dir: get_option('libdir') / 'saguaro/runtime/glibc',
 )

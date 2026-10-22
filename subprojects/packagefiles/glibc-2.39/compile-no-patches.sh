@@ -49,7 +49,7 @@ mkdir -p "$BUILDDIR"
     log "running configure..."
     ../configure \
         --prefix="$PREFIX" \
-        --libdir="$PREFIX"/"$LIBDIR"/gramine/runtime/glibc \
+        --libdir="$PREFIX"/"$LIBDIR"/saguaro/runtime/glibc \
         --with-tls \
         --without-gd \
         --without-selinux \

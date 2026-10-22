@@ -156,7 +156,7 @@ test_vsock() {
 test_measure() {
     local sevctl=${SEVCTL:-/root/sev-tools/prefix/bin/sevctl}
     local igvm_tool
-    igvm_tool=$(dirname "$(readlink -f "$(command -v saguaro-sev)")")/../lib/*/gramine/sev/saguaro-sev-igvm.py
+    igvm_tool=$(dirname "$(readlink -f "$(command -v saguaro-sev)")")/../lib/*/saguaro/sev/saguaro-sev-igvm.py
     igvm_tool=$(ls $igvm_tool 2>/dev/null | head -1)
     local igvm=${igvm_tool%/*}/saguaro-sev.igvm
     [ -x "$sevctl" ] || { fail "measure: no sevctl ($sevctl)"; return; }
@@ -226,7 +226,7 @@ test_attest() {
     meas=$(python3 -c 'import sys; print(open(sys.argv[1], "rb").read()[0x90:0xc0].hex())' "$report")
     echo "attest: measurement $meas"
     local igvm_tool igvm expected
-    igvm_tool=$(ls "$(dirname "$(readlink -f "$(command -v saguaro-sev)")")"/../lib/*/gramine/sev/saguaro-sev-igvm.py | head -1)
+    igvm_tool=$(ls "$(dirname "$(readlink -f "$(command -v saguaro-sev)")")"/../lib/*/saguaro/sev/saguaro-sev-igvm.py | head -1)
     igvm=${igvm_tool%/*}/saguaro-sev.igvm
     expected=$(python3 "$igvm_tool" measure --mode snp --vcpus 1 "$igvm" 2>/dev/null)
     if [ -n "$expected" ]; then

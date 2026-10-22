@@ -10,7 +10,7 @@ runs in -- the LibOS tid and the system call it is inside (number and first two 
 futex and its address). Threads of other processes show "(other address space)" for the LibOS part.
 
 Usage: vm-thread-dump.py <monitor-socket> <pal-elf> [--port N]
-  pal-elf: the installed VM PAL kernel, e.g. $SAGUARO_PREFIX/lib/x86_64-linux-gnu/gramine/vm/pal
+  pal-elf: the installed VM PAL kernel, e.g. $SAGUARO_PREFIX/lib/x86_64-linux-gnu/saguaro/vm/pal
 
 The structure offsets below were measured on 2026-10-17 against this tree's headers (an offsets
 object compiled with the PAL's and the LibOS's own flags; see FINDINGS.md of that day). A change of

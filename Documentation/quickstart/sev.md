@@ -100,8 +100,8 @@ server) and its measurement against the IGVM file:
     export PATH=/root/sev-tools/prefix/bin:$PATH
     snpguest fetch ca pem /tmp/certs milan -e vcek
     snpguest fetch vcek pem /tmp/certs /tmp/report.bin
-    python3 ~/.local/saguaro-vm/lib/x86_64-linux-gnu/gramine/sev/saguaro-sev-igvm.py verify-snp \
-        ~/.local/saguaro-vm/lib/x86_64-linux-gnu/gramine/sev/saguaro-sev.igvm /tmp/report.bin \
+    python3 ~/.local/saguaro-vm/lib/x86_64-linux-gnu/saguaro/sev/saguaro-sev-igvm.py verify-snp \
+        ~/.local/saguaro-vm/lib/x86_64-linux-gnu/saguaro/sev/saguaro-sev.igvm /tmp/report.bin \
         --vcpus 1 --certs /tmp/certs
 
 which ends with `ok   signature by the VCEK` and `OK`. The measurement covers the PAL and its

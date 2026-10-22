@@ -13,8 +13,8 @@
 #   gdb -batch -x scripts/riscv64/symprobe.gdb \
 #       -ex 'set $sysdb="<build>/libos/src/libsysdb.so"' \
 #       -ex 'set $pal="<build>/pal/src/host/linux/libpal.so"' \
-#       --args <build>/prefix/lib/gramine/direct/loader \
-#              <build>/prefix/lib/gramine/direct/libpal.so init <test>
+#       --args <build>/prefix/lib/saguaro/direct/loader \
+#              <build>/prefix/lib/saguaro/direct/libpal.so init <test>
 
 set pagination off
 

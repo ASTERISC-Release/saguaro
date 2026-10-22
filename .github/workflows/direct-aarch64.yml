@@ -128,7 +128,7 @@ jobs:
         run: |
           . "$SAGUARO_PREFIX/env.sh"
           command -v saguaro-vm
-          pal=$(find "$SAGUARO_PREFIX" -path '*/gramine/vm/pal' -type f | head -n 1)
+          pal=$(find "$SAGUARO_PREFIX" -path '*/saguaro/vm/pal' -type f | head -n 1)
           test -n "$pal"
           file "$pal"
 

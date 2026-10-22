@@ -3,7 +3,7 @@
 #
 
 project(
-    'gramine',
+    'saguaro',
     'c', 'cpp',
     version: '1.7post~UNRELEASED',
     license: 'LGPLv3+',

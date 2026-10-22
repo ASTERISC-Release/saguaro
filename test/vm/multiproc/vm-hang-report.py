@@ -12,7 +12,7 @@ import argparse, bisect, glob, os, re, socket, subprocess, time
 
 def pal_symbols():
     prefix = os.environ.get('SAGUARO_PREFIX', os.path.expanduser('~/.local/saguaro-vm'))
-    pals = glob.glob(os.path.join(prefix, 'lib', '*', 'gramine', 'vm', 'pal'))
+    pals = glob.glob(os.path.join(prefix, 'lib', '*', 'saguaro', 'vm', 'pal'))
     if not pals:
         return [], []
     out = subprocess.run(['nm', '--defined-only', pals[0]], capture_output=True, text=True).stdout

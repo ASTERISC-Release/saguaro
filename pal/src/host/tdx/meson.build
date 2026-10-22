@@ -105,8 +105,8 @@ meson.add_install_script('/bin/sh', '-c',
     ('cd "$HOME"/td-shim && cargo run -p td-shim-tools --bin td-shim-ld -- ' +
      'target/x86_64-unknown-none/release/ResetVector.bin ' +
      'target/x86_64-unknown-none/release/td-shim ' +
-     '-t executable -p "$MESON_INSTALL_DESTDIR_PREFIX"/@0@/gramine/tdx/pal ' +
-     '-o "$MESON_INSTALL_DESTDIR_PREFIX"/@0@/gramine/tdx/tdshim-pal').format(get_option('libdir')))
+     '-t executable -p "$MESON_INSTALL_DESTDIR_PREFIX"/@0@/tdx/pal ' +
+     '-o "$MESON_INSTALL_DESTDIR_PREFIX"/@0@/tdx/tdshim-pal').format(pkglibdir))
 
 libpal_tdx_dep = declare_dependency(
     link_with: libpal_tdx,
