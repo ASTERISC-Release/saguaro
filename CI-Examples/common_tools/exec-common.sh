@@ -33,7 +33,7 @@
 #   sev      $SAGUARO_VM_PREFIX     (same install as vm, --sev)     saguaro-sev, x86_64 with SEV; plain SEV
 #   sev-snp  (same install and runner as sev)                        saguaro-sev in SEV-SNP mode
 #   sgx      $SAGUARO_SGX_PREFIX    (default ~/.local/saguaro-sgx)   saguaro-sgx, x86_64 with SGX (/dev/sgx_enclave);
-#            scripts/install.sh --sgx; make SGX=1 signs the enclave with ~/.config/gramine/enclave-key.pem
+#            scripts/install.sh --sgx; make SGX=1 signs the enclave with ~/.config/saguaro/enclave-key.pem
 #   vbs      scripts/install.sh --vbs, in WSL on a Windows machine   Windows VBS enclave (make VBS=1); an
 #            with VBS enclaves                                       example offers it when it has a
 #                                                                    vbs.manifest.template
@@ -189,7 +189,10 @@ exec_one() {
         sev)     export SAGUARO_SEV_MODE=sev ;;
         sev-snp) export SAGUARO_SEV_MODE=snp ;;
         sgx)     export SGX=1; mtarget=all
-                 [ -e "${SGX_SIGNER_KEY:-$HOME/.config/gramine/enclave-key.pem}" ] || saguaro-sgx-gen-private-key ;;
+                 # (a key at the earlier default ~/.config/gramine/ is still used by saguaro-sgx-sign)
+                 [ -e "${SGX_SIGNER_KEY:-$HOME/.config/saguaro/enclave-key.pem}" ] \
+                     || { [ -z "${SGX_SIGNER_KEY:-}" ] && [ -e "$HOME/.config/gramine/enclave-key.pem" ]; } \
+                     || saguaro-sgx-gen-private-key ;;
     esac
     cd "$EXEC_DIR" || return 1
     # QEMU software emulation is much slower than KVM: say so (the log header repeats it)

@@ -40,7 +40,13 @@ SGX_RSA_PUBLIC_EXPONENT = 3
 SGX_RSA_KEY_SIZE = 3072
 _xdg_config_home = pathlib.Path(os.getenv('XDG_CONFIG_HOME',
     pathlib.Path.home() / '.config'))
-SGX_RSA_KEY_PATH = _xdg_config_home / 'gramine' / 'enclave-key.pem'
+SGX_RSA_KEY_PATH_SAGUARO = _xdg_config_home / 'saguaro' / 'enclave-key.pem'
+# the default of the earlier name of the tree: still used when it is the only key, so that an
+# existing key is not silently replaced by a new one (sign_with_file says so)
+SGX_RSA_KEY_PATH_GRAMINE = _xdg_config_home / 'gramine' / 'enclave-key.pem'
+SGX_RSA_KEY_PATH = (SGX_RSA_KEY_PATH_GRAMINE
+    if SGX_RSA_KEY_PATH_GRAMINE.exists() and not SGX_RSA_KEY_PATH_SAGUARO.exists()
+    else SGX_RSA_KEY_PATH_SAGUARO)
 
 # Utilities
 
@@ -573,6 +579,9 @@ def get_tbssigstruct(manifest_path, date, libpal=SGX_LIBPAL, verbose=False):
 def sign_with_file(ctx, key, passphrase):
     if passphrase is not None:
         passphrase = passphrase.encode()
+    if key.name == os.fspath(SGX_RSA_KEY_PATH_GRAMINE):
+        click.echo(f'note: signing with the key at its earlier default location {key.name} '
+                   f'(move it to {SGX_RSA_KEY_PATH_SAGUARO})', err=True)
     try:
         private_key = load_private_key_from_pem_file(key, passphrase)
     except InvalidKeyError as e:

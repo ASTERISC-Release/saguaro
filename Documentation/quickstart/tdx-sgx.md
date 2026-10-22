@@ -67,8 +67,9 @@ control, `is-sgx-available` prints, among others:
     cd CI-Examples/helloworld
     ./exec.sh --sgx
 
-`exec.sh` creates the enclave signing key `~/.config/gramine/enclave-key.pem` once (the equivalent of
-`saguaro-sgx-gen-private-key`), runs `make SGX=1` (renders the manifest and signs it: `helloworld.manifest.sgx`
+`exec.sh` creates the enclave signing key `~/.config/saguaro/enclave-key.pem` once (the equivalent of
+`saguaro-sgx-gen-private-key`; a key at the earlier default `~/.config/gramine/enclave-key.pem` is still used
+when it is the only one, and `saguaro-sgx-sign` says so), runs `make SGX=1` (renders the manifest and signs it: `helloworld.manifest.sgx`
 and `helloworld.sig`, with the enclave measurement printed) and runs `saguaro-sgx ./helloworld`. The output ends with:
 
     Hello, world
