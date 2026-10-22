@@ -21,12 +21,12 @@ HAS_AVX = os.environ.get('AVX') == '1'
 HAS_EDMM = os.environ.get('EDMM') == '1'
 HAS_SGX = os.environ.get('SGX') == '1'
 IS_VM = os.environ.get('IS_VM') == '1'
-# Run the tests under the VM PAL (`gramine-vm`) instead of Linux-direct/SGX. Note this is not IS_VM,
+# Run the tests under the VM PAL (`saguaro-vm`) instead of Linux-direct/SGX. Note this is not IS_VM,
 # which says the *test machine* is a VM.
 USE_GRAMINE_VM = os.environ.get('SAGUARO_VM') == '1'
-# the launcher of the VM runs: gramine-vm, or gramine-sev for the AMD SEV build of the vm PAL
+# the launcher of the VM runs: saguaro-vm, or saguaro-sev for the AMD SEV build of the vm PAL
 # (dev docs: sev/), whose PAL lives in <pkglibdir>/sev
-VM_LAUNCHER = os.environ.get('SAGUARO_VM_LAUNCHER', 'gramine-vm')
+VM_LAUNCHER = os.environ.get('SAGUARO_VM_LAUNCHER', 'saguaro-vm')
 ON_X86 = os.uname().machine in ['x86_64']
 USES_MUSL = os.environ.get('SAGUARO_MUSL') == '1'
 
@@ -186,7 +186,7 @@ class RegressionTestCase(unittest.TestCase):
     @property
     def pal_path(self):
         # pylint: disable=protected-access
-        vm_host = 'sev' if VM_LAUNCHER == 'gramine-sev' else 'vm'
+        vm_host = 'sev' if VM_LAUNCHER == 'saguaro-sev' else 'vm'
         host = 'sgx' if HAS_SGX else vm_host if USE_GRAMINE_VM else 'direct'
         return pathlib.Path(graminelibos._CONFIG_PKGLIBDIR) / host
 
@@ -231,7 +231,7 @@ class RegressionTestCase(unittest.TestCase):
         if USE_GRAMINE_VM:
             if not self.libpal_path.exists():
                 self.fail('vm-PAL kernel ({}) not found'.format(self.libpal_path))
-            # `gramine-vm` exits with the guest's exit code. The guest has a single (virtio)
+            # `saguaro-vm` exits with the guest's exit code. The guest has a single (virtio)
             # console carrying application stdout/stderr and Gramine's log, so both streams
             # are that console.
             # absolute path: tests that pass a custom `env=` may not carry our PATH

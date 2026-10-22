@@ -4,7 +4,7 @@
 /*
  * vbs-tls-client: a Windows TLS client (SChannel) that talks to a server in a VBS enclave only after
  * it verified the server's attestation (CI-Examples/vbs/tls-echo, dev docs: vbs-enclave/manual.md "TLS with
- * attestation"). `gramine-vbs tls-client ...` compiles it once with MSVC and runs it.
+ * attestation"). `saguaro-vbs tls-client ...` compiles it once with MSVC and runs it.
  *
  *   vbs-tls-client PORT --verifier DIR\IMAGE.dll [checks] [action]
  *
@@ -154,7 +154,7 @@ static int tls_handshake(struct tls* t) {
         SecBuffer outb[1] = { { 0, SECBUFFER_TOKEN, NULL } };
         SecBufferDesc outd = { SECBUFFER_VERSION, 1, outb };
         st = InitializeSecurityContextA(&t->cred, first ? NULL : &t->ctx,
-                                        first ? "gramine-vbs-tls-echo" : NULL, flags, 0, 0,
+                                        first ? "saguaro-vbs-tls-echo" : NULL, flags, 0, 0,
                                         first ? NULL : &ind, 0, &t->ctx, &outd, &got_flags, &ts);
         if (first)
             t->have_ctx = 1;

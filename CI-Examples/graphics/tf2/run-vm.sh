@@ -95,7 +95,7 @@ fi
 set +e
 export SAGUARO_RAM_SIZE="${SAGUARO_RAM_SIZE:-16G}"
 export SAGUARO_CPU_NUM="${SAGUARO_CPU_NUM:-1}"
-gramine-vm tf2
+saguaro-vm tf2
 status=$?
 set -e
 exit "$status"

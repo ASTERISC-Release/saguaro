@@ -4,8 +4,8 @@
 #
 # The runtime of a VBS enclave image, on an aarch64 or x86_64 Linux machine (WSL, the build container): the
 # vbs glibc (scripts/vbs/build-glibc.sh, into build-vbs-glibc) and the meson build of the vbs PAL
-# and LibOS (build-vbs) when missing, then ninja. Used by wsl-build.sh (gramine-vbs.ps1 on
-# Windows) and by `gramine-vbs runtime` (the make VBS=1 flow). Step logs: build-vbs-logs/.
+# and LibOS (build-vbs) when missing, then ninja. Used by wsl-build.sh (saguaro-vbs.ps1 on
+# Windows) and by `saguaro-vbs runtime` (the make VBS=1 flow). Step logs: build-vbs-logs/.
 set -e
 
 HERE=$(cd "$(dirname "$0")" && pwd)

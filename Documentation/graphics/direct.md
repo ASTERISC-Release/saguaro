@@ -1,8 +1,8 @@
-# The host GPU under `gramine-direct`
+# The host GPU under `saguaro-direct`
 
 > All numbers on this page are experimental measurements from one machine, taken during development; they are not benchmarks.
 
-**What it does.** An OpenGL or Vulkan application under `gramine-direct` uses the host's GPU
+**What it does.** An OpenGL or Vulkan application under `saguaro-direct` uses the host's GPU
 directly, with the host's Mesa (or NVIDIA's driver) and the host's X server. It is the fast route
 and the reference for the VM route; it is not a sandbox.
 

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
-# A Vulkan program under gramine-direct on the host GPU (dev docs: vulkan/). Same keys as
+# A Vulkan program under saguaro-direct on the host GPU (dev docs: vulkan/). Same keys as
 # CI-Examples/graphics/*/ *-direct.manifest.template (dev docs: graphics-direct/running.md):
 # insecure by design. The Vulkan loader finds the ICD and layer files under /usr/share/vulkan (and
 # /etc/vulkan when the host has it); the program is chosen with -Dentrypoint and -Dbinary.

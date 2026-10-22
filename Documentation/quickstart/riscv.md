@@ -1,4 +1,4 @@
-# Quickstart: RISC-V (RV64), `gramine-direct` in an emulated guest
+# Quickstart: RISC-V (RV64), `saguaro-direct` in an emulated guest
 
 The RISC-V port covers the direct PAL and is **experimental**: it is cross-built on an x86_64
 machine and run in an Ubuntu 24.04 riscv64 guest under `qemu-system-riscv64` (full-system

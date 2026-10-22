@@ -550,7 +550,7 @@ static void prot_none_free_memory(void) {
 
 noreturn static void print_usage_and_exit(void) {
     log_always("USAGE: init <application> args...");
-    log_always("This is an internal interface. Use gramine-vm to launch applications.");
+    log_always("This is an internal interface. Use saguaro-vm to launch applications.");
     _PalProcessExit(1);
 }
 

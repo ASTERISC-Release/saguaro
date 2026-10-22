@@ -7,7 +7,7 @@
 # modules whose libraries are not in that sysroot (zlib, OpenSSL, libffi, ...); NumPy/SciPy are
 # packed on x86_64 only (-Dnumpy=1).
 # Everything is packed into the signed image (vbs.packed_files, measured like sgx.trusted_files);
-# `gramine-vbs ./python scripts/helloworld.py` runs a script (the paths are relative to /app).
+# `saguaro-vbs ./python scripts/helloworld.py` runs a script (the paths are relative to /app).
 
 loader.entrypoint = "file:/libsysdb.so"
 libos.entrypoint = "/usr/bin/python3.12"

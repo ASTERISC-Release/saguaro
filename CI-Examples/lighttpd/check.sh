@@ -5,7 +5,7 @@
 # `make check` (direct, vm and sev): lighttpd runs under $GRAMINE and curl on the host fetches the
 # 10 KiB test page, which must be byte-identical to the file.
 set -uo pipefail
-: "${GRAMINE:=gramine-direct}"
+: "${GRAMINE:=saguaro-direct}"
 . ../common_tools/server-check.sh
 server_start 8003:8003 "$GRAMINE" ./lighttpd
 retry 120 curl -sf --max-time 5 http://127.0.0.1:8003/random/10K.1.html -o fetched.html

@@ -18,7 +18,7 @@ Open items by architecture and host. Longer lists are kept with the maintainers'
 - CI workflows, later: run the rewrite stress step by default on direct aarch64 and add one for riscv64; make the LibOS step of the x86_64 VM workflow strict (it is informational); run the full Python example (with its HTTP check) in the x86_64 VM workflow; make Python work in the aarch64 TCG workflow (the system Python is not PIE).
 - CI for hardware-bound backends (`sev`, `sgx`, `vbs`, `tdx`): there is no workflow and no self-hosted runner, deliberately (the repository is public); `test/sev/test-sev-all.sh` and the `./exec.sh --<backend>` runs are done by hand on the hardware.
 - `sev`: trusted files, Secure TSC; `sgx`: remote attestation (AESM, PCCS) and the `ra-tls` examples.
-- Proton (Wine, DXVK) under `gramine-vm`: phase 1 and later, see the status in the development notes.
+- Proton (Wine, DXVK) under `saguaro-vm`: phase 1 and later, see the status in the development notes.
 
 ## AArch64
 

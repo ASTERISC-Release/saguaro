@@ -20,8 +20,8 @@ By hand:
 
 ```sh
 make                    # make SGX=1 for SGX; make VBS=1 in WSL for VBS
-gramine-direct sqlite3 < scripts/create.sql     # or gramine-vm, gramine-sev, gramine-sgx
-make regression         # prints [ Success N/3 ]; GRAMINE=gramine-vm etc., SGX=1 for SGX; make VBS=1 check for VBS
+saguaro-direct sqlite3 < scripts/create.sql     # or saguaro-vm, saguaro-sev, saguaro-sgx
+make regression         # prints [ Success N/3 ]; GRAMINE=saguaro-vm etc., SGX=1 for SGX; make VBS=1 check for VBS
 ```
 
 ## Notes

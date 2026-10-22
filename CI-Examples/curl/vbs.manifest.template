@@ -4,7 +4,7 @@
 # curl manifest for a Windows VBS enclave (`make VBS=1`, dev docs: vbs-enclave/manual.md): the counterpart of
 # curl.manifest.template. curl is built from source with the vbs gcc against the vbs glibc
 # (vbs-build/curl, a dynamic PIE, HTTP only) and packed with the glibc libraries it needs. The
-# arguments come from the command line (`gramine-vbs curl -s URL`).
+# arguments come from the command line (`saguaro-vbs curl -s URL`).
 
 loader.entrypoint = "file:/libsysdb.so"
 libos.entrypoint = "/curl"

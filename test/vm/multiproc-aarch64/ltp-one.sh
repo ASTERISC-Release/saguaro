@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
-# ltp-one.sh -- one LTP test of a harness directory made by ltp-groups.sh, under gramine-vm, with
+# ltp-one.sh -- one LTP test of a harness directory made by ltp-groups.sh, under saguaro-vm, with
 # an optional log level, keeping the console and serial logs (for debugging one failure).
 # Usage: test/vm/multiproc-aarch64/ltp-one.sh --prefix DIR --tag NAME [--log LEVEL] [--cpus N]
 #            [--monitor SOCKET] test [args...]
@@ -37,5 +37,5 @@ fi
 cd "$H"
 [ -n "$MON" ] && export SAGUARO_VM_MONITOR=$MON
 SAGUARO_CPU_NUM=$CPUS SAGUARO_VM_SERIAL=$OUT/$T.serial \
-    timeout -s KILL ${RUN_TIMEOUT:-120} gramine-vm $app "$@" > "$OUT/$T.log" 2>&1
+    timeout -s KILL ${RUN_TIMEOUT:-120} saguaro-vm $app "$@" > "$OUT/$T.log" 2>&1
 echo "rc=$? log=$OUT/$T.log"

@@ -1,6 +1,6 @@
 #!/bin/bash
 # SPDX-License-Identifier: LGPL-3.0-or-later
-# Starts N gramine-vm guests back to back (as a CI step or the LibOS suite does) and counts the ones
+# Starts N saguaro-vm guests back to back (as a CI step or the LibOS suite does) and counts the ones
 # that do not print the program's output or exit status: a guest that dies early in boot prints only
 # the launcher lines ("Configuring Gramine VM ...", "vm-relay: ... listening ...") and, since the
 # launcher checks for that, "Error: the guest ended without reporting an exit code" with the guest's
@@ -45,7 +45,7 @@ trap '[ ${#LOAD_PIDS[@]} = 0 ] || kill "${LOAD_PIDS[@]}" 2>/dev/null' EXIT
 fails=0
 start=$(date +%s)
 for i in $(seq 1 "$N"); do
-    out=$(timeout -s KILL 60 gramine-vm hello 2>&1)
+    out=$(timeout -s KILL 60 saguaro-vm hello 2>&1)
     rc=$?
     if ! grep -q "boot-loop: hello" <<<"$out" || [ "$rc" != 7 ]; then
         fails=$((fails + 1))

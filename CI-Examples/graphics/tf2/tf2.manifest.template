@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (C) 2026 The ASTERISC Research Lab
-# Team Fortress 2 Linux client under gramine-vm with the Tirith graphics redirection (x86_64),
+# Team Fortress 2 Linux client under saguaro-vm with the Tirith graphics redirection (x86_64),
 # configured for a local offline workload. Not yet run in this tree; see README.md.
 
 libos.entrypoint = "/tf2/tf_linux64"

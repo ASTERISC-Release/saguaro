@@ -1,6 +1,6 @@
 # Bastion
 
-Supergiant Games' Bastion, the Linux build sold on GOG.com (MonoKickstart: Mono, FNA on SDL2 and OpenGL), under `gramine-direct` on the host GPU or under `gramine-vm` with the graphics redirection (x86_64).
+Supergiant Games' Bastion, the Linux build sold on GOG.com (MonoKickstart: Mono, FNA on SDL2 and OpenGL), under `saguaro-direct` on the host GPU or under `saguaro-vm` with the graphics redirection (x86_64).
 
 ## Prerequisites
 
@@ -15,8 +15,8 @@ Backend and display setup: [`../README.md`](../README.md).
 ## Run
 
 ```sh
-make run-direct      # gramine-direct on the host GPU with the host's Mesa
-make run             # gramine-vm (QEMU_PATH exported, see ../README.md)
+make run-direct      # saguaro-direct on the host GPU with the host's Mesa
+make run             # saguaro-vm (QEMU_PATH exported, see ../README.md)
 make run-native      # without Gramine, with the preload library
 ```
 

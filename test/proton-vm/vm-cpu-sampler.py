@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
-"""Samples every vCPU of a gramine-vm guest through its QEMU monitor (SAGUARO_VM_MONITOR=<socket>)
+"""Samples every vCPU of a saguaro-vm guest through its QEMU monitor (SAGUARO_VM_MONITOR=<socket>)
 at a fixed interval and prints one line per sample: the time since start, and per CPU its CPL and
 the PAL symbol at RIP (or "user:<rip>" when CPL=3 — the live RIP, exact for a spinning thread; "?" outside the PAL) with the low digits of its CR3
 (the address space it serves: the PAL's boot root for helpers and idle, a process root otherwise). A monitor `info registers -a`

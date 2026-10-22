@@ -43,9 +43,9 @@ sgx_sign: R.manifest
 		--output $<.sgx
 
 ifeq ($(SGX),)
-GRAMINE = gramine-direct
+GRAMINE = saguaro-direct
 else
-GRAMINE = gramine-sgx
+GRAMINE = saguaro-sgx
 endif
 
 .PHONY: check

@@ -27,7 +27,7 @@ case ${1:-} in
 seq 1 200000 | cut -c1-3 | sort -n | uniq -c | sort -rn | head -3 | md5sum
 SH
         expected=$(bash pipeline.sh)
-        timeout -s KILL 300 gramine-vm bash /probe/pipeline.sh > bash-$CPUS.log 2>&1
+        timeout -s KILL 300 saguaro-vm bash /probe/pipeline.sh > bash-$CPUS.log 2>&1
         actual=$(grep -- ' -$' bash-$CPUS.log | tail -1)
         [ "$actual" = "$expected" ] || { echo "bash mismatch: $actual vs $expected"; exit 1; }
         echo "bash: 200,000 lines through seven processes matched native ($CPUS vCPUs)" ;;
@@ -88,7 +88,7 @@ PY
         before=0
         [ ! -f "$error_log" ] || before=$(stat -c %s "$error_log")
         (cd "$D" && SAGUARO_VM_INBOUND="8002:$PORT,8444:$TLS_PORT" \
-            exec setsid timeout -s KILL 300 gramine-vm nginx \
+            exec setsid timeout -s KILL 300 saguaro-vm nginx \
             > "$WORK/nginx-$CPUS.log" 2>&1) &
         server_pid=$!
         python3 - "$PORT" "$D/install/html/random/10K.1.html" <<'PY'

@@ -20,7 +20,7 @@ By hand:
 
 ```sh
 make                    # make SGX=1 for SGX
-gramine-direct ./pytorch ./pytorchexample.py     # or gramine-vm, gramine-sev, gramine-sgx
+saguaro-direct ./pytorch ./pytorchexample.py     # or saguaro-vm, saguaro-sev, saguaro-sgx
 cat result.txt          # first entry: Labrador retriever
 ```
 

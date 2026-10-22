@@ -3,9 +3,9 @@
 # SPDX-License-Identifier: BSD-3-Clause
 #
 # `make VBS=1 check`: curl in a Windows VBS enclave fetches a page from a plain HTTP server that runs
-# natively in WSL on 127.0.0.1 (Windows forwards its loopback to WSL). GRAMINE is gramine-vbs.
+# natively in WSL on 127.0.0.1 (Windows forwards its loopback to WSL). GRAMINE is saguaro-vbs.
 set -euo pipefail
-: "${GRAMINE:=../../scripts/vbs/gramine-vbs}"
+: "${GRAMINE:=../../scripts/vbs/saguaro-vbs}"
 PORT=${CURL_PORT:-19111}
 
 (cd test-docroot; exec python3 -m http.server -b 127.0.0.1 "$PORT") > httpd.log 2>&1 &

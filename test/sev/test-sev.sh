@@ -2,32 +2,32 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
-# test-sev.sh -- regression tests of the AMD SEV build of the vm PAL (gramine-sev,
+# test-sev.sh -- regression tests of the AMD SEV build of the vm PAL (saguaro-sev,
 # dev docs: sev/). Run it on an SEV host in the container of container/run.sh, with the
 # QEMU of container/sev/build-sev-tools.sh (QEMU_PATH, default /root/sev-tools/prefix/bin/...).
 #
-#   hello    CI-Examples/helloworld under gramine-sev at 1 and 4 vCPUs; the guest must report
+#   hello    CI-Examples/helloworld under saguaro-sev at 1 and 4 vCPUs; the guest must report
 #            "SEV: memory encryption active" on its serial port
 #   memory   test/sev/sev_probe: a virtiofs file read through the bounce buffers (checksum compared
 #            with the host's), then a host-side look at guest memory through the QEMU monitor while
 #            the probe holds a random marker: under SEV the marker and the PAL's ELF header must not
 #            be visible anywhere in guest RAM, while the console text in the shared region must be;
-#            the same run under gramine-vm (COMPARE=1, the default) must see all three
-#   vsock    test/vm/network/test-vm-loopback.sh under gramine-sev (host-initiated vsock connections into the
+#            the same run under saguaro-vm (COMPARE=1, the default) must see all three
+#   vsock    test/vm/network/test-vm-loopback.sh under saguaro-sev (host-initiated vsock connections into the
 #            guest, through the shared region)
 #   attest   SNP: test/sev/sev_attest gets an attestation report through /dev/attestation with
 #            random report data; the host checks the report data, verifies the report against
 #            AMD's VCEK chain (snpguest, certificates from AMD's KDS; SNP_CERTS caches them) and
-#            compares its measurement with the digest gramine-sev-igvm.py computes (when known)
+#            compares its measurement with the digest saguaro-sev-igvm.py computes (when known)
 #   measure  plain SEV: a launch session from `sevctl session`, then the LAUNCH_MEASURE value that
 #            QEMU reports (QMP query-sev-launch-measure) checked against the launch digest that
-#            gramine-sev-igvm.py computes from the IGVM file, with the session's TIK
+#            saguaro-sev-igvm.py computes from the IGVM file, with the session's TIK
 #
 # Usage: test/sev/test-sev.sh [--prefix DIR] [suite...]   (default: hello memory vsock)
-#   SAGUARO_SEV_MODE=sev     the gramine-sev mode: sev or snp (measure: sev only)
+#   SAGUARO_SEV_MODE=sev     the saguaro-sev mode: sev or snp (measure: sev only)
 #   SAGUARO_RAM_SIZE=8G      guest RAM (SEV pins all of it at launch, so smaller boots faster; the
 #                            multiprocess frame pool, on by default, needs more than 4G)
-#   COMPARE=1                memory: also run the probe under gramine-vm as the control
+#   COMPARE=1                memory: also run the probe under saguaro-vm as the control
 set -u
 set -o pipefail
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
@@ -56,7 +56,7 @@ export SAGUARO_SEV_MODE=${SAGUARO_SEV_MODE:-sev}
 RAM_GIB=${SAGUARO_RAM_SIZE%G}
 OUT=${OUT:-/tmp/test-sev}
 mkdir -p "$OUT"
-command -v gramine-sev >/dev/null || { echo "gramine-sev not on PATH (prefix $PREFIX?)" >&2; exit 1; }
+command -v saguaro-sev >/dev/null || { echo "saguaro-sev not on PATH (prefix $PREFIX?)" >&2; exit 1; }
 
 rc=0
 fail() { echo "FAIL: $*"; rc=1; }
@@ -69,7 +69,7 @@ test_hello() {
     for cpus in 1 4; do
         local t0 out serial=$OUT/hello-$cpus.serial
         t0=$(now)
-        out=$(SAGUARO_CPU_NUM=$cpus SAGUARO_VM_SERIAL_LOG=$serial timeout 120 gramine-sev helloworld 2>&1)
+        out=$(SAGUARO_CPU_NUM=$cpus SAGUARO_VM_SERIAL_LOG=$serial timeout 120 saguaro-sev helloworld 2>&1)
         local r=$? t
         t=$(elapsed "$t0")
         if [ $r -ne 0 ] || ! grep -q "Hello, world" <<<"$out"; then
@@ -143,22 +143,22 @@ print(f"len={len(open(sys.argv[1], "rb").read())} sum={s:016x}")' "$input")
 
 test_memory() {
     make -C "$HERE" -s >/dev/null || { fail "building sev_probe"; return; }
-    probe_run gramine-sev sev
-    [ "${COMPARE:-1}" = 1 ] && probe_run gramine-vm plain
+    probe_run saguaro-sev sev
+    [ "${COMPARE:-1}" = 1 ] && probe_run saguaro-vm plain
 }
 
 test_vsock() {
-    SAGUARO_VM_LAUNCHER=gramine-sev SEQUENTIAL=${SEQUENTIAL:-20} CONCURRENT=${CONCURRENT:-4} \
+    SAGUARO_VM_LAUNCHER=saguaro-sev SEQUENTIAL=${SEQUENTIAL:-20} CONCURRENT=${CONCURRENT:-4} \
         OUT=$OUT/vsock "$HERE/../vm/network/test-vm-loopback.sh" --prefix "$PREFIX" 2>&1 | tail -n 3 \
-        || fail "vsock loopback under gramine-sev"
+        || fail "vsock loopback under saguaro-sev"
 }
 
 test_measure() {
     local sevctl=${SEVCTL:-/root/sev-tools/prefix/bin/sevctl}
     local igvm_tool
-    igvm_tool=$(dirname "$(readlink -f "$(command -v gramine-sev)")")/../lib/*/gramine/sev/gramine-sev-igvm.py
+    igvm_tool=$(dirname "$(readlink -f "$(command -v saguaro-sev)")")/../lib/*/gramine/sev/saguaro-sev-igvm.py
     igvm_tool=$(ls $igvm_tool 2>/dev/null | head -1)
-    local igvm=${igvm_tool%/*}/gramine-sev.igvm
+    local igvm=${igvm_tool%/*}/saguaro-sev.igvm
     [ -x "$sevctl" ] || { fail "measure: no sevctl ($sevctl)"; return; }
     "$sevctl" export --full "$OUT/pdh.cert" >/dev/null || { fail "measure: sevctl export"; return; }
     (cd "$OUT" && rm -f gsev_* && "$sevctl" session --name gsev pdh.cert 1 >/dev/null) \
@@ -168,7 +168,7 @@ test_measure() {
     rm -f "$qmp" "$done"
     echo x > "$OUT/measure.input"
     (cd "$HERE" && SAGUARO_SEV_SESSION=$OUT/gsev SAGUARO_VM_QMP=$qmp SAGUARO_CPU_NUM=1 \
-        timeout 300 gramine-sev sev_probe "$OUT/measure.input" "$done" >"$log" 2>&1) &
+        timeout 300 saguaro-sev sev_probe "$OUT/measure.input" "$done" >"$log" 2>&1) &
     local pid=$!
     for _ in $(seq 600); do
         grep -q READY "$log" 2>/dev/null && break
@@ -203,7 +203,7 @@ test_attest() {
     local data report=$OUT/attest-report.bin log=$OUT/attest.out
     data=$(head -c 64 /dev/urandom | od -An -tx1 | tr -d ' \n')
     rm -f "$report"
-    (cd "$HERE" && SAGUARO_CPU_NUM=1 timeout 300 gramine-sev sev_attest "$data" "$report" \
+    (cd "$HERE" && SAGUARO_CPU_NUM=1 timeout 300 saguaro-sev sev_attest "$data" "$report" \
         >"$log" 2>&1) || { fail "attest: the guest failed: $(tail -n 5 "$log")"; return; }
     grep -q "attestation_type=sev-snp" "$log" || fail "attest: attestation_type is not sev-snp"
     [ -s "$report" ] || { fail "attest: no report"; return; }
@@ -226,16 +226,16 @@ test_attest() {
     meas=$(python3 -c 'import sys; print(open(sys.argv[1], "rb").read()[0x90:0xc0].hex())' "$report")
     echo "attest: measurement $meas"
     local igvm_tool igvm expected
-    igvm_tool=$(ls "$(dirname "$(readlink -f "$(command -v gramine-sev)")")"/../lib/*/gramine/sev/gramine-sev-igvm.py | head -1)
-    igvm=${igvm_tool%/*}/gramine-sev.igvm
+    igvm_tool=$(ls "$(dirname "$(readlink -f "$(command -v saguaro-sev)")")"/../lib/*/gramine/sev/saguaro-sev-igvm.py | head -1)
+    igvm=${igvm_tool%/*}/saguaro-sev.igvm
     expected=$(python3 "$igvm_tool" measure --mode snp --vcpus 1 "$igvm" 2>/dev/null)
     if [ -n "$expected" ]; then
-        [ "$expected" = "$meas" ] && echo "attest: measurement = gramine-sev-igvm.py measure --mode snp" \
+        [ "$expected" = "$meas" ] && echo "attest: measurement = saguaro-sev-igvm.py measure --mode snp" \
             || fail "attest: measurement differs from the computed $expected"
     fi
     grep -q "launch digest of .* on 1 vCPUs: $meas" "$log" \
-        && echo "attest: the digest gramine-sev printed at launch = the report's measurement" \
-        || fail "attest: gramine-sev printed no launch digest equal to the report's"
+        && echo "attest: the digest saguaro-sev printed at launch = the report's measurement" \
+        || fail "attest: saguaro-sev printed no launch digest equal to the report's"
     python3 "$igvm_tool" verify-snp "$igvm" "$report" --vcpus 1 --report-data "$data" \
         --certs "$certs" --snpguest "$snpguest" | sed 's/^/attest: verify-snp: /'
     [ "${PIPESTATUS[0]}" = 0 ] || fail "attest: verify-snp"

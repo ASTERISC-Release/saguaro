@@ -3,7 +3,7 @@
 
 /*
  * The device ioctls whose argument carries file descriptors or absolute deadlines, and where in the
- * argument they are. Used by the raw device ioctls of gramine-direct (fs/hostfd/fs.c) and by the
+ * argument they are. Used by the raw device ioctls of saguaro-direct (fs/hostfd/fs.c) and by the
  * forwarded ioctls of the VM graphics redirection (sys/libos_ioctl.c), which both translate those
  * fields between the application's view (LibOS fds, Gramine's clock) and the host's.
  */

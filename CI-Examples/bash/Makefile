@@ -30,9 +30,9 @@ bash.manifest.sgx: bash.manifest
 bash.sig: bash.manifest.sgx
 
 ifeq ($(SGX),)
-GRAMINE = gramine-direct
+GRAMINE = saguaro-direct
 else
-GRAMINE = gramine-sgx
+GRAMINE = saguaro-sgx
 endif
 
 .PHONY: regression

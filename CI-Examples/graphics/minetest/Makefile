@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (C) 2026 The ASTERISC Research Lab
 
-# Minetest 5.6.1 under gramine-vm with the Tirith graphics redirection (x86_64). Build the game
+# Minetest 5.6.1 under saguaro-vm with the Tirith graphics redirection (x86_64). Build the game
 # first with ./setup-minetest.sh; see dev docs: graphics/ for the host setup.
 
 # The graphics preload library is built and installed with Gramine (-Dgraphics=enabled and a
@@ -55,9 +55,9 @@ run-native: $(MT_BIN) dirs
 
 .PHONY: run
 run: all dirs
-	gramine-vm minetest
+	saguaro-vm minetest
 
-# gramine-direct on the host GPU (dev docs: graphics-direct/): stock Mesa with DRI3 by
+# saguaro-direct on the host GPU (dev docs: graphics-direct/): stock Mesa with DRI3 by
 # default; PRELOAD=1 uses the preload library instead (needs an install built with a VM-type PAL).
 # The X server is the one of $(DISPLAY), reached through its Unix socket.
 PRELOAD ?= 0
@@ -81,7 +81,7 @@ minetest-direct.manifest: minetest-direct.manifest.template $(MT_BIN) FORCE
 
 .PHONY: run-direct
 run-direct: minetest-direct.manifest dirs
-	gramine-direct minetest-direct
+	saguaro-direct minetest-direct
 
 # The same game without Gramine and without the preload library (stock Mesa), for comparison.
 .PHONY: run-native-stock

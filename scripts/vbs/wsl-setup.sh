@@ -104,7 +104,7 @@ env)
     echo "$TOOLS/env.sh"
     ;;
 missing)
-    # the missing packages, into /tmp/saguaro-vbs-missing (read by gramine-vbs.ps1 setup)
+    # the missing packages, into /tmp/saguaro-vbs-missing (read by saguaro-vbs.ps1 setup)
     missing | tee /tmp/saguaro-vbs-missing; echo
     ;;
 *)

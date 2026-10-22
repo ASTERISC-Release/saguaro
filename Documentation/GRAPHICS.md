@@ -4,13 +4,13 @@
 
 ## The two routes
 
-**Direct** (`gramine-direct`, x86_64 and AArch64): the application runs as a host process under
+**Direct** (`saguaro-direct`, x86_64 and AArch64): the application runs as a host process under
 the LibOS and opens the host's render nodes and X server itself; stock Mesa or NVIDIA's driver
 does the work, and the LibOS translates only the file descriptors and the absolute deadlines
 inside the device ioctls. Fast, not isolated. Details: [graphics/direct.md](graphics/direct.md),
 [graphics/aarch64.md](graphics/aarch64.md).
 
-**Redirected** (`gramine-vm`, x86_64): the application runs in a microVM without a GPU driver. A
+**Redirected** (`saguaro-vm`, x86_64): the application runs in a microVM without a GPU driver. A
 preload library, `libgraphics.so`, forwards its EGL, GBM and DRM calls through a shared
 communication page to a listener in a QEMU fork, which uses the host GPU and presents the frames;
 the X connection is relayed over vsock. Vulkan presents through a layer in the same library. With
@@ -59,13 +59,13 @@ handles to the host. Verified: Minetest and `glxgears` on the AMD GPU, three run
 
 ## Proton games
 
-GE-Proton 11's Wine with DXVK in `gramine-vm` on the redirected route (`test/proton-vm/`),
+GE-Proton 11's Wine with DXVK in `saguaro-vm` on the redirected route (`test/proton-vm/`),
 on both GPUs; the guest with 4 vCPUs and 12 GiB; "native" is the same game through the
 same Wine prefix on the host, vsync off where stated; every window went full screen at 3840x2160;
 the games were driven by a short key script; the FPS are the DXVK overlay at the stated point and
 the ratio is against native on the same GPU. Details: [graphics/proton.md](graphics/proton.md).
 
-| Game | Bitness | API | GPU | Native FPS | `gramine-vm` FPS (ratio) | Result | First blocker |
+| Game | Bitness | API | GPU | Native FPS | `saguaro-vm` FPS (ratio) | Result | First blocker |
 |---|---|---|---|---|---|---|---|
 | DOOM I Enhanced | x86-64 | D3D11 | AMD | 2294 to 2347, E1M1 | 72 (0.03), E1M1 | plays the first level | present path bound; the crash before the guard¹ |
 | DOOM I Enhanced | x86-64 | D3D11 | Intel | 68 to 69, E1M1 | 59.5 (0.86), E1M1 | plays the first level | – |

@@ -33,7 +33,7 @@ reused without a build. A container is recreated only when its own checkout's Co
 behaviour).
 
 Each needs a **native** host of the same architecture (no emulation) with working KVM (`/dev/kvm`) for
-`gramine-vm`; the direct PAL needs no devices. The container runs with `--cap-add ALL` (virtiofsd serves
+`saguaro-vm`; the direct PAL needs no devices. The container runs with `--cap-add ALL` (virtiofsd serves
 the container's `/` as the guest's `/`) and `seccomp=unconfined` (the direct PAL calls `personality()`,
 which the default profile blocks).
 

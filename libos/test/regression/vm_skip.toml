@@ -78,7 +78,7 @@ tests = [
 [[group]]
 kind = "skip"
 category = "host-environment"
-reason = "gramine-vm is a bash launcher (bash rewrites PWD/_/SHLVL in the forwarded environment) and the guest has its own hostname."
+reason = "saguaro-vm is a bash launcher (bash rewrites PWD/_/SHLVL in the forwarded environment) and the guest has its own hostname."
 tests = [
   "TC_01_Bootstrap::test_103_env_from_host",
   "TC_30_Syscall::test_121_gethostname_pass_etc",

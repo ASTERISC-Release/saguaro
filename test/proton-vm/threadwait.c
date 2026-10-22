@@ -5,7 +5,7 @@
  * suspended, resumed, and waited for with a 100 ms deadline; on timeout the game kills it and
  * hangs. This program does the same ROUNDS times with a thread that returns at once, and reports
  * how long the thread took to finish (median, p90, max) and how many times the deadline expired
- * -- natively against gramine-vm, 32-bit (WoW64) against 64-bit, idle against a loaded host.
+ * -- natively against saguaro-vm, 32-bit (WoW64) against 64-bit, idle against a loaded host.
  * Usage: threadwait.exe [rounds] [deadline_ms] [pollers]   (defaults 200, 100 and 0: with N > 0,
  * N sibling threads poll an event every 5 ms meanwhile, as the game's do) */
 #include <windows.h>

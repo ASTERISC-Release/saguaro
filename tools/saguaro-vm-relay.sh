@@ -2,8 +2,8 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
 # The per-VM vsock relay of the VM PAL, for the launchers (dev docs: CHANGELOG.md).
-# This file is sourced by `gramine-vm-aarch64` (and, once the x86_64 launcher is switched over, by
-# `gramine-vm`); it only defines functions. It is installed next to the VM PAL, as
+# This file is sourced by `saguaro-vm-aarch64` (and, once the x86_64 launcher is switched over, by
+# `saguaro-vm`); it only defines functions. It is installed next to the VM PAL, as
 # $HOST_PAL_PATH/vm-relay.sh.
 #
 # One relay process runs per VM, in the launcher's container or host, started once the guest CID is
@@ -13,7 +13,7 @@
 #
 #   vm_relay_find_python <launcher>
 #       make `graminelibos` importable: when it is not, add <prefix>/lib/python3*/site-packages of the
-#       installation that holds <launcher> (<prefix>/bin/gramine-vm) to PYTHONPATH. Callers with a
+#       installation that holds <launcher> (<prefix>/bin/saguaro-vm) to PYTHONPATH. Callers with a
 #       stripped environment (the LibOS regression tests pass `env=`) have no PYTHONPATH.
 #   vm_relay_manifest_wants_network <manifest>
 #       exit status 0 when the manifest has a `vm.net` table (it needs the vsock device and the relay).

@@ -10,7 +10,7 @@
  * code, handled the way Wine does (restore the TLS base first, reload the 32-bit %fs before the
  * return), with the sigreturn resuming the 32-bit code. The PALs without per-thread GDT slots
  * answer ENOSYS: the test then exits early with "TEST SKIPPED" (the Python side runs it only
- * under gramine-vm).
+ * under saguaro-vm).
  */
 
 #define _GNU_SOURCE

@@ -5,7 +5,7 @@
 # test-vm.sh — the aarch64 `vm` PAL test battery (run it where /dev/kvm and stock
 # qemu-system-aarch64 are available, e.g. the container from container/run.sh).
 #
-#   libos     the LibOS regression suite under gramine-vm (SAGUARO_VM=1, libos/test/regression/vm_skip.toml)
+#   libos     the LibOS regression suite under saguaro-vm (SAGUARO_VM=1, libos/test/regression/vm_skip.toml)
 #   examples  CI-Examples applications (tools/run-vm-aarch64-examples.sh)
 #   hello     the bring-up soak test (tools/vm-aarch64-stage/hello.c, SMP=2 and SMP=4)
 #   loopback  host-initiated connections into a guest AF_INET TCP server (test/vm/network/test-vm-loopback.sh,

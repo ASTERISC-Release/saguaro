@@ -1,11 +1,11 @@
 # Benchmarks
 
-Performance measurements for the direct PAL: native execution versus `gramine-direct`.
+Performance measurements for the direct PAL: native execution versus `saguaro-direct`.
 
 ```
 ./test/benchmarks/run_benchmarks.sh            # syscall microbenchmark + redis-benchmark
 ./test/benchmarks/run_benchmarks.sh syscall    # per-syscall cost only
-./test/benchmarks/run_benchmarks.sh redis      # redis-server native vs gramine-direct
+./test/benchmarks/run_benchmarks.sh redis      # redis-server native vs saguaro-direct
 ```
 
 Outputs are appended to `test/benchmarks/results/<date>_<arch>.txt` (git-ignored). Each file starts with a
@@ -18,7 +18,7 @@ here.
 ## Layout
 
 - `run_benchmarks.sh` — the driver: builds and runs the workloads natively and under
-  `gramine-direct` and writes the results file.
+  `saguaro-direct` and writes the results file.
 - `syscall-bench/` — the per-syscall microbenchmark (`syscall_bench.c`, manifest template,
   Makefile; `make REWRITE=1|0` forces `sys.rewrite_syscalls` on/off in its manifest).
 

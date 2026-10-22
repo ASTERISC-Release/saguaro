@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
-# run_benchmarks.sh — performance benchmarks for the direct PAL (native vs gramine-direct).
+# run_benchmarks.sh — performance benchmarks for the direct PAL (native vs saguaro-direct).
 #
 # Usage:
 #   ./run_benchmarks.sh                # all benchmarks
@@ -55,7 +55,7 @@ bench_syscall() {
     ( cd "$HERE/syscall-bench" && make -s >/dev/null ) || { say "build failed"; return 1; }
     local d="$HERE/syscall-bench"
     say "-- native";          (cd "$d" && taskset -c "$SERVER_CPU" ./syscall_bench "$ITERS" "$REPS") 2>&1 | tee -a "$RESULT"
-    say "-- gramine-direct";  (cd "$d" && taskset -c "$SERVER_CPU" gramine-direct syscall_bench "$ITERS" "$REPS") 2>&1 | grep -v '^Emulating' | tee -a "$RESULT"
+    say "-- saguaro-direct";  (cd "$d" && taskset -c "$SERVER_CPU" saguaro-direct syscall_bench "$ITERS" "$REPS") 2>&1 | grep -v '^Emulating' | tee -a "$RESULT"
 }
 
 wait_port() { for _ in $(seq 1 120); do (exec 3<>/dev/tcp/127.0.0.1/$1) 2>/dev/null && return 0; sleep 0.5; done; return 1; }
@@ -84,7 +84,7 @@ bench_redis() {
     ( cd "$d" && make -s redis-server.manifest >/dev/null 2>&1 )
     say "## redis-benchmark (requests/s; higher is better)  N=$REDIS_N clients=$REDIS_C server cpu=$SERVER_CPU client cpus=$CLIENT_CPUS"
     run_redis_one native 6390 taskset -c "$SERVER_CPU" ./redis-server --port 6390 --save ""
-    run_redis_one gramine-direct 6379 taskset -c "$SERVER_CPU" gramine-direct redis-server
+    run_redis_one saguaro-direct 6379 taskset -c "$SERVER_CPU" saguaro-direct redis-server
 }
 
 header

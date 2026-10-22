@@ -9,9 +9,9 @@
 #   1. scripts/install.sh --sev (unless NO_BUILD=1)
 #   2. test/sev/test-sev.sh under plain SEV and under SNP (hello, memory, vsock, measure / attest)
 #   3. the LibOS regression suite under SNP at the vCPU counts of CPUS (default "1 2 4"); reported,
-#      not judged: compare with gramine-vm on the same host (known failures on the development host:
+#      not judged: compare with saguaro-vm on the same host (known failures on the development host:
 #      test_020_cpuinfo on AMD, and at 1 vCPU test_000_spinlock and test_074_eventfd_races, as with
-#      gramine-vm)
+#      saguaro-vm)
 #   4. CI-Examples under SNP: helloworld, the multi-threaded unit test, python
 #   5. the multi-process checks under SNP (test/vm/multiproc/check-probes.sh, MP_RAM default 8G),
 #      unless MP=0
@@ -46,27 +46,27 @@ done
 
 for n in $CPUS; do
     step "LibOS suite under SNP, $n vCPUs"
-    SAGUARO_CPU_NUM=$n SAGUARO_VM_LAUNCHER=gramine-sev SAGUARO_SEV_MODE=snp \
+    SAGUARO_CPU_NUM=$n SAGUARO_VM_LAUNCHER=saguaro-sev SAGUARO_SEV_MODE=snp \
         "$HERE/../vm/test-vm.sh" --prefix "$PREFIX" libos > "$OUT/libos-snp-$n.log" 2>&1
     grep -E "^FAILED|[0-9]+ (passed|failed)" "$OUT/libos-snp-$n.log" | tail -n 20
 done
 
 step "CI-Examples under SNP"
 export SAGUARO_SEV_MODE=snp
-( cd CI-Examples/helloworld && make -s >/dev/null && timeout 300 gramine-sev helloworld ) \
+( cd CI-Examples/helloworld && make -s >/dev/null && timeout 300 saguaro-sev helloworld ) \
     > "$OUT/ex-helloworld.log" 2>&1
 grep -q "Hello, world" "$OUT/ex-helloworld.log" && echo "helloworld: ok" || fail "helloworld"
 ( cd CI-Examples/unit_tests/multi-thread && make -s thread-tls thread-tls.manifest >/dev/null &&
-  SAGUARO_CPU_NUM=4 timeout 300 gramine-sev thread-tls ) > "$OUT/ex-threads.log" 2>&1
+  SAGUARO_CPU_NUM=4 timeout 300 saguaro-sev thread-tls ) > "$OUT/ex-threads.log" 2>&1
 grep -q "(again)" "$OUT/ex-threads.log" && echo "thread-tls (4 vCPUs): ok" || fail "thread-tls"
 ( cd CI-Examples/python && make -s python.manifest >/dev/null &&
-  timeout 600 gramine-sev python scripts/helloworld.py ) > "$OUT/ex-python.log" 2>&1
+  timeout 600 saguaro-sev python scripts/helloworld.py ) > "$OUT/ex-python.log" 2>&1
 grep -q "Hello World" "$OUT/ex-python.log" && echo "python helloworld: ok" || fail "python"
 
 if [ "${MP:-1}" != 0 ]; then
     step "multi-process checks under SNP"
-    # the frame pool needs a free GB of RAM above 4G: 4G guests have none (as with gramine-vm)
-    SAGUARO_RAM_SIZE=${MP_RAM:-8G} SAGUARO_VM_LAUNCHER=gramine-sev WORK=$OUT/mp \
+    # the frame pool needs a free GB of RAM above 4G: 4G guests have none (as with saguaro-vm)
+    SAGUARO_RAM_SIZE=${MP_RAM:-8G} SAGUARO_VM_LAUNCHER=saguaro-sev WORK=$OUT/mp \
         "$HERE/../vm/multiproc/check-probes.sh" \
         > "$OUT/multiproc.log" 2>&1 || fail "multi-process checks"
     tail -n 12 "$OUT/multiproc.log"

@@ -9,7 +9,7 @@
 # The script does not probe the port first: iperf3 counts a connection that closes without a test as an
 # error. The client is retried instead, until the server is up.
 set -uo pipefail
-: "${GRAMINE:=gramine-direct}"
+: "${GRAMINE:=saguaro-direct}"
 PORT=${IPERF_PORT:-5201}
 SECONDS_=${IPERF_SECONDS:-2}
 TRIES=${IPERF_TRIES:-60}

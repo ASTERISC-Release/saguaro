@@ -3,7 +3,7 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 """A relay for the guest's X connection that hides X extensions from the guest.
 
-gramine-vm relays the application's X connection (vsock port 6000+N for DISPLAY "2:N") to the
+saguaro-vm relays the application's X connection (vsock port 6000+N for DISPLAY "2:N") to the
 host's X socket with socat, which carries bytes only. A DRI3 server (Xwayland) makes Mesa's GLX
 and Vulkan WSI open the GPU through that connection (DRI3Open), whose reply carries a file
 descriptor: it never arrives through the relay and the guest hangs waiting for it (winex11's
@@ -11,7 +11,7 @@ OpenGL initialisation under Wine, dev docs: proton-vm/FINDINGS.md 2026-10-16). T
 answers the guest's QueryExtension for the named extensions (default: DRI3 and Present) with
 "absent", so Mesa takes its paths without them; everything else passes through unchanged.
 
-Usage: gramine-vm-xfilter.py --port 6001 --x-socket /tmp/.X11-unix/X0 [--hide DRI3,Present]
+Usage: saguaro-vm-xfilter.py --port 6001 --x-socket /tmp/.X11-unix/X0 [--hide DRI3,Present]
        (listens on AF_VSOCK, any CID; one asyncio task pair per connection)
 """
 

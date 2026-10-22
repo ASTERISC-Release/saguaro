@@ -74,7 +74,7 @@ static int get_report(mbedtls_pk_context* pk, unsigned char* report, size_t* rep
 static int make_cert(mbedtls_pk_context* pk, const unsigned char* report, size_t report_len,
                      int (*f_rng)(void*, unsigned char*, size_t), void* p_rng,
                      mbedtls_x509_crt* crt, const char** what) {
-    static const char name[] = "CN=gramine-vbs-ratls,O=VBS enclave";
+    static const char name[] = "CN=saguaro-vbs-ratls,O=VBS enclave";
     mbedtls_x509write_cert w;
     unsigned char* val = NULL;
     unsigned char* der = NULL;

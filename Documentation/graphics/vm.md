@@ -1,9 +1,9 @@
-# Redirected graphics for `gramine-vm`
+# Redirected graphics for `saguaro-vm`
 
 > All numbers on this page are experimental measurements from one machine, taken during development; they are not benchmarks.
 
 **What it does.** An unmodified OpenGL application (stock Mesa, EGL or GLX) runs inside the
-`gramine-vm` microVM and draws on the host's GPU. The guest has no GPU driver and no
+`saguaro-vm` microVM and draws on the host's GPU. The guest has no GPU driver and no
 paravirtual device: the GPU work is forwarded to a listener on the host, which follows the design
 of the Tirith paper (cited in the quickstart). x86_64 only.
 

@@ -109,13 +109,13 @@ libpal_sev = executable('pal',
 
 # The boot image: the PAL, the SEV reset stub and (for SNP) the initial VMSA in one IGVM file that
 # QEMU loads with -object igvm-cfg (PLAN.md D4); every page of it is measured at launch.
-pal_sev_igvm_prog = find_program('gramine-sev-igvm.py')
-custom_target('gramine-sev.igvm',
+pal_sev_igvm_prog = find_program('saguaro-sev-igvm.py')
+custom_target('saguaro-sev.igvm',
     command: [pal_sev_igvm_prog, 'build', '--pal', libpal_sev, '--bios', pal_sev_bios,
               '--output', '@OUTPUT@'],
-    output: 'gramine-sev.igvm',
+    output: 'saguaro-sev.igvm',
     install: true,
     install_dir: pkglibdir / 'sev',
 )
 
-install_data('gramine-sev-igvm.py', install_dir: pkglibdir / 'sev', install_mode: 'rwxr-xr-x')
+install_data('saguaro-sev-igvm.py', install_dir: pkglibdir / 'sev', install_mode: 'rwxr-xr-x')

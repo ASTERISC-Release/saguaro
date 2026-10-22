@@ -17,7 +17,7 @@
 #define SEV_STATUS_SEV_ES    (1 << 1)
 #define SEV_STATUS_SEV_SNP   (1 << 2)
 
-/* Fixed guest-physical pages of the SNP boot image (gramine-sev-igvm.py writes them), inside the
+/* Fixed guest-physical pages of the SNP boot image (saguaro-sev-igvm.py writes them), inside the
  * PAL's reserved range [1 MB, 4 MB) so that they stay mapped (kernel-only) for the whole run */
 #define SEV_SNP_SECRETS_PAGE_GPA 0x3fe000
 #define SEV_SNP_CPUID_PAGE_GPA   0x3ff000

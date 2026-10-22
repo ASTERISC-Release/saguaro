@@ -28,11 +28,11 @@
 #   EXAMPLE_NOTE       why it is skipped on this host when no backend applies (printed with the SKIP)
 #
 # Backends and where they are installed (scripts/install.sh; override with the env vars):
-#   direct   $SAGUARO_DIRECT_PREFIX (default ~/.local/saguaro)      gramine-direct
-#   vm       $SAGUARO_VM_PREFIX     (default ~/.local/saguaro-vm)   gramine-vm, needs /dev/kvm
-#   sev      $SAGUARO_VM_PREFIX     (same install as vm, --sev)     gramine-sev, x86_64 with SEV; plain SEV
-#   sev-snp  (same install and runner as sev)                        gramine-sev in SEV-SNP mode
-#   sgx      $SAGUARO_SGX_PREFIX    (default ~/.local/saguaro-sgx)   gramine-sgx, x86_64 with SGX (/dev/sgx_enclave);
+#   direct   $SAGUARO_DIRECT_PREFIX (default ~/.local/saguaro)      saguaro-direct
+#   vm       $SAGUARO_VM_PREFIX     (default ~/.local/saguaro-vm)   saguaro-vm, needs /dev/kvm
+#   sev      $SAGUARO_VM_PREFIX     (same install as vm, --sev)     saguaro-sev, x86_64 with SEV; plain SEV
+#   sev-snp  (same install and runner as sev)                        saguaro-sev in SEV-SNP mode
+#   sgx      $SAGUARO_SGX_PREFIX    (default ~/.local/saguaro-sgx)   saguaro-sgx, x86_64 with SGX (/dev/sgx_enclave);
 #            scripts/install.sh --sgx; make SGX=1 signs the enclave with ~/.config/gramine/enclave-key.pem
 #   vbs      scripts/install.sh --vbs, in WSL on a Windows machine   Windows VBS enclave (make VBS=1); an
 #            with VBS enclaves                                       example offers it when it has a
@@ -55,7 +55,7 @@
 # printed), 2 for a usage error.
 # Environment: EXEC_TIMEOUT (seconds per run, default 300; EXEC_BUILD_TIMEOUT, default 3600, for the build
 # of a vbs image), EXEC_LOG_DIR (default /tmp/saguaro-exec),
-# The backend sets SAGUARO_SEV_MODE for gramine-sev: sev for --sev, snp for --sev-snp.
+# The backend sets SAGUARO_SEV_MODE for saguaro-sev: sev for --sev, snp for --sev-snp.
 
 # EXEC_DIR (the directory to build and run in) and EXAMPLE_NAME default to the exec.sh's own directory;
 # unit_tests/exec.sh sets them to run each test of its subdirectories
@@ -66,7 +66,7 @@ EXEC_TIMEOUT=${EXEC_TIMEOUT:-300}
 
 exec_host_arch() { uname -m; }
 
-# backend_base <backend>: the backend whose install and runner it uses (sev-snp is gramine-sev, like sev)
+# backend_base <backend>: the backend whose install and runner it uses (sev-snp is saguaro-sev, like sev)
 backend_base() {
     case $1 in
         sev-snp) echo sev ;;
@@ -99,10 +99,10 @@ backend_unavailable() {
     fi
     prefix=$(backend_prefix "$b")
     case $b in
-        direct) runner=gramine-direct ;;
-        vm)     runner=gramine-vm ;;
-        sev)    runner=gramine-sev ;;
-        sgx)    runner=gramine-sgx ;;
+        direct) runner=saguaro-direct ;;
+        vm)     runner=saguaro-vm ;;
+        sev)    runner=saguaro-sev ;;
+        sgx)    runner=saguaro-sgx ;;
         *)      echo "unknown backend $b"; return 0 ;;
     esac
     if [ "$b" = sgx ]; then
@@ -202,7 +202,7 @@ exec_one() {
     local binary=${EXAMPLE_BINARY:-$EXAMPLE_NAME}
     local manifest=${EXAMPLE_MANIFEST:-$binary.manifest}
     local runner mode=${EXAMPLE_MODE:-run}
-    case $base in direct) runner=gramine-direct ;; vm) runner=gramine-vm ;; sev) runner=gramine-sev ;; sgx) runner=gramine-sgx ;; esac
+    case $base in direct) runner=saguaro-direct ;; vm) runner=saguaro-vm ;; sev) runner=saguaro-sev ;; sgx) runner=saguaro-sgx ;; esac
     mtarget=${mtarget:-$manifest}
 
     if [ "$mode" = check ]; then

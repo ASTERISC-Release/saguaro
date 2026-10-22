@@ -7,14 +7,14 @@
 #
 #   1. installs the missing build packages user-level (wsl-setup.sh user: Ubuntu packages unpacked
 #      into ~/.local/share/saguaro-vbs/tools; nothing is installed system-wide);
-#   2. puts `gramine-vbs` on the PATH (a link in ~/.local/bin);
+#   2. puts `saguaro-vbs` on the PATH (a link in ~/.local/bin);
 #   3. builds the vbs glibc, PAL and LibOS (once per checkout; `make VBS=1` does not build them and
 #      stops when they are missing; run this again after changing the PAL or the LibOS);
 #   4. checks the Windows side through powershell.exe and prints the Windows steps it cannot do.
 #      It changes nothing on Windows.
 #
 # Idempotent: a second run finds everything in place. After it: `make VBS=1` in an example and
-# `gramine-vbs <program>`.
+# `saguaro-vbs <program>`.
 set -e
 
 HERE=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)
@@ -39,22 +39,22 @@ else
     sh "$HERE/wsl-setup.sh" user clang
 fi
 
-echo ">>> gramine-vbs on the PATH ($BIN)"
+echo ">>> saguaro-vbs on the PATH ($BIN)"
 mkdir -p "$BIN"
-ln -sfn "$HERE/gramine-vbs" "$BIN/gramine-vbs"
-echo "$BIN/gramine-vbs -> $HERE/gramine-vbs"
+ln -sfn "$HERE/saguaro-vbs" "$BIN/saguaro-vbs"
+echo "$BIN/saguaro-vbs -> $HERE/saguaro-vbs"
 case ":$PATH:" in
     *":$BIN:"*) ;;
     *) echo "note: $BIN is not in your PATH; add it:  export PATH=\"$BIN:\$PATH\"" ;;
 esac
 
 echo ">>> vbs glibc, PAL and LibOS (first time: several minutes)"
-"$HERE/gramine-vbs" runtime
+"$HERE/saguaro-vbs" runtime
 
 echo ">>> Windows side"
-if "$HERE/gramine-vbs" check; then
+if "$HERE/saguaro-vbs" check; then
     echo
-    echo "Done. Next:  cd CI-Examples/helloworld && make VBS=1 && gramine-vbs helloworld"
+    echo "Done. Next:  cd CI-Examples/helloworld && make VBS=1 && saguaro-vbs helloworld"
 else
     cat <<'MSG'
 
@@ -64,7 +64,7 @@ dev docs: vbs-enclave/windows-fresh-machine.md:
   - VBS running: Windows Security > Device security > Core isolation > Memory integrity, restart
   - Visual Studio (C++ desktop workload, build tools of this architecture) and the Windows SDK
   - the enclave test-signing certificate (CN=TheDefaultTestEnclaveCertName) and test signing on
-Then run scripts/install.sh --vbs again (or `gramine-vbs check`).
+Then run scripts/install.sh --vbs again (or `saguaro-vbs check`).
 MSG
     exit 1
 fi

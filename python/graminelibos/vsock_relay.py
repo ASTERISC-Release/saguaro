@@ -4,7 +4,7 @@
 """
 vsock_relay -- the per-VM network relay of the VM PAL (dev docs: CHANGELOG.md).
 
-One relay process per VM, started by `gramine-vm` in the container and stopped with the VM. It
+One relay process per VM, started by `saguaro-vm` in the container and stopped with the VM. It
 listens on AF_VSOCK port 65536 + <CID> (RELAY_PORT_BASE + CID; the guest knows its own CID, so the
 relay address needs no configuration). Guest TCP connects send the versioned numeric-destination
 handshake below and are dialed under the manifest's `vm.net.outbound` / `vm.net.deny` policy.
@@ -521,7 +521,7 @@ async def run_relay(cid, rules, stats=None, policy=None):
     """
     The relay's main loop: the vsock listener on 65536+CID plus one TCP listener per inbound rule.
     The host (TCP) listeners are opened first so a taken port fails the launcher immediately, then
-    the vsock listener -- its "listening on vsock port" line is what gramine-vm waits for.
+    the vsock listener -- its "listening on vsock port" line is what saguaro-vm waits for.
     """
     stats = stats if stats is not None else Stats()
     # strong references to all in-flight connection tasks (see spawn())
@@ -575,7 +575,7 @@ def die_with_parent():
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog='gramine-vm-relay')
+    ap = argparse.ArgumentParser(prog='saguaro-vm-relay')
     ap.add_argument('--cid', type=int, required=True, help='the VM\'s guest CID')
     ap.add_argument('--inbound', action='append', default=[],
                     help='inbound rule, e.g. guest=8080:host=18080:bind=127.0.0.1 or 8080:18080')

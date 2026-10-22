@@ -1,7 +1,7 @@
 # A TCP server in a Windows VBS enclave (dev docs: vbs-enclave/manual.md): it listens on 127.0.0.1:18080
 # through the host's sockets, answers three clients and exits. The program is the vbs PAL's test
 # pal/src/host/vbs/test/tcpserver/tcpserver.c. Run it with
-#   make VBS=1; gramine-vbs tcpserver
+#   make VBS=1; saguaro-vbs tcpserver
 # and connect from another PowerShell window, three times: .\client.ps1
 loader.entrypoint = "file:/libsysdb.so"
 libos.entrypoint = "/tcpserver"

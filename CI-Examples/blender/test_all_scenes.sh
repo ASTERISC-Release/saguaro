@@ -5,14 +5,14 @@
 
 set -e
 
-# GRAMINE (for example gramine-vm, from exec.sh) names the runner; otherwise SGX selects gramine-sgx
+# GRAMINE (for example saguaro-vm, from exec.sh) names the runner; otherwise SGX selects saguaro-sgx
 if test -z "$GRAMINE"
 then
     if test -n "$SGX"
     then
-        GRAMINE=gramine-sgx
+        GRAMINE=saguaro-sgx
     else
-        GRAMINE=gramine-direct
+        GRAMINE=saguaro-direct
     fi
 fi
 

@@ -33,7 +33,7 @@ features and architecture limits are noted in the linked documentation.
 |---|---|---|---|
 | `fs.root.type`, `fs.root.uri` | Common | Configure the root filesystem mount. | [Root filesystem mount point](manifest-syntax.md#root-fs-mount-point) |
 | `fs.mounts[]` | Common; mount-type support depends on the PAL | Mount host-backed, encrypted, untrusted shared-memory, or temporary filesystems. Fields include `type`, `path`, and `uri`. | [Filesystem mount points](manifest-syntax.md#fs-mount-points) |
-| `fs.mounts[].host_symlinks` | `gramine-direct` only | Allow host symlink targets to be returned by `readlink()` under a chroot mount. | [FS mount points](manifest-syntax.md#fs-mount-points) |
+| `fs.mounts[].host_symlinks` | `saguaro-direct` only | Allow host symlink targets to be returned by `readlink()` under a chroot mount. | [FS mount points](manifest-syntax.md#fs-mount-points) |
 | `fs.mounts[].key_name` | Encrypted mounts | Select the encryption key for a mount; defaults to `default`. | [Encrypted files](manifest-syntax.md#encrypted-files) |
 | `fs.insecure__keys.<NAME>` | Encrypted mounts; built-in SGX sealing keys are SGX-specific | Supply an encryption key directly in the manifest. | [Encrypted files](manifest-syntax.md#encrypted-files) |
 | `fs.start_dir` | Common | Set the initial working directory. | [Start directory](manifest-syntax.md#start-current-working-directory) |
@@ -43,24 +43,24 @@ features and architecture limits are noted in the linked documentation.
 | Key | Applies to | Purpose | Details |
 |---|---|---|---|
 | `sys.enable_extra_runtime_domain_names_conf` | Common | Generate hostname and resolver configuration from the host. | [Domain names configuration](manifest-syntax.md#domain-names-configuration) |
-| `sys.rewrite_syscalls` | `gramine-direct` on AArch64 and RISC-V; VBS manifests set it to `false` | Rewrite trapped syscall sites to reduce repeated trap overhead. | [Syscall-site rewriting](manifest-syntax.md#rewriting-trapped-syscall-sites-aarch64-and-riscv64-direct-pal), [VBS syntax](manifest-syntax.md#vbs-syntax-windows-vbs-enclaves) |
+| `sys.rewrite_syscalls` | `saguaro-direct` on AArch64 and RISC-V; VBS manifests set it to `false` | Rewrite trapped syscall sites to reduce repeated trap overhead. | [Syscall-site rewriting](manifest-syntax.md#rewriting-trapped-syscall-sites-aarch64-and-riscv64-direct-pal), [VBS syntax](manifest-syntax.md#vbs-syntax-windows-vbs-enclaves) |
 | `sys.ioctl_structs.<NAME>[]` | Common IOCTL configuration; SGX has additional memory-boundary considerations | Describe an IOCTL argument's memory layout. Fields include `name`, `alignment`, `size`, `unit`, `adjustment`, `direction`, `ptr`, `array_len`, and `onlyif`. | [Allowed IOCTLs](manifest-syntax.md#allowed-ioctls) |
 | `sys.allowed_ioctls[]` | Common IOCTL configuration | Allow selected IOCTL request codes; fields are `request_code` and optional `struct`. | [Allowed IOCTLs](manifest-syntax.md#allowed-ioctls) |
-| `sys.insecure__allow_raw_device_ioctl` | `gramine-direct` only; other PALs ignore it | Pass mounted-device IOCTLs directly to the host. | [Raw device IOCTLs](manifest-syntax.md#raw-device-ioctls-gramine-direct) |
-| `sys.insecure__host_unix_sockets` | `gramine-direct` only; other PALs ignore it | Permit connections to listed host UNIX socket paths. | [Host UNIX sockets](manifest-syntax.md#host-unix-sockets-gramine-direct) |
+| `sys.insecure__allow_raw_device_ioctl` | `saguaro-direct` only; other PALs ignore it | Pass mounted-device IOCTLs directly to the host. | [Raw device IOCTLs](manifest-syntax.md#raw-device-ioctls-saguaro-direct) |
+| `sys.insecure__host_unix_sockets` | `saguaro-direct` only; other PALs ignore it | Permit connections to listed host UNIX socket paths. | [Host UNIX sockets](manifest-syntax.md#host-unix-sockets-saguaro-direct) |
 | `sys.experimental__enable_flock` | Common | Enable the experimental `flock` system call. | [Experimental flock support](manifest-syntax.md#experimental-flock-bsd-style-locks-support) |
 
 ## VM launcher
 
-These keys configure the `gramine-vm` launcher and relay, not the Linux PAL. The reference describes
+These keys configure the `saguaro-vm` launcher and relay, not the Linux PAL. The reference describes
 the relay for x86_64 and AArch64.
 
 | Key | Applies to | Purpose | Details |
 |---|---|---|---|
-| `vm.net.outbound` | `gramine-vm` | Allow or deny guest-initiated TCP and UDP connections. | [VM networking](manifest-syntax.md#vm-networking-gramine-vm) |
-| `vm.net.deny` | `gramine-vm` | Deny destinations matching IP-network or protocol-port rules. | [VM networking](manifest-syntax.md#vm-networking-gramine-vm) |
-| `vm.net.inbound[]` | `gramine-vm` | Forward host listener ports to guest TCP ports; fields include `guest`, `host`, and `bind`. | [VM networking](manifest-syntax.md#vm-networking-gramine-vm) |
-| `vm.net.direct_vsock_ports` | `gramine-vm` | Map guest TCP ports directly to host AF_VSOCK ports, bypassing the relay. | [VM networking](manifest-syntax.md#vm-networking-gramine-vm) |
+| `vm.net.outbound` | `saguaro-vm` | Allow or deny guest-initiated TCP and UDP connections. | [VM networking](manifest-syntax.md#vm-networking-saguaro-vm) |
+| `vm.net.deny` | `saguaro-vm` | Deny destinations matching IP-network or protocol-port rules. | [VM networking](manifest-syntax.md#vm-networking-saguaro-vm) |
+| `vm.net.inbound[]` | `saguaro-vm` | Forward host listener ports to guest TCP ports; fields include `guest`, `host`, and `bind`. | [VM networking](manifest-syntax.md#vm-networking-saguaro-vm) |
+| `vm.net.direct_vsock_ports` | `saguaro-vm` | Map guest TCP ports directly to host AF_VSOCK ports, bypassing the relay. | [VM networking](manifest-syntax.md#vm-networking-saguaro-vm) |
 
 ## Tree-specific VM and confidential-VM options
 
@@ -70,12 +70,12 @@ the relay for x86_64 and AArch64.
 | `sys.experimental__assume_external_processes_alive` | Common LibOS option; used by VM/TDX integrations | Make `kill(pid, 0)` succeed when the target is outside Gramine and would otherwise be reported as absent. | [Implementation](../libos/src/sys/libos_sigaction.c) |
 | `sys.experimental__shared_input_ring` | VM and TDX PALs; graphics use | Make the VM vsock driver use interrupt-driven polling when the graphics shared input ring is active. | dev docs: `graphics/` |
 | `sys.experimental__enable_host_sysv_semaphores` | VM/TDX with graphics enabled and a host agent | Forward System V semaphore operations to the host agent. | [Graphics example](../CI-Examples/graphics/tf2/README.md) |
-| `tdx.enclave_size` | `gramine-tdx` | Set guest memory size from the TDX manifest. | [VM size](quickstart/vm.md#4-other-information) |
+| `tdx.enclave_size` | `saguaro-tdx` | Set guest memory size from the TDX manifest. | [VM size](quickstart/vm.md#4-other-information) |
 | `tdx.trusted_files[]` | TDX | Verify listed files against hashes; entries contain `uri` and `sha256`. | [SGX trusted-file syntax](manifest-syntax.md#trusted-files), [implementation](../pal/src/host/vm-common/pal_common_tf.c) |
 | `tdx.allowed_files[]` | TDX | Allow listed files or directories without hash verification. | [SGX allowed-file syntax](manifest-syntax.md#allowed-files), [implementation](../pal/src/host/vm-common/pal_common_tf.c) |
 | `tdx.file_check_policy` | TDX | Select strict file checking or allow unknown files while logging them. | [SGX file-check policy](manifest-syntax.md#file-check-policy), [implementation](../pal/src/host/vm-common/pal_common_tf.c) |
-| `sev.mode` | `gramine-sev` | Select SNP (default), plain SEV, or the native boot-path debug mode. | [SEV settings](quickstart/sev.md#2-example-hello-world), [launcher](../tools/gramine-vm.in) |
-| `sev.policy` | `gramine-sev` | Set the guest policy passed to QEMU; defaults depend on the selected mode. | [SEV settings](quickstart/sev.md#2-example-hello-world), [launcher](../tools/gramine-vm.in) |
+| `sev.mode` | `saguaro-sev` | Select SNP (default), plain SEV, or the native boot-path debug mode. | [SEV settings](quickstart/sev.md#2-example-hello-world), [launcher](../tools/saguaro-vm.in) |
+| `sev.policy` | `saguaro-sev` | Set the guest policy passed to QEMU; defaults depend on the selected mode. | [SEV settings](quickstart/sev.md#2-example-hello-world), [launcher](../tools/saguaro-vm.in) |
 
 ## VBS
 

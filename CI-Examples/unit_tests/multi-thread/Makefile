@@ -80,9 +80,9 @@ sgx_sign: helloworld.manifest helloworld
 	gramine-manifest-check $<.sgx
 
 ifeq ($(SGX),)
-GRAMINE = gramine-direct
+GRAMINE = saguaro-direct
 else
-GRAMINE = gramine-sgx
+GRAMINE = saguaro-sgx
 endif
 
 .PHONY: check

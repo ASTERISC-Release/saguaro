@@ -1,6 +1,6 @@
 # Team Fortress 2
 
-The native Linux Team Fortress 2 client under `gramine-vm` with the graphics redirection (x86_64), on an insecure LAN-only local server (`cp_badlands`). `-insecure` disables VAC: do not use it for public matchmaking. There is no `run-direct` target.
+The native Linux Team Fortress 2 client under `saguaro-vm` with the graphics redirection (x86_64), on an insecure LAN-only local server (`cp_badlands`). `-insecure` disables VAC: do not use it for public matchmaking. There is no `run-direct` target.
 
 ## Prerequisites
 

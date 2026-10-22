@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
-# Research probe (PLAN-rwx.md, "Runtime executable memory: options"); not in any default build. `make VBS=1`, `gramine-vbs rxprobe`.
+# Research probe (PLAN-rwx.md, "Runtime executable memory: options"); not in any default build. `make VBS=1`, `saguaro-vbs rxprobe`.
 
 .PHONY: all
 ifeq ($(VBS),1)

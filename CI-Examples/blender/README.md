@@ -20,5 +20,5 @@ By hand:
 
 ```sh
 make
-make check              # renders every scene, expects data/images/<scene>0001.png; GRAMINE=gramine-vm etc., SGX=1 for SGX
+make check              # renders every scene, expects data/images/<scene>0001.png; GRAMINE=saguaro-vm etc., SGX=1 for SGX
 ```

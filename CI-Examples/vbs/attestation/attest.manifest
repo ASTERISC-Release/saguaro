@@ -1,7 +1,7 @@
 # Attestation in a Windows VBS enclave (dev docs: vbs-enclave/manual.md): the program writes user data to
-# /dev/attestation/user_report_data and saves the report to the host; `gramine-vbs verify` checks
+# /dev/attestation/user_report_data and saves the report to the host; `saguaro-vbs verify` checks
 # it. vbs.build compiles the program (pal/src/host/vbs/test/attest/attest.c) for the enclave.
-#   gramine-vbs run attest.manifest -- <user data hex>
+#   saguaro-vbs run attest.manifest -- <user data hex>
 loader.entrypoint = "file:/libsysdb.so"
 libos.entrypoint = "/attest"
 loader.insecure__use_cmdline_argv = true  # the user data comes from the command line

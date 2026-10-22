@@ -67,9 +67,9 @@ test_files/gzip.c: test_files/gzip_broken.c test_files/gzip.patch
 	patch test_files/gzip_broken.c -i test_files/gzip.patch -o $@
 
 ifeq ($(SGX),)
-GRAMINE = gramine-direct
+GRAMINE = saguaro-direct
 else
-GRAMINE = gramine-sgx
+GRAMINE = saguaro-sgx
 endif
 
 .PHONY: check

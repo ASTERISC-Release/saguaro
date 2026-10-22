@@ -29,8 +29,8 @@ gaps; ⚠️), *planned* (🛫). The whole tree is experimental and not for prod
   test, inside SEV-SNP guests.
 - Rewriting system-call sites makes a call 3.3 to 4.1 times cheaper than a trap on the RISC-V board measured,
   which removes the need for a patched C library on AArch64 and RISC-V.
-- Unmodified OpenGL games run at 76 to 102 % of native speed through the host GPU on `gramine-direct`, and on
-  `gramine-vm` through a redirection to the hypervisor.
+- Unmodified OpenGL games run at 76 to 102 % of native speed through the host GPU on `saguaro-direct`, and on
+  `saguaro-vm` through a redirection to the hypervisor.
 - A Linux application can run inside a Windows VBS enclave, although the enclave cannot make memory executable at
   run time, by packing the library OS, the libc and the application into the signed image at build time.
 
@@ -38,7 +38,7 @@ gaps; ⚠️), *planned* (🛫). The whole tree is experimental and not for prod
 
 ### AArch64
 
-`gramine-direct` runs on AArch64 Linux. The LibOS regression reaches about 195 passed and 36 skipped, the PAL
+`saguaro-direct` runs on AArch64 Linux. The LibOS regression reaches about 195 passed and 36 skipped, the PAL
 regression 28 passed and 8 skipped, and twelve example suites pass.
 
 Design decisions:
@@ -101,7 +101,7 @@ the direct AArch64 and RISC-V builds; x86_64 direct and SGX keep the bundled gli
 from 5 min 45 s to 1 min 19 s with identical test results. `gramine.runtimedir()` finds the host directory when the
 manifest is rendered.
 
-## VM PAL (`gramine-vm`)
+## VM PAL (`saguaro-vm`)
 
 The VM PAL runs the library OS as a unikernel in a microVM, under stock QEMU with KVM, at 1 to 4 vCPUs.
 
@@ -157,7 +157,7 @@ registration from another vCPU sends CPU 0 a timer IPI. Short timed waits take a
 All examples pass on x86_64. On AArch64, `gcc`, `openjdk`, `pytorch` and `python` fail because the guest cannot
 map the distribution's program. Hosted AArch64 runners have no KVM, so the AArch64 VM is not in CI.
 
-## AMD SEV and SEV-SNP (`gramine-sev`)
+## AMD SEV and SEV-SNP (`saguaro-sev`)
 
 The VM PAL runs as a SEV or SEV-SNP guest. The guest kernel is launched from an IGVM file whose launch
 measurement covers the kernel, so the measurement can be recomputed from the file.
@@ -186,7 +186,7 @@ The inherited SGX backend is built and tested again. `scripts/install.sh --sgx` 
 - **Use.** [quickstart/tdx-sgx.md](Documentation/quickstart/tdx-sgx.md).
 - **Limits.** Remote attestation and the `ra-tls` examples are not covered.
 
-## Windows VBS enclaves (`gramine-vbs`)
+## Windows VBS enclaves (`saguaro-vbs`)
 
 The `vbs` PAL runs an unmodified Linux application inside a virtualization-based security enclave on Windows 11
 (ARM64 and x64). A VBS enclave cannot make memory executable at run time, so the library OS, a glibc and the
@@ -210,7 +210,7 @@ application are packed into a signed enclave image at build time. The tool build
 
 ## Graphics
 
-### Host GPU for `gramine-direct`
+### Host GPU for `saguaro-direct`
 
 Opt-in manifest keys let an unmodified OpenGL application (and, on x86_64, a Vulkan application) use the host's
 render node and X server. `glxgears`, Quake II, SuperTuxKart and Minetest reach 97 to 102 % of native speed on
@@ -218,10 +218,10 @@ Intel, 76 to 91 % on AMD, and 88 to 100 % on an NVIDIA GPU with the proprietary 
 
 - **Findings.** The NVIDIA driver needed file-descriptor translation for its ioctls; the X connection needed
   socketpair ends passed across the boundary; and a `poll` and an `mremap` defect surfaced only with a real driver.
-- **Limits.** `gramine-direct` is not a sandbox and the keys grant the application access to the GPU. Sound and
+- **Limits.** `saguaro-direct` is not a sandbox and the keys grant the application access to the GPU. Sound and
   several GPU nodes are not supported.
 
-### Redirected graphics for `gramine-vm`
+### Redirected graphics for `saguaro-vm`
 
 EGL, GBM and DRM calls of the guest are forwarded through a fixed shared page to a listener in a QEMU fork that
 uses the host GPU with stock Mesa. `glxgears`, SuperTuxKart, Quake II and Minetest run (x86_64 only). Vulkan is
@@ -245,7 +245,7 @@ Intel and 72 % on AMD.
 
 ### Windows games
 
-Under `gramine-vm`, GE-Proton's Wine runs `hello.exe` and DOOM I Enhanced (64-bit, Direct3D 11 through DXVK) to its
+Under `saguaro-vm`, GE-Proton's Wine runs `hello.exe` and DOOM I Enhanced (64-bit, Direct3D 11 through DXVK) to its
 first level, with keyboard input, in software rendering (44 to 48 frames per second). It required named Unix-socket
 nodes, `fork` without copying reservations, `SCM_RIGHTS`, a virtual `%gs`, exception events, a 512 GiB address space
 and syscall user dispatch. This is a feasibility result: Wine's GPU path and 32-bit games are open.
@@ -262,7 +262,7 @@ memory and message queues, `faccessat2`, `getresuid`, more `prctl` options, file
 
 - **Result.** LTP passes under the direct loader rose from 620 to 739 and under the VM without `fork` from 490 to
   596 (unmodified VM: 315 to 380).
-- **Matrices.** 1,327 LTP scenarios are measured natively, under `gramine-direct` and under `gramine-vm`, on x86_64
+- **Matrices.** 1,327 LTP scenarios are measured natively, under `saguaro-direct` and under `saguaro-vm`, on x86_64
   and AArch64, with a reason for every non-pass. AArch64 passes: native 944, direct 611, VM unmodified 315, VM
   no-fork 482 (x86_64: 955, 620, 315, 490). With the no-fork shim on x86_64, 477 pass, 185 fail, 250 are
   not applicable, 390 break, 23 time out and 2 panic.
@@ -288,5 +288,5 @@ memory and message queues, `faccessat2`, `getresuid`, more `prctl` options, file
 ## Inherited from upstream
 
 The manifest syntax, the TDX backend of gramine-tdx and the SGX tooling are inherited; the SGX documentation is
-unchanged except where noted above. The examples that run on SEV also run on TDX (`gramine-tdx`, built with
+unchanged except where noted above. The examples that run on SEV also run on TDX (`saguaro-tdx`, built with
 `scripts/install.sh --vm --tdx`); `exec.sh` has no TDX backend.

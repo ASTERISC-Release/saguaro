@@ -374,7 +374,7 @@ static int add_preloaded_range(uintptr_t addr, size_t size, bool is_user_reserve
 
 noreturn static void print_usage_and_exit(void) {
     log_always("USAGE: init <application> args...");
-    log_always("This is an internal interface. Use gramine-vm to launch applications.");
+    log_always("This is an internal interface. Use saguaro-vm to launch applications.");
     _PalProcessExit(1);
 }
 

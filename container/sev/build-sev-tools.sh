@@ -22,7 +22,7 @@
 # /root/sev-tools, so the build survives container recreation; create it before the container is
 # created (`mkdir ../sev-tools`). Select the QEMU with
 #   export QEMU_PATH=/root/sev-tools/prefix/bin/qemu-system-x86_64
-# (the gramine-vm convention for a QEMU outside the image) and the tools with
+# (the saguaro-vm convention for a QEMU outside the image) and the tools with
 #   export PATH=/root/sev-tools/prefix/bin:$PATH
 #
 # Sources are pinned. The QEMU tarball is verified with its upstream OpenPGP signature against the

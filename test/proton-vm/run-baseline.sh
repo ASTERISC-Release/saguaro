@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 # Game intake on the real display (PLAN.md step 0, run from the host, not the container): runs a
-# game through run-game.sh on Xwayland :0 natively or under gramine-vm with the Hyprland rule that
+# game through run-game.sh on Xwayland :0 natively or under saguaro-vm with the Hyprland rule that
 # keeps the window floating and unfocused (class steam_proton, removed afterwards), captures the
 # window with grim every 20 s and records the load with every capture (TESTING.md "Window size").
 # Usage: run-baseline.sh NAME EXE SECS [native|vm]   (EXE relative to the checkout, e.g.

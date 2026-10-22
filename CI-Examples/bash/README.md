@@ -14,8 +14,8 @@ By hand:
 
 ```sh
 make
-gramine-direct ./bash -c "ls"
-make regression         # 7 checks, prints [ Success N/7 ]; GRAMINE=gramine-vm etc. for another backend, SGX=1 for SGX
+saguaro-direct ./bash -c "ls"
+make regression         # 7 checks, prints [ Success N/7 ]; GRAMINE=saguaro-vm etc. for another backend, SGX=1 for SGX
 ```
 
 ## Notes

@@ -5,7 +5,7 @@
 # `make check` (direct, vm and sev): redis-server runs under $GRAMINE and a TCP client on the host
 # checks PING, SET, GET and 20 round trips (the checks of test/direct/test-direct.sh).
 set -uo pipefail
-: "${GRAMINE:=gramine-direct}"
+: "${GRAMINE:=saguaro-direct}"
 . ../common_tools/server-check.sh
 server_start 6379:6379 "$GRAMINE" redis-server
 python3 - <<'PYEOF'

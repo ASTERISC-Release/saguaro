@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Boot-time and physical-commit probe for graphics VMs: boots glxgears under gramine-vm,
+# Boot-time and physical-commit probe for graphics VMs: boots glxgears under saguaro-vm,
 # samples the host's shmem/hugetlb commit while the guest renders, and prints the [boot]
 # stamps (QEMU backend placement, PAL phases, guest library phases). Not a pass/fail
 # test: its numbers feed the memory-reservation experiments in dev docs: graphics/.

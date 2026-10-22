@@ -12,7 +12,7 @@
  * With the argument "--all" every probe runs, advertised or not, and only the outcome is printed
  * (to see what the CPU executes; a SIGILL there is not a failure).
  *
- * Under gramine-vm an illegal instruction at EL0 stops the whole VM instead of raising SIGILL, so
+ * Under saguaro-vm an illegal instruction at EL0 stops the whole VM instead of raising SIGILL, so
  * there the test reaching its end is the evidence.
  */
 

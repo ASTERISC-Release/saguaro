@@ -1,6 +1,6 @@
-# Quickstart: graphics under `gramine-direct` (x86_64 and AArch64)
+# Quickstart: graphics under `saguaro-direct` (x86_64 and AArch64)
 
-Under `gramine-direct` an OpenGL (and, on x86_64, Vulkan) application uses the host's GPU
+Under `saguaro-direct` an OpenGL (and, on x86_64, Vulkan) application uses the host's GPU
 directly: its render node or the NVIDIA driver's device nodes, the host's X server, and the
 host's Mesa or NVIDIA libraries. No QEMU and no preload library are involved. Details:
 `dev docs: graphics-direct/running.md` and
@@ -68,8 +68,8 @@ Vulkan programs run as they are, on the host's Vulkan drivers:
 
     cd test/vulkan
     make direct-vulkaninfo.manifest direct-vkcube.manifest
-    gramine-direct direct-vulkaninfo --summary     # lists the GPUs
-    gramine-direct direct-vkcube                   # the spinning cube, until stopped
+    saguaro-direct direct-vulkaninfo --summary     # lists the GPUs
+    saguaro-direct direct-vkcube                   # the spinning cube, until stopped
 
 ## Per-architecture notes
 

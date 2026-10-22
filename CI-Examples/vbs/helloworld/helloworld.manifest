@@ -1,4 +1,4 @@
-# Hello world in a Windows VBS enclave (dev docs: vbs-enclave/manual.md): make VBS=1; gramine-vbs helloworld
+# Hello world in a Windows VBS enclave (dev docs: vbs-enclave/manual.md): make VBS=1; saguaro-vbs helloworld
 # (vbs.build compiles the program for the enclave first: a static PIE against the vbs glibc).
 loader.entrypoint = "file:/libsysdb.so"
 libos.entrypoint = "/helloworld"

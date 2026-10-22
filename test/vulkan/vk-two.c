@@ -6,7 +6,7 @@
  * "Several graphics processes"). Starts N children (default 2, argument 1) at once, each an exec
  * of the program named by argument 2 (default /vk-headless) with the remaining arguments, and
  * reports their exit codes: every child must start or join the guest's one graphics session and
- * run to completion. Under gramine-vm with `make vm-vk-two.manifest MULTIPROCESS=1 TWO=1` the
+ * run to completion. Under saguaro-vm with `make vm-vk-two.manifest MULTIPROCESS=1 TWO=1` the
  * children are demand-paged processes with their own LibOS; before the shared session, the second
  * child spun for ever in setup_syscall_comms().
  */

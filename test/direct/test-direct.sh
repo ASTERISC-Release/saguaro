@@ -16,12 +16,12 @@
 # Environment overrides:
 #   SAGUARO_PREFIX   install prefix (default: ~/.local/saguaro)
 #   LOGDIR           per-test log directory (default: ${TMPDIR:-/tmp}/saguaro-tests)
-#   SAGUARO_RUNNER   gramine-direct (default) or gramine-vm: run the server examples (redis, memcached,
+#   SAGUARO_RUNNER   saguaro-direct (default) or saguaro-vm: run the server examples (redis, memcached,
 #                    lighttpd, nginx, rust) and `networks` under the VM PAL instead. The install must be
 #                    a --vm build; each server's guest port is forwarded to the same port on 127.0.0.1
 #                    by the VM's relay (SAGUARO_VM_INBOUND), so the clients are the ones of the direct run.
 #                    nginx gets `master_process off;` (one process is enough for the check).
-#                    The other suites run under gramine-direct in either case.
+#                    The other suites run under saguaro-direct in either case.
 #
 # The script is architecture-neutral and also runs on x86_64 for parity
 # testing, given a Gramine install built for that host (set SAGUARO_PREFIX to
@@ -118,8 +118,8 @@ else
     RUN=("${ALL_SUITES[@]}")
 fi
 
-RUNNER=${SAGUARO_RUNNER:-gramine-direct}
-case "$RUNNER" in gramine-direct|gramine-vm) ;; *) echo "ERROR: SAGUARO_RUNNER must be gramine-direct or gramine-vm"; exit 1 ;; esac
+RUNNER=${SAGUARO_RUNNER:-saguaro-direct}
+case "$RUNNER" in saguaro-direct|saguaro-vm) ;; *) echo "ERROR: SAGUARO_RUNNER must be saguaro-direct or saguaro-vm"; exit 1 ;; esac
 for bin in "$RUNNER" gramine-test gramine-manifest; do
     command -v "$bin" >/dev/null || { echo "ERROR: $bin not on PATH (set SAGUARO_PREFIX?)"; exit 1; }
 done
@@ -212,9 +212,9 @@ kill_strays() {
     pkill -9 -x loader 2>/dev/null
     pkill -9 -f "/gramine/direct/[l]oader " 2>/dev/null
     pkill -9 -f "/gramine/direct/[l]ibpal[.]so " 2>/dev/null
-    # gramine-vm: SIGKILL of the launcher leaves its QEMU running until the guest ends, and a server
+    # saguaro-vm: SIGKILL of the launcher leaves its QEMU running until the guest ends, and a server
     # guest never ends
-    [ "$RUNNER" = gramine-vm ] && pkill -9 -f "[q]emu-system-.* -gramine-args init" 2>/dev/null
+    [ "$RUNNER" = saguaro-vm ] && pkill -9 -f "[q]emu-system-.* -gramine-args init" 2>/dev/null
     sleep 0.3
 }
 trap kill_strays EXIT INT TERM
@@ -227,14 +227,14 @@ summary() {
 }
 
 # start_server <logname> <timeout-sec> <dir> <cmd...> — new session, PGID-killable
-# guest ports of the server examples; under gramine-vm the relay forwards each one to the same port
+# guest ports of the server examples; under saguaro-vm the relay forwards each one to the same port
 # on 127.0.0.1 (the container), where the suites' clients connect
 declare -A VM_INBOUND=([redis]="6379:6379" [memcached]="11211:11211" [lighttpd]="8003:8003"
                        [nginx]="8002:8002,8444:8444" [rust]="3000:3000")
 start_server() {
     local name=$1 tmo=$2 dir=$3; shift 3
     local inbound=
-    [ "$RUNNER" = gramine-vm ] && inbound=${VM_INBOUND[$name]:-}
+    [ "$RUNNER" = saguaro-vm ] && inbound=${VM_INBOUND[$name]:-}
     ( cd "$dir" && SAGUARO_VM_INBOUND="$inbound" setsid timeout -s KILL "$tmo" "$@" \
           >"$LOGDIR/$name.log" 2>&1 &
       echo $! >"$LOGDIR/$name.pid" )
@@ -292,7 +292,7 @@ libos)
 
 helloworld)
     if ! ensure_example helloworld helloworld helloworld.manifest; then summary helloworld 1 "build"; continue; fi
-    timeout -s KILL 60 sh -c "cd '$REPO/CI-Examples/helloworld' && gramine-direct helloworld" \
+    timeout -s KILL 60 sh -c "cd '$REPO/CI-Examples/helloworld' && saguaro-direct helloworld" \
         >"$LOGDIR/helloworld.log" 2>&1
     rc=$?
     grep -q "Hello, world" "$LOGDIR/helloworld.log" || rc=1
@@ -304,7 +304,7 @@ multithread)
     rc=0
     for b in thread-tls thread-rwlock thread-stress; do
         if ! ensure_example unit_tests/multi-thread "$b" "$b.manifest"; then rc=1; break; fi
-        if ! timeout -s KILL 120 sh -c "cd '$REPO/CI-Examples/unit_tests/multi-thread' && gramine-direct $b" \
+        if ! timeout -s KILL 120 sh -c "cd '$REPO/CI-Examples/unit_tests/multi-thread' && saguaro-direct $b" \
                 >"$LOGDIR/$b.log" 2>&1; then
             echo "  $b failed:"; tail -3 "$LOGDIR/$b.log"; rc=1
         fi
@@ -315,7 +315,7 @@ multithread)
 
 busybox)
     if ! ensure_example busybox busybox busybox.manifest; then summary busybox 1 "build"; continue; fi
-    timeout -s KILL 60 sh -c "cd '$REPO/CI-Examples/busybox' && gramine-direct busybox sh -c 'echo busybox-shell-works; uname -m'" \
+    timeout -s KILL 60 sh -c "cd '$REPO/CI-Examples/busybox' && saguaro-direct busybox sh -c 'echo busybox-shell-works; uname -m'" \
         >"$LOGDIR/busybox.log" 2>&1
     rc=$?
     grep -q "busybox-shell-works" "$LOGDIR/busybox.log" || rc=1
@@ -458,7 +458,7 @@ python)
     fi
     wait_port_free 8005 || echo "  warning: port 8005 still busy"
     # `make` does not render an existing manifest again, so one left by a run against another
-    # install (for example the VM examples script) would make gramine-direct load that LibOS.
+    # install (for example the VM examples script) would make saguaro-direct load that LibOS.
     if stale=$(drop_stale_manifest "$REPO/CI-Examples/python/python.manifest"); then
         echo "  python.manifest was rendered for another Gramine install or libc mode ($stale); rendering it again"
     fi
@@ -509,7 +509,7 @@ nginx)
         summary nginx 1 "build"; continue
     fi
     wait_port_free 8002 || echo "  warning: port 8002 still busy"
-    if [ "$RUNNER" = gramine-vm ]; then
+    if [ "$RUNNER" = saguaro-vm ]; then
         # the VM PAL cannot create worker processes: run nginx as a single process
         grep -q '^master_process' "$REPO/CI-Examples/nginx/install/conf/nginx-gramine.conf" \
             || sed -i '1i master_process off;' "$REPO/CI-Examples/nginx/install/conf/nginx-gramine.conf"

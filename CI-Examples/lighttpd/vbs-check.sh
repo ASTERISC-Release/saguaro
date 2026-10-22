@@ -5,7 +5,7 @@
 # `make VBS=1 check`: lighttpd in a Windows VBS enclave, checked from the Windows side (the enclave's
 # sockets are Windows sockets): pages fetched with curl.exe and compared with the packed files.
 set -euo pipefail
-: "${GRAMINE:=../../scripts/vbs/gramine-vbs}"
+: "${GRAMINE:=../../scripts/vbs/saguaro-vbs}"
 PORT=${PORT:-8003}
 ROOT=vbs-build/root/lighttpd/html
 

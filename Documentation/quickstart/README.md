@@ -8,12 +8,12 @@ applicable.
 
 | What | Intel x86_64 | AMD64 | AArch64 | RISC-V (RV64) | Guide |
 |----|----|----|----|----|----|
-| `gramine-direct`: an ordinary Linux process; hello world, regression tests | ✅ | ✅ | ✅ | ⚠️ [riscv.md](riscv.md) | [direct.md](direct.md) |
-| `gramine-vm`: a microVM under KVM; processes, VM size, networking | ✅ | ⚠️ | ⚠️ | 🛫 | [vm.md](vm.md) |
-| `gramine-direct` with the host GPU: glxgears, Quake II, Vulkan | ⚠️ | ⚠️ | ⚠️ (NVIDIA) | ❌ | [graphics-direct.md](graphics-direct.md) |
-| `gramine-vm` with graphics redirection: glxgears, Quake II (OpenGL, Vulkan) | ⚠️ | ⚠️ | 🛫 | ❌ | [graphics-vm.md](graphics-vm.md) |
-| Windows VBS enclaves (`gramine-vbs`): hello world, Python, attestation | ⚠️ (Windows 11 x64) | ⚠️ (Windows 11 x64) | ⚠️ (Windows 11 ARM64) | ➖ | [vbs-windows.md](vbs-windows.md); machine setup: [vbs-enable.md](vbs-enable.md) |
-| AMD SEV-SNP (`gramine-sev`): hello world, regression tests, attestation | ➖ | ⚠️ | ➖ | ➖ | [sev.md](sev.md) |
+| `saguaro-direct`: an ordinary Linux process; hello world, regression tests | ✅ | ✅ | ✅ | ⚠️ [riscv.md](riscv.md) | [direct.md](direct.md) |
+| `saguaro-vm`: a microVM under KVM; processes, VM size, networking | ✅ | ⚠️ | ⚠️ | 🛫 | [vm.md](vm.md) |
+| `saguaro-direct` with the host GPU: glxgears, Quake II, Vulkan | ⚠️ | ⚠️ | ⚠️ (NVIDIA) | ❌ | [graphics-direct.md](graphics-direct.md) |
+| `saguaro-vm` with graphics redirection: glxgears, Quake II (OpenGL, Vulkan) | ⚠️ | ⚠️ | 🛫 | ❌ | [graphics-vm.md](graphics-vm.md) |
+| Windows VBS enclaves (`saguaro-vbs`): hello world, Python, attestation | ⚠️ (Windows 11 x64) | ⚠️ (Windows 11 x64) | ⚠️ (Windows 11 ARM64) | ➖ | [vbs-windows.md](vbs-windows.md); machine setup: [vbs-enable.md](vbs-enable.md) |
+| AMD SEV-SNP (`saguaro-sev`): hello world, regression tests, attestation | ➖ | ⚠️ | ➖ | ➖ | [sev.md](sev.md) |
 | Intel SGX and TDX | ⚠️ | ➖ | ➖ | ➖ | [tdx-sgx.md](tdx-sgx.md) |
 
 ## The route of all guides
@@ -26,7 +26,7 @@ applicable.
   WSL on a Windows machine.
 - **Installation is `scripts/install.sh`** (there is no top-level `install.sh`). No option installs
   the direct backend into `~/.local/saguaro`; `--vm` the vm PAL into `~/.local/saguaro-vm`;
-  `--sev --graphics disabled` the vm PAL with the SEV PAL and `gramine-sev`; `--sgx` the SGX backend into
+  `--sev --graphics disabled` the vm PAL with the SEV PAL and `saguaro-sev`; `--sgx` the SGX backend into
   `~/.local/saguaro-sgx`; `--vbs` the WSL side of
   the VBS tooling and runtime. `container/run.sh` loads `~/.local/saguaro-vm/env.sh` itself when
   it exists.
@@ -49,7 +49,7 @@ applicable.
 - **An application protected from Windows itself**, on an ARM64 or x64 Windows 11 PC, in WSL (the one guide without the container):
   [vbs-windows.md](vbs-windows.md).
 - **Intel confidential computing**: [tdx-sgx.md](tdx-sgx.md). SGX: the container route,
-  `scripts/install.sh --sgx`, `./exec.sh --sgx`. TDX: `scripts/install.sh --vm --tdx` and `gramine-tdx`; the
+  `scripts/install.sh --sgx`, `./exec.sh --sgx`. TDX: `scripts/install.sh --vm --tdx` and `saguaro-tdx`; the
   examples that run on SEV also run on TDX.
 - **AMD confidential computing** (SEV-SNP, with attestation): [sev.md](sev.md). It needs an
   EPYC host with SEV-SNP and access to `/dev/sev`.

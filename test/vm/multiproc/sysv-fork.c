@@ -2,7 +2,7 @@
 /* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /*
- * System V IPC between a parent and its forked children (gramine-vm with
+ * System V IPC between a parent and its forked children (saguaro-vm with
  * sys.experimental__multiprocess, or natively): shared memory, message queues and semaphores by key
  * and by IPC_PRIVATE identifier, both directions, IPC_RMID while attached and while another process
  * waits, SEM_UNDO at exit, and no segment file left behind. Prints one "PASS"/"FAIL" line per check

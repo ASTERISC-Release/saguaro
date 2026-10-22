@@ -9,7 +9,7 @@
  * `ARCH_SET_FS` with the current value stands in), and a plain TLS load through `%fs`.
  * Usage: gsbench [iterations] [-g] (default 1,000,000; -g: own %gs first with
  * arch_prctl(ARCH_SET_GS), to measure the paths of a thread that owns %gs). Run natively, under
- * gramine-direct and gramine-vm; the `wrgsbase` row needs FSGSBASE (skipped when it faults).
+ * saguaro-direct and saguaro-vm; the `wrgsbase` row needs FSGSBASE (skipped when it faults).
  */
 
 #define _GNU_SOURCE

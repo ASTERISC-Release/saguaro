@@ -34,7 +34,7 @@ def ltp_test_command(command):
 
 def build_argv(command, loader, binary):
     """Build an argv for a test, including the occasional LTP shell pipeline."""
-    loader_program = {"direct": "gramine-direct", "vm": os.environ.get("SAGUARO_VM_LAUNCHER", "gramine-vm")}.get(loader)
+    loader_program = {"direct": "saguaro-direct", "vm": os.environ.get("SAGUARO_VM_LAUNCHER", "saguaro-vm")}.get(loader)
     if "|" not in command:
         if loader == "native":
             return [str(binary), *command[1:]]
@@ -310,7 +310,7 @@ MULTIPROCESS_RE = re.compile(r"^\s*experimental__multiprocess\s*=\s*true\s*$", r
 
 def set_manifest_shm(manifests, kind):
     """Give the manifests the /dev/shm mount `kind` needs: "tmpfs" for the VM PAL (it has no
-    dev: stream), "host" for gramine-direct (LTP's library shares its result counters with the
+    dev: stream), "host" for saguaro-direct (LTP's library shares its result counters with the
     forked test process through /dev/shm; a LibOS tmpfs is private to one process, so the counts
     of a forking test would be lost). "vm" picks per manifest: "host" when the manifest enables
     the VM PAL's experimental multiprocess support (`sys.experimental__multiprocess`, see
@@ -398,7 +398,7 @@ def run_one(name, command, args, per_test_timeout, reserved_cid=None):
         remove_guest_files(cid)
     else:
         # Processes the test left in its process group (the group outlives its leader): forked
-        # gramine-direct PAL children survived the SIGTERM of a timeout and stayed forever (182 of
+        # saguaro-direct PAL children survived the SIGTERM of a timeout and stayed forever (182 of
         # them after the AArch64 direct run, from futex_wake03, shmctl01, kill08, kill06, signal01).
         try:
             os.killpg(proc.pid, signal.SIGKILL)

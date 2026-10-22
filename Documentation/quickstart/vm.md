@@ -1,6 +1,6 @@
-# Quickstart: Micro-Virtual Machine (`gramine-vm`)
+# Quickstart: Micro-Virtual Machine (`saguaro-vm`)
 
-`gramine-vm` boots the library OS, a small kernel and the application as a unikernel in a QEMU
+`saguaro-vm` boots the library OS, a small kernel and the application as a unikernel in a QEMU
 guest (a *microVM*): the application no longer runs on the host's kernel.
 
 ## Status
@@ -9,8 +9,8 @@ Symbols as in [README.md](../../README.md):
 
 | Configuration | Intel x86_64 | AMD64 | AArch64 | RISC-V (RV64) |
 |----|----|----|----|----|
-| `gramine-vm` | ✅ | ⚠️ | ⚠️ | 🛫 |
-| `gramine-vm` with redirected graphics | ⚠️ | ⚠️ | 🛫 | ❌ |
+| `saguaro-vm` | ✅ | ⚠️ | ⚠️ | 🛫 |
+| `saguaro-vm` with redirected graphics | ⚠️ | ⚠️ | 🛫 | ❌ |
 
 ## Requirements
 
@@ -37,14 +37,14 @@ On x86_64 `--vm` builds the direct PAL too, and the graphics paths ([graphics-vm
 `--graphics disabled` leaves them out. On AArch64 it builds only the vm PAL. The vm install uses its
 own build directory (`build-vm-<arch>`) and prefix, so it never overwrites a direct install.
 
-`container/run.sh` loads `~/.local/saguaro-vm/env.sh` itself when it exists, so `gramine-vm` is on
+`container/run.sh` loads `~/.local/saguaro-vm/env.sh` itself when it exists, so `saguaro-vm` is on
 `PATH` in every shell and every one-shot command of the container. A shell that was not opened by
 `container/run.sh` sources it by hand: `. ~/.local/saguaro-vm/env.sh`.
 
 # 2. Example: Hello World
 
 Run in the container, from the directory of the example (`exec.sh` builds against the vm install,
-so that the manifest names its `libsysdb.so`, and runs the program under `gramine-vm`):
+so that the manifest names its `libsysdb.so`, and runs the program under `saguaro-vm`):
 
     cd CI-Examples/helloworld
     ./exec.sh --vm
@@ -58,7 +58,7 @@ The steps by hand:
 
     cd CI-Examples/helloworld
     make
-    gramine-vm helloworld
+    saguaro-vm helloworld
 
 Every other example runs the same way (`./exec.sh --vm` in its directory). The recorded results are
 in [RESULTS.md](../../CI-Examples/RESULTS.md): all examples pass on Intel
@@ -67,7 +67,7 @@ file:/usr/bin/<program>`). Refer to each example folder for further per-applicat
 
 # 3. Regression Tests
 
-    test/vm/test-vm.sh libos              # the LibOS suite under gramine-vm, about 2 to 3 minutes
+    test/vm/test-vm.sh libos              # the LibOS suite under saguaro-vm, about 2 to 3 minutes
 
 It ends with a pytest summary (failures with a known cause are marked xfail by
 `libos/test/regression/vm_skip.toml`) and `ALL VM SUITES PASSED`. `test/vm/test-vm.sh --help`

@@ -1,6 +1,6 @@
 #!/bin/bash
 # SPDX-License-Identifier: LGPL-3.0-or-later
-# Multi-process applications under load in gramine-vm (sys.experimental__multiprocess), run in the
+# Multi-process applications under load in saguaro-vm (sys.experimental__multiprocess), run in the
 # container after `scripts/install.sh --vm` and after the examples were built once (test-direct.sh):
 #   nginx   master + 4 workers; N concurrent clients fetch a 10 KiB page, each body compared
 #   redis   C clients write keys while BGSAVE forks a saving child R times; checks every save
@@ -21,7 +21,7 @@ nginx_load() {
     sed -i '/^master_process off;$/d' install/conf/nginx-gramine.conf
     sed -i 's/^enable_sigterm_injection = true$/enable_sigterm_injection = true\nexperimental__multiprocess = true/' nginx.manifest
     SAGUARO_CPU_NUM=$CPUS SAGUARO_VM_INBOUND="8002:8002,8444:8444" setsid timeout -s KILL 300 \
-        gramine-vm nginx > /tmp/nginx-load.log 2>&1 &
+        saguaro-vm nginx > /tmp/nginx-load.log 2>&1 &
     local pid=$!
     python3 - "${REQUESTS:-2000}" "${CLIENTS:-16}" <<'PY'
 import concurrent.futures, sys, time, urllib.request
@@ -59,7 +59,7 @@ redis_load() {
     sed -i 's/^enable_sigterm_injection = true$/enable_sigterm_injection = true\nexperimental__multiprocess = true/' redis-server.manifest
     rm -f dump.rdb
     SAGUARO_CPU_NUM=$CPUS SAGUARO_VM_INBOUND="6379:6379" setsid timeout -s KILL 300 \
-        gramine-vm redis-server > /tmp/redis-load.log 2>&1 &
+        saguaro-vm redis-server > /tmp/redis-load.log 2>&1 &
     local pid=$!
     python3 - "${CLIENTS:-4}" "${KEYS:-5000}" "${SAVES:-5}" <<'PY'
 import socket, sys, threading, time
@@ -125,7 +125,7 @@ bash_load() {
     cp "$HERE"/manifest.template .
     gramine-manifest -Darch_libdir=/lib/x86_64-linux-gnu -Dentry=/usr/bin/bash -Dprobedir="$work" \
         manifest.template bash.manifest 2>/dev/null
-    # a script file, so that the pipeline needs no quoting through the gramine-vm command line
+    # a script file, so that the pipeline needs no quoting through the saguaro-vm command line
     mkdir -p tmp
     cat > pipeline.sh <<'SH'
 [ -d /probe/tmp ] && export TMPDIR=/probe/tmp   # in the guest: the probe manifest has no /tmp
@@ -133,7 +133,7 @@ seq 1 200000 | awk '{print $1 % 977}' | sort -n | uniq -c | sort -rn | head -3 |
 SH
     local want got
     want=$(bash pipeline.sh)
-    got=$(SAGUARO_CPU_NUM=$CPUS timeout -s KILL 300 gramine-vm bash /probe/pipeline.sh 2>/dev/null | grep -- ' -$')
+    got=$(SAGUARO_CPU_NUM=$CPUS timeout -s KILL 300 saguaro-vm bash /probe/pipeline.sh 2>/dev/null | grep -- ' -$')
     [ "$got" = "$want" ] && echo "bash: pipeline of 6 processes over 200,000 lines: identical" \
                          || echo "bash: pipeline output differs: '$got' vs '$want'"
 }

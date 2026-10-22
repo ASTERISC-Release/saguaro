@@ -16,7 +16,7 @@ fs.mounts = [
   { uri = "file:/usr", path = "/usr" },
 ]
 
-# If using 64G or greater enclave sizes, the JVM flag `-Xmx8G` can be omitted in gramine-sgx.
+# If using 64G or greater enclave sizes, the JVM flag `-Xmx8G` can be omitted in saguaro-sgx.
 sgx.enclave_size = "16G"
 
 # SGX needs minimum 64 threads for loading OpenJDK runtime.

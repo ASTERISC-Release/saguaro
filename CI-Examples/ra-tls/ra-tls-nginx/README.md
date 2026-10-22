@@ -10,7 +10,7 @@ An SGX machine with Gramine installed for SGX ([`Documentation/quickstart/tdx-sg
 
 ```sh
 make                       # RA_TYPE=dcap by default
-gramine-sgx nginx          # the server, on https://localhost:8000
+saguaro-sgx nginx          # the server, on https://localhost:8000
 curl --insecure https://localhost:8000
 make check                 # runs run.sh: starts the enclave, makes a request, stops it
 ```

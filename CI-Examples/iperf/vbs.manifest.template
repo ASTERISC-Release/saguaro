@@ -9,7 +9,7 @@ loader.entrypoint = "file:/libsysdb.so"
 libos.entrypoint = "/iperf3"
 loader.log_level = "{{ log_level }}"
 
-# The arguments come from the command line (`gramine-vbs iperf3 -s -p 5201 -B 127.0.0.1`, or `-c` for
+# The arguments come from the command line (`saguaro-vbs iperf3 -s -p 5201 -B 127.0.0.1`, or `-c` for
 # a client in a second enclave of the same image). Use the default mode of iperf3: one process and
 # its threads (no -D: a daemon forks). The enclave's sockets are the Windows host's: listen on the
 # loopback only.

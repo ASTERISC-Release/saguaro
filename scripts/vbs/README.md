@@ -13,8 +13,8 @@ image holds two kinds of code:
   machine (the repository's build container), and the manifest, all placed into the image by
   `pack.py`.
 
-`gramine-vbs` (in this folder; `dev docs: vbs-enclave/manual.md`) does all of the steps below from a
-manifest (`gramine-vbs build app.manifest`, which `make VBS=1` calls); `gramine-vbs.ps1` is its Windows-side runner. The steps by
+`saguaro-vbs` (in this folder; `dev docs: vbs-enclave/manual.md`) does all of the steps below from a
+manifest (`saguaro-vbs build app.manifest`, which `make VBS=1` calls); `saguaro-vbs.ps1` is its Windows-side runner. The steps by
 hand (the commands used for the phase-2 hello world):
 
 1. **Linux ELF objects** (aarch64 build container):
@@ -54,15 +54,15 @@ hand (the commands used for the phase-2 hello world):
 
 **On one Windows machine** (no second Linux machine; `dev docs: vbs-enclave/PLAN-windows-build.md`,
 `PLAN-make-vbs.md`): everything runs in a WSL2 Ubuntu distribution of the machine's architecture,
-except linking, signing and running, which `gramine-vbs` reaches through `powershell.exe`:
+except linking, signing and running, which `saguaro-vbs` reaches through `powershell.exe`:
 
-    scripts/install.sh --vbs          # once: user-level packages, gramine-vbs on PATH, runtime, Windows check
+    scripts/install.sh --vbs          # once: user-level packages, saguaro-vbs on PATH, runtime, Windows check
     cd CI-Examples/helloworld
     make VBS=1                        # build and package: helloworld.manifest.vbs, helloworld.vbs/helloworld.dll
-    gramine-vbs helloworld            # run it (never builds; says to run make VBS=1 if the package is missing)
+    saguaro-vbs helloworld            # run it (never builds; says to run make VBS=1 if the package is missing)
 
-`gramine-vbs` (Python, this folder) does steps 1 to 4 and calls `gramine-vbs.ps1` for step 5.
-`gramine-vbs.ps1` (`gramine-vbs.cmd` runs it from cmd or PowerShell) is the Windows-side runner:
+`saguaro-vbs` (Python, this folder) does steps 1 to 4 and calls `saguaro-vbs.ps1` for step 5.
+`saguaro-vbs.ps1` (`saguaro-vbs.cmd` runs it from cmd or PowerShell) is the Windows-side runner:
 `run`, `sign`, `verify`, `check` (the Windows side) and `setup` (Windows and WSL checks, user-level WSL
 packages); it does not build. `install-vbs.sh` is `install.sh --vbs`. `build-enclave.ps1` does steps 3 to
 5 for a pack made by hand in WSL (`wsl-build.sh objs`: the objects with clang inside WSL, against

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
 /*
  * xsend-key: sends a key press and release to ONE window, the parent of the window named NAME
- * (the gramine-vm listener's presentation child is reparented into the application's window), with
+ * (the saguaro-vm listener's presentation child is reparented into the application's window), with
  * XSendEvent; nothing else on the desktop receives it (dev docs: vulkan/, phase 2: input
  * check for vkcube, which quits on Escape).
  *

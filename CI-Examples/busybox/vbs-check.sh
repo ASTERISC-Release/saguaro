@@ -4,9 +4,9 @@
 #
 # `make VBS=1 check`: single BusyBox applets, one enclave each: echo, cat and ls of a packed file,
 # grep, a shell with builtins only, and wget over plain HTTP from a server that runs natively in WSL
-# on 127.0.0.1 (Windows forwards its loopback to WSL). GRAMINE is gramine-vbs.
+# on 127.0.0.1 (Windows forwards its loopback to WSL). GRAMINE is saguaro-vbs.
 set -euo pipefail
-: "${GRAMINE:=../../scripts/vbs/gramine-vbs}"
+: "${GRAMINE:=../../scripts/vbs/saguaro-vbs}"
 PORT=${BUSYBOX_PORT:-19112}
 
 expect() {  # expect "<wanted output>" applet args...

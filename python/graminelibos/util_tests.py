@@ -247,8 +247,8 @@ def run_ninja(args):
 
 
 def exec_gramine(sgx, name, args):
-    prog = ('gramine-sgx' if sgx else
-            'gramine-vm' if os.environ.get('SAGUARO_VM') == '1' else 'gramine-direct')
+    prog = ('saguaro-sgx' if sgx else
+            'saguaro-vm' if os.environ.get('SAGUARO_VM') == '1' else 'saguaro-direct')
     argv = [prog, name] + list(args)
     print(' '.join(argv))
     os.execvp(prog, argv)

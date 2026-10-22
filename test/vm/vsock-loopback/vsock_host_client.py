@@ -73,7 +73,7 @@ def find_guest_cid(app, timeout=120):
 
 def find_child_guest_cid(app, ancestor_pid, timeout=120):
     """
-    CID of the QEMU that is a descendant of `ancestor_pid` (the `gramine-vm` this suite started),
+    CID of the QEMU that is a descendant of `ancestor_pid` (the `saguaro-vm` this suite started),
     which is unambiguous even when other VMs of the same application run in parallel.
     """
     def ppid_of(pid):
@@ -180,7 +180,7 @@ def main():
     ap.add_argument('--cid', type=int)
     ap.add_argument('--app', default='vsock_echo_server')
     ap.add_argument('--vm-pid', type=int,
-                    help='PID of the gramine-vm launcher whose QEMU child to use (unambiguous'
+                    help='PID of the saguaro-vm launcher whose QEMU child to use (unambiguous'
                          ' when several VMs run in parallel)')
     ap.add_argument('--port', type=int, default=7000)
     ap.add_argument('--tcp', type=int,

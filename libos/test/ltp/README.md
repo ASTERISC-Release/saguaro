@@ -48,7 +48,7 @@ re-sign the manifest using `gramine-test build`.
 `manifest.template`, but you can edit the generated manifests anyway. If
 necessary, `gramine-test build -f` will rebuild the manifests from scratch).
 
-You can also use GDB: `GDB=1 gramine-{direct|sgx} <TEST_BINARY>`. You should
+You can also use GDB: `GDB=1 saguaro-{direct|sgx} <TEST_BINARY>`. You should
 compile Gramine in debug mode so that you can see the symbols inside Gramine.
 
 ## `ltp.cfg`

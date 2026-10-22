@@ -28,7 +28,7 @@ int main(int argc, char** argv) {
         return 2;
     }
 
-    static const char request[] = "gramine-vm-udp-echo";
+    static const char request[] = "saguaro-vm-udp-echo";
     if (sendto(fd, request, sizeof(request), 0, (struct sockaddr*)&target, sizeof(target)) !=
             (ssize_t)sizeof(request)) {
         perror("sendto");

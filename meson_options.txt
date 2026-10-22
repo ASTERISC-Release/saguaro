@@ -1,17 +1,17 @@
 # TODO: after deprecating 18.04/bionic, change these to type: 'feature'
 option('direct', type: 'combo', choices: ['disabled', 'enabled'],
-    description: 'Build and install gramine-direct (aka Linux aka nonsgx)')
+    description: 'Build and install saguaro-direct (aka Linux aka nonsgx)')
 option('sgx', type: 'combo', choices: ['disabled', 'enabled'],
-    description: 'Build and install gramine-sgx (aka Linux-SGX)')
+    description: 'Build and install saguaro-sgx (aka Linux-SGX)')
 option('vm', type: 'combo', choices: ['disabled', 'enabled'],
       description: 'Build Virtual Machine (VM, currently only x86-64) PAL')
 option('tdx', type: 'combo', choices: ['disabled', 'enabled'],
       description: 'Build Trusted Domain Extensions (aka TDX) PAL')
 option('sev', type: 'combo', choices: ['disabled', 'enabled'],
-      description: 'Also build the AMD SEV / SEV-SNP variant of the VM PAL and gramine-sev ' +
+      description: 'Also build the AMD SEV / SEV-SNP variant of the VM PAL and saguaro-sev ' +
                    '(x86-64; needs -Dvm=enabled; the vm PAL itself is unchanged)')
 option('sev_qemu', type: 'string', value: '',
-      description: 'QEMU binary that gramine-sev runs when QEMU_PATH is not set (it needs ' +
+      description: 'QEMU binary that saguaro-sev runs when QEMU_PATH is not set (it needs ' +
                    'sev-guest/sev-snp-guest and igvm-cfg, e.g. container/sev/build-sev-tools.sh)')
 option('skeleton', type: 'combo', choices: ['disabled', 'enabled'],
     description: 'Build skeleton PAL')

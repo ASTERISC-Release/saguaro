@@ -156,7 +156,7 @@ int main(int argc, char** argv) {
     mbedtls_entropy_init(&g_entropy);
     mbedtls_ctr_drbg_init(&g_drbg);
     int ret = mbedtls_ctr_drbg_seed(&g_drbg, mbedtls_entropy_func, &g_entropy,
-                                    (const unsigned char*)"gramine-vbs-tls-echo", 20);
+                                    (const unsigned char*)"saguaro-vbs-tls-echo", 20);
     if (ret)
         die_mbed("ctr_drbg_seed", ret);
     double t_seed = now_ms();

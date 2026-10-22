@@ -1,6 +1,6 @@
-# Quickstart: Containerized Userspace (`gramine-direct`)
+# Quickstart: Containerized Userspace (`saguaro-direct`)
 
-`gramine-direct` runs an unmodified Linux application as a container-like Linux process on top
+`saguaro-direct` runs an unmodified Linux application as a container-like Linux process on top
 of the Saguaro LibOS.
 
 All guides use one route: the development container of `container/run.sh`. Building and installing
@@ -12,8 +12,8 @@ Symbols as in [README.md](../../README.md):
 
 | Configuration | Intel x86_64 | AMD64 | AArch64 | RISC-V (RV64) |
 |----|----|----|----|----|
-| `gramine-direct` | ✅ | ✅ | ✅ | ⚠️ |
-| `gramine-direct` with redirected graphics | ⚠️ | ⚠️ | ⚠️ | ❌ |
+| `saguaro-direct` | ✅ | ✅ | ✅ | ⚠️ |
+| `saguaro-direct` with redirected graphics | ⚠️ | ⚠️ | ⚠️ | ❌ |
 
 ## Requirements
 
@@ -46,7 +46,7 @@ The `~` is the home directory of the container's root user; it stays when the co
 stopped and is discarded when the container is recreated (the builds inside the repository
 survive). Re-running the script is cheap: meson and ninja rebuild only what changed.
 `container/run.sh` loads only the environment of the vm install (`~/.local/saguaro-vm/env.sh`), so
-`gramine-direct` of this install is not on `PATH` by itself: `. ~/.local/saguaro/env.sh` sets `PATH` and
+`saguaro-direct` of this install is not on `PATH` by itself: `. ~/.local/saguaro/env.sh` sets `PATH` and
 `PYTHONPATH` in the current shell, and `scripts/install.sh --add-to-profile` does it for every new shell.
 
 # 2. Example: Hello World
@@ -63,12 +63,12 @@ lists the backends and whether this host can run each. The script prints each co
 pass. The run ends with the output `Hello, world`.
 
 The same steps by hand, which show what `exec.sh` does (the program is built, `helloworld.manifest`
-is rendered from its template, and `gramine-direct` runs the program on the LibOS):
+is rendered from its template, and `saguaro-direct` runs the program on the LibOS):
 
-    . ~/.local/saguaro/env.sh             # gramine-direct and the tools on PATH
+    . ~/.local/saguaro/env.sh             # saguaro-direct and the tools on PATH
     cd CI-Examples/helloworld
     make                                  # builds the program and renders helloworld.manifest
-    gramine-direct helloworld
+    saguaro-direct helloworld
 
 The output is `Hello, world`. The other examples run the same way (`./exec.sh --direct` in their
 directory); the recorded results are in
@@ -88,7 +88,7 @@ Each suite ends with a `PASS` or `FAIL` line. Logs are stored in `/tmp/saguaro-t
 
 # 4. Troubleshooting
 
-- `gramine-direct: command not found`: run `. ~/.local/saguaro/env.sh` in that shell
+- `saguaro-direct: command not found`: run `. ~/.local/saguaro/env.sh` in that shell
   (`container/run.sh` loads only the vm install's environment), or `scripts/install.sh --add-to-profile` once.
 - `exec.sh` reports that a backend is not installed: run `scripts/install.sh` (direct) or
   `scripts/install.sh --vm` (vm) in the container, as in section 1.

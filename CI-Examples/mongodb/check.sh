@@ -6,7 +6,7 @@
 # install-prereqs.sh) runs on the host against port 27017: the example's insert/fetch, a bulk insert
 # with indexes and an aggregation, and eight concurrent clients.
 set -uo pipefail
-: "${GRAMINE:=gramine-direct}"
+: "${GRAMINE:=saguaro-direct}"
 . ../common_tools/server-check.sh
 python3 -c 'import pymongo' 2>/dev/null || { echo "FAIL: pymongo is missing (./install-prereqs.sh)"; exit 1; }
 rm -rf data/db/*; mkdir -p data/db

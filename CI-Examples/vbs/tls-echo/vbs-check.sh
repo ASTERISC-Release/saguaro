@@ -3,10 +3,10 @@
 # SPDX-License-Identifier: BSD-3-Clause
 #
 # `make check`: the TLS echo server in a VBS enclave and the Windows client that verifies its
-# attestation before it sends anything (gramine-vbs tls-client). The positive case, then the
+# attestation before it sends anything (saguaro-vbs tls-client). The positive case, then the
 # negative ones: each must be refused (exit 1, "REFUSED").
 set -uo pipefail
-: "${GRAMINE:=../../../scripts/vbs/gramine-vbs}"
+: "${GRAMINE:=../../../scripts/vbs/saguaro-vbs}"
 PORT=${TLS_PORT:-4433}
 FAMILY=6772616d696e652d7662732d746c7300
 IMAGE=746c732d6563686f0000000000000001

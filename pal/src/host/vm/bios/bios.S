@@ -8,7 +8,7 @@
     .section .rodata
 #ifdef BIOS_SEV_IGVM
 // The SEV variant of this reset stub is not loaded by `-device loader` but placed into the IGVM
-// file of gramine-sev (pal/src/host/vm/sev/gramine-sev-igvm.py), which also loads the PAL and
+// file of saguaro-sev (pal/src/host/vm/sev/saguaro-sev-igvm.py), which also loads the PAL and
 // writes the PAL's entry point into the slot after this tag: fw_cfg has no kernel entry then.
     .align  8
     .ascii  "GSEVPALE"

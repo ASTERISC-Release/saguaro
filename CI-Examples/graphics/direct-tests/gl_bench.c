@@ -5,7 +5,7 @@
  * gl_bench: offscreen GPU throughput without presentation (EGL on GBM, surfaceless GLES2):
  * draws full-screen quads with a moderately heavy fragment shader into a 1920x1080 renderbuffer,
  * many draws per frame, glFinish() per frame. Separates the GPU work from the X presentation
- * path when comparing native and gramine-direct runs.
+ * path when comparing native and saguaro-direct runs.
  * Usage: gl_bench [/dev/dri/renderD128] [frames] [draws per frame]
  */
 

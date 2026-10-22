@@ -1,10 +1,10 @@
-# Vulkan under `gramine-direct` and `gramine-vm`
+# Vulkan under `saguaro-direct` and `saguaro-vm`
 
 > All numbers on this page are experimental measurements from one machine, taken during development; they are not benchmarks.
 
 **What it does.** Vulkan applications (Mesa's `anv` on Intel, `radv` on AMD) run under both
-routes. Under `gramine-direct` they need nothing beyond the direct route's keys. Under
-`gramine-vm` the device path goes through the forwarded DRM ioctls and presentation goes through
+routes. Under `saguaro-direct` they need nothing beyond the direct route's keys. Under
+`saguaro-vm` the device path goes through the forwarded DRM ioctls and presentation goes through
 a layer, because Mesa's X11 window-system integration cannot pass dma-buf fds over the vsock relay.
 
 **How it works.** *Device path:* the ioctl forwarding was made good enough for a Vulkan driver:

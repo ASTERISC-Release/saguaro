@@ -4,7 +4,7 @@
 # BusyBox manifest for a Windows VBS enclave (`make VBS=1`, dev docs: vbs-enclave/manual.md): the counterpart of
 # busybox.manifest.template. BusyBox is built with the vbs gcc (vbs-build/busybox, a dynamic PIE) and
 # packed with the glibc libraries it needs. One applet per enclave: the arguments come from the command
-# line (`gramine-vbs busybox cat /etc/hosts`); a VBS enclave has one process, so a shell pipeline or an
+# line (`saguaro-vbs busybox cat /etc/hosts`); a VBS enclave has one process, so a shell pipeline or an
 # applet that forks (httpd, xargs, find -exec) does not work in it.
 
 loader.entrypoint = "file:/libsysdb.so"

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
 /*
  * vk-headless: a window-less Vulkan test that walks the device path step by step, so that a run
- * under gramine-direct or gramine-vm shows how far it gets. Every step prints one line
+ * under saguaro-direct or saguaro-vm shows how far it gets. Every step prints one line
  * "STEP <name>: PASS|FAIL|SKIP <detail>"; the exit status is the number of failed steps.
  *
  * Steps: instance, device selection, logical device (Vulkan 1.3 features: timeline semaphores,

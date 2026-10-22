@@ -3,7 +3,7 @@
 
 /*
  * The dev-libos-misc system calls seen from a forked child (integration probe for the VM PAL's
- * experimental multiprocess support; also runs natively and under gramine-direct for comparison).
+ * experimental multiprocess support; also runs natively and under saguaro-direct for comparison).
  * Prints one line per check, "name: ok" or "name: <what happened>", and "misc-fork done".
  * Usage: misc-fork <scratch-dir>
  */

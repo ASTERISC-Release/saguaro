@@ -52,7 +52,7 @@ RUN apt-get update && \
       python3-tomli python3-tomli-w python3-voluptuous python3-pyelftools \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Test layer: the libos regression suite (`gramine-test` + pytest) run under `gramine-vm`
+# Test layer: the libos regression suite (`gramine-test` + pytest) run under `saguaro-vm`
 # (-Dtests=enabled -Dtests_pie=true; see dev docs: vm.md). procps/file/iproute2 are
 # used by individual tests.
 RUN apt-get update && \

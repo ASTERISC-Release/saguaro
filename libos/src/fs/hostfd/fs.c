@@ -2,7 +2,7 @@
 /* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /*
- * Host file descriptors without a path, and raw device ioctls (gramine-direct only).
+ * Host file descriptors without a path, and raw device ioctls (saguaro-direct only).
  *
  * With `sys.insecure__allow_raw_device_ioctl`, the Linux PAL passes device ioctls to the host with
  * the application's argument (see `_PalDeviceIoControl()`). Some ioctls carry file descriptors

@@ -21,12 +21,12 @@ By hand, in the directory of a test:
 
 ```sh
 make                    # make SGX=1 for SGX
-gramine-direct thread-tls       # multi-thread/; likewise thread-rwlock, thread-stress
-gramine-direct helloworld       # mremap/
-gramine-direct align_test       # align_test/
+saguaro-direct thread-tls       # multi-thread/; likewise thread-rwlock, thread-stress
+saguaro-direct helloworld       # mremap/
+saguaro-direct align_test       # align_test/
 ```
 
-The `multi-thread` and `networks` suites also run from the repository root: `test/direct/test-direct.sh multithread` and `test/direct/test-direct.sh networks` (`SAGUARO_RUNNER=gramine-vm` for the VM).
+The `multi-thread` and `networks` suites also run from the repository root: `test/direct/test-direct.sh multithread` and `test/direct/test-direct.sh networks` (`SAGUARO_RUNNER=saguaro-vm` for the VM).
 
 ## Notes
 

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (C) 2026 The ASTERISC Research Lab
 
-# Yamagi Quake II under gramine-vm with the Tirith graphics redirection (x86_64).
+# Yamagi Quake II under saguaro-vm with the Tirith graphics redirection (x86_64).
 
 libos.entrypoint = "/quake2_bin/release/quake2"
 

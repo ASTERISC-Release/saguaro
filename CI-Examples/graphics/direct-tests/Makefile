@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (C) 2026 The ASTERISC Research Lab
 
-# Test programs for graphics under gramine-direct (x86_64), see
-# dev docs: graphics-direct/. `make check` runs each natively and under gramine-direct.
+# Test programs for graphics under saguaro-direct (x86_64), see
+# dev docs: graphics-direct/. `make check` runs each natively and under saguaro-direct.
 
 PROGRAMS = drm_info gbm_map egl_readback ioctl_bench x_roundtrip gl_bench egl_surfaceless x_input
 NODE ?= /dev/dri/renderD128
@@ -64,12 +64,12 @@ egl_readback: egl_readback.c
 check: all
 	@for p in $(filter-out ioctl_bench x_roundtrip gl_bench egl_surfaceless x_input,$(PROGRAMS)); do \
 		echo "== $$p native"; ./$$p $(NODE) || exit 1; \
-		echo "== $$p gramine-direct"; gramine-direct $$p $(NODE) || exit 1; \
+		echo "== $$p saguaro-direct"; saguaro-direct $$p $(NODE) || exit 1; \
 	done
 
 .PHONY: eglinfo
 eglinfo: eglinfo.manifest
-	gramine-direct eglinfo -B
+	saguaro-direct eglinfo -B
 
 eglinfo.manifest: direct-tests.manifest.template FORCE
 	gramine-manifest -Dlog_level=$(SAGUARO_LOG_LEVEL) -Darch_libdir=$(ARCH_LIBDIR) -Dnvidia=$(NVIDIA) -Ddisplay=$(X_DISPLAY_NUM) -Dentrypoint=/usr/bin/eglinfo $< $@

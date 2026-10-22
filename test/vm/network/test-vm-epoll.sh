@@ -27,7 +27,7 @@ export PATH=$PREFIX/bin:$PATH
 export PYTHONPATH=$(ls -d "$PREFIX"/lib/python3*/site-packages 2>/dev/null | head -1)
 export SAGUARO_CPU_NUM=${SAGUARO_CPU_NUM:-2}
 
-command -v gramine-vm >/dev/null || { echo "gramine-vm not on PATH (prefix $PREFIX?)" >&2; exit 1; }
+command -v saguaro-vm >/dev/null || { echo "saguaro-vm not on PATH (prefix $PREFIX?)" >&2; exit 1; }
 [ -e /dev/vhost-vsock ] || { echo "no /dev/vhost-vsock; this test needs it" >&2; exit 1; }
 if [ "$TRANSPORT" = tcp ]; then
 python3 - "$HOST_PORT" <<'PY' || { echo "host port $HOST_PORT is busy" >&2; exit 1; }
@@ -48,18 +48,18 @@ make -C "$DIR" -s || exit 1
 (cd "$DIR" && SAGUARO_VM=1 gramine-test build -f vsock_echo_server) >"$OUT/manifest.log" 2>&1 || {
     cat "$OUT/manifest.log"; echo "manifest build failed" >&2; exit 1; }
 
-VM_LOG=$OUT/gramine-vm.log
+VM_LOG=$OUT/saguaro-vm.log
 rm -f "$VM_LOG"
 echo "== vsock-epoll: starting ${SAGUARO_CPU_NUM}-vCPU guest in $SERVER_MODE mode, $REQUESTS synchronous requests"
 cd "$DIR"
 if [ "$TRANSPORT" = tcp ]; then
     SAGUARO_VM_INBOUND="$GUEST_PORT:$HOST_PORT" SAGUARO_VM_RELAY_DEBUG=1 \
         SAGUARO_VM_CONSOLE_LOG=$VM_LOG \
-        gramine-vm vsock_echo_server "$GUEST_PORT" "$SERVER_MODE" "$REQUESTS" \
-        >"$OUT/gramine-vm.out" 2>&1 &
+        saguaro-vm vsock_echo_server "$GUEST_PORT" "$SERVER_MODE" "$REQUESTS" \
+        >"$OUT/saguaro-vm.out" 2>&1 &
 else
-    SAGUARO_VM_CONSOLE_LOG=$VM_LOG gramine-vm vsock_echo_server "$GUEST_PORT" "$SERVER_MODE" \
-        "$REQUESTS" >"$OUT/gramine-vm.out" 2>&1 &
+    SAGUARO_VM_CONSOLE_LOG=$VM_LOG saguaro-vm vsock_echo_server "$GUEST_PORT" "$SERVER_MODE" \
+        "$REQUESTS" >"$OUT/saguaro-vm.out" 2>&1 &
 fi
 VM_PID=$!
 
@@ -101,11 +101,11 @@ PY
 trap kill_guest EXIT INT TERM
 
 for _ in $(seq 400); do
-    grep -q "LISTENING" "$OUT/gramine-vm.out" 2>/dev/null && break
-    kill -0 "$VM_PID" 2>/dev/null || { tail -n 30 "$OUT/gramine-vm.out" >&2; exit 1; }
+    grep -q "LISTENING" "$OUT/saguaro-vm.out" 2>/dev/null && break
+    kill -0 "$VM_PID" 2>/dev/null || { tail -n 30 "$OUT/saguaro-vm.out" >&2; exit 1; }
     sleep 0.25
 done
-if ! grep -q "LISTENING" "$OUT/gramine-vm.out" 2>/dev/null; then
+if ! grep -q "LISTENING" "$OUT/saguaro-vm.out" 2>/dev/null; then
     echo "guest epoll server never reported LISTENING" >&2
     exit 1
 fi
@@ -133,7 +133,7 @@ fi
 wait "$VM_PID"
 VM_PID=
 trap - EXIT INT TERM
-if ! grep -q "DONE $REQUESTS" "$VM_LOG" "$OUT/gramine-vm.out" 2>/dev/null; then
+if ! grep -q "DONE $REQUESTS" "$VM_LOG" "$OUT/saguaro-vm.out" 2>/dev/null; then
     echo "guest did not report DONE $REQUESTS (logs in $OUT)" >&2
     exit 1
 fi

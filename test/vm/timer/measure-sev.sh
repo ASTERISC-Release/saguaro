@@ -3,7 +3,7 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
 # One measurement of the SEV-SNP timing set of dev docs: vm-timer/TESTING.md, run in the
-# development container after scripts/install.sh --sev (gramine-sev, SNP mode):
+# development container after scripts/install.sh --sev (saguaro-sev, SNP mode):
 #
 #   measure-sev.sh libos  N OUTDIR   LibOS suite at N vCPUs, pytest --durations=0 and --junitxml
 #   measure-sev.sh probes N OUTDIR   tickgran (1 ms and 5 ms waits) and threadlat (pipe round trip)
@@ -39,7 +39,7 @@ FILTER="self-check\|Frame-pool\|boot\]\|Physical\|Configuring\|REM_MEM\|vm-relay
 case $KIND in
 libos)
     cd "$TREE/libos/test/regression" || exit 2
-    SAGUARO_VM=1 SAGUARO_VM_LAUNCHER=gramine-sev gramine-test pytest -- -q -rfEsxX --tb=short \
+    SAGUARO_VM=1 SAGUARO_VM_LAUNCHER=saguaro-sev gramine-test pytest -- -q -rfEsxX --tb=short \
         -p no:cacheprovider --durations=0 --junitxml="$OUT/libos-$N.xml" test_libos.py \
         > "$OUT/libos-$N.log" 2>&1
     echo "exit $?"; grep -E "[0-9]+ (passed|failed)" "$OUT/libos-$N.log" | tail -n 1 ;;
@@ -50,14 +50,14 @@ probes)
     for p in tickgran threadlat; do
         [ "$p" = threadlat ] && [ "$N" = 1 ] && continue
         echo "# $p"
-        timeout 120 gramine-sev probes $p 2>&1 | grep -v "$FILTER"
+        timeout 120 saguaro-sev probes $p 2>&1 | grep -v "$FILTER"
     done | tee "$OUT/probes-$N.log" ;;
 idle)
     W=/tmp/idle-w; prog_manifest $W idle
     gcc -O1 -o $W/idle "$HERE/idle.c" || exit 2
     cd $W
     Q=$OUT/idle-$N-p$PERIOD.qmp; rm -f "$Q"
-    SAGUARO_VM_QMP=$Q gramine-sev idle 50 $PERIOD > $OUT/idle-$N-p$PERIOD.guest 2>&1 &
+    SAGUARO_VM_QMP=$Q saguaro-sev idle 50 $PERIOD > $OUT/idle-$N-p$PERIOD.guest 2>&1 &
     sleep 12; python3 "$HERE/qstats.py" "$Q" > $OUT/idle-$N-p$PERIOD.a.json
     sleep 30; python3 "$HERE/qstats.py" "$Q" > $OUT/idle-$N-p$PERIOD.b.json
     wait

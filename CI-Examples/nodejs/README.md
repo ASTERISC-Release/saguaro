@@ -20,7 +20,7 @@ By hand:
 
 ```sh
 make                    # make SGX=1 for SGX; make VBS=1 in WSL for VBS
-make check              # runs helloworld.js, prints [ Success 1/1 ]; GRAMINE=gramine-vm etc., SGX=1 or VBS=1 for those backends
+make check              # runs helloworld.js, prints [ Success 1/1 ]; GRAMINE=saguaro-vm etc., SGX=1 or VBS=1 for those backends
 ```
 
 ## Notes

@@ -9,7 +9,7 @@
  * Two things Mesa also relies on are not checked, because the generic path (a file on the tmpfs
  * mount of /dev/shm) does not provide them in Gramine: two MAP_SHARED mappings of the same pages
  * seeing each other's stores, and read() seeing a store made through a mapping (Gramine maps tmpfs
- * files as copies). Under gramine-vm with the graphics redirection active, memfd_create returns a
+ * files as copies). Under saguaro-vm with the graphics redirection active, memfd_create returns a
  * host-backed file whose mappings are real host mappings; that path is exercised by test/vulkan
  * in a VM with the host listener, since this suite has no listener.
  */

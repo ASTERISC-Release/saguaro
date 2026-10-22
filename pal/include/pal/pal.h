@@ -1179,7 +1179,7 @@ int PalSegmentDescriptorGet(unsigned int entry, uint64_t* descriptor);
 int PalDeviceIoControl(PAL_HANDLE handle, uint32_t cmd, unsigned long arg, int* out_ret);
 
 /*
- * Host passthrough (Linux PAL only, i.e. `gramine-direct`). These calls give the LibOS access to
+ * Host passthrough (Linux PAL only, i.e. `saguaro-direct`). These calls give the LibOS access to
  * host objects that have no PAL abstraction. Every other PAL returns -PAL_ERROR_NOTIMPLEMENTED.
  * The LibOS uses them only when the manifest opts in (see Documentation/manifest-syntax.md).
  */

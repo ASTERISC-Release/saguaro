@@ -8,7 +8,7 @@
  * a forked child (it shares the parent's graphics session), and an exec'd child started with
  * EGL_EAGER_SESSION=0 that never touched graphics (the LibOS maps the comm page for it when the
  * fd arrives, as for the wineserver). Each receiver does fstat, DRM_IOCTL_VERSION and close on the
- * received fd. Under gramine-vm: `make vm-gfx-fdpass.manifest MULTIPROCESS=1 EAGER=1` (the parent's
+ * received fd. Under saguaro-vm: `make vm-gfx-fdpass.manifest MULTIPROCESS=1 EAGER=1` (the parent's
  * session starts at load), see vm-check.sh. Usage: gfx-fdpass [recv <socket fd>].
  */
 

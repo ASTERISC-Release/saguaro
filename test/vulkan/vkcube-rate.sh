@@ -3,7 +3,7 @@
 # Frame rate of vkcube without its start-up cost: runs it for N1 and N2 frames (--c) and reports
 # (N2 - N1) / (t2 - t1). Usage: vkcube-rate.sh GPU_NUMBER N1 N2 [launcher...]
 # e.g.  vkcube-rate.sh 1 1000 5000                         (native)
-#       vkcube-rate.sh 1 1000 5000 gramine-direct direct-vkcube
+#       vkcube-rate.sh 1 1000 5000 saguaro-direct direct-vkcube
 # Window 1920x1080, immediate present mode (no vsync). Prints one line with both times and the rate.
 set -u
 gpu=$1 n1=$2 n2=$3

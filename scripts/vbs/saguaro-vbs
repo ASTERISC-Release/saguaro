@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
-"""gramine-vbs: from a manifest to an application running in a Windows VBS enclave.
+"""saguaro-vbs: from a manifest to an application running in a Windows VBS enclave.
 
 The work is split between two machines (dev docs: vbs-enclave/manual.md):
 
@@ -13,31 +13,31 @@ The work is split between two machines (dev docs: vbs-enclave/manual.md):
   runs the application with pal_vbs_host.exe.
 
 Commands:
-  gramine-vbs <program> [args]              run a packaged program (made by `make VBS=1` in its
-                                            folder), like `gramine-vm <program>`; <program> is a
+  saguaro-vbs <program> [args]              run a packaged program (made by `make VBS=1` in its
+                                            folder), like `saguaro-vm <program>`; <program> is a
                                             name, <name>.manifest.vbs or <name>.vbs; the exit code
-                                            is the program's. The Windows runner (gramine-vbs.ps1)
+                                            is the program's. The Windows runner (saguaro-vbs.ps1)
                                             is called through powershell.exe.
-  gramine-vbs run    <program|dir> [--threads N] [--root DIR] [-v] [-- args]   the same, explicit
-  gramine-vbs check                         check the Windows side (changes nothing there)
-  gramine-vbs stop   <program|dir>          stop the running hosts of a package on Windows
-  gramine-vbs verify <program|dir> <report> [verifier options]   (report: a Windows path, or
+  saguaro-vbs run    <program|dir> [--threads N] [--root DIR] [-v] [-- args]   the same, explicit
+  saguaro-vbs check                         check the Windows side (changes nothing there)
+  saguaro-vbs stop   <program|dir>          stop the running hosts of a package on Windows
+  saguaro-vbs verify <program|dir> <report> [verifier options]   (report: a Windows path, or
                                             relative to the host root, e.g. data/out/report.bin)
-  gramine-vbs manifest [-Dk=v ...] <template> [out]   render a manifest template (Jinja, as
+  saguaro-vbs manifest [-Dk=v ...] <template> [out]   render a manifest template (Jinja, as
                                             gramine-manifest, with the vbs.* globals)
-  gramine-vbs runtime                       build the vbs glibc and the vbs PAL and LibOS when
+  saguaro-vbs runtime                       build the vbs glibc and the vbs PAL and LibOS when
                                             missing, then ninja (scripts/vbs/build-runtime.sh)
-  gramine-vbs net <wait|req|redis|bench> ...   a Winsock client on Windows (scripts/vbs/win/
+  saguaro-vbs net <wait|req|redis|bench> ...   a Winsock client on Windows (scripts/vbs/win/
                                             vbs-net.c, compiled there once with MSVC)
-  gramine-vbs tls-client PORT --verifier DIR.vbs ...   a TLS client on Windows that verifies the
+  saguaro-vbs tls-client PORT --verifier DIR.vbs ...   a TLS client on Windows that verifies the
                                             server's attestation first (scripts/vbs/win/
                                             vbs-tls-client.c; CI-Examples/vbs/tls-echo)
-  gramine-vbs win <program> [args]          run a program on the Windows side (e.g. curl.exe)
-  gramine-vbs setup-headers                 copy the Windows SDK and MSVC headers from Windows
+  saguaro-vbs win <program> [args]          run a program on the Windows side (e.g. curl.exe)
+  saguaro-vbs setup-headers                 copy the Windows SDK and MSVC headers from Windows
 
 Building is `make VBS=1` (scripts/vbs/Makefile.vbs), which uses these internal steps:
-  gramine-vbs build  <manifest>             pack and compile; with a Windows target also sign
-  gramine-vbs sign   <manifest|build dir>   upload, link and sign on Windows
+  saguaro-vbs build  <manifest>             pack and compile; with a Windows target also sign
+  saguaro-vbs sign   <manifest|build dir>   upload, link and sign on Windows
 
 Settings (options override the environment):
   --runtime DIR / SAGUARO_VBS_RUNTIME     the meson build directory of `-Dvbs=enabled` (or a folder
@@ -51,7 +51,7 @@ Settings (options override the environment):
   --windows-dir DIR / SAGUARO_VBS_WINDOWS_DIR   folder on Windows (default
                                           <base>\\<name>, and <base>\\<name>-<hash> for local)
   SAGUARO_VBS_WINDOWS_BASE                the base of those folders (default
-                                          %USERPROFILE%\\gramine-vbs, local: ...\\gramine-vbs\\wsl)
+                                          %USERPROFILE%\\saguaro-vbs, local: ...\\saguaro-vbs\\wsl)
   --cert-name NAME / SAGUARO_VBS_CERT_NAME      signing certificate (current user's store; default
                                           TheDefaultTestEnclaveCertName)
   SAGUARO_VBS_SSH_OPTS                    extra ssh/scp options, e.g. "-o BatchMode=yes"
@@ -72,7 +72,7 @@ import sys
 import time
 import tomllib
 
-HERE = os.path.dirname(os.path.realpath(__file__))   # (gramine-vbs on PATH is a symlink)
+HERE = os.path.dirname(os.path.realpath(__file__))   # (saguaro-vbs on PATH is a symlink)
 ROOT = os.path.dirname(os.path.dirname(HERE))
 # the architecture of the Linux side and of the enclave image: aarch64 (ARM64 Windows) or x86_64
 # (x64 Windows, dev docs: vbs-enclave/PLAN-x64.md); SAGUARO_VBS_ARCH overrides
@@ -96,11 +96,11 @@ X18_DEFAULTS = {
 
 
 def die(msg):
-    sys.exit(f'gramine-vbs: {msg}')
+    sys.exit(f'saguaro-vbs: {msg}')
 
 
 def log(msg):
-    print(f'[gramine-vbs] {msg}', flush=True)
+    print(f'[saguaro-vbs] {msg}', flush=True)
 
 
 # ---- settings ----
@@ -202,9 +202,9 @@ def ps(host, script, check=True, capture=False, on_line=None):
 
 
 def runner_popen(host, windir, argv):
-    """Starts the Windows-side runner (gramine-vbs.ps1, uploaded to `windir` by `sign`) with
+    """Starts the Windows-side runner (saguaro-vbs.ps1, uploaded to `windir` by `sign`) with
     `argv`: through powershell.exe -File from WSL, or over ssh."""
-    script = windir + '\\gramine-vbs.ps1'
+    script = windir + '\\saguaro-vbs.ps1'
     if host == LOCAL:
         exe = powershell_exe()
         return subprocess.Popen([exe, '-NoProfile', '-NonInteractive', '-ExecutionPolicy',
@@ -230,7 +230,7 @@ def windows_dir(args, host, name, b=None, explicit=True):
     base = os.environ.get('SAGUARO_VBS_WINDOWS_BASE')
     if not base:
         _, out = ps(host, 'Write-Output $env:USERPROFILE', capture=True)
-        base = out.strip().splitlines()[-1] + '\\gramine-vbs' + ('\\wsl' if host == LOCAL else '')
+        base = out.strip().splitlines()[-1] + '\\saguaro-vbs' + ('\\wsl' if host == LOCAL else '')
     base = base.rstrip('\\/')
     if host == LOCAL and b is not None:
         # several checkouts and examples share one Windows: one folder per Linux build folder
@@ -269,11 +269,11 @@ class Build:
             self.dir = os.path.abspath(target)
             st = self.load()
             if not st:
-                die(f'{target} is not a gramine-vbs build directory')
+                die(f'{target} is not a saguaro-vbs build directory')
             self.manifest = st['manifest']
         else:
             if target.rstrip('/').endswith('.vbs') and not os.path.isfile(target):
-                die(f'{target} does not exist: build it first (gramine-vbs build <manifest>)')
+                die(f'{target} does not exist: build it first (saguaro-vbs build <manifest>)')
             self.manifest = os.path.abspath(target)
             stem = os.path.basename(self.manifest)
             for suffix in ('.manifest.toml', '.manifest.vbs', '.manifest'):
@@ -305,7 +305,7 @@ class Build:
 
 
 def default_headers():
-    """~/.cache/saguaro-vbs/winhdr (setup-headers), or the newest copy that gramine-vbs.ps1 left
+    """~/.cache/saguaro-vbs/winhdr (setup-headers), or the newest copy that saguaro-vbs.ps1 left
     in ~/.cache/saguaro-vbs/winhdr/<SDK>-<MSVC> (a WSL distribution used by the Windows tool)"""
     base = os.path.expanduser('~/.cache/saguaro-vbs/winhdr')
     if os.path.isdir(os.path.join(base, 'sdk', 'um')):
@@ -432,7 +432,7 @@ def cmd_build(args):
             cmd_setup_headers(args)
             hdr = default_headers()
         else:
-            die(f'no Windows headers in {hdr}: run `gramine-vbs setup-headers` (or give --headers)')
+            die(f'no Windows headers in {hdr}: run `saguaro-vbs setup-headers` (or give --headers)')
 
     files = packed_entries(b.manifest, m)
     paths = [p for _, p in files]
@@ -506,15 +506,15 @@ def cmd_build(args):
 
     if not args.no_sign and windows_target(args):
         cmd_sign(args, b)
-    elif not os.environ.get('GV_OUT'):    # (not when gramine-vbs.ps1 drives the build from WSL)
-        log(f'built {b.dir}; `gramine-vbs sign` links and signs it on Windows')
+    elif not os.environ.get('GV_OUT'):    # (not when saguaro-vbs.ps1 drives the build from WSL)
+        log(f'built {b.dir}; `saguaro-vbs sign` links and signs it on Windows')
 
 
 def cmd_sign(args, b=None):
     b = b or Build(args.target)
     st = b.load()
     if not st or not st.get('objects'):
-        die(f'{b.dir} is not built (gramine-vbs build)')
+        die(f'{b.dir} is not built (saguaro-vbs build)')
     host = windows_host(args)
     windir = windows_dir(args, host, b.name, b)
     obj_dir = os.path.join(b.dir, 'obj')
@@ -526,9 +526,9 @@ def cmd_sign(args, b=None):
     with open(crlf, 'w', newline='') as f:
         f.write(text)
     files += [crlf, os.path.join(ROOT, 'pal/src/host/vbs/enclave/pal_vbs_enclave.def'),
-              os.path.join(HERE, 'gramine-vbs.ps1')]
+              os.path.join(HERE, 'saguaro-vbs.ps1')]
     # the host folders the manifest allows (vbs.allowed_files entries ending in /), made below the
-    # host root before each run (gramine-vbs.ps1 run)
+    # host root before each run (saguaro-vbs.ps1 run)
     dirs = []
     try:
         with open(st['manifest'], 'rb') as f:
@@ -584,12 +584,12 @@ def cmd_run(args):
             os.environ['WSLENV'] = ':'.join(filter(None, [os.environ.get('WSLENV'),
                                                           'SAGUARO_VBS_ARGS']))
     # The runner names its own process first: SIGTERM or SIGINT here stops the host process (its
-    # child) on Windows, so that scripts can stop a server with `kill` as with gramine-direct.
+    # child) on Windows, so that scripts can stop a server with `kill` as with saguaro-direct.
     pspid = []
     stopped = []
 
     def on_line(line):
-        if line.startswith('[gramine-vbs-pid] '):
+        if line.startswith('[saguaro-vbs-pid] '):
             pspid.append(line.split()[1])
             return True
         return False
@@ -608,8 +608,8 @@ def cmd_run(args):
         if os.environ.get(k) and host == LOCAL:
             os.environ['WSLENV'] = ':'.join(filter(None, [os.environ.get('WSLENV'), k]))
     if host == LOCAL:    # the runner of this checkout (a package signed earlier may hold an older one)
-        dst = os.path.join(wslpath(windir), 'gramine-vbs.ps1')
-        src = os.path.join(HERE, 'gramine-vbs.ps1')
+        dst = os.path.join(wslpath(windir), 'saguaro-vbs.ps1')
+        src = os.path.join(HERE, 'saguaro-vbs.ps1')
         with open(src, 'rb') as f1, open(dst, 'rb') as f2:
             same = f1.read() == f2.read()
         if not same:
@@ -651,7 +651,7 @@ def cmd_check(args):
     """Checks the Windows side (VBS, Visual Studio, SDK, certificate) and changes nothing there."""
     host = windows_host(args)
     windir = windows_dir(args, host, 'runner')
-    upload(host, [os.path.join(HERE, 'gramine-vbs.ps1')], windir)
+    upload(host, [os.path.join(HERE, 'saguaro-vbs.ps1')], windir)
     cert = setting(args, 'cert_name', 'SAGUARO_VBS_CERT_NAME', 'TheDefaultTestEnclaveCertName')
     rc, _ = consume(runner_popen(host, windir, ['check', '-CertName', cert]), host, check=False)
     sys.exit(rc)
@@ -802,7 +802,7 @@ def win_tool(args, name):
         present = rc == 0
     if not present:
         log(f'compiling {name}.c with MSVC on Windows ({exe})')
-        tmp = os.path.join(os.environ.get('TMPDIR', '/tmp'), f'gramine-vbs-{os.getpid()}')
+        tmp = os.path.join(os.environ.get('TMPDIR', '/tmp'), f'saguaro-vbs-{os.getpid()}')
         os.makedirs(tmp, exist_ok=True)
         cmdf = os.path.join(tmp, f'build-{name}.cmd')
         with open(cmdf, 'w', newline='') as f:
@@ -913,7 +913,7 @@ Write-Output "$t\winhdr.tgz"
 
 def tools_env():
     """Re-executes with the user-level build tools of `wsl-setup.sh user` (env.sh) in the
-    environment, so that make and scripts can call gramine-vbs directly."""
+    environment, so that make and scripts can call saguaro-vbs directly."""
     tools = os.environ.get('SAGUARO_VBS_TOOLS',
                            os.path.expanduser('~/.local/share/saguaro-vbs/tools'))
     envsh = os.path.join(tools, 'env.sh')
@@ -925,7 +925,7 @@ def tools_env():
 
 def main():
     tools_env()
-    ap = argparse.ArgumentParser(prog='gramine-vbs', description=__doc__,
+    ap = argparse.ArgumentParser(prog='saguaro-vbs', description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest='cmd', required=True)
 
@@ -963,7 +963,7 @@ def main():
     p.add_argument('--headers')
     p.add_argument('--windows')
     p.add_argument('--windows-dir', help='work folder on Windows (default '
-                   '%%USERPROFILE%%\\gramine-vbs\\headers)')
+                   '%%USERPROFILE%%\\saguaro-vbs\\headers)')
 
     p = sub.add_parser('stop')
     p.add_argument('target', metavar='manifest|build-dir')
@@ -987,7 +987,7 @@ def main():
     p.add_argument('args', nargs=argparse.REMAINDER)
     common(p)
 
-    # `gramine-vbs <program> [args]`: run the packaged program, like `gramine-vm <program>`
+    # `saguaro-vbs <program> [args]`: run the packaged program, like `saguaro-vm <program>`
     argv = sys.argv[1:]
     if argv and argv[0] not in sub.choices and not argv[0].startswith('-'):
         argv = ['run', argv[0], '--', *argv[1:]]

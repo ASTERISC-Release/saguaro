@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: LGPL-3.0-or-later
-"""Ground truth for scripts/syscall-profile.py: run programs under gramine-direct with the log
+"""Ground truth for scripts/syscall-profile.py: run programs under saguaro-direct with the log
 level `warning` and compare the syscalls the LibOS reports as unsupported ("Unsupported system
 call X") with the syscalls the profile says are ENOSYS in the LibOS.
 
@@ -66,7 +66,7 @@ def build(work, name, source):
 
 
 def run_target(work, name, binary, args):
-    """Profile natively, then run under gramine-direct. Returns the comparison."""
+    """Profile natively, then run under saguaro-direct. Returns the comparison."""
     profile = tool.do_profile([str(binary), *args])
     matrix, evidence = tool.load_matrix()
     result = tool.check_loader(profile, "direct", matrix, evidence, tool.load_rules(), 0.5)
@@ -80,7 +80,7 @@ def run_target(work, name, binary, args):
     (run_dir / f"{prog}.manifest.template").write_text(TEMPLATE)
     subprocess.run(["gramine-manifest", "-Dargv=" + argv, "-Dprog=" + prog,
                     f"{prog}.manifest.template", f"{prog}.manifest"], cwd=run_dir, check=True)
-    run = subprocess.run(["gramine-direct", prog], cwd=run_dir, capture_output=True, text=True,
+    run = subprocess.run(["saguaro-direct", prog], cwd=run_dir, capture_output=True, text=True,
                          timeout=120)
     log = run.stdout + run.stderr
     seen = set(re.findall(r"Unsupported system call (\w+)", log))
@@ -100,7 +100,7 @@ def main():
         r = run_target(work, name, binary, args)
         agree = r["predicted"] == r["seen"]
         bad += not agree
-        print(f"{name}: gramine-direct exit {r['exit']}, {r['calls']} calls traced natively")
+        print(f"{name}: saguaro-direct exit {r['exit']}, {r['calls']} calls traced natively")
         print(f"   profile says ENOSYS in the LibOS: {sorted(r['predicted'])}")
         print(f"   LibOS reported unsupported:       {sorted(r['seen'])}   "
               f"{'agree' if agree else 'DIFFER'}")

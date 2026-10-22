@@ -5,7 +5,7 @@
 # `make check` (direct, vm and sev): memcached runs under $GRAMINE and a TCP client on the host
 # checks counters and 100 set/get round trips (the checks of test/direct/test-direct.sh).
 set -uo pipefail
-: "${GRAMINE:=gramine-direct}"
+: "${GRAMINE:=saguaro-direct}"
 . ../common_tools/server-check.sh
 server_start 11211:11211 "$GRAMINE" memcached
 python3 - <<'PYEOF'

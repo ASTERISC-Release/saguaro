@@ -54,11 +54,11 @@ sgx_sign: sqlite3.manifest
 		--output $<.sgx
 
 ifeq ($(VBS),1)
-# GRAMINE is gramine-vbs (Makefile.vbs)
+# GRAMINE is saguaro-vbs (Makefile.vbs)
 else ifeq ($(SGX),)
-GRAMINE = gramine-direct
+GRAMINE = saguaro-direct
 else
-GRAMINE = gramine-sgx
+GRAMINE = saguaro-sgx
 endif
 
 # Note that command-line arguments are hardcoded in the manifest file.
@@ -73,7 +73,7 @@ regression: all
 	@echo "[ Success 2/3 ]"
 
 	$(GRAMINE) sqlite3 < scripts/select.sql > OUTPUT
-ifneq ($(filter gramine-vm gramine-sev,$(GRAMINE)),)
+ifneq ($(filter saguaro-vm saguaro-sev,$(GRAMINE)),)
 	# The VM and SEV launchers print console lines to stdout; drop them before the diff. The
 	# patterns are those of vmfilter() in test/vm/multiproc/vm-examples.sh, plus the line the PAL
 	# added later ('Application address space').

@@ -14,8 +14,8 @@ By hand:
 
 ```sh
 make                    # make SGX=1 for SGX; make VBS=1 in WSL for VBS
-gramine-direct helloworld       # or gramine-vm, gramine-sev, gramine-sgx, gramine-vbs
-make check              # make check GRAMINE=gramine-vm for another backend; make VBS=1 check for VBS
+saguaro-direct helloworld       # or saguaro-vm, saguaro-sev, saguaro-sgx, saguaro-vbs
+make check              # make check GRAMINE=saguaro-vm for another backend; make VBS=1 check for VBS
 ```
 
 `make DEBUG=1` builds with debug logging.

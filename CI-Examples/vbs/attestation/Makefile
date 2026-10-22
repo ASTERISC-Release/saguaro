@@ -5,7 +5,7 @@
 # (dev docs: vbs-enclave/manual.md, "Makefile flow"). attest.manifest has no template variables, so it is the
 # template of attest.manifest.vbs; its vbs.build compiles attest.c for the enclave.
 #   make VBS=1
-#   gramine-vbs attest <64 hex digits>
+#   saguaro-vbs attest <64 hex digits>
 #   make VBS=1 check        runs it and verifies the report
 
 .PHONY: all

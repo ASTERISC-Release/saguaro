@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: LGPL-3.0-or-later
-"""Where the vCPUs of a hung AArch64 gramine-vm guest are (the AArch64 port of the x86_64 tool on
+"""Where the vCPUs of a hung AArch64 saguaro-vm guest are (the AArch64 port of the x86_64 tool on
 the dev-sig-hang branch). Start the guest with SAGUARO_VM_MONITOR=<socket>; this asks the QEMU
 monitor for every vCPU's registers a few times and names each PC (and ELR_EL1, the address an
 exception at EL1 will return to) after the VM PAL function that contains it; an address outside

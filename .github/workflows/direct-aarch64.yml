@@ -5,7 +5,7 @@
 # tested in an emulated guest) and vm-x86_64.yml (the vm PAL).
 #
 # With the `vm_build` input on (the default), a second job builds and installs the aarch64 VM PAL
-# (gramine-vm) and renders and checks the helloworld manifest with it. Build only: the hosted aarch64
+# (saguaro-vm) and renders and checks the helloworld manifest with it. Build only: the hosted aarch64
 # runners have no usable KVM (run it on an aarch64 machine with /dev/kvm: test/vm/test-vm.sh). It exists
 # because main once stopped building the aarch64 VM PAL unnoticed (the x86_64-only multiprocess work,
 # dev docs: syscall-compat/TODO.md).
@@ -127,7 +127,7 @@ jobs:
       - name: Check the installed vm PAL
         run: |
           . "$SAGUARO_PREFIX/env.sh"
-          command -v gramine-vm
+          command -v saguaro-vm
           pal=$(find "$SAGUARO_PREFIX" -path '*/gramine/vm/pal' -type f | head -n 1)
           test -n "$pal"
           file "$pal"

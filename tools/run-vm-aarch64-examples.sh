@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
-# Run CI-Examples applications under `gramine-vm` on aarch64 (inside the saguaro-vm-aarch64 container,
+# Run CI-Examples applications under `saguaro-vm` on aarch64 (inside the saguaro-vm-aarch64 container,
 # with the VM build installed; see dev docs: vm.md) and check their output.
 #
 # Usage: tools/run-vm-aarch64-examples.sh [example ...]        (default: all below)
@@ -10,7 +10,7 @@
 #   VM_PREFIX=/tmp/vm-prefix                   OUT=/tmp/vm-examples (per-run logs)
 #
 # Each example's manifest is re-rendered with `make -B` against the VM install (so loader.entrypoint
-# is the VM libsysdb), then run with `gramine-vm`. On aarch64 the application binary must be PIE (the
+# is the VM libsysdb), then run with `saguaro-vm`. On aarch64 the application binary must be PIE (the
 # VM's DRAM starts at 0x40000000, a non-PIE binary linked at 0x400000 cannot be mapped); non-PIE ones
 # are reported SKIP. x86_64 has no such restriction. Examples that need a TCP/IP stack (redis, memcached, nginx, lighttpd, rust-hyper,
 # networks) cannot run: the VM PAL only has vsock.
@@ -46,9 +46,9 @@ run_example() {
         echo "SKIP  $name ($binary is not PIE)"; skip=$((skip+1)); return
     fi
     if [ "$stdin" = - ]; then
-        timeout "$RUN_TIMEOUT" gramine-vm "$app" "$@" > "$log" 2>&1 < /dev/null; rc=$?
+        timeout "$RUN_TIMEOUT" saguaro-vm "$app" "$@" > "$log" 2>&1 < /dev/null; rc=$?
     else
-        timeout "$RUN_TIMEOUT" gramine-vm "$app" "$@" > "$log" 2>&1 < "$stdin"; rc=$?
+        timeout "$RUN_TIMEOUT" saguaro-vm "$app" "$@" > "$log" 2>&1 < "$stdin"; rc=$?
     fi
     if [ $rc = 124 ]; then verdict=HANG
     elif grep -q "Panic" "$log"; then verdict=PANIC
@@ -77,7 +77,7 @@ for ex in $SEL; do
         run_example thread-rwlock unit_tests/multi-thread thread-rwlock.manifest thread-rwlock "" - thread-rwlock
         run_example thread-tls unit_tests/multi-thread thread-tls.manifest thread-tls "" - thread-tls ;;
     bash)
-        run_example bash-echo bash bash.manifest bash "gramine-vm-ok" - bash -c "echo gramine-vm-ok"
+        run_example bash-echo bash bash.manifest bash "saguaro-vm-ok" - bash -c "echo saguaro-vm-ok"
         run_example bash-ls bash bash.manifest bash "Makefile" - bash -c "ls" ;;
     busybox)
         run_example busybox-echo busybox busybox.manifest busybox "Hello" - busybox echo Hello

@@ -14,7 +14,7 @@ Run from the repository root. `test/run.sh` forwards to the runners with the arg
 |---|---|---|---|
 | direct | `test/direct/test-direct.sh [suite...]` or `test/run.sh direct [suite...]` | a direct install (`scripts/install.sh`) | `test/direct/test-direct.sh --list` |
 | vm | `test/vm/test-vm.sh [suite...]` or `test/run.sh vm [suite...]` | `/dev/kvm`, a vm install (`scripts/install.sh --vm`) | libos examples hello loopback epoll outbound udp guest-loopback |
-| vm, servers via the direct runner | `SAGUARO_RUNNER=gramine-vm test/direct/test-direct.sh redis` | a vm install | server suites and `networks` |
+| vm, servers via the direct runner | `SAGUARO_RUNNER=saguaro-vm test/direct/test-direct.sh redis` | a vm install | server suites and `networks` |
 | sev | `test/sev/test-sev.sh [suite...]` or `test/run.sh sev [suite...]` | SEV host, container of `container/run.sh` | hello memory vsock measure attest |
 | sev, qualification | `test/sev/test-sev-all.sh` or `test/run.sh sev-all` | SEV-SNP host; builds with `scripts/install.sh --sev` | none (one run) |
 | vbs | none | Windows machine; steps are `.cmd` files in the folders | not confirmed |
@@ -49,7 +49,7 @@ display).
 | `test/boot-probe.sh` | graphics | boot time and memory commit of a graphics VM; not pass/fail |
 | `test/direct/direct-prefix-sweep.sh` | direct | `fork_and_exec` regression from install copies at many path lengths |
 | `test/calibrate-syscall-profile.py` | any | calibrates `scripts/syscall-profile.py`; needs strace and distro packages |
-| `test/runtime-check-syscall-profile.py` | direct | compares the profile with the syscalls gramine-direct reports as unsupported |
+| `test/runtime-check-syscall-profile.py` | direct | compares the profile with the syscalls saguaro-direct reports as unsupported |
 | `test/test-syscall-profile.py` | any | checks the profiler against raw strace output |
 | `test/tolerance-syscall-profile.py` | any | runs `scripts/syscall-tolerance.py` on ten applications |
 
@@ -58,7 +58,7 @@ display).
 | Folder | Backend | Content (from headers) |
 |---|---|---|
 | `test/unit/` | any | pytest unit tests of `graminelibos` (chroot, ldd parsing, sgx sign) |
-| `test/benchmarks/` | direct | `run_benchmarks.sh` and `syscall-bench`: native against gramine-direct |
+| `test/benchmarks/` | direct | `run_benchmarks.sh` and `syscall-bench`: native against saguaro-direct |
 | `test/sev/` | sev | `sev_probe`, `sev_attest`, `qmp.py`, `sev_memcheck.py`: used by `test-sev.sh` |
 | `test/vm/multiproc/` | vm | multi-process checks; `check-probes.sh` is called by `vm-x86_64.yml`; `run-probes.sh`, `load.sh`, `vm-examples.sh`, `boot-loop.sh`, `sig-loop.sh`, `nginx-workers.sh`, `redis-bgsave.sh` are run by hand |
 | `test/vm/multiproc-aarch64/` | vm (aarch64) | `validate.sh` and its parts (`hello.sh`, `probes.sh`, `load.sh`, LTP scripts, hang tools) |

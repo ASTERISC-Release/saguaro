@@ -1,13 +1,13 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
-# VM PAL (gramine-vm) CI.
+# VM PAL (saguaro-vm) CI.
 #
-# gramine-vm needs hardware virtualization (/dev/kvm) on a machine of the same architecture, and
+# saguaro-vm needs hardware virtualization (/dev/kvm) on a machine of the same architecture, and
 # on x86_64 also /dev/vhost-vsock. Hosted x86_64 runners provide both; the hosted aarch64 runners have
 # no usable KVM, so the aarch64 vm PAL is tested under software emulation instead (vm-aarch64-tcg.yml);
 # on a machine with /dev/kvm use test/vm/test-vm.sh.
 #
-#   x86_64-vm   builds the vm PAL on a hosted x86_64 runner and runs gramine-vm: a smoke test
+#   x86_64-vm   builds the vm PAL on a hosted x86_64 runner and runs saguaro-vm: a smoke test
 #               (helloworld, a multi-threaded example) that must pass, then the LibOS regression suite
 #               under the VM harness (informational at first: the skip list was measured on aarch64 and
 #               x86_64 results may differ; see the job summary).
@@ -23,7 +23,7 @@ on:
   workflow_dispatch:
     inputs:
       run_suite:
-        description: "x86_64-vm: also run the LibOS regression suite under gramine-vm (informational)"
+        description: "x86_64-vm: also run the LibOS regression suite under saguaro-vm (informational)"
         type: boolean
         default: true
       ram:
@@ -73,7 +73,7 @@ jobs:
         run: |
           scripts/dependencies.sh --build-only
           sudo apt-get install -y -qq qemu-system-x86 virtiofsd lsof python3-psutil python3-numpy python3-scipy
-          # gramine-vm starts `virtiofsd` by name; Ubuntu installs it off PATH. Symlink it instead of
+          # saguaro-vm starts `virtiofsd` by name; Ubuntu installs it off PATH. Symlink it instead of
           # putting /usr/libexec on PATH: that directory contains a `gcc` *directory*, which GNU make
           # picks over /usr/bin/gcc and then fails with "gcc: Permission denied" (glibc build).
           for d in /usr/libexec /usr/lib/qemu; do
@@ -104,28 +104,28 @@ jobs:
             echo "no $log"
           fi
 
-      - name: Smoke test - helloworld under gramine-vm
+      - name: Smoke test - helloworld under saguaro-vm
         run: |
           . "$SAGUARO_PREFIX/env.sh"
           cd CI-Examples/helloworld
           make
           # virtiofsd serves / and runs with --sandbox none: run as root like the container does
-          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" timeout 300 gramine-vm helloworld \
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" timeout 300 saguaro-vm helloworld \
             2>&1 | tee ../../vm-hello.log
           grep -q "Hello, world" ../../vm-hello.log
 
-      - name: Smoke test - multi-threaded example under gramine-vm
+      - name: Smoke test - multi-threaded example under saguaro-vm
         run: |
           # The example's manifests name no display; one that does (loader.env.DISPLAY = "2:N") makes
-          # gramine-vm require a local X display, which a runner does not have.
+          # saguaro-vm require a local X display, which a runner does not have.
           . "$SAGUARO_PREFIX/env.sh"
           cd CI-Examples/unit_tests/multi-thread
           make thread-tls thread-tls.manifest
-          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" timeout 300 gramine-vm thread-tls \
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" timeout 300 saguaro-vm thread-tls \
             2>&1 | tee ../../../vm-threads.log
           grep -q "(again)" ../../../vm-threads.log   # printed by every thread at the end of its TLS check
 
-      - name: Smoke test - python example (hello, numpy, scipy) under gramine-vm
+      - name: Smoke test - python example (hello, numpy, scipy) under saguaro-vm
         run: |
           # Only the three scripts that need no network run here; the servers are tested in the steps
           # below (Redis, memcached, nginx).
@@ -133,7 +133,7 @@ jobs:
           cd CI-Examples/python
           make python.manifest
           for s in helloworld test-numpy test-scipy; do
-            sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" timeout 600 gramine-vm python scripts/$s.py \
+            sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" timeout 600 saguaro-vm python scripts/$s.py \
               2>&1 | tee ../../vm-python-$s.log
           done
           grep -q "Hello World" ../../vm-python-helloworld.log
@@ -154,7 +154,7 @@ jobs:
         run: |
           export SAGUARO_VM_PREFIX="$SAGUARO_PREFIX"
           cd CI-Examples/memcached
-          # gramine-vm's virtiofsd serves / and needs root, as in the other steps
+          # saguaro-vm's virtiofsd serves / and needs root, as in the other steps
           sudo -E env "PATH=$PATH" "PYTHONPATH=${PYTHONPATH:-}" ./exec.sh --vm
 
       - name: nginx example (./exec.sh --vm)
@@ -167,7 +167,7 @@ jobs:
         if: always()
         run: sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
 
-      - name: LibOS regression suite under gramine-vm (informational)
+      - name: LibOS regression suite under saguaro-vm (informational)
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_suite }}
         continue-on-error: true
         run: |

@@ -29,7 +29,7 @@
 #   --vbs                  the Windows VBS enclave tooling, inside WSL on the Windows machine
 #                          (user-level, no sudo; nothing else is built; scripts/vbs/install-vbs.sh)
 #   --sgx | --vm | --tdx   enable extra PAL backends (off by default; "direct" is always built)
-#   --sev                  --vm plus the AMD SEV build of the vm PAL and gramine-sev (x86_64;
+#   --sev                  --vm plus the AMD SEV build of the vm PAL and saguaro-sev (x86_64;
 #                          dev docs: sev/)
 #   --graphics enabled|disabled
 #                          compile the Tirith graphics host-redirection paths into the LibOS
@@ -55,7 +55,7 @@
 # dir becomes build-vm-<arch> so it never reconfigures a direct-PAL build dir, and on aarch64 the
 # option set is fixed to the dev docs: vm.md recipe (-Dvm=enabled; direct, sgx, tdx and graphics
 # disabled -- the aarch64 vm kernel replaces the direct PAL; the tests are built as PIE for the LibOS
-# suite under gramine-vm, test/vm/test-vm.sh). On x86_64 your --sgx/--tdx choices are kept.
+# suite under saguaro-vm, test/vm/test-vm.sh). On x86_64 your --sgx/--tdx choices are kept.
 #
 # Defaults match this repo's tested configuration:
 #   -Ddirect=enabled -Dsgx=disabled -Dvm=disabled -Dtdx=disabled -Dgraphics=enabled
@@ -147,7 +147,7 @@ fi
 # (PREFIX is normalized below, after the vm default is applied.)
 
 # --sgx (without --vm): never share a direct-PAL build dir or install either; the SGX build has its own
-# (build-sgx, ~/.local/saguaro-sgx), which also holds gramine-direct and the tools.
+# (build-sgx, ~/.local/saguaro-sgx), which also holds saguaro-direct and the tools.
 if [ "$SGX" = enabled ] && [ "$VM" != enabled ]; then
     if [ "$BUILDDIR_EXPLICIT" = 0 ]; then BUILDDIR="build-sgx"; fi
     if [ "$PREFIX_EXPLICIT" = 0 ]; then PREFIX="$HOME/.local/saguaro-sgx"; fi
@@ -168,7 +168,7 @@ if [ "$VM" = enabled ]; then
     if [ "$ARCH" = aarch64 ]; then
         # aarch64 recipe (dev docs: vm.md): the vm kernel *is* the PAL here; the direct PAL and
         # SGX/TDX hosts do not exist in this build. The PAL regression battery is built against
-        # the direct PAL and is not built; the LibOS regression suite runs under gramine-vm
+        # the direct PAL and is not built; the LibOS regression suite runs under saguaro-vm
         # (test/vm/test-vm.sh), which needs PIE test binaries (the guest maps DRAM at 0x40000000).
         if [ "$SGX" = enabled ] || [ "$TDX" = enabled ]; then
             echo "note: --sgx/--tdx have no aarch64 vm host; forcing them off"
@@ -205,7 +205,7 @@ if [ "$LIBC" = none ] && [ "$SGX" = enabled ]; then
     exit 2
 fi
 
-# gramine-sev's default QEMU (SEV_QEMU overrides): the one of container/sev/build-sev-tools.sh
+# saguaro-sev's default QEMU (SEV_QEMU overrides): the one of container/sev/build-sev-tools.sh
 SEV_QEMU=${SEV_QEMU:-}
 if [ "$SEV" = enabled ] && [ -z "$SEV_QEMU" ] && [ -x /root/sev-tools/prefix/bin/qemu-system-x86_64 ]; then
     SEV_QEMU=/root/sev-tools/prefix/bin/qemu-system-x86_64

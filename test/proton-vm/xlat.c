@@ -3,7 +3,7 @@
 
 /* The latency of X round trips as a Wine program sees them: GetCursorPos() is an XQueryPointer
  * round trip in winex11, so each call crosses the guest's X connection (the vsock relay under
- * gramine-vm) and back. ROUNDS calls, 3 ms apart; median, p90, max and the count above 50 ms.
+ * saguaro-vm) and back. ROUNDS calls, 3 ms apart; median, p90, max and the count above 50 ms.
  * The thread first opens its own X connection (the first call), timed separately: that is what
  * every new Wine thread does on its first user32 call (FINDINGS.md of proton-vm, 2026-10-17).
  * Usage: xlat.exe [rounds] [threads]   (defaults 500 and 1: with N > 1, N threads run the loop at

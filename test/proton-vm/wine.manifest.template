@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
-# GE-Proton's 64-bit Wine under gramine-direct / gramine-vm (phase 0 (d) of
+# GE-Proton's 64-bit Wine under saguaro-direct / saguaro-vm (phase 0 (d) of
 # dev docs: proton-vm/PLAN.md): the cheapest end-to-end try, no Gramine changes.
 # The entry point is the `wine` loader itself (WINELOADERNOEXEC=1 stops it from re-executing
 # through wine-preloader, a static binary that maps ld.so by hand); the Proton files and the prefix
@@ -60,7 +60,7 @@ loader.env.WINENTSYNC = "{{ sync }}"
 loader.env.WINEDLLOVERRIDES = "d3d11,d3d10core,d3d9,dxgi,d3d12,d3d12core=n;winemenubuilder.exe=d"
 {% if display|string != "" %}
 # a window: the X server of the host (the container's Xorg dummy server :N for the game runs, see
-# test/proton-vm/xorg-dummy.conf) through gramine-vm's vsock relay (dev docs: graphics/running.md)
+# test/proton-vm/xorg-dummy.conf) through saguaro-vm's vsock relay (dev docs: graphics/running.md)
 loader.env.DISPLAY = "2:{{ display }}"
 vm.net.direct_vsock_ports = [{{ 6000 + display|int }}]
 # NET=deny: a game's online features fail at once instead of waiting on the relay (Doom's

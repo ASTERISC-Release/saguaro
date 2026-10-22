@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
 /* Copyright (C) 2026 The ASTERISC Research Lab */
 /*
- * VK_LAYER_GRAMINE_present: Vulkan presentation under gramine-vm (dev docs: vulkan/,
+ * VK_LAYER_GRAMINE_present: Vulkan presentation under saguaro-vm (dev docs: vulkan/,
  * "Phase 2 design").
  *
  * An implicit Vulkan layer that implements the X11 window-system extensions (VK_KHR_surface,
@@ -1321,7 +1321,7 @@ __attribute__((visibility("default"))) VkResult gramine_vk_negotiate(
         return VK_ERROR_INITIALIZATION_FAILED;
     if (!in_gramine_vm) {
         /* outside the VM the driver's own presentation works: stay out of the way */
-        LOG("not under gramine-vm; the layer passes everything through\n");
+        LOG("not under saguaro-vm; the layer passes everything through\n");
     }
     if (iface->loaderLayerInterfaceVersion > 2)
         iface->loaderLayerInterfaceVersion = 2;

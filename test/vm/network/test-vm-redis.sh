@@ -16,7 +16,7 @@ mkdir -p "$OUT"
 export PATH=$PREFIX/bin:$PATH
 export PYTHONPATH=$(ls -d "$PREFIX"/lib/python3*/site-packages 2>/dev/null | head -1)
 
-command -v gramine-vm >/dev/null || { echo "gramine-vm not on PATH (prefix $PREFIX?)" >&2; exit 1; }
+command -v saguaro-vm >/dev/null || { echo "saguaro-vm not on PATH (prefix $PREFIX?)" >&2; exit 1; }
 
 python3 - "$HOST_PORT" <<'PY' || { echo "host port $HOST_PORT is busy" >&2; exit 1; }
 import socket
@@ -38,11 +38,11 @@ REDIS_BENCHMARK=$APP/src/src/redis-benchmark
     exit 1
 }
 
-VM_LOG=$OUT/gramine-vm.log
+VM_LOG=$OUT/saguaro-vm.log
 rm -f "$VM_LOG"
 cd "$APP"
 SAGUARO_VM_INBOUND="$GUEST_PORT:$HOST_PORT" SAGUARO_VM_CONSOLE_LOG=$VM_LOG \
-    gramine-vm redis-server >"$OUT/gramine-vm.out" 2>&1 &
+    saguaro-vm redis-server >"$OUT/saguaro-vm.out" 2>&1 &
 VM_PID=$!
 
 stop_vm() {
@@ -86,7 +86,7 @@ trap stop_vm EXIT INT TERM
 
 ready=0
 for _ in $(seq 240); do
-    kill -0 "$VM_PID" 2>/dev/null || { tail -n 40 "$OUT/gramine-vm.out" >&2; exit 1; }
+    kill -0 "$VM_PID" 2>/dev/null || { tail -n 40 "$OUT/saguaro-vm.out" >&2; exit 1; }
     if [ "$("$REDIS_CLI" -h 127.0.0.1 -p "$HOST_PORT" ping 2>/dev/null)" = PONG ]; then
         ready=1
         break
@@ -95,14 +95,14 @@ for _ in $(seq 240); do
 done
 if [ "$ready" != 1 ]; then
     echo "Redis did not answer PING through the VM relay" >&2
-    tail -n 40 "$OUT/gramine-vm.out" >&2
+    tail -n 40 "$OUT/saguaro-vm.out" >&2
     exit 1
 fi
 
-key=gramine-vm-relay-smoke
+key=saguaro-vm-relay-smoke
 value=phase2-inbound-ok
 [ "$("$REDIS_CLI" -h 127.0.0.1 -p "$HOST_PORT" set "$key" "$value")" = OK ] || exit 1
 [ "$("$REDIS_CLI" -h 127.0.0.1 -p "$HOST_PORT" get "$key")" = "$value" ] || exit 1
 "$REDIS_BENCHMARK" -q -h 127.0.0.1 -p "$HOST_PORT" -c 10 -n 5000 -P 1 -t set,get \
     | tee "$OUT/benchmark.log"
-echo "Redis PING/SET/GET and benchmark passed through gramine-vm relay (host port $HOST_PORT)."
+echo "Redis PING/SET/GET and benchmark passed through saguaro-vm relay (host port $HOST_PORT)."

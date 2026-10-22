@@ -2,11 +2,11 @@
 /* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /*
- * Probes for the facts that decide whether Wine can run under gramine-vm (phase 0 of
+ * Probes for the facts that decide whether Wine can run under saguaro-vm (phase 0 of
  * dev docs: proton-vm/PLAN.md). Each probe prints `PROBE <name>: <result>` lines and
  * exits; `probes all` runs every probe in a forked child (a crash or hang in one probe does not
  * stop the others; without fork they run inline). Run natively first (every probe passes on Linux),
- * then under gramine-direct and gramine-vm (test/proton-vm/run-probes.sh).
+ * then under saguaro-direct and saguaro-vm (test/proton-vm/run-probes.sh).
  *
  * What Wine does (dlls/ntdll/unix/signal_x86_64.c, virtual.c, loader/preloader.c, checked
  * 2026-10-15) and the probe that checks it:

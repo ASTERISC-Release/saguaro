@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (C) 2026 The ASTERISC Research Lab
 
-# SuperTuxKart under gramine-vm with the Tirith graphics redirection (x86_64).
+# SuperTuxKart under saguaro-vm with the Tirith graphics redirection (x86_64).
 
 libos.entrypoint = "/supertuxkart/stk-build/stk-code/cmake_build/bin/supertuxkart"
 

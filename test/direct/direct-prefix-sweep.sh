@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
-# direct-prefix-sweep.sh — run the fork_and_exec LibOS regression test under gramine-direct from
+# direct-prefix-sweep.sh — run the fork_and_exec LibOS regression test under saguaro-direct from
 # copies of one install at paths of every length from that of SWEEP_DIR + 2 up to MAX characters.
 #
 # What the PAL allocates at startup (paths, the manifest, the environment) decides where its heap

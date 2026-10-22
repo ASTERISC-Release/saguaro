@@ -14,8 +14,8 @@ By hand:
 
 ```sh
 make                    # make SGX=1 for SGX; make VBS=1 in WSL for VBS
-gramine-direct busybox sh       # a shell: type ls
-make check              # runs busybox echo Hello; GRAMINE=gramine-vm etc., SGX=1 or VBS=1 for those backends
+saguaro-direct busybox sh       # a shell: type ls
+make check              # runs busybox echo Hello; GRAMINE=saguaro-vm etc., SGX=1 or VBS=1 for those backends
 ```
 
 ## Notes

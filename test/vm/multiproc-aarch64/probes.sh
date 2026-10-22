@@ -3,7 +3,7 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
 # probes.sh -- the multi-process probes of test/vm/multiproc/ (spawn.c, forks.c, sig.sh and
-# manifest.template, sys.experimental__multiprocess on) under the AArch64 gramine-vm. The
+# manifest.template, sys.experimental__multiprocess on) under the AArch64 saguaro-vm. The
 # x86_64 runner (test/vm/multiproc/run-probes.sh) hardcodes the x86_64 library directory; this one
 # takes the build machine's (gcc -dumpmachine) and keeps one log per probe.
 #
@@ -61,17 +61,17 @@ run() {
 }
 for what in "${WHAT[@]}"; do
     case $what in
-        sh)      run sh 60 gramine-vm sh -c 'echo hi | cat; ls /probe | wc -l' ;;
-        spawn)   run spawn 60 gramine-vm spawn ;;
-        forks)   run forks-1000 900 gramine-vm forks 1000 1; run forks-64x8 600 gramine-vm forks 64 8 ;;
-        signals) run signals 60 gramine-vm bash /probe/sig.sh ;;
-        shared)  run shared 60 gramine-vm shared
+        sh)      run sh 60 saguaro-vm sh -c 'echo hi | cat; ls /probe | wc -l' ;;
+        spawn)   run spawn 60 saguaro-vm spawn ;;
+        forks)   run forks-1000 900 saguaro-vm forks 1000 1; run forks-64x8 600 saguaro-vm forks 64 8 ;;
+        signals) run signals 60 saguaro-vm bash /probe/sig.sh ;;
+        shared)  run shared 60 saguaro-vm shared
                  grep -qx 'shared: 5/5 passed (pipes, Unix sockets, MAP_SHARED, futex, /dev/shm)' \
                      "$LOGS/shared.log" || exit 1 ;;
         eintr)   # one guest per case: a case that times out ends its process
                  for c in poll ppoll-null pause pipe-read epoll_wait select nanosleep futex \
                           child-pause; do
-                     LINES_SHOWN=${LINES_SHOWN:-2} run eintr-$c 40 gramine-vm eintr $c
+                     LINES_SHOWN=${LINES_SHOWN:-2} run eintr-$c 40 saguaro-vm eintr $c
                      if [ "$c" = child-pause ]; then
                          grep -q 'child-pause killed=1 sig=15' "$LOGS/eintr-$c.log" || exit 1
                      else
@@ -87,7 +87,7 @@ for what in "${WHAT[@]}"; do
                  for c in sigframe altstack; do
                      for k in on off; do
                          m=efault; [ $k = off ] && m=efault-nokey
-                         LINES_SHOWN=0 run efault-$c-$k 60 gramine-vm $m $c
+                         LINES_SHOWN=0 run efault-$c-$k 60 saguaro-vm $m $c
                          grep -a "child \|no fork\|Internal\|Panic\|exited with" \
                              "$LOGS/efault-$c-$k.log" | tail -4
                          case $c-$k in
@@ -102,7 +102,7 @@ for what in "${WHAT[@]}"; do
                  ln -sf cntvct cntvct-nokey
                  for k in on off; do
                      m=cntvct; [ $k = off ] && m=cntvct-nokey
-                     LINES_SHOWN=${LINES_SHOWN:-2} run cntvct-$k 60 gramine-vm $m
+                     LINES_SHOWN=${LINES_SHOWN:-2} run cntvct-$k 60 saguaro-vm $m
                      grep -q '^cntvct: ok' "$LOGS/cntvct-$k.log" || exit 1
                      grep -q '\[ VM exited with code 0 \]' "$LOGS/cntvct-$k.log" || exit 1
                  done ;;
@@ -110,13 +110,13 @@ for what in "${WHAT[@]}"; do
                  ln -sf regs regs-nokey
                  for k in on off; do
                      m=regs; arg=; [ $k = off ] && { m=regs-nokey; arg=nofork; }
-                     LINES_SHOWN=${LINES_SHOWN:-12} run regs-$k 120 gramine-vm $m $arg
+                     LINES_SHOWN=${LINES_SHOWN:-12} run regs-$k 120 saguaro-vm $m $arg
                      grep -Eq "^regs: ([0-9]+)/\1 passed" "$LOGS/regs-$k.log" || exit 1
                      grep -q "\[ VM exited with code 0 \]" "$LOGS/regs-$k.log" || exit 1
                  done ;;
-        unixsock) LINES_SHOWN=${LINES_SHOWN:-5} run unixsock 60 gramine-vm unixsock
+        unixsock) LINES_SHOWN=${LINES_SHOWN:-5} run unixsock 60 saguaro-vm unixsock
                  grep -q '^unixsock: 2/2 passed' "$LOGS/unixsock.log" || exit 1 ;;
-        sysloop) LINES_SHOWN=${LINES_SHOWN:-3} run sysloop 300 gramine-vm sysloop
+        sysloop) LINES_SHOWN=${LINES_SHOWN:-3} run sysloop 300 saguaro-vm sysloop
                  grep -q '^sysloop: getpid' "$LOGS/sysloop.log" || exit 1 ;;
         forks-mem)
             # pool frames in use after each child's exit (log_debug of pal_process.c): the first
@@ -125,7 +125,7 @@ for what in "${WHAT[@]}"; do
             ln -sf forks forks-dbg
             for spec in "${FORKS_N:-1000} 1" "${FORKS_P:-64} 8"; do
                 set -- $spec
-                LINES_SHOWN=0 run forks-mem-$1x$2 900 gramine-vm forks-dbg $1 $2
+                LINES_SHOWN=0 run forks-mem-$1x$2 900 saguaro-vm forks-dbg $1 $2
                 grep -a "forks=" "$LOGS/forks-mem-$1x$2.log"
                 grep -ao "process exit: [0-9]* frame-pool frames in use" "$LOGS/forks-mem-$1x$2.log" \
                     | awk '{print $3}' | sed -n '1p;$p' | tr '\n' ' ' \

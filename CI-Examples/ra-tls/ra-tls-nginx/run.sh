@@ -5,7 +5,7 @@
 
 set -e
 
-gramine-sgx nginx &
+saguaro-sgx nginx &
 pid=$!
 
 ../../../scripts/wait_for_server 60 localhost 8000

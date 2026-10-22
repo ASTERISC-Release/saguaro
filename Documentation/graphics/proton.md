@@ -1,9 +1,9 @@
-# Wine/Proton under `gramine-vm`
+# Wine/Proton under `saguaro-vm`
 
 > All numbers on this page are experimental measurements from one machine, taken during development; they are not benchmarks.
 
 **What it does.** GE-Proton's Wine (Wine 11 with DXVK and VKD3D-Proton), driven without the Steam
-client through Proton's own environment, runs Windows programs and games inside the `gramine-vm`
+client through Proton's own environment, runs Windows programs and games inside the `saguaro-vm`
 microVM, first with software rendering (lavapipe), then on the host GPU through the redirected
 route ([vm.md](vm.md), [vulkan.md](vulkan.md)). A feasibility study with a reduced scope: 64-bit
 first, server-side synchronisation, then the GPU, then 32-bit games.

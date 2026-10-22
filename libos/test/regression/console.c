@@ -24,7 +24,7 @@
  *   Gramine logs to analyze and debug this test instead.
  * - Under Gramine, app stdout and stderr streams are both redirected to host stdout. The host
  *   stderr only prints Gramine logs. So, don't be surprised that `console > /dev/null` and
- *   `gramine-direct console > /dev/null` show different results.
+ *   `saguaro-direct console > /dev/null` show different results.
  */
 
 int main(void) {

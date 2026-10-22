@@ -7,8 +7,8 @@
 # processes and threads, the resident memory, a screenshot every few seconds, and the Wine
 # output. Usage (in the container):
 #   run-game.sh [-l native|vm] [-d :N] [-s SECONDS] [-o OUTDIR] [-g WxH] EXE [ARGS...]
-# -l vm runs the game under gramine-vm through run-wine.sh (SAGUARO_CPU_NUM, SAGUARO_RAM_SIZE,
-# WINEDEBUG... as there; the guest reaches the display through gramine-vm's vsock relay).
+# -l vm runs the game under saguaro-vm through run-wine.sh (SAGUARO_CPU_NUM, SAGUARO_RAM_SIZE,
+# WINEDEBUG... as there; the guest reaches the display through saguaro-vm's vsock relay).
 # EXE is a Unix path; the game runs with its folder as the working directory. Defaults: display
 # :7 (an Xvfb of 1280x720x24 is started if the display is not up), 90 s, OUTDIR
 # .proton-vm/games/runs/<exe name>-<time>. Environment as run-native.sh (WINEDEBUG, WINEDLLOVERRIDES,
@@ -42,7 +42,7 @@ START=$(date +%s)
 # 32-bit loader first, which this container cannot run
 . "$HERE/wine-env.sh"
 if [ "$LOADER" = vm ]; then
-    # gramine-vm relays vsock port 6000+N to /tmp/.X11-unix/XN; in the container that directory is
+    # saguaro-vm relays vsock port 6000+N to /tmp/.X11-unix/XN; in the container that directory is
     # the host's (not writable), so Xvfb/Xorg listen on the abstract socket only: relay to that one
     N=${DISP#:}
     if [ ! -S "/tmp/.X11-unix/X$N" ] || [ "$TARGET" != "$DISP" ]; then
@@ -51,10 +51,10 @@ if [ "$LOADER" = vm ]; then
         if ! ss -H -ln --vsock "sport = :$((6000 + N))" 2>/dev/null | grep -q .; then
             if [ -S "/tmp/.X11-unix/X${TARGET#:}" ]; then
                 # a host server with a filesystem socket (Xwayland): through the filtering relay,
-                # which hides DRI3 and Present from the guest (tools/gramine-vm-xfilter.py; a DRI3
+                # which hides DRI3 and Present from the guest (tools/saguaro-vm-xfilter.py; a DRI3
                 # server makes Mesa open the GPU through the X connection with fd passing, which no
                 # vsock relay can carry: the guest hangs in winex11's GL initialisation)
-                setsid -f nohup python3 "$ROOT/tools/gramine-vm-xfilter.py" --port $((6000 + N)) \
+                setsid -f nohup python3 "$ROOT/tools/saguaro-vm-xfilter.py" --port $((6000 + N)) \
                     --x-socket "/tmp/.X11-unix/X${TARGET#:}" </dev/null >"$OUT/socat.log" 2>&1
             else
                 setsid -f nohup socat -b 1048576 "VSOCK-LISTEN:$((6000 + N)),fork,reuseaddr,max-children=50" \

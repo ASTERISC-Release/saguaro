@@ -1,7 +1,7 @@
 #!/bin/bash
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
-# Runs GE-Proton's Wine under gramine-direct or gramine-vm with test/proton-vm/wine.manifest.template
+# Runs GE-Proton's Wine under saguaro-direct or saguaro-vm with test/proton-vm/wine.manifest.template
 # (in the container, after run-native.sh -p made the prefix). Usage:
 #   run-wine.sh [direct|vm] [ARGS...]      default args: --version
 # Environment: WINEDEBUG (default -all), SYNC=1 (esync/fsync/ntsync on), LOG_LEVEL (default error),
@@ -42,7 +42,7 @@ gramine-manifest -Dproton="$PROTON" -Dprefix="$PREFIX" -Dtests="$TESTS" -Dwork="
     "$HERE/wine.manifest.template" wine.manifest || exit 1
 echo "# $(date -u +%Y-%m-%dT%H:%MZ) loader=$LOADER args: $* cpus=${SAGUARO_CPU_NUM:-1} ram=${SAGUARO_RAM_SIZE:-default} $(uptime | sed 's/.*load/load/')"
 case $LOADER in
-    direct) timeout "${TIMEOUT:-120}" gramine-direct wine "$@" ;;
-    vm)     timeout "${TIMEOUT:-180}" gramine-vm wine "$@" 2>&1 | grep --line-buffered -v "self-check\|Frame-pool\|boot\]\|Physical\|Configuring\|REM_MEM\|vm-relay\|frame pool\|^(qemu)\|^qemu-system" ;;
+    direct) timeout "${TIMEOUT:-120}" saguaro-direct wine "$@" ;;
+    vm)     timeout "${TIMEOUT:-180}" saguaro-vm wine "$@" 2>&1 | grep --line-buffered -v "self-check\|Frame-pool\|boot\]\|Physical\|Configuring\|REM_MEM\|vm-relay\|frame pool\|^(qemu)\|^qemu-system" ;;
 esac
 echo "# exit ${PIPESTATUS[0]}"

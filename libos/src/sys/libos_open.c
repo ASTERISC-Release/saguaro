@@ -233,7 +233,7 @@ long libos_syscall_creat(const char* path, mode_t mode) {
 #ifdef ENABLE_GRAPHICS
 /* The graphics comm window at COMM_ADDR (0xf00000) is a fixed host-shared page provided by the
  * full Tirith deployment: the VM/TDX PAL guest memory map has the sg-listener's shared memory
- * attached there by the host. Under the plain `Linux` PAL (any gramine-direct run, including
+ * attached there by the host. Under the plain `Linux` PAL (any saguaro-direct run, including
  * the entire aarch64 port, where `linux` is the only PAL) no host agent exists and the page
  * is *never* mapped -- and note comm_sync_notify()'s `magic` check cannot cover this, because
  * every caller writes c->p1..p3 *before* calling it, so the very first write faults

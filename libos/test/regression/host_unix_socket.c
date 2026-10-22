@@ -2,7 +2,7 @@
 /* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /*
- * A host UNIX socket (sys.insecure__host_unix_sockets, gramine-direct): connect to a server that
+ * A host UNIX socket (sys.insecure__host_unix_sockets, saguaro-direct): connect to a server that
  * runs on the host (started by the test harness), pass it an fd of a file opened in Gramine
  * (SCM_RIGHTS, LibOS fd -> host fd), and receive an fd from it (host fd -> new LibOS fd); then pass
  * it one end of a socketpair and receive an fd through the other end.

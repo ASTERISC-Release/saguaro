@@ -107,7 +107,7 @@ noreturn static void print_usage_and_exit(const char* argv_0) {
                "\tChildren:      %s <path to libpal.so> child <parent_stream_fd> "
                "<reserved_mem_ranges_fd> args...",
                self, self);
-    log_always("This is an internal interface. Use gramine-direct wrapper to launch applications "
+    log_always("This is an internal interface. Use saguaro-direct wrapper to launch applications "
                "in Gramine.");
     _PalProcessExit(1);
 }

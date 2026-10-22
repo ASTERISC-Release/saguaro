@@ -14,8 +14,8 @@ make check              # runs the server and the Windows client, including the 
 By hand:
 
 ```sh
-../../../scripts/vbs/gramine-vbs tls-echo --port 4433 &
-../../../scripts/vbs/gramine-vbs tls-client 4433 --verifier tls-echo.vbs \
+../../../scripts/vbs/saguaro-vbs tls-echo --port 4433 &
+../../../scripts/vbs/saguaro-vbs tls-client 4433 --verifier tls-echo.vbs \
     --family-id 6772616d696e652d7662732d746c7300 --image-id 746c732d6563686f0000000000000001 \
     --min-svn 1 --message hello
 ```

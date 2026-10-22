@@ -30,7 +30,7 @@
 # container that does not mount this checkout at its mount point is refused instead of being
 # silently reused.
 #
-# Needs a native host of the same architecture (no emulation) with /dev/kvm for gramine-vm. The
+# Needs a native host of the same architecture (no emulation) with /dev/kvm for saguaro-vm. The
 # container runs with --cap-add ALL (virtiofsd serves its / as the guest's /) and
 # seccomp=unconfined (the direct PAL calls personality(), which the default profile blocks).
 # Recreating the container discards what is stored in its /tmp (builds in the repository survive).
@@ -93,7 +93,7 @@ if [ "${1:-}" = "down" ]; then
     exit 0
 fi
 
-[ -e /dev/kvm ] || echo "warning: no /dev/kvm on this host; the container works but gramine-vm cannot run." >&2
+[ -e /dev/kvm ] || echo "warning: no /dev/kvm on this host; the container works but saguaro-vm cannot run." >&2
 
 # --- image: one per Containerfile version ------------------------------------------------------------
 # The image is tagged <name>:cf-<first 12 hex digits of the Containerfile's sha256>, so checkouts with
@@ -205,7 +205,7 @@ if ! podman container exists "$CONTAINER"; then
         done
     fi
     echo ">>> creating container $CONTAINER"
-    # --init: a minimal init as PID 1 reaps orphaned helper processes (e.g. of gramine-vm) when the
+    # --init: a minimal init as PID 1 reaps orphaned helper processes (e.g. of saguaro-vm) when the
     # host has one (catatonit); without it they stay around as zombies until the container stops.
     INIT=()
     command -v catatonit >/dev/null 2>&1 && INIT=(--init)
@@ -221,7 +221,7 @@ fi
 
 # --- attach -----------------------------------------------------------------------------------------
 # Both modes load the Saguaro environment of the vm install (scripts/install.sh --vm), when it exists:
-# gramine-vm and the Python tooling are then on PATH without sourcing env.sh by hand.
+# saguaro-vm and the Python tooling are then on PATH without sourcing env.sh by hand.
 SAGUARO_ENV='[ -f "$HOME/.local/saguaro-vm/env.sh" ] && . "$HOME/.local/saguaro-vm/env.sh"'
 if [ $# -gt 0 ]; then
     exec podman exec -i -w "$MOUNT_POINT" "$CONTAINER" bash -c "$SAGUARO_ENV; $*"

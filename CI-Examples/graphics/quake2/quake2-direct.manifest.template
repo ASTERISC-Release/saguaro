@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (C) 2026 The ASTERISC Research Lab
 
-# Yamagi Quake II under gramine-direct on the host GPU (dev docs: graphics-direct/).
+# Yamagi Quake II under saguaro-direct on the host GPU (dev docs: graphics-direct/).
 # Insecure by design: the application can submit work to the GPU and talk to the X server directly
 # (see the insecure__ keys below and Documentation/manifest-syntax.md).
 

@@ -7,10 +7,10 @@
 # Under the vm and sev nginx runs as one process: the guest cannot create worker processes, so
 # `master_process off;` is added to the installed configuration.
 set -uo pipefail
-: "${GRAMINE:=gramine-direct}"
+: "${GRAMINE:=saguaro-direct}"
 . ../common_tools/server-check.sh
 case $GRAMINE in
-    gramine-vm|gramine-sev)
+    saguaro-vm|saguaro-sev)
         grep -q '^master_process' install/conf/nginx-gramine.conf \
             || sed -i '1i master_process off;' install/conf/nginx-gramine.conf ;;
 esac

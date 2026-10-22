@@ -20,7 +20,7 @@ By hand, the server in one terminal (port 5201) and the client in another:
 
 ```sh
 make                    # make SGX=1 for SGX; make VBS=1 in WSL for VBS
-gramine-direct iperf3   # VM and SEV: SAGUARO_VM_INBOUND=5201:5201 gramine-vm iperf3 (or gramine-sev)
+saguaro-direct iperf3   # VM and SEV: SAGUARO_VM_INBOUND=5201:5201 saguaro-vm iperf3 (or saguaro-sev)
 LD_LIBRARY_PATH=./install ./install/iperf3 -c 127.0.0.1 -p 5201
 ```
 

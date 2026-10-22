@@ -35,7 +35,7 @@ for i in $(seq 1 "$N"); do
     # the guest in the background with its QEMU monitor on a socket: a hung one is looked at
     # (vm-hang-report.py, then ON_HANG) and stopped through the monitor, so the launcher reports
     rm -f "$OUT/mon.sock"
-    SAGUARO_VM_MONITOR=$OUT/mon.sock setsid gramine-vm bash /probe/sig.sh > "$OUT/cur.log" 2>&1 < /dev/null &
+    SAGUARO_VM_MONITOR=$OUT/mon.sock setsid saguaro-vm bash /probe/sig.sh > "$OUT/cur.log" 2>&1 < /dev/null &
     pid=$!
     for _ in $(seq 1 $(( ${RUN_TIMEOUT:-60} * 10 ))); do kill -0 $pid 2>/dev/null || break; sleep 0.1; done
     hung=0

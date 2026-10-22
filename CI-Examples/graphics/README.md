@@ -1,6 +1,6 @@
 # Graphics examples
 
-OpenGL games and benchmarks that draw on the host GPU: under `gramine-direct` (x86_64, and AArch64 with the NVIDIA driver) or under `gramine-vm` with the graphics redirection (x86_64). They need a display, so `exec.sh` runs none of them: run them by hand.
+OpenGL games and benchmarks that draw on the host GPU: under `saguaro-direct` (x86_64, and AArch64 with the NVIDIA driver) or under `saguaro-vm` with the graphics redirection (x86_64). They need a display, so `exec.sh` runs none of them: run them by hand.
 
 ## Prerequisites
 
@@ -20,8 +20,8 @@ Install the backend, with graphics, and set `DISPLAY`: [`Documentation/quickstar
 ```sh
 cd CI-Examples/graphics/<example>
 mkdir -p ~/.cache
-make run-direct    # gramine-direct on the host GPU (not tf2)
-make run           # gramine-vm
+make run-direct    # saguaro-direct on the host GPU (not tf2)
+make run           # saguaro-vm
 make run-native    # without Gramine, to tell a GPU problem from a Gramine one
 ```
 
@@ -32,5 +32,5 @@ For the VM, export `QEMU_PATH=<qemu checkout>/build/qemu-system-x86_64` first. T
 - `DEBUG=1` sets the Gramine debug log level; `SHARED_INPUT=0` takes input over the X connection instead of the shared ring.
 - `SAGUARO_CPU_NUM` and `SAGUARO_RAM_SIZE` set the guest's vCPUs and memory (defaults 1 and 8G). A graphics guest needs at least 5G, and 3G plus `SAGUARO_DATA_SIZE` (default 1G).
 - Quake II: `make run-direct-timedemo`. SuperTuxKart: `make run-startup PROFILE_TIME=<seconds>`, `make run-direct-startup`.
-- The `-direct` manifests enable insecure options (raw GPU ioctls, the X server's Unix socket): `gramine-direct` is not a sandbox here.
+- The `-direct` manifests enable insecure options (raw GPU ioctls, the X server's Unix socket): `saguaro-direct` is not a sandbox here.
 - `direct-tests/` holds small test programs for the direct route (`make check`).

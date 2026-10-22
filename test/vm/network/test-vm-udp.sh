@@ -21,7 +21,7 @@ done
 
 export PATH=$PREFIX/bin:$PATH
 export PYTHONPATH=$(ls -d "$PREFIX"/lib/python3*/site-packages 2>/dev/null | head -1)
-command -v gramine-vm >/dev/null || { echo "gramine-vm not on PATH (prefix $PREFIX?)" >&2; exit 1; }
+command -v saguaro-vm >/dev/null || { echo "saguaro-vm not on PATH (prefix $PREFIX?)" >&2; exit 1; }
 [ -e /dev/vhost-vsock ] || { echo "no /dev/vhost-vsock; this test needs it" >&2; exit 1; }
 test_host_ip() {
     python3 -c 'import socket; s=socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.connect(("1.1.1.1", 53)); print(s.getsockname()[0]); s.close()'
@@ -54,7 +54,7 @@ PORT=$(cat "$READY")
 echo "== UDP echo to $HOST_IP and DNS $DNS_NAME, ${CPU_NUM} vCPUs"
 cd "$DIR"
 SAGUARO_CPU_NUM=$CPU_NUM SAGUARO_VM_CONSOLE_LOG="$OUT/guest.console" \
-    timeout --signal=TERM --kill-after=5s 120s gramine-vm vsock_udp_client \
+    timeout --signal=TERM --kill-after=5s 120s saguaro-vm vsock_udp_client \
     "$DNS_NAME" "$HOST_IP" "$PORT" >"$OUT/guest.log" 2>&1 || {
         cat "$OUT/guest.log" "$SERVER_LOG" >&2; exit 1;
     }

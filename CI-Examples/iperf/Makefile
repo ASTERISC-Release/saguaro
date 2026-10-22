@@ -4,7 +4,7 @@
 
 # Build iperf3 as follows:
 #
-# - make               -- create non-SGX manifest (gramine-direct)
+# - make               -- create non-SGX manifest (saguaro-direct)
 # - make SGX=1         -- create SGX manifest
 # - make VBS=1         -- build iperf3 for a Windows VBS enclave, pack and sign it (in WSL; see
 #                         dev docs: vbs-enclave/manual.md); make VBS=1 check runs the server in the enclave
@@ -116,7 +116,7 @@ endif
 
 ifneq ($(VBS),1)
 # the server under $(GRAMINE), the native client on the host's loopback (check.sh)
-GRAMINE ?= gramine-direct
+GRAMINE ?= saguaro-direct
 
 .PHONY: check
 check: all

@@ -18,10 +18,10 @@
 # $(VBS_CC_DYNAMIC), into a folder of its own so that the direct and SGX builds are not touched.
 #
 # Where the image is linked and signed: in WSL with interop, on the Windows of the same machine
-# (gramine-vbs copies the objects to a Windows folder; see gramine-vbs --help for
+# (saguaro-vbs copies the objects to a Windows folder; see saguaro-vbs --help for
 # SAGUARO_VBS_WINDOWS_BASE); elsewhere on the Windows machine named by SAGUARO_VBS_WINDOWS (ssh);
 # with SAGUARO_VBS_WINDOWS=none or no Windows only the Linux half is built (`make VBS=1 vbs-sign`
-# later). $(GRAMINE) runs the application like gramine-direct: `$(GRAMINE) $(VBS_APP) args`.
+# later). $(GRAMINE) runs the application like saguaro-direct: `$(GRAMINE) $(VBS_APP) args`.
 #
 # The runtime (the vbs glibc, PAL and LibOS) is not built here: `scripts/install.sh --vbs` builds it
 # once per checkout (and again when its sources change), and `make VBS=1` stops with a message when
@@ -30,7 +30,7 @@
 VBS_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 SAGUARO_VBS_REPO ?= $(abspath $(VBS_DIR)/../..)
 
-SAGUARO_VBS := $(VBS_DIR)/gramine-vbs
+SAGUARO_VBS := $(VBS_DIR)/saguaro-vbs
 GRAMINE = $(SAGUARO_VBS)
 VBS_SYSROOT := $(SAGUARO_VBS_REPO)/build-vbs-glibc
 VBS_GCC := $(VBS_DIR)/vbs-gcc
@@ -45,7 +45,7 @@ endif
 VBS_TEMPLATE ?= vbs.manifest.template
 VBS_MANIFEST := $(VBS_APP).manifest.vbs
 VBS_IMAGE := $(VBS_APP).vbs/image.stamp
-# written by `scripts/install.sh --vbs` (gramine-vbs runtime); it changes only when the runtime
+# written by `scripts/install.sh --vbs` (saguaro-vbs runtime); it changes only when the runtime
 # objects, the vbs glibc or the sources of the Windows half changed, which rebuilds the images
 VBS_RUNTIME_STAMP := $(SAGUARO_VBS_REPO)/build-vbs/runtime.stamp
 
@@ -71,7 +71,7 @@ $(VBS_MANIFEST): $(VBS_TEMPLATE)
 		$(VBS_DEFINES) \
 		$< $@
 
-# pack (gramine-vbs build), compile the Windows objects, and link and sign on Windows when one is
+# pack (saguaro-vbs build), compile the Windows objects, and link and sign on Windows when one is
 # reachable; the stamp is written only when all of that succeeded
 $(VBS_IMAGE): $(VBS_MANIFEST) $(VBS_DEPS) $(VBS_RUNTIME_STAMP)
 	$(SAGUARO_VBS) build $<

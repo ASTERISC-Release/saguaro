@@ -39,7 +39,7 @@ For example:
         -KeyUsage DigitalSignature -Type Custom -TextExtension @(
         "2.5.29.37={text}1.3.6.1.5.5.7.3.3,1.3.6.1.4.1.311.76.57.1.15,1.3.6.1.4.1.311.97.814040577.346743379.4783502.105532346")
 
-The tools use the subject `CN=TheDefaultTestEnclaveCertName`; pass `--cert-name` to `gramine-vbs` for another one.
+The tools use the subject `CN=TheDefaultTestEnclaveCertName`; pass `--cert-name` to `saguaro-vbs` for another one.
 
 ## 5. Smart App Control off
 
@@ -51,7 +51,7 @@ without resetting Windows.
 
 ## Check the result
 
-After installing the runtime in WSL (`scripts/install.sh --vbs`), `gramine-vbs check` reports each of the steps above
+After installing the runtime in WSL (`scripts/install.sh --vbs`), `saguaro-vbs check` reports each of the steps above
 that is missing: the architecture, VBS running, Visual Studio, the MSVC enclave libraries, the Windows SDK, `veiid.exe`
 and `signtool.exe`, and the signing certificate. It does not report test signing or Smart App Control: read them with
 `bcdedit` and in *Windows Security*.

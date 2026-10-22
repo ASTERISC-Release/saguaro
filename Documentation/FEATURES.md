@@ -13,20 +13,20 @@ production use.
 
 ### Platforms
 
-- **AArch64 direct PAL** (done). `gramine-direct` runs on AArch64 Linux: LibOS regression about 195 passed / 36
+- **AArch64 direct PAL** (done). `saguaro-direct` runs on AArch64 Linux: LibOS regression about 195 passed / 36
   skipped, PAL regression 28 / 8, 12 example suites. `dev docs: aarch64/direct/`
-- **AArch64 vm PAL** (experimental). `gramine-vm` boots a microVM under stock QEMU `virt` with KVM at 1 to 4
+- **AArch64 vm PAL** (experimental). `saguaro-vm` boots a microVM under stock QEMU `virt` with KVM at 1 to 4
   vCPUs and runs LibOS applications, by default with several processes (`sys.experimental__multiprocess`):
   `fork`, `vfork`, `execve`, pipes, signals and shared memory between processes (bash, nginx workers, redis
   `BGSAVE`). [CHANGELOG.md](../CHANGELOG.md), `dev docs: vm-multiproc-aarch64/`
 - **RISC-V (RV64) direct PAL** (experimental). Cross-built; the regression suites and 11 example suites pass in an
   emulated RISC-V guest and, natively, on a board (PAL 27 passed, LibOS 190 passed and 3 failed, all 12 example
   suites). `dev docs: riscv/`
-- **x86_64 vm PAL, extended** (experimental). The inherited `gramine-vm` unikernel got a reworked vsock driver,
+- **x86_64 vm PAL, extended** (experimental). The inherited `saguaro-vm` unikernel got a reworked vsock driver,
   PCI/ivshmem support and uncacheable shared mappings; it is the base of the graphics and network work.
   `dev docs: vm.md`
 
-- **AMD SEV and SEV-SNP** (experimental, AMD64). `gramine-sev` runs the VM PAL as a SEV or SEV-SNP guest launched from an
+- **AMD SEV and SEV-SNP** (experimental, AMD64). `saguaro-sev` runs the VM PAL as a SEV or SEV-SNP guest launched from an
   IGVM file; the launch measurement covers the guest kernel and can be recomputed from the file. Attestation reports
   from `/dev/attestation` verify against AMD's VCEK chain. The LibOS suite passes except `test_020_cpuinfo` (the host
   has `mwaitx`, the KVM guest does not), and all examples pass in both modes. Trusted files and Secure TSC are
@@ -42,7 +42,7 @@ production use.
   example binds its key to the attestation report. `nodejs`, NumPy/SciPy, MongoDB and PyTorch are blocked by the
   ARM64 `x18` rule or the loader, `openjdk` by run-time code generation and R by process creation
   (`dev docs: vbs-enclave/APPS.md`). Limits: no `fork`, no run-time code loading (no JIT), test-signed debug enclaves.
-  `gramine-vbs`, `scripts/install.sh --vbs` and `./exec.sh --vbs` drive it. On both ARM64 and x64, 11 of 12 examples and
+  `saguaro-vbs`, `scripts/install.sh --vbs` and `./exec.sh --vbs` drive it. On both ARM64 and x64, 11 of 12 examples and
   all 8 static examples pass (`nodejs` fails: the x18 rule on ARM64, no x64 recipe on x64).
   `dev docs: vbs-enclave/manual.md`
 
@@ -67,7 +67,7 @@ production use.
   `strace` and reports which of its syscalls the direct and vm loaders support, with a likely/may run/unlikely
   verdict; calibrated on ten applications. `dev docs: syscall-profile/`
 
-### The VM PAL (`gramine-vm`)
+### The VM PAL (`saguaro-vm`)
 
 - **Processes** (experimental, x86_64 and AArch64). `fork`, `vfork`, `execve`, `wait`, signals between processes,
   pipes, shared futexes, guest-wide `/dev/shm` and System V IPC, on by default on both architectures
@@ -95,17 +95,17 @@ production use.
 - **Graphics host redirection** (experimental, x86_64 only). EGL, GBM and DRM calls of the application are
   forwarded through a shared page to a listener in QEMU that uses the host GPU, with stock Mesa; `glxgears`,
   SuperTuxKart, Quake II and Minetest run. `dev docs: graphics/`
-- **Vulkan** (experimental, x86_64). Works under `gramine-direct` as is; under `gramine-vm`, an implicit layer in
+- **Vulkan** (experimental, x86_64). Works under `saguaro-direct` as is; under `saguaro-vm`, an implicit layer in
   `libgraphics.so` provides the device path and presentation (Quake II's Vulkan renderer runs). `dev docs: vulkan/`
 - **Lower graphics memory floor** (experimental). The guest memory layout is computed at launch: boot takes
   about 0.8 s at 8G instead of 2.9 s, and host memory follows what the guest touches. `dev docs: graphics/`
 
-### `gramine-direct` with the host GPU
+### `saguaro-direct` with the host GPU
 
 - **Accelerated graphics** (experimental). Opt-in manifest keys let an unmodified OpenGL application (and, on
   x86_64, a Vulkan application) use the host's render node and X server: `glxgears`, Quake II, SuperTuxKart and
   Minetest at 76 to 102 % of native speed on Intel and AMD GPUs (x86_64), and at 88 to 100 % on an NVIDIA GPU
-  with the proprietary driver (AArch64). `gramine-direct` is not a sandbox, and the keys give the application
+  with the proprietary driver (AArch64). `saguaro-direct` is not a sandbox, and the keys give the application
   access to the GPU. `dev docs: graphics-direct/`, `dev docs: graphics-aarch64/`
 
 ### Build, test and workflow
@@ -118,7 +118,7 @@ production use.
   `--sgx` or `--vbs`: it explains why a backend cannot run, prints the command under test, streams the logs and ends
   with the example's check. The shared helpers (`CI-Examples/common_tools/`) also start and stop the server examples.
   Results per backend: [CI-Examples/README.md](../CI-Examples/README.md), [CI-Examples/RESULTS.md](../CI-Examples/RESULTS.md).
-- **Test batteries** (done). `test/direct/test-direct.sh` (PAL, LibOS, 12 example suites; `SAGUARO_RUNNER=gramine-vm`
+- **Test batteries** (done). `test/direct/test-direct.sh` (PAL, LibOS, 12 example suites; `SAGUARO_RUNNER=saguaro-vm`
   runs the server examples under the VM), the `test/test-vm*.sh` scripts, `test/sev/test-sev.sh` and the VM skip list.
   `dev docs: multiarch.md`
 - **CI workflows** (done). Manual workflows for direct x86_64, direct AArch64, emulated RISC-V, the x86_64

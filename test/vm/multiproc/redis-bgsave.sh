@@ -5,7 +5,7 @@ cd "${REPO:-$(cd "$(dirname "$(readlink -f "$0")")/../../.." && pwd)}"/CI-Exampl
 cp redis-server.manifest /tmp/redis-manifest.bak
 sed -i 's/^enable_sigterm_injection = true$/enable_sigterm_injection = true\nexperimental__multiprocess = true/' redis-server.manifest
 rm -f dump.rdb
-SAGUARO_CPU_NUM=${CPUS:-2} SAGUARO_VM_INBOUND="6379:6379" setsid timeout -s KILL 120 gramine-vm redis-server > /tmp/redis-mp.log 2>&1 &
+SAGUARO_CPU_NUM=${CPUS:-2} SAGUARO_VM_INBOUND="6379:6379" setsid timeout -s KILL 120 saguaro-vm redis-server > /tmp/redis-mp.log 2>&1 &
 pid=$!
 python3 - <<'PY'
 import socket, time

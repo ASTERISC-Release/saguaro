@@ -1,7 +1,7 @@
 #!/bin/bash
 # SPDX-License-Identifier: LGPL-3.0-or-later
-# Multi-process checks for gramine-vm with sys.experimental__multiprocess = true, with assertions
-# (run-probes.sh only prints). Each check runs under gramine-vm, compares the output with the
+# Multi-process checks for saguaro-vm with sys.experimental__multiprocess = true, with assertions
+# (run-probes.sh only prints). Each check runs under saguaro-vm, compares the output with the
 # expected lines, and is rerun once before it counts as failed (hosted guests are slow and the
 # signal probe has a known rare flake, see FINDINGS.md). Exit status 0 only if every check passed.
 #
@@ -22,7 +22,7 @@
 # (default 2), WORK (scratch dir, default <repo>/.mp-probes), LOGDIR (default $WORK/logs),
 # TIMEOUT_SCALE (multiplies every timeout, default 1), RERUN (default 1: rerun a failed check once),
 # MP (default 1; MP=0 renders the probe manifests without the key, as a negative check),
-# REDIS_HOST_PORT (default 16379), SAGUARO_VM_LAUNCHER (default gramine-vm; gramine-sev for AMD SEV,
+# REDIS_HOST_PORT (default 16379), SAGUARO_VM_LAUNCHER (default saguaro-vm; saguaro-sev for AMD SEV,
 # applies to the checks that run through vm()).
 set -u
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
@@ -30,7 +30,7 @@ REPO=$(cd "$HERE/../../.." && pwd)
 PREFIX=${SAGUARO_PREFIX:-$HOME/.local/saguaro-vm}
 [ -f "$PREFIX/env.sh" ] || { echo "no $PREFIX/env.sh: set SAGUARO_PREFIX to the install prefix" >&2; exit 2; }
 . "$PREFIX/env.sh"
-command -v gramine-vm >/dev/null || { echo "gramine-vm not on PATH after $PREFIX/env.sh" >&2; exit 2; }
+command -v saguaro-vm >/dev/null || { echo "saguaro-vm not on PATH after $PREFIX/env.sh" >&2; exit 2; }
 export SAGUARO_CPU_NUM=${SAGUARO_CPU_NUM:-2}
 WORK=${WORK:-$REPO/.mp-probes}
 LOGDIR=${LOGDIR:-$WORK/logs}
@@ -41,15 +41,15 @@ ARCH_LIBDIR=/lib/$(gcc -dumpmachine)
 mkdir -p "$WORK" "$LOGDIR"
 
 FAILED=()
-# vm <log> <timeout-seconds> <command...>: run a command (gramine-vm ...) with a timeout, its
+# vm <log> <timeout-seconds> <command...>: run a command (saguaro-vm ...) with a timeout, its
 # stdout+stderr (carriage returns removed) appended to <log>. A guest still running at the timeout
 # is looked at through its QEMU monitor (where its vCPUs are, vm-hang-report.py) and then stopped
 # through it, so that the launcher still reports how the guest ended and its serial output.
 vm() {
     local log=$1 t=$(( $2 * SCALE )) mon="$LOGDIR/qemu-monitor.sock" raw="$LOGDIR/vm-output.raw" pid rc i
     shift 2
-    # SAGUARO_VM_LAUNCHER=gramine-sev runs the checks under AMD SEV (dev docs: sev/)
-    [ "$1" = gramine-vm ] && [ -n "${SAGUARO_VM_LAUNCHER:-}" ] && set -- "$SAGUARO_VM_LAUNCHER" "${@:2}"
+    # SAGUARO_VM_LAUNCHER=saguaro-sev runs the checks under AMD SEV (dev docs: sev/)
+    [ "$1" = saguaro-vm ] && [ -n "${SAGUARO_VM_LAUNCHER:-}" ] && set -- "$SAGUARO_VM_LAUNCHER" "${@:2}"
     echo "+ $* (timeout ${t}s, $SAGUARO_CPU_NUM vCPUs)" >> "$log"
     rm -f "$mon"
     SAGUARO_VM_MONITOR=$mon setsid "$@" > "$raw" 2>&1 < /dev/null &
@@ -123,14 +123,14 @@ check_spawn() {
     local log=$1 rc=0
     build_probes
     mkdir -p "$WORK/countdir" && rm -f "$WORK"/countdir/* && touch "$WORK"/countdir/{a,b,c}
-    # no double quotes in the arguments: gramine-vm passes each argument to the guest inside
-    # double quotes without escaping them (tools/gramine-vm.in)
-    ( cd "$WORK" && vm "$log" 120 gramine-vm sh -c \
+    # no double quotes in the arguments: saguaro-vm passes each argument to the guest inside
+    # double quotes without escaping them (tools/saguaro-vm.in)
+    ( cd "$WORK" && vm "$log" 120 saguaro-vm sh -c \
           'echo hi | cat; x=$(echo sub); echo subst=$x; echo count=$(ls /probe/countdir | wc -l)' )
     expect "$log" "hi" || rc=1
     expect "$log" "subst=sub" || rc=1
     expect "$log" "count=3" || rc=1
-    ( cd "$WORK" && vm "$log" 120 gramine-vm spawn )
+    ( cd "$WORK" && vm "$log" 120 saguaro-vm spawn )
     expect "$log" "system(true) = 0 (exit 0)" || rc=1
     expect "$log" "from posix_spawn" || rc=1
     expect "$log" "posix_spawn = 0, child exit 3" || rc=1
@@ -142,7 +142,7 @@ check_spawn() {
 check_signals() {
     local log=$1 rc=0 l
     build_probes
-    ( cd "$WORK" && vm "$log" 120 gramine-vm bash /probe/sig.sh )
+    ( cd "$WORK" && vm "$log" 120 saguaro-vm bash /probe/sig.sh )
     for l in "got USR1" "after-self" "child got USR2" "child-status=5" "term-status=143"; do
         expect "$log" "$l" || rc=1
     done
@@ -152,9 +152,9 @@ check_signals() {
 check_forks() {
     local log=$1 rc=0
     build_probes
-    ( cd "$WORK" && vm "$log" 900 gramine-vm forks 1000 1 )
+    ( cd "$WORK" && vm "$log" 900 saguaro-vm forks 1000 1 )
     expect "$log" "forks=1000 parallel=1 bad=0" || rc=1
-    ( cd "$WORK" && vm "$log" 600 gramine-vm forks 64 8 )
+    ( cd "$WORK" && vm "$log" 600 saguaro-vm forks 64 8 )
     expect "$log" "forks=64 parallel=8 bad=0" || rc=1
     return $rc
 }
@@ -163,7 +163,7 @@ check_misc() {
     local log=$1 rc=0
     build_probes
     rm -f "$WORK"/scratch/mf-* "$WORK"/tmp/.gramine-*
-    ( cd "$WORK" && vm "$log" 240 gramine-vm misc-fork /probe/scratch )
+    ( cd "$WORK" && vm "$log" 240 saguaro-vm misc-fork /probe/scratch )
     expect "$log" "misc-fork done" || rc=1
     local l
     for l in "sysv_shm (inherited attach shared both ways)" "sysv_msg (child's own queue)" \
@@ -179,7 +179,7 @@ check_misc() {
 check_sysv() {
     local log=$1 rc=0
     build_probes
-    ( cd "$WORK" && vm "$log" 240 gramine-vm sysv-fork )
+    ( cd "$WORK" && vm "$log" 240 saguaro-vm sysv-fork )
     expect "$log" "sysv-fork: 18/18 passed" || rc=1
     if grep -q '^FAIL \|^child step' "$log"; then grep '^FAIL \|^child step' "$log" | sed 's/^/  /'; rc=1; fi
     return $rc
@@ -231,14 +231,14 @@ check_examples() {
              "$E/python/python.manifest" "$E/bash/bash.manifest"; do
         key_on "$m" "$list"
     done
-    ( cd "$E/helloworld" && vm "$log" 180 gramine-vm helloworld )
+    ( cd "$E/helloworld" && vm "$log" 180 saguaro-vm helloworld )
     expect_sub "$log" "Hello, world" || rc=1
-    ( cd "$E/unit_tests/multi-thread" && vm "$log" 300 gramine-vm thread-tls )
+    ( cd "$E/unit_tests/multi-thread" && vm "$log" 300 saguaro-vm thread-tls )
     expect_sub "$log" "(again)" || rc=1
-    ( cd "$E/python" && vm "$log" 600 gramine-vm python scripts/helloworld.py )
+    ( cd "$E/python" && vm "$log" 600 saguaro-vm python scripts/helloworld.py )
     expect_sub "$log" "Hello World" || rc=1
     # bash: the example's own checks; 2..7 start a second bash (a new process)
-    ( cd "$E/bash" && rm -f OUTPUT && timeout -s KILL $(( 600 * SCALE )) make regression GRAMINE=gramine-vm ) \
+    ( cd "$E/bash" && rm -f OUTPUT && timeout -s KILL $(( 600 * SCALE )) make regression GRAMINE=saguaro-vm ) \
         2>&1 | tr -d '\r' >> "$log"
     n=$(grep -c '^\[ Success [0-9]*/7 \]' "$log")
     echo "  bash example: $n/7"
@@ -254,7 +254,7 @@ check_redis() {
         || { echo "  host port $port is busy"; return 1; }
     : > "$list"; key_on "$D/redis-server.manifest" "$list"
     rm -f "$D/dump.rdb"
-    ( cd "$D" && SAGUARO_VM_INBOUND="6379:$port" exec setsid timeout -s KILL $(( 300 * SCALE )) gramine-vm redis-server \
+    ( cd "$D" && SAGUARO_VM_INBOUND="6379:$port" exec setsid timeout -s KILL $(( 300 * SCALE )) saguaro-vm redis-server \
           > "$log.server" 2>&1 ) &
     pid=$!
     python3 - "$port" "$SCALE" >> "$log" 2>&1 <<'PY' || rc=1

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (C) 2026 The ASTERISC Research Lab
 
-# glxgears under gramine-vm with the Tirith graphics redirection (x86_64). See
+# glxgears under saguaro-vm with the Tirith graphics redirection (x86_64). See
 # dev docs: graphics/ for the host setup (QEMU fork, X proxy).
 
 # The graphics preload library is built and installed with Gramine (-Dgraphics=enabled and a
@@ -48,9 +48,9 @@ run-native: all
 .PHONY: run
 run: all
 	mkdir -p $$HOME/.cache
-	gramine-vm glxgears
+	saguaro-vm glxgears
 
-# gramine-direct on the host GPU (dev docs: graphics-direct/): stock Mesa with DRI3 by
+# saguaro-direct on the host GPU (dev docs: graphics-direct/): stock Mesa with DRI3 by
 # default; PRELOAD=1 uses the preload library instead (needs an install built with a VM-type PAL).
 # The X server is the one of $(DISPLAY), reached through its Unix socket.
 PRELOAD ?= 0
@@ -73,7 +73,7 @@ glxgears-direct.manifest: glxgears-direct.manifest.template FORCE
 
 .PHONY: run-direct
 run-direct: glxgears glxgears-direct.manifest
-	gramine-direct glxgears-direct $(GLXGEARS_ARGS)
+	saguaro-direct glxgears-direct $(GLXGEARS_ARGS)
 
 .PHONY: clean
 clean:

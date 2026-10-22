@@ -8,9 +8,9 @@ This tree builds and runs on Debian/Ubuntu (24.04 is the tested baseline) on **x
 **aarch64**, in two ways (the experimental **riscv64** port of the direct PAL is cross-built instead;
 see [RISC-V (cross-build and test guest)](#risc-v-cross-build-and-test-guest)):
 
-- `gramine-direct`, the *direct* PAL: the library OS runs as an ordinary Linux process. It needs
+- `saguaro-direct`, the *direct* PAL: the library OS runs as an ordinary Linux process. It needs
   only the build tools and works anywhere, including in a container.
-- `gramine-vm`, the *vm* PAL: the library OS and a small kernel boot as a unikernel in a QEMU guest.
+- `saguaro-vm`, the *vm* PAL: the library OS and a small kernel boot as a unikernel in a QEMU guest.
   It needs a **native** machine of the same architecture with KVM (`/dev/kvm`), a stock
   `qemu-system-*`, `virtiofsd` and, on aarch64, `dtc`. On aarch64 it is experimental.
 
@@ -35,8 +35,8 @@ From the repository root:
 | `--prefix DIR` | install prefix, no root needed; default `~/.local/saguaro`, `~/.local/saguaro-vm` with `--vm` or `--sev`, `~/.local/saguaro-sgx` with `--sgx` (without `--vm`), `~/.local/saguaro-riscv64` with `--target riscv64` |
 | `--build-dir DIR` | meson build directory; default `build-<arch>`, `build-vm-<arch>` with `--vm`, `build-sgx` with `--sgx` (without `--vm`), `build-riscv64` with `--target riscv64` |
 | `--vm`, `--tdx`, `--sgx` | also build that PAL (the direct PAL is always built, except by `--vm` on aarch64) |
-| `--sev` | `--vm` plus the AMD SEV build of the vm PAL and `gramine-sev` (x86_64) |
-| `--vbs` | the Windows VBS tooling, in WSL on the Windows machine (`scripts/vbs/install-vbs.sh`: `gramine-vbs` in `~/.local/bin`, the vbs runtime in `build-vbs`); nothing else is built |
+| `--sev` | `--vm` plus the AMD SEV build of the vm PAL and `saguaro-sev` (x86_64) |
+| `--vbs` | the Windows VBS tooling, in WSL on the Windows machine (`scripts/vbs/install-vbs.sh`: `saguaro-vbs` in `~/.local/bin`, the vbs runtime in `build-vbs`); nothing else is built |
 | `--graphics disabled` | leave out the Tirith graphics host-redirection paths |
 | `--libc glibc|none|musl` | libc of the runtime directory; see [Which libc](#which-libc) |
 | `--target riscv64` | cross-build (see [RISC-V (cross-build and test guest)](#risc-v-cross-build-and-test-guest)) |
@@ -52,9 +52,9 @@ Check the install and run an example:
 
     cd CI-Examples/helloworld
     make
-    gramine-direct helloworld
+    saguaro-direct helloworld
 
-### Virtual-machine PAL (`gramine-vm`)
+### Virtual-machine PAL (`saguaro-vm`)
 
 Install the QEMU side, then build with `--vm`.
 
@@ -64,7 +64,7 @@ aarch64:
     scripts/dependencies.sh --build-only
     scripts/install.sh --vm           # into ~/.local/saguaro-vm, build dir build-vm-aarch64
     . ~/.local/saguaro-vm/env.sh
-    test/vm/test-vm.sh                   # LibOS suite under gramine-vm, example apps, hello soak test
+    test/vm/test-vm.sh                   # LibOS suite under saguaro-vm, example apps, hello soak test
 
 On aarch64 `--vm` builds *only* the vm PAL (no direct PAL, SGX or TDX), builds without graphics (the
 redirection needs the QEMU fork's host agent, which does not exist for aarch64) and builds the test
@@ -81,7 +81,7 @@ x86_64:
     scripts/install.sh --vm --graphics disabled [--tdx] [--sgx]
     sudo ln -sf /usr/libexec/virtiofsd /usr/local/bin/virtiofsd    # if `command -v virtiofsd` finds nothing
 
-The x86_64 vm PAL is inherited from upstream gramine-tdx. `gramine-vm` runs the QEMU named by
+The x86_64 vm PAL is inherited from upstream gramine-tdx. `saguaro-vm` runs the QEMU named by
 `QEMU_PATH`, otherwise a stock `qemu-system-x86_64` from `PATH`. TDX and the graphics redirection
 need a QEMU fork kept outside this repository; for graphics see
 `dev docs: graphics/running.md`. With graphics enabled (the default), `--vm` also builds
@@ -90,7 +90,7 @@ without them.
 
 Running an application under the VM PAL is described in `dev docs: vm.md`: the manifest's
 loader entrypoint must name the VM `libsysdb.so` (`make` against the VM install does this), the
-binary must be a PIE on aarch64, and you start it with `gramine-vm <application>`. A kernel panic or
+binary must be a PIE on aarch64, and you start it with `saguaro-vm <application>`. A kernel panic or
 guest exit is reported as `[ VM exited with code N ]`.
 
 ### Which libc
@@ -112,7 +112,7 @@ a build directory of its own, for the patched glibc. On aarch64 the direct PAL n
 matching image if it is missing or its Containerfile changed, creates a long-lived container and opens a
 shell in it. The repository is mounted at `/root/<checkout folder>` (`/root/saguaro` for a
 checkout named `saguaro`, as `git clone git@github.com:ASTERISC-Release/saguaro.git` makes); builds
-and install prefixes live in the container's home. You need `podman`, and for `gramine-vm` a native
+and install prefixes live in the container's home. You need `podman`, and for `saguaro-vm` a native
 host of the same architecture with `/dev/kvm`.
 
     container/run.sh                      # shell in the container for this machine
@@ -184,7 +184,7 @@ defaults in [Which libc](#which-libc) are set by `scripts/install.sh`.
 - `PAL failed setting personality failed: Function not implemented`: the direct PAL runs under a
   seccomp profile that blocks `personality()` (typically a default container). Run it natively or with
   `--security-opt seccomp=unconfined` (`container/run.sh` does this).
-- `gramine-vm` does nothing useful, or `/dev/kvm` is missing: the vm PAL needs hardware
+- `saguaro-vm` does nothing useful, or `/dev/kvm` is missing: the vm PAL needs hardware
   virtualisation on a machine of the *same* architecture; on AArch64 the launcher falls back to software emulation (TCG)
   without `/dev/kvm`, on x86_64 KVM is required.
 - `[ VM exited with code 134 ]`: the guest kernel panicked; the lines above it hold the register dump.

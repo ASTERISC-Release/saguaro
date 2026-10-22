@@ -10,7 +10,7 @@
 #   retry <seconds> <command...>          run the command until it succeeds or the time is up
 #
 # The server runs in its own session under `timeout`, so server_stop kills the whole group: killing only
-# gramine-vm would leave its QEMU process running (and exec.sh waiting for it).
+# saguaro-vm would leave its QEMU process running (and exec.sh waiting for it).
 
 SERVER_PID=
 

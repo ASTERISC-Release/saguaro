@@ -5,13 +5,13 @@
 
 set -e
 
-# VBS=1: GRAMINE is scripts/vbs/gramine-vbs (make VBS=1 check); the servers listen on Windows, so
-# the port is awaited and fetched on the Windows side (gramine-vbs net / win)
+# VBS=1: GRAMINE is scripts/vbs/saguaro-vbs (make VBS=1 check); the servers listen on Windows, so
+# the port is awaited and fetched on the Windows side (saguaro-vbs net / win)
 if test -z "${GRAMINE:-}"; then
     if test -n "$SGX"; then
-        GRAMINE=gramine-sgx
+        GRAMINE=saguaro-sgx
     else
-        GRAMINE=gramine-direct
+        GRAMINE=saguaro-direct
     fi
 fi
 

@@ -3,7 +3,7 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
 # The WSL half of the Windows-only build (dev docs: vbs-enclave/PLAN-windows-build.md):
-# started from Windows by gramine-vbs.ps1 or build-enclave.ps1 with its inputs in environment
+# started from Windows by saguaro-vbs.ps1 or build-enclave.ps1 with its inputs in environment
 # variables (WSLENV; the /p ones arrive as Linux paths), never on a command line.
 #
 #   wsl-build.sh sync      unpack the tar of a Windows folder into the distribution
@@ -15,7 +15,7 @@
 #   wsl-build.sh objs      compile the Windows enclave runtime and host (build-objs.sh)
 #       GV_PACK  pack.py output folder in the distribution (empty: no packed objects)
 #   wsl-build.sh manifest  the whole Linux side for a manifest: the vbs glibc and the meson build of
-#                          the runtime when missing (build-runtime.sh), then `gramine-vbs build --no-sign` (the
+#                          the runtime when missing (build-runtime.sh), then `saguaro-vbs build --no-sign` (the
 #                          manifest's vbs.build recipe, pack.py, build-objs.sh)
 #       GV_MANIFEST  the manifest in the distribution
 #   objs and manifest also take
@@ -106,14 +106,14 @@ fi
 mkdir -p "$GV_OUT"
 
 if [ "$MODE" = objs ]; then
-    OBJ=$(mktemp -d "${TMPDIR:-/tmp}/gramine-vbs-obj.XXXXXX")
+    OBJ=$(mktemp -d "${TMPDIR:-/tmp}/saguaro-vbs-obj.XXXXXX")
     trap 'rm -rf "$OBJ" "$OBJ.log"' EXIT
     HDR="$HDR" OUT="$OBJ" PACK="$GV_PACK" sh "$HERE/build-objs.sh" >"$OBJ.log" 2>&1 \
         || { tail -30 "$OBJ.log"; exit 1; }
 else
     : "${GV_MANIFEST:?}"
     SAGUARO_VBS_LOG_PREFIX=[wsl] sh "$HERE/build-runtime.sh"
-    python3 -I "$HERE/gramine-vbs" build "$GV_MANIFEST" --no-sign --runtime "$ROOT/build-vbs" \
+    python3 -I "$HERE/saguaro-vbs" build "$GV_MANIFEST" --no-sign --runtime "$ROOT/build-vbs" \
         --headers "$HDR"
     B=${GV_MANIFEST%.toml}
     B=${B%.vbs}

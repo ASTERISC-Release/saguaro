@@ -142,11 +142,11 @@ start-native-server: all
 	$(INSTALL_DIR)/sbin/lighttpd -D -m $(INSTALL_DIR)/lib -f lighttpd.conf
 
 ifeq ($(VBS),1)
-# GRAMINE is gramine-vbs (Makefile.vbs)
+# GRAMINE is saguaro-vbs (Makefile.vbs)
 else ifeq ($(SGX),)
-GRAMINE = gramine-direct
+GRAMINE = saguaro-direct
 else
-GRAMINE = gramine-sgx
+GRAMINE = saguaro-sgx
 endif
 
 # Note that command-line arguments are hardcoded in the manifest file.

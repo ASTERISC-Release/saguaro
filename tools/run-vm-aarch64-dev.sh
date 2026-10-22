@@ -3,7 +3,7 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
 # Development bring-up runner for the aarch64 vm-PAL kernel (dev docs: vm.md).
-# Not the final launcher: tools/gramine-vm.in's arm counterpart will replace it.
+# Not the final launcher: tools/saguaro-vm.in's arm counterpart will replace it.
 #
 # Usage: run-vm-aarch64-dev.sh [extra qemu args]
 #
@@ -55,7 +55,7 @@ qemu-system-aarch64 $M -accel "$ACCEL" -cpu "$CPU" -m 2G -smp "$SMP" -nic none \
     -machine dumpdtb="$WORK/virt.dtb" >/dev/null
 dtc -I dtb -O dtb -o "$WORK/virt-packed.dtb" "$WORK/virt.dtb"
 
-# virtio-fs backend, mirroring tools/gramine-vm.in: virtiofsd serves / over a unix
+# virtio-fs backend, mirroring tools/saguaro-vm.in: virtiofsd serves / over a unix
 # socket and QEMU's RAM must be a shared memfd backend for the vhost-user mapping.
 # (Ubuntu's virtiofsd package installs it under /usr/lib/qemu, off PATH.)
 VIRTIOFSD=$(command -v virtiofsd || echo /usr/lib/qemu/virtiofsd)

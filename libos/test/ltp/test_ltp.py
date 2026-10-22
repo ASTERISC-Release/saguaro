@@ -187,10 +187,10 @@ def check_must_pass(passed, failed, must_pass):
 def test_ltp(cmd, section):
     must_pass = section.getintset('must-pass')
 
-    loader = LTP_LOADER or ('gramine-sgx' if HAS_SGX else 'gramine-direct')
-    loader = {'direct': 'gramine-direct', 'vm': 'gramine-vm'}.get(loader, loader)
-    if loader not in ('native', 'gramine-direct', 'gramine-vm', 'gramine-sgx'):
-        raise ValueError('LTP_LOADER must be native, gramine-direct, gramine-vm or gramine-sgx')
+    loader = LTP_LOADER or ('saguaro-sgx' if HAS_SGX else 'saguaro-direct')
+    loader = {'direct': 'saguaro-direct', 'vm': 'saguaro-vm'}.get(loader, loader)
+    if loader not in ('native', 'saguaro-direct', 'saguaro-vm', 'saguaro-sgx'):
+        raise ValueError('LTP_LOADER must be native, saguaro-direct, saguaro-vm or saguaro-sgx')
     timeout = int(section.getfloat('timeout') * LTP_TIMEOUT_FACTOR)
     full_cmd = cmd if loader == 'native' else [loader, *cmd]
 
@@ -262,7 +262,7 @@ Supports the following environment variables:
     LTP_SCENARIO: LTP scenario file (default: {})
     LTP_CONFIG: space-separated list of LTP config files (default: {})
     LTP_TIMEOUT_FACTOR: multiply all timeouts by given value
-    LTP_LOADER: native, gramine-direct, gramine-vm or gramine-sgx (default preserves old behavior)
+    LTP_LOADER: native, saguaro-direct, saguaro-vm or saguaro-sgx (default preserves old behavior)
 '''.format(sys.argv[0], DEFAULT_LTP_SCENARIO, DEFAULT_LTP_CONFIG)
         print(usage, file=sys.stderr)
         sys.exit(1)

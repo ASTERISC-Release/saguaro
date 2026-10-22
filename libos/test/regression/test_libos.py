@@ -480,7 +480,7 @@ class TC_01_Bootstrap(RegressionTestCase):
         self.assertIn('TEST OK', stdout)
         if USE_GRAMINE_VM:
             return
-        # gramine-direct: the words are the host kernel's, masked to the allowlist
+        # saguaro-direct: the words are the host kernel's, masked to the allowlist
         words = {}
         with open('/proc/self/auxv', 'rb') as f:
             auxv = f.read()
@@ -691,9 +691,9 @@ class TC_04_Attestation(RegressionTestCase):
         self.assertIn("Test local attestation... SUCCESS", stdout)
         self.assertIn("Test quote interface... SUCCESS", stdout)
 
-@unittest.skipUnless(USE_GRAMINE_VM and VM_LAUNCHER == 'gramine-sev'
+@unittest.skipUnless(USE_GRAMINE_VM and VM_LAUNCHER == 'saguaro-sev'
                      and os.environ.get('SAGUARO_SEV_MODE') == 'snp',
-    'SEV-SNP attestation: only under gramine-sev with SAGUARO_SEV_MODE=snp')
+    'SEV-SNP attestation: only under saguaro-sev with SAGUARO_SEV_MODE=snp')
 class TC_04_AttestationSevSnp(RegressionTestCase):
     def test_000_attestation_sev_snp(self):
         stdout, _ = self.run_binary(['attestation_sev_snp'], timeout=120)
@@ -1692,7 +1692,7 @@ class TC_50_GDB(RegressionTestCase):
 
     def test_000_gdb_backtrace(self):
         # To run this test manually, use:
-        # GDB=1 GDB_SCRIPT=debug.gdb gramine-{direct|sgx} debug
+        # GDB=1 GDB_SCRIPT=debug.gdb saguaro-{direct|sgx} debug
         #
         # TODO: strengthen this test after SGX includes enclave entry.
         #
@@ -1731,7 +1731,7 @@ class TC_50_GDB(RegressionTestCase):
     @unittest.skipUnless(ON_X86, 'x86-specific')
     def test_010_regs_x86_64(self):
         # To run this test manually, use:
-        # GDB=1 GDB_SCRIPT=debug_regs_x86_64.gdb gramine-{direct|sgx} debug_regs_x86_64
+        # GDB=1 GDB_SCRIPT=debug_regs_x86_64.gdb saguaro-{direct|sgx} debug_regs_x86_64
 
         stdout, _ = self.run_gdb(['debug_regs_x86_64'], 'debug_regs_x86_64.gdb')
 
@@ -1750,7 +1750,7 @@ class TC_50_GDB(RegressionTestCase):
     @unittest.skipUnless(HAS_SGX, 'Trusted files bug was SGX-specific')
     def test_020_gdb_fork_and_access_file_bug(self):
         # To run this test manually, use:
-        # GDB=1 GDB_SCRIPT=fork_and_access_file.gdb gramine-sgx fork_and_access_file
+        # GDB=1 GDB_SCRIPT=fork_and_access_file.gdb saguaro-sgx fork_and_access_file
         #
         # This test checks that the bug of trusted files was fixed. The bug effectively degenerated
         # opened trusted files to allowed files after fork. This test starts a program that forks

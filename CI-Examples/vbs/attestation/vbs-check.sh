@@ -5,7 +5,7 @@
 # `make VBS=1 check`: the enclave writes an attestation report for given user data and the
 # verifier accepts it for that data and rejects it for other data (dev docs: vbs-enclave/manual.md, Attestation).
 set -euo pipefail
-: "${GRAMINE:=../../../scripts/vbs/gramine-vbs}"
+: "${GRAMINE:=../../../scripts/vbs/saguaro-vbs}"
 N=$(printf 'ab%.0s' $(seq 32)); O=$(printf 'cd%.0s' $(seq 32))
 "$GRAMINE" attest "$N" > OUTPUT 2>&1
 grep -q "attest test: passed" OUTPUT || { cat OUTPUT; echo "FAIL: attest"; exit 1; }

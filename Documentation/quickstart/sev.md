@@ -1,6 +1,6 @@
-# Quickstart: AMD SEV Confidential Virtual Machine (`gramine-sev`)
+# Quickstart: AMD SEV Confidential Virtual Machine (`saguaro-sev`)
 
-`gramine-sev` runs a Gramine micro-VM as an AMD SEV-SNP guest. SEV-SNP protects guest
+`saguaro-sev` runs a Gramine micro-VM as an AMD SEV-SNP guest. SEV-SNP protects guest
 memory and registers from the host and supports hardware-signed attestation. The guest kernel is
 loaded from an IGVM file measured at launch. See the [VM quickstart](vm.md) and the
 dev docs: `sev/PLAN.md`.
@@ -11,7 +11,7 @@ Symbols as in [README.md](../../README.md):
 
 | Configuration           | Intel x86_64 | AMD64 | AArch64 | RISC-V (RV64) |
 |-------------------------|--------------|-------|---------|---------------|
-| `gramine-sev` (SEV-SNP) | ➖           | ⚠️    | ➖      | ➖            |
+| `saguaro-sev` (SEV-SNP) | ➖           | ⚠️    | ➖      | ➖            |
 
 Plain SEV/SEV-ES is also available: `./exec.sh --sev`, or `SAGUARO_SEV_MODE=sev` by hand.
 
@@ -35,10 +35,10 @@ Saguaro. QEMU 11.1.2 with `sev-snp-guest` and IGVM (including a local patch for 
 
     cd <repo-home>
     container/run.sh "container/sev/build-sev-tools.sh all"
-    container/run.sh "scripts/install.sh --sev --graphics disabled"   # vm PAL + SEV PAL + gramine-sev
+    container/run.sh "scripts/install.sh --sev --graphics disabled"   # vm PAL + SEV PAL + saguaro-sev
 
 `--sev` builds the normal vm PAL as well, into `~/.local/saguaro-vm` (the same prefix as
-`--vm`); `gramine-sev` uses the QEMU of `sev-tools/` when `QEMU_PATH` is not set.
+`--vm`); `saguaro-sev` uses the QEMU of `sev-tools/` when `QEMU_PATH` is not set.
 `--graphics disabled` leaves out the graphics paths, which the SEV guest does not use.
 `container/run.sh` loads `~/.local/saguaro-vm/env.sh` by itself, so the commands below need no
 environment step.
@@ -52,10 +52,10 @@ In the container shell, `exec.sh` runs the example under SEV-SNP (`--sev-snp`) o
     ./exec.sh --sev-snp
     ./exec.sh --sev
 
-The script builds the example, sets `SAGUARO_SEV_MODE` to `snp` or `sev` and runs `gramine-sev`.
+The script builds the example, sets `SAGUARO_SEV_MODE` to `snp` or `sev` and runs `saguaro-sev`.
 The output contains:
 
-    gramine-sev: snp launch digest of .../sev/gramine-sev.igvm on 1 vCPUs: <96 hex digits>
+    saguaro-sev: snp launch digest of .../sev/saguaro-sev.igvm on 1 vCPUs: <96 hex digits>
     Hello, world
     [ VM exited with code 0 ]
 
@@ -63,7 +63,7 @@ The steps by hand:
 
     cd CI-Examples/helloworld
     make
-    SAGUARO_SEV_MODE=snp gramine-sev helloworld
+    SAGUARO_SEV_MODE=snp saguaro-sev helloworld
 
 The digest depends on the PAL build and vCPU count; the attestation report must contain this value.
 
@@ -77,7 +77,7 @@ In a fresh container, `blender`, `mongodb`, `nodejs`, `openjdk` and `r` first st
 
 Note the following:
 
-- Set `SAGUARO_CPU_NUM` and `SAGUARO_RAM_SIZE` as for `gramine-vm`. The guest needs at least 6G
+- Set `SAGUARO_CPU_NUM` and `SAGUARO_RAM_SIZE` as for `saguaro-vm`. The guest needs at least 6G
   (the launcher default and the scripts of `test/sev/` use 8G, which SEV pins at launch): `4G`
   no longer works, the guest stops with `Cannot initialize the multiprocess frame pool: Not enough memory`.
 - Mode can be selected with `SAGUARO_SEV_MODE` or `sev.mode` in the manifest (`snp` by default, or `sev`).
@@ -92,7 +92,7 @@ Inside the guest, `/dev/attestation/attestation_type` reads `sev-snp`; write 64 
 this and writes the report to a host file:
 
     cd test/sev && make
-    SAGUARO_SEV_MODE=snp gramine-sev sev_attest $(head -c 64 /dev/urandom | od -An -tx1 | tr -d ' \n') /tmp/report.bin
+    SAGUARO_SEV_MODE=snp saguaro-sev sev_attest $(head -c 64 /dev/urandom | od -An -tx1 | tr -d ' \n') /tmp/report.bin
 
 Check the report (in the container, where the SEV tools are): its signature against AMD's certificate chain (fetched from AMD's key
 server) and its measurement against the IGVM file:
@@ -100,8 +100,8 @@ server) and its measurement against the IGVM file:
     export PATH=/root/sev-tools/prefix/bin:$PATH
     snpguest fetch ca pem /tmp/certs milan -e vcek
     snpguest fetch vcek pem /tmp/certs /tmp/report.bin
-    python3 ~/.local/saguaro-vm/lib/x86_64-linux-gnu/gramine/sev/gramine-sev-igvm.py verify-snp \
-        ~/.local/saguaro-vm/lib/x86_64-linux-gnu/gramine/sev/gramine-sev.igvm /tmp/report.bin \
+    python3 ~/.local/saguaro-vm/lib/x86_64-linux-gnu/gramine/sev/saguaro-sev-igvm.py verify-snp \
+        ~/.local/saguaro-vm/lib/x86_64-linux-gnu/gramine/sev/saguaro-sev.igvm /tmp/report.bin \
         --vcpus 1 --certs /tmp/certs
 
 which ends with `ok   signature by the VCEK` and `OK`. The measurement covers the PAL and its
@@ -112,7 +112,7 @@ are currently not measured.
 
     SAGUARO_SEV_MODE=snp test/sev/test-sev.sh     # hello (1, 4 vCPUs), host-side memory check, vsock, attest
     test/sev/test-sev.sh                          # the same under plain SEV, with the launch measurement
-    SAGUARO_VM_LAUNCHER=gramine-sev SAGUARO_SEV_MODE=snp SAGUARO_RAM_SIZE=8G test/vm/test-vm.sh libos
+    SAGUARO_VM_LAUNCHER=saguaro-sev SAGUARO_SEV_MODE=snp SAGUARO_RAM_SIZE=8G test/vm/test-vm.sh libos
     test/sev/test-sev-all.sh                      # everything above, at 1, 2 and 4 vCPUs, plus examples
 
 `SAGUARO_SEV_MODE=snp test/sev/test-sev.sh` runs under SNP, `test/sev/test-sev.sh` under plain SEV
@@ -126,7 +126,7 @@ are currently not measured.
   discards the install inside it, then repeat section 1; not verified).
 - `sev_snp` in `/sys/module/kvm_amd/parameters` is not `Y`: SNP is off in the firmware or the host
   kernel; plain SEV (`--sev`) may still work.
-- `gramine-sev` cannot find QEMU: `container/sev/build-sev-tools.sh all` has not run, or
+- `saguaro-sev` cannot find QEMU: `container/sev/build-sev-tools.sh all` has not run, or
   `sev-tools/` is not next to the checkout. Set `SEV_TOOLS_DIR` or `QEMU_PATH`.
 - `Cannot initialize the multiprocess frame pool: Not enough memory`: `SAGUARO_RAM_SIZE` is below
   6G; unset it or use `8G`.

@@ -1,6 +1,6 @@
 #!/bin/bash
 # SPDX-License-Identifier: LGPL-3.0-or-later
-# Multi-process probes for gramine-vm with sys.experimental__multiprocess (run in the container,
+# Multi-process probes for saguaro-vm with sys.experimental__multiprocess (run in the container,
 # after `scripts/install.sh --vm`): spawn (sh -c, system(), posix_spawn), signals between
 # processes (bash), fork stress, then nginx with workers and redis BGSAVE (both use host ports
 # 8002/8444 and 6379: check that nobody else uses them), and `misc`: the dev-libos-misc calls
@@ -26,12 +26,12 @@ run() { SAGUARO_CPU_NUM=${CPUS:-2} timeout -s KILL "$@" 2>&1 | grep -v "self-che
 [ $# -gt 0 ] || set -- spawn signals forks
 for what in "$@"; do
     case $what in
-        spawn)   run 60 gramine-vm sh -c 'echo hi | cat; ls /probe | wc -l'; run 60 gramine-vm spawn ;;
-        signals) run 60 gramine-vm bash /probe/sig.sh ;;
-        forks)   run 600 gramine-vm forks 1000 1; run 600 gramine-vm forks 64 8 ;;
+        spawn)   run 60 saguaro-vm sh -c 'echo hi | cat; ls /probe | wc -l'; run 60 saguaro-vm spawn ;;
+        signals) run 60 saguaro-vm bash /probe/sig.sh ;;
+        forks)   run 600 saguaro-vm forks 1000 1; run 600 saguaro-vm forks 64 8 ;;
         nginx)   "$HERE"/nginx-workers.sh ;;
         redis)   "$HERE"/redis-bgsave.sh ;;
         misc)    mkdir -p "$WORK/scratch" "$WORK/tmp"; rm -f "$WORK"/scratch/mf-* "$WORK"/tmp/.gramine-*
-                 run 120 gramine-vm misc-fork /probe/scratch ;;
+                 run 120 saguaro-vm misc-fork /probe/scratch ;;
     esac
 done

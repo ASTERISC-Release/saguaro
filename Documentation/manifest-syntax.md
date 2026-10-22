@@ -176,9 +176,9 @@ This option takes precedence over `fs.mounts`.
 This means that etc files provided via `fs.mounts` will be overridden with
 the ones added via this option.
 
-### VM networking (`gramine-vm`)
+### VM networking (`saguaro-vm`)
 
-The `gramine-vm` launcher (x86_64 and AArch64) starts a per-VM VSOCK relay. The guest has no TCP/IP stack; the
+The `saguaro-vm` launcher (x86_64 and AArch64) starts a per-VM VSOCK relay. The guest has no TCP/IP stack; the
 relay opens TCP and UDP sockets in the launcher's network namespace. These settings are read by the
 VM launcher and relay and do not configure the Linux PAL.
 
@@ -470,7 +470,7 @@ a path under this mount returns the target of the host's symbolic link; path
 lookup is unchanged. libdrm needs this for the links under `/sys/dev/char`,
 for example `{ path = "/sys", type = "chroot", uri = "file:/sys", host_symlinks = true }`. A relative target is resolved inside Gramine's file
 system, an absolute one too, so it must be mounted at the same path. Only the
-Linux PAL (`gramine-direct`) supports it; with other PALs `readlink()`
+Linux PAL (`saguaro-direct`) supports it; with other PALs `readlink()`
 still fails.
 
 ### Start (current working) directory
@@ -627,18 +627,18 @@ sys.allowed_ioctls = [
 ]
 ```
 
-### Raw device IOCTLs (`gramine-direct`)
+### Raw device IOCTLs (`saguaro-direct`)
 
 ```
 sys.insecure__allow_raw_device_ioctl = [true|false]
 (Default: false)
 ```
 
-With `true`, the Linux PAL (`gramine-direct`) passes every IOCTL on a
+With `true`, the Linux PAL (`saguaro-direct`) passes every IOCTL on a
 mounted device (for example a DRM render node under `/dev/dri`) to the host
 unchanged: the application's argument pointer goes to the host kernel as it is,
 without `sys.ioctl_structs` and `sys.allowed_ioctls` being consulted. This
-works because under `gramine-direct` the application and the host kernel
+works because under `saguaro-direct` the application and the host kernel
 share one address space; it is what GPU drivers need, whose IOCTLs carry nested
 pointers that cannot practically be described in the manifest. Gramine logs a
 warning on the first such IOCTL. Other PALs ignore the key. File descriptors
@@ -647,13 +647,13 @@ host fds: DRM PRIME and syncobj, dma-buf sync files, and the NVIDIA driver's
 IOCTLs on its character devices (major 195) that carry an fd.
 
 > [!WARNING]
-> This option is insecure and must not be used in production. `gramine-direct`
+> This option is insecure and must not be used in production. `saguaro-direct`
 > is not a sandbox, and with this option the application can issue any IOCTL
 > to the devices it can open, with any pointers in the argument; for a GPU
 > this means submitting commands to it. File descriptors inside IOCTL arguments
 > are host file descriptors unless Gramine knows the IOCTL and translates them.
 
-### Host UNIX sockets (`gramine-direct`)
+### Host UNIX sockets (`saguaro-direct`)
 
 ```
 sys.insecure__host_unix_sockets = ["[HOST PATH]", ...]
@@ -699,7 +699,7 @@ This syntax enables the `flock` system call in Gramine.
 These keys configure the `vbs` PAL, which runs Linux applications inside
 Windows VBS enclaves on ARM64 or x64 Windows 11 (see `vbs`). Other PALs ignore
 them. The image, its configuration and every packed file are fixed when the
-enclave image is built and signed (`gramine-vbs build`); nothing executable
+enclave image is built and signed (`saguaro-vbs build`); nothing executable
 can be added at run time. A VBS manifest also needs:
 
 ```
@@ -744,11 +744,11 @@ vbs.allowed_files = [ "[ENCLAVE PATH]", "[ENCLAVE DIRECTORY]/" ]
 ```
 
 Host files are read and written through the untrusted host process, below its
-host root folder (`gramine-vbs run --root`). A trusted file is read in full
+host root folder (`saguaro-vbs run --root`). A trusted file is read in full
 when it is opened and refused unless its SHA-256 matches; it is read-only. An
 allowed file or directory (an entry ending in `/` covers everything below
 it) is passed through without any protection, as `sgx.allowed_files`.
-`gramine-vbs run` creates the allowed directories below the host root.
+`saguaro-vbs run` creates the allowed directories below the host root.
 
 ### Debug/production enclave
 
@@ -822,7 +822,7 @@ for function multi-versioning, which nothing in `libgcc_s` reads).
 vbs.build = "[SHELL COMMAND]"
 ```
 
-A command that `gramine-vbs build` runs with `sh -c` in the manifest's
+A command that `saguaro-vbs build` runs with `sh -c` in the manifest's
 folder before packing, to build the application's files for the enclave (on
 Windows it runs inside the WSL distribution). Its environment has
 `SYSROOT` (the vbs glibc), `VBS_CC_STATIC` and `VBS_CC_DYNAMIC` (link a

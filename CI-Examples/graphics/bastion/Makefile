@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (C) 2026 The ASTERISC Research Lab
 
-# Bastion (GOG.com Linux build) under gramine-vm with the Tirith graphics redirection (x86_64).
+# Bastion (GOG.com Linux build) under saguaro-vm with the Tirith graphics redirection (x86_64).
 # The game is commercial: buy it on GOG.com and unpack it with ./setup-bastion.sh first. See
 # README.md here and dev docs: graphics/ for the host setup.
 
@@ -62,9 +62,9 @@ run-native: $(GAME_BIN) dirs
 
 .PHONY: run
 run: all dirs
-	gramine-vm bastion
+	saguaro-vm bastion
 
-# gramine-direct on the host GPU (dev docs: graphics-direct/): stock Mesa with DRI3 by
+# saguaro-direct on the host GPU (dev docs: graphics-direct/): stock Mesa with DRI3 by
 # default; PRELOAD=1 uses the preload library instead (needs an install built with a VM-type PAL).
 # The X server is the one of $(DISPLAY), reached through its Unix socket. Arguments come from the
 # command line (BASTION_ARGS).
@@ -78,7 +78,7 @@ bastion-direct.manifest: bastion-direct.manifest.template $(GAME_BIN) FORCE
 
 .PHONY: run-direct
 run-direct: bastion-direct.manifest dirs
-	gramine-direct bastion-direct $(BASTION_ARGS)
+	saguaro-direct bastion-direct $(BASTION_ARGS)
 
 .PHONY: clean
 clean:

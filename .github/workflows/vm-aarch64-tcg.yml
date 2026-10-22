@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
-# The aarch64 VM PAL (gramine-vm) under QEMU software emulation (TCG).
+# The aarch64 VM PAL (saguaro-vm) under QEMU software emulation (TCG).
 #
-# Hosted aarch64 runners have no usable KVM, so the launcher (tools/gramine-vm-aarch64.in) falls back to
+# Hosted aarch64 runners have no usable KVM, so the launcher (tools/saguaro-vm-aarch64.in) falls back to
 # `-accel tcg,thread=multi -cpu max` by itself. The aarch64 VM PAL is built natively with
 # scripts/install.sh --vm (no cross toolchain exists in the repository), hence the arm64 runner.
 #
@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
     inputs:
       run_suite:
-        description: "also run the LibOS regression suite under gramine-vm"
+        description: "also run the LibOS regression suite under saguaro-vm"
         type: boolean
         default: true
       cpus:
@@ -46,7 +46,7 @@ jobs:
           # qemu-system-arm provides qemu-system-aarch64 (8.2.2 on noble, the version measured)
           sudo apt-get install -y -qq qemu-system-arm virtiofsd device-tree-compiler \
             procps file iproute2 lsof
-          # gramine-vm starts `virtiofsd` by name (as in vm-x86_64.yml)
+          # saguaro-vm starts `virtiofsd` by name (as in vm-x86_64.yml)
           for d in /usr/libexec /usr/lib/qemu; do
             if [ -x "$d/virtiofsd" ]; then sudo ln -sf "$d/virtiofsd" /usr/local/bin/virtiofsd; break; fi
           done
@@ -64,17 +64,17 @@ jobs:
       - name: Build and install Gramine (aarch64 vm PAL)
         run: scripts/install.sh --vm --prefix "$SAGUARO_PREFIX" -j "$(nproc)"
 
-      - name: Smoke test - helloworld under gramine-vm (TCG)
+      - name: Smoke test - helloworld under saguaro-vm (TCG)
         run: |
           . "$SAGUARO_PREFIX/env.sh"
           cd CI-Examples/helloworld
           make
           # virtiofsd serves / with --sandbox none: run as root, like the container does
-          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" timeout 300 gramine-vm helloworld \
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" timeout 300 saguaro-vm helloworld \
             2>&1 | tee ../../vm-hello.log
           grep -q "Hello, world" ../../vm-hello.log
 
-      - name: CI-Examples under gramine-vm (helloworld, mremap, threads, bash, busybox, sqlite)
+      - name: CI-Examples under saguaro-vm (helloworld, mremap, threads, bash, busybox, sqlite)
         run: |
           sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" RUN_TIMEOUT=600 VM_PREFIX="$SAGUARO_PREFIX" \
             OUT="$GITHUB_WORKSPACE/vm-examples" tools/run-vm-aarch64-examples.sh 2>&1 | tee vm-examples.log
@@ -94,7 +94,7 @@ jobs:
         run: |
           export SAGUARO_VM_PREFIX="$SAGUARO_PREFIX"
           cd CI-Examples/memcached
-          # gramine-vm's virtiofsd serves / and needs root, as in the other steps
+          # saguaro-vm's virtiofsd serves / and needs root, as in the other steps
           sudo -E env "PATH=$PATH" "PYTHONPATH=${PYTHONPATH:-}" ./exec.sh --vm
 
       - name: nginx example (./exec.sh --vm)
@@ -107,7 +107,7 @@ jobs:
         if: always()
         run: sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
 
-      - name: LibOS regression suite under gramine-vm
+      - name: LibOS regression suite under saguaro-vm
         env:
           # test_604_sigreturn_regs hangs on the hosted runner under TCG (it passes under TCG on a local
           # aarch64 machine); see Documentation/TODO.md. Everything else must pass.

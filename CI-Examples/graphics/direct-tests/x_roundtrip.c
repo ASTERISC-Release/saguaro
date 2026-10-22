@@ -3,7 +3,7 @@
 
 /*
  * x_roundtrip: latency of an X request with a reply (GetInputFocus), natively and under
- * gramine-direct (sys.insecure__host_unix_sockets). Usage: x_roundtrip [iterations]
+ * saguaro-direct (sys.insecure__host_unix_sockets). Usage: x_roundtrip [iterations]
  */
 
 #include <stdint.h>

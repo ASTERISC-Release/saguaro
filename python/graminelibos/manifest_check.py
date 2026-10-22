@@ -139,7 +139,7 @@ GramineManifestSchema = Schema({
         'stack': {'size': _size},
     },
 
-    # The VM PAL (`gramine-vm`); see dev docs: CHANGELOG.md. Only `vm.net` is read
+    # The VM PAL (`saguaro-vm`); see dev docs: CHANGELOG.md. Only `vm.net` is read
     # today, by the launcher and its per-VM vsock relay. The `vm` table is shared with a planned
     # VM memory topic (not in the development notes yet; dev docs: TODO.md records it): whichever
     # topic lands first adds its keys here; keep the other's keys when editing.

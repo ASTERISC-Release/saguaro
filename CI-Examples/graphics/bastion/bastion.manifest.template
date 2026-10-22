@@ -2,7 +2,7 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 
 # Bastion (Supergiant Games, the GOG.com Linux build: MonoKickstart, FNA on SDL2 and OpenGL, FMOD)
-# under gramine-vm with the Tirith graphics redirection (x86_64). See README.md in this directory.
+# under saguaro-vm with the Tirith graphics redirection (x86_64). See README.md in this directory.
 
 libos.entrypoint = "/bastion/Bastion.bin.x86_64"
 fs.start_dir = "/bastion"

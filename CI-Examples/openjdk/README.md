@@ -20,7 +20,7 @@ By hand:
 
 ```sh
 make                    # make SGX=1 for SGX
-gramine-direct java MultiThreadMain     # or gramine-vm, gramine-sev; SGX: gramine-sgx java -Xmx8G MultiThreadMain
+saguaro-direct java MultiThreadMain     # or saguaro-vm, saguaro-sev; SGX: saguaro-sgx java -Xmx8G MultiThreadMain
 ```
 
 ## Notes

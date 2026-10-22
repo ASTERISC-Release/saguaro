@@ -3,7 +3,7 @@
 
 /* The granularity of short timed waits as a Wine program sees them: Sleep(1), Sleep(0),
  * WaitForSingleObject(event, 1 ms) and (event, 5 ms) on a never-signalled event, 50 each;
- * median and max in ms. Under gramine-vm timed waits are served from the PAL's 100 ms tick
+ * median and max in ms. Under saguaro-vm timed waits are served from the PAL's 100 ms tick
  * (FINDINGS.md of proton-vm, 2026-10-17), so a game that polls with 1 to 5 ms waits runs them
  * at 100 ms each. Usage: sleepgran.exe [rounds]   (default 50) */
 #include <windows.h>

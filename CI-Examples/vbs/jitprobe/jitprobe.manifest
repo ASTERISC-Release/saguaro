@@ -1,6 +1,6 @@
 # Research probe (dev docs: vbs-enclave/PLAN-rwx.md): what a VBS enclave answers to the memory
 # requests of a JIT (executable anonymous memory, adding execute, changing the program's own code).
-#   make VBS=1; gramine-vbs jitprobe
+#   make VBS=1; saguaro-vbs jitprobe
 loader.entrypoint = "file:/libsysdb.so"
 libos.entrypoint = "/jitprobe"
 loader.log_level = "error"

@@ -35,7 +35,7 @@ static void signal_io(IDTYPE caller, void* arg) {
 
 #ifdef ENABLE_GRAPHICS
 /*
- * A device ioctl forwarded to the host listener (gramine-vm graphics redirection). Pointers inside
+ * A device ioctl forwarded to the host listener (saguaro-vm graphics redirection). Pointers inside
  * the argument need nothing (guest RAM is mapped at the same addresses in the listener), but the
  * fields listed in libos_device_ioctl.h do:
  *  - FD_IN: a LibOS fd of a forwarded host object (TYPE_HOST, installed at host fd +

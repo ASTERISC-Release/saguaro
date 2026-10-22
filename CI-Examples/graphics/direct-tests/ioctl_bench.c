@@ -2,7 +2,7 @@
 /* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /*
- * ioctl_bench: the cost of one DRM ioctl, natively and under gramine-direct. Times a loop of
+ * ioctl_bench: the cost of one DRM ioctl, natively and under saguaro-direct. Times a loop of
  * DRM_IOCTL_SYNCOBJ_WAIT with timeout 0 on a signaled syncobj (what Mesa's iris does to ask whether
  * a buffer is busy, thousands of times per frame in Quake II), DRM_IOCTL_GET_CAP, and getppid() as
  * the cost of a system call without the device.

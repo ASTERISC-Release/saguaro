@@ -4,5 +4,5 @@ An allocation and alignment probe: it allocates blocks, prints a pointer and wai
 
 ```sh
 make
-gramine-direct align_test
+saguaro-direct align_test
 ```

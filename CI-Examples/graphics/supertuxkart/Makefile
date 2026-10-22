@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (C) 2026 The ASTERISC Research Lab
 
-# SuperTuxKart under gramine-vm with the Tirith graphics redirection (x86_64). Build the game first
+# SuperTuxKart under saguaro-vm with the Tirith graphics redirection (x86_64). Build the game first
 # with ./install-stk.sh; see dev docs: graphics/ for the host setup.
 
 # The graphics preload library is built and installed with Gramine (-Dgraphics=enabled and a
@@ -64,13 +64,13 @@ run-native-startup:
 
 .PHONY: run
 run: all dirs
-	gramine-vm supertuxkart
+	saguaro-vm supertuxkart
 
 .PHONY: run-startup
 run-startup: all dirs
-	gramine-vm supertuxkart-startup
+	saguaro-vm supertuxkart-startup
 
-# gramine-direct on the host GPU (dev docs: graphics-direct/): stock Mesa with DRI3 by
+# saguaro-direct on the host GPU (dev docs: graphics-direct/): stock Mesa with DRI3 by
 # default; PRELOAD=1 uses the preload library instead (needs an install built with a VM-type PAL).
 # The X server is the one of $(DISPLAY), reached through its Unix socket.
 PRELOAD ?= 0
@@ -93,9 +93,9 @@ supertuxkart-direct-startup.manifest: supertuxkart-direct.manifest.template $(ST
 
 .PHONY: run-direct run-direct-startup
 run-direct: supertuxkart-direct.manifest dirs
-	gramine-direct supertuxkart-direct
+	saguaro-direct supertuxkart-direct
 run-direct-startup: supertuxkart-direct-startup.manifest dirs
-	gramine-direct supertuxkart-direct-startup
+	saguaro-direct supertuxkart-direct-startup
 
 # The benchmark without Gramine and without the preload library (stock Mesa), for comparison.
 .PHONY: run-native-stock-startup

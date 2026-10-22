@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
-"""Classify an installed Windows game for the Proton-under-gramine-vm work
+"""Classify an installed Windows game for the Proton-under-saguaro-vm work
 (dev docs: proton-vm/PLAN.md, "Next phases", step 0).
 
 Walks a game folder, parses every .exe and .dll (PE headers only, no third-party module), and

@@ -3,9 +3,9 @@
 # SPDX-License-Identifier: BSD-3-Clause
 #
 # `make VBS=1 check`: the hyper server runs in a Windows VBS enclave on 127.0.0.1:3000 (hard-coded in
-# src/main.rs) and Windows' own curl.exe asks it for a page. GRAMINE is gramine-vbs.
+# src/main.rs) and Windows' own curl.exe asks it for a page. GRAMINE is saguaro-vbs.
 set -euo pipefail
-: "${GRAMINE:=../../scripts/vbs/gramine-vbs}"
+: "${GRAMINE:=../../scripts/vbs/saguaro-vbs}"
 
 "$GRAMINE" rust-hyper-http-server > OUTPUT 2>&1 &
 pid=$!

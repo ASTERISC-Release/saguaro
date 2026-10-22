@@ -3,7 +3,7 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
 # stress_rewrite.sh — repeat the rewrite_stress scenarios many times (the interesting races only
-# happen on cold processes, so each run is a fresh gramine-direct).
+# happen on cold processes, so each run is a fresh saguaro-direct).
 #
 # Usage:
 #   scripts/stress_rewrite.sh [-n RUNS] [--rewrite on|off] [scenario...]
@@ -55,7 +55,7 @@ for sc in "${SCEN[@]}"; do
     ok=0; bad=0; hang=0
     for _ in $(seq 1 "$N"); do
         out=$(mktemp)
-        timeout -s KILL "$TMO" gramine-direct rewrite_stress "$sc" >"$out" 2>&1
+        timeout -s KILL "$TMO" saguaro-direct rewrite_stress "$sc" >"$out" 2>&1
         rc=$?
         if [ $rc -eq 0 ] && grep -q "^OK $sc" "$out"; then
             ok=$((ok+1)); rm -f "$out"

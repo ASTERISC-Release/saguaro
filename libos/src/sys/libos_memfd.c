@@ -52,7 +52,7 @@ long libos_syscall_memfd_create(const char* name, unsigned int flags) {
     int fd = -1;
 
 #ifdef ENABLE_GRAPHICS
-    /* With the graphics redirection active (gramine-vm with the host listener), every open under
+    /* With the graphics redirection active (saguaro-vm with the host listener), every open under
      * /dev goes to the host, including the backing file below, which the guest then could not
      * unlink. Ask the host for an anonymous file in its /dev/shm instead (O_TMPFILE: nothing to
      * unlink). Its mappings are host mappings, so MAP_SHARED is real, and a large sparse size costs
@@ -88,7 +88,7 @@ long libos_syscall_memfd_create(const char* name, unsigned int flags) {
             fd = (int)libos_openat_internal(AT_FDCWD, path, O_RDWR | O_CREAT | O_EXCL |
                                             ((flags & MFD_CLOEXEC) ? O_CLOEXEC : 0), 0600);
             if (fd >= 0 && !memfd_backing_usable(fd)) {
-                /* e.g. an `untrusted_shm` /dev/shm (gramine-direct's default): it maps but
+                /* e.g. an `untrusted_shm` /dev/shm (saguaro-direct's default): it maps but
                  * cannot read() or write(), which a memfd must; try the next directory */
                 libos_syscall_close(fd);
                 libos_unlink_internal(path);

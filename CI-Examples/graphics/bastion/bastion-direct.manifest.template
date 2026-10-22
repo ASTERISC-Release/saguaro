@@ -2,7 +2,7 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 
 # Bastion (the GOG.com Linux build: MonoKickstart, FNA on SDL2 and OpenGL, FMOD) under
-# gramine-direct on the host GPU (dev docs: graphics-direct/). See README.md here.
+# saguaro-direct on the host GPU (dev docs: graphics-direct/). See README.md here.
 # Insecure by design: the application can submit work to the GPU and talk to the X server directly
 # (see the insecure__ keys below and Documentation/manifest-syntax.md).
 

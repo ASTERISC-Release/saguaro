@@ -17,7 +17,7 @@ In a fresh container, `blender`, `mongodb`, `nodejs`, `openjdk` and `r` first st
 
 The examples that run under `--sev` also run under TDX; `exec.sh` has no TDX backend.
 
-LibOS suite under `gramine-vm` (168 passed on x86_64, 167 on AArch64); under `gramine-sev` (SEV-SNP) one test
+LibOS suite under `saguaro-vm` (168 passed on x86_64, 167 on AArch64); under `saguaro-sev` (SEV-SNP) one test
 fails, `test_020_cpuinfo`: the AMD host has the `mwaitx` flag and the KVM guest does not.
 
 ## Known intermittent failure

@@ -1,7 +1,7 @@
 # Quickstart: Intel SGX and TDX
 
-This tree keeps the confidential-computing back ends of upstream [gramine-tdx](https://github.com/gramineproject/gramine-tdx) for Intel CPUs: `gramine-sgx` (the application
-in an SGX enclave) and `gramine-tdx` (the `vm` unikernel in a TDX trust domain). The examples that run on
+This tree keeps the confidential-computing back ends of upstream [gramine-tdx](https://github.com/gramineproject/gramine-tdx) for Intel CPUs: `saguaro-sgx` (the application
+in an SGX enclave) and `saguaro-tdx` (the `vm` unikernel in a TDX trust domain). The examples that run on
 SEV also run on TDX.
 
 Status (as in [README.md](../../README.md)): Intel x86_64 ⚠️ for SGX and for TDX; AMD64, AArch64 and RISC-V ➖.
@@ -12,7 +12,7 @@ they say that they run on the host.
 
 ## SGX
 
-`gramine-sgx` runs an unmodified application in an Intel SGX enclave. The enclave is built and
+`saguaro-sgx` runs an unmodified application in an Intel SGX enclave. The enclave is built and
 signed from the application's manifest; the Saguaro runtime, the library OS and the application are
 measured into it.
 
@@ -69,7 +69,7 @@ control, `is-sgx-available` prints, among others:
 
 `exec.sh` creates the enclave signing key `~/.config/gramine/enclave-key.pem` once (the equivalent of
 `gramine-sgx-gen-private-key`), runs `make SGX=1` (renders the manifest and signs it: `helloworld.manifest.sgx`
-and `helloworld.sig`, with the enclave measurement printed) and runs `gramine-sgx ./helloworld`. The output ends with:
+and `helloworld.sig`, with the enclave measurement printed) and runs `saguaro-sgx ./helloworld`. The output ends with:
 
     Hello, world
     [PASS] helloworld sgx x86_64 (...)
@@ -78,7 +78,7 @@ The steps by hand:
 
     gramine-sgx-gen-private-key        # once
     make SGX=1
-    gramine-sgx helloworld
+    saguaro-sgx helloworld
 
 The manifest of this example sets `sgx.enclave_size = "1G"`: the program maps 512 MiB, and the default
 enclave size is 256M.
@@ -120,7 +120,7 @@ Reference: [attestation.md](../attestation.md), the `sgx.*` keys of [manifest-sy
 
 Needs an Intel CPU and host kernel with TDX, a QEMU with TDX support and the TD-shim firmware, as
 described by the upstream gramine-tdx project. The build is `scripts/install.sh --vm --tdx` (in the container); the
-launcher is `gramine-tdx` (the TDX variant of `gramine-vm`, `tools/gramine-vm.in`).
+launcher is `saguaro-tdx` (the TDX variant of `saguaro-vm`, `tools/saguaro-vm.in`).
 
 The install step links the PAL with TD-shim: it runs `cargo run -p td-shim-tools` in
 `$HOME/td-shim`, so that checkout (built as upstream gramine-tdx describes) must exist, or the

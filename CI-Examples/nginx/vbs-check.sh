@@ -5,7 +5,7 @@
 # `make VBS=1 check`: NGINX in a Windows VBS enclave, checked from the Windows side (the enclave's
 # sockets are Windows sockets): pages fetched with curl.exe and compared with the packed files.
 set -euo pipefail
-: "${GRAMINE:=../../scripts/vbs/gramine-vbs}"
+: "${GRAMINE:=../../scripts/vbs/saguaro-vbs}"
 PORT=${LISTEN_PORT:-8002}
 ROOT=vbs-build/root/nginx/html
 

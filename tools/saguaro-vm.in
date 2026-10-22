@@ -2,17 +2,17 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2023 Intel Corporation
 
-# This file is based on `gramine.in` and modified for VM/TDX environment and QEMU.
+# This file is based on `saguaro.in` (upstream `gramine.in`) and modified for VM/TDX environment and QEMU.
 
 BIOS_PATH=@BIOS_PATH@
 LIBPAL_PATH=@LIBPAL_PATH@
 HOST_PAL_PATH=@HOST_PAL_PATH@
 TDSHIM_PAL_PATH=@TDSHIM_PAL_PATH@
-# gramine-sev (the AMD SEV build of this launcher): the IGVM boot image, empty for gramine-vm
+# saguaro-sev (the AMD SEV build of this launcher): the IGVM boot image, empty for saguaro-vm
 SEV_IGVM_PATH=@SEV_IGVM_PATH@
 SEV_QEMU_PATH=@SEV_QEMU_PATH@
 
-# The per-VM vsock relay (dev docs: CHANGELOG.md), shared with gramine-vm-aarch64; installed
+# The per-VM vsock relay (dev docs: CHANGELOG.md), shared with saguaro-vm-aarch64; installed
 # next to the VM PAL. The launcher runs Python snippets and the relay from this installation: a caller
 # with a stripped environment (the LibOS regression tests pass `env=`) has no PYTHONPATH, so the library
 # finds the package next to the launcher.
@@ -102,7 +102,7 @@ QEMU_CPU_NUM=${QEMU_CPU_NUM:-"1"}
 
 # QEMU: QEMU_PATH in the environment, else a stock qemu-system-x86_64 from PATH. TDX and the graphics
 # redirection need a QEMU fork built outside this repository (see dev docs: graphics/).
-# gramine-sev: the QEMU configured with -Dsev_qemu, if any (the LibOS tests run it with a stripped
+# saguaro-sev: the QEMU configured with -Dsev_qemu, if any (the LibOS tests run it with a stripped
 # environment)
 [ -n "$SEV_QEMU_PATH" ] && QEMU_PATH=${QEMU_PATH:-$SEV_QEMU_PATH}
 QEMU_PATH=${QEMU_PATH:-$(command -v qemu-system-x86_64 || echo qemu-system-x86_64)}
@@ -114,7 +114,7 @@ QEMU_OPTS="-enable-kvm -vga none -display none -no-reboot -monitor none "
 # at from outside (test/vm/multiproc/vm-hang-report.py)
 [ -n "$SAGUARO_VM_MONITOR" ] && \
     QEMU_OPTS="${QEMU_OPTS/-monitor none/-monitor unix:$SAGUARO_VM_MONITOR,server=on,wait=off}"
-# SAGUARO_VM_QMP=<path>: a QMP socket (e.g. for query-sev-launch-measure under gramine-sev)
+# SAGUARO_VM_QMP=<path>: a QMP socket (e.g. for query-sev-launch-measure under saguaro-sev)
 [ -n "$SAGUARO_VM_QMP" ] && QEMU_OPTS+="-qmp unix:$SAGUARO_VM_QMP,server=on,wait=off "
 
 RAW_MEM_SIZE=$(echo $QEMU_MEM_SIZE | tr -d 'G')
@@ -277,7 +277,7 @@ print(sev.get('mode', ''), sev.get('policy', ''))
     read -r SEV_MANIFEST_MODE SEV_MANIFEST_POLICY <<<"$SEV_MANIFEST"
     SEV_MODE=${SAGUARO_SEV_MODE:-${SEV_MANIFEST_MODE:-snp}}
     SAGUARO_SEV_POLICY=${SAGUARO_SEV_POLICY:-$SEV_MANIFEST_POLICY}
-    SEV_CBITPOS=${SAGUARO_SEV_CBITPOS:-$(python3 "$HOST_PAL_PATH/gramine-sev-igvm.py" cbitpos)}
+    SEV_CBITPOS=${SAGUARO_SEV_CBITPOS:-$(python3 "$HOST_PAL_PATH/saguaro-sev-igvm.py" cbitpos)}
     case "$SEV_MODE" in
         sev)
             SEV_OBJECT="sev-guest,id=sev0,cbitpos=$SEV_CBITPOS,reduced-phys-bits=1,policy=${SAGUARO_SEV_POLICY:-0x1}"
@@ -303,9 +303,9 @@ print(sev.get('mode', ''), sev.get('policy', ''))
     # the launch digest the platform must report for this file and vCPU count (SNP: the
     # MEASUREMENT of the attestation report; SEV: the digest inside LAUNCH_MEASURE)
     if [ "$SEV_MODE" != native ]; then
-        SEV_DIGEST=$(python3 "$HOST_PAL_PATH/gramine-sev-igvm.py" measure --mode "$SEV_MODE" \
+        SEV_DIGEST=$(python3 "$HOST_PAL_PATH/saguaro-sev-igvm.py" measure --mode "$SEV_MODE" \
                      --vcpus "$QEMU_CPU_NUM" "$SEV_IGVM_PATH")
-        echo "gramine-sev: $SEV_MODE launch digest of $SEV_IGVM_PATH on $QEMU_CPU_NUM vCPUs: $SEV_DIGEST" >&2
+        echo "saguaro-sev: $SEV_MODE launch digest of $SEV_IGVM_PATH on $QEMU_CPU_NUM vCPUs: $SEV_DIGEST" >&2
     fi
 elif [ "$TDSHIM_PAL_PATH" == "" ]; then
     QEMU_MACHINE="-M q35,kernel_irqchip=on"
@@ -392,7 +392,7 @@ QEMU_VIRTIO_FS="-chardev socket,path=/tmp/gramine_vhostfs_"$SAGUARO_VM_ID",id=vh
 QEMU_VIRTIO_VSOCK="-device vhost-vsock-pci,iommu_platform=off,guest-cid="$SAGUARO_VM_ID",id=vsockdev"
 
 # The guest splits this string on whitespace but keeps "double-quoted" tokens whole (no escapes), so
-# quote every argument: `gramine-vm app -c "echo hi"` must reach the app as two arguments.
+# quote every argument: `saguaro-vm app -c "echo hi"` must reach the app as two arguments.
 SAGUARO_ARGS="-gramine-args init \"$APPLICATION\""
 for arg in "$@"; do
     SAGUARO_ARGS+=" \"$arg\""
@@ -467,7 +467,7 @@ if [ -n "$X_DISPLAY_NUM" ] && [ "${SAGUARO_VM_X_PROXY:-1}" != "0" ]; then
     HOST_X_SOCKET=/tmp/.X11-unix/X${BASH_REMATCH[2]}
     if command -v ss >/dev/null 2>&1 \
             && ss -H -ln --vsock "sport = :$XPROXY_PORT" 2>/dev/null | grep -q .; then
-        echo "gramine-vm: using the X proxy already listening on vsock port $XPROXY_PORT" >&2
+        echo "saguaro-vm: using the X proxy already listening on vsock port $XPROXY_PORT" >&2
     else
         if ! command -v socat >/dev/null 2>&1; then
             echo "Error: socat is needed to relay the application's X connection" \

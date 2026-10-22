@@ -2,7 +2,7 @@
 /* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /*
- * A DRM render node under gramine-direct: device number, the sysfs links libdrm reads, and ioctls
+ * A DRM render node under saguaro-direct: device number, the sysfs links libdrm reads, and ioctls
  * with pointers inside their argument (sys.insecure__allow_raw_device_ioctl). With the argument
  * "denied" it checks the default instead: without that manifest key the ioctl is refused.
  *

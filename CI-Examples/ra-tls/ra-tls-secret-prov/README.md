@@ -20,7 +20,7 @@ export RA_TLS_ALLOW_DEBUG_ENCLAVE_INSECURE=1 RA_TLS_ALLOW_OUTDATED_TCB_INSECURE=
 make app dcap RA_TYPE=dcap       # or: make app epid RA_TYPE=epid RA_CLIENT_SPID=<spid> RA_CLIENT_LINKABLE=<0|1>
 cd secret_prov_pf
 ./server_dcap wrap_key &         # EPID: RA_TLS_EPID_API_KEY=<key> ./server_epid wrap_key &
-gramine-sgx ./client
+saguaro-sgx ./client
 kill %%
 ```
 

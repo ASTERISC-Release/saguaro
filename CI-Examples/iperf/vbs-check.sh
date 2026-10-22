@@ -3,9 +3,9 @@
 # SPDX-License-Identifier: BSD-3-Clause
 #
 # `make VBS=1 check`: an iperf3 server and an iperf3 client, each in its own Windows VBS enclave (the
-# same image, started twice), talking over the loopback of the Windows host. GRAMINE is gramine-vbs.
+# same image, started twice), talking over the loopback of the Windows host. GRAMINE is saguaro-vbs.
 set -euo pipefail
-: "${GRAMINE:=../../scripts/vbs/gramine-vbs}"
+: "${GRAMINE:=../../scripts/vbs/saguaro-vbs}"
 PORT=${IPERF_PORT:-5201}
 SECONDS_=${IPERF_SECONDS:-3}
 STREAMS=${IPERF_STREAMS:-2}

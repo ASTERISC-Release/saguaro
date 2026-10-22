@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2023 Intel Corporation
 
-# aarch64 counterpart of `gramine-vm.in` (installed as `gramine-vm` on aarch64 hosts): boots the
+# aarch64 counterpart of `saguaro-vm.in` (installed as `saguaro-vm` on aarch64 hosts): boots the
 # vm-PAL unikernel (@LIBPAL_PATH@) under QEMU `virt` + KVM and runs <application>.manifest in it.
-# Usage is the same as on x86:   gramine-vm <application> [args...]
+# Usage is the same as on x86:   saguaro-vm <application> [args...]
 #
 # Differences from the x86 launcher (see dev docs: CHANGELOG.md):
 #   * machine `virt,gic-version=3`, no BIOS blob; the kernel image is loaded with `-kernel`
@@ -28,7 +28,7 @@
 #   SAGUARO_VM_ID_BASE  first VM id (= vsock guest-cid) to try, default 10; workspaces of the repository
 #                    use different bases so their VMs and relay ports do not collide
 #   SAGUARO_VM_RELAY=0, SAGUARO_VM_INBOUND, SAGUARO_VM_RELAY_DEBUG: the vsock relay, see
-#                    tools/gramine-vm-relay.sh (the relay is started for every VM that has the device)
+#                    tools/saguaro-vm-relay.sh (the relay is started for every VM that has the device)
 #   SAGUARO_VM_CONSOLE_LOG=<file>  keep a copy of the console log
 #   SAGUARO_VM_MONITOR=<socket>    QEMU monitor on a unix socket (vm-hang-report.py reads vCPU states)
 #   SAGUARO_VM_SERIAL=<file>       the PL011 UART (early kernel/debug output) into a file
@@ -106,20 +106,20 @@ QEMU_CPU_NUM=${SAGUARO_CPU_NUM:-1}
 
 QEMU_PATH=${QEMU_PATH:-$(command -v qemu-system-aarch64)}
 if [ -z "$QEMU_PATH" ]; then
-    echo "gramine-vm: qemu-system-aarch64 not found (set QEMU_PATH)" >&2
+    echo "saguaro-vm: qemu-system-aarch64 not found (set QEMU_PATH)" >&2
     exit 2
 fi
 VIRTIOFSD=$(command -v virtiofsd || echo /usr/lib/qemu/virtiofsd)
 if [ ! -x "$VIRTIOFSD" ]; then
-    echo "gramine-vm: virtiofsd not found" >&2
+    echo "saguaro-vm: virtiofsd not found" >&2
     exit 2
 fi
 if ! command -v dtc >/dev/null; then
-    echo "gramine-vm: dtc (device-tree-compiler) not found" >&2
+    echo "saguaro-vm: dtc (device-tree-compiler) not found" >&2
     exit 2
 fi
 if [ ! -f "$LIBPAL_PATH" ]; then
-    echo "gramine-vm: vm-PAL kernel $LIBPAL_PATH not found" >&2
+    echo "saguaro-vm: vm-PAL kernel $LIBPAL_PATH not found" >&2
     exit 2
 fi
 
@@ -170,7 +170,7 @@ trap 'exit 130' INT TERM
 $QEMU_PATH $QEMU_MACHINE $QEMU_SHAPE -nic none -machine dumpdtb="$WORK/virt.dtb" >/dev/null 2>&1 \
     && dtc -I dtb -O dtb -o "$WORK/virt-packed.dtb" "$WORK/virt.dtb" 2>/dev/null
 if [ ! -s "$WORK/virt-packed.dtb" ]; then
-    echo "gramine-vm: could not generate the machine DTB (is /dev/kvm available? else set SAGUARO_ACCEL=tcg)" >&2
+    echo "saguaro-vm: could not generate the machine DTB (is /dev/kvm available? else set SAGUARO_ACCEL=tcg)" >&2
     exit 2
 fi
 
@@ -182,7 +182,7 @@ for _ in $(seq 100); do
     sleep 0.1
 done
 if [ ! -e "$VHOSTFS_SOCKET" ]; then
-    echo "gramine-vm: virtiofsd failed to start:" >&2
+    echo "saguaro-vm: virtiofsd failed to start:" >&2
     cat "$WORK/virtiofsd.log" >&2
     exit 2
 fi
@@ -193,7 +193,7 @@ fi
 SAGUARO_VSOCK=${SAGUARO_VSOCK:-1}
 if [ "$SAGUARO_VSOCK" = 1 ] && ! { [ -r /dev/vhost-vsock ] && [ -w /dev/vhost-vsock ]; }; then
     if vm_relay_manifest_wants_network "$SAGUARO_MANIFEST"; then
-        echo "gramine-vm: $SAGUARO_MANIFEST has vm.net.* keys, but /dev/vhost-vsock is not" \
+        echo "saguaro-vm: $SAGUARO_MANIFEST has vm.net.* keys, but /dev/vhost-vsock is not" \
              "readable and writable (load the vhost_vsock module and give this user access)" >&2
         exit 2
     fi
@@ -204,7 +204,7 @@ if [ "$SAGUARO_VSOCK" = 1 ]; then
 fi
 
 # The guest splits this string on whitespace but keeps "double-quoted" tokens whole (no escapes), so
-# quote every argument: `gramine-vm app -c "echo hi"` must reach the app as two arguments.
+# quote every argument: `saguaro-vm app -c "echo hi"` must reach the app as two arguments.
 SAGUARO_ARGS="-gramine-args init \"$APPLICATION\""
 for arg in "$@"; do
     SAGUARO_ARGS+=" \"$arg\""

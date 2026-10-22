@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 
-# Development container for the x86_64 builds: the direct PAL and the vm-PAL unikernel (gramine-vm)
+# Development container for the x86_64 builds: the direct PAL and the vm-PAL unikernel (saguaro-vm)
 # under QEMU/KVM. Counterpart of Containerfile.vm-aarch64.
 #
 # Requires an x86_64 host with working KVM (`/dev/kvm`) and `vhost-vsock` for the vm PAL; the direct
@@ -13,7 +13,7 @@ FROM ubuntu:noble
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Run layer: QEMU for the vm PAL (virtiofsd is shipped at /usr/lib/qemu/virtiofsd; gramine-vm needs
+# Run layer: QEMU for the vm PAL (virtiofsd is shipped at /usr/lib/qemu/virtiofsd; saguaro-vm needs
 # it on PATH, lsof for its pid-file check, python3-psutil for its VM-id allocation).
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \

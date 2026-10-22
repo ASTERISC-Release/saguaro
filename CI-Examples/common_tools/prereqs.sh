@@ -66,12 +66,12 @@ pip_user_install() {
         || pip3 install --user "$@" || prereq_die "pip install failed: $*"
 }
 
-# Warn (do not fail) if Gramine itself is not installed; examples need gramine-direct.
+# Warn (do not fail) if Gramine itself is not installed; examples need saguaro-direct.
 check_gramine() {
-    if command -v gramine-direct >/dev/null; then
-        prereq_log "gramine-direct found: $(command -v gramine-direct)"
+    if command -v saguaro-direct >/dev/null; then
+        prereq_log "saguaro-direct found: $(command -v saguaro-direct)"
     else
-        prereq_log "WARNING: gramine-direct not on PATH. Build and install Gramine first" \
+        prereq_log "WARNING: saguaro-direct not on PATH. Build and install Gramine first" \
                    "(gramine-tdx/install.sh) and add <prefix>/bin to PATH."
     fi
 }

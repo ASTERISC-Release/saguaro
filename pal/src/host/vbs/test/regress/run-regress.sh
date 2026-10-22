@@ -12,7 +12,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=${SAGUARO_REPO:-$(cd "$HERE/../../../../../.." && pwd)}
 OUT=$(realpath -m "$1")
 FILTER=${2:-.}
-G="$ROOT/scripts/vbs/gramine-vbs"
+G="$ROOT/scripts/vbs/saguaro-vbs"
 "$G" runtime
 sh "$ROOT/pal/src/host/vbs/test/regress/build.sh" "$OUT"
 tests=$(cd "$OUT/tests" && ls | tr '\n' ' ')

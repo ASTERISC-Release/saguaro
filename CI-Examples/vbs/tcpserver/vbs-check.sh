@@ -3,9 +3,9 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 #
 # `make VBS=1 check`: the TCP server in a VBS enclave answers clients on the Windows side
-# (gramine-vbs net req: the enclave's sockets are Windows sockets).
+# (saguaro-vbs net req: the enclave's sockets are Windows sockets).
 set -euo pipefail
-: "${GRAMINE:=../../../scripts/vbs/gramine-vbs}"
+: "${GRAMINE:=../../../scripts/vbs/saguaro-vbs}"
 PORT=18080
 "$GRAMINE" tcpserver > OUTPUT 2>&1 &
 pid=$!

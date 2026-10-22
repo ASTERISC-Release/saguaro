@@ -25,7 +25,7 @@ export WINE64="$PROTON/files/lib/wine/x86_64-unix/wine-preloader $PROTON/files/l
 # WOW64=1: a 32-bit game in Wine's new WoW64 mode (a 64-bit process running 32-bit code); the
 # prefix is the phase-0 WoW64 prefix (PROTON_USE_WOW64=1). A null ALSA device so a game that
 # refuses to start without a playback device (Psychonauts) finds one; a test convenience, silent.
-# Under gramine-vm the guest's HOME is not read by ALSA: the container's /etc/asound.conf serves
+# Under saguaro-vm the guest's HOME is not read by ALSA: the container's /etc/asound.conf serves
 # there (FINDINGS.md 2026-10-16, Psychonauts).
 if [ "${WOW64:-0}" = 1 ]; then
     export WINEARCH=wow64

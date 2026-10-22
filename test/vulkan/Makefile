@@ -39,8 +39,8 @@ vert_spv.h: tri.vert
 frag_spv.h: tri.frag
 	$(GLSLANG) -V --target-env vulkan1.1 --vn frag_spv -o $@ $<
 
-# gramine-direct: `make direct-<prog>.manifest` for vk-headless (this directory) or a program in
-# /usr/bin (vulkaninfo, vkcube, vkmark); then `gramine-direct direct-<prog> [args]`.
+# saguaro-direct: `make direct-<prog>.manifest` for vk-headless (this directory) or a program in
+# /usr/bin (vulkaninfo, vkcube, vkmark); then `saguaro-direct direct-<prog> [args]`.
 SAGUARO_LOG_LEVEL ?= error
 EAGER ?= 0
 SHIM ?= 0
@@ -57,11 +57,11 @@ direct-%.manifest: vk-direct.manifest.template FORCE
 		-Detc_vulkan=$(ETC_VULKAN) -Dentrypoint=/$* -Dbinary=$(call prog_binary,$*) $< $@
 	gramine-manifest-check $@
 
-# gramine-vm: `make vm-<prog>.manifest` (EGL_DISCRETE=1 for renderD129; EAGER=1 for programs that
+# saguaro-vm: `make vm-<prog>.manifest` (EGL_DISCRETE=1 for renderD129; EAGER=1 for programs that
 # dlopen the Vulkan loader; SHIM=1 for the phase-0 shim; PRESENT=1 for windows through the layer;
 # MULTIPROCESS=1 for the VM PAL's demand-paged processes, which vm-vk-two needs: its children are
 # processes; TWO=1 also mounts /vk-headless for them), then
-# `QEMU_PATH=<qemu-tirith>/build/qemu-system-x86_64 gramine-vm vm-<prog> [args]`.
+# `QEMU_PATH=<qemu-tirith>/build/qemu-system-x86_64 saguaro-vm vm-<prog> [args]`.
 vm-%.manifest: vk-vm.manifest.template vk-session-shim.so FORCE
 	gramine-manifest -Dlog_level=$(SAGUARO_LOG_LEVEL) -Degl_discrete=$${EGL_DISCRETE:-0} \
 		-Deager=$(EAGER) -Dshim=$(SHIM) -Dpresent=$(PRESENT) -Dlayer_dir=$(LAYER_DIR) \

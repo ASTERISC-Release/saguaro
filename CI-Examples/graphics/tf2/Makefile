@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (C) 2026 The ASTERISC Research Lab
 
-# Team Fortress 2 (native Linux client) under gramine-vm with the Tirith graphics redirection
+# Team Fortress 2 (native Linux client) under saguaro-vm with the Tirith graphics redirection
 # (x86_64). Ported from Tirith but not yet run in this tree; see README.md for what it needs.
 
 TF2_DIR ?= $(CURDIR)/game

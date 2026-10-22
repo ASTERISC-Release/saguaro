@@ -58,11 +58,11 @@ sgx_sign: nodejs.manifest
 		--output $<.sgx
 
 ifeq ($(VBS),1)
-# GRAMINE is gramine-vbs (Makefile.vbs)
+# GRAMINE is saguaro-vbs (Makefile.vbs)
 else ifeq ($(SGX),)
-GRAMINE = gramine-direct
+GRAMINE = saguaro-direct
 else
-GRAMINE = gramine-sgx
+GRAMINE = saguaro-sgx
 endif
 
 ifeq ($(VBS),1)

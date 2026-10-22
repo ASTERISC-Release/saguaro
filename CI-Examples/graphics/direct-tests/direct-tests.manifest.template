@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (C) 2026 The ASTERISC Research Lab
 
-# Test programs for graphics under gramine-direct (dev docs: graphics-direct/): the
+# Test programs for graphics under saguaro-direct (dev docs: graphics-direct/): the
 # render node, sysfs and the raw ioctl passthrough. One manifest per program (-Dentrypoint=...);
 # an entrypoint with an absolute path (e.g. /usr/bin/eglinfo) is taken from the host's /usr.
 

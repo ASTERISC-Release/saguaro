@@ -9,7 +9,7 @@ In WSL on a Windows machine with VBS enabled. Install the backend first: [`Docum
 ```sh
 make VBS=1              # build and sign
 make VBS=1 check        # run and check
-gramine-vbs python      # by hand
+saguaro-vbs python      # by hand
 ```
 
 `../exec.sh --vbs` builds, runs and checks all the VBS examples; `make` without `VBS=1` says that the example does not run elsewhere.

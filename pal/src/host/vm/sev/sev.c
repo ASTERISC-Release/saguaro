@@ -23,7 +23,7 @@ void sev_init_early(void) {
     if (!(g_sev_status & SEV_STATUS_SEV) || !g_sev_c_bit_mask) {
         /* the SEV PAL keeps nothing secret without encryption: refuse to run */
         INIT_FAIL("SEV: memory encryption is not active (SEV_STATUS 0x%lx); this PAL runs only "
-                  "as an AMD SEV guest (use gramine-vm otherwise)", g_sev_status);
+                  "as an AMD SEV guest (use saguaro-vm otherwise)", g_sev_status);
     }
 
     if (sev_es_active()) {

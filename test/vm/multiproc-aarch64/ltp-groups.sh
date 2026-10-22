@@ -3,7 +3,7 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
 # ltp-groups.sh -- the process LTP groups of dev docs: vm-multiproc-aarch64/PLAN.md
-# (vfork, execve family, fork, wait4 group, waitid, clone) under gramine-vm, one guest at a time,
+# (vfork, execve family, fork, wait4 group, waitid, clone) under saguaro-vm, one guest at a time,
 # with the stock LTP install (.ltp-install, real fork) and its own harness directory, so that the
 # manifests point at this prefix's LibOS. With --key on the manifests get
 # sys.experimental__multiprocess (scripts/build-ltp-manifests.sh, LTP_VM_MULTIPROCESS=1).

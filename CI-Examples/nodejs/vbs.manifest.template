@@ -4,7 +4,7 @@
 # Node.js manifest for a Windows VBS enclave (`make VBS=1`, dev docs: vbs-enclave/manual.md). The node binary is
 # the official linux-arm64 build (dynamic, not built with the vbs glibc); its interpreter is
 # /lib/ld-linux-aarch64.so.1 and its libraries are packed in /usr/lib. The arguments come from the
-# command line: `gramine-vbs node --jitless --v8-pool-size=1 /app/helloworld.js`.
+# command line: `saguaro-vbs node --jitless --v8-pool-size=1 /app/helloworld.js`.
 
 loader.entrypoint = "file:/libsysdb.so"
 libos.entrypoint = "/node"

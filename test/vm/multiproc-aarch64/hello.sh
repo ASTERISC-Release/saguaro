@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
-# hello.sh -- CI-Examples/helloworld under the AArch64 gramine-vm with the multiprocess key on and
+# hello.sh -- CI-Examples/helloworld under the AArch64 saguaro-vm with the multiprocess key on and
 # off, at each vCPU count given (default 1 2 4). With the key on the boot runs the frame-pool,
 # address-space and scheduler self-checks (arch/aarch64/pal_main.c). Prints one line per run and
 # keeps every console log (and the PL011 serial log) in $OUT.
@@ -47,7 +47,7 @@ for n in "${CPUS[@]}"; do
         load=$(cut -d' ' -f1 /proc/loadavg)
         start=$(date +%s%N)
         (cd "$W" && SAGUARO_CPU_NUM=$n SAGUARO_VM_SERIAL=$OUT/hello-$k-cpu$n.serial \
-            timeout ${RUN_TIMEOUT:-120} gramine-vm $app > "$log" 2>&1)
+            timeout ${RUN_TIMEOUT:-120} saguaro-vm $app > "$log" 2>&1)
         r=$?
         t=$(( ($(date +%s%N) - start) / 1000000 ))
         if [ $r = 0 ] && grep -q "Hello, world" "$log"; then v=PASS; else v="FAIL(rc=$r)"; rc=1; fi

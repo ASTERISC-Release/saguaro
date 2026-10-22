@@ -1,4 +1,4 @@
-# CPython in a Windows VBS enclave (dev docs: vbs-enclave/manual.md): make VBS=1; gramine-vbs python
+# CPython in a Windows VBS enclave (dev docs: vbs-enclave/manual.md): make VBS=1; saguaro-vbs python
 # vbs.build builds CPython 3.12.7 for the enclave once (scripts/vbs/build-python.sh, against the vbs
 # glibc, into <repo>/build-vbs-python; later builds reuse it); the paths below are relative to this
 # file.

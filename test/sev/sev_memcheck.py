@@ -63,7 +63,7 @@ class Hmp:
 
 
 def ram_ranges(ram_gib):
-    # gramine-vm's layout: 2G below the PCI hole, the rest from 4G (tools/gramine-vm.in)
+    # saguaro-vm's layout: 2G below the PCI hole, the rest from 4G (tools/saguaro-vm.in)
     low = min(ram_gib, 2) << 30
     ranges = [(0, low)]
     if ram_gib > 2:

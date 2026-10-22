@@ -4,7 +4,7 @@
 
 Reads the published per-test matrix (`dev docs: syscall-compat/matrix.csv`, which gives
 the native, direct and VM columns of `MATRIX.md`) and one LTP run of the stock install under
-`gramine-vm` with `sys.experimental__multiprocess = true` (`scripts/run-ltp-syscalls.py --loader
+`saguaro-vm` with `sys.experimental__multiprocess = true` (`scripts/run-ltp-syscalls.py --loader
 vm` on manifests built with `LTP_VM_MULTIPROCESS=1`), and writes a Markdown table: the loader
 totals, then one row per syscall of the process, signal and IPC groups and per other syscall whose
 key-on result differs from the VM no-fork column. `MATRIX.md` itself is not changed: the key is

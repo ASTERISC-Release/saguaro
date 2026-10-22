@@ -17,7 +17,7 @@ syscall_bench.manifest: syscall_bench.manifest.template
 .PHONY: bench
 bench: all
 	@echo "== native =="; ./syscall_bench $(ITERS) $(REPS)
-	@echo "== gramine-direct =="; gramine-direct syscall_bench $(ITERS) $(REPS)
+	@echo "== saguaro-direct =="; saguaro-direct syscall_bench $(ITERS) $(REPS)
 
 .PHONY: clean
 clean:

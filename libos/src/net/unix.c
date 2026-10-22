@@ -35,7 +35,7 @@
 #include "toml_utils.h"
 
 /*
- * Host UNIX sockets (gramine-direct). Gramine's UNIX sockets connect Gramine processes only. The
+ * Host UNIX sockets (saguaro-direct). Gramine's UNIX sockets connect Gramine processes only. The
  * manifest can list host socket paths (`sys.insecure__host_unix_sockets`, for example the X
  * server's `/tmp/.X11-unix/X0`); a `connect()` to such a path connects to the host socket itself,
  * through the Linux PAL, and file descriptors passed with `SCM_RIGHTS` are translated between

@@ -68,4 +68,4 @@ make install
 
 cd "$THIS_DIR"
 make
-echo "nginx built; now run:  gramine-direct nginx  (serves http on 8002, https on 8444)"
+echo "nginx built; now run:  saguaro-direct nginx  (serves http on 8002, https on 8444)"

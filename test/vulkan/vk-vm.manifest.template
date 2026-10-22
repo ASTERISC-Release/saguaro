@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
-# A Vulkan program under gramine-vm with the graphics redirection (dev docs: vulkan/,
+# A Vulkan program under saguaro-vm with the graphics redirection (dev docs: vulkan/,
 # phase 0: measures how far the existing OpenGL redirection carries Vulkan). Based on
 # CI-Examples/graphics/glxgears/glxgears.manifest.template. The program is chosen with -Dentrypoint
 # and -Dbinary. libgraphics.so starts the graphics session at vkCreateInstance; -Deager=1 sets

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Quake II timedemo (633 frames of the demo's first map) with the Vulkan renderer ref_vk, natively,
-# under gramine-direct or under gramine-vm, windowed 1920x1080 (dev docs: vulkan/, phase 3).
+# under saguaro-direct or under saguaro-vm, windowed 1920x1080 (dev docs: vulkan/, phase 3).
 # Run inside the container, with Gramine's env.sh sourced and, for vm, QEMU_PATH set.
 #
 # Usage: test/vulkan/q2-timedemo.sh native|direct|vm intel|amd [RUNS] [RENDERER]
@@ -44,8 +44,8 @@ for r in $(seq 1 "$runs"); do
                     ALSOFT_DRIVERS=null unshare --user --map-user=1000 --map-group=1000 \
                     quake2_bin/release/quake2 "${args[@]}" >/dev/null 2>&1 & ;;
         direct) VK_ICD_FILENAMES=$icd vblank_mode=0 SDL_AUDIODRIVER=dummy ALSOFT_DRIVERS=null \
-                    gramine-direct quake2-direct "${args[@]}" >/dev/null 2>&1 & ;;
-        vm) gramine-vm quake2 > /tmp/q2-vm-run.log 2>&1 & ;;
+                    saguaro-direct quake2-direct "${args[@]}" >/dev/null 2>&1 & ;;
+        vm) saguaro-vm quake2 > /tmp/q2-vm-run.log 2>&1 & ;;
     esac
     pid=$!
     start=$(date +%s)

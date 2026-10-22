@@ -189,7 +189,7 @@ static int tdx_extend_rtmr2_with_manifest(const char* manifest, size_t manifest_
 
 noreturn static void print_usage_and_exit(void) {
     log_always("USAGE: init <application> args...");
-    log_always("This is an internal interface. Use gramine-tdx to launch applications.");
+    log_always("This is an internal interface. Use saguaro-tdx to launch applications.");
     _PalProcessExit(1);
 }
 

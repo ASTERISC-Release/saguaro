@@ -5,17 +5,17 @@
 # The network loads of dev docs: vbs-enclave/TESTING.md ("networking study"), from WSL on
 # the Windows machine, against the examples built with `make VBS=1`: for each application of SUITE
 # (redis nginx memcached lighttpd) the server is started in its enclave and each load is run with
-# `gramine-vbs net bench`. With STATS=1 the host process counts its host calls
+# `saguaro-vbs net bench`. With STATS=1 the host process counts its host calls
 # (SAGUARO_VBS_HOSTCALL_STATS) into STATS_FILE (a Windows path; default
-# %USERPROFILE%\gramine-vbs\hostcall-stats.txt), and the calls per request by kind are printed, with
+# %USERPROFILE%\saguaro-vbs\hostcall-stats.txt), and the calls per request by kind are printed, with
 # the calls an idle server makes outside the load subtracted. Results go to ~/vbsnet-logs/bench-TAG.
 # Request counts: N1 (one connection), N8 (eight), NP (pipelined), NM (100 KiB), NL (1 MiB).
 set -u
 R=$(cd "$(dirname "$0")/../.." && pwd)
-G=$R/scripts/vbs/gramine-vbs
+G=$R/scripts/vbs/saguaro-vbs
 OUTD=~/vbsnet-logs/bench-${TAG:-x}
 mkdir -p $OUTD
-WSTATS=${STATS_FILE:-$(powershell.exe -NoProfile -Command 'Write-Output $env:USERPROFILE' | tr -d '\r')\gramine-vbs\hostcall-stats.txt}
+WSTATS=${STATS_FILE:-$(powershell.exe -NoProfile -Command 'Write-Output $env:USERPROFILE' | tr -d '\r')\saguaro-vbs\hostcall-stats.txt}
 LSTATS=$(wslpath -u "$WSTATS")
 snap() { sleep 0.3; local k=0; until cat $LSTATS > $1 2>/dev/null && [ -s $1 ]; do sleep 0.05; k=$((k+1)); [ $k -gt 100 ] && break; done; date +%s.%N > $1.t; }
 diffstats() {  # A B requests bench-seconds -> per-kind counts per request (idle calls subtracted)

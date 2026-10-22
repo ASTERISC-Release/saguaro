@@ -20,7 +20,7 @@ By hand, the server in one terminal and the client in another:
 
 ```sh
 make                    # make SGX=1 for SGX
-gramine-direct mongod   # VM and SEV: SAGUARO_VM_INBOUND=27017:27017 gramine-vm mongod (or gramine-sev)
+saguaro-direct mongod   # VM and SEV: SAGUARO_VM_INBOUND=27017:27017 saguaro-vm mongod (or saguaro-sev)
 mongosh scripts/insert.js && mongosh scripts/fetch.js       # needs mongosh; make check uses pymongo instead
 ```
 

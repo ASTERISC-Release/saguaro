@@ -1,7 +1,7 @@
-# Quickstart: graphics under `gramine-vm` (x86_64)
+# Quickstart: graphics under `saguaro-vm` (x86_64)
 
 With the graphics host redirection ([Tirith](https://arxiv.org/abs/2609.17525)) an OpenGL or
-Vulkan application runs inside the `gramine-vm` microVM and draws on the host's GPU: a preload
+Vulkan application runs inside the `saguaro-vm` microVM and draws on the host's GPU: a preload
 library in the guest (`libgraphics.so`) forwards the GPU work to a listener in a QEMU fork on the
 host, and the application's own X connection is relayed over vsock. 
 
@@ -40,10 +40,10 @@ If the container already existed without `DISPLAY` or without the fork, recreate
 
     cd CI-Examples/graphics/glxgears
     make
-    make run                           # gramine-vm glxgears
+    make run                           # saguaro-vm glxgears
 
 A window with the gears opens; the program prints a frame-rate report once a minute. Stop it with
-Ctrl-C. `gramine-vm` starts and stops the X relay (`socat`) by itself. `make run-native` runs
+Ctrl-C. `saguaro-vm` starts and stops the X relay (`socat`) by itself. `make run-native` runs
 the same preload library without the VM, to tell a GPU problem from a Saguaro one.
 
 ## 3. Quake II (OpenGL and Vulkan)
@@ -64,7 +64,7 @@ prints `vm intel gl3 run 1: 633 frames, N seconds: N fps`.
 
 - **The manifest** mounts `libgraphics.so` at `/libgraphics.so` and preloads it, and sets
   `loader.env.DISPLAY = "2:0"`: the host's display 0 over vsock. That `DISPLAY` is what makes
-  `gramine-vm` start the X relay; the shell that runs it needs a local `DISPLAY` and `socat`.
+  `saguaro-vm` start the X relay; the shell that runs it needs a local `DISPLAY` and `socat`.
 - **The GPU**: `EGL_DISCRETE` `"0"` opens `renderD128`, `"1"` `renderD129`; which
   physical GPU that is depends on the machine (`ls -l /dev/dri/by-path`).
 - **Vulkan**: `libgraphics.so` also contains a presentation layer; `EGL_VULKAN_PRESENT` in the

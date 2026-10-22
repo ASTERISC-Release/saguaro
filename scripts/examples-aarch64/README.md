@@ -15,7 +15,7 @@ uses `sudo` for apt and may prompt; `DRY_RUN=1` previews). `CI-Examples/install-
 - mongodb: runtime libs, `pymongo`, and the official release tarball (SHA-256 checked) unpacked to
   `~/.local/mongodb` with `mongod` linked into `~/.local/bin` (ARMv8.2 CPU required on arm64)
 `iperf` needs two processes (server under Gramine, client natively) and is not in the runner:
-`cd CI-Examples/iperf && make && gramine-direct iperf3` then
+`cd CI-Examples/iperf && make && saguaro-direct iperf3` then
 `LD_LIBRARY_PATH=./install ./install/iperf3 -c 127.0.0.1`.
 
 ## Differences from upstream (portability gaps in the examples, not port bugs)
@@ -44,5 +44,5 @@ uses `sudo` for apt and may prompt; `DRY_RUN=1` previews). `CI-Examples/install-
 
 Notes: oneDNN prints `Can't open MIDR_EL1 sysfs entry` under Gramine (the guest does not emulate
 `/sys/devices/system/cpu/cpuN/regs/identification/`; harmless). MongoDB logs benign warnings for
-missing `/sys/block`, the TCP fast-open option and acceptor queue length. `gramine-direct`
+missing `/sys/block`, the TCP fast-open option and acceptor queue length. `saguaro-direct`
 resolves symlinks, so a symlinked `mongod` still uses `mongod.manifest`.

@@ -3,7 +3,7 @@
 
 /*
  * A memfd must support read(), write() and mmap() even when /dev/shm is an `untrusted_shm`
- * mount (gramine-direct's default for LTP), which maps but cannot read or write: memfd_create
+ * mount (saguaro-direct's default for LTP), which maps but cannot read or write: memfd_create
  * then backs the memfd elsewhere (LTP memfd_create01 read EBADF before).
  */
 

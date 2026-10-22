@@ -3,9 +3,9 @@
 # SPDX-License-Identifier: BSD-3-Clause
 #
 # `make VBS=1 check`: memcached in a Windows VBS enclave, checked by a client on the Windows side
-# (gramine-vbs net: the enclave's sockets are Windows sockets). GRAMINE is gramine-vbs.
+# (saguaro-vbs net: the enclave's sockets are Windows sockets). GRAMINE is saguaro-vbs.
 set -euo pipefail
-: "${GRAMINE:=../../scripts/vbs/gramine-vbs}"
+: "${GRAMINE:=../../scripts/vbs/saguaro-vbs}"
 PORT=${MEMCACHED_PORT:-11211}
 
 "$GRAMINE" memcached > OUTPUT 2>&1 &

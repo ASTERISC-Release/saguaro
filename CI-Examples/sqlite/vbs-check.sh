@@ -4,9 +4,9 @@
 #
 # `make VBS=1 check`: the three SQL scripts run in a Windows VBS enclave, one enclave per script
 # (`sqlite3 DB ".read SCRIPT"`), the last output is compared with scripts/select.txt. GRAMINE is
-# gramine-vbs.
+# saguaro-vbs.
 set -euo pipefail
-: "${GRAMINE:=../../scripts/vbs/gramine-vbs}"
+: "${GRAMINE:=../../scripts/vbs/saguaro-vbs}"
 DB=/db/test.db
 
 "$GRAMINE" sqlite3 "$DB" ".read /scripts/create.sql"

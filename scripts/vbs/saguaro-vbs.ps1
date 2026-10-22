@@ -1,24 +1,24 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
-# gramine-vbs.ps1: the Windows-side runner of the VBS enclave tooling (dev docs: vbs-enclave/manual.md). It
+# saguaro-vbs.ps1: the Windows-side runner of the VBS enclave tooling (dev docs: vbs-enclave/manual.md). It
 # launches a signed enclave package, checks the Windows side of the machine and verifies attestation
 # reports. It does not build: applications are built and packaged in WSL with `make VBS=1`, and
-# `gramine-vbs <program>` in WSL calls this script through powershell.exe. gramine-vbs.cmd next to
+# `saguaro-vbs <program>` in WSL calls this script through powershell.exe. saguaro-vbs.cmd next to
 # this file runs it from cmd or PowerShell.
 #
-#   gramine-vbs check                              check the Windows side (VBS, Visual Studio, SDK, certificate)
-#   gramine-vbs setup                              check Windows and WSL; install missing WSL tools user-level
-#   gramine-vbs run    <DIR> [-Threads N] [-Root DIR] [-PidLine] [-ShowHost] [-- ARGS]
-#   gramine-vbs sign   <DIR>
-#   gramine-vbs verify <DIR> -Report FILE [-- verifier options]
+#   saguaro-vbs check                              check the Windows side (VBS, Visual Studio, SDK, certificate)
+#   saguaro-vbs setup                              check Windows and WSL; install missing WSL tools user-level
+#   saguaro-vbs run    <DIR> [-Threads N] [-Root DIR] [-PidLine] [-ShowHost] [-- ARGS]
+#   saguaro-vbs sign   <DIR>
+#   saguaro-vbs verify <DIR> -Report FILE [-- verifier options]
 #
 # DIR is a package folder: the signed <name>.dll, pal_vbs_host.exe (and objects for `sign`); <name> is
 # the folder's name without ".vbs", or -Name. Options for all commands: -Distro NAME (default
 # $env:SAGUARO_VBS_DISTRO or Ubuntu-24.04), -CertName SUBJECT (default $env:SAGUARO_VBS_CERT_NAME or
 # TheDefaultTestEnclaveCertName). The earlier form `run|sign|verify -Dir <folder> -Name <name>` still works.
 # Arguments are parsed here (no param block): `--` must reach the script when it is started with
-# powershell -File (gramine-vbs.cmd), where a param block would refuse it.
+# powershell -File (saguaro-vbs.cmd), where a param block would refuse it.
 $Command = 'help'; $Target = ''; $Out = ''; $Distro = ''; $CertName = ''; $Threads = 0; $Root = ''
 $Report = ''; $Dir = ''; $Name = ''; $ShowHost = $false; $PidLine = $false
 $Rest = @()
@@ -31,13 +31,13 @@ for ($i = 0; $i -lt $args.Count; $i++) {
     if ($a -match '^-(\w+)$') {
         $o = $valueOpts | Where-Object { $_ -eq $Matches[1] }
         if ($o) {
-            if ($i + 1 -ge $args.Count) { Write-Host "gramine-vbs: -$o needs a value"; exit 2 }
+            if ($i + 1 -ge $args.Count) { Write-Host "saguaro-vbs: -$o needs a value"; exit 2 }
             $i++; Set-Variable -Name $o -Value ([string]$args[$i]); continue
         }
         $o = $switchOpts | Where-Object { $_ -eq $Matches[1] }
         if ($o) { Set-Variable -Name $o -Value $true; continue }
         if ($pos.Count -ge 2) { $pos += $a; continue }   # an application argument
-        Write-Host "gramine-vbs: unknown option $a"; exit 2
+        Write-Host "saguaro-vbs: unknown option $a"; exit 2
     }
     $pos += $a
 }
@@ -45,7 +45,7 @@ if ($pos.Count -ge 1) { $Command = $pos[0] }
 if ($pos.Count -ge 2) { $Target = $pos[1] }
 if ($pos.Count -ge 3) { $Rest = @($pos[2..($pos.Count - 1)]) + $Rest }
 $Threads = [int]$Threads
-# the application's arguments of `run`, from gramine-vbs in WSL: JSON in base64 in the environment
+# the application's arguments of `run`, from saguaro-vbs in WSL: JSON in base64 in the environment
 # (no quoting layer in between), each one quoted for CommandLineToArgvW; Windows PowerShell 5.1
 # passes a native command's arguments without escaping embedded quotes
 if ($env:SAGUARO_VBS_ARGS) {
@@ -75,8 +75,8 @@ function Full-Path([string]$p) { return $ExecutionContext.SessionState.Path.GetU
 $VbsArch = if ($env:PROCESSOR_ARCHITECTURE -eq 'AMD64') { 'x64' } else { 'arm64' }
 $LinuxArch = if ($VbsArch -eq 'x64') { 'x86_64' } else { 'aarch64' }
 
-function Say($msg) { Write-Host "[gramine-vbs] $msg" }
-function Fail($msg, $code = 1) { Write-Host "gramine-vbs: $msg"; exit $code }
+function Say($msg) { Write-Host "[saguaro-vbs] $msg" }
+function Fail($msg, $code = 1) { Write-Host "saguaro-vbs: $msg"; exit $code }
 
 # ---- Visual Studio, MSVC, the Windows SDK ----
 
@@ -97,9 +97,9 @@ function Find-Toolchain {
 
 function Need-Toolchain {
     $t = Find-Toolchain
-    if (-not $t.vs) { Fail 'no Visual Studio found (gramine-vbs setup)' }
-    if (-not $t.vc) { Fail "no MSVC $VbsArch tools with the enclave CRT (gramine-vbs setup)" }
-    if (-not $t.sdk) { Fail 'no Windows SDK with um\winenclave.h (gramine-vbs setup)' }
+    if (-not $t.vs) { Fail 'no Visual Studio found (saguaro-vbs setup)' }
+    if (-not $t.vc) { Fail "no MSVC $VbsArch tools with the enclave CRT (saguaro-vbs setup)" }
+    if (-not $t.sdk) { Fail 'no Windows SDK with um\winenclave.h (saguaro-vbs setup)' }
     return $t
 }
 
@@ -137,7 +137,7 @@ function Invoke-WslScript([string]$Script, [string]$Mode, [string]$Arg = '', [ha
 
 function Wsl-Home {
     $h = & wsl.exe -d $Distro -e printenv HOME
-    if ($LASTEXITCODE -ne 0 -or -not $h) { Fail "WSL distribution '$Distro' does not start (gramine-vbs setup)" }
+    if ($LASTEXITCODE -ne 0 -or -not $h) { Fail "WSL distribution '$Distro' does not start (saguaro-vbs setup)" }
     return ($h | Select-Object -Last 1).Trim()
 }
 
@@ -180,7 +180,7 @@ function Do-Run($b) {
         Get-Content $hd | Where-Object { $_ } | ForEach-Object {
             New-Item -ItemType Directory -Force -Path (Join-Path $root $_) | Out-Null }
     }
-    if ($PidLine) { Write-Output "[gramine-vbs-pid] $PID" }   # (gramine-vbs in WSL stops the host through it)
+    if ($PidLine) { Write-Output "[saguaro-vbs-pid] $PID" }   # (saguaro-vbs in WSL stops the host through it)
     # The host is started with one command-line string, so that the arguments reach it exactly as
     # quoted at the top (Windows PowerShell 5.1 re-quotes a native command's arguments). Its
     # standard output and error are printed as they arrive.
@@ -268,13 +268,13 @@ function Do-Setup {
     if (-not $has) { exit 1 }
     $arch = (& wsl.exe -d $Distro -e uname -m | Select-Object -Last 1)
     Check ($arch -eq $LinuxArch) "$Distro is $LinuxArch ($arch)" "a $LinuxArch distribution (Windows installs one of its own architecture by default)"
-    $self = Join-Path ([IO.Path]::GetTempPath()) "gramine-vbs-setup-$PID.sh"
+    $self = Join-Path ([IO.Path]::GetTempPath()) "saguaro-vbs-setup-$PID.sh"
     $text = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'wsl-setup.sh')) -replace "`r`n", "`n"
     [IO.File]::WriteAllText($self, $text, (New-Object Text.UTF8Encoding($false)))
     try {
         $rc = Invoke-WslScript $self 'user' 'clang' -IsWinPath
         $rc = Invoke-WslScript $self 'check' 'clang' -IsWinPath
-        Check ($rc -eq 0) "build tools in $Distro" "gramine-vbs setup, or ./install.sh --vbs in WSL"
+        Check ($rc -eq 0) "build tools in $Distro" "saguaro-vbs setup, or ./install.sh --vbs in WSL"
     } finally { Remove-Item -Force $self -ErrorAction SilentlyContinue }
     if ($script:bad) { Write-Host "$($script:bad) item(s) missing"; exit 1 }
     Write-Host 'everything needed is present'

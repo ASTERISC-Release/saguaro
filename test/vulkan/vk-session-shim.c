@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
 /*
- * vk-session-shim: a phase-0 test aid for Vulkan under gramine-vm (dev docs: vulkan/).
+ * vk-session-shim: a phase-0 test aid for Vulkan under saguaro-vm (dev docs: vulkan/).
  *
  * The graphics preload library (libgraphics.so) starts the guest's graphics session -- the comm-page
  * handshake with the host listener, after which the LibOS forwards opens of /dev/dri and /sys to the
@@ -52,7 +52,7 @@ __attribute__((constructor)) static void shim_init(void) {
         ensure_session();
 }
 
-/* Not dlsym(RTLD_NEXT): inside the gramine-vm guest it returned the shim's own function again
+/* Not dlsym(RTLD_NEXT): inside the saguaro-vm guest it returned the shim's own function again
  * (endless recursion, seen in phase 0); ask the loader library by name instead. */
 static void* loader_sym(const char* name, void* self) {
     void* loader = dlopen("libvulkan.so.1", RTLD_NOW | RTLD_NOLOAD);

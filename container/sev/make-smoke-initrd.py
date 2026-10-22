@@ -28,7 +28,7 @@ mount -t configfs configfs /sys/kernel/config 2>/dev/null
 R=/sys/kernel/config/tsm/report/r0
 if [ -d /sys/kernel/config/tsm/report ] && mkdir $R 2>/dev/null; then
     # 64 bytes of report data: the ASCII string below, zero padded
-    printf 'gramine-sev smoke test' | dd of=$R/inblob bs=64 conv=sync 2>/dev/null
+    printf 'saguaro-sev smoke test' | dd of=$R/inblob bs=64 conv=sync 2>/dev/null
     echo "SMOKE: tsm provider $(cat $R/provider), generation $(cat $R/generation)"
     if dd if=$R/outblob of=/tmp/report.bin 2>/dev/null && [ -s /tmp/report.bin ]; then
         echo "SMOKE: report $(wc -c < /tmp/report.bin) bytes"

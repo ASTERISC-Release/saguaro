@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (C) 2026 The ASTERISC Research Lab
 
-# Yamagi Quake II under gramine-vm with the Tirith graphics redirection (x86_64). Build the game
+# Yamagi Quake II under saguaro-vm with the Tirith graphics redirection (x86_64). Build the game
 # first with ./setup-quake.sh; see dev docs: graphics/ for the host setup.
 
 # The graphics preload library is built and installed with Gramine (-Dgraphics=enabled and a
@@ -13,7 +13,7 @@ Q2_ARGS ?= +vid_maxfps 999 +toggleconsole
 
 # Input goes through the shared-memory ring in the comm page; 0 falls back to the X connection.
 SHARED_INPUT ?= 1
-# VULKAN=1: the Vulkan renderer ref_vk (built by setup-quake.sh) under gramine-vm, presented through
+# VULKAN=1: the Vulkan renderer ref_vk (built by setup-quake.sh) under saguaro-vm, presented through
 # libgraphics.so's Vulkan layer (dev docs: vulkan/)
 VULKAN ?= 0
 LAYER_DIR = $(shell python3 -c "import graminelibos; print(graminelibos._CONFIG_PKGLIBDIR)")/vulkan
@@ -66,9 +66,9 @@ run-native: $(Q2_BIN) dirs
 
 .PHONY: run
 run: all dirs
-	gramine-vm quake2
+	saguaro-vm quake2
 
-# gramine-direct on the host GPU (dev docs: graphics-direct/): stock Mesa with DRI3 by
+# saguaro-direct on the host GPU (dev docs: graphics-direct/): stock Mesa with DRI3 by
 # default; PRELOAD=1 uses the preload library instead (needs an install built with a VM-type PAL).
 # The X server is the one of $(DISPLAY), reached through its Unix socket.
 PRELOAD ?= 0
@@ -92,13 +92,13 @@ quake2-direct.manifest: quake2-direct.manifest.template $(Q2_BIN) FORCE
 
 .PHONY: run-direct
 run-direct: quake2-direct.manifest dirs
-	gramine-direct quake2-direct $(Q2_ARGS)
+	saguaro-direct quake2-direct $(Q2_ARGS)
 
 # Quake II's own benchmark: plays the demo's recording as fast as possible and prints
 # "633 frames, N seconds: N fps" (stop the game afterwards; it stays at the console).
 .PHONY: run-direct-timedemo run-native-timedemo
 run-direct-timedemo: quake2-direct.manifest dirs
-	gramine-direct quake2-direct +vid_maxfps 999 +timedemo 1 +map q2demo1.dm2
+	saguaro-direct quake2-direct +vid_maxfps 999 +timedemo 1 +map q2demo1.dm2
 run-native-timedemo: $(Q2_BIN) dirs
 	$(NATIVE_AS) $(if $(filter 1,$(PRELOAD)),LD_PRELOAD=$(GRAPHICS_LIB) EGL_DISCRETE=$${EGL_DISCRETE:-0}) \
 		vblank_mode=0 SDL_AUDIODRIVER=dummy ALSOFT_DRIVERS=null \
