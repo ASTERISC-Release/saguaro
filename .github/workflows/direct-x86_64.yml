@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     env:
-      GRAMINE_PREFIX: ${{ github.workspace }}/.install
+      SAGUARO_PREFIX: ${{ github.workspace }}/.install
       LOGDIR: ${{ github.workspace }}/test-logs
     steps:
       - uses: actions/checkout@v4
@@ -46,11 +46,11 @@ jobs:
         run: INSTALL_RUSTUP=1 scripts/dependencies.sh
 
       - name: Build and install Gramine (direct PAL)
-        run: scripts/install.sh --prefix "$GRAMINE_PREFIX"
+        run: scripts/install.sh --prefix "$SAGUARO_PREFIX"
 
       - name: Check built binaries for writable+executable segments
         run: |
-          libdir=$(dirname "$(find "$GRAMINE_PREFIX" -name libsysdb.so | head -n 1)")
+          libdir=$(dirname "$(find "$SAGUARO_PREFIX" -name libsysdb.so | head -n 1)")
           scripts/ci/check-rwx.py "$libdir/libsysdb.so" "$libdir"/direct/loader "$libdir"/direct/libpal.so
 
       - name: Run the direct-PAL regression tests
@@ -65,13 +65,13 @@ jobs:
 
       - name: memcached example (./exec.sh --direct)
         run: |
-          export GRAMINE_DIRECT_PREFIX="$GRAMINE_PREFIX"
+          export SAGUARO_DIRECT_PREFIX="$SAGUARO_PREFIX"
           cd CI-Examples/memcached
           ./exec.sh --direct
 
       - name: nginx example (./exec.sh --direct)
         run: |
-          export GRAMINE_DIRECT_PREFIX="$GRAMINE_PREFIX"
+          export SAGUARO_DIRECT_PREFIX="$SAGUARO_PREFIX"
           cd CI-Examples/nginx
           ./exec.sh --direct
 
@@ -83,7 +83,7 @@ jobs:
           path: |
             test-logs
             /tmp/rewrite-stress-fail
-            /tmp/gramine-exec/
+            /tmp/saguaro-exec/
           if-no-files-found: ignore
 
   tdx-build:

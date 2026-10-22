@@ -17,7 +17,7 @@ on:
         type: boolean
         default: true
       cpus:
-        description: "guest vCPUs (GRAMINE_CPU_NUM)"
+        description: "guest vCPUs (SAGUARO_CPU_NUM)"
         required: false
         default: "2"
 
@@ -34,9 +34,9 @@ jobs:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 60
     env:
-      GRAMINE_PREFIX: ${{ github.workspace }}/.install-vm
-      GRAMINE_CPU_NUM: ${{ inputs.cpus || '2' }}
-      GRAMINE_TEST_TIMEOUT: "300"          # seconds per test; software emulation needs more than the 40 to 120 s defaults
+      SAGUARO_PREFIX: ${{ github.workspace }}/.install-vm
+      SAGUARO_CPU_NUM: ${{ inputs.cpus || '2' }}
+      SAGUARO_TEST_TIMEOUT: "300"          # seconds per test; software emulation needs more than the 40 to 120 s defaults
     steps:
       - uses: actions/checkout@v4
 
@@ -57,16 +57,16 @@ jobs:
         run: |
           sudo modprobe vhost_vsock || echo "::warning::vhost_vsock is not available on this kernel"
           sudo chmod 0666 /dev/vhost-vsock || true
-          ls -l /dev/vhost-vsock || echo "no /dev/vhost-vsock: socket tests will fail (GRAMINE_VSOCK=0 fallback)"
+          ls -l /dev/vhost-vsock || echo "no /dev/vhost-vsock: socket tests will fail (SAGUARO_VSOCK=0 fallback)"
           ls -l /dev/kvm || echo "no /dev/kvm (expected): QEMU runs with TCG"
           uname -r
 
       - name: Build and install Gramine (aarch64 vm PAL)
-        run: scripts/install.sh --vm --prefix "$GRAMINE_PREFIX" -j "$(nproc)"
+        run: scripts/install.sh --vm --prefix "$SAGUARO_PREFIX" -j "$(nproc)"
 
       - name: Smoke test - helloworld under gramine-vm (TCG)
         run: |
-          . "$GRAMINE_PREFIX/env.sh"
+          . "$SAGUARO_PREFIX/env.sh"
           cd CI-Examples/helloworld
           make
           # virtiofsd serves / with --sandbox none: run as root, like the container does
@@ -76,15 +76,15 @@ jobs:
 
       - name: CI-Examples under gramine-vm (helloworld, mremap, threads, bash, busybox, sqlite)
         run: |
-          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" RUN_TIMEOUT=600 VM_PREFIX="$GRAMINE_PREFIX" \
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" RUN_TIMEOUT=600 VM_PREFIX="$SAGUARO_PREFIX" \
             OUT="$GITHUB_WORKSPACE/vm-examples" tools/run-vm-aarch64-examples.sh 2>&1 | tee vm-examples.log
           grep -q "fail=0" vm-examples.log
 
       - name: VM network suites (vsock relay)
         run: |
-          . "$GRAMINE_PREFIX/env.sh"
-          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" GRAMINE_PREFIX="$GRAMINE_PREFIX" \
-            test/vm/test-vm.sh --prefix "$GRAMINE_PREFIX" loopback epoll outbound udp guest-loopback \
+          . "$SAGUARO_PREFIX/env.sh"
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" SAGUARO_PREFIX="$SAGUARO_PREFIX" \
+            test/vm/test-vm.sh --prefix "$SAGUARO_PREFIX" loopback epoll outbound udp guest-loopback \
             2>&1 | tee vm-net.log
 
       - name: Install the prerequisites of the memcached and nginx examples
@@ -92,14 +92,14 @@ jobs:
 
       - name: memcached example (./exec.sh --vm)
         run: |
-          export GRAMINE_VM_PREFIX="$GRAMINE_PREFIX"
+          export SAGUARO_VM_PREFIX="$SAGUARO_PREFIX"
           cd CI-Examples/memcached
           # gramine-vm's virtiofsd serves / and needs root, as in the other steps
           sudo -E env "PATH=$PATH" "PYTHONPATH=${PYTHONPATH:-}" ./exec.sh --vm
 
       - name: nginx example (./exec.sh --vm)
         run: |
-          export GRAMINE_VM_PREFIX="$GRAMINE_PREFIX"
+          export SAGUARO_VM_PREFIX="$SAGUARO_PREFIX"
           cd CI-Examples/nginx
           sudo -E env "PATH=$PATH" "PYTHONPATH=${PYTHONPATH:-}" ./exec.sh --vm
 
@@ -114,9 +114,9 @@ jobs:
           PYTEST_K: not test_604_sigreturn_regs
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_suite }}
         run: |
-          . "$GRAMINE_PREFIX/env.sh"
+          . "$SAGUARO_PREFIX/env.sh"
           sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "PYTEST_K=$PYTEST_K" \
-            test/vm/test-vm.sh --prefix "$GRAMINE_PREFIX" libos 2>&1 | tee vm-libos.log
+            test/vm/test-vm.sh --prefix "$SAGUARO_PREFIX" libos 2>&1 | tee vm-libos.log
           exit "${PIPESTATUS[0]}"
 
       - name: Upload logs
@@ -127,4 +127,4 @@ jobs:
           path: |
             vm-*.log
             vm-examples/
-            /tmp/gramine-exec/
+            /tmp/saguaro-exec/

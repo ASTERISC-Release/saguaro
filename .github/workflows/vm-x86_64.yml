@@ -27,11 +27,11 @@ on:
         type: boolean
         default: true
       ram:
-        description: "x86_64-vm: guest RAM (GRAMINE_RAM_SIZE; the launcher needs >= 5G)"
+        description: "x86_64-vm: guest RAM (SAGUARO_RAM_SIZE; the launcher needs >= 5G)"
         required: false
         default: "8G"
       cpus:
-        description: "x86_64-vm: guest vCPUs (GRAMINE_CPU_NUM)"
+        description: "x86_64-vm: guest vCPUs (SAGUARO_CPU_NUM)"
         required: false
         default: "2"
       multiprocess:
@@ -52,9 +52,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     env:
-      GRAMINE_PREFIX: ${{ github.workspace }}/.install-vm
-      GRAMINE_RAM_SIZE: ${{ inputs.ram || '8G' }}
-      GRAMINE_CPU_NUM: ${{ inputs.cpus || '2' }}
+      SAGUARO_PREFIX: ${{ github.workspace }}/.install-vm
+      SAGUARO_RAM_SIZE: ${{ inputs.ram || '8G' }}
+      SAGUARO_CPU_NUM: ${{ inputs.cpus || '2' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -90,7 +90,7 @@ jobs:
 
       - name: Build and install Gramine (direct + vm PALs, graphics disabled)
         id: build
-        run: scripts/install.sh --vm --graphics disabled --prefix "$GRAMINE_PREFIX" -j "$(nproc)"
+        run: scripts/install.sh --vm --graphics disabled --prefix "$SAGUARO_PREFIX" -j "$(nproc)"
 
       - name: Show the glibc build log (build failed)
         if: failure()
@@ -106,7 +106,7 @@ jobs:
 
       - name: Smoke test - helloworld under gramine-vm
         run: |
-          . "$GRAMINE_PREFIX/env.sh"
+          . "$SAGUARO_PREFIX/env.sh"
           cd CI-Examples/helloworld
           make
           # virtiofsd serves / and runs with --sandbox none: run as root like the container does
@@ -118,7 +118,7 @@ jobs:
         run: |
           # The example's manifests name no display; one that does (loader.env.DISPLAY = "2:N") makes
           # gramine-vm require a local X display, which a runner does not have.
-          . "$GRAMINE_PREFIX/env.sh"
+          . "$SAGUARO_PREFIX/env.sh"
           cd CI-Examples/unit_tests/multi-thread
           make thread-tls thread-tls.manifest
           sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" timeout 300 gramine-vm thread-tls \
@@ -129,7 +129,7 @@ jobs:
         run: |
           # Only the three scripts that need no network run here; the servers are tested in the steps
           # below (Redis, memcached, nginx).
-          . "$GRAMINE_PREFIX/env.sh"
+          . "$SAGUARO_PREFIX/env.sh"
           cd CI-Examples/python
           make python.manifest
           for s in helloworld test-numpy test-scipy; do
@@ -142,8 +142,8 @@ jobs:
 
       - name: Smoke test - Redis through the VM inbound relay
         run: |
-          . "$GRAMINE_PREFIX/env.sh"
-          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "GRAMINE_PREFIX=$GRAMINE_PREFIX" \
+          . "$SAGUARO_PREFIX/env.sh"
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "SAGUARO_PREFIX=$SAGUARO_PREFIX" \
             timeout 600 test/vm/network/test-vm-redis.sh 2>&1 | tee vm-redis.log
           grep -q "Redis PING/SET/GET and benchmark passed" vm-redis.log
 
@@ -152,14 +152,14 @@ jobs:
 
       - name: memcached example (./exec.sh --vm)
         run: |
-          export GRAMINE_VM_PREFIX="$GRAMINE_PREFIX"
+          export SAGUARO_VM_PREFIX="$SAGUARO_PREFIX"
           cd CI-Examples/memcached
           # gramine-vm's virtiofsd serves / and needs root, as in the other steps
           sudo -E env "PATH=$PATH" "PYTHONPATH=${PYTHONPATH:-}" ./exec.sh --vm
 
       - name: nginx example (./exec.sh --vm)
         run: |
-          export GRAMINE_VM_PREFIX="$GRAMINE_PREFIX"
+          export SAGUARO_VM_PREFIX="$SAGUARO_PREFIX"
           cd CI-Examples/nginx
           sudo -E env "PATH=$PATH" "PYTHONPATH=${PYTHONPATH:-}" ./exec.sh --vm
 
@@ -171,9 +171,9 @@ jobs:
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_suite }}
         continue-on-error: true
         run: |
-          . "$GRAMINE_PREFIX/env.sh"
+          . "$SAGUARO_PREFIX/env.sh"
           cd libos/test/regression
-          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" GRAMINE_VM=1 \
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" SAGUARO_VM=1 \
             gramine-test pytest -- -q -rfEsxX --tb=short -p no:cacheprovider test_libos.py \
             2>&1 | tee ../../../vm-libos.log
 
@@ -181,77 +181,77 @@ jobs:
       # those run unchanged. Each check is its own step, runs even when an earlier one failed, and
       # reruns a failing check once (hosted guests are slow); the full guest output of each attempt
       # is in the vm-mp-logs/ of the uploaded artifact. Where the key comes from: the probe manifest
-      # templates (test/vm/multiproc/*.manifest.template), GRAMINE_VM_MULTIPROCESS=1 for the LibOS
+      # templates (test/vm/multiproc/*.manifest.template), SAGUARO_VM_MULTIPROCESS=1 for the LibOS
       # regression manifests, and an edit of the examples' generated manifests (restored after).
       - name: Multi-process - spawn (sh pipeline and command substitution, system(), posix_spawn)
         if: ${{ !cancelled() && inputs.multiprocess && steps.build.outcome == 'success' }}
         run: |
-          . "$GRAMINE_PREFIX/env.sh"
-          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "GRAMINE_PREFIX=$GRAMINE_PREFIX" \
-            "GRAMINE_CPU_NUM=$GRAMINE_CPU_NUM" "LOGDIR=$GITHUB_WORKSPACE/vm-mp-logs" TIMEOUT_SCALE=2 \
+          . "$SAGUARO_PREFIX/env.sh"
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "SAGUARO_PREFIX=$SAGUARO_PREFIX" \
+            "SAGUARO_CPU_NUM=$SAGUARO_CPU_NUM" "LOGDIR=$GITHUB_WORKSPACE/vm-mp-logs" TIMEOUT_SCALE=2 \
             test/vm/multiproc/check-probes.sh spawn 2>&1 | tee vm-mp-spawn.log
           exit "${PIPESTATUS[0]}"
 
       - name: Multi-process - signals between processes (bash, sig.sh)
         if: ${{ !cancelled() && inputs.multiprocess && steps.build.outcome == 'success' }}
         run: |
-          . "$GRAMINE_PREFIX/env.sh"
-          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "GRAMINE_PREFIX=$GRAMINE_PREFIX" \
-            "GRAMINE_CPU_NUM=$GRAMINE_CPU_NUM" "LOGDIR=$GITHUB_WORKSPACE/vm-mp-logs" TIMEOUT_SCALE=2 \
+          . "$SAGUARO_PREFIX/env.sh"
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "SAGUARO_PREFIX=$SAGUARO_PREFIX" \
+            "SAGUARO_CPU_NUM=$SAGUARO_CPU_NUM" "LOGDIR=$GITHUB_WORKSPACE/vm-mp-logs" TIMEOUT_SCALE=2 \
             test/vm/multiproc/check-probes.sh signals 2>&1 | tee vm-mp-signals.log
           exit "${PIPESTATUS[0]}"
 
       - name: Multi-process - fork stress (1000 sequential, 64 in batches of 8)
         if: ${{ !cancelled() && inputs.multiprocess && steps.build.outcome == 'success' }}
         run: |
-          . "$GRAMINE_PREFIX/env.sh"
-          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "GRAMINE_PREFIX=$GRAMINE_PREFIX" \
-            "GRAMINE_CPU_NUM=$GRAMINE_CPU_NUM" "LOGDIR=$GITHUB_WORKSPACE/vm-mp-logs" TIMEOUT_SCALE=2 \
+          . "$SAGUARO_PREFIX/env.sh"
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "SAGUARO_PREFIX=$SAGUARO_PREFIX" \
+            "SAGUARO_CPU_NUM=$SAGUARO_CPU_NUM" "LOGDIR=$GITHUB_WORKSPACE/vm-mp-logs" TIMEOUT_SCALE=2 \
             test/vm/multiproc/check-probes.sh forks 2>&1 | tee vm-mp-forks.log
           exit "${PIPESTATUS[0]}"
 
       - name: Multi-process - forked child (SysV IPC, memfd, file calls, timers, inotify)
         if: ${{ !cancelled() && inputs.multiprocess && steps.build.outcome == 'success' }}
         run: |
-          . "$GRAMINE_PREFIX/env.sh"
-          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "GRAMINE_PREFIX=$GRAMINE_PREFIX" \
-            "GRAMINE_CPU_NUM=$GRAMINE_CPU_NUM" "LOGDIR=$GITHUB_WORKSPACE/vm-mp-logs" TIMEOUT_SCALE=2 \
+          . "$SAGUARO_PREFIX/env.sh"
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "SAGUARO_PREFIX=$SAGUARO_PREFIX" \
+            "SAGUARO_CPU_NUM=$SAGUARO_CPU_NUM" "LOGDIR=$GITHUB_WORKSPACE/vm-mp-logs" TIMEOUT_SCALE=2 \
             test/vm/multiproc/check-probes.sh misc 2>&1 | tee vm-mp-misc.log
           exit "${PIPESTATUS[0]}"
 
       - name: Multi-process - System V IPC between processes (shm, queues, semaphores)
         if: ${{ !cancelled() && inputs.multiprocess && steps.build.outcome == 'success' }}
         run: |
-          . "$GRAMINE_PREFIX/env.sh"
-          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "GRAMINE_PREFIX=$GRAMINE_PREFIX" \
-            "GRAMINE_CPU_NUM=$GRAMINE_CPU_NUM" "LOGDIR=$GITHUB_WORKSPACE/vm-mp-logs" TIMEOUT_SCALE=2 \
+          . "$SAGUARO_PREFIX/env.sh"
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "SAGUARO_PREFIX=$SAGUARO_PREFIX" \
+            "SAGUARO_CPU_NUM=$SAGUARO_CPU_NUM" "LOGDIR=$GITHUB_WORKSPACE/vm-mp-logs" TIMEOUT_SCALE=2 \
             test/vm/multiproc/check-probes.sh sysv 2>&1 | tee vm-mp-sysv.log
           exit "${PIPESTATUS[0]}"
 
       - name: Multi-process - LibOS regressions fork_and_exec and vfork_and_exec
         if: ${{ !cancelled() && inputs.multiprocess && steps.build.outcome == 'success' }}
         run: |
-          . "$GRAMINE_PREFIX/env.sh"
-          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "GRAMINE_PREFIX=$GRAMINE_PREFIX" \
-            "GRAMINE_CPU_NUM=$GRAMINE_CPU_NUM" "LOGDIR=$GITHUB_WORKSPACE/vm-mp-logs" TIMEOUT_SCALE=2 \
+          . "$SAGUARO_PREFIX/env.sh"
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "SAGUARO_PREFIX=$SAGUARO_PREFIX" \
+            "SAGUARO_CPU_NUM=$SAGUARO_CPU_NUM" "LOGDIR=$GITHUB_WORKSPACE/vm-mp-logs" TIMEOUT_SCALE=2 \
             test/vm/multiproc/check-probes.sh libos 2>&1 | tee vm-mp-libos.log
           exit "${PIPESTATUS[0]}"
 
       - name: Multi-process - examples (helloworld, thread-tls, python, bash 7 checks)
         if: ${{ !cancelled() && inputs.multiprocess && steps.build.outcome == 'success' }}
         run: |
-          . "$GRAMINE_PREFIX/env.sh"
-          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "GRAMINE_PREFIX=$GRAMINE_PREFIX" \
-            "GRAMINE_CPU_NUM=$GRAMINE_CPU_NUM" "LOGDIR=$GITHUB_WORKSPACE/vm-mp-logs" TIMEOUT_SCALE=2 \
+          . "$SAGUARO_PREFIX/env.sh"
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "SAGUARO_PREFIX=$SAGUARO_PREFIX" \
+            "SAGUARO_CPU_NUM=$SAGUARO_CPU_NUM" "LOGDIR=$GITHUB_WORKSPACE/vm-mp-logs" TIMEOUT_SCALE=2 \
             test/vm/multiproc/check-probes.sh examples 2>&1 | tee vm-mp-examples.log
           exit "${PIPESTATUS[0]}"
 
       - name: Multi-process - redis BGSAVE (forked child writes the dump)
         if: ${{ !cancelled() && inputs.multiprocess && steps.build.outcome == 'success' }}
         run: |
-          . "$GRAMINE_PREFIX/env.sh"
-          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "GRAMINE_PREFIX=$GRAMINE_PREFIX" \
-            "GRAMINE_CPU_NUM=$GRAMINE_CPU_NUM" "LOGDIR=$GITHUB_WORKSPACE/vm-mp-logs" TIMEOUT_SCALE=2 \
+          . "$SAGUARO_PREFIX/env.sh"
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "SAGUARO_PREFIX=$SAGUARO_PREFIX" \
+            "SAGUARO_CPU_NUM=$SAGUARO_CPU_NUM" "LOGDIR=$GITHUB_WORKSPACE/vm-mp-logs" TIMEOUT_SCALE=2 \
             test/vm/multiproc/check-probes.sh redis 2>&1 | tee vm-mp-redis.log
           exit "${PIPESTATUS[0]}"
 
@@ -286,5 +286,5 @@ jobs:
           path: |
             vm-*.log
             vm-mp-logs/
-            /tmp/gramine-exec/
+            /tmp/saguaro-exec/
             build-vm-x86_64/subprojects/glibc-2.39-1/glibc-build.log

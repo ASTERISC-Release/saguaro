@@ -49,7 +49,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 120
     env:
-      GRAMINE_PREFIX: ${{ github.workspace }}/.install
+      SAGUARO_PREFIX: ${{ github.workspace }}/.install
       LOGDIR: ${{ github.workspace }}/test-logs
     steps:
       - uses: actions/checkout@v4
@@ -64,11 +64,11 @@ jobs:
       - name: Build and install Gramine (direct PAL)
         env:
           LIBC: ${{ inputs.libc || 'none' }}   # via env, never interpolated into the script text
-        run: scripts/install.sh --prefix "$GRAMINE_PREFIX" --libc "$LIBC"
+        run: scripts/install.sh --prefix "$SAGUARO_PREFIX" --libc "$LIBC"
 
       - name: Check built binaries for writable+executable segments
         run: |
-          libdir=$(dirname "$(find "$GRAMINE_PREFIX" -name libsysdb.so | head -n 1)")
+          libdir=$(dirname "$(find "$SAGUARO_PREFIX" -name libsysdb.so | head -n 1)")
           scripts/ci/check-rwx.py "$libdir/libsysdb.so" "$libdir"/direct/loader "$libdir"/direct/libpal.so
 
       - name: Run the direct-PAL regression tests
@@ -83,13 +83,13 @@ jobs:
 
       - name: memcached example (./exec.sh --direct)
         run: |
-          export GRAMINE_DIRECT_PREFIX="$GRAMINE_PREFIX"
+          export SAGUARO_DIRECT_PREFIX="$SAGUARO_PREFIX"
           cd CI-Examples/memcached
           ./exec.sh --direct
 
       - name: nginx example (./exec.sh --direct)
         run: |
-          export GRAMINE_DIRECT_PREFIX="$GRAMINE_PREFIX"
+          export SAGUARO_DIRECT_PREFIX="$SAGUARO_PREFIX"
           cd CI-Examples/nginx
           ./exec.sh --direct
 
@@ -105,7 +105,7 @@ jobs:
           path: |
             test-logs
             /tmp/rewrite-stress-fail
-            /tmp/gramine-exec/
+            /tmp/saguaro-exec/
           if-no-files-found: ignore
 
   vm-build:
@@ -114,7 +114,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 60
     env:
-      GRAMINE_PREFIX: ${{ github.workspace }}/.install-vm
+      SAGUARO_PREFIX: ${{ github.workspace }}/.install-vm
     steps:
       - uses: actions/checkout@v4
 
@@ -122,17 +122,17 @@ jobs:
         run: scripts/dependencies.sh --build-only
 
       - name: Build and install Gramine (vm PAL, graphics disabled)
-        run: scripts/install.sh --vm --graphics disabled --prefix "$GRAMINE_PREFIX" -j "$(nproc)"
+        run: scripts/install.sh --vm --graphics disabled --prefix "$SAGUARO_PREFIX" -j "$(nproc)"
 
       - name: Check the installed vm PAL
         run: |
-          . "$GRAMINE_PREFIX/env.sh"
+          . "$SAGUARO_PREFIX/env.sh"
           command -v gramine-vm
-          pal=$(find "$GRAMINE_PREFIX" -path '*/gramine/vm/pal' -type f | head -n 1)
+          pal=$(find "$SAGUARO_PREFIX" -path '*/gramine/vm/pal' -type f | head -n 1)
           test -n "$pal"
           file "$pal"
 
       - name: Render and check a VM manifest (helloworld)
         run: |
-          . "$GRAMINE_PREFIX/env.sh"
+          . "$SAGUARO_PREFIX/env.sh"
           make -C CI-Examples/helloworld helloworld helloworld.manifest   # also runs gramine-manifest-check
