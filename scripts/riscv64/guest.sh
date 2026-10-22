@@ -48,7 +48,7 @@ prepare() {
         wget -q --show-progress -O "$BASE.part" "$IMAGE_URL"
         mv "$BASE.part" "$BASE"
     fi
-    [ -f "$KEY" ] || ssh-keygen -q -t ed25519 -N '' -C gramine-riscv64-guest -f "$KEY"
+    [ -f "$KEY" ] || ssh-keygen -q -t ed25519 -N '' -C saguaro-riscv64-guest -f "$KEY"
     if [ ! -f "$DISK" ]; then
         qemu-img create -q -f qcow2 -F qcow2 -b "$BASE" "$DISK" 20G
         # First-boot configuration: root login with our key, the repository mounted at its usual
@@ -75,7 +75,7 @@ runcmd:
   - sysctl -w vm.overcommit_memory=1
   - touch /var/lib/saguaro-guest-ready
 USERDATA
-        printf 'instance-id: gramine-riscv64-%s\nlocal-hostname: riscv64-guest\n' "$(date +%s)" \
+        printf 'instance-id: saguaro-riscv64-%s\nlocal-hostname: riscv64-guest\n' "$(date +%s)" \
             > "$DIR/meta-data"
         cloud-localds "$SEED" "$DIR/user-data" "$DIR/meta-data"
     fi

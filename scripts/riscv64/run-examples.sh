@@ -8,7 +8,7 @@
 #   scripts/riscv64/run-examples.sh [suite...]      e.g.  helloworld multithread sqlite
 #
 # The examples are built natively in the guest, in a copy of the tracked files of CI-Examples/,
-# test/ and scripts/ on the guest's own disk (/srv/gramine-examples). Building them in the
+# test/ and scripts/ on the guest's own disk (/srv/saguaro-examples). Building them in the
 # repository itself would overwrite the x86_64 example binaries and manifests there, and the 9p
 # share is a poor place for the files the examples create. The copy is refreshed on every run;
 # what the guest built in it is kept.
@@ -17,7 +17,7 @@ set -euo pipefail
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 REPO=$(cd "$HERE/../.." && pwd)
 BUILD="${BUILD:-$REPO/build-riscv64}"
-DEST=/srv/gramine-examples
+DEST=/srv/saguaro-examples
 
 ARGS=""
 for a in "$@"; do ARGS+=" $(printf '%q' "$a")"; done
@@ -28,6 +28,6 @@ for a in "$@"; do ARGS+=" $(printf '%q' "$a")"; done
 exec "$HERE/guest.sh" ssh "
     cd $DEST
     export SAGUARO_PREFIX=$BUILD/prefix
-    export LOGDIR=/srv/gramine-examples-logs
+    export LOGDIR=/srv/saguaro-examples-logs
     test/direct/test-direct.sh $ARGS
 "
