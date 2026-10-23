@@ -38,22 +38,25 @@ Szeredi), and the example applications under `CI-Examples/` with the software th
 
 ## Individuals
 
-Everyone who authored at least one commit in this repository's history, in alphabetical order (names
-as recorded in git; a few contributors appear under more than one spelling or handle):
+Everyone who authored or co-authored (`Co-authored-by`) at least one commit in this repository's history,
+in alphabetical order (names as recorded in git; a few contributors appear under more than one spelling or handle):
 
 - abin
 - Adil Ahmad
 - Alex Merritt
+- Amie Raine
 - aneessahib
 - Aniket Borkar
 - Anjali Rai
 - Anjo Vahldiek-Oberwagner
 - AntonioDan Hu
+- Benny Fuhry
 - Borys Popławski
 - borysp
 - Chia-Che Tsai
 - Chihyun Song
 - Dayeol Lee
+- Deb Taylor
 - Denis Zygann
 - Dimitrios Stavrakakis
 - Dmitrii Kuvaiskii
@@ -64,6 +67,7 @@ as recorded in git; a few contributors appear under more than one spelling or ha
 - Frieder Paape
 - g2flyer
 - Gary
+- Giovanni Paladino
 - Iacopo Colonnelli
 - Isaku Yamahata
 - J. Scott Raynor
@@ -72,6 +76,7 @@ as recorded in git; a few contributors appear under more than one spelling or ha
 - Jakub Kądziołka
 - James R. Bergsten
 - Jia Zhang
+- jianyu-m
 - Jinen Gandhi
 - Jitender Kumar
 - jkr0103
@@ -95,11 +100,15 @@ as recorded in git; a few contributors appear under more than one spelling or ha
 - Nick Hynes
 - Nils Hanke
 - Nir Lavi
+- Nirjhar Roy
 - Patrick Foley
+- Paul Cartee
 - Paweł Marczewski
 - Rafał Wojdyła
 - Rahul Unnikrishnan Nair
+- Ranjit Narjala
 - Sankaranarayanan Venkatasubramanian
+- Santosh Gokul
 - Satyanaraya Illa
 - Sebastian Przystawski
 - Simon Gaiser
@@ -125,6 +134,7 @@ as recorded in git; a few contributors appear under more than one spelling or ha
 - Yunjong Jeong
 - Zhang Chen
 - Zhang Lili
+- Zongmin Gu
 
 If you contributed and are missing from this list, or would like your name or affiliation recorded
 differently, please open an issue or a pull request.
