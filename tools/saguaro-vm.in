@@ -50,6 +50,12 @@ fi
 # shared virtio-queues memory, page tables, PAL binary, etc. and (b) for simplicity we want to reuse
 # already-existing SGX manifests, thus we don't want to bump `sgx.enclave_size` to 1GB explicitly.
 export SAGUARO_MANIFEST=$APPLICATION.manifest
+if [ ! -f "$SAGUARO_MANIFEST" ]; then
+    echo "saguaro-vm: manifest '$SAGUARO_MANIFEST' not found in $PWD." >&2
+    echo "  Build it first (run 'make' in the example's directory), or start saguaro-vm from the" >&2
+    echo "  directory that holds it: the application argument is the manifest name without '.manifest'." >&2
+    exit 2
+fi
 QEMU_MEM_SIZE=$(python3 -c "
 import os
 import re
