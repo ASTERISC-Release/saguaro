@@ -25,8 +25,8 @@ for additional backends, namely
 Additionally, several quality-of-life [features](Documentation/FEATURES.md) have been added, including
 
 - **Multi-architecture support:** AMD64, AArch64 and RISC-V.
-- **Graphics redirection:** redirection to the host GPU in the `vm`/`direct` PAL (see [Tirith](https://arxiv.org/abs/2609.17525)).
-  - Even allows us to play Windows games using Wine and Proton in the `vm` PAL.
+- **Graphics acceleration:** redirection to the host GPU in the `vm`/`direct` PAL (see [Tirith](https://arxiv.org/abs/2609.17525)).
+  - Experimentally, it can even play (some) Windows games using Wine/Proton in the `vm` PAL.
 - **Richer system call coverage:** including multi-process (e.g., fork, clone), signaling, and network.
 
 These features and backends are the result of published (and upcoming) work by the ASU Trusted, Reliable, and Secure Computing
@@ -55,10 +55,12 @@ platform that hosts it: Intel SGX enclaves (`sgx`), Intel TDX and AMD SEV confid
 machines (`tdx`, `sev`) and Windows VBS enclaves (`vbs`). The application does not need to be modified
 or ported to a different enclave interface. Remote attestation lets a remote party verify what is running.
 
-**(3) Teaching Linux-inspired operating system implementations on different architectures:** The
+**(3) Teaching Linux-inspired operating system and protected computing implementations:** The
 library OS and the small bare-metal kernel of the `vm` PAL (page tables, scheduler, interrupts,
 and virtio drivers) are compact and readable. The same Linux-compatible interface is implemented
 on x86_64, AArch64 and RISC-V, so that the architecture-specific parts can be compared directly.
+The same applies to protected contexts like TDX/SEV/VBS, where the underlying PAL shows how the same
+feature is implemented in different underlying hardware/software contexts.
 
 ## Platform Support
 
