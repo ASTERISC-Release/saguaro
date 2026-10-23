@@ -92,6 +92,18 @@ feature is implemented in different hardware/software contexts.
 
 Please see [CHANGELOG.md](CHANGELOG.md) and [TODO.md](Documentation/TODO.md) for a summary.
 
+### Continuous Integration
+
+The workflows run on hosted GitHub runners and are started by hand (`workflow_dispatch`); each badge shows the last
+run on `main`. Hardware-bound backends (`sgx`, `tdx`, `sev`, `vbs`) are tested manually on the hardware.
+
+| Workflow | Intel x86_64 | AArch64 | RISC-V (RV64, emulated) |
+|:---:|:---:|:---:|:---:|
+| `direct` (Container) | [![direct x86_64](https://github.com/ASTERISC-Release/saguaro/actions/workflows/direct-x86_64.yml/badge.svg?branch=main&event=workflow_dispatch)](https://github.com/ASTERISC-Release/saguaro/actions/workflows/direct-x86_64.yml) | [![direct aarch64](https://github.com/ASTERISC-Release/saguaro/actions/workflows/direct-aarch64.yml/badge.svg?branch=main&event=workflow_dispatch)](https://github.com/ASTERISC-Release/saguaro/actions/workflows/direct-aarch64.yml) | [![direct riscv64](https://github.com/ASTERISC-Release/saguaro/actions/workflows/direct-riscv64-emulated.yml/badge.svg?branch=main&event=workflow_dispatch)](https://github.com/ASTERISC-Release/saguaro/actions/workflows/direct-riscv64-emulated.yml) |
+| `vm` (MicroVM)       | [![vm x86_64](https://github.com/ASTERISC-Release/saguaro/actions/workflows/vm-x86_64.yml/badge.svg?branch=main&event=workflow_dispatch)](https://github.com/ASTERISC-Release/saguaro/actions/workflows/vm-x86_64.yml) | [![vm aarch64 (TCG)](https://github.com/ASTERISC-Release/saguaro/actions/workflows/vm-aarch64-tcg.yml/badge.svg?branch=main&event=workflow_dispatch)](https://github.com/ASTERISC-Release/saguaro/actions/workflows/vm-aarch64-tcg.yml) | – |
+
+[![documentation check](https://github.com/ASTERISC-Release/saguaro/actions/workflows/docs-check.yml/badge.svg?branch=main&event=workflow_dispatch)](https://github.com/ASTERISC-Release/saguaro/actions/workflows/docs-check.yml)
+
 ## Getting Started
 
 Get the source:
@@ -116,7 +128,8 @@ and [microVM](https://github.com/ASTERISC-Release/saguaro/blob/main/Documentatio
 ## Contributing
 
 Bug reports and pull requests are welcome through the GitHub repository
-([ASTERISC-Release/saguaro](https://github.com/ASTERISC-Release/saguaro)). By
+([ASTERISC-Release/saguaro](https://github.com/ASTERISC-Release/saguaro)); see
+[CONTRIBUTING.md](CONTRIBUTING.md), which also asks you to mark AI-generated content. By
 submitting a contribution you agree that it is licensed under the license of the
 file it modifies or adds (LGPL-3.0-or-later, or BSD-3-Clause for files under
 `CI-Examples/`), and that you have the right to submit it under that license.
