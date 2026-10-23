@@ -70,8 +70,8 @@ project by the Gramine contributors (https://github.com/gramineproject/gramine),
 Attribution 4.0 International License (https://creativecommons.org/licenses/by/4.0/). It has been modified:
 converted to Markdown, edited, and the project name changed.
 
-The texts of the licenses named in this file are in COPYING (GPL-3.0, to which LICENSE.txt, the LGPL-3.0, refers)
-and in the LICENSES directory (MIT, BSD-2-Clause, BSD-3-Clause, Apache-2.0).
+The LGPL-3.0 is LICENSE.txt. The texts of the other licenses that require their text to accompany the code (MIT,
+BSD-2-Clause, BSD-3-Clause, Apache-2.0) are in the LICENSES directory.
 
 Patches against programs that are downloaded or built, not included. Each
 patch applies to a program under that program's own license; the patch files
