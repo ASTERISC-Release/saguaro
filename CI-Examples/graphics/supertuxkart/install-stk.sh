@@ -13,6 +13,7 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 PATCH_DIR=$SCRIPT_DIR/patches
+mkdir -p ~/.config
 mkdir -p "$SCRIPT_DIR/stk-build"
 cd "$SCRIPT_DIR/stk-build"
 
