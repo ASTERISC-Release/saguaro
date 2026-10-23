@@ -14,23 +14,23 @@ performance quirks. This work will likely require many months of development.
 - An x86_64 machine with KVM (`/dev/kvm`), `/dev/vhost-vsock`, and an Intel or AMD GPU with a
   render node (`/dev/dri/renderD128`, `renderD129`) that the user can open.
 - An X server (Xwayland counts) with `DISPLAY` set when the container is created.
-- The QEMU fork [qemu-tirith](https://github.com/adilahmad17/qemu-tirith), branch
-  `dev-graphics`, checked out **next to** this repository before the container is created (or
-  `QEMU_TIRITH_DIR` set): `container/run.sh` mounts it at `/root/qemu-tirith`.
+- The QEMU fork (UNRELEASED) checked out **next to** this repository before the container is created (or
+  `QEMU_SAGUARO_DIR` set): `container/run.sh` mounts it at `/root/qemu-saguaro`.
+  - This will be released shortly.
 
 ## 1. Build (in the container)
 
 From the folder that holds the checkout:
 
-    git clone -b dev-graphics https://github.com/adilahmad17/qemu-tirith.git
+    git clone <URL of the QEMU fork> qemu-saguaro      # the URL is published with the release of the fork
     cd saguaro
     container/run.sh                   # with DISPLAY set; the rest runs inside
 
 Inside the container:
 
-    /root/qemu-tirith/tirith-build.sh                  # once: build/qemu-system-x86_64
+    /root/qemu-saguaro/build.sh                        # once: build/qemu-system-x86_64
     scripts/install.sh --vm                            # graphics on by default; builds libgraphics.so
-    export QEMU_PATH=/root/qemu-tirith/build/qemu-system-x86_64
+    export QEMU_PATH=/root/qemu-saguaro/build/qemu-system-x86_64
     mkdir -p ~/.cache
 
 `container/run.sh` loads `~/.local/saguaro-vm/env.sh` in the container shell, so no environment step
@@ -78,7 +78,7 @@ Note that memory is allocated on-demand; so this simply denotes the maximum that
 
 ## Limits
 
-- x86_64 only; graphics-enabled builds have only been run on `qemu-tirith`.
+- x86_64 only; graphics-enabled builds have only been run on the QEMU fork.
 - Input arrives through a shared ring by default; applications that read input without the Xlib
   calls the ring covers need `SHARED_INPUT=0` (`running.md`).
 - Two graphics VMs at once share one X relay; the second loses its display when the first exits.

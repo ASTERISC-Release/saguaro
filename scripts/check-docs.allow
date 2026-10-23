@@ -1,11 +1,11 @@
 # Names that documents mention and that are legitimately not files of this repository.
 # One regular expression per line; a document token that matches any of them is not reported.
 
-# the external QEMU fork (qemu-tirith) and the graphics workspace layout
-^qemu-tirith/
+# the external QEMU fork (qemu-saguaro) and the graphics workspace layout
+^qemu-saguaro/
 ^qemu/
 ^saguaro-graphics/
-^tirith-build\.sh$
+^build\.sh$
 (^|/)util/(sg-listener\.c|sg-xcb\.c|input_ring\.h|meson\.build|mmap-alloc\.c)$
 ^include/qemu/sg\.h$
 

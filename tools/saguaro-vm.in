@@ -194,7 +194,7 @@ fi
 [ -n "${GRAPHICS_HUGE_ADDR:-}" ] && export SAGUARO_HUGEPAGE_ADDR
 [ -n "${GRAPHICS_DATA_SIZE:-}" ] && export SAGUARO_DATA_SIZE
 [ -n "${GRAPHICS_DATA_ADDR:-}" ] && export SAGUARO_DATA_ADDR
-[ -n "${GRAPHICS_DATA_ADDR:-}" ] && export GRAMINE_DATA_ADDR=$GRAPHICS_DATA_ADDR   # read by qemu-tirith
+[ -n "${GRAPHICS_DATA_ADDR:-}" ] && export GRAMINE_DATA_ADDR=$GRAPHICS_DATA_ADDR   # read by the QEMU fork
 GRAPHICS_BACKEND_ARGS=""
 
 if [ "$SAGUARO_HUGEPAGES" == "1" ]; then
@@ -258,7 +258,7 @@ QEMU_OPTS+="$GRAPHICS_BACKEND_ARGS"
 # The bases go to the QEMU fork's placement logic (per-backend identity mapping) as env -- the
 # guest never sees this one.
 export SAGUARO_RAM_BASES=$RAM_BASES
-# qemu-tirith (the external QEMU fork) reads the map and the arena address under their old names
+# the external QEMU fork reads the map and the arena address under their old names
 export GRAMINE_RAM_BASES=$RAM_BASES
 
 if [ -n "$SEV_IGVM_PATH" ]; then

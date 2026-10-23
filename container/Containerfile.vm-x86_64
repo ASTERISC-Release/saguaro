@@ -49,7 +49,7 @@ ENV PATH="/usr/lib/rust-1.85/bin:${PATH}"
 
 # Graphics layer (see dev docs: graphics/): stock Mesa and the X/GL/SDL2 headers for the
 # graphics preload library (libos/src/graphics) and CI-Examples/graphics, socat for the
-# vsock-to-X proxy, and the packages needed to build the QEMU fork (qemu-tirith, kept outside this repository)
+# vsock-to-X proxy, and the packages needed to build the QEMU fork (qemu-saguaro, kept outside this repository)
 # with its graphics listener.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \

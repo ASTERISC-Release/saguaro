@@ -331,7 +331,7 @@ The tree was renamed to Saguaro. What an upgrader has to change (there are no al
   `libra_tls_verify_dcap_gramine.so`, headers under `include/gramine/`), the manifest syntax, the C macros of the
   LibOS ABI and their header guard (`GRAMINE_CALL_*`, `GRAMINE_SYSCALL*`, ...), the C functions of the entry API
   that patched libcs call (`gramine_register_library`, ...), the example Makefile variable `SAGUARO`, the legacy
-  fallbacks (`~/.config/gramine/enclave-key.pem`, `gramine-<name>` workspace folders) and the names qemu-tirith
+  fallbacks (`~/.config/gramine/enclave-key.pem`, `gramine-<name>` workspace folders) and the names the QEMU fork
   reads: the launcher exports `GRAMINE_RAM_BASES` and `GRAMINE_DATA_ADDR` for it (next to the `SAGUARO_` ones),
   its build uses `GRAMINE_ABI_ROOT`/`GRAMINE_ABI_DIR`, and `libos/src/graphics/xcb.c` (with `in_gramine_vm`) is
   kept byte-identical to its copy there.

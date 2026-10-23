@@ -39,7 +39,7 @@ which the default profile blocks).
 
 QEMU: the images contain stock distribution QEMU only (see `dev docs: vm.md`). TDX and the graphics
 redirection need a QEMU fork kept outside this repository. For graphics on x86_64, `run.sh` mounts a
-`qemu-tirith` checkout found next to this repository (or at `QEMU_TIRITH_DIR`) at `/root/qemu-tirith`, and
+`qemu-saguaro` checkout found next to this repository (or at `QEMU_SAGUARO_DIR`) at `/root/qemu-saguaro`, and
 passes the DRM render nodes, the host X socket and `DISPLAY` into the container; the image has the packages
 to build it. See `dev docs: graphics/running.md`.
 

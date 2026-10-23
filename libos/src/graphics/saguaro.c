@@ -165,7 +165,7 @@ void setup_syscall_comms(void) {
     if (addr[0].p5 != GRAPHICS_COMM_ABI_VERSION) {
         fprintf(stderr, "[!] graphics: the host listener speaks comm ABI version %llu, this guest "
                 "version %llu (graphics_comm_abi.h): rebuild the QEMU fork against this tree "
-                "(qemu-tirith/tirith-build.sh)\n", (unsigned long long)addr[0].p5,
+                "(qemu-saguaro/build.sh)\n", (unsigned long long)addr[0].p5,
                 (unsigned long long)GRAPHICS_COMM_ABI_VERSION);
         abort();
     }

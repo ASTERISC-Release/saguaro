@@ -17,7 +17,7 @@ set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
 N=${1:-2}
 . "${SAGUARO_PREFIX:-$HOME/.local/saguaro-vm}/env.sh"
-[ -n "${QEMU_PATH:-}" ] || { [ -x /root/qemu-tirith/build/qemu-system-x86_64 ] && export QEMU_PATH=/root/qemu-tirith/build/qemu-system-x86_64; }
+[ -n "${QEMU_PATH:-}" ] || { [ -x /root/qemu-saguaro/build/qemu-system-x86_64 ] && export QEMU_PATH=/root/qemu-saguaro/build/qemu-system-x86_64; }
 export EGL_DISCRETE=${EGL_DISCRETE:-1}
 cd "$HERE" || exit 2
 make -s vk-headless vk-two gfx-fdpass vk-session-shim.so >/dev/null || exit 2
