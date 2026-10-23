@@ -53,14 +53,15 @@ redirection to the host GPU in an efficient manner.
 runs an application inside hardware-protected environments, so that it is protected from the
 platform that hosts it: Intel SGX enclaves (`sgx`), Intel TDX and AMD SEV confidential virtual
 machines (`tdx`, `sev`) and Windows VBS enclaves (`vbs`). The application does not need to be modified
-or ported to a different enclave interface. Remote attestation lets a remote party verify what is running.
+or ported to a different enclave interface. Remote attestation (implemented by the hardware/OS vendor) lets a 
+remote party verify what is running.
 
 **(3) Teaching Linux-inspired operating system and protected computing implementations:** The
 library OS and the small bare-metal kernel of the `vm` PAL (page tables, scheduler, interrupts,
 and virtio drivers) are compact and readable. The same Linux-compatible interface is implemented
 on x86_64, AArch64 and RISC-V, so that the architecture-specific parts can be compared directly.
 The same applies to protected contexts like TDX/SEV/VBS, where the underlying PAL shows how the same
-feature is implemented in different underlying hardware/software contexts.
+feature is implemented in different hardware/software contexts.
 
 ## Platform Support
 
