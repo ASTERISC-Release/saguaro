@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
+/* Copyright (C) 2023 Intel Labs */
 /* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /* Console of the vbs PAL proper: writes go to the host console through W's console OCALL; there is

@@ -1,5 +1,8 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
-/* Copyright (C) 2026 The ASTERISC Research Lab */
+/* Copyright (C) 2014 Stony Brook University
+ * Copyright (C) 2020 Intel Corporation
+ *                    Borys Popławski <borysp@invisiblethingslab.com>
+ * Copyright (C) 2026 The ASTERISC Research Lab */
 
 /*
  * This file contains definition of aarch64-specific aspects of PAL.

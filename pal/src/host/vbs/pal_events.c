@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
-/* Copyright (C) 2026 The ASTERISC Research Lab */
+/* Copyright (C) 2021 Intel Corporation
+ *                    Borys Popławski <borysp@invisiblethingslab.com>
+ * Copyright (C) 2026 The ASTERISC Research Lab */
 
 /* Events of the vbs PAL proper: a 32-bit word, waited on with WaitOnAddress (W's wait service) and
  * woken with WakeByAddressAll, which work across enclave threads (phase 0, step e). */
