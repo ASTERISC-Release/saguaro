@@ -17,9 +17,9 @@ sys.experimental__shared_input_ring = true
 loader.log_level = "{{ log_level }}"
 loader.insecure__use_host_env = true
 {% if vulkan|string == "1" %}
-loader.argv = ["quake2", "+set", "vid_renderer", "vk", "+vid_maxfps", "999", "+toggleconsole"]
+loader.argv = ["quake2", {% for a in q2_video.split() %}"{{ a }}", {% endfor %}"+set", "vid_renderer", "vk", "+vid_maxfps", "999", "+toggleconsole"]
 {% else %}
-loader.argv = ["quake2", "+vid_maxfps", "999", "+toggleconsole"]
+loader.argv = ["quake2", {% for a in q2_video.split() %}"{{ a }}", {% endfor %}"+vid_maxfps", "999", "+toggleconsole"]
 {% endif %}
 loader.uid = 1000
 loader.gid = 1000

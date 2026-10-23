@@ -9,7 +9,11 @@
 GRAPHICS_LIB = $(shell python3 -c "import saguarolibos; print(saguarolibos._CONFIG_PKGLIBDIR)")/libgraphics.so
 Q2_DIR = $(abspath quake2_bin)
 Q2_BIN = quake2_bin/release/quake2
-Q2_ARGS ?= +vid_maxfps 999 +toggleconsole
+# Window and resolution (Yamagi Quake II cvars): windowed, 1920x1080. For another size change
+# r_customwidth/r_customheight; for fullscreen use Q2_VIDEO="+set vid_fullscreen 1". It reaches the
+# game through loader.argv of quake2.manifest (saguaro-vm) and through Q2_ARGS (direct and native).
+Q2_VIDEO ?= +set vid_fullscreen 0 +set r_mode -1 +set r_customwidth 1920 +set r_customheight 1080
+Q2_ARGS ?= $(Q2_VIDEO) +vid_maxfps 999 +toggleconsole
 
 # Input goes through the shared-memory ring in the comm page; 0 falls back to the X connection.
 SHARED_INPUT ?= 1
@@ -31,6 +35,7 @@ MANIFEST_ARGS = \
 	-Dhome=$(HOME) \
 	-Dshared_input=$(SHARED_INPUT) \
 	-Dvulkan=$(VULKAN) \
+	-Dq2_video='$(Q2_VIDEO)' \
 	-Degl_discrete=$${EGL_DISCRETE:-0} \
 	-Dlayer_dir=$(LAYER_DIR)
 

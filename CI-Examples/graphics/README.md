@@ -31,6 +31,8 @@ For the VM, export `QEMU_PATH=<qemu checkout>/build/qemu-system-x86_64` first. T
 
 - `DEBUG=1` sets the Saguaro debug log level; `SHARED_INPUT=0` takes input over the X connection instead of the shared ring.
 - `SAGUARO_CPU_NUM` and `SAGUARO_RAM_SIZE` set the guest's vCPUs and memory (defaults 1 and 8G). A graphics guest needs at least 5G, and 3G plus `SAGUARO_DATA_SIZE` (default 1G).
-- Quake II: `make run-direct-timedemo`. SuperTuxKart: `make run-startup PROFILE_TIME=<seconds>`, `make run-direct-startup`.
+- Quake II starts windowed at 1920x1080; `Q2_VIDEO` sets the video options, for example
+  `make run Q2_VIDEO="+set vid_fullscreen 0 +set r_mode -1 +set r_customwidth 1280 +set r_customheight 720"` (`Q2_VIDEO=` leaves the
+  game's own settings alone). Timedemo: `make run-direct-timedemo`. SuperTuxKart: `make run-startup PROFILE_TIME=<seconds>`, `make run-direct-startup`.
 - The `-direct` manifests enable insecure options (raw GPU ioctls, the X server's Unix socket): `saguaro-direct` is not a sandbox here.
 - `direct-tests/` holds small test programs for the direct route (`make check`).
