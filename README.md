@@ -14,7 +14,7 @@ to run on Intel x86 platforms. Our work is not affiliated with or endorsed by th
 see the [Acknowledgements](#acknowledgement) section. 
 
 Keeping [upstream](https://github.com/gramineproject/gramine-tdx)'s full history, Saguaro extends Gramine to provide wide support 
-for additional backends, namely
+for different PAL backends:
 
 - Containerized userspace (`direct`)
 - Isolated userspace (`sgx`)
