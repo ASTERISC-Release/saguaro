@@ -34,6 +34,7 @@ Saguaro. QEMU 11.1.2 with `sev-snp-guest` and IGVM (including a local patch for 
 (it survives the recreation of the container):
 
     cd <repo-home>
+    mkdir -p ../sev-tools      # before the first container/run.sh: it is mounted only if it already exists
     container/run.sh "container/sev/build-sev-tools.sh all"
     container/run.sh "scripts/install.sh --sev --graphics disabled"   # vm PAL + SEV PAL + saguaro-sev
 
