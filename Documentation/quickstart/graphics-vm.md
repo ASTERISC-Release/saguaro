@@ -74,6 +74,7 @@ prints `vm intel gl3 run 1: 633 frames, N seconds: N fps`.
 - **Vulkan**: `libgraphics.so` also contains a presentation layer; `EGL_VULKAN_PRESENT` in the
   manifest turns it on (`test/vulkan/vk-vm.manifest.template` shows the keys, `make vm-<program>.manifest PRESENT=1` in `test/vulkan` builds one for a program in `/usr/bin`).
 - **Memory**: a graphics guest needs at least 5G (the launcher enforces it; the default is 8G).
+Note that memory is allocated on-demand; so this simply denotes the maximum that QEMU can allocate. 
 
 ## Limits
 
