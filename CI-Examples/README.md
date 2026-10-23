@@ -24,7 +24,7 @@ the example and runs it under one backend. Run it in the directory of the exampl
 
 # Results
 
-The table lists the result of each example for each backend. The record of the `exec.sh` runs (x86_64, aarch64, SEV, SEV-SNP, SGX, and VBS on x86_64 and aarch64) is in [RESULTS.md](RESULTS.md); the RISC-V column comes from another script (see ¹⁰). The examples that run on SEV also run on TDX; `exec.sh` has no TDX backend.
+The table lists the result of each example for each backend. The record of the `exec.sh` runs (x86_64, aarch64, SEV, SEV-SNP, SGX, and VBS on x86_64 and aarch64) is in [RESULTS.md](RESULTS.md).
 
 **Symbols:** ✓ pass, ✗ fail, – not run or not applicable, blank not measured.
 
