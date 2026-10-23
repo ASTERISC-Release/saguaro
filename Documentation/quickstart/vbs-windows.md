@@ -40,7 +40,7 @@ The steps by hand:
 `make VBS=1` builds the program for the enclave and packs it, then links and signs the enclave image
 (the signed `helloworld.dll` in the folder `helloworld.vbs`, next to `helloworld.manifest.vbs`). 
 
-    Hello, world from a VBS enclave (pid 1, 0 arguments)
+    Hello, world
 
 # 3. Example: Python
 
@@ -69,8 +69,6 @@ data, and `saguaro-vbs verify` checks one on the same machine:
     saguaro-vbs attest <64 hex digits>
     saguaro-vbs verify attest data/out/report.bin --user-data <64 hex digits> --same-image --min-svn 1
 
-The check is local to this machine; what it establishes and what it does not is in
-`dev docs: vbs-enclave/manual.md`, Attestation.
 
 # 5. Troubleshooting
 
