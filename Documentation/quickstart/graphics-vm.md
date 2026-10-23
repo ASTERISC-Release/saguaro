@@ -5,6 +5,10 @@ Vulkan application runs inside the `saguaro-vm` microVM and draws on the host's 
 library in the guest (`libgraphics.so`) forwards the GPU work to a listener in a QEMU fork on the
 host, and the application's own X connection is relayed over vsock. 
 
+> **Disclaimer:** Graphics work is **heavily work-in-progress**. The performance of the graphical redirection
+approach has only been tested in a small set of hardware topologies, and more testing is ongoing to address 
+performance quirks. This work will likely require many months of development.
+
 ## Requirements
 
 - An x86_64 machine with KVM (`/dev/kvm`), `/dev/vhost-vsock`, and an Intel or AMD GPU with a
@@ -79,9 +83,10 @@ prints `vm intel gl3 run 1: 633 frames, N seconds: N fps`.
 - Two graphics VMs at once share one X relay; the second loses its display when the first exits.
 - With `sys.experimental__multiprocess` on (the default) the application is demand-paged and
   every pointer inside a forwarded DRM ioctl is translated by a table in the LibOS
-  (`../GRAPHICS.md`). The table covers what Mesa 25.2's `iris`, `anv`, `radeonsi` and `radv`
+  (`../GRAPHICS.md`).
+  - This is currently an experimental, but enabled feature. It diverges from the core Tirith
+  approach (which requires no pointer copy) for multi-process application support.
+  - The table covers what Mesa 25.2's `iris`, `anv`, `radeonsi` and `radv`
   issue; a request outside it (user-pointer objects, `I915_EXEC_FENCE_IN`, an engine map with
-  extensions) fails with `EFAULT` or `EINVAL` and a LibOS warning. Earlier versions had no i915
-  request in the table, so Intel GPUs needed `sys.experimental__multiprocess = false`; that
-  is fixed, and the LibOS now keeps its own mappings apart from the application's (the guard in
-  `../GRAPHICS.md`). Not covered by the table: the `xe` kernel driver's requests.
+  extensions) fails with `EFAULT` or `EINVAL` and a LibOS warning.
+  - The performance penalty of this approach is currently under-investigation.
