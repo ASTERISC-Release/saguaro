@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
 # Prepare all LTP syscall manifests with the repository's upstream manifest template.
 set -euo pipefail
 

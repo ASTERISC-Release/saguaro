@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
 """Where the vCPUs of a hung saguaro-vm guest are: started with SAGUARO_VM_MONITOR=<socket>, the
 guest's QEMU monitor is asked for every vCPU's registers a few times, and each RIP is named after
 the VM PAL function that contains it (an address outside the PAL is LibOS or application code).

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
+
 trap 'echo got USR1' USR1
 kill -USR1 $$
 echo after-self

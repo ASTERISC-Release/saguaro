@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
 """Run the LTP syscall tests of one loader as N parallel shards of scripts/run-ltp-syscalls.py,
 merge the shard results into one results file, and optionally rerun every non-pass serially.
 

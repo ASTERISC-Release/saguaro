@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
+/* Copyright (C) 2026 The ASTERISC Research Lab */
 /* Prints CLOCK_MONOTONIC, CLOCK_BOOTTIME and CLOCK_REALTIME (seconds), to compare a guest's clocks
  * with the host's (dev docs: vulkan/, blocker 4: DRM waits take absolute
  * CLOCK_MONOTONIC deadlines). */

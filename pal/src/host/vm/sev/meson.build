@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
+
 # AMD SEV / SEV-SNP build of the x86-64 vm PAL (dev docs: sev/PLAN.md D2): the same
 # sources as ../meson.build, compiled again with PAL_HOST_SEV, plus the SEV files of this directory,
 # installed into <pkglibdir>/sev next to the IGVM file that boots it. HOST_TYPE stays VM: the LibOS

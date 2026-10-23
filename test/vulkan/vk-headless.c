@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
+/* Copyright (C) 2026 The ASTERISC Research Lab */
 /*
  * vk-headless: a window-less Vulkan test that walks the device path step by step, so that a run
  * under saguaro-direct or saguaro-vm shows how far it gets. Every step prints one line

@@ -1,5 +1,6 @@
 #!/bin/bash
 # SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
 # Multi-process checks for saguaro-vm with sys.experimental__multiprocess = true, with assertions
 # (run-probes.sh only prints). Each check runs under saguaro-vm, compares the output with the
 # expected lines, and is rerun once before it counts as failed (hosted guests are slow and the

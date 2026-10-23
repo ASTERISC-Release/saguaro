@@ -1,5 +1,6 @@
 #!/bin/bash
 # SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
 # Runs the signals probe (sig.sh under bash, multi-process key on) N times back to back and counts
 # the runs that miss a line or hang. Run in the container after `scripts/install.sh --vm`.
 #

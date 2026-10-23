@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
 # Frame rate of vkcube without its start-up cost: runs it for N1 and N2 frames (--c) and reports
 # (N2 - N1) / (t2 - t1). Usage: vkcube-rate.sh GPU_NUMBER N1 N2 [launcher...]
 # e.g.  vkcube-rate.sh 1 1000 5000                         (native)

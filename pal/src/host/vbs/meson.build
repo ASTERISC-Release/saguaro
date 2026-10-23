@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
+
 # The Windows VBS-enclave PAL has two parts (dev docs: vbs-enclave/PLAN.md, D1-D3 and the
 # design of the hello-world path):
 #

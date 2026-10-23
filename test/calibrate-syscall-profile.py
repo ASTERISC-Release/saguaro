@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
 """Calibrate scripts/syscall-profile.py: profile distro builds of the example applications and
 compare the verdicts with the outcomes known from the test documents.
 

@@ -1,5 +1,6 @@
 #!/bin/bash
 # SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
 # Starts N saguaro-vm guests back to back (as a CI step or the LibOS suite does) and counts the ones
 # that do not print the program's output or exit status: a guest that dies early in boot prints only
 # the launcher lines ("Configuring Saguaro VM ...", "vm-relay: ... listening ...") and, since the

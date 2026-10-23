@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
+
 # Saguaro x64 phase-0 spike (step g): compile a VBS enclave C source on Linux with clang for
 # x86_64-pc-windows-msvc. The Windows SDK and MSVC headers are not redistributable; copy them from
 # the Windows machine into a scratch folder first:

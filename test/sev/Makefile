@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
+
 # test/sev/test-sev.sh builds this; SAGUARO_LOG_LEVEL=error unless set
 
 SAGUARO_LOG_LEVEL ?= error

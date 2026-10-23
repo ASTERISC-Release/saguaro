@@ -1,5 +1,6 @@
 #!/bin/bash
 # SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
 # Multi-process probes for saguaro-vm with sys.experimental__multiprocess (run in the container,
 # after `scripts/install.sh --vm`): spawn (sh -c, system(), posix_spawn), signals between
 # processes (bash), fork stress, then nginx with workers and redis BGSAVE (both use host ports

@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
+
 # Saguaro phase-0 spike (step h): build the AArch64 Linux program with the GNU toolchain (WSL
 # Ubuntu 24.04 on the ARM64 machine, native aarch64 gcc) and split it into the two binaries that
 # ../elf.asm includes into the enclave image.

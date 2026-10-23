@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
 """Does an application tolerate the loss of the syscalls the LibOS does not support?
 
 Takes the syscalls that scripts/syscall-profile.py reports as ENOSYS in the LibOS (or a list you

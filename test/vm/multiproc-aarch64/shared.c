@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
+/* Copyright (C) 2026 The ASTERISC Research Lab */
 /* Cross-process VM PAL qualification: inherited channels and two kinds of shared mappings. */
 #define _GNU_SOURCE
 #include <errno.h>

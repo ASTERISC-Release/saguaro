@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
+/* Copyright (C) 2026 The ASTERISC Research Lab */
 /*
  * xwin-dump: writes the contents of one X window, found by a substring of its WM_NAME, to a PPM
  * file (dev docs: vulkan/, phase 2: checks what the presentation layer put on screen,

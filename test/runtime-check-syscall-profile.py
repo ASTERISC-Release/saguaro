@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
 """Ground truth for scripts/syscall-profile.py: run programs under saguaro-direct with the log
 level `warning` and compare the syscalls the LibOS reports as unsupported ("Unsupported system
 call X") with the syscalls the profile says are ENOSYS in the LibOS.

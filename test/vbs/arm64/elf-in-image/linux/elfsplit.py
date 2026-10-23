@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
+
 """Saguaro phase-0 spike (step h): write the two PT_LOAD segments of app.elf as text.bin (padded to
 a fixed 64 KiB so that the enclave image layout does not depend on the program) and data.bin
 (padded to its memory size), and check that the program needs no relocation."""

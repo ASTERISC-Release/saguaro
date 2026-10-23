@@ -1,3 +1,6 @@
+/* SPDX-License-Identifier: LGPL-3.0-or-later */
+/* Copyright (C) 2026 The ASTERISC Research Lab */
+
 /* Saguaro phase-0 spike (step h): a freestanding AArch64 Linux program. Its only "system call"
  * goes through a function pointer that the loader passes in x0 (as a PAL table would). It uses
  * read-only data, initialised data and zero-initialised data, all addressed PC-relative. */

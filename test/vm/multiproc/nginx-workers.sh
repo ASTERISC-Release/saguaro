@@ -1,4 +1,7 @@
 #!/bin/bash
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
+
 # nginx with master process and 4 workers under saguaro-vm (experimental multiprocess)
 set -u
 . ~/.local/saguaro-vm/env.sh

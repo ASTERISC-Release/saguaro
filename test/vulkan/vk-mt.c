@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
+/* Copyright (C) 2026 The ASTERISC Research Lab */
 /*
  * vk-mt: Vulkan from several threads (dev docs: vulkan/, blocker 7). Under saguaro-vm
  * every device call goes through the comm page; if a thread blocked in a long wait holds it, the

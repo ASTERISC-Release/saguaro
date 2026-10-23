@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
 """Run scripts/syscall-tolerance.py on the ten calibration applications: each is run natively with
 the syscalls the direct loader reports as ENOSYS answered by -ENOSYS, and compared with an
 undisturbed run. Same setup and caveats as test/calibrate-syscall-profile.py (distro builds)."""

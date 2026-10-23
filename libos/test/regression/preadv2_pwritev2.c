@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
+/* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /*
  * Regression test for preadv2/pwritev2: explicit offsets, offset -1 (the file position), the

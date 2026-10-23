@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
 # Download and build the LTP revision formerly pinned by libos/test/ltp/src.
 set -euo pipefail
 

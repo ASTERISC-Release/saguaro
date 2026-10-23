@@ -1,5 +1,6 @@
 #!/bin/bash
 # SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
 # Multi-process applications under load in saguaro-vm (sys.experimental__multiprocess), run in the
 # container after `scripts/install.sh --vm` and after the examples were built once (test-direct.sh):
 #   nginx   master + 4 workers; N concurrent clients fetch a 10 KiB page, each body compared

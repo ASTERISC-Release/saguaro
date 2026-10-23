@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
+
 libos_sources_arch_list = {
     'fs_proc/info.c': {},
     'libos_context.c': {},

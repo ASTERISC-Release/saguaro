@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
+/* Copyright (C) 2026 The ASTERISC Research Lab */
 /*
  * xsend-key: sends a key press and release to ONE window, the parent of the window named NAME
  * (the saguaro-vm listener's presentation child is reparented into the application's window), with

@@ -1,5 +1,6 @@
 #!/bin/bash
 # SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
 # Run the CI examples under saguaro-vm, optionally with sys.experimental__multiprocess = true
 # (MP=1) added to their generated manifests (restored afterwards). Run in the container after
 # `. <prefix>/env.sh`. Servers go through test/direct/test-direct.sh with SAGUARO_RUNNER=saguaro-vm; the

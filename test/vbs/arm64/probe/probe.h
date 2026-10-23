@@ -1,3 +1,6 @@
+/* SPDX-License-Identifier: LGPL-3.0-or-later */
+/* Copyright (C) 2026 The ASTERISC Research Lab */
+
 // Saguaro phase-0 spike: interface between the probe host and the probe enclave.
 #pragma once
 

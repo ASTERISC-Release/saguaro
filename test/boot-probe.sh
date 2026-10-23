@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
+
 # Boot-time and physical-commit probe for graphics VMs: boots glxgears under saguaro-vm,
 # samples the host's shmem/hugetlb commit while the guest renders, and prints the [boot]
 # stamps (QEMU backend placement, PAL phases, guest library phases). Not a pass/fail

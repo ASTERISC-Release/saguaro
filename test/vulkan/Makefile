@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
 # Vulkan feasibility tests (dev docs: vulkan/). `make` builds vk-headless; the SPIR-V
 # headers are committed and only regenerated when a shader changes and glslangValidator exists.
 

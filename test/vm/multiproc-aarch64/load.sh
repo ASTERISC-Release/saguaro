@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
 # AArch64 VM process qualification, in this checkout's container after a --vm install.
 # Usage: SAGUARO_PREFIX=... SAGUARO_CPU_NUM=1|2|4 test/vm/multiproc-aarch64/load.sh bash|nginx|redis
 # MP=0 (nginx only): without the multiprocess key, as one process (`master_process off`), the same

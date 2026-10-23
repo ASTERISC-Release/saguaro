@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
 """Profile the syscalls of an application and check them against the syscall matrix.
 
   syscall-profile.py profile [-o FILE] -- CMD ARGS...   trace CMD with strace -f, write a JSON profile

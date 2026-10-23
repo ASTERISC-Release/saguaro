@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
+
 # No pal_arch_misc.c on aarch64: its x86_64 counterpart only implements _PalSegmentBaseGet/Set
 # (behind arch_prctl, which doesn't exist on aarch64 -- TLS is set directly via TPIDR_EL0, see
 # pal_host_arch.h) and _PalCpuIdRetrieve (a thin cpuid() wrapper; the generic PalCpuIdRetrieve/

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
 """Check scripts/syscall-profile.py against its own raw strace output.
 
 For each command the raw `strace -f` file is counted line by line, independently of the profiler's

@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
 #
 # Build of the guest-side server of the vsock-loopback test (test/vm/network/test-vm-loopback.sh).
 # static-pie: the VM PAL needs PIE binaries (the same requirement the CI-Examples under
