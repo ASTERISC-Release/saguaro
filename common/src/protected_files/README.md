@@ -34,7 +34,7 @@ Saguaro allows mounting files and directories as encrypted. If a directory is
 mounted as encrypted, all existing files/directories within it are recursively
 treated as encrypted.
 
-See `Documentation/manifest-syntax.md` for details.
+See [Gramine's manifest documentation](https://gramine.readthedocs.io/en/latest/manifest-syntax.html) for details.
 
 ### Limitations
 

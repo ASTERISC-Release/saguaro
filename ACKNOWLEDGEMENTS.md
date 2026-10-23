@@ -66,7 +66,7 @@ as recorded in git; a few contributors appear under more than one spelling or ha
 - Gary
 - Iacopo Colonnelli
 - Isaku Yamahata
-- 10. Scott Raynor
+- J. Scott Raynor
 - jack.wxz
 - Jaewon Hur
 - Jakub Kądziołka

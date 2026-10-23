@@ -3,7 +3,7 @@
 
 # Minetest under saguaro-direct on the host GPU (dev docs: graphics-direct/). Insecure by
 # design: the application can submit work to the GPU and talk to the X server directly (see the
-# insecure__ keys below and Documentation/manifest-syntax.md).
+# insecure__ keys below and Documentation/manifest-keys.md).
 
 libos.entrypoint = "/luanti-5.6.1/bin/minetest"
 

@@ -3,7 +3,7 @@
 
 # Yamagi Quake II under saguaro-direct on the host GPU (dev docs: graphics-direct/).
 # Insecure by design: the application can submit work to the GPU and talk to the X server directly
-# (see the insecure__ keys below and Documentation/manifest-syntax.md).
+# (see the insecure__ keys below and Documentation/manifest-keys.md).
 
 libos.entrypoint = "/quake2_bin/release/quake2"
 

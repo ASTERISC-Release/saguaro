@@ -13,7 +13,7 @@ loader.insecure__use_cmdline_argv = true
 loader.env.LD_LIBRARY_PATH = "/lib:/usr{{ arch_libdir }}"
 
 # The application may submit any ioctl to the GPU and talk to the X server (see
-# Documentation/manifest-syntax.md).
+# Documentation/manifest-keys.md).
 sys.insecure__allow_raw_device_ioctl = true
 sys.insecure__host_unix_sockets = ["/tmp/.X11-unix/X{{ display }}"]
 loader.env.DISPLAY = ":{{ display }}"

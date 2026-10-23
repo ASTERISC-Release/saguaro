@@ -26,6 +26,3 @@ the RISC-V cross-build). `quickstart/vbs-enable.md` explains how to enable VBS o
 
 | Document | Content | Note |
 |---|---|---|
-| `manifest-syntax.md` | detailed syntax, defaults, constraints and examples for manifest keys | inherited, with tree-specific additions; indexed by `manifest-keys.md` |
-| `glossary.md` | terms | |
-| `attestation.md` | Intel SGX attestation | inherited; the SGX route of this tree: `quickstart/tdx-sgx.md` |

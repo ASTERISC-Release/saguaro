@@ -1181,7 +1181,7 @@ int PalDeviceIoControl(PAL_HANDLE handle, uint32_t cmd, unsigned long arg, int* 
 /*
  * Host passthrough (Linux PAL only, i.e. `saguaro-direct`). These calls give the LibOS access to
  * host objects that have no PAL abstraction. Every other PAL returns -PAL_ERROR_NOTIMPLEMENTED.
- * The LibOS uses them only when the manifest opts in (see Documentation/manifest-syntax.md).
+ * The LibOS uses them only when the manifest opts in (see Documentation/manifest-keys.md).
  */
 
 /*!

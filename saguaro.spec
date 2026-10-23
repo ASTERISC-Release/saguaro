@@ -6,7 +6,7 @@ Release: 1%{?dist}
 Group: Development Tools
 Summary: A lightweight usermode guest OS designed to run a single Linux application
 License: LGPLv3+
-URL: https://gramineproject.io
+URL: https://github.com/ASTERISC-Release/saguaro
 BuildArch: x86_64
 
 Source0: %{name}-%{version}.tar.gz

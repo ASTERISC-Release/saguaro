@@ -1,6 +1,9 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
 /* Copyright (C) 2026 The ASTERISC Research Lab */
 
+/* Parts of this file are derived from SharedGL (https://github.com/dmaivel/sharedgl), Copyright (c) 2023-2024
+ * dmaivel, licensed under the MIT License (see LICENSES/MIT.txt). */
+
 #define _GNU_SOURCE
 #include <GL/gl.h>
 #include <GL/glx.h>

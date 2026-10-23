@@ -115,7 +115,7 @@ In a fresh container, `blender`, `mongodb`, `nodejs`, `openjdk` and `r` first st
 - The `make SGX=1` step needs the protobuf-c tools (`protobuf-c-compiler libprotobuf-c-dev`), which the
   container image has.
 
-Reference: [attestation.md](../attestation.md), the `sgx.*` keys of [manifest-syntax.md](../manifest-syntax.md), and [gramine.readthedocs.io](https://gramine.readthedocs.io).
+Reference: the `sgx.*` keys in [Gramine's manifest documentation](https://gramine.readthedocs.io/en/latest/manifest-syntax.html), the [key catalog](../manifest-keys.md), and [gramine.readthedocs.io](https://gramine.readthedocs.io) (attestation).
 
 ## TDX
 
