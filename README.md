@@ -123,11 +123,8 @@ file it modifies or adds (LGPL-3.0-or-later, or BSD-3-Clause for files under
 
 Saguaro, like Gramine, is licensed under the LGPL-3.0-or-later (see `LICENSE.txt`); the
 examples in `CI-Examples/` are BSD-3-Clause unless a file says otherwise (see
-`LICENSE.addendum.txt`). The code added by the ASTERISC Research Lab (Arizona State
-University) is copyright (C) 2026 The ASTERISC Research Lab and is licensed under the
-same terms as the part of the tree it belongs to; the addendum lists the third-party
-material this tree added. The copyright notices of upstream Gramine and gramine-tdx
-are retained.
+`LICENSE.addendum.txt`). The copyright notices of upstream Gramine and Gramine-TDX
+contributors are retained in their original format.
 
 ## Citation
 
