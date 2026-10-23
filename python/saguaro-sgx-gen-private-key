@@ -17,7 +17,7 @@ from saguarolibos import sgx_sign
     help='don\'t write the key path to stdout')
 @click.argument('output',
     type=click.Path(file_okay=True, dir_okay=False),
-    default=os.fspath(sgx_sign.SGX_RSA_KEY_PATH))
+    default=os.fspath(sgx_sign.SGX_RSA_KEY_PATH_SAGUARO))
 def main(output, force, quiet):
     output = pathlib.Path(output)
     old_umask = os.umask(0o077)

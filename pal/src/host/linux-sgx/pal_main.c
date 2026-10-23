@@ -541,7 +541,7 @@ static int print_warnings_on_insecure_configs(PAL_HANDLE parent_process) {
                    "(keys hardcoded in manifest)");
 
 
-    log_always("\nGramine will continue application execution, but this configuration must not be "
+    log_always("\nSaguaro will continue application execution, but this configuration must not be "
                "used in production!");
     log_always("-------------------------------------------------------------------------------"
                "----------------------------------------\n");

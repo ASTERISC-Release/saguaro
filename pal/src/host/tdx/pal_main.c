@@ -401,7 +401,7 @@ noreturn int pal_start_continue(void* cmdline_) {
 
     bool first_process = !strcmp(argv[0], "init");
     if (!first_process)
-        INIT_FAIL("Gramine-TDX currently runs only in single-process mode (with `init`)");
+        INIT_FAIL("Saguaro-TDX currently runs only in single-process mode (with `init`)");
 
     /* hack to re-use .manifest.sgx file if .manifest.tdx not found */
     char* manifest_path_tdx = alloc_concat(argv[1], -1, ".manifest.tdx", -1);
