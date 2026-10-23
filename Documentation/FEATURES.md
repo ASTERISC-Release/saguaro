@@ -113,7 +113,7 @@ production use.
 - **`scripts/install.sh`** (done). One command builds and installs the direct and VM PALs (`--vm`,
   `--graphics`, `--libc`, `--target riscv64`) and the `--sev`, `--sgx` and `--vbs` runtimes, and can run the tests. [INSTALL.md](../INSTALL.md)
 - **Containers and workspaces** (done). `container/run.sh` gives each checkout its own rootless container,
-  guest CIDs and ports, so several branches and agents work side by side. [AGENTS.md](AGENTS.md)
+  guest CIDs and ports, so several branches and agents work side by side (the header of `container/run.sh`).
 - **`./exec.sh --<backend>`** (done). Every `CI-Examples/` directory runs with `--direct`, `--vm`, `--sev`, `--sev-snp`,
   `--sgx` or `--vbs`: it explains why a backend cannot run, prints the command under test, streams the logs and ends
   with the example's check. The shared helpers (`CI-Examples/common_tools/`) also start and stop the server examples.

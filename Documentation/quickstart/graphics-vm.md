@@ -84,7 +84,7 @@ Note that memory is allocated on-demand; so this simply denotes the maximum that
 - Two graphics VMs at once share one X relay; the second loses its display when the first exits.
 - With `sys.experimental__multiprocess` on (the default) the application is demand-paged and
   every pointer inside a forwarded DRM ioctl is translated by a table in the LibOS
-  (`../GRAPHICS.md`).
+  (dev docs: graphics/overview/GRAPHICS.md).
   - This is currently an experimental, but enabled feature. It diverges from the core Tirith
   approach (which requires no pointer copy) for multi-process application support.
   - The table covers what Mesa 25.2's `iris`, `anv`, `radeonsi` and `radv`

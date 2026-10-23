@@ -6,7 +6,7 @@
   syscall-profile.py check FILE [--loader L] [--json]   verdict for direct and/or vm from a profile
   syscall-profile.py run -- CMD ARGS...                 profile, then check
 
-The matrix is dev docs: syscall-compat/syscalls.csv (made by scripts/syscall-matrix.py).
+The matrix is dev docs: syscall-compat/syscalls.csv (SAGUARO_DEV_DOCS names the folder that holds it).
 A dynamic profile covers only the code paths the traced run exercised. See
 dev docs: syscall-profile/PLAN.md.
 """
@@ -28,11 +28,17 @@ import time
 import tomllib
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-# The syscall-compat and syscall-profile data live in the private development-documents repository, checked out
-# next to this one (SAGUARO_DEV_DOCS names another place).
-DEV_DOCS = pathlib.Path(os.environ.get("SAGUARO_DEV_DOCS", ROOT.parent / "saguaro-docs"))
+# The syscall-compat and syscall-profile data (the syscall matrix) are not part of this repository; SAGUARO_DEV_DOCS names
+# the folder that holds them.
+DEV_DOCS = pathlib.Path(os.environ.get("SAGUARO_DEV_DOCS", ROOT.parent / "dev-docs"))
 COMPAT = DEV_DOCS / "syscall-compat"
 PROFILE_DIR = DEV_DOCS / "syscall-profile"
+
+
+def require_matrix():
+    if not (COMPAT / "syscalls.csv").exists():
+        sys.exit(f"the syscall matrix ({COMPAT}/syscalls.csv) is not part of this repository: set SAGUARO_DEV_DOCS "
+                 "to the folder that holds it (profiling alone, without a verdict, does not need it)")
 
 # strace name -> matrix name, where the matrix uses another spelling
 ALIASES = {
@@ -222,6 +228,7 @@ def static_profile(binary, with_libs=True):
     objdump = shutil.which("objdump")
     if not objdump:
         sys.exit("objdump not found (binutils)")
+    require_matrix()
     with (COMPAT / "syscalls.csv").open() as f:
         names = {int(r["x86_64_number"]): r["syscall"] for r in csv.DictReader(f) if r["x86_64_number"]}
     files = [binary]
@@ -256,6 +263,7 @@ def static_profile(binary, with_libs=True):
 
 
 def load_matrix():
+    require_matrix()
     with (COMPAT / "syscalls.csv").open() as f:
         syscalls = {row["syscall"]: row for row in csv.DictReader(f)}
     evidence = {}

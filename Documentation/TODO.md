@@ -7,7 +7,7 @@ Open items by architecture and host. Longer lists are kept with the maintainers'
 - `direct`: audit PAL state that a starting child allocates and frees at exit; sound and the remaining GPU-driver gaps for graphics.
 - `vm`: multi-vCPU performance at 2 and 4 vCPUs (fork cost, TLB shootdowns, scheduler lock contention); robust mutex for the System V shared tables.
 - `vm` with graphics: present events and a non-flipping blit for Vulkan, idle CPU of the listener, SuperTuxKart start hang, sound.
-- `vm` with graphics, after the pointer table and the guard ([Documentation/GRAPHICS.md](Documentation/GRAPHICS.md)):
+- `vm` with graphics, after the pointer table and the guard:
   soak tests (DOOM on the AMD GPU at least 20 runs, each Proton game at least 5 runs per GPU); the caller of the
   260-byte over-read in Wine's Unix side (ntdll, Mesa or the presentation layer) is unidentified; the AMD
   "Internal memory fault at 0x10" on the EGL path is fixed (`lseek`/`fstat` on identity host fds), but the

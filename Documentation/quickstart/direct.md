@@ -22,7 +22,7 @@ Symbols as in [README.md](../../README.md):
   needs no device: it also works inside a virtual machine or another container. RISC-V is covered
   by [riscv.md](riscv.md).
 - A checkout (`git clone https://github.com/ASTERISC-Release/saguaro`) in a folder
-  `saguaro-<name>/saguaro` (see `Documentation/AGENTS.md`) keeps the container names of several
+  `saguaro-<name>/saguaro` (see the header of `container/run.sh`) keeps the container names of several
   checkouts apart.
 
 # 1. Container and install
@@ -96,4 +96,4 @@ Each suite ends with a `PASS` or `FAIL` line. Logs are stored in `/tmp/saguaro-t
   (`fs.mounts`); add the missing path, as the examples do. `make DEBUG=1` or
   `loader.log_level = "debug"` shows what the library OS looked for.
 - `container/run.sh` refuses a container that mounts a different checkout: name the folder
-  `saguaro-<name>/saguaro` or set `SAGUARO_WORKSPACE` (see `Documentation/AGENTS.md`).
+  `saguaro-<name>/saguaro` or set `SAGUARO_WORKSPACE` (see the header of `container/run.sh`).

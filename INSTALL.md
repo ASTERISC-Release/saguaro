@@ -135,7 +135,7 @@ Notes:
 
 - The images are `saguaro-vm-aarch64` and `saguaro-vm-x86_64` (`container/Containerfile.vm-*`, tags below);
   set `CONTAINER_NAME` / `IMAGE_NAME` for other names. A checkout in a folder named
-  `saguaro-<name>` gets its own container and guest CID range (see `Documentation/AGENTS.md`); a folder
+  `saguaro-<name>` gets its own container and guest CID range (see the header of `container/run.sh`); a folder
   named `gramine-<name>` (the earlier convention) is accepted too.
 - The container runs with `--cap-add ALL` (virtiofsd serves the container's `/` as the guest's `/`)
   and `seccomp=unconfined` (the direct PAL calls `personality()`, which the default profile blocks).

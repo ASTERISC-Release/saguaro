@@ -29,8 +29,8 @@ gaps; ◐), *planned* (○). The whole tree is experimental and not for producti
   test, inside SEV-SNP guests.
 - Rewriting system-call sites makes a call 3.3 to 4.1 times cheaper than a trap on the RISC-V board measured,
   which removes the need for a patched C library on AArch64 and RISC-V.
-- Unmodified OpenGL games run at 76 to 102 % of native speed through the host GPU on `saguaro-direct`, and on
-  `saguaro-vm` through a redirection to the hypervisor.
+- Unmodified OpenGL games can use the host GPU on `saguaro-direct`, and on `saguaro-vm` through a redirection to the
+  hypervisor (experimental).
 - A Linux application can run inside a Windows VBS enclave, although the enclave cannot make memory executable at
   run time, by packing the library OS, the libc and the application into the signed image at build time.
 
@@ -213,8 +213,8 @@ application are packed into a signed enclave image at build time. The tool build
 ### Host GPU for `saguaro-direct`
 
 Opt-in manifest keys let an unmodified OpenGL application (and, on x86_64, a Vulkan application) use the host's
-render node and X server. `glxgears`, Quake II, SuperTuxKart and Minetest reach 97 to 102 % of native speed on
-Intel, 76 to 91 % on AMD, and 88 to 100 % on an NVIDIA GPU with the proprietary driver (AArch64).
+render node and X server (experimental). `glxgears`, Quake II, SuperTuxKart and Minetest run on Intel and AMD GPUs, and
+on an NVIDIA GPU with the proprietary driver (AArch64).
 
 - **Findings.** The NVIDIA driver needed file-descriptor translation for its ioctls; the X connection needed
   socketpair ends passed across the boundary; and a `poll` and an `mremap` defect surfaced only with a real driver.
@@ -225,8 +225,7 @@ Intel, 76 to 91 % on AMD, and 88 to 100 % on an NVIDIA GPU with the proprietary 
 
 EGL, GBM and DRM calls of the guest are forwarded through a fixed shared page to a listener in a QEMU fork that
 uses the host GPU with stock Mesa. `glxgears`, SuperTuxKart, Quake II and Minetest run (x86_64 only). Vulkan is
-provided by an implicit layer in `libgraphics.so`; Quake II's Vulkan renderer reaches 86 % of native speed on
-Intel and 72 % on AMD.
+provided by an implicit layer in `libgraphics.so`; Quake II's Vulkan renderer runs on Intel and AMD.
 
 - **Finding.** Computing the guest memory layout at launch, instead of fixing it, reduced boot at 8 GB from 2.9 s
   to 0.8 s, and host memory follows what the guest touches.
@@ -236,21 +235,19 @@ Intel and 72 % on AMD.
   `AMDGPU_GEM_OP` are now translated. The LibOS's own mappings (thread stacks, the slab) then got a range of their
   own at the top of the address space, so that an application's read past the end of a mapping reaches its next
   mapping as under Linux and not a LibOS page, and a user-mode access to a LibOS mapping is the application's
-  `SIGSEGV` ([Documentation/GRAPHICS.md](Documentation/GRAPHICS.md); regression test `vma_neighbor`). `lseek` and
+  `SIGSEGV` (regression test `vma_neighbor`). `lseek` and
   `fstat` on a host object registered under its raw host fd number no longer end the process (the
   "Internal memory fault at 0x10" of the AMD EGL path).
-- **Limits.** The listener and the shared-page address are x86-only, which blocks AArch64. Minetest reaches 25 to
-  35 % of native speed. With the default `sys.experimental__multiprocess` (true) the Intel GPU's DRM ioctls are not
+- **Limits.** The listener and the shared-page address are x86-only, which blocks AArch64. With the default `sys.experimental__multiprocess` (true) the Intel GPU's DRM ioctls are not
   translated, so a graphics manifest without `sys.experimental__multiprocess = false` shows no window.
 
 ### Windows games
 
 Under `saguaro-vm`, GE-Proton's Wine runs `hello.exe` and DOOM I Enhanced (64-bit, Direct3D 11 through DXVK) to its
-first level, with keyboard input, in software rendering (44 to 48 frames per second). It required named Unix-socket
+first level, with keyboard input, in software rendering. It required named Unix-socket
 nodes, `fork` without copying reservations, `SCM_RIGHTS`, a virtual `%gs`, exception events, a 512 GiB address space
 and syscall user dispatch. This is a feasibility result: Wine's GPU path and 32-bit games are open.
-On the GPU path (2026-10-20, [Documentation/GRAPHICS.md](Documentation/GRAPHICS.md)) DOOM plays its first level on
-an Intel iGPU at 86 % of native and on an AMD GPU at the present path's rate (about 70 frames per second);
+On the GPU path (2026-10-20) DOOM plays its first level on an Intel iGPU and on an AMD GPU;
 Psychonauts, The Witcher and BioShock 2 (32-bit) start on both GPUs; Tomb Raider: Underworld does not load (a
 non-relocatable executable's address range). Soak tests of the games are an open item ([TODO.md](TODO.md)).
 
