@@ -74,9 +74,9 @@ on x86_64, AArch64 and RISC-V, so that the architecture-specific parts can be co
 
 | Platform Adaptation Layer (PAL)   | Intel x86_64 | AMD64 | AArch64 | RISC-V (RV64) |
 |:---:|:---:|:---:|:---:|:---:|
-| `direct`                          | ✓           | ✓    | ✓      | ◐            |
+| `direct` (Container)              | ✓           | ✓    | ✓      | ◐            |
 | `direct` with redirected graphics | ◐           | ◐    | ◐      | ✗            |
-| `vm` (`saguaro-vm`)               | ✓           | ◐    | ◐      | ○            |
+| `vm` (MicroVM)               | ✓           | ◐    | ◐      | ○            |
 | `vm` with redirected graphics     | ◐           | ◐    | ○      | ✗            |
 
 ### Protected Environments
@@ -144,6 +144,4 @@ If you find this project useful, we request that you cite our work.
 
 ## Acknowledgement
 
-Saguaro builds on [Gramine](https://github.com/gramineproject/gramine) and its
-Intel TDX and virtual-machine fork [gramine-tdx](https://github.com/gramineproject/gramine-tdx). We thank the Gramine and gramine-tdx authors and contributors; the organizations and individuals are listed in
-[ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md).
+Saguaro is derived from Gramine's Intel TDX and virtual-machine fork, namely [gramine-tdx](https://github.com/gramineproject/gramine-tdx). We thank the Gramine/Gramine-TDX contributors; the organizations and individuals are listed in [ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md).
