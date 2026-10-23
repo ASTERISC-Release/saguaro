@@ -94,8 +94,8 @@ Please see [CHANGELOG.md](CHANGELOG.md) and [TODO.md](Documentation/TODO.md) for
 
 ### Continuous Integration
 
-The workflows run on hosted GitHub runners and are started by hand (`workflow_dispatch`); each badge shows the last
-run on `main`. Hardware-bound backends (`sgx`, `tdx`, `sev`, `vbs`) are tested manually on the hardware.
+The workflows run on hosted GitHub runners. Each badge shows the last run on `main`. Hardware-bound 
+backends (`sgx`, `tdx`, `sev`, `vbs`) are tested manually on their respective hardware.
 
 | Workflow | Intel x86_64 | AArch64 | RISC-V (RV64, emulated) |
 |:---:|:---:|:---:|:---:|
