@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2023 Intel Corporation
+# Copyright (C) 2026 The ASTERISC Research Lab
 
 # aarch64 counterpart of `saguaro-vm.in` (installed as `saguaro-vm` on aarch64 hosts): boots the
 # vm-PAL unikernel (@LIBPAL_PATH@) under QEMU `virt` + KVM and runs <application>.manifest in it.

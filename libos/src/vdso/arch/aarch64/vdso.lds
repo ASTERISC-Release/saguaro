@@ -2,7 +2,7 @@
 /* Copyright (C) 2018 Intel Corporation
  *                    Isaku Yamahata <isaku.yamahata at gmail.com>
  *                                   <isaku.yamahata at intel.com>
- */
+ * Copyright (C) 2026 The ASTERISC Research Lab */
 
 /*
  * Linker script for Gramine vDSO emulation

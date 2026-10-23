@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
 /* Copyright (C) 2023 Intel Corporation */
+/* Copyright (C) 2026 The ASTERISC Research Lab */
 
 /*
  * aarch64 VM-PAL backend of the PAL_TCB lookup contract in pal_arch.h's pal_get_tcb().
