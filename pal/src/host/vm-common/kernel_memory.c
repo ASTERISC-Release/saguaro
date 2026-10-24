@@ -531,7 +531,8 @@ static int address_space_get_private_child(uint64_t* entry, uint64_t base_entry,
         if (ret < 0)
             return ret;
         memcpy(copy, memory_frame_pointer(*entry & addr_mask), PAGE_SIZE);
-        *entry = (*entry & ~addr_mask) | (memory_frame_from_pointer(copy) & addr_mask);
+        __atomic_store_n(entry, (*entry & ~addr_mask) | (memory_frame_from_pointer(copy) & addr_mask),
+                         __ATOMIC_RELEASE);
     }
 
     *out_child = memory_frame_pointer(*entry & addr_mask);
@@ -710,14 +711,20 @@ int memory_address_space_copy_private_range(struct memory_address_space* source,
     return memory_address_space_flush_range(addr, size);
 }
 
+/* Serializes the creation and the private copy of page tables (of every address space): two vCPUs
+ * that map into the same missing or still shared table must not both install a table of their own,
+ * the entries written into the one that lost would be lost (the page then faults with no entry).
+ * Never taken in interrupt context; the holder only allocates and fills the table. */
+static spinlock_t g_address_space_tables_lock = INIT_SPINLOCK_UNLOCKED;
+
 /* The table `entry` points to, on a walk of `space`. With `make_private`, a table the base (the
  * boot tables) still shares is copied first, and a missing one (an address beyond what the boot
  * tables cover, up to MEMORY_ADDRESS_SPACE_LIMIT: the application's range of pal_main.c) is
  * created, zeroed; without it, a missing table is -PAL_ERROR_INVAL. `base_entry` is the base's
  * entry at the same place, 0 when the base has none. */
-static int address_space_get_child(uint64_t* entry, uint64_t base_entry,
-                                   struct memory_address_space* space, bool make_private,
-                                   uint64_t** out_child) {
+static int address_space_get_child_locked(uint64_t* entry, uint64_t base_entry,
+                                          struct memory_address_space* space, bool make_private,
+                                          uint64_t** out_child) {
     const uint64_t addr_mask = 0x00000ffffffff000UL;
     if (!(*entry & PTE_PRESENT)) {
         if (!make_private)
@@ -727,8 +734,8 @@ static int address_space_get_child(uint64_t* entry, uint64_t base_entry,
         if (ret < 0)
             return ret;
         memset(page, 0, PAGE_SIZE);
-        *entry = (memory_frame_from_pointer(page) & addr_mask) | PTE_PRESENT | PTE_WRITE | PTE_USER |
-                 PTE_ENC;
+        __atomic_store_n(entry, (memory_frame_from_pointer(page) & addr_mask) | PTE_PRESENT |
+                                PTE_WRITE | PTE_USER | PTE_ENC, __ATOMIC_RELEASE);
         *out_child = page;
         return 0;
     }
@@ -737,6 +744,23 @@ static int address_space_get_child(uint64_t* entry, uint64_t base_entry,
         return address_space_get_private_child(entry, base_entry, space, out_child);
     *out_child = memory_frame_pointer(*entry & addr_mask);
     return 0;
+}
+
+static int address_space_get_child(uint64_t* entry, uint64_t base_entry,
+                                   struct memory_address_space* space, bool make_private,
+                                   uint64_t** out_child) {
+    const uint64_t addr_mask = 0x00000ffffffff000UL;
+    uint64_t cur = __atomic_load_n(entry, __ATOMIC_ACQUIRE);
+    bool needs_table = !(cur & PTE_PRESENT) ||
+                       ((base_entry & PTE_PRESENT) && (cur & addr_mask) == (base_entry & addr_mask));
+    if (!make_private || !needs_table)
+        return address_space_get_child_locked(entry, base_entry, space, make_private, out_child);
+
+    /* a table to create or to copy: re-checked under the lock, another vCPU may have done it */
+    spinlock_lock(&g_address_space_tables_lock);
+    int ret = address_space_get_child_locked(entry, base_entry, space, make_private, out_child);
+    spinlock_unlock(&g_address_space_tables_lock);
+    return ret;
 }
 
 static int address_space_get_leaf_entry(struct memory_address_space* space, uintptr_t addr,
