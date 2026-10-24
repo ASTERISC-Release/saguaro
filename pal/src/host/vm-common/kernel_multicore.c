@@ -324,7 +324,9 @@ noreturn void pal_start_ap_c(uint32_t cpu_idx) {
     set_dummy_gs_base();
 
     /* PAT is per-CPU state; ensure WC is configured on this AP CPU as well. */
-    // memory_pat_init_for_wc(); // not needed
+    /* the PAT MSR is per CPU: without this the GEM mappings (PTE PWT=1 = PAT index 1, which the BSP
+     * programs to WC in pal_main()) are write-through on every vCPU but the BSP */
+    wrmsr(0x277 /* MSR_IA32_PAT */, (rdmsr(0x277) & ~(0xffUL << 8)) | (0x01UL << 8));
 
     /* BSP (main processor) created page table hierarchy, AP just needs to use it */
     __asm__ volatile("mov %%rax, %%cr3" : : "a"(g_pml4_table_base));
