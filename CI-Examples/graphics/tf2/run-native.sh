@@ -103,7 +103,6 @@ export XDG_CONFIG_HOME="$HOME/.config"
 export XDG_DATA_HOME="$HOME/.local/share"
 export XDG_CACHE_HOME="$HOME/.cache"
 export GLIBC_TUNABLES="glibc.pthread.rseq=0"
-export GALLIUM_THREAD=0
 export __GL_SYNC_TO_VBLANK=0
 export vblank_mode=0
 export SDL_AUDIODRIVER=dummy
