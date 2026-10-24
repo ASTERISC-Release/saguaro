@@ -1854,6 +1854,13 @@ int memory_address_space_alias_device(struct memory_address_space* space, uintpt
     return -PAL_ERROR_NOTIMPLEMENTED;
 }
 
+int memory_address_space_discard(struct memory_address_space* space, void* addr, size_t size) {
+    __UNUSED(space);
+    __UNUSED(addr);
+    __UNUSED(size);
+    return -PAL_ERROR_NOTIMPLEMENTED;
+}
+
 int memory_address_space_alloc_contiguous(struct memory_address_space* space, void* addr,
                                           size_t size, bool execute, uintptr_t* out_phys) {
     __UNUSED(space);
