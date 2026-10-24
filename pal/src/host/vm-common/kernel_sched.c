@@ -340,12 +340,9 @@ void sched_thread(uint32_t* lock_to_unlock, int* clear_child_tid) {
 
     // log_always("Scheduling out thread %p, scheduling in thread %p\n", curr_thread, next_thread);
 
-    /* clear_child_tid belongs to the exiting thread's address space. Clear it here, in that
-     * address space; the assembly switches to the next thread's root later. */
-    if (clear_child_tid) {
-        __atomic_store_n(clear_child_tid, 0, __ATOMIC_RELEASE);
-        clear_child_tid = NULL;
-    }
+    /* clear_child_tid (in the exiting thread's address space) is cleared by the assembly, after
+     * the last use of this stack and before it switches roots: once it is clear, the LibOS frees
+     * the exiting thread's stack (cleanup_thread()), which may be the one this code runs on */
 
     /* it is cumbersome to restore FSBASE in asm, so restore explicitly here (the switch-in
      * reloads it after the TLS slots, sched_switch_to_current_thread_root()) */
