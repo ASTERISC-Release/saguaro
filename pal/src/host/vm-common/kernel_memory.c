@@ -2401,4 +2401,107 @@ int memory_address_space_protect(struct memory_address_space* space, void* addr,
 #endif
     return 0;
 }
+
+/* MADV_DONTNEED for an anonymous range of a demand-paged process: every page that holds a frame
+ * goes back to a demand-zero entry and its frame to the pool, pages that were never touched stay
+ * as they are (they cost nothing, and filling them with zeros would allocate a frame for each).
+ * Returns -PAL_ERROR_NOTIMPLEMENTED without changing anything if a page of the range is not plain
+ * private anonymous memory of this space (shared or copy-on-write frames, device memory, the
+ * graphics ranges): the caller then zeroes the range by hand. */
+__attribute_no_sanitize_address
+int memory_address_space_discard(struct memory_address_space* space, void* addr, size_t size) {
+    const uint64_t addr_mask = 0x00000ffffffff000UL;
+    if (!g_frame_pool_bitmap || !space || !space->root || space->identity_memory ||
+            is_egl_redirect_data_region_range(addr, size) || is_graphics_comm_range(addr, size))
+        return -PAL_ERROR_NOTIMPLEMENTED;
+    if (!IS_ALIGNED_POW2((uintptr_t)addr, PAGE_SIZE) || !size ||
+            !IS_ALIGNED_POW2(size, PAGE_SIZE) || (uintptr_t)addr + size < (uintptr_t)addr)
+        return -PAL_ERROR_INVAL;
+    if ((uintptr_t)addr < SHARED_MEM_ADDR + SHARED_MEM_SIZE &&
+            SHARED_MEM_ADDR < (uintptr_t)addr + size)
+        return -PAL_ERROR_DENIED;
+
+    const uintptr_t end = (uintptr_t)addr + size;
+
+    /* first pass: nothing is changed unless every page is of a kind handled below */
+    for (uintptr_t va = (uintptr_t)addr; va < end;) {
+        uint64_t* entry;
+        uintptr_t next;
+        int ret = address_space_find_leaf_entry(space, va, &entry, &next);
+        if (ret < 0)
+            return -PAL_ERROR_NOTIMPLEMENTED; /* a huge page */
+        if (ret == 1) {
+            va = next; /* no table: nothing is mapped there */
+            continue;
+        }
+        uint64_t e = __atomic_load_n(entry, __ATOMIC_ACQUIRE);
+        if ((e & (PTE_COW | PTE_COW_WRITABLE)) || ((e & PTE_PRESENT) && !leaf_holds_reference(va, e)))
+            return -PAL_ERROR_NOTIMPLEMENTED;
+        va += PAGE_SIZE;
+    }
+
+    /* second pass, in batches: an entry that holds a frame is switched to demand-zero in one
+     * atomic step (a thread that touches the page meanwhile either still reaches the old frame or
+     * faults in a fresh zero page, never sees a hole); the frames are returned to the pool only
+     * after the other vCPUs have dropped their translations */
+    enum { BATCH = 256 };
+    uintptr_t frames[BATCH];
+    size_t nframes = 0;
+    uintptr_t batch_begin = 0;
+    for (uintptr_t va = (uintptr_t)addr; va <= end;) {
+        bool flush = false;
+        if (va < end) {
+            uint64_t* entry;
+            uintptr_t next;
+            int ret = address_space_find_leaf_entry(space, va, &entry, &next);
+            if (ret < 0)
+                return ret;
+            if (ret == 1) {
+                va = next;
+                continue;
+            }
+            ret = address_space_get_leaf_entry(space, va, /*make_private=*/true, &entry);
+            if (ret < 0)
+                return ret;
+            uint64_t e = __atomic_load_n(entry, __ATOMIC_ACQUIRE);
+            while (leaf_holds_reference(va, e)) {
+                /* present: back to demand-zero with the same rights; a PROT_NONE page (the frame
+                 * kept in a not-present entry) back to an empty entry */
+                uint64_t fresh = (e & PTE_PRESENT) ? (PTE_LAZY | (e & PTE_WRITE) | (e & PTE_NX)) : 0;
+                if (__atomic_compare_exchange_n(entry, &e, fresh, /*weak=*/false, __ATOMIC_ACQ_REL,
+                                                __ATOMIC_ACQUIRE)) {
+                    if (!nframes)
+                        batch_begin = va;
+                    frames[nframes++] = e & addr_mask;
+                    uint64_t current_root;
+                    __asm__ volatile("mov %%cr3, %0" : "=r"(current_root));
+                    if ((current_root & addr_mask) == space->root_phys)
+                        __asm__ volatile("invlpg (%0)" : : "r"(va) : "memory");
+                    break;
+                }
+            }
+            va += PAGE_SIZE;
+            flush = nframes == BATCH;
+        } else {
+            flush = true;
+        }
+        if (flush) {
+            if (nframes) {
+                uintptr_t batch_end = (va < end ? va : end);
+                int ret = memory_address_space_flush_range(batch_begin, batch_end - batch_begin);
+                if (ret < 0)
+                    return ret;
+                for (size_t i = 0; i < nframes; i++)
+                    memory_frame_put(frames[i]);
+                nframes = 0;
+            }
+            if (va >= end)
+                break;
+        }
+    }
+#ifdef ASAN
+    asan_unpoison_region((uintptr_t)addr, size);
+#endif
+    return 0;
+}
 #endif

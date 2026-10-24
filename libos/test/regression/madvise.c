@@ -76,9 +76,49 @@ static void test_madvise_none(void) {
         err(1, "munmap");
 }
 
+/* a large mapping of which few pages were touched (what glibc does to the stack of every exiting
+ * thread): the touched pages, one of them PROT_NONE meanwhile, read as zeros afterwards and the
+ * range is usable again */
+static void test_madvise_sparse(void) {
+    size_t page_size = getpagesize();
+    size_t pages = 8192; /* 32 MiB */
+
+    char* m = (char*)mmap(NULL, pages * page_size, PROT_READ | PROT_WRITE,
+                          MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (m == MAP_FAILED)
+        err(1, "mmap()");
+
+    size_t touched[] = {0, 1, 100, 4096, pages - 1};
+    for (size_t i = 0; i < sizeof(touched) / sizeof(touched[0]); i++)
+        *(int*)(m + page_size * touched[i]) = 0x456;
+    if (mprotect(m + page_size * 100, page_size, PROT_NONE) < 0)
+        err(1, "mprotect(PROT_NONE)");
+
+    if (madvise(m, pages * page_size, MADV_DONTNEED))
+        err(1, "madvise(MADV_DONTNEED)");
+
+    if (mprotect(m + page_size * 100, page_size, PROT_READ | PROT_WRITE) < 0)
+        err(1, "mprotect(PROT_READ | PROT_WRITE)");
+    for (size_t i = 0; i < pages; i += 7) {
+        if (*(int*)(m + page_size * i) != 0)
+            errx(1, "page %zu is not zero after MADV_DONTNEED", i);
+    }
+    for (size_t i = 0; i < sizeof(touched) / sizeof(touched[0]); i++) {
+        if (*(int*)(m + page_size * touched[i]) != 0)
+            errx(1, "touched page %zu is not zero after MADV_DONTNEED", touched[i]);
+        *(int*)(m + page_size * touched[i]) = 0x789;
+        if (*(int*)(m + page_size * touched[i]) != 0x789)
+            errx(1, "touched page %zu cannot be written again", touched[i]);
+    }
+
+    if (munmap(m, pages * page_size) < 0)
+        err(1, "munmap");
+}
+
 int main(void) {
     test_madvise_rw();
     test_madvise_none();
+    test_madvise_sparse();
     puts("TEST OK");
     return 0;
 }

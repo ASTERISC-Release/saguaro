@@ -314,6 +314,21 @@ int PalVirtualMemoryAllocContiguous(void* addr, size_t size, pal_prot_flags_t pr
 int PalVirtualMemoryAlias(void* addr, void* src, size_t size, pal_prot_flags_t prot);
 
 /*!
+ * \brief Give back the contents of a range of anonymous private memory (`MADV_DONTNEED`).
+ *
+ * \param addr  The address, aligned at the allocation alignment.
+ * \param size  The size, positive and aligned at the allocation alignment.
+ *
+ * Afterwards the range reads as zeros, as after #PalVirtualMemoryAlloc, with the same permissions.
+ * The VM PAL of a demand-paged process returns the frames of the pages that were touched and
+ * leaves the others unbacked, which zeroing from the LibOS cannot do (every untouched page would
+ * be given a frame to be filled with zeros). Returns -PAL_ERROR_NOTIMPLEMENTED, with the range
+ * unchanged, where the PAL cannot do it (all other PALs, and VM ranges that are not plain private
+ * anonymous memory): the caller then zeroes the range itself.
+ */
+int PalVirtualMemoryDiscard(void* addr, size_t size);
+
+/*!
  * \brief Deallocate a previously allocated memory mapping.
  *
  * \param addr  The address.

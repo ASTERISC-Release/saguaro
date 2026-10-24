@@ -140,6 +140,9 @@ int memory_address_space_alloc(struct memory_address_space* space, void* addr, s
 int memory_address_space_free(struct memory_address_space* space, void* addr, size_t size);
 int memory_address_space_protect(struct memory_address_space* space, void* addr, size_t size,
                                  bool read, bool write, bool execute);
+/* MADV_DONTNEED of an anonymous range (PalVirtualMemoryDiscard); -PAL_ERROR_NOTIMPLEMENTED
+ * (nothing changed) where the range is not plain private anonymous memory. x86_64 only. */
+int memory_address_space_discard(struct memory_address_space* space, void* addr, size_t size);
 int memory_address_space_switch(const struct memory_address_space* space);
 bool memory_address_space_handle_fault(uintptr_t addr, uint64_t error_code);
 /* Physical address of `addr` in the current root (the page must be present). */

@@ -25,6 +25,7 @@ static struct memory_address_space* current_address_space(void) {
 #define memory_address_space_alloc(...) (-PAL_ERROR_NOTIMPLEMENTED)
 #define memory_address_space_free(...) (-PAL_ERROR_NOTIMPLEMENTED)
 #define memory_address_space_protect(...) (-PAL_ERROR_NOTIMPLEMENTED)
+#define memory_address_space_discard(...) (-PAL_ERROR_NOTIMPLEMENTED)
 struct memory_address_space;
 #endif
 
@@ -73,6 +74,14 @@ int _PalVirtualMemoryFree(void* addr, size_t size) {
     if (address_space)
         return memory_address_space_free(address_space, addr, size);
     return memory_free(addr, size);
+}
+
+int _PalVirtualMemoryDiscard(void* addr, size_t size) {
+    assert(addr);
+    struct memory_address_space* address_space = current_address_space();
+    if (!address_space)
+        return -PAL_ERROR_NOTIMPLEMENTED;
+    return memory_address_space_discard(address_space, addr, size);
 }
 
 int _PalVirtualMemoryProtect(void* addr, size_t size, pal_prot_flags_t prot) {

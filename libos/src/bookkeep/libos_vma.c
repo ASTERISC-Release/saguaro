@@ -1418,6 +1418,17 @@ static bool madvise_dontneed_visitor(struct libos_vma* vma, void* visitor_arg) {
     uintptr_t zero_start = MAX(ctx->begin, vma->begin);
     uintptr_t zero_end = MIN(ctx->end, vma->end);
 
+    /* Let the PAL drop the contents when it can (the VM PAL of a demand-paged process: only the
+     * pages that were touched hold memory, and zeroing would back every other page with a frame;
+     * glibc discards the whole unused stack of each exiting thread this way). */
+    int discard_ret = PalVirtualMemoryDiscard((void*)zero_start, zero_end - zero_start);
+    if (discard_ret == 0)
+        return true;
+    if (discard_ret != -PAL_ERROR_NOTIMPLEMENTED) {
+        ctx->error = pal_to_unix_errno(discard_ret);
+        return false;
+    }
+
     pal_prot_flags_t pal_prot = LINUX_PROT_TO_PAL(vma->prot, vma->flags);
     pal_prot_flags_t pal_prot_writable = pal_prot | PAL_PROT_WRITE;
 

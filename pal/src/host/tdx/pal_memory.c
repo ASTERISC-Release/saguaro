@@ -71,3 +71,9 @@ int _PalVirtualMemoryAlias(void* addr, void* src, size_t size, pal_prot_flags_t 
     __UNUSED(prot);
     return -PAL_ERROR_NOTIMPLEMENTED;
 }
+
+int _PalVirtualMemoryDiscard(void* addr, size_t size) {
+    __UNUSED(addr);
+    __UNUSED(size);
+    return -PAL_ERROR_NOTIMPLEMENTED;
+}

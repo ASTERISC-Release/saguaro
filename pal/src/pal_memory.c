@@ -34,6 +34,12 @@ int PalVirtualMemoryAlias(void* addr, void* src, size_t size, pal_prot_flags_t p
     return _PalVirtualMemoryAlias(addr, src, size, prot);
 }
 
+int PalVirtualMemoryDiscard(void* addr, size_t size) {
+    if (!addr || !IS_ALLOC_ALIGNED_PTR(addr) || !size || !IS_ALLOC_ALIGNED(size))
+        return -PAL_ERROR_INVAL;
+    return _PalVirtualMemoryDiscard(addr, size);
+}
+
 int PalVirtualMemoryFree(void* addr, size_t size) {
     if (!addr || !IS_ALLOC_ALIGNED_PTR(addr) || !size || !IS_ALLOC_ALIGNED(size)) {
         return -PAL_ERROR_INVAL;
