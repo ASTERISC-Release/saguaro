@@ -99,14 +99,20 @@ int pal_common_event_wait(struct pal_handle* handle, uint64_t* timeout_us) {
             if (ret < 0)
                 goto out;
 
-            if (timeout_absolute_us <= curr_time_us) {
+            if (timeout_absolute_us <= curr_time_us ||
+                    __atomic_load_n(timeout_fired_flag(timeout), __ATOMIC_ACQUIRE)) {
                 ret = -PAL_ERROR_TRYAGAIN;
                 goto out;
             }
         }
 
-        /* event wasn't yet signalled, need to sleep waiting on this event */
-        ret = sched_thread_wait_interruptible(&handle->event.signaled, &handle->event.lock);
+        /* event wasn't yet signalled, need to sleep waiting on this event; the timer ISR may fire
+         * the timeout between the check above and the block, and its wakeup then finds no blocked
+         * thread: the wait re-checks the fired flag under the scheduler lock and returns 1 instead
+         * of sleeping without a timeout */
+        ret = sched_thread_wait_interruptible_gen(&handle->event.signaled, &handle->event.lock,
+                                                  timeout ? timeout_fired_flag(timeout) : NULL,
+                                                  /*expected=*/0);
         if (ret < 0)
             goto out;
     }

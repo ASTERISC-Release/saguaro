@@ -33,6 +33,7 @@ DEFINE_LIST(pending_timeout);
 struct pending_timeout {
     uint64_t timeout_absolute_us;
     int* futex;
+    uint64_t fired; /* set by the timer ISR before its wakeup, see timeout_fired_flag() */
     LIST_TYPE(pending_timeout) list;
 };
 DEFINE_LISTP(pending_timeout);
@@ -109,6 +110,7 @@ int register_timeout(uint64_t timeout_absolute_us, int* futex, void** timeout_ou
     assert(futex);
     timeout->timeout_absolute_us = timeout_absolute_us;
     timeout->futex = futex;
+    timeout->fired = 0;
 
     /* g_pending_timeouts_list is used by interrupt-handler's
      * notify_about_timeouts_uninterruptable(); temporarily disable interrupts to avoid deadlock */
@@ -163,6 +165,10 @@ void deregister_timeout(void* _timeout) {
     free(timeout);
 }
 
+uint64_t* timeout_fired_flag(void* timeout) {
+    return &((struct pending_timeout*)timeout)->fired;
+}
+
 int notify_about_timeouts_uninterruptable(void) {
     int ret;
     uint64_t curr_time_us;
@@ -179,6 +185,7 @@ int notify_about_timeouts_uninterruptable(void) {
     struct pending_timeout* tmp;
     LISTP_FOR_EACH_ENTRY_SAFE(timeout, tmp, &g_pending_timeouts_list, list) {
         if (timeout->timeout_absolute_us <= curr_time_us) {
+            __atomic_store_n(&timeout->fired, 1, __ATOMIC_RELEASE);
             sched_thread_wakeup_uninterruptable(timeout->futex);
             LISTP_DEL(timeout, &g_pending_timeouts_list, list);
         }

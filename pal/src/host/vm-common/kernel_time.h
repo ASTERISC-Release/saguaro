@@ -21,6 +21,10 @@ int delay(uint64_t delay_us, bool* continue_gate);
  * `notify_about_timeouts_uninterruptable`). */
 int register_timeout(uint64_t timeout_absolute_us, int* futex, void** timeout_out);
 void deregister_timeout(void* timeout);
+/* 0 until the timer ISR fired `timeout` (it then wakes only the threads already blocked on the
+ * futex and drops the timeout): a waiter that registered a timeout passes this flag as the
+ * generation of sched_thread_wait_interruptible_gen() so that it never blocks after the firing */
+uint64_t* timeout_fired_flag(void* timeout);
 
 int remove_timeouts_on_futex(int* futex);
 int notify_about_timeouts_uninterruptable(void);
