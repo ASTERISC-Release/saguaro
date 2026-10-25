@@ -1,0 +1,139 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
+# SEV PAL under the emulated SEV of QEMU TCG (saguaro-sev, SAGUARO_ACCEL=tcg test/quick.sh sev|sev-snp).
+#
+# No SEV hardware and no KVM are needed: the QEMU of the dev-sev branch of adilahmad17/qemu-sev emulates
+# the SEV, SEV-ES and SEV-SNP interface that the PAL uses (functional only: no attestation, no memory
+# isolation, so the results do not replace a run on an SEV host). The job builds that QEMU with its
+# build.sh (cached by its commit), installs the SEV build of the vm PAL, and runs test/quick.sh at 2 vCPUs.
+#
+# The QEMU repository is private today: the checkout step uses the secret QEMU_SEV_TOKEN (a fine-grained
+# token with read access to the repository). Without it the checkout fails until the repository is public.
+#
+# Manual trigger only.
+name: SEV PAL emulated (x86_64, QEMU TCG)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tier:
+        description: "test/quick.sh tier: smoke, regression or extended"
+        type: choice
+        options:
+          - smoke
+          - regression
+          - extended
+        default: regression
+      qemu_ref:
+        description: "branch or tag of adilahmad17/qemu-sev to build"
+        required: false
+        default: "dev-sev"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sev-emulated-x86_64-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  QEMU_PREFIX: ${{ github.workspace }}/.qemu-sev
+
+jobs:
+  x86_64-sev-emu:
+    name: x86_64 SEV PAL on the emulated SEV (${{ matrix.mode }})
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [sev-snp, sev]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      SAGUARO_PREFIX: ${{ github.workspace }}/.install-vm
+      SAGUARO_RAM_SIZE: "8G"
+      SAGUARO_CPU_NUM: "2"
+      # hosted runners are slower than a workstation: longer per-test and per-step limits
+      SAGUARO_TEST_TIMEOUT: "180"
+      QUICK_TIMEOUT_SCALE: "2"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies and virtiofsd
+        run: |
+          scripts/dependencies.sh --build-only
+          sudo apt-get install -y -qq virtiofsd lsof python3-psutil python3-numpy python3-scipy zstd
+          for d in /usr/libexec /usr/lib/qemu; do
+            if [ -x "$d/virtiofsd" ]; then sudo ln -sf "$d/virtiofsd" /usr/local/bin/virtiofsd; break; fi
+          done
+          command -v virtiofsd
+          sudo modprobe vhost_vsock && test -c /dev/vhost-vsock
+
+      # ---- the emulating QEMU: built from the fork's dev-sev branch with its build.sh, cached by commit ----------
+      - name: Emulating QEMU - source
+        uses: actions/checkout@v4
+        with:
+          repository: adilahmad17/qemu-sev
+          ref: ${{ inputs.qemu_ref || 'dev-sev' }}
+          token: ${{ secrets.QEMU_SEV_TOKEN || github.token }}
+          path: qemu-sev
+
+      - name: Emulating QEMU - revision
+        id: qemu-rev
+        run: echo "sha=$(git -C qemu-sev rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Emulating QEMU - cache
+        id: qemu-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.QEMU_PREFIX }}
+          key: qemu-sev-${{ runner.os }}-${{ steps.qemu-rev.outputs.sha }}-${{ hashFiles('qemu-sev/build.sh') }}
+
+      - name: Emulating QEMU - build
+        if: steps.qemu-cache.outputs.cache-hit != 'true'
+        run: qemu-sev/build.sh --install-deps --prefix "$QEMU_PREFIX" --jobs "$(nproc)"
+
+      - name: Emulating QEMU - check
+        run: |
+          "$QEMU_PREFIX/bin/qemu-system-x86_64" --version | head -1
+          "$QEMU_PREFIX/bin/qemu-system-x86_64" -object help | grep -E 'sev-emu|sev-snp-emu|igvm-cfg'
+
+      # ---- Saguaro --------------------------------------------------------------------------------------------
+      - name: Build and install Saguaro (vm + SEV PALs, graphics disabled)
+        run: scripts/install.sh --sev --graphics disabled --prefix "$SAGUARO_PREFIX" -j "$(nproc)"
+
+      - name: Regression tests (SAGUARO_ACCEL=tcg test/quick.sh ${{ matrix.mode }})
+        env:
+          TIER: ${{ inputs.tier || 'regression' }}
+        run: |
+          # saguaro-sev's virtiofsd serves / and needs root, as the vm workflow does
+          . "$SAGUARO_PREFIX/env.sh"
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "SAGUARO_PREFIX=$SAGUARO_PREFIX" \
+            "SAGUARO_VM_PREFIX=$SAGUARO_PREFIX" "SAGUARO_ACCEL=tcg" "QEMU_PATH=$QEMU_PREFIX/bin/qemu-system-x86_64" \
+            "EXEC_LOG_DIR=$GITHUB_WORKSPACE/quick-out/exec-logs" \
+            test/quick.sh ${{ matrix.mode }} --tier "$TIER" --vcpus "$SAGUARO_CPU_NUM" --out "$GITHUB_WORKSPACE/quick-out" \
+            2>&1 | tee quick.log
+          exit "${PIPESTATUS[0]}"
+
+      - name: Give the workspace back to the runner user
+        if: always()
+        run: sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo '## SAGUARO_ACCEL=tcg test/quick.sh ${{ matrix.mode }} (QEMU TCG emulation: no attestation, no memory isolation; not a substitute for an SEV host)'
+            echo '```'
+            cat quick-out/summary.txt 2>/dev/null || echo "(no summary: the run did not finish)"
+            grep -E ',(fail|known-fail)(,|$)' quick-out/results.csv 2>/dev/null | cut -d, -f5-7 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sev-emulated-${{ matrix.mode }}-${{ inputs.tier || 'regression' }}
+          path: |
+            quick-out
+            quick.log
+          if-no-files-found: ignore
