@@ -1107,21 +1107,33 @@ static bool is_block(uint64_t entry) {
     return (entry & PT_TYPE_MASK) == PT_BLOCK;
 }
 
+/* Serializes the creation, the private copy and the split of page tables (of every address
+ * space): two vCPUs that map into the same missing, still shared or block-mapped table must not
+ * both install a table of their own, the entries written into the one that lost would be lost (the
+ * page then faults with no entry). Never taken in interrupt context; the holder only allocates and
+ * fills the table. */
+static spinlock_t g_address_space_tables_lock = INIT_SPINLOCK_UNLOCKED;
+
+/* Whether `entry` already points to a table private to the space (not the baseline's). */
+static bool private_table_present(uint64_t entry, uint64_t base_entry, bool shared_with_base) {
+    return is_table(entry) && (!shared_with_base || !is_table(base_entry) ||
+                               (entry & PT_ADDR_MASK) != (base_entry & PT_ADDR_MASK));
+}
+
 /* Makes the table under `*entry` (a level-1 or level-2 entry of a root this space may change)
  * private to `space`: a table still shared with the lazy-copy baseline (`base_entry`) is copied,
  * a 2 MB block is split into a level-3 table that reproduces it, and an invalid entry gets an
- * empty table. Returns the table. */
-static int address_space_private_table(struct memory_address_space* space, uint64_t* entry,
-                                       uint64_t base_entry, bool shared_with_base,
-                                       uint64_t** out_table) {
+ * empty table. Returns the table. Called with g_address_space_tables_lock held. */
+static int address_space_private_table_locked(struct memory_address_space* space, uint64_t* entry,
+                                              uint64_t base_entry, bool shared_with_base,
+                                              uint64_t** out_table) {
     uint64_t old = *entry;
     uint64_t* table;
+    if (private_table_present(old, base_entry, shared_with_base)) {
+        *out_table = table_pointer(old);
+        return 0;
+    }
     if (is_table(old)) {
-        if (!shared_with_base || !is_table(base_entry) ||
-                (old & PT_ADDR_MASK) != (base_entry & PT_ADDR_MASK)) {
-            *out_table = table_pointer(old);
-            return 0;
-        }
         int ret = address_space_alloc_table_page(space, &table);
         if (ret < 0)
             return ret;
@@ -1141,10 +1153,28 @@ static int address_space_private_table(struct memory_address_space* space, uint6
     }
     /* the new table's entries before the entry that points at it (see l3_from_block) */
     __asm__ volatile("dsb ishst" ::: "memory");
-    *entry = (memory_frame_from_pointer(table) & PT_ADDR_MASK) | PT_TABLE;
+    __atomic_store_n(entry, (memory_frame_from_pointer(table) & PT_ADDR_MASK) | PT_TABLE,
+                     __ATOMIC_RELEASE);
     __asm__ volatile("dsb ishst" ::: "memory");
     *out_table = table;
     return 0;
+}
+
+static int address_space_private_table(struct memory_address_space* space, uint64_t* entry,
+                                       uint64_t base_entry, bool shared_with_base,
+                                       uint64_t** out_table) {
+    uint64_t cur = __atomic_load_n(entry, __ATOMIC_ACQUIRE);
+    if (private_table_present(cur, base_entry, shared_with_base)) {
+        *out_table = table_pointer(cur);
+        return 0;
+    }
+
+    /* a table to create, copy or split: re-checked under the lock, another vCPU may have done it */
+    spinlock_lock(&g_address_space_tables_lock);
+    int ret = address_space_private_table_locked(space, entry, base_entry, shared_with_base,
+                                                 out_table);
+    spinlock_unlock(&g_address_space_tables_lock);
+    return ret;
 }
 
 /* The level-3 entry of `addr` in `space`. With `make_private`, every table on the way is made
