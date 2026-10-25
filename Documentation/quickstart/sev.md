@@ -132,7 +132,7 @@ summary line to keep with a release (there is no CI for SEV). The scripts undern
 
 The SEV PAL also runs on a plain x86_64 machine (no `/dev/sev`, no KVM needed) under QEMU's software
 emulation with the `sev-emu` and `sev-snp-emu` objects of the `dev-sev` branch of the lab's QEMU fork
-(`qemu-sev`). This is a *functional* emulation of the guest-visible interface: SEV_STATUS and CPUID report
+([`qemu-sev-tcg`](https://github.com/adilahmad17/qemu-sev-tcg); build it with its `./build.sh`). This is a *functional* emulation of the guest-visible interface: SEV_STATUS and CPUID report
 SEV/SEV-ES/SEV-SNP, the intercepted instructions raise `#VC`, the GHCB protocol and VMGEXIT are answered as
 KVM answers them, the SNP CPUID and secrets pages exist, `PVALIDATE`/`RMPADJUST`/page-state changes keep a
 validation table and an access to an unvalidated private page raises `#VC` as on hardware, APs are created
@@ -144,7 +144,7 @@ no launch measurement to verify. Use it to test the PAL's SEV code paths where n
 Run examples and tests with the same commands as on hardware, adding two variables. `QEMU_PATH` must name the
 `qemu-system-x86_64` built from the `dev-sev` branch; it is checked first (a stock QEMU is refused with the reason):
 
-    export SAGUARO_ACCEL=tcg QEMU_PATH=<qemu-sev build>/qemu-system-x86_64
+    export SAGUARO_ACCEL=tcg QEMU_PATH=<qemu-sev-tcg prefix>/bin/qemu-system-x86_64
     CI-Examples/helloworld/exec.sh --sev            # or --sev-snp; every example's exec.sh works
     test/sev/test-sev.sh hello vsock                # SAGUARO_SEV_MODE=snp for SNP; memory, measure, attest are skipped
     test/quick.sh sev-snp --tier smoke              # or sev; add --tier regression for the LibOS core list

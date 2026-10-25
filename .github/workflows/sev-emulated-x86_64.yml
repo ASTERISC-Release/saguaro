@@ -2,13 +2,11 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 # SEV PAL under the emulated SEV of QEMU TCG (saguaro-sev, SAGUARO_ACCEL=tcg test/quick.sh sev|sev-snp).
 #
-# No SEV hardware and no KVM are needed: the QEMU of the dev-sev branch of adilahmad17/qemu-sev emulates
+# No SEV hardware and no KVM are needed: the QEMU of the dev-sev branch of adilahmad17/qemu-sev-tcg emulates
 # the SEV, SEV-ES and SEV-SNP interface that the PAL uses (functional only: no attestation, no memory
 # isolation, so the results do not replace a run on an SEV host). The job builds that QEMU with its
 # build.sh (cached by its commit), installs the SEV build of the vm PAL, and runs test/quick.sh at 2 vCPUs.
 #
-# The QEMU repository is private today: the checkout step uses the secret QEMU_SEV_TOKEN (a fine-grained
-# token with read access to the repository). Without it the checkout fails until the repository is public.
 #
 # Manual trigger only.
 name: SEV PAL emulated (x86_64, QEMU TCG)
@@ -25,7 +23,7 @@ on:
           - extended
         default: regression
       qemu_ref:
-        description: "branch or tag of adilahmad17/qemu-sev to build"
+        description: "branch or tag of adilahmad17/qemu-sev-tcg to build"
         required: false
         default: "dev-sev"
 
@@ -37,7 +35,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  QEMU_PREFIX: ${{ github.workspace }}/.qemu-sev
+  QEMU_PREFIX: ${{ github.workspace }}/.qemu-sev-tcg
 
 jobs:
   x86_64-sev-emu:
@@ -72,25 +70,24 @@ jobs:
       - name: Emulating QEMU - source
         uses: actions/checkout@v4
         with:
-          repository: adilahmad17/qemu-sev
+          repository: adilahmad17/qemu-sev-tcg
           ref: ${{ inputs.qemu_ref || 'dev-sev' }}
-          token: ${{ secrets.QEMU_SEV_TOKEN || github.token }}
-          path: qemu-sev
+          path: qemu-sev-tcg
 
       - name: Emulating QEMU - revision
         id: qemu-rev
-        run: echo "sha=$(git -C qemu-sev rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+        run: echo "sha=$(git -C qemu-sev-tcg rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Emulating QEMU - cache
         id: qemu-cache
         uses: actions/cache@v4
         with:
           path: ${{ env.QEMU_PREFIX }}
-          key: qemu-sev-${{ runner.os }}-${{ steps.qemu-rev.outputs.sha }}-${{ hashFiles('qemu-sev/build.sh') }}
+          key: qemu-sev-tcg-${{ runner.os }}-${{ steps.qemu-rev.outputs.sha }}-${{ hashFiles('qemu-sev-tcg/build.sh') }}
 
       - name: Emulating QEMU - build
         if: steps.qemu-cache.outputs.cache-hit != 'true'
-        run: qemu-sev/build.sh --install-deps --prefix "$QEMU_PREFIX" --jobs "$(nproc)"
+        run: qemu-sev-tcg/build.sh --install-deps --prefix "$QEMU_PREFIX" --jobs "$(nproc)"
 
       - name: Emulating QEMU - check
         run: |
