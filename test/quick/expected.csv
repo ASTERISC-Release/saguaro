@@ -6,4 +6,4 @@ vm,x86_64,development PC (container; KVM),2,121,4,2,0,yes,libos-core step. skip:
 vm,aarch64,hosted CI (TCG),2,122,4,1,0,no,projection from vm_skip.toml (010 xfail is x86 only); first CI run decides
 sev,x86_64,AMD SEV host,2,121,4,2,0,no,projection: the vm list; test_020_cpuinfo passes now that the VM mode drops mwaitx
 sev-snp,x86_64,AMD SEV-SNP host,2,121,4,2,0,no,same as sev; TC_04_AttestationSevSnp is a separate step (libos-snp-attest)
-sgx,x86_64,SGX host,-,,,,,no,UNMEASURED: the LibOS suite was never run on SGX; the first run fills this row
+sgx,x86_64,SGX host,-,120,0,0,7,yes,libos-core step. known: the five *_chroot tests (no symlink/RENAME_EXCHANGE in the SGX PAL) and 100_socket_unix 101_socket_unix_fdpass

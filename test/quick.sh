@@ -210,7 +210,8 @@ steps() {
                  echo "sev-suite|regression|900|$cpu|plain|test/sev/test-sev.sh --prefix \"\$SAGUARO_PREFIX\" --vcpus $CPUS"
                  echo "vm-multiproc|regression|900|$cpu|plain|SAGUARO_VM_LAUNCHER=saguaro-sev test/vm/multiproc/check-probes.sh spawn signals forks misc sysv"
                  [ "$VARIANT" = sev-snp ] && echo "libos-snp-attest|regression|120|$cpu|pytest|(cd libos/test/regression && $env $st $PYARGS test_libos.py -k TC_04_AttestationSevSnp)" ;;
-        sgx)     echo "libos-sgx-only|regression|900|-|pytest|(cd libos/test/regression && $env $st $PYARGS test_libos.py -k 'TC_03_FileCheckPolicy or TC_90_CpuidSGX or TC_91_RdtscSGX or TC_92_avx or sealed or mrenclave')"
+        sgx)     # TC_92_avx runs only with AVX=1 (saguarolibos/regression.py); the sealed-file tests need tmp_enc/mrenclaves and tmp_enc/mrsigners
+                 echo "libos-sgx-only|regression|900|-|pytest|(cd libos/test/regression && mkdir -p tmp_enc/mrenclaves tmp_enc/mrsigners && AVX=\$(grep -qw avx /proc/cpuinfo && echo 1 || echo 0) $env $st $PYARGS test_libos.py -k 'TC_03_FileCheckPolicy or TC_90_CpuidSGX or TC_91_RdtscSGX or TC_92_avx or sealed or mrenclave')"
                  echo "unit|regression|300|-|pytest|SGX=1 python3 -m pytest $PYARGS test/unit" ;;
     esac
     [ "$TIER" = regression ] && return

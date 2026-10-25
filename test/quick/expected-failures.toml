@@ -127,3 +127,39 @@ variants = ["vbs"]
 step = "vbs-regress"
 test = "unix"
 reason = "fork: the test needs a second process (process creation failed)"
+
+# --- sgx (measured on the SGX host: the libos-core and libos-full steps) ---
+[[known]]
+variants = ["sgx"]
+test = "TC_40_FileSystem::test_073a_setid_rules_chroot"
+reason = "symlink() on a chroot mount: the SGX PAL has no file symlink op (PalFileCreateSymlink; pal/src/host/linux-sgx), EACCES"
+
+[[known]]
+variants = ["sgx"]
+test = "TC_40_FileSystem::test_074a_perm_checks_chroot"
+reason = "symlink() on a chroot mount: the SGX PAL has no file symlink op (PalFileCreateSymlink), EACCES"
+
+[[known]]
+variants = ["sgx"]
+test = "TC_40_FileSystem::test_081a_file_times_chroot"
+reason = "symlink() on a chroot mount: the SGX PAL has no file symlink op (PalFileCreateSymlink), EACCES"
+
+[[known]]
+variants = ["sgx"]
+test = "TC_40_FileSystem::test_082a_links_chroot"
+reason = "symlink() on a chroot mount: the SGX PAL has no file symlink op (PalFileCreateSymlink), EACCES"
+
+[[known]]
+variants = ["sgx"]
+test = "TC_40_FileSystem::test_083a_renameat2_chroot"
+reason = "renameat2(RENAME_EXCHANGE) on a chroot mount is not supported by the SGX PAL (EOPNOTSUPP)"
+
+[[known]]
+variants = ["sgx"]
+test = "TC_80_Socket::test_100_socket_unix"
+reason = "bind() of a pathname UNIX socket creates a host-visible node (libos/src/net/unix.c), which the SGX PAL refuses (EACCES)"
+
+[[known]]
+variants = ["sgx"]
+test = "TC_80_Socket::test_101_socket_unix_fdpass"
+reason = "fd passing over UNIX sockets uses PalHostSendmsg, which the SGX PAL does not implement (ENOSYS)"
