@@ -78,3 +78,4 @@ built-debug
 # the vbs PAL build trees (dev docs: vbs-enclave/manual.md)
 /build-vbs*/
 .proton-vm/
+/.stress/

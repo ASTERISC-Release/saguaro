@@ -6,7 +6,7 @@
 # dev docs: sev/). Run it on an SEV host in the container of container/run.sh, with the
 # QEMU of container/sev/build-sev-tools.sh (QEMU_PATH, default /root/sev-tools/prefix/bin/...).
 #
-#   hello    CI-Examples/helloworld under saguaro-sev at 1 and 4 vCPUs; the guest must report
+#   hello    CI-Examples/helloworld under saguaro-sev at 1 and 4 vCPUs (one count with --vcpus); the guest must report
 #            "SEV: memory encryption active" on its serial port
 #   memory   test/sev/sev_probe: a virtiofs file read through the bounce buffers (checksum compared
 #            with the host's), then a host-side look at guest memory through the QEMU monitor while
@@ -23,7 +23,9 @@
 #            QEMU reports (QMP query-sev-launch-measure) checked against the launch digest that
 #            saguaro-sev-igvm.py computes from the IGVM file, with the session's TIK
 #
-# Usage: test/sev/test-sev.sh [--prefix DIR] [suite...]   (default: hello memory vsock)
+# Usage: test/sev/test-sev.sh [--prefix DIR] [--vcpus N] [suite...]   (default: hello memory vsock)
+#   --vcpus N                run every suite at N vCPUs, once (test/quick.sh uses 2). Without it hello runs at 1
+#                            and 4 vCPUs and the other suites at 1.
 #   SAGUARO_SEV_MODE=sev     the saguaro-sev mode: sev or snp (measure: sev only)
 #   SAGUARO_RAM_SIZE=8G      guest RAM (SEV pins all of it at launch, so smaller boots faster; the
 #                            multiprocess frame pool, on by default, needs more than 4G)
@@ -34,11 +36,13 @@ HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 REPO=$(cd "$HERE/../.." && pwd)
 PREFIX=${SAGUARO_PREFIX:-$HOME/.local/saguaro-vm}
 SUITES=()
+VCPUS=
 while [ $# -gt 0 ]; do
     case $1 in
         --prefix) PREFIX=$2; shift 2 ;;
+        --vcpus) VCPUS=$2; shift 2 ;;
         hello|memory|vsock|measure|attest) SUITES+=("$1"); shift ;;
-        -h|--help) sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
 done
@@ -66,7 +70,7 @@ elapsed() { python3 -c 'import sys; print(f"{float(sys.argv[2]) - float(sys.argv
 test_hello() {
     cd "$REPO/CI-Examples/helloworld" || return
     make -s >/dev/null || { fail "building helloworld"; return; }
-    for cpus in 1 4; do
+    for cpus in ${VCPUS:-1 4}; do
         local t0 out serial=$OUT/hello-$cpus.serial
         t0=$(now)
         out=$(SAGUARO_CPU_NUM=$cpus SAGUARO_VM_SERIAL_LOG=$serial timeout 120 saguaro-sev helloworld 2>&1)
@@ -95,7 +99,7 @@ s = 0
 for b in open(sys.argv[1], "rb").read():
     s = (s * 31 + b) & 0xffffffffffffffff
 print(f"len={len(open(sys.argv[1], "rb").read())} sum={s:016x}")' "$input")
-    (cd "$HERE" && SAGUARO_VM_MONITOR=$mon SAGUARO_CPU_NUM=1 \
+    (cd "$HERE" && SAGUARO_VM_MONITOR=$mon SAGUARO_CPU_NUM=${VCPUS:-1} \
         timeout 300 "$launcher" sev_probe "$input" "$done" >"$log" 2>&1) &
     local pid=$!
     for _ in $(seq 600); do
@@ -167,7 +171,7 @@ test_measure() {
     local qmp=$OUT/measure.qmp done=$OUT/measure.done log=$OUT/measure.out
     rm -f "$qmp" "$done"
     echo x > "$OUT/measure.input"
-    (cd "$HERE" && SAGUARO_SEV_SESSION=$OUT/gsev SAGUARO_VM_QMP=$qmp SAGUARO_CPU_NUM=1 \
+    (cd "$HERE" && SAGUARO_SEV_SESSION=$OUT/gsev SAGUARO_VM_QMP=$qmp SAGUARO_CPU_NUM=${VCPUS:-1} \
         timeout 300 saguaro-sev sev_probe "$OUT/measure.input" "$done" >"$log" 2>&1) &
     local pid=$!
     for _ in $(seq 600); do
@@ -203,7 +207,7 @@ test_attest() {
     local data report=$OUT/attest-report.bin log=$OUT/attest.out
     data=$(head -c 64 /dev/urandom | od -An -tx1 | tr -d ' \n')
     rm -f "$report"
-    (cd "$HERE" && SAGUARO_CPU_NUM=1 timeout 300 saguaro-sev sev_attest "$data" "$report" \
+    (cd "$HERE" && SAGUARO_CPU_NUM=${VCPUS:-1} timeout 300 saguaro-sev sev_attest "$data" "$report" \
         >"$log" 2>&1) || { fail "attest: the guest failed: $(tail -n 5 "$log")"; return; }
     grep -q "attestation_type=sev-snp" "$log" || fail "attest: attestation_type is not sev-snp"
     [ -s "$report" ] || { fail "attest: no report"; return; }
@@ -228,15 +232,15 @@ test_attest() {
     local igvm_tool igvm expected
     igvm_tool=$(ls "$(dirname "$(readlink -f "$(command -v saguaro-sev)")")"/../lib/*/saguaro/sev/saguaro-sev-igvm.py | head -1)
     igvm=${igvm_tool%/*}/saguaro-sev.igvm
-    expected=$(python3 "$igvm_tool" measure --mode snp --vcpus 1 "$igvm" 2>/dev/null)
+    expected=$(python3 "$igvm_tool" measure --mode snp --vcpus ${VCPUS:-1} "$igvm" 2>/dev/null)
     if [ -n "$expected" ]; then
         [ "$expected" = "$meas" ] && echo "attest: measurement = saguaro-sev-igvm.py measure --mode snp" \
             || fail "attest: measurement differs from the computed $expected"
     fi
-    grep -q "launch digest of .* on 1 vCPUs: $meas" "$log" \
+    grep -q "launch digest of .* on ${VCPUS:-1} vCPUs: $meas" "$log" \
         && echo "attest: the digest saguaro-sev printed at launch = the report's measurement" \
         || fail "attest: saguaro-sev printed no launch digest equal to the report's"
-    python3 "$igvm_tool" verify-snp "$igvm" "$report" --vcpus 1 --report-data "$data" \
+    python3 "$igvm_tool" verify-snp "$igvm" "$report" --vcpus ${VCPUS:-1} --report-data "$data" \
         --certs "$certs" --snpguest "$snpguest" | sed 's/^/attest: verify-snp: /'
     [ "${PIPESTATUS[0]}" = 0 ] || fail "attest: verify-snp"
 }

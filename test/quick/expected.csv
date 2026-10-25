@@ -1,0 +1,9 @@
+variant,arch,host,vcpus,pass,skip,xfail,known_fail,measured,note
+direct,x86_64,development PC (container),-,127,0,0,0,yes,libos-core step. The full suite has skips (SGX/ASAN/arch-only) that the core list avoids.
+direct,aarch64,hosted CI,-,127,0,0,0,no,projection: the core list has no arch-only test; first CI run decides
+direct,riscv64,emulated guest,-,127,0,0,0,no,projection; first run decides
+vm,x86_64,development PC (container; KVM),2,121,4,2,0,yes,libos-core step. skip: 060_sigaltstack 150_itimer 070_shm 200_socket_udp (vm_skip.toml); xfail: 010_gramine_run_test 030_fdleak
+vm,aarch64,hosted CI (TCG),2,122,4,1,0,no,projection from vm_skip.toml (010 xfail is x86 only); first CI run decides
+sev,x86_64,AMD SEV host,2,121,4,2,0,no,projection: the vm list; test_020_cpuinfo passes now that the VM mode drops mwaitx
+sev-snp,x86_64,AMD SEV-SNP host,2,121,4,2,0,no,same as sev; TC_04_AttestationSevSnp is a separate step (libos-snp-attest)
+sgx,x86_64,SGX host,-,,,,,no,UNMEASURED: the LibOS suite was never run on SGX; the first run fills this row

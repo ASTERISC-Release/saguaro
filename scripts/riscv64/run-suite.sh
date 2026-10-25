@@ -9,7 +9,8 @@
 #   scripts/riscv64/run-suite.sh pal   [pytest arguments...]
 #   scripts/riscv64/run-suite.sh libos [pytest arguments...]     e.g.  -k 'eventfd or signal'
 #
-# SAGUARO_TEST_TIMEOUT (seconds per test, default 120) is taken from the caller's environment.
+# SAGUARO_TEST_TIMEOUT (seconds per test, default 120) and SAGUARO_TESTSET (core: the core list of
+# test/quick/core-tests.txt, libos suite only) are taken from the caller's environment.
 #
 # The suite runs from a directory on the guest's own disk that mirrors
 # build-riscv64/run/<suite>/regression with symbolic links. The files the tests create (tmp/,
@@ -44,5 +45,6 @@ exec "$HERE/guest.sh" ssh "
     export PATH=$BUILD/prefix/bin:\$PATH
     export PYTHONPATH=\$(echo $BUILD/prefix/lib/python3*/site-packages)
     export SAGUARO_TEST_TIMEOUT=${SAGUARO_TEST_TIMEOUT:-120}
+    export SAGUARO_TESTSET=${SAGUARO_TESTSET:-}
     python3 -m pytest $TEST -q --tb=line -rf -p no:cacheprovider $ARGS
 "

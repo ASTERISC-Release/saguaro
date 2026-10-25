@@ -1,0 +1,63 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
+#
+# Failures that test/quick.sh reports as "known-fail" instead of "fail" (a known failure does not fail the run).
+# Matching is exact (test/quick/report.py): an entry applies only when ALL of its fields match.
+#   variants  list of variants (direct vm sev sev-snp sgx vbs tdx)            required
+#   test      the pytest id <class>::<test>, or for an example the name that exec.sh prints in its [FAIL] line
+#             (for example unit_tests-mremap), or the step name for a step that is not pytest              required
+#   arch      architecture (x86_64, aarch64, riscv64), string or list                                      optional
+#   vcpus     vCPU count (string or list)                                                                  optional
+#   step      step name (see `test/quick.sh <variant> --list`)                                              optional
+#   reason    why it fails; an entry without a cause that is understood is not allowed                      required
+# libos/test/regression/vm_skip.toml (skips and xfails under the VM PAL) is separate and unchanged.
+# A test that is too slow or hangs on one host is not listed here but left out of the run with QUICK_PYTEST_K in the
+# workflow (see .github/workflows/*.yml and test/README.md).
+# `python3 test/quick/check-core-list.py` checks that the libos entries name existing tests.
+
+[[known]]
+variants = ["vm", "sev", "sev-snp"]
+vcpus = 1
+test = "TC_00_Unittests::test_000_spinlock"
+reason = "fails at 1 vCPU (measured under saguaro-vm on x86_64 and under SNP); tier 1 runs at 2 vCPUs, so only the extended sweep meets it"
+
+[[known]]
+variants = ["vm", "sev", "sev-snp"]
+vcpus = 1
+test = "TC_30_Syscall::test_074_eventfd_races"
+reason = "fails at 1 vCPU (measured under saguaro-vm on x86_64 and under SNP); tier 1 runs at 2 vCPUs, so only the extended sweep meets it"
+
+[[known]]
+variants = ["direct"]
+arch = "riscv64"
+test = "TC_30_Syscall::test_054_large_mmap"
+reason = "too little RAM on the RISC-V development board (not in the core list; the emulated guest has enough)"
+
+[[known]]
+variants = ["direct"]
+arch = "riscv64"
+test = "TC_30_Syscall::test_103_gettimeofday"
+reason = "the test's own 20 s limit for 4 million calls cannot be met when every call is a seccomp trap (board and emulated guest; not in the core list)"
+
+[[known]]
+variants = ["direct"]
+arch = "riscv64"
+test = "TC_01_Bootstrap::test_2025_fork_reservation"
+reason = "fails on the RISC-V development board (not in the core list)"
+
+[[known]]
+variants = ["sgx"]
+test = "unit_tests-mremap"
+reason = "the mremap unit test fails under SGX (measured on the SGX host); the other unit_tests programs pass"
+
+[[known]]
+variants = ["vm"]
+arch = "aarch64"
+test = "python"
+reason = "the guest cannot map the system Python on aarch64 (CI-Examples/README.md, footnote 5)"
+
+[[known]]
+variants = ["vm", "sev", "sev-snp"]
+step = "libos-fs"
+test = "TC_10_Tmpfs::test_111_read_write_mmap"
+reason = "under the VM PAL a shared mapping of a tmpfs file does not show what write() wrote just before (measured under saguaro-vm on x86_64; sev uses the same LibOS and PAL); libos/test/fs is in the extended tier only"

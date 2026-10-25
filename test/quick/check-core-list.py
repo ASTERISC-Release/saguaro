@@ -66,7 +66,7 @@ def main():
             known.update(group['tests'])
     with open(os.path.join(HERE, 'expected-failures.toml'), 'rb') as f:
         for entry in toml.load(f).get('known', []):
-            if '::' in entry['test']:
+            if '::' in entry['test'] and entry.get('step') not in ('libos-fs', 'libos-abi'):
                 known.add(entry['test'])
     for k in sorted(known - set(tests)):
         print('vm_skip.toml / expected-failures.toml name an unknown test:', k)
