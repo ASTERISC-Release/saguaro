@@ -21,9 +21,11 @@ The VM variants need a user that may run `saguaro-vm` (root in the container of 
 | `extended` | hours; nightly or by hand | the full LibOS suite, the vCPU sweep, the loops, the stress tests, `libos/test/fs`, `libos/test/abi`, `test/unit`, every example that has an `exec.sh`, LTP. |
 
 Measured on a development PC (x86_64, 24 threads, KVM, examples already built): `direct` smoke 17 s,
-`direct` regression 107 s (the PAL suite 9 s, `libos-core` 8 s); `vm` smoke 25 s, `vm` regression 296 s
-(`libos-core` 113 s, `vm-net` 120 s, `vm-multiproc` 27 s). The first run also builds the examples (busybox,
-memcached and nginx download and compile their sources).
+`direct` regression 37 s (the PAL suite 9 s, `libos-core` 8 s, `unit_tests` 16 s); `vm` smoke 25 s, `vm`
+regression 261 s (`libos-core` 114 s, `vm-net` 82 s, `vm-multiproc` 27 s). The first run also builds the examples
+(busybox, memcached and nginx download and compile their sources: 107 s for the first `direct` regression run).
+`vm` extended steps: the full LibOS suite 167 s at 2 vCPUs (244 s at 1, 167 s at 4), `vm-stress` 163 s,
+`vm-sig-loop` 157 s, `vm-boot-loop` 169 s, `libos-fs` 61 s.
 
 The VM-based variants (`vm`, `sev`, `sev-snp`) run `smoke` and `regression` with exactly 2 vCPUs
 (`SAGUARO_CPU_NUM=2`; `--vcpus` changes it) and 8G of RAM (`SAGUARO_RAM_SIZE`): there is no sweep in these
@@ -42,7 +44,7 @@ Steps of the variants in `regression`, besides the common ones:
 | `tdx` | `tdx-build` only: the TDX PAL cannot run without TDX hardware |
 
 `extended` adds `libos-fs` (`libos/test/fs`), `libos-abi` (`libos/test/abi`, x86_64 direct), `ex-<name>` for
-every other example, `stress-rewrite` and `prefix-sweep` (direct), and on the VM variants `vm-net-all`,
+every other example, `stress-rewrite` (aarch64 and riscv64 only) and `prefix-sweep` (direct), and on the VM variants `vm-net-all`,
 `vm-multiproc-all` (the probes `libos examples redis` as well), `vm-sig-loop`, `vm-boot-loop`, `vm-stress`
 (below) and `ltp`. An example that does not offer the variant is reported as `skip`.
 

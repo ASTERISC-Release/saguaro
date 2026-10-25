@@ -81,7 +81,7 @@ The test scripts find the install through `SAGUARO_PREFIX` (default `~/.local/sa
 tier of the regression set (`test/README.md` describes them):
 
     test/quick.sh direct --tier smoke         # install check, helloworld, unit_tests, two LibOS tests: well under 3 minutes
-    test/quick.sh direct                      # the regression tier (default): PAL suite, LibOS core list (127 tests), six examples, test/unit: about 2 minutes once the examples are built
+    test/quick.sh direct                      # the regression tier (default): PAL suite, LibOS core list (127 tests), six examples, test/unit: under a minute once the examples are built
     test/quick.sh direct --tier extended      # the full LibOS suite, all examples, libos/test/fs, libos/test/abi, the rewrite stress
 
 It prints one line per step and a summary line, writes `results.csv`, `summary.txt` and the logs to
