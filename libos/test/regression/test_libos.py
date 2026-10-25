@@ -39,6 +39,10 @@ CPUINFO_TEST_FLAGS = [
     'avx512cd', 'sgx_lc', 'amx_tile', 'avx_vnni', 'mwaitx', 'rdtscp',
     'syscall',
 ]
+# Under the VM PAL the guest's CPUID is the VM's, which does not pass through mwaitx (AMD hosts report
+# it, the guest does not): do not expect it there. On the direct PAL the list is unchanged.
+if USE_SAGUARO_VM:
+    CPUINFO_TEST_FLAGS.remove('mwaitx')
 
 
 class TC_00_Unittests(RegressionTestCase):
@@ -1358,12 +1362,12 @@ class TC_40_FileSystem(RegressionTestCase):
         stdout, _ = self.run_binary(['device_drm_denied', 'denied'])
         self.assertIn('TEST OK', stdout)
 
-    @unittest.skipUnless(IS_VM, '/dev/gramine_test_dev is available only on some Jenkins machines')
+    @unittest.skipUnless(IS_VM, 'needs the /dev/gramine_test_dev test device; set IS_VM=1 on a host that has it')
     def test_003_device_ioctl(self):
         stdout, _ = self.run_binary(['device_ioctl'])
         self.assertIn('TEST OK', stdout)
 
-    @unittest.skipUnless(IS_VM, '/dev/gramine_test_dev is available only on some Jenkins machines')
+    @unittest.skipUnless(IS_VM, 'needs the /dev/gramine_test_dev test device; set IS_VM=1 on a host that has it')
     def test_004_device_ioctl_fail(self):
         try:
             self.run_binary(['device_ioctl_fail'])
@@ -1373,7 +1377,7 @@ class TC_40_FileSystem(RegressionTestCase):
             self.assertRegex(stdout, r'ioctl\(devfd, GRAMINE_TEST_DEV_IOCTL_REWIND\).*'
                                      r'Function not implemented')
 
-    @unittest.skipUnless(IS_VM, '/dev/gramine_test_dev is available only on some Jenkins machines')
+    @unittest.skipUnless(IS_VM, 'needs the /dev/gramine_test_dev test device; set IS_VM=1 on a host that has it')
     def test_005_device_ioctl_parse_fail(self):
         stdout, stderr = self.run_binary(['device_ioctl_parse_fail'])
         self.assertRegex(stderr, r'error: Invalid struct value of allowed IOCTL .* in manifest')

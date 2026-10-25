@@ -12,6 +12,8 @@ from cryptography.hazmat.primitives.asymmetric import padding, rsa
 
 @pytest.fixture
 def tmp_rsa_key(tmpdir):
+    # only an install built with SGX has saguarolibos.sgx_sign
+    pytest.importorskip('saguarolibos.sgx_sign')
     from saguarolibos.sgx_sign import (SGX_RSA_KEY_SIZE, SGX_RSA_PUBLIC_EXPONENT,
         _cryptography_backend)
     def gen_rsa_key(passphrase=None, key_size=SGX_RSA_KEY_SIZE):
