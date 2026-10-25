@@ -7,7 +7,8 @@
 # dev docs: riscv/PLAN.md.
 #
 # The guest is emulated, so this is slow (the first boot installs packages) and timing-sensitive
-# tests have less headroom than on real hardware.
+# tests have less headroom than on real hardware. The tests run through test/quick.sh direct --target riscv64
+# (the tiers are described in test/README.md); the guest boot is a step of its own and is not part of the budget.
 #
 # Manual trigger only (Actions tab -> "Direct PAL (riscv64, emulated)" -> Run workflow).
 name: Direct PAL (riscv64, emulated)
@@ -15,12 +16,12 @@ name: Direct PAL (riscv64, emulated)
 on:
   workflow_dispatch:
     inputs:
-      suites:
-        description: "regression suites to run in the guest: pal, libos (\"none\": cross-build only)"
+      tier:
+        description: "test/quick.sh tier: smoke, regression (the PAL suite, the LibOS core list, the examples below) or extended (the full LibOS suite); \"none\": cross-build only"
         required: false
-        default: "pal libos"
+        default: "regression"
       examples:
-        description: "example suites for scripts/riscv64/run-examples.sh, built in the guest (slow; default: python; empty: none)"
+        description: "examples of the regression tier, built in the guest (slow: the default is python only; the full set is: bash sqlite python busybox memcached nginx)"
         required: false
         default: "python"
 
@@ -37,8 +38,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     env:
-      SUITES: ${{ inputs.suites || 'pal libos' }}       # via env, never interpolated into the script text
-      EXAMPLES: ${{ inputs.examples }}
+      TIER: ${{ inputs.tier || 'regression' }}          # via env, never interpolated into the script text
+      EXAMPLES: ${{ inputs.examples || 'python' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -60,39 +61,29 @@ jobs:
           done
 
       - name: Boot the RISC-V guest
-        if: ${{ inputs.suites != 'none' || inputs.examples != '' }}
+        if: ${{ inputs.tier != 'none' }}
         run: |
           container/run.sh --target riscv64 'RISCV_GUEST_BOOT_TIMEOUT=3600 scripts/riscv64/guest.sh start && scripts/riscv64/guest.sh ssh "uname -a; nproc; free -m"'
 
-      - name: Run the regression suites in the guest
-        if: ${{ inputs.suites != 'none' }}
+      - name: Install the build prerequisites of the examples in the guest
+        if: ${{ inputs.tier != 'none' }}
         run: |
-          mkdir -p test-logs
-          rc=0
-          for suite in $SUITES; do
-            case $suite in pal|libos) ;; *) echo "unknown suite: $suite" >&2; exit 2 ;; esac
-            # Emulation on a hosted runner is several times slower than on a workstation: give
-            # each test more time, and leave out gettimeofday, whose own 20 s limit for 4 million
-            # calls cannot be met here (every call is a seccomp trap; see the port's plan), and
-            # test_603_rewrite_stress, whose `threads` scenario ran into its own 240 s alarm on
-            # both hosted runs (about 2 s locally; cause not established, probably the runner:
-            # Documentation/TODO.md). It still runs locally.
-            container/run.sh --target riscv64 \
-              "scripts/riscv64/render-test-manifests.sh $suite >/dev/null && SAGUARO_TEST_TIMEOUT=600 scripts/riscv64/run-suite.sh $suite -rfs --durations=10 -k 'not test_103_gettimeofday and not test_603_rewrite_stress'" \
-              2>&1 | tee "test-logs/$suite.log" || rc=1
-            [ "${PIPESTATUS[0]}" -eq 0 ] || rc=1
-          done
-          exit $rc
-
-      - name: Run the example suites in the guest
-        if: ${{ inputs.examples != '' }}
-        run: |
-          mkdir -p test-logs
           container/run.sh --target riscv64 \
             'scripts/riscv64/guest.sh ssh "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq build-essential cmake pkg-config curl wget sqlite3 libevent-dev libssl-dev libpcre2-dev python3-numpy python3-scipy autoconf automake libtool >/dev/null"'
+
+      - name: Regression tests in the guest (test/quick.sh direct --target riscv64)
+        if: ${{ inputs.tier != 'none' }}
+        run: |
+          # Emulation on a hosted runner is several times slower than on a workstation: each test gets
+          # more time (SAGUARO_TEST_TIMEOUT). The core list has neither test_103_gettimeofday, whose own
+          # 20 s limit for 4 million calls cannot be met here (every call is a seccomp trap; see the port's
+          # plan), nor test_603_rewrite_stress, whose `threads` scenario ran into its own 240 s alarm on both
+          # hosted runs (cause not established, probably the runner: Documentation/TODO.md); the extended
+          # tier leaves them out through QUICK_PYTEST_K.
           set -o pipefail
-          container/run.sh --target riscv64 "scripts/riscv64/run-examples.sh $(printf '%q ' $EXAMPLES)" \
-            2>&1 | tee test-logs/examples.log
+          container/run.sh --target riscv64 \
+            "SAGUARO_TEST_TIMEOUT=600 QUICK_PYTEST_K='test_103_gettimeofday or test_603_rewrite_stress' QUICK_RISCV64_EXAMPLES=$(printf '%q' "$EXAMPLES") test/quick.sh direct --target riscv64 --tier $TIER --out quick-out" \
+            2>&1 | tee quick.log
 
       - name: Summary
         if: always()
@@ -100,10 +91,8 @@ jobs:
           {
             echo "### Direct PAL, riscv64 (emulated guest)"
             echo '```'
-            for f in test-logs/pal.log test-logs/libos.log; do
-              [ -f "$f" ] && { echo "$(basename "$f" .log): $(grep -aE "passed|failed" "$f" | tail -n 1)"; }
-            done
-            [ -f test-logs/examples.log ] && sed -n '/= SUMMARY =/,$p' test-logs/examples.log
+            cat quick-out/summary.txt 2>/dev/null || echo "(no summary: the run did not finish)"
+            grep -E ',(fail|known-fail)(,|$)' quick-out/results.csv 2>/dev/null | cut -d, -f5-7 || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -115,5 +104,6 @@ jobs:
           if-no-files-found: ignore
           include-hidden-files: true
           path: |
-            test-logs
+            quick-out
+            quick.log
             .riscv64-guest/console.log

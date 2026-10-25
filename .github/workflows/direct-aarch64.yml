@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
-# Builds the DIRECT PAL natively on a hosted aarch64 runner and runs test/direct/test-direct.sh. The other
+# Builds the DIRECT PAL natively on a hosted aarch64 runner and runs test/quick.sh direct (the regression tier
+# by default; test/README.md). The other
 # platforms have workflows of their own: direct-x86_64.yml, direct-riscv64-emulated.yml (cross-built,
 # tested in an emulated guest) and vm-x86_64.yml (the vm PAL).
 #
@@ -16,12 +17,16 @@ name: Direct PAL (aarch64)
 on:
   workflow_dispatch:
     inputs:
-      suites:
-        description: "test/direct/test-direct.sh suites (default: PAL and LibOS regression and the python example; see test/direct/test-direct.sh --list for the other application suites)"
-        required: false
-        default: "pal libos python"
+      tier:
+        description: "test/quick.sh tier: smoke, regression (the PAL suite, the LibOS core list, six examples, test/unit) or extended (the long suites, all examples, the rewrite stress)"
+        type: choice
+        options:
+          - smoke
+          - regression
+          - extended
+        default: regression
       stress:
-        description: "also run scripts/stress_rewrite.sh (~10 min)"
+        description: "also run scripts/stress_rewrite.sh (~10 min; the extended tier runs it anyway)"
         type: boolean
         default: false
       libc:
@@ -50,16 +55,19 @@ jobs:
     timeout-minutes: 120
     env:
       SAGUARO_PREFIX: ${{ github.workspace }}/.install
-      LOGDIR: ${{ github.workspace }}/test-logs
+      EXEC_LOG_DIR: ${{ github.workspace }}/quick-out/exec-logs
     steps:
       - uses: actions/checkout@v4
 
       - name: Install build and test dependencies
         run: scripts/dependencies.sh --build-only
 
-      - name: Install application prerequisites
-        if: ${{ inputs.suites != '' && inputs.suites != 'pal libos' }}
-        run: INSTALL_RUSTUP=1 scripts/dependencies.sh
+      - name: Install the prerequisites of the examples
+        env:
+          TIER: ${{ inputs.tier || 'regression' }}   # via env, never interpolated into the script text
+        run: |
+          # the rust example (extended tier only) needs rustup
+          if [ "$TIER" = extended ]; then INSTALL_RUSTUP=1 scripts/dependencies.sh; else scripts/dependencies.sh; fi
 
       - name: Build and install Saguaro (direct PAL)
         env:
@@ -71,31 +79,28 @@ jobs:
           libdir=$(dirname "$(find "$SAGUARO_PREFIX" -name libsysdb.so | head -n 1)")
           scripts/ci/check-rwx.py "$libdir/libsysdb.so" "$libdir"/direct/loader "$libdir"/direct/libpal.so
 
-      - name: Run the direct-PAL regression tests
+      - name: Regression tests (test/quick.sh direct)
         env:
-          SUITES: ${{ inputs.suites || 'pal libos python' }}   # via env, never interpolated into the script text
+          TIER: ${{ inputs.tier || 'regression' }}   # via env, never interpolated into the script text
         run: |
           export PATH="$HOME/.cargo/bin:$PATH"
-          test/direct/test-direct.sh $SUITES
-
-      - name: Install the prerequisites of the memcached and nginx examples
-        run: scripts/dependencies.sh
-
-      - name: memcached example (./exec.sh --direct)
-        run: |
-          export SAGUARO_DIRECT_PREFIX="$SAGUARO_PREFIX"
-          cd CI-Examples/memcached
-          ./exec.sh --direct
-
-      - name: nginx example (./exec.sh --direct)
-        run: |
-          export SAGUARO_DIRECT_PREFIX="$SAGUARO_PREFIX"
-          cd CI-Examples/nginx
-          ./exec.sh --direct
+          test/quick.sh direct --tier "$TIER" --out "$GITHUB_WORKSPACE/quick-out" | tee quick.log
+          exit "${PIPESTATUS[0]}"
 
       - name: Rewrite stress (aarch64)
-        if: ${{ inputs.stress }}
+        if: ${{ inputs.stress && inputs.tier != 'extended' }}
         run: scripts/stress_rewrite.sh -n 20
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Direct PAL (aarch64)"
+            echo '```'
+            cat quick-out/summary.txt 2>/dev/null || echo "(no summary: the run did not finish)"
+            grep -E ',(fail|known-fail)(,|$)' quick-out/results.csv 2>/dev/null | cut -d, -f5-7 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload logs
         if: always()
@@ -103,9 +108,9 @@ jobs:
         with:
           name: logs-direct-aarch64
           path: |
-            test-logs
+            quick-out
+            quick.log
             /tmp/rewrite-stress-fail
-            /tmp/saguaro-exec/
           if-no-files-found: ignore
 
   vm-build:
