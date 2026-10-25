@@ -280,13 +280,12 @@ memory and message queues, `faccessat2`, `getresuid`, more `prctl` options, file
   bundled glibc and that the `tdx` PAL did not build (the build is fixed). A direct run of the iperf example
   hung for 600 s until the shared server helpers started servers in their own process group.
 - **Regression tiers.** `test/quick.sh <variant>` runs one of three tiers on `direct`, `vm`, `sev`, `sev-snp`, `sgx`,
-  `vbs` or `tdx`: `smoke` (a few minutes), `regression` (the same core list of 127 LibOS tests and the same six
+  `vbs` or `tdx`: `smoke` (a few minutes), `regression` (the same core list of 127 LibOS tests and the same nine
   examples on every variant, at one vCPU count, 2, on the VM variants; at most 20 minutes) and `extended` (the full
   suites, the vCPU sweep, the stress tests in `test/vm/stress/`, all examples). It writes one results format
   (`results.csv`, `summary.txt`) and fails only on unexpected failures (`test/quick/expected-failures.toml`).
   The workflows call it. The scripts that duplicated it (the dispatcher and the forwarders directly in `test/`, the
-  `examples` and `hello` suites of `test-vm.sh`, the example suites of `test-direct.sh` except for the RISC-V
-  board, several scripts in `test/vm/multiproc/`) are removed.
+  `examples` and `hello` suites of `test-vm.sh`, the example suites of `test-direct.sh` are deprecated, several scripts in `test/vm/multiproc/`) are removed.
 - **Documentation.** `scripts/check-docs.py` verifies the paths and links of the documents. Workflows cover direct
   x86_64, direct AArch64, emulated RISC-V, VM x86_64 and SEV.
 

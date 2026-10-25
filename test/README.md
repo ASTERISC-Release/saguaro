@@ -17,15 +17,16 @@ The VM variants need a user that may run `saguaro-vm` (root in the container of 
 | Tier | Budget (the test run only: the install, the build and the RISC-V guest boot are not counted) | What runs |
 |---|---|---|
 | `smoke` | about 3 minutes | install check, `check-core-list`, `helloworld`, the `unit_tests` examples (mremap, thread-tls, thread-rwlock, thread-stress, networks), two LibOS tests (`202_fork_and_exec`, `600_multi_pthread`). tdx: the compile job. |
-| `regression` (the default) | 20 minutes per variant | `smoke`, then `pal` (direct and sgx: the PAL regression), `libos-core` (the 127 ids of `test/quick/core-tests.txt`), the examples `bash sqlite python busybox memcached nginx` through their `exec.sh`, and the steps of the variant (below). |
+| `regression` (the default) | 20 minutes per variant | `smoke`, then `pal` (direct and sgx: the PAL regression), `libos-core` (the 127 ids of `test/quick/core-tests.txt`), the examples `bash sqlite python busybox memcached redis lighttpd rust nginx` through their `exec.sh`, and the steps of the variant (below). |
 | `extended` | hours; nightly or by hand | the full LibOS suite, the vCPU sweep, the loops, the stress tests, `libos/test/fs`, `libos/test/abi`, `test/unit`, every example that has an `exec.sh`, LTP. |
 
-Measured on a development PC (x86_64, 24 threads, KVM, examples already built): `direct` smoke 17 s,
-`direct` regression 37 s (the PAL suite 9 s, `libos-core` 8 s, `unit_tests` 16 s); `vm` smoke 25 s, `vm`
-regression 261 s (`libos-core` 114 s, `vm-net` 82 s, `vm-multiproc` 27 s). The first run also builds the examples
-(busybox, memcached and nginx download and compile their sources: 107 s for the first `direct` regression run).
-`vm` extended steps: the full LibOS suite 167 s at 2 vCPUs (244 s at 1, 167 s at 4), `vm-stress` 163 s,
-`vm-sig-loop` 157 s, `vm-boot-loop` 169 s, `libos-fs` 61 s.
+Measured on a development PC (x86_64, 24 threads, KVM, examples already built): `direct` smoke 18 s,
+`direct` regression 38 s (the PAL suite 9 s, `libos-core` 8 s, `unit_tests` 16 s; the nine examples about 1 s
+each except `python` 3 s); `vm` smoke 26 s, `vm` regression 267 to 296 s (`libos-core` 115 s, `vm-net` 82 to
+115 s, `vm-multiproc` 26 s; the nine examples 1 s each except `sqlite` 3 s and `python` 7 s). The first run also
+builds the examples (busybox, memcached, nginx and lighttpd download and compile their sources: 62 s for the
+first `direct` regression run, of which `lighttpd` 23 s). `vm` extended steps: the full LibOS suite 167 s at 2
+vCPUs (244 s at 1, 167 s at 4), `vm-stress` 163 s, `vm-sig-loop` 157 s, `vm-boot-loop` 169 s, `libos-fs` 61 s.
 
 The VM-based variants (`vm`, `sev`, `sev-snp`) run `smoke` and `regression` with exactly 2 vCPUs
 (`SAGUARO_CPU_NUM=2`; `--vcpus` changes it) and 8G of RAM (`SAGUARO_RAM_SIZE`): there is no sweep in these
@@ -40,11 +41,11 @@ Steps of the variants in `regression`, besides the common ones:
 | `vm` | `vm-net` (`test/vm/test-vm.sh loopback outbound guest-loopback`), `vm-multiproc` (`test/vm/multiproc/check-probes.sh spawn signals forks misc sysv`; x86_64 only) |
 | `sev`, `sev-snp` | `sev-suite` (`test/sev/test-sev.sh --vcpus 2`), `vm-multiproc`; `sev-snp` also `libos-snp-attest` |
 | `sgx` | `libos-sgx-only` (file check policy, CPUID and RDTSC under SGX, sealed and MRENCLAVE tests), `unit` (with `test_sgx_sign.py`) |
-| `vbs` | `vbs-regress` (the core programs that have a VBS case, `test/quick/vbs-core.txt`), the examples `busybox sqlite python` and `CI-Examples/vbs`; no LibOS pytest |
+| `vbs` | `vbs-regress` (the core programs that have a VBS case, `test/quick/vbs-core.txt`), the examples `busybox sqlite python redis lighttpd rust` and `CI-Examples/vbs`; no LibOS pytest |
 | `tdx` | `tdx-build` only: the TDX PAL cannot run without TDX hardware |
 
 `extended` adds `libos-fs` (`libos/test/fs`), `libos-abi` (`libos/test/abi`, x86_64 direct), `ex-<name>` for
-every other example, `stress-rewrite` (aarch64 and riscv64 only) and `prefix-sweep` (direct), and on the VM variants `vm-net-all`,
+every other example, `stress-rewrite` (aarch64 and riscv64 only: x86_64 does not rewrite system calls, so its `blob` scenario fails there by design) and `prefix-sweep` (direct), and on the VM variants `vm-net-all`,
 `vm-multiproc-all` (the probes `libos examples redis` as well), `vm-sig-loop`, `vm-boot-loop`, `vm-stress`
 (below) and `ltp`. An example that does not offer the variant is reported as `skip`.
 
@@ -91,7 +92,7 @@ a run with the pytest expression in `QUICK_PYTEST_K`, which the workflow of that
 | Command | Role |
 |---|---|
 | `CI-Examples/<name>/exec.sh --<variant>` | the single runner of the examples (`--direct --vm --sev --sev-snp --sgx --vbs`) |
-| `test/direct/test-direct.sh [pal] [libos]` | the PAL suite and the full LibOS suite of the direct PAL. Its example suites (`helloworld multithread busybox bash redis memcached sqlite python lighttpd nginx rust networks`) are deprecated and stay only for `scripts/riscv64/run-examples.sh`: the RISC-V board needs them until `exec.sh --direct` works there |
+| `test/direct/test-direct.sh [pal] [libos]` | the PAL suite and the full LibOS suite of the direct PAL. Its example suites (`helloworld multithread busybox bash redis memcached sqlite python lighttpd nginx rust networks`) are deprecated and stay only because `scripts/riscv64/run-examples.sh` runs them in the RISC-V guest |
 | `test/vm/test-vm.sh [libos] [loopback] [epoll] [outbound] [udp] [guest-loopback]` | the LibOS suite under `saguaro-vm` (2 vCPUs unless `SAGUARO_CPU_NUM` says otherwise) and the VM network suites |
 | `test/vm/multiproc/check-probes.sh [check...]` | the multi-process checks of the VM PAL: `spawn signals forks misc sysv libos examples redis` (default: the first five) |
 | `test/vm/multiproc/sig-loop.sh`, `boot-loop.sh` | the signal loop and the boot loop (extended) |

@@ -79,7 +79,7 @@ In WSL, after `scripts/install.sh --vbs`:
 
 The regression tier runs the core programs of the LibOS regression suite that have a VBS case
 (`pal/src/host/vbs/test/regress/run-regress.sh`, selected by `test/quick/vbs-core.txt`), the examples
-`busybox sqlite python` and the enclave programs of `CI-Examples/vbs` through `exec.sh --vbs`, and prints a summary
+`busybox sqlite python redis lighttpd rust` and the enclave programs of `CI-Examples/vbs` through `exec.sh --vbs`, and prints a summary
 line to keep with a release (there is no CI for VBS). The whole case list is `test/quick.sh vbs --tier extended`;
 some of its cases fail by design (they need `fork` or host sockets and devices).
 

@@ -102,7 +102,7 @@ In a fresh container, `blender`, `mongodb`, `nodejs`, `openjdk` and `r` first st
     test/quick.sh sgx                     # the regression tier
 
 The regression tier runs the PAL suite, the LibOS core list (127 tests, the same list as on every variant), the
-examples `bash sqlite python busybox memcached nginx` through `exec.sh --sgx`, the tests that exist only under SGX
+examples `bash sqlite python busybox memcached redis lighttpd rust nginx` through `exec.sh --sgx`, the tests that exist only under SGX
 (file check policy, CPUID and RDTSC, sealed files, MRENCLAVE) and `test/unit` with `test_sgx_sign.py`. It prints a
 summary line to keep with a release (there is no CI for SGX). The `unit_tests-mremap` failure listed above is a known
 failure (`test/quick/expected-failures.toml`). The LibOS suite has not been recorded on SGX yet: the first run fills

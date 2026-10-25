@@ -119,7 +119,7 @@ production use.
   with the example's check. The shared helpers (`CI-Examples/common_tools/`) also start and stop the server examples.
   Results per backend: [CI-Examples/README.md](../CI-Examples/README.md), [CI-Examples/RESULTS.md](../CI-Examples/RESULTS.md).
 - **Test batteries** (done). `test/quick.sh <variant>` runs three tiers (smoke, regression, extended) with one
-  results format; the regression tier is the PAL suite, a core list of 127 LibOS tests, six examples through their
+  results format; the regression tier is the PAL suite, a core list of 127 LibOS tests, nine examples through their
   `exec.sh` and the steps of the variant, at 2 vCPUs on the VM variants (`test/README.md`). Underneath:
   `test/direct/test-direct.sh` (PAL, LibOS), `test/vm/test-vm.sh`, `test/sev/test-sev.sh`, the VM stress tests
   (`test/vm/stress/`) and the VM skip list.

@@ -6,6 +6,7 @@ Open items by architecture and host. Longer lists are kept with the maintainers'
 
 - `direct`: audit PAL state that a starting child allocates and frees at exit; sound and the remaining GPU-driver gaps for graphics.
 - `vm`: multi-vCPU performance at 2 and 4 vCPUs (fork cost, TLB shootdowns, scheduler lock contention); robust mutex for the System V shared tables.
+- `vm`: a `write()` is not visible through a shared `mmap` of the same tmpfs file afterwards (`libos/test/fs`, `TC_10_Tmpfs::test_111_read_write_mmap`; a known failure for `vm`, `sev` and `sev-snp` in `test/quick/expected-failures.toml`); to be investigated.
 - `vm` with graphics: present events and a non-flipping blit for Vulkan, idle CPU of the listener, SuperTuxKart start hang, sound.
 - `vm` with graphics, after the pointer table and the guard:
   soak tests (DOOM on the AMD GPU at least 20 runs, each Proton game at least 5 runs per GPU); the caller of the

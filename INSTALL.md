@@ -48,7 +48,7 @@ From the repository root:
 Check the install and run an example:
 
     test/quick.sh direct --tier smoke        # install check, helloworld, unit_tests, two LibOS tests (about 20 s)
-    test/quick.sh direct                     # the regression tier: PAL suite, LibOS core list, six examples (under a minute once the examples are built)
+    test/quick.sh direct                     # the regression tier: PAL suite, LibOS core list, nine examples (under a minute once the examples are built)
     test/direct/test-direct.sh libos         # the full PAL / LibOS suites alone (`pal`, `libos`; `--list` shows them)
 
 The tiers (`smoke`, `regression`, `extended`), their output files and the exit status are described in
