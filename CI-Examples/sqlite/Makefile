@@ -75,8 +75,8 @@ regression: all
 	$(SAGUARO) sqlite3 < scripts/select.sql > OUTPUT
 ifneq ($(filter saguaro-vm saguaro-sev,$(SAGUARO)),)
 	# The VM and SEV launchers print console lines to stdout; drop them before the diff. The
-	# patterns are those of vmfilter() in test/vm/multiproc/vm-examples.sh, plus the line the PAL
-	# added later ('Application address space').
+	# patterns are the launcher's console lines, including the one the PAL prints for the
+	# application address space ('Application address space').
 	grep -v -e '^Configuring Saguaro VM' -e '^REM_MEM_SIZE' -e '^\[boot\]' -e '^(PAL) Physical' \
 		-e '^Private frame pool' -e 'self-check passed' -e '^\[ VM ' -e '^vm-relay:' \
 		-e '^Application address space' -e '^Address-space switch' \

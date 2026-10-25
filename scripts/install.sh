@@ -41,7 +41,7 @@
 #                          (x86_64 direct keeps the patched glibc). SGX needs the bundled glibc.
 #   -j N                   ninja parallelism (default: nproc)
 #   --run-tests [suite...] run test/direct/test-direct.sh afterwards, building the test manifests first
-#                          (with --vm on aarch64: test/vm/test-vm.sh, suites libos|examples|hello)
+#                          (with --vm on aarch64: test/vm/test-vm.sh, suites libos|loopback)
 #                          (naming suites implies this)
 #   -h, --help
 #
@@ -324,8 +324,8 @@ if [ -n "$TARGET_ARCH" ]; then
 fi
 echo "Done. To use this install in the current shell:   . \"$PREFIX/env.sh\""
 [ "$ADD_TO_PROFILE" = 1 ] || echo "(or rerun with --add-to-profile to get it in every new shell)"
-if [ "$VM" = enabled ] && [ "$ARCH" = aarch64 ]; then
-    echo "Test with:  test/vm/test-vm.sh --prefix \"$PREFIX\" --build-dir $BUILDDIR"
+if [ "$VM" = enabled ]; then
+    echo "Test with:  SAGUARO_PREFIX=\"$PREFIX\" test/quick.sh vm      (test/quick.sh --help)"
 else
-    echo "Test with:  SAGUARO_PREFIX=\"$PREFIX\" test/direct/test-direct.sh"
+    echo "Test with:  SAGUARO_PREFIX=\"$PREFIX\" test/quick.sh direct  (test/quick.sh --help)"
 fi

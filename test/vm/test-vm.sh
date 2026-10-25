@@ -6,8 +6,6 @@
 # qemu-system-aarch64 are available, e.g. the container from container/run.sh).
 #
 #   libos     the LibOS regression suite under saguaro-vm (SAGUARO_VM=1, libos/test/regression/vm_skip.toml)
-#   examples  CI-Examples applications (tools/run-vm-aarch64-examples.sh)
-#   hello     the bring-up soak test (tools/vm-aarch64-stage/hello.c, SMP=2 and SMP=4)
 #   loopback  host-initiated connections into a guest AF_INET TCP server (test/vm/network/test-vm-loopback.sh,
 #             dev docs: CHANGELOG.md phase 1)
 #   epoll     many small synchronous requests through an epoll-driven guest TCP server
@@ -15,7 +13,9 @@
 #   udp       guest getaddrinfo and a host-side UDP echo through the relay
 #   guest-loopback guest IPv4/IPv6 TCP and UDP loopback through the relay
 #
-# Usage: test/vm/test-vm.sh [--prefix DIR] [--build-dir DIR] [suite...]   (default: all)
+# The CI-Examples run through their exec.sh (`CI-Examples/<name>/exec.sh --vm`, or test/quick.sh vm).
+#
+# Usage: test/vm/test-vm.sh [--prefix DIR] [--build-dir DIR] [suite...]   (default: libos loopback)
 # Prerequisite: a vm build installed with `scripts/install.sh --vm` (default prefix ~/.local/saguaro-vm,
 # build dir build-vm-<arch>; it builds the PIE test binaries the libos suite needs).
 set -u
@@ -28,12 +28,12 @@ while [ $# -gt 0 ]; do
     case $1 in
         --prefix) PREFIX=$2; shift 2 ;;
         --build-dir) BUILD=$2; shift 2 ;;
-        libos|examples|hello|loopback|epoll|outbound|udp|guest-loopback) SUITES+=("$1"); shift ;;
-        -h|--help) sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        libos|loopback|epoll|outbound|udp|guest-loopback) SUITES+=("$1"); shift ;;
+        -h|--help) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
 done
-[ ${#SUITES[@]} -gt 0 ] || SUITES=(libos examples hello loopback)
+[ ${#SUITES[@]} -gt 0 ] || SUITES=(libos loopback)
 
 export PATH=$PREFIX/bin:$PATH
 export PYTHONPATH=$(ls -d "$PREFIX"/lib/python3*/site-packages 2>/dev/null | head -1)
@@ -46,25 +46,6 @@ for s in "${SUITES[@]}"; do
         [ -z "${PYTEST_K:-}${PYTEST_ARGS:-}" ] || echo "pytest selection: -k '${PYTEST_K:-}' ${PYTEST_ARGS:-}"
         (cd "$REPO/libos/test/regression" && SAGUARO_VM=1 SAGUARO_CPU_NUM=${SAGUARO_CPU_NUM:-2} \
             saguaro-test pytest -- -q -rfEsxX --tb=short -p no:cacheprovider test_libos.py ${PYTEST_K:+-k "$PYTEST_K"} ${PYTEST_ARGS:-}) || rc=1 ;;
-    examples)
-        "$REPO/tools/run-vm-aarch64-examples.sh" || rc=1 ;;
-    hello)
-        # The bring-up soak test targets KVM on a native aarch64 host; on anything else
-        # it cannot boot (run-vm-aarch64-dev.sh does not emulate) and would count as failures.
-        if [ "$(uname -m)" != "aarch64" ]; then
-            echo "hello: skipped (aarch64-only bring-up test; this host is $(uname -m))"
-            continue
-        fi
-        for n in 2 4; do
-            ok=0
-            for i in $(seq 10); do
-                out=$(cd "$REPO" && BUILD=$BUILD SMP=$n RUN_TIMEOUT=60 tools/run-vm-aarch64-dev.sh 2>&1)
-                echo "$out" | grep -q "sigreturn recovered: faults=1" && echo "$out" | grep -q "exited with code 0" \
-                    && ok=$((ok+1))
-            done
-            echo "hello SMP=$n: $ok/10"
-            [ "$ok" = 10 ] || rc=1
-        done ;;
     loopback)
         # Host-initiated connections into the guest (the driver is shared with aarch64; the test
         # itself has no architecture-specific part, but only x86_64 has been run with it so far).

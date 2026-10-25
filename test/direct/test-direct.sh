@@ -2,21 +2,25 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 #
-# test-direct.sh — run the test battery of the direct PAL (any architecture):
-#   PAL regression, LibOS regression, and the CI example applications
-#   (helloworld, multi-thread, busybox, bash, redis, memcached, sqlite, python,
-#   lighttpd, nginx, rust, networks).
+# test-direct.sh — run the PAL regression suite (`pal`) and the full LibOS regression suite (`libos`) of the
+# direct PAL (any architecture). The tiered set of every variant, with a results file, is test/quick.sh.
+#
+# The example suites (helloworld, multithread, busybox, bash, redis, memcached, sqlite, python, lighttpd,
+# nginx, rust, networks) are DEPRECATED: `CI-Examples/<name>/exec.sh --direct` is the single example
+# runner. They are still accepted by name, and only because the riscv64 board (scripts/riscv64/run-examples.sh
+# runs them in the guest, and exec.sh --direct is not yet validated there) needs them; they are removed
+# once exec.sh works on the board.
 #
 # Usage:
-#   test/direct/test-direct.sh                 # everything
-#   test/direct/test-direct.sh libos redis     # only the named suites
-#   test/direct/test-direct.sh --list          # list suite names
+#   test/direct/test-direct.sh                 # pal and libos
+#   test/direct/test-direct.sh libos           # only the named suites
+#   test/direct/test-direct.sh --list          # list suite names (the deprecated ones after a blank line)
 #   test/direct/test-direct.sh --no-build      # skip manifest rebuilds of the pytest suites
 #
 # Environment overrides:
 #   SAGUARO_PREFIX   install prefix (default: ~/.local/saguaro)
 #   LOGDIR           per-test log directory (default: ${TMPDIR:-/tmp}/saguaro-tests)
-#   SAGUARO_RUNNER   saguaro-direct (default) or saguaro-vm: run the server examples (redis, memcached,
+#   SAGUARO_RUNNER   (deprecated example suites only) saguaro-direct (default) or saguaro-vm: run the server examples (redis, memcached,
 #                    lighttpd, nginx, rust) and `networks` under the VM PAL instead. The install must be
 #                    a --vm build; each server's guest port is forwarded to the same port on 127.0.0.1
 #                    by the VM's relay (SAGUARO_VM_INBOUND), so the clients are the ones of the direct run.
@@ -93,8 +97,10 @@ REPO="$(cd "$(dirname "$(readlink -f "$0")")/../.." && pwd)"
 . "$REPO/scripts/saguaro-env.sh"   # SAGUARO_PREFIX, PATH, PYTHONPATH, LOGDIR
 mkdir -p "$LOGDIR"
 
-ALL_SUITES=(pal libos helloworld multithread busybox bash redis memcached \
-            sqlite python lighttpd nginx rust networks)
+DEFAULT_SUITES=(pal libos)
+DEPRECATED_SUITES=(helloworld multithread busybox bash redis memcached \
+                   sqlite python lighttpd nginx rust networks)   # use CI-Examples/<name>/exec.sh --direct
+ALL_SUITES=("${DEFAULT_SUITES[@]}" "${DEPRECATED_SUITES[@]}")
 DO_BUILD=1
 RUN=()
 
@@ -102,7 +108,8 @@ declare -a REQUESTED=()
 for arg in "$@"; do
     case "$arg" in
         -h|--help)  awk '/^set -u/{exit} /^# test-direct.sh/{p=1} p&&/^#/{sub(/^# ?/,""); print}' "$0"; exit 0 ;;
-        --list)     printf '%s\n' "${ALL_SUITES[@]}"; exit 0 ;;
+        --list)     printf '%s\n' "${DEFAULT_SUITES[@]}"; echo; echo "deprecated (CI-Examples/<name>/exec.sh --direct):"
+                    printf '%s\n' "${DEPRECATED_SUITES[@]}"; exit 0 ;;
         --no-build) DO_BUILD=0 ;;
         *)          matched=0
                     for s in "${ALL_SUITES[@]}"; do [ "$s" = "$arg" ] && { REQUESTED+=("$s"); matched=1; }; done
@@ -115,7 +122,7 @@ if [ "${#REQUESTED[@]}" -gt 0 ]; then
     done
     RUN=($(printf '%s\n' "${RUN[@]}" | sort -u))
 else
-    RUN=("${ALL_SUITES[@]}")
+    RUN=("${DEFAULT_SUITES[@]}")
 fi
 
 RUNNER=${SAGUARO_RUNNER:-saguaro-direct}
@@ -273,6 +280,11 @@ run_pytest() {
     return $rc
 }
 
+for s in "${RUN[@]}"; do
+    for d in "${DEPRECATED_SUITES[@]}"; do
+        [ "$s" = "$d" ] && echo "note: the suite '$s' is deprecated: use CI-Examples/<example>/exec.sh --direct" >&2
+    done
+done
 echo "=== Saguaro $HOST_ARCH test battery — suites: ${RUN[*]} ==="
 
 for suite in "${RUN[@]}"; do

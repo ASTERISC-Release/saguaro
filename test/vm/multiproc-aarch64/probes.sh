@@ -4,8 +4,8 @@
 #
 # probes.sh -- the multi-process probes of test/vm/multiproc/ (spawn.c, forks.c, sig.sh and
 # manifest.template, sys.experimental__multiprocess on) under the AArch64 saguaro-vm. The
-# x86_64 runner (test/vm/multiproc/run-probes.sh) hardcodes the x86_64 library directory; this one
-# takes the build machine's (gcc -dumpmachine) and keeps one log per probe.
+# x86_64 checks (test/vm/multiproc/check-probes.sh) run them with assertions; this script takes the build
+# machine's library directory (gcc -dumpmachine) and keeps one log per probe.
 #
 # Usage: test/vm/multiproc-aarch64/probes.sh [--prefix DIR] [--cpus N]
 #            [spawn|sh|forks|signals|forks-mem|eintr|efault|shared|cntvct|regs|sysloop|unixsock]...   (default: sh spawn)

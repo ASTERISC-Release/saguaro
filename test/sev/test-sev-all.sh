@@ -8,10 +8,10 @@
 #
 #   1. scripts/install.sh --sev (unless NO_BUILD=1)
 #   2. test/sev/test-sev.sh under plain SEV and under SNP (hello, memory, vsock, measure / attest)
-#   3. the LibOS regression suite under SNP at the vCPU counts of CPUS (default "1 2 4"); reported,
-#      not judged: compare with saguaro-vm on the same host (known failures on the development host:
-#      test_020_cpuinfo on AMD, and at 1 vCPU test_000_spinlock and test_074_eventfd_races, as with
-#      saguaro-vm)
+#   3. the full LibOS regression suite under SNP at ONE vCPU count (SAGUARO_CPU_NUM, default 2); reported,
+#      not judged. The core list at 2 vCPUs is what `test/quick.sh sev-snp` runs, and the sweep at 1 and 4
+#      vCPUs is `test/quick.sh sev-snp --tier extended` (at 1 vCPU test_000_spinlock and
+#      test_074_eventfd_races fail, as with saguaro-vm: test/quick/expected-failures.toml)
 #   4. CI-Examples under SNP: helloworld, the multi-threaded unit test, python
 #   5. the multi-process checks under SNP (test/vm/multiproc/check-probes.sh, MP_RAM default 8G),
 #      unless MP=0
@@ -22,7 +22,7 @@ HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 REPO=$(cd "$HERE/../.." && pwd)
 PREFIX=${SAGUARO_PREFIX:-$HOME/.local/saguaro-vm}
 OUT=${OUT:-/tmp/test-sev-all}
-CPUS=${CPUS-"1 2 4"}   # CPUS= (empty) skips the suite
+CPUS=${SAGUARO_CPU_NUM:-2}
 export SAGUARO_RAM_SIZE=${SAGUARO_RAM_SIZE:-8G}
 mkdir -p "$OUT"
 rc=0
@@ -44,12 +44,10 @@ for mode in sev snp; do
     tail -n 1 "$OUT/test-sev-$mode.log"
 done
 
-for n in $CPUS; do
-    step "LibOS suite under SNP, $n vCPUs"
-    SAGUARO_CPU_NUM=$n SAGUARO_VM_LAUNCHER=saguaro-sev SAGUARO_SEV_MODE=snp \
-        "$HERE/../vm/test-vm.sh" --prefix "$PREFIX" libos > "$OUT/libos-snp-$n.log" 2>&1
-    grep -E "^FAILED|[0-9]+ (passed|failed)" "$OUT/libos-snp-$n.log" | tail -n 20
-done
+step "LibOS suite under SNP, $CPUS vCPUs"
+SAGUARO_CPU_NUM=$CPUS SAGUARO_VM_LAUNCHER=saguaro-sev SAGUARO_SEV_MODE=snp \
+    "$HERE/../vm/test-vm.sh" --prefix "$PREFIX" libos > "$OUT/libos-snp-$CPUS.log" 2>&1
+grep -E "^FAILED|[0-9]+ (passed|failed)" "$OUT/libos-snp-$CPUS.log" | tail -n 20
 
 step "CI-Examples under SNP"
 export SAGUARO_SEV_MODE=snp

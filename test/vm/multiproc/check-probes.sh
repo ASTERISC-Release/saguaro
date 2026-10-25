@@ -1,8 +1,8 @@
 #!/bin/bash
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
-# Multi-process checks for saguaro-vm with sys.experimental__multiprocess = true, with assertions
-# (run-probes.sh only prints). Each check runs under saguaro-vm, compares the output with the
+# Multi-process checks for saguaro-vm with sys.experimental__multiprocess = true, with assertions.
+# Each check runs under saguaro-vm, compares the output with the
 # expected lines, and is rerun once before it counts as failed (hosted guests are slow and the
 # signal probe has a known rare flake, see FINDINGS.md). Exit status 0 only if every check passed.
 #
@@ -190,11 +190,12 @@ check_libos() {
     local log=$1 rc=0 m
     (
         cd "$REPO/libos/test/regression" || exit 1
-        # --force: saguaro-test leaves up-to-date manifests alone, so the key must be re-rendered
-        SAGUARO_VM_MULTIPROCESS=1 saguaro-test build --force >> "$log" 2>&1 || exit 1
+        # --force: saguaro-test leaves up-to-date manifests alone. The VM PAL runs several processes by
+        # default, so the rendered manifests must not turn the key off.
+        saguaro-test build --force >> "$log" 2>&1 || exit 1
         for m in fork_and_exec vfork_and_exec; do
-            grep -qx 'experimental__multiprocess = true' "$m.manifest" \
-                || { echo "  $m.manifest does not set the key" | tee -a "$log"; exit 1; }
+            ! grep -qx 'experimental__multiprocess = false' "$m.manifest" \
+                || { echo "  $m.manifest turns the key off" | tee -a "$log"; exit 1; }
         done
         SAGUARO_VM=1 SAGUARO_VM_SKIPLIST=0 timeout -s KILL $(( 900 * SCALE )) \
             python3 -m pytest -q -rfEsxX --tb=short -p no:cacheprovider test_libos.py \
@@ -211,12 +212,11 @@ check_libos() {
 
 # key_on <manifest> <list>: add the key to a generated manifest, the original kept as <manifest>.mp-bak
 key_on() {
+    # the key is on by default: only a manifest that turns it off is patched (a second `experimental__multiprocess`
+    # line would make the manifest invalid)
+    grep -qx 'experimental__multiprocess = false' "$1" || return 0
     cp "$1" "$1.mp-bak" && echo "$1" >> "$2"
-    if grep -q '^\[sys\]$' "$1"; then
-        sed -i 's/^\[sys\]$/[sys]\nexperimental__multiprocess = true/' "$1"
-    else
-        printf '\n[sys]\nexperimental__multiprocess = true\n' >> "$1"
-    fi
+    sed -i 's/^experimental__multiprocess = false$/experimental__multiprocess = true/' "$1"
 }
 key_restore() { local m; while read -r m; do [ -f "$m.mp-bak" ] && mv "$m.mp-bak" "$m"; done < "$1"; : > "$1"; }
 
