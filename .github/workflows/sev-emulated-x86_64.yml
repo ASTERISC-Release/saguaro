@@ -12,6 +12,10 @@
 name: SEV PAL emulated (x86_64, QEMU TCG)
 
 on:
+  schedule:
+    - cron: '7 10 * * *'   # nightly, UTC
+  push:
+    branches: [nightly-ci]   # TEMPORARY, to prove the scheduled path; removed before merging
   workflow_dispatch:
     inputs:
       tier:

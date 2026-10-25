@@ -7,6 +7,10 @@
 name: Documentation check
 
 on:
+  schedule:
+    - cron: '7 9 * * *'   # nightly, UTC
+  push:
+    branches: [nightly-ci]   # TEMPORARY, to prove the scheduled path; removed before merging
   workflow_dispatch:
 
 permissions:

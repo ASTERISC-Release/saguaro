@@ -9,6 +9,10 @@
 name: Direct PAL (x86_64)
 
 on:
+  schedule:
+    - cron: '17 9 * * *'   # nightly, UTC
+  push:
+    branches: [nightly-ci]   # TEMPORARY, to prove the scheduled path; removed before merging
   workflow_dispatch:
     inputs:
       tier:
@@ -96,7 +100,7 @@ jobs:
     # test noticing; this job only compiles it (meson + ninja, no install: the install links the
     # PAL with td-shim, which is not on the runner).
     name: TDX PAL build (x86_64, build only)
-    if: ${{ inputs.tdx_build }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.tdx_build }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:

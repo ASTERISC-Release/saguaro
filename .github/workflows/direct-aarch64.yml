@@ -15,6 +15,10 @@
 name: Direct PAL (aarch64)
 
 on:
+  schedule:
+    - cron: '27 9 * * *'   # nightly, UTC
+  push:
+    branches: [nightly-ci]   # TEMPORARY, to prove the scheduled path; removed before merging
   workflow_dispatch:
     inputs:
       tier:
@@ -115,7 +119,7 @@ jobs:
 
   vm-build:
     name: vm PAL build (aarch64, no KVM)
-    if: ${{ inputs.vm_build }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.vm_build }}
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 60
     env:
