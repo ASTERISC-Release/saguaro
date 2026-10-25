@@ -1177,9 +1177,13 @@ static int vm_sock_recv_wait(struct pal_handle* handle, int* futex, uint64_t* de
     ret = register_timeout(*deadline_us, futex, &timeout);
     if (ret < 0)
         return ret;
-    ret = sched_thread_wait_interruptible(futex, &handle->sock.lock);
+    /* the timer ISR may fire the timeout between the check above and the block, and its wakeup
+     * then finds no blocked thread: the wait re-checks the fired flag under the scheduler lock
+     * (returns 1: the caller re-checks, and the next call sees the deadline passed) */
+    ret = sched_thread_wait_interruptible_gen(futex, &handle->sock.lock,
+                                              timeout_fired_flag(timeout), /*expected=*/0);
     deregister_timeout(timeout);
-    return ret;
+    return ret < 0 ? ret : 0;
 }
 
 static int pal_common_tcp_recv(struct pal_handle* handle, struct iovec* iov, size_t iov_len,
