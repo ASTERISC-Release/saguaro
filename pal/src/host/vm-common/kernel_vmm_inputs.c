@@ -221,6 +221,32 @@ int cmdline_init_envs(char* cmdline_envs, size_t cmdline_envs_size) {
     return 0;
 }
 
+/* opt/saguaro/tsc_khz: the TSC frequency in kHz when the hypervisor's CPUID leaves do not report
+ * it (QEMU TCG); absent otherwise */
+int tsc_khz_init(uint64_t* out_tsc_khz) {
+    uint16_t fw_cfg_selector;
+    uint32_t fw_cfg_size;
+    int ret = find_fw_cfg_selector("opt/saguaro/tsc_khz", &fw_cfg_selector, &fw_cfg_size);
+    if (ret < 0)
+        return ret;
+    char buf[32] = { 0 };
+    if (fw_cfg_size >= sizeof(buf))
+        return -PAL_ERROR_INVAL;
+    vm_portio_writew(FW_CFG_PORT_SEL, fw_cfg_selector);
+    for (size_t i = 0; i < fw_cfg_size; i++)
+        buf[i] = vm_portio_readb(FW_CFG_PORT_SEL + 1);
+    uint64_t value = 0;
+    for (size_t i = 0; buf[i]; i++) {
+        if (buf[i] < '0' || buf[i] > '9')
+            return -PAL_ERROR_INVAL;
+        value = value * 10 + (uint64_t)(buf[i] - '0');
+    }
+    if (!value)
+        return -PAL_ERROR_INVAL;
+    *out_tsc_khz = value;
+    return 0;
+}
+
 int graphics_data_size_init(uint64_t* out_graphics_data_size) {
     uint16_t fw_cfg_selector;
     uint32_t fw_cfg_size;

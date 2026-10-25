@@ -464,15 +464,27 @@ static int tsc_frequency_init(void) {
      *   - 0x40000000: EAX: The maximum input value for CPUID supported by the hypervisor
      *   - 0x40000010: EAX: (Virtual) TSC frequency in kHz
      */
+    /* QEMU TCG has neither the invariant TSC bit nor the KVM leaf 0x40000010: the launcher then
+     * passes the frequency over fw_cfg (opt/saguaro/tsc_khz) */
+    uint64_t fw_tsc_khz = 0;
+    if (tsc_khz_init(&fw_tsc_khz) == 0 && fw_tsc_khz / 1000) {
+        g_tsc_mhz = fw_tsc_khz / 1000;
+        log_always("TSC frequency from fw_cfg opt/saguaro/tsc_khz: %lu MHz", g_tsc_mhz);
+        return 0;
+    }
+
     _PalCpuIdRetrieve(INVARIANT_TSC_LEAF, 0, words);
     if (!(words[CPUID_WORD_EDX] & (1 << 8))) {
         /* invariant TSC is not available */
+        log_error("TSC: CPUID.80000007H:EDX[8] (invariant TSC) is not set");
         return -PAL_ERROR_DENIED;
     }
 
     _PalCpuIdRetrieve(0x40000000, 0, words);
     if (words[CPUID_WORD_EAX] < 0x40000010) {
         /* virtual TSC frequency is not available */
+        log_error("TSC: hypervisor CPUID leaf 0x40000010 (TSC kHz) is not available (max 0x%x)",
+                  words[CPUID_WORD_EAX]);
         return -PAL_ERROR_DENIED;
     }
 

@@ -97,5 +97,7 @@ int graphics_huge_addr_init(uint64_t* out_graphics_huge_addr);
 int graphics_data_addr_init(uint64_t* out_graphics_data_addr);
 
 int unixtime_init(char* unixtime_s, size_t unixtime_size);
+/* TSC kHz from fw_cfg opt/saguaro/tsc_khz, for hypervisors without CPUID leaf 0x40000010 */
+int tsc_khz_init(uint64_t* out_tsc_khz);
 
 int e820_table_init(char* e820_table, size_t* e820_size, size_t max_e820_size);
