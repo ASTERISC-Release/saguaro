@@ -236,6 +236,12 @@ class RegressionTestCase(unittest.TestCase):
             # are that console.
             # absolute path: tests that pass a custom `env=` may not carry our PATH
             saguaro_vm = shutil.which(VM_LAUNCHER) or VM_LAUNCHER
+            # the launcher's own configuration (accelerator, QEMU, SEV mode, ...) comes from
+            # the test runner's environment and must reach it through a custom `env=` too
+            if kwds.get('env') is not None:
+                launcher_env = {name: value for name, value in os.environ.items()
+                                if name.startswith('SAGUARO_') or name in ('QEMU_PATH', 'VIRTIOFSD')}
+                kwds['env'] = {**launcher_env, **kwds['env']}   # the test's own dict stays as it is
             try:
                 _returncode, stdout, stderr = run_command([*prefix, saguaro_vm, *args],
                                                           timeout=timeout, **kwds)
