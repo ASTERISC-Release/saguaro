@@ -27,6 +27,8 @@
 #   --vcpus N                run every suite at N vCPUs, once (test/quick.sh uses 2). Without it hello runs at 1
 #                            and 4 vCPUs and the other suites at 1.
 #   SAGUARO_SEV_MODE=sev     the saguaro-sev mode: sev or snp (measure: sev only)
+#   SAGUARO_ACCEL=tcg        the emulated SEV of QEMU TCG: hello and vsock only (QEMU_PATH names the
+#                            QEMU with sev-emu/sev-snp-emu)
 #   SAGUARO_RAM_SIZE=8G      guest RAM (SEV pins all of it at launch, so smaller boots faster; the
 #                            multiprocess frame pool, on by default, needs more than 4G)
 #   COMPARE=1                memory: also run the probe under saguaro-vm as the control
@@ -46,10 +48,23 @@ while [ $# -gt 0 ]; do
         *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
 done
-[ ${#SUITES[@]} -gt 0 ] || if [ "${SAGUARO_SEV_MODE:-sev}" = snp ]; then
-    [ ${#SUITES[@]} -gt 0 ] || SUITES=(hello memory vsock attest)
-else
-    [ ${#SUITES[@]} -gt 0 ] || SUITES=(hello memory vsock measure)
+# the emulated SEV of QEMU TCG (SAGUARO_ACCEL=tcg) has no attestation, no launch measurement to
+# verify and no memory protection: only hello and vsock apply there
+if [ "${SAGUARO_ACCEL:-kvm}" = tcg ]; then
+    for s in "${SUITES[@]}"; do
+        case $s in
+            memory|measure|attest) echo "$s: skipped under the emulated SEV of QEMU TCG" ;;
+        esac
+    done
+    SUITES=("${SUITES[@]/memory/}"); SUITES=("${SUITES[@]/measure/}"); SUITES=("${SUITES[@]/attest/}")
+    SUITES=(${SUITES[@]})
+    [ ${#SUITES[@]} -gt 0 ] || SUITES=(hello vsock)
+elif [ ${#SUITES[@]} -eq 0 ]; then
+    if [ "${SAGUARO_SEV_MODE:-sev}" = snp ]; then
+        SUITES=(hello memory vsock attest)
+    else
+        SUITES=(hello memory vsock measure)
+    fi
 fi
 
 export PATH=$PREFIX/bin:$PATH
