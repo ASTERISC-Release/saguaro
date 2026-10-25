@@ -113,9 +113,28 @@ QEMU_CPU_NUM=${QEMU_CPU_NUM:-"1"}
 [ -n "$SEV_QEMU_PATH" ] && QEMU_PATH=${QEMU_PATH:-$SEV_QEMU_PATH}
 QEMU_PATH=${QEMU_PATH:-$(command -v qemu-system-x86_64 || echo qemu-system-x86_64)}
 
-QEMU_VM="-cpu host,host-phys-bits,-kvm-steal-time,pmu=off,+tsc-deadline,+invtsc \
+# SAGUARO_ACCEL=tcg runs the guest under QEMU's software emulation (MTTCG) instead of KVM, for
+# hosts without /dev/kvm or without SEV; SAGUARO_CPU overrides the CPU model (TCG default: max).
+# Under TCG the SEV modes use the emulated objects sev-emu / sev-snp-emu of the dev-sev QEMU.
+QEMU_ACCEL=${SAGUARO_ACCEL:-kvm}
+KIRQ=on
+if [ "$QEMU_ACCEL" = tcg ]; then
+    KIRQ=off
+    QEMU_VM="-cpu ${SAGUARO_CPU:-max} -m $QEMU_MEM_SIZE -smp $QEMU_CPU_NUM"
+    QEMU_OPTS="-accel tcg,thread=multi -vga none -display none -no-reboot -monitor none "
+    # the guest TSC runs at the host TSC rate under TCG and QEMU reports no frequency to the
+    # guest: pass it over fw_cfg (SAGUARO_TSC_KHZ, else the kernel's tsc_khz, else the nominal
+    # base frequency, else the current MHz of /proc/cpuinfo)
+    TSC_KHZ=${SAGUARO_TSC_KHZ:-}
+    [ -n "$TSC_KHZ" ] || TSC_KHZ=$(cat /sys/devices/system/cpu/cpu0/tsc_freq_khz 2>/dev/null)
+    [ -n "$TSC_KHZ" ] || TSC_KHZ=$(cat /sys/devices/system/cpu/cpu0/cpufreq/base_frequency 2>/dev/null)
+    [ -n "$TSC_KHZ" ] || TSC_KHZ=$(awk -F: '/^cpu MHz/ {printf "%d", $2 * 1000; exit}' /proc/cpuinfo)
+    QEMU_OPTS+="-fw_cfg name=opt/saguaro/tsc_khz,string=$TSC_KHZ "
+else
+    QEMU_VM="-cpu ${SAGUARO_CPU:-host,host-phys-bits,-kvm-steal-time,pmu=off,+tsc-deadline,+invtsc} \
 -m $QEMU_MEM_SIZE -smp $QEMU_CPU_NUM"
-QEMU_OPTS="-enable-kvm -vga none -display none -no-reboot -monitor none "
+    QEMU_OPTS="-enable-kvm -vga none -display none -no-reboot -monitor none "
+fi
 # SAGUARO_VM_MONITOR=<path>: the QEMU monitor on a unix socket, so that a hung guest can be looked
 # at from outside (test/vm/multiproc/vm-hang-report.py)
 [ -n "$SAGUARO_VM_MONITOR" ] && \
@@ -286,23 +305,33 @@ print(sev.get('mode', ''), sev.get('policy', ''))
     read -r SEV_MANIFEST_MODE SEV_MANIFEST_POLICY <<<"$SEV_MANIFEST"
     SEV_MODE=${SAGUARO_SEV_MODE:-${SEV_MANIFEST_MODE:-snp}}
     SAGUARO_SEV_POLICY=${SAGUARO_SEV_POLICY:-$SEV_MANIFEST_POLICY}
-    SEV_CBITPOS=${SAGUARO_SEV_CBITPOS:-$(python3 "$HOST_PAL_PATH/saguaro-sev-igvm.py" cbitpos)}
+    if [ "$QEMU_ACCEL" = tcg ]; then
+        # the emulated SEV of QEMU TCG: the C-bit position is a property of the object (51 as on
+        # SEV hardware) and the host CPUID says nothing
+        SEV_CBITPOS=${SAGUARO_SEV_CBITPOS:-51}
+        SEV_OBJECT_SEV=sev-emu
+        SEV_OBJECT_SNP=sev-snp-emu
+    else
+        SEV_CBITPOS=${SAGUARO_SEV_CBITPOS:-$(python3 "$HOST_PAL_PATH/saguaro-sev-igvm.py" cbitpos)}
+        SEV_OBJECT_SEV=sev-guest
+        SEV_OBJECT_SNP=sev-snp-guest
+    fi
     case "$SEV_MODE" in
         sev)
-            SEV_OBJECT="sev-guest,id=sev0,cbitpos=$SEV_CBITPOS,reduced-phys-bits=1,policy=${SAGUARO_SEV_POLICY:-0x1}"
+            SEV_OBJECT="$SEV_OBJECT_SEV,id=sev0,cbitpos=$SEV_CBITPOS,reduced-phys-bits=1,policy=${SAGUARO_SEV_POLICY:-0x1}"
             [ -n "$SAGUARO_SEV_SESSION" ] && \
                 SEV_OBJECT+=",dh-cert-file=${SAGUARO_SEV_SESSION}_godh.b64,session-file=${SAGUARO_SEV_SESSION}_session.b64"
-            QEMU_MACHINE="-M q35,kernel_irqchip=on,confidential-guest-support=sev0,igvm-cfg=igvm0 \
+            QEMU_MACHINE="-M q35,kernel_irqchip=$KIRQ,confidential-guest-support=sev0,igvm-cfg=igvm0 \
             -object $SEV_OBJECT" ;;
         snp)
             # KVM offers no TSC-deadline timer to SEV-ES/SNP guests (the PAL uses the one-shot
             # LAPIC timer instead), so do not ask for it
             QEMU_VM=${QEMU_VM/,+tsc-deadline/}
-            SEV_OBJECT="sev-snp-guest,id=sev0,cbitpos=$SEV_CBITPOS,reduced-phys-bits=1,policy=${SAGUARO_SEV_POLICY:-0x30000}"
-            QEMU_MACHINE="-M q35,kernel_irqchip=on,confidential-guest-support=sev0,igvm-cfg=igvm0 \
+            SEV_OBJECT="$SEV_OBJECT_SNP,id=sev0,cbitpos=$SEV_CBITPOS,reduced-phys-bits=1,policy=${SAGUARO_SEV_POLICY:-0x30000}"
+            QEMU_MACHINE="-M q35,kernel_irqchip=$KIRQ,confidential-guest-support=sev0,igvm-cfg=igvm0 \
             -object $SEV_OBJECT" ;;
         native)
-            QEMU_MACHINE="-M q35,kernel_irqchip=on,igvm-cfg=igvm0" ;;
+            QEMU_MACHINE="-M q35,kernel_irqchip=$KIRQ,igvm-cfg=igvm0" ;;
         *)
             echo "Error: SAGUARO_SEV_MODE must be sev, snp or native (got '$SEV_MODE')." >&2
             exit 2 ;;
@@ -317,7 +346,7 @@ print(sev.get('mode', ''), sev.get('policy', ''))
         echo "saguaro-sev: $SEV_MODE launch digest of $SEV_IGVM_PATH on $QEMU_CPU_NUM vCPUs: $SEV_DIGEST" >&2
     fi
 elif [ "$TDSHIM_PAL_PATH" == "" ]; then
-    QEMU_MACHINE="-M q35,kernel_irqchip=on"
+    QEMU_MACHINE="-M q35,kernel_irqchip=$KIRQ"
     QEMU_BINARIES="-kernel $LIBPAL_PATH -device loader,file=$BIOS_PATH"
 else
     QEMU_MACHINE="-M q35,kernel_irqchip=split,confidential-guest-support=tdx \
