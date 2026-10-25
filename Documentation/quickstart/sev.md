@@ -5,26 +5,26 @@ memory and registers from the host and supports hardware-signed attestation. The
 loaded from an IGVM file measured at launch. See the [VM quickstart](vm.md) and the
 dev docs: `sev/PLAN.md`.
 
-## Status
-
-Symbols as in [README.md](../../README.md):
-
-| Configuration           | Intel x86_64 | AMD64 | AArch64 | RISC-V (RV64) |
-|-------------------------|--------------|-------|---------|---------------|
-| `saguaro-sev` (SEV-SNP) | –           | ◐    | –      | –            |
-
-Plain SEV/SEV-ES is also available: `./exec.sh --sev`, or `SAGUARO_SEV_MODE=sev` by hand.
-
 ## Requirements
+
+- `podman` for the container of `container/run.sh`. The SEV tools are built inside the container;
+  nothing is installed on the host.
+
+### Hardware
 
 All the requirements from [VM quickstart](vm.md) apply, and:
 
-- An AMD EPYC host (Milan or later) with SEV-SNP enabled in the firmware and a host kernel with
+- An AMD EPYC host with SEV/SEV-SNP enabled in the firmware and a host kernel with
   SNP support (`cat /sys/module/kvm_amd/parameters/sev_snp` prints `Y`).
   - Refer to [AMD's SEV-SNP GitHub repository](https://github.com/AMDESE/AMDSEV) for details on enabling SEV-SNP in the firmware and kernel.
 - `/dev/sev` readable and writable by the user (add the user to the `sev` group on the host).
-- `podman` for the container of `container/run.sh`. The SEV tools are built inside the container;
-  nothing is installed on the host.
+
+### Emulation (Optional)
+
+We have also designed a functional emulation of SEV/SEV-SNP (for testing/development). For this, you need:
+
+- Our fork of QEMU--[`qemu-sev-tcg`](https://github.com/adilahmad17/qemu-sev-tcg)--from the `dev-sev` branch. 
+  - Build this fork (using `./build.sh`) inside the podman container (after step 1 below).
 
 # 1. Build and install
 
@@ -53,6 +53,11 @@ In the container shell, `exec.sh` runs the example under SEV-SNP (`--sev-snp`) o
     ./exec.sh --sev-snp
     ./exec.sh --sev
 
+If you are using **emulation** mode, please export the following environment variables: 
+
+    export SAGUARO_ACCEL=tcg QEMU_PATH=<qemu-sev-tcg prefix>/bin/qemu-system-x86_64
+    ./exec.sh --sev            # or --sev-snp; every example's exec.sh works
+
 The script builds the example, sets `SAGUARO_SEV_MODE` to `snp` or `sev` and runs `saguaro-sev`.
 The output contains:
 
@@ -74,7 +79,6 @@ encryption.
 `./exec.sh --sev` and `./exec.sh --sev-snp` pass for every example that supports them
 ([RESULTS.md](../../CI-Examples/RESULTS.md)).
 
-In a fresh container, `blender`, `mongodb`, `nodejs`, `openjdk` and `r` first stop with "cannot run here: missing on the host"; run `CI-Examples/install-all-prereqs.sh` once (or the `install-prereqs.sh` of that example, which the message names) and repeat the command.
 
 Note the following:
 
@@ -128,33 +132,7 @@ summary line to keep with a release (there is no CI for SEV). The scripts undern
 (see the header of the script for the suites). `test/sev/test-sev.sh` passes in both modes
 ([RESULTS.md](../../CI-Examples/RESULTS.md)).
 
-# 5. Without SEV hardware: the emulated SEV of QEMU TCG
-
-The SEV PAL also runs on a plain x86_64 machine (no `/dev/sev`, no KVM needed) under QEMU's software
-emulation with the `sev-emu` and `sev-snp-emu` objects of the `dev-sev` branch of the lab's QEMU fork
-([`qemu-sev-tcg`](https://github.com/adilahmad17/qemu-sev-tcg); build it with its `./build.sh`). This is a *functional* emulation of the guest-visible interface: SEV_STATUS and CPUID report
-SEV/SEV-ES/SEV-SNP, the intercepted instructions raise `#VC`, the GHCB protocol and VMGEXIT are answered as
-KVM answers them, the SNP CPUID and secrets pages exist, `PVALIDATE`/`RMPADJUST`/page-state changes keep a
-validation table and an access to an unvalidated private page raises `#VC` as on hardware, APs are created
-from their VMSA. It has **no attestation** (the report request fails, `/dev/attestation/quote` is not
-readable), **no memory encryption or isolation** (the host sees guest memory; the C-bit is bookkeeping) and
-no launch measurement to verify. Use it to test the PAL's SEV code paths where no SEV host is available
-(CI); the SEV host remains the reference.
-
-Run examples and tests with the same commands as on hardware, adding two variables. `QEMU_PATH` must name the
-`qemu-system-x86_64` built from the `dev-sev` branch; it is checked first (a stock QEMU is refused with the reason):
-
-    export SAGUARO_ACCEL=tcg QEMU_PATH=<qemu-sev-tcg prefix>/bin/qemu-system-x86_64
-    CI-Examples/helloworld/exec.sh --sev            # or --sev-snp; every example's exec.sh works
-    test/sev/test-sev.sh hello vsock                # SAGUARO_SEV_MODE=snp for SNP; memory, measure, attest are skipped
-    test/quick.sh sev-snp --tier smoke              # or sev; add --tier regression for the LibOS core list
-
-`SAGUARO_ACCEL=tcg` makes the launcher use `-accel tcg`, `-cpu max`, the emulated SEV objects (C-bit
-position 51, `SAGUARO_SEV_CBITPOS` overrides) and pass the host's TSC frequency to the guest over fw_cfg.
-A boot takes about three times longer than under KVM on the same machine. `test_020_cpuinfo` of the LibOS
-suite fails (the guest sees QEMU's CPU model), see `test/quick/expected-failures.toml`.
-
-# 6. Troubleshooting
+# 5. Troubleshooting
 
 - `exec.sh` reports that `sev` cannot run: it names the reason. No `/dev/sev`: add the user to the
   `sev` group on the host, log in again; the container may have to be recreated to see the device (`container/run.sh down`
