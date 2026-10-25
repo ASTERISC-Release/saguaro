@@ -682,6 +682,7 @@ class TC_03_FileCheckPolicy(RegressionTestCase):
     'These tests are only meaningful on SGX PAL because only SGX supports attestation.')
 @unittest.skipIf(USES_MUSL,
     'These tests require custom build of mbedtls, which is cumbersome to do twice (musl and glibc)')
+@unittest.skipUnless(os.path.exists('/var/run/aesmd/aesm.socket'), 'needs the AESM service (quotes)')
 class TC_04_Attestation(RegressionTestCase):
     def test_000_attestation(self):
         stdout, _ = self.run_binary(['attestation'], timeout=60)
