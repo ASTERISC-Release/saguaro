@@ -12,6 +12,8 @@
 name: SEV PAL emulated (x86_64, QEMU TCG)
 
 on:
+  push:
+    branches: [dev-sev-emulated]   # TEMPORARY, to prove the workflow runs before it is on main; remove before merging
   workflow_dispatch:
     inputs:
       tier:
