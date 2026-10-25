@@ -7,9 +7,8 @@
 #
 # The example suites (helloworld, multithread, busybox, bash, redis, memcached, sqlite, python, lighttpd,
 # nginx, rust, networks) are DEPRECATED: `CI-Examples/<name>/exec.sh --direct` is the single example
-# runner. They are still accepted by name, and only because the riscv64 board (scripts/riscv64/run-examples.sh
-# runs them in the guest, and exec.sh --direct is not yet validated there) needs them; they are removed
-# once exec.sh works on the board.
+# runner. They are still accepted by name, and only because scripts/riscv64/run-examples.sh runs them in the
+# RISC-V guest.
 #
 # Usage:
 #   test/direct/test-direct.sh                 # pal and libos

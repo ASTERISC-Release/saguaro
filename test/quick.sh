@@ -11,7 +11,7 @@
 #   tier      smoke       about 3 minutes: install check, helloworld, unit_tests examples, two LibOS tests
 #             regression  about 20 minutes at most (the default; includes smoke): PAL regression (direct, sgx),
 #                         the LibOS core list (SAGUARO_TESTSET=core, test/quick/core-tests.txt), the examples
-#                         bash sqlite python busybox memcached nginx through their exec.sh, and the steps of
+#                         bash sqlite python busybox memcached redis lighttpd rust nginx through their exec.sh, and the steps of
 #                         the variant (see test/README.md). VM-based variants use ONE vCPU count: 2.
 #             extended    the long suites (nightly or by hand): the full LibOS suite, the vCPU sweep (1 and 4),
 #                         loops, stress tests (test/vm/stress), all examples, libos/test/fs, LTP
@@ -20,8 +20,9 @@
 #   --target riscv64   the direct variant for the RISC-V guest of scripts/riscv64/guest.sh: run it in the cross
 #             container (container/run.sh --target riscv64) with the guest started; the tests run in the guest
 #             through scripts/riscv64/run-suite.sh and run-examples.sh (the examples run as the suites of
-#             test/direct/test-direct.sh there, until exec.sh --direct works on the board; QUICK_RISCV64_EXAMPLES
-#             names them, default: bash sqlite python busybox memcached nginx). The guest boot is not a step.
+#             test/direct/test-direct.sh there; QUICK_RISCV64_EXAMPLES names them, default: the examples of
+#             the regression tier). The guest boot is not a step.
+#   The rewrite stress (stress-rewrite, extended) runs on aarch64 and riscv64 only: x86_64 does not rewrite system calls.
 #   --list    print the steps of the variant and tier, run nothing
 #   --dry-run print the commands that would run
 #   --only    run only the named steps (see --list)
@@ -126,7 +127,7 @@ KSEL=${QUICK_PYTEST_K:+-k "not ($QUICK_PYTEST_K)"}
 # The direct variant for the RISC-V guest (see --target). The tests run in the guest; the pytest suites print only
 # the plain summary there, report.py reads it from the log.
 steps_riscv64() {
-    local run="scripts/riscv64/run-suite.sh" ex=${QUICK_RISCV64_EXAMPLES:-bash sqlite python busybox memcached nginx}
+    local run="scripts/riscv64/run-suite.sh" ex=${QUICK_RISCV64_EXAMPLES:-bash sqlite python busybox memcached redis lighttpd rust nginx}
     local t=${SAGUARO_TEST_TIMEOUT:-600}
     echo "install-check|smoke|60|-|plain|test -d build-riscv64/prefix && scripts/riscv64/guest.sh status"
     echo "check-core-list|smoke|60|-|plain|python3 test/quick/check-core-list.py"
@@ -159,7 +160,7 @@ steps() {
         [ "$TIER" = smoke ] && return
         local names; names=$(grep -v '^#' "$Q/vbs-core.txt" | cut -f2 | sort -u | paste -sd'|')
         echo "vbs-regress|regression|1500|-|plain|pal/src/host/vbs/test/regress/run-regress.sh \"\$QUICK_OUT/vbs-regress\" '^($names)(\\||\$)'"
-        for e in busybox sqlite python; do echo "ex-$e|regression|900|-|exec|(cd CI-Examples/$e && ./exec.sh $EXEC)"; done
+        for e in busybox sqlite python redis lighttpd rust; do echo "ex-$e|regression|900|-|exec|(cd CI-Examples/$e && ./exec.sh $EXEC)"; done
         echo "ex-vbs|regression|600|-|exec|(cd CI-Examples/vbs && ./exec.sh $EXEC)"
         [ "$TIER" = regression ] && return
         echo "vbs-regress-full|extended|3600|-|plain|pal/src/host/vbs/test/regress/run-regress.sh \"\$QUICK_OUT/vbs-regress-full\""
@@ -179,7 +180,7 @@ steps() {
         echo "pal|regression|600|$cpu|pytest|(cd pal/regression && $env $st $PYARGS)" ;;      # 36 tests
     esac
     echo "libos-core|regression|1500|$cpu|pytest|(cd libos/test/regression && $env SAGUARO_TESTSET=core $st $PYARGS test_libos.py $KSEL)"
-    for e in bash sqlite python busybox memcached nginx; do
+    for e in bash sqlite python busybox memcached redis lighttpd rust nginx; do
         echo "ex-$e|regression|600|$cpu|exec|(cd CI-Examples/$e && ./exec.sh $EXEC)"
     done
     case $VARIANT in
@@ -215,14 +216,14 @@ steps() {
     local d n
     for d in "$REPO"/CI-Examples/*/exec.sh; do
         n=$(basename "$(dirname "$d")")
-        case $n in helloworld|unit_tests|bash|sqlite|python|busybox|memcached|nginx) continue ;;
+        case $n in helloworld|unit_tests|bash|sqlite|python|busybox|memcached|redis|lighttpd|rust|nginx) continue ;;
             graphics) continue ;;   # needs a display
             vbs) [ "$VARIANT" = vbs ] || continue ;; esac
         # an example that does not offer the variant is skipped, not failed (exec.sh without a backend lists them)
         echo "ex-$n|extended|900|$cpu|exec|(cd CI-Examples/$n && ./exec.sh 2>&1 | grep -q '^  ${EXEC#--}: yes' || { echo '[SKIP] $n: not offered by ${EXEC#--} on this host'; exit 0; }; ./exec.sh $EXEC)"
     done
     case $VARIANT in
-        direct)  # syscall rewriting is for aarch64 and riscv64; on x86_64 its `blob` scenario failed in 20 of 20 runs (rewrite_stress.c:314)
+        direct)  # x86_64 does not rewrite system calls, so the `blob` scenario fails there by design: this step runs on aarch64 and riscv64 only
                  [ "$ARCH" = x86_64 ] || echo "stress-rewrite|extended|1800|-|plain|scripts/stress_rewrite.sh -n 20"
                  echo "prefix-sweep|extended|1800|-|plain|test/direct/direct-prefix-sweep.sh" ;;
     esac
@@ -285,6 +286,11 @@ while IFS='|' read -r name tr tmo vc kind cmd; do
     [ "$kind" = pytest ] && extra=(--junit "$QUICK_JUNIT" --summary-log "$OUT/$name.log")
     [ "$kind" = exec ] && extra=(--exec-log "$OUT/$name.log")
     python3 "${REP[0]}" add "${COMMON[@]}" --vcpus "$vc" --step "$name" --rc "$rc" --secs "$dt" "${extra[@]}"
+    # a log above 5 MB (thread-stress prints a lot) is cut to its last 2000 lines, after the results were read from it
+    if [ "$(stat -c %s "$OUT/$name.log")" -gt 5000000 ]; then
+        { echo "[quick.sh: log cut to its last 2000 lines]"; tail -n 2000 "$OUT/$name.log"; } > "$OUT/$name.log.cut" \
+            && mv "$OUT/$name.log.cut" "$OUT/$name.log"
+    fi
 done < <(selected)
 
 python3 "${REP[0]}" summary "${COMMON[@]}" --vcpus "$VCPUS" --secs $((SECONDS - T0))
