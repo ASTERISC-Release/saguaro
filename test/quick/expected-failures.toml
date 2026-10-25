@@ -43,3 +43,87 @@ variants = ["vm", "sev", "sev-snp"]
 step = "libos-fs"
 test = "TC_10_Tmpfs::test_111_read_write_mmap"
 reason = "under the VM PAL a shared mapping of a tmpfs file does not show what write() wrote just before (measured under saguaro-vm on x86_64; sev uses the same LibOS and PAL); libos/test/fs is in the extended tier only"
+
+[[known]]
+variants = ["vbs"]
+step = "vbs-regress"
+test = "double_fork"
+reason = "fork: VBS has one process per enclave"
+
+[[known]]
+variants = ["vbs"]
+step = "vbs-regress"
+test = "fcntl_lock"
+reason = "fork: the test needs a second process (process creation failed)"
+
+[[known]]
+variants = ["vbs"]
+step = "vbs-regress"
+test = "fdleak"
+reason = "fork: the test needs a second process (process creation failed)"
+
+[[known]]
+variants = ["vbs"]
+step = "vbs-regress"
+test = "flock_lock"
+reason = "fork: the test needs a second process (process creation failed)"
+
+[[known]]
+variants = ["vbs"]
+step = "vbs-regress"
+test = "hostname|localhost"
+reason = "fork: the test starts a second process (process creation failed)"
+
+[[known]]
+variants = ["vbs"]
+step = "vbs-regress"
+test = "kill_all"
+reason = "fork: the test needs child processes (process creation failed)"
+
+[[known]]
+variants = ["vbs"]
+step = "vbs-regress"
+test = "mkfifo"
+reason = "fork: the test needs a second process (process creation failed)"
+
+[[known]]
+variants = ["vbs"]
+step = "vbs-regress"
+test = "open_opath"
+reason = "fork: the test needs a second process (process creation failed)"
+
+[[known]]
+variants = ["vbs"]
+step = "vbs-regress"
+test = "renameat2|tmp|chroot"
+reason = "RENAME_EXCHANGE on a chroot (host) file is not supported by the VBS PAL (renameat2: EXCHANGE on chroot: Operation not supported)"
+
+[[known]]
+variants = ["vbs"]
+step = "vbs-regress"
+test = "shm"
+reason = "fork: the test needs a second process (process creation failed)"
+
+[[known]]
+variants = ["vbs"]
+step = "vbs-regress"
+test = "sid"
+reason = "fork: the test needs a second process (process creation failed)"
+
+[[known]]
+variants = ["vbs"]
+step = "vbs-regress"
+test = "udp"
+reason = "fork: the test needs a second process (process creation failed)"
+
+[[known]]
+variants = ["vbs"]
+step = "vbs-regress"
+test = "uid_gid"
+reason = "the test expects the uid/gid of its own manifest; the shared regress manifest does not set them (UID/effective UID are not equal to the value in the manifest)"
+
+[[known]]
+variants = ["vbs"]
+step = "vbs-regress"
+test = "unix"
+reason = "fork: the test needs a second process (process creation failed)"

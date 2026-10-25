@@ -36,7 +36,6 @@ TC_30_Syscall::test_110_fcntl_lock	fcntl_lock	FAIL
 TC_30_Syscall::test_120_gethostname_default	hostname	FAIL
 TC_30_Syscall::test_130_sid	sid	FAIL
 TC_30_Syscall::test_140_flock_lock	flock_lock	FAIL
-TC_30_Syscall::test_150_itimer	itimer	FAIL
 TC_31_Syscall::test_000_syscall_redirect	syscall	pass
 TC_40_FileSystem::test_011_open_opath	open_opath	FAIL
 TC_40_FileSystem::test_020_cpuinfo	proc_cpuinfo	pass

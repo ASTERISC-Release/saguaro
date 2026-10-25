@@ -74,7 +74,7 @@ data, and `saguaro-vbs verify` checks one on the same machine:
 
 In WSL, after `scripts/install.sh --vbs`:
 
-    test/quick.sh vbs --tier smoke        # the runtime check and CI-Examples/helloworld
+    test/quick.sh vbs --tier smoke        # the runtime check, the core list check and CI-Examples/helloworld
     test/quick.sh vbs                     # the regression tier
 
 The regression tier runs the core programs of the LibOS regression suite that have a VBS case

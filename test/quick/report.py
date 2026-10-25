@@ -4,7 +4,7 @@
 """Results of test/quick.sh: the CSV rows of a step, the one-line summary and the exit status.
 
   report.py add     --out DIR --variant V --arch A --commit C --tier T --vcpus N --step S --rc RC --secs SEC
-                    [--junit FILE | --exec-log FILE | --summary-log FILE]
+                    [--junit FILE | --exec-log FILE | --summary-log FILE | --regress-results FILE]
   report.py summary --out DIR --variant V --arch A --commit C --tier T --vcpus N --secs SEC
 
 results.csv has one row per test (a pytest step: from its JUnit file) or one row per step (any other step):
@@ -100,6 +100,18 @@ def exec_rows(path):
     return rows
 
 
+def regress_rows(path):
+    """(case, result, seconds) from the results.txt of pal/src/host/vbs/test/regress/run-regress.sh: one line per case,
+    `<case>  pass|FAIL  exit=<code> <seconds>s`, then `passed N of M cases`."""
+    rows = []
+    with open(path, errors='replace') as f:
+        for line in f:
+            m = re.match(r'^(\S.*?)\s+(pass|FAIL)\s+exit=\S+\s+([\d.]+)s\s*$', line)
+            if m:
+                rows.append((m.group(1), 'pass' if m.group(2) == 'pass' else 'fail', float(m.group(3))))
+    return rows
+
+
 def summary_rows(path):
     """Rows from the plain pytest output (no JUnit file: the suites run in the RISC-V guest): the FAILED lines
     of -rf and the counts of the last summary line."""
@@ -126,6 +138,8 @@ def cmd_add(args):
             rows = []
     if not rows and args.summary_log and os.path.exists(args.summary_log):
         rows = summary_rows(args.summary_log)
+    if not rows and args.regress_results and os.path.exists(args.regress_results):
+        rows = regress_rows(args.regress_results)
     if not rows and args.exec_log and os.path.exists(args.exec_log):
         rows = exec_rows(args.exec_log)
     if not rows:
@@ -199,6 +213,7 @@ def main():
     parser.add_argument('--junit')
     parser.add_argument('--exec-log')
     parser.add_argument('--summary-log')
+    parser.add_argument('--regress-results')
     args = parser.parse_args()
     {'add': cmd_add, 'summary': cmd_summary}[args.command](args)
 

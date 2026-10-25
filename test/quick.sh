@@ -8,7 +8,7 @@
 #                           [--list] [--dry-run] [--only STEP[,STEP...]]
 #
 #   variant   direct | vm | sev | sev-snp | sgx | vbs | tdx
-#   tier      smoke       about 3 minutes: install check, helloworld, unit_tests examples, two LibOS tests
+#   tier      smoke       about 3 minutes: install check, helloworld, unit_tests examples, two LibOS tests (not on vbs, tdx)
 #             regression  about 20 minutes at most (the default; includes smoke): PAL regression (direct, sgx),
 #                         the LibOS core list (SAGUARO_TESTSET=core, test/quick/core-tests.txt), the examples
 #                         bash sqlite python busybox memcached redis lighttpd rust nginx through their exec.sh, and the steps of
@@ -105,6 +105,8 @@ setup_env() {
         sev)     export SAGUARO_SEV_MODE=sev ;;
         sev-snp) export SAGUARO_SEV_MODE=snp ;;
     esac
+    # the VBS examples need saguaro-vbs (~/.local/bin) and, for rust, cargo (~/.cargo/bin), which a non-login shell lacks
+    [ "$VARIANT" != vbs ] || export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
     export EXEC_LOG_DIR=${EXEC_LOG_DIR:-$OUT/exec-logs}
 }
 
@@ -168,10 +170,12 @@ steps() {
     fi
     if [ "$VARIANT" = vbs ]; then
         echo "install-check|smoke|60|-|plain|test -e build-vbs/runtime.stamp"
+        echo "check-core-list|smoke|60|-|plain|python3 test/quick/check-core-list.py"
         echo "ex-helloworld|smoke|900|-|exec|(cd CI-Examples/helloworld && ./exec.sh $EXEC)"
+        echo "ex-unit_tests|smoke|600|-|exec|(cd CI-Examples/unit_tests && ./exec.sh $EXEC)"   # every program: [SKIP] (no VBS build)
         [ "$TIER" = smoke ] && return
         local names; names=$(grep -v '^#' "$Q/vbs-core.txt" | cut -f2 | sort -u | paste -sd'|')
-        echo "vbs-regress|regression|1500|-|plain|pal/src/host/vbs/test/regress/run-regress.sh \"\$QUICK_OUT/vbs-regress\" '^($names)(\\||\$)'"
+        echo "vbs-regress|regression|1500|-|regress|pal/src/host/vbs/test/regress/run-regress.sh \"\$QUICK_OUT/vbs-regress\" '^($names)(\\||\$)'"
         for e in busybox sqlite python redis lighttpd rust; do echo "ex-$e|regression|900|-|exec|(cd CI-Examples/$e && ./exec.sh $EXEC)"; done
         echo "ex-vbs|regression|600|-|exec|(cd CI-Examples/vbs && ./exec.sh $EXEC)"
         [ "$TIER" = regression ] && return
@@ -305,6 +309,7 @@ while IFS='|' read -r name tr tmo vc kind cmd; do
     extra=()
     [ "$kind" = pytest ] && extra=(--junit "$QUICK_JUNIT" --summary-log "$OUT/$name.log")
     [ "$kind" = exec ] && extra=(--exec-log "$OUT/$name.log")
+    [ "$kind" = regress ] && extra=(--regress-results "$OUT/$name/results.txt")
     python3 "${REP[0]}" add "${COMMON[@]}" --vcpus "$vc" --step "$name" --rc "$rc" --secs "$dt" "${extra[@]}"
     # a log above 5 MB (thread-stress prints a lot) is cut to its last 2000 lines, after the results were read from it
     if [ "$(stat -c %s "$OUT/$name.log")" -gt 5000000 ]; then

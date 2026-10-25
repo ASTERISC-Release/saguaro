@@ -16,7 +16,7 @@ The VM variants need a user that may run `saguaro-vm` (root in the container of 
 
 | Tier | Budget (the test run only: the install, the build and the RISC-V guest boot are not counted) | What runs |
 |---|---|---|
-| `smoke` | about 3 minutes | install check, `check-core-list`, `helloworld`, the `unit_tests` examples (mremap, thread-tls, thread-rwlock, thread-stress, networks), two LibOS tests (`202_fork_and_exec`, `600_multi_pthread`). tdx: the compile job. |
+| `smoke` | about 3 minutes | install check, `check-core-list`, `helloworld`, the `unit_tests` examples (mremap, thread-tls, thread-rwlock, thread-stress, networks), two LibOS tests (`202_fork_and_exec`, `600_multi_pthread`). vbs: no LibOS tests, and every `unit_tests` program is skipped (no VBS build). tdx: the compile job. |
 | `regression` (the default) | 20 minutes per variant | `smoke`, then `pal` (direct and sgx: the PAL regression), `libos-core` (the 127 ids of `test/quick/core-tests.txt`), the examples `bash sqlite python busybox memcached redis lighttpd rust nginx` through their `exec.sh`, and the steps of the variant (below). |
 | `extended` | hours; nightly or by hand | the full LibOS suite, the vCPU sweep, the loops, the stress tests, `libos/test/fs`, `libos/test/abi`, `test/unit`, every example that has an `exec.sh`, LTP. |
 
@@ -38,16 +38,22 @@ Steps of the variants in `regression`, besides the common ones:
 | Variant | Extra steps |
 |---|---|
 | `direct` | `unit` (`test/unit`) |
-| `vm` | `vm-net` (`test/vm/test-vm.sh loopback outbound guest-loopback`), `vm-multiproc` (`test/vm/multiproc/check-probes.sh spawn signals forks misc sysv`; x86_64 only) |
+| `vm` | `vm-net` (`test/vm/test-vm.sh loopback outbound`), `vm-multiproc` (`test/vm/multiproc/check-probes.sh spawn signals forks misc sysv`; x86_64 only) |
 | `sev`, `sev-snp` | `sev-suite` (`test/sev/test-sev.sh --vcpus 2`), `vm-multiproc`; `sev-snp` also `libos-snp-attest` |
 | `sgx` | `libos-sgx-only` (file check policy, CPUID and RDTSC under SGX, sealed and MRENCLAVE tests), `unit` (with `test_sgx_sign.py`) |
-| `vbs` | `vbs-regress` (the core programs that have a VBS case, `test/quick/vbs-core.txt`), the examples `busybox sqlite python redis lighttpd rust` and `CI-Examples/vbs`; no LibOS pytest |
+| `vbs` | `vbs-regress` (the core programs that have a VBS case, `test/quick/vbs-core.txt`, one result row per case; the failures that need `fork` or host devices are known failures), the examples `busybox sqlite python redis lighttpd rust` and `CI-Examples/vbs`; no LibOS pytest |
 | `tdx` | `tdx-build` only: the TDX PAL cannot run without TDX hardware |
 
 `extended` adds `libos-fs` (`libos/test/fs`), `libos-abi` (`libos/test/abi`, x86_64 direct), `ex-<name>` for
 every other example, `stress-rewrite` (aarch64 and riscv64 only: x86_64 does not rewrite system calls, so its `blob` scenario fails there by design) and `prefix-sweep` (direct), and on the VM variants `vm-net-all`,
 `vm-multiproc-all` (the probes `libos examples redis` as well), `vm-sig-loop`, `vm-boot-loop`, `vm-stress`
 (below) and `ltp`. An example that does not offer the variant is reported as `skip`.
+
+Two steps are left out of the tiers on purpose. `guest-loopback` (in `vm-net-all`) hung for its 120 s limit on a hosted
+x86_64 runner, where `loopback` and `outbound` passed; the cause is not known, and it passes on a development PC. Under
+QEMU software emulation (TCG, the aarch64 `vm` on a host without KVM) the `thread-stress` program of `unit_tests` needs
+about 15 minutes, so `smoke` and `regression` skip it there (`UNIT_TESTS_SKIP`, `CI-Examples/unit_tests/exec.sh`) and
+`extended` runs it as `ex-thread-stress`.
 
 `test/quick.sh direct --target riscv64` runs the direct variant in the RISC-V guest of
 `scripts/riscv64/guest.sh` (inside the cross container; `Documentation/quickstart/riscv.md`).
@@ -58,7 +64,8 @@ every other example, `stress-rewrite` (aarch64 and riscv64 only: x86_64 does not
 
 - `results.csv`, one row per test (a pytest step, from its JUnit file), per example (the `[PASS]` lines of
   `exec.sh`) or per step: `variant,arch,commit,tier,step,test,result,seconds,vcpus`. `result` is `pass`,
-  `fail`, `skip`, `xfail` or `known-fail`; `vcpus` is `-` for a variant without a vCPU count.
+  `fail`, `skip`, `xfail`, `xpass` (a test that `vm_skip.toml` expects to fail passed; it counts as a pass in
+  `summary.txt`, which also gives `xpass=N`, and as an xfail in the comparison with `expected.csv`) or `known-fail`; `vcpus` is `-` for a variant without a vCPU count.
 - `summary.txt`, one line: `QUICK variant=vm arch=x86_64 tier=regression vcpus=2 commit=... pass=N fail=N skip=N xfail=N known=N secs=N status=PASS`.
   Keep it for a release or a pull request, in particular for the variants without CI (sev, sev-snp, sgx, vbs).
 - `<step>.log` and `<step>.xml`: the raw output and the JUnit file of every step.
