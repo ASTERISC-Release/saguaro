@@ -32,6 +32,8 @@ loader.env.DISPLAY = "2:0"
 vm.net.direct_vsock_ports = [6000]
 loader.env.IVSHMEM_SAGUARO_VM = "1"
 loader.env.HOST_SDL_WINDOW = "1"
+# Quake II runs about 30% slower with Mesa's threaded context; the other graphics examples gain from it
+loader.env.GALLIUM_THREAD = "0"
 loader.env.GLIBC_TUNABLES = "glibc.pthread.rseq=0"
 loader.env.__GL_SYNC_TO_VBLANK = "0"
 loader.env.vblank_mode = "0"
