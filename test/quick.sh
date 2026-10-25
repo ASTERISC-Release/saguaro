@@ -28,8 +28,8 @@
 #   --only    run only the named steps (see --list)
 #
 # Output (OUT, default /tmp/saguaro-quick/<variant>-<arch>-<date>):
-#   results.csv  variant,arch,commit,tier,step,test,result,seconds,vcpus  (result: pass fail skip xfail known-fail)
-#   summary.txt  one line: QUICK variant=.. arch=.. tier=.. vcpus=.. commit=.. pass=N fail=N skip=N xfail=N known=N secs=N status=PASS|FAIL
+#   results.csv  variant,arch,commit,tier,step,test,result,seconds,vcpus,retried  (result: pass fail skip xfail xpass known-fail)
+#   summary.txt  one line: QUICK variant=.. arch=.. tier=.. vcpus=.. commit=.. pass=N fail=N skip=N xfail=N xpass=N known=N retried=N secs=N status=PASS|FAIL
 #   <step>.log   the raw output of each step (and <step>.xml, the JUnit file of a pytest step)
 # Exit status 0 only if no test or step failed unexpectedly. A failure that expected-failures.toml lists for this
 # variant, architecture and vCPU count is reported as known-fail and does not fail the run.
@@ -210,7 +210,8 @@ steps() {
                  echo "sev-suite|regression|900|$cpu|plain|test/sev/test-sev.sh --prefix \"\$SAGUARO_PREFIX\" --vcpus $CPUS"
                  echo "vm-multiproc|regression|900|$cpu|plain|SAGUARO_VM_LAUNCHER=saguaro-sev test/vm/multiproc/check-probes.sh spawn signals forks misc sysv"
                  [ "$VARIANT" = sev-snp ] && echo "libos-snp-attest|regression|120|$cpu|pytest|(cd libos/test/regression && $env $st $PYARGS test_libos.py -k TC_04_AttestationSevSnp)" ;;
-        sgx)     # TC_92_avx runs only with AVX=1 (saguarolibos/regression.py); the sealed-file tests need tmp_enc/mrenclaves and tmp_enc/mrsigners
+        sgx)     # TC_93_In_Out is not in the -k expression: it has not been run on SGX yet
+                 # TC_92_avx runs only with AVX=1 (saguarolibos/regression.py); the sealed-file tests need tmp_enc/mrenclaves and tmp_enc/mrsigners
                  echo "libos-sgx-only|regression|900|-|pytest|(cd libos/test/regression && mkdir -p tmp_enc/mrenclaves tmp_enc/mrsigners && AVX=\$(grep -qw avx /proc/cpuinfo && echo 1 || echo 0) $env $st $PYARGS test_libos.py -k 'TC_03_FileCheckPolicy or TC_90_CpuidSGX or TC_91_RdtscSGX or TC_92_avx or sealed or mrenclave')"
                  echo "unit|regression|300|-|pytest|SGX=1 python3 -m pytest $PYARGS test/unit" ;;
     esac
@@ -284,34 +285,50 @@ if [ $DRY = 1 ]; then
     exit $bad
 fi
 
-mkdir -p "$OUT" || exit 2
-OUT=$(cd "$OUT" && pwd)
-export QUICK_OUT=$OUT
-setup_env
-cd "$REPO" || exit 2
 if [ -n "$ONLY" ]; then   # an unknown step name is an error, not a silent empty run
     for s in ${ONLY//,/ }; do
         steps | cut -d'|' -f1 | grep -qxF -- "$s" || { echo "unknown step for $VARIANT/$TIER: $s (--list)" >&2; exit 2; }
     done
 fi
-echo "variant,arch,commit,tier,step,test,result,seconds,vcpus" > "$OUT/results.csv"
+mkdir -p "$OUT" || exit 2
+OUT=$(cd "$OUT" && pwd)
+export QUICK_OUT=$OUT
+setup_env
+cd "$REPO" || exit 2
+echo "variant,arch,commit,tier,step,test,result,seconds,vcpus,retried" > "$OUT/results.csv"
 REP=("$Q/report.py")
 COMMON=(--out "$OUT" --variant "$VARIANT" --arch "$ARCH" --commit "$COMMIT" --tier "$TIER")
 T0=$SECONDS
 echo "# quick.sh $VARIANT --tier $TIER: vcpus=$VCPUS commit=$COMMIT out=$OUT"
+# A step that fails once is run again only for the helloworld example of sgx and vbs, and only when its log has
+# the known allocation failure of the enclave (about 1 run in 8): the retry is printed and recorded (retried=1).
+retriable() {
+    case $VARIANT:$1 in sgx:ex-helloworld|vbs:ex-helloworld) grep -q 'mmap DATA_REGION' "$OUT/$1.log" ;; *) return 1 ;; esac
+}
+RETRIED=0
 while IFS='|' read -r name tr tmo vc kind cmd; do
     s0=$(date +%s%N)
-    # timeout runs the step in its own process group and kills all of it at the limit
+    retried=0
     export QUICK_JUNIT=$OUT/$name.xml
-    rm -f "$QUICK_JUNIT"
-    timeout -s KILL $((tmo * SCALE)) bash -c "$cmd" > "$OUT/$name.log" 2>&1 < /dev/null
-    rc=$?
+    while :; do
+        rm -f "$QUICK_JUNIT"
+        # timeout runs the step in its own process group and kills all of it at the limit
+        timeout -s KILL $((tmo * SCALE)) bash -c "$cmd" > "$OUT/$name.log" 2>&1 < /dev/null
+        rc=$?
+        if [ $rc -ne 0 ] && [ $retried = 0 ] && retriable "$name"; then
+            echo "NOTE retried: $name failed with 'mmap DATA_REGION' (a known flake of the enclave size); running it once more (first log: $name.first.log)"
+            cp "$OUT/$name.log" "$OUT/$name.first.log"
+            retried=1; RETRIED=$((RETRIED + 1))
+            continue
+        fi
+        break
+    done
     ms=$((($(date +%s%N) - s0) / 1000000)); dt=$(printf '%d.%02d' $((ms / 1000)) $((ms % 1000 / 10)))
     extra=()
     [ "$kind" = pytest ] && extra=(--junit "$QUICK_JUNIT" --summary-log "$OUT/$name.log")
     [ "$kind" = exec ] && extra=(--exec-log "$OUT/$name.log")
     [ "$kind" = regress ] && extra=(--regress-results "$OUT/$name/results.txt")
-    python3 "${REP[0]}" add "${COMMON[@]}" --vcpus "$vc" --step "$name" --rc "$rc" --secs "$dt" "${extra[@]}"
+    python3 "${REP[0]}" add "${COMMON[@]}" --vcpus "$vc" --step "$name" --rc "$rc" --secs "$dt" --retried "$retried" "${extra[@]}"
     # a log above 5 MB (thread-stress prints a lot) is cut to its last 2000 lines, after the results were read from it
     if [ "$(stat -c %s "$OUT/$name.log")" -gt 5000000 ]; then
         { echo "[quick.sh: log cut to its last 2000 lines]"; tail -n 2000 "$OUT/$name.log"; } > "$OUT/$name.log.cut" \

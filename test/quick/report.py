@@ -8,7 +8,9 @@
   report.py summary --out DIR --variant V --arch A --commit C --tier T --vcpus N --secs SEC
 
 results.csv has one row per test (a pytest step: from its JUnit file) or one row per step (any other step):
-  variant,arch,commit,tier,step,test,result,seconds,vcpus
+  variant,arch,commit,tier,step,test,result,seconds,vcpus,retried
+  (retried is 1 for a step that quick.sh ran twice: only the helloworld example of sgx and vbs, on a known
+  allocation failure of the enclave; the retry is printed and counted in the summary)
 result is pass, fail, skip, xfail, xpass or known-fail. A failure is known-fail, and does not make the run fail,
 only if expected-failures.toml has an entry that matches exactly: the variant is in `variants`, the
 architecture is `arch` (when given), the vCPU count is in `vcpus` (when given), the step is `step` (when
@@ -158,7 +160,7 @@ def cmd_add(args):
                 result = 'xpass'    # expected to fail (vm_skip.toml) but passed: flaky; reported, not a failure
             counts[result] += 1
             writer.writerow([args.variant, args.arch, args.commit, args.tier, args.step, test, result,
-                             f'{secs:.2f}', args.vcpus])
+                             f'{secs:.2f}', args.vcpus, args.retried])
     print('{:<22} rc={:<3} {:>5}s  pass={pass} fail={fail} skip={skip} xfail={xfail} xpass={xpass} known={known-fail}'.format(
         args.step, args.rc, args.secs, **counts))
 
@@ -176,15 +178,18 @@ def expected_counts(args):
 def cmd_summary(args):
     totals = dict.fromkeys(['pass', 'fail', 'skip', 'xfail', 'xpass', 'known-fail'], 0)
     core = dict.fromkeys(totals, 0)
+    retried = set()
     with open(os.path.join(args.out, 'results.csv'), newline='') as f:
         for row in csv.DictReader(f):
             totals[row['result']] += 1
+            if row['retried'] == '1':
+                retried.add(row['step'])
             if row['step'] == 'libos-core':
                 core[row['result']] += 1
     status = 'PASS' if totals['fail'] == 0 else 'FAIL'
     line = (f"QUICK variant={args.variant} arch={args.arch} tier={args.tier} vcpus={args.vcpus} "
             f"commit={args.commit} pass={totals['pass'] + totals['xpass']} fail={totals['fail']} skip={totals['skip']} "
-            f"xfail={totals['xfail']} xpass={totals['xpass']} known={totals['known-fail']} secs={args.secs} status={status}")
+            f"xfail={totals['xfail']} xpass={totals['xpass']} known={totals['known-fail']} retried={len(retried)} secs={args.secs} status={status}")
     with open(os.path.join(args.out, 'summary.txt'), 'w') as f:
         f.write(line + '\n')
     print(line)
@@ -210,6 +215,7 @@ def main():
     parser.add_argument('--step', default='')
     parser.add_argument('--rc', type=int, default=0)
     parser.add_argument('--secs', default='0')
+    parser.add_argument('--retried', default='0')
     parser.add_argument('--junit')
     parser.add_argument('--exec-log')
     parser.add_argument('--summary-log')
