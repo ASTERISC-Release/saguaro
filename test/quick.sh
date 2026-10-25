@@ -108,6 +108,17 @@ setup_env() {
     export EXEC_LOG_DIR=${EXEC_LOG_DIR:-$OUT/exec-logs}
 }
 
+# QEMU software emulation (TCG) is the accelerator of the aarch64 vm PAL when there is no usable /dev/kvm (or
+# SAGUARO_ACCEL names another one); the same test as exec_accel in CI-Examples/common_tools/exec-common.sh
+tcg() {
+    [ "$VARIANT" = vm ] && [ "$ARCH" = aarch64 ] || return 1
+    case ${SAGUARO_ACCEL:-} in
+        kvm*) return 1 ;;
+        ?*)   return 0 ;;
+    esac
+    ! { [ -r /dev/kvm ] && [ -w /dev/kvm ]; }
+}
+
 # Environment of the pytest suites: the launcher is chosen by the environment, as in the CI workflows.
 libos_env() {
     case $VARIANT in
@@ -118,7 +129,8 @@ libos_env() {
 }
 # $QUICK_JUNIT is the JUnit file of the step (set by the loop below); the string is expanded when the step runs
 PYARGS='-q -rfEsxX --tb=short -p no:cacheprovider --junitxml=$QUICK_JUNIT -o junit_logging=no'
-KSEL=${QUICK_PYTEST_K:+-k "not ($QUICK_PYTEST_K)"}
+# the -k expression is quoted for the `bash -c` that runs the step (it has spaces and parentheses)
+KSEL=; [ -z "${QUICK_PYTEST_K:-}" ] || KSEL=$(printf -- '-k %q' "not ($QUICK_PYTEST_K)")
 
 # Steps: "name|tier|timeout-seconds|vcpus|kind|command"; tier is the lowest tier that runs the step
 # (smoke < regression < extended); kind is pytest (a JUnit file gives one row per test), exec (the [PASS] and
@@ -171,7 +183,9 @@ steps() {
     echo "install-check|smoke|60|$cpu|plain|command -v $LAUNCH saguaro-manifest saguaro-test && python3 -c 'import saguarolibos'"
     echo "check-core-list|smoke|60|-|plain|python3 test/quick/check-core-list.py"
     echo "ex-helloworld|smoke|300|$cpu|exec|(cd CI-Examples/helloworld && ./exec.sh $EXEC)"
-    echo "ex-unit_tests|smoke|600|$cpu|exec|(cd CI-Examples/unit_tests && ./exec.sh $EXEC)"      # mremap, thread-tls/rwlock/stress, networks
+    # thread-stress takes about 15 minutes under TCG: the extended tier runs it there (ex-thread-stress)
+    local skip=; tcg && skip="UNIT_TESTS_SKIP=thread-stress "
+    echo "ex-unit_tests|smoke|600|$cpu|exec|(cd CI-Examples/unit_tests && ${skip}./exec.sh $EXEC)"      # mremap, thread-tls/rwlock/stress, networks
     echo "libos-smoke|smoke|300|$cpu|pytest|(cd libos/test/regression && $env $st $PYARGS test_libos.py -k 'test_202_fork_and_exec or test_600_multi_pthread')"
     [ "$TIER" = smoke ] && return
 
@@ -185,7 +199,7 @@ steps() {
     done
     case $VARIANT in
         direct)  echo "unit|regression|300|-|pytest|python3 -m pytest $PYARGS test/unit" ;;
-        vm)      echo "vm-net|regression|600|$cpu|plain|test/vm/test-vm.sh --prefix \"\$SAGUARO_PREFIX\" loopback outbound guest-loopback"
+        vm)      echo "vm-net|regression|600|$cpu|plain|test/vm/test-vm.sh --prefix \"\$SAGUARO_PREFIX\" loopback outbound"        # guest-loopback: extended (it hung on a hosted runner)
                  # the multi-process mode of the VM PAL (sys.experimental__multiprocess) is x86_64 only
                  [ "$ARCH" = x86_64 ] && echo "vm-multiproc|regression|900|$cpu|plain|test/vm/multiproc/check-probes.sh spawn signals forks misc sysv" ;;
         sev|sev-snp)
@@ -210,6 +224,7 @@ steps() {
     case $VARIANT in vm|sev|sev-snp)
         echo "unit|extended|300|-|pytest|python3 -m pytest $PYARGS test/unit" ;;
     esac
+    tcg && echo "ex-thread-stress|extended|3600|$cpu|exec|(cd CI-Examples/unit_tests && EXEC_TIMEOUT=3000 UNIT_TESTS_ONLY=thread-stress ./exec.sh $EXEC)"
     echo "libos-fs|extended|900|$cpu|pytest|(cd libos/test/fs && $env $st $PYARGS test_fs.py test_tmpfs.py)"
     [ "$ARCH" = x86_64 ] && [ $VMLIKE = 0 ] && [ "$VARIANT" = direct ] \
         && echo "libos-abi|extended|300|-|pytest|(cd libos/test/abi/x86_64 && $st $PYARGS test_entrypoint.py)"
@@ -255,8 +270,13 @@ if [ $LIST = 1 ]; then
 fi
 if [ $DRY = 1 ]; then
     echo "# dry run: variant=$VARIANT arch=$ARCH tier=$TIER vcpus=$VCPUS prefix=${PREFIX:-none} out=$OUT"
-    selected | while IFS='|' read -r n tr t v k c; do echo "DRY  $n (timeout $((t * SCALE))s, vcpus $v, $k): $c"; done
-    exit 0
+    bad=0
+    while IFS='|' read -r n tr t v k c; do
+        # every command must parse as shell (a quoting bug in a step would fail only when the step runs)
+        if bash -n -c "$c" 2> /dev/null; then ok=ok; else ok="SYNTAX ERROR"; bad=1; fi
+        echo "DRY  $n (timeout $((t * SCALE))s, vcpus $v, $k, syntax $ok): $c"
+    done < <(selected)
+    exit $bad
 fi
 
 mkdir -p "$OUT" || exit 2

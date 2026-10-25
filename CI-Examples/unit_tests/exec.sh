@@ -5,6 +5,10 @@
 # ../common_tools/exec-common.sh): each is built and run in its own directory and passes on exit status 0
 # (and its expected output, if it has one). align_test/ is not a test (it prints pointers and waits).
 #
+# UNIT_TESTS_SKIP="name ..." leaves the named tests out (reported as [SKIP]); UNIT_TESTS_ONLY="name ..." runs only
+# those. test/quick.sh uses them to keep thread-stress, which is far too slow under QEMU software emulation (TCG),
+# out of the smoke and regression tiers.
+#
 # Each entry: directory, name, program built by make, manifest, what the runner is given, expected output.
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 TESTS=(
@@ -18,6 +22,11 @@ TESTS=(
 failed=0
 for t in "${TESTS[@]}"; do
     IFS='|' read -r dir name binary manifest program expect <<<"$t"
+    if [ -n "${UNIT_TESTS_ONLY:-}" ] && [[ " $UNIT_TESTS_ONLY " != *" $name "* ]]; then continue; fi
+    if [[ " ${UNIT_TESTS_SKIP:-} " == *" $name "* ]]; then
+        echo "[SKIP] unit_tests-$name: left out by UNIT_TESTS_SKIP"
+        continue
+    fi
     (
         EXEC_DIR=$HERE/$dir
         EXAMPLE_NAME=unit_tests-$name
