@@ -27,6 +27,11 @@ each except `python` 3 s); `vm` smoke 26 s, `vm` regression 267 to 296 s (`libos
 builds the examples (busybox, memcached, nginx and lighttpd download and compile their sources: 62 s for the
 first `direct` regression run, of which `lighttpd` 23 s). `vm` extended steps: the full LibOS suite 167 s at 2
 vCPUs (244 s at 1, 167 s at 4), `vm-stress` 163 s, `vm-sig-loop` 157 s, `vm-boot-loop` 169 s, `libos-fs` 61 s.
+On an AMD SEV host (8G guests, examples already built unless stated): `sev-snp` smoke 46 s, `sev-snp` regression
+907 s including the first build of the examples (about 200 s; `libos-core` 431 s, `sev-suite` 103 s,
+`vm-multiproc` 61 s); plain `sev` smoke 78 s, `sev` regression 1362 s (`libos-core` 961 s, `sev-suite` 113 s,
+`vm-multiproc` 103 s), over the 20-minute budget: a plain-SEV guest takes about 7.5 s to start at 8G (3.3 s under
+SNP), and `libos-core` is where it adds up. Extended `sev-snp`: `libos-full-2vcpu` 617 s, `vm-stress` 181 s.
 
 The VM-based variants (`vm`, `sev`, `sev-snp`) run `smoke` and `regression` with exactly 2 vCPUs
 (`SAGUARO_CPU_NUM=2`; `--vcpus` changes it) and 8G of RAM (`SAGUARO_RAM_SIZE`): there is no sweep in these

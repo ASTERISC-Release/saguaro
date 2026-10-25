@@ -276,6 +276,11 @@ if [ $LIST = 1 ]; then
 fi
 if [ $DRY = 1 ]; then
     echo "# dry run: variant=$VARIANT arch=$ARCH tier=$TIER vcpus=$VCPUS prefix=${PREFIX:-none} out=$OUT"
+    # the environment setup_env exports for every step (not shown in the commands below)
+    env_line="SAGUARO_PREFIX=${PREFIX:-none}"
+    [ $VMLIKE = 1 ] && env_line="$env_line SAGUARO_CPU_NUM=$CPUS SAGUARO_RAM_SIZE=${SAGUARO_RAM_SIZE:-8G}"
+    case $VARIANT in sev) env_line="$env_line SAGUARO_SEV_MODE=sev" ;; sev-snp) env_line="$env_line SAGUARO_SEV_MODE=snp" ;; esac
+    echo "# environment: $env_line"
     bad=0
     while IFS='|' read -r n tr t v k c; do
         # every command must parse as shell (a quoting bug in a step would fail only when the step runs)
