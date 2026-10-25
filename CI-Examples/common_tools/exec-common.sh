@@ -113,12 +113,16 @@ backend_unavailable() {
     if [ "$b" = sev ] && [ "$(exec_host_arch)" != x86_64 ]; then
         echo "SEV needs an x86_64 host"; return 0
     fi
-    if [ "$b" = sev ]; then
+    if [ "$b" = sev ] && [ "${SAGUARO_ACCEL:-kvm}" = tcg ]; then
+        # the emulated SEV of QEMU TCG (test/quick.sh sev-emu): no device, but the QEMU that emulates it
+        [ -x "${QEMU_PATH:-}" ] || { echo "the emulated SEV needs QEMU_PATH to name the QEMU with the sev-emu objects (SAGUARO_EMU_QEMU of test/quick.sh)"; return 0; }
+    elif [ "$b" = sev ]; then
         [ -e /dev/sev ] || { echo "no SEV device (/dev/sev) on this host"; return 0; }
         [ -r /dev/sev ] && [ -w /dev/sev ] || { echo "no read/write access to /dev/sev"; return 0; }
     fi
-    # the aarch64 launcher falls back to software emulation (TCG) without /dev/kvm; x86_64 and SEV need KVM
-    if [ "$b" = sev ] || { [ "$b" = vm ] && [ "$(uname -m)" != aarch64 ]; }; then
+    # the aarch64 launcher falls back to software emulation (TCG) without /dev/kvm; x86_64 and SEV need KVM,
+    # unless SAGUARO_ACCEL=tcg asks for the software emulation explicitly
+    if [ "${SAGUARO_ACCEL:-kvm}" != tcg ] && { [ "$b" = sev ] || { [ "$b" = vm ] && [ "$(uname -m)" != aarch64 ]; }; }; then
         [ -r /dev/kvm ] && [ -w /dev/kvm ] || { echo "no read/write access to /dev/kvm"; return 0; }
     fi
     [ -x "$prefix/bin/$runner" ] || { echo "$runner not installed in $prefix (scripts/install.sh)"; return 0; }
