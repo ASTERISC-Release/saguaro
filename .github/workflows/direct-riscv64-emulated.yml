@@ -21,7 +21,7 @@ on:
         required: false
         default: "regression"
       examples:
-        description: "examples of the regression tier, built in the guest (slow: the default is python only; the full set is: bash sqlite python busybox memcached nginx)"
+        description: "examples of the regression tier, built in the guest (slow: the default is python only; the full set is: bash sqlite python busybox memcached redis lighttpd rust nginx)"
         required: false
         default: "python"
 

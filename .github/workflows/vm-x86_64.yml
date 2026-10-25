@@ -9,7 +9,7 @@
 #
 #   x86_64-vm   builds the vm PAL on a hosted x86_64 runner, checks the inbound relay with Redis, and runs
 #               test/quick.sh vm: the regression tier by default (smoke tests, the LibOS core list under the
-#               VM harness, six examples, the VM network suites and the multi-process probes, at 2 vCPUs;
+#               VM harness, nine examples, the VM network suites and the multi-process probes, at 2 vCPUs;
 #               test/README.md). The tier input selects smoke or extended (the full suite, the vCPU sweep,
 #               loops and the stress tests of test/vm/stress).
 #
@@ -114,8 +114,8 @@ jobs:
         env:
           TIER: ${{ inputs.tier || 'regression' }}   # via env, never interpolated into the script text
         run: |
-          # the rust example (extended tier only) needs rustup
-          if [ "$TIER" = extended ]; then INSTALL_RUSTUP=1 scripts/dependencies.sh; else scripts/dependencies.sh; fi
+          # the rust example needs rustup
+          INSTALL_RUSTUP=1 scripts/dependencies.sh
 
       - name: Regression tests (test/quick.sh vm)
         env:

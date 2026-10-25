@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
     inputs:
       tier:
-        description: "test/quick.sh tier: smoke, regression (the PAL suite, the LibOS core list, six examples, test/unit) or extended (the long suites, all examples)"
+        description: "test/quick.sh tier: smoke, regression (the PAL suite, the LibOS core list, nine examples, test/unit) or extended (the long suites, all examples)"
         type: choice
         options:
           - smoke
@@ -50,8 +50,8 @@ jobs:
         env:
           TIER: ${{ inputs.tier || 'regression' }}   # via env, never interpolated into the script text
         run: |
-          # the rust example (extended tier only) needs rustup
-          if [ "$TIER" = extended ]; then INSTALL_RUSTUP=1 scripts/dependencies.sh; else scripts/dependencies.sh; fi
+          # the rust example needs rustup
+          INSTALL_RUSTUP=1 scripts/dependencies.sh
 
       - name: Build and install Saguaro (direct PAL)
         run: scripts/install.sh --prefix "$SAGUARO_PREFIX"

@@ -78,8 +78,8 @@ jobs:
         env:
           TIER: ${{ inputs.tier || 'regression' }}   # via env, never interpolated into the script text
         run: |
-          # the rust example (extended tier only) needs rustup
-          if [ "$TIER" = extended ]; then INSTALL_RUSTUP=1 scripts/dependencies.sh; else scripts/dependencies.sh; fi
+          # the rust example needs rustup
+          INSTALL_RUSTUP=1 scripts/dependencies.sh
 
       - name: Regression tests (test/quick.sh vm)
         env:
