@@ -33,6 +33,15 @@ On an AMD SEV host (8G guests, examples already built unless stated): `sev-snp` 
 `vm-multiproc` 103 s), over the 20-minute budget: a plain-SEV guest takes about 7.5 s to start at 8G (3.3 s under
 SNP), and `libos-core` is where it adds up. Extended `sev-snp`: `libos-full-2vcpu` 617 s, `vm-stress` 181 s.
 
+`sev` and `sev-snp` under `SAGUARO_ACCEL=tcg` (the emulated SEV of QEMU TCG, below; the results say `sev-emu`): `smoke` adds the SEV
+smoke suite of the mode (`sev-smoke`: hello at 1, 2 and 4 vCPUs and the vsock
+loopback), `regression` adds only `libos-core`; the examples and `vm-multiproc` are in its `extended` tier.
+Measured (QEMU TCG, 2 vCPUs, examples built): `sev-emu` smoke 42 s (`sev-smoke` 9 s, `unit_tests` 16 s), `sev-emu` regression 338 s (`libos-core` 294 s: 120 pass, 4 skip,
+2 xfail, 1 known). A hosted 4-vCPU runner is about twice as slow per boot, so the regression tier is expected
+to take 10 to 12 minutes there; `QUICK_PYTEST_K` can leave out the slowest tests (`test_401_exit_group` 12 s,
+`test_220_send_handle`, `test_076_timerfd`, `test_110_fcntl_lock`, `test_041_futex_timeout`) if a shorter
+run is wanted.
+
 The VM-based variants (`vm`, `sev`, `sev-snp`) run `smoke` and `regression` with exactly 2 vCPUs
 (`SAGUARO_CPU_NUM=2`; `--vcpus` changes it) and 8G of RAM (`SAGUARO_RAM_SIZE`): there is no sweep in these
 tiers. The `extended` tier keeps it, and the step names say the count: `libos-full-2vcpu`,
@@ -45,6 +54,7 @@ Steps of the variants in `regression`, besides the common ones:
 | `direct` | `unit` (`test/unit`) |
 | `vm` | `vm-net` (`test/vm/test-vm.sh loopback outbound`), `vm-multiproc` (`test/vm/multiproc/check-probes.sh spawn signals forks misc sysv`; x86_64 only) |
 | `sev`, `sev-snp` | `sev-suite` (`test/sev/test-sev.sh --vcpus 2`), `vm-multiproc`; `sev-snp` also `libos-snp-attest` |
+| `sev`, `sev-snp` under `SAGUARO_ACCEL=tcg` | none in `regression` (the hosted-runner budget); `smoke` has `sev-smoke`, `extended` the nine examples, `vm-multiproc` and `sev-smoke-1vcpu` |
 | `sgx` | `libos-sgx-only` (file check policy, CPUID and RDTSC under SGX, sealed and MRENCLAVE tests), `unit` (with `test_sgx_sign.py`) |
 | `vbs` | `vbs-regress` (the core programs that have a VBS case, `test/quick/vbs-core.txt`, one result row per case; the failures that need `fork` or host devices are known failures), the examples `busybox sqlite python redis lighttpd rust` and `CI-Examples/vbs`; no LibOS pytest |
 | `tdx` | `tdx-build` only: the TDX PAL cannot run without TDX hardware |
@@ -62,6 +72,25 @@ about 15 minutes, so `smoke` and `regression` skip it there (`UNIT_TESTS_SKIP`, 
 
 `test/quick.sh direct --target riscv64` runs the direct variant in the RISC-V guest of
 `scripts/riscv64/guest.sh` (inside the cross container; `Documentation/quickstart/riscv.md`).
+
+## The emulated SEV (`SAGUARO_ACCEL=tcg`)
+
+`SAGUARO_ACCEL=tcg QEMU_PATH=<qemu> test/quick.sh sev|sev-snp` runs the SEV PAL (`saguaro-sev`, the same install as `sev`) on a host without SEV
+hardware and without KVM: QEMU's software emulation (TCG) with the `sev-emu` and `sev-snp-emu` objects of the
+`dev-sev` branch of the lab's QEMU fork, a *functional* emulation of what an SEV, SEV-ES or SEV-SNP guest can
+observe: `SEV_STATUS` and CPUID 0x8000001F, the C-bit in page tables (bookkeeping only), `#VC` for the
+intercepted instructions, the GHCB MSR protocol and the VMGEXIT events, the SNP CPUID and secrets pages,
+`PVALIDATE`, `RMPADJUST` and page-state changes with the "page not validated" `#VC`, AP creation from a
+VMSA. It has no firmware and no RMP: there is **no attestation** (a guest request fails as a firmware error
+does, `/dev/attestation/quote` cannot be read), **no memory isolation or encryption** (the host reads guest
+memory), no launch measurement that a report could be checked against, and no VMPL model. It validates the
+PAL's use of the protocols and finds regressions in that code; it does not replace a run on an SEV host,
+which stays the qualification of a release (`test/quick.sh sev` and `sev-snp` there). `QEMU_PATH`
+names the emulating QEMU (`qemu-system-x86_64` of that branch, built with `--enable-igvm`); it is checked
+first by `CI-Examples/common_tools/sev-emu-check.sh` (set, a QEMU, TCG, the `sev-emu` or `sev-snp-emu` object), and
+`exec.sh --sev|--sev-snp` and `test/sev/test-sev.sh` run the same check. The mode follows the variant. The known differences are in `expected-failures.toml` (`test_020_cpuinfo`: the guest sees
+QEMU's `max` CPU model) and `test/sev/test-sev.sh` skips its `memory`, `measure` and `attest` suites under
+`SAGUARO_ACCEL=tcg`.
 
 ## Results
 
@@ -156,4 +185,6 @@ the job summary and uploads the output directory. Deselects for a slow host are 
 workflow (aarch64 TCG: `test_604_sigreturn_regs`; riscv64: `test_103_gettimeofday`, `test_603_rewrite_stress`)
 and entries of `expected-failures.toml`. The TDX PAL is compiled by the `tdx-build` job of `direct-x86_64.yml`.
 SEV, SGX and VBS have no CI (the repository is public): run `test/quick.sh sev`, `sev-snp`, `sgx` or `vbs` by
-hand per release and keep the summary line.
+hand per release and keep the summary line. The emulated SEV can run on a hosted x86_64 runner once
+the emulating QEMU is available to the workflow (the `dev-sev` fork is private: publish it or build the binary
+elsewhere and fetch it as an artifact); its results say `sev-emu` and are not a substitute for the SEV host.

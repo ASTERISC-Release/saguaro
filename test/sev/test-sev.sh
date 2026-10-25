@@ -53,6 +53,9 @@ done
 # the emulated SEV of QEMU TCG (SAGUARO_ACCEL=tcg) has no attestation, no launch measurement to
 # verify and no memory protection: only hello and vsock apply there
 if [ "${SAGUARO_ACCEL:-kvm}" = tcg ]; then
+    # QEMU_PATH must name the QEMU with the emulated SEV (no default here: the default below is the hardware one)
+    "$(dirname "$(readlink -f "$0")")/../../CI-Examples/common_tools/sev-emu-check.sh" \
+        "$([ "${SAGUARO_SEV_MODE:-sev}" = snp ] && echo snp || echo sev)" || exit 1
     for s in "${SUITES[@]}"; do
         case $s in
             memory|measure|attest) echo "$s: skipped under the emulated SEV of QEMU TCG" ;;

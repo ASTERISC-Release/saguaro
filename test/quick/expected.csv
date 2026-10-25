@@ -7,3 +7,4 @@ vm,aarch64,hosted CI (TCG),2,122,4,1,0,no,projection from vm_skip.toml (010 xfai
 sev,x86_64,AMD SEV host (container),2,121,4,2,0,yes,libos-core step. skip and xfail as vm; test_020_cpuinfo passes
 sev-snp,x86_64,AMD SEV-SNP host (container),2,121,4,2,0,yes,libos-core step. same as sev; TC_04_AttestationSevSnp is a separate step (libos-snp-attest)
 sgx,x86_64,SGX host,-,120,0,0,7,yes,libos-core step. known: the five *_chroot tests (no symlink/RENAME_EXCHANGE in the SGX PAL) and 100_socket_unix 101_socket_unix_fdpass
+sev-emu,x86_64,x86_64 host (container; QEMU TCG emulation),2,120,4,2,1,yes,libos-core step. skip and xfail as vm; known: test_020_cpuinfo (QEMU CPU model). No attestation step: the emulation has no firmware

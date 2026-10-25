@@ -16,13 +16,13 @@
 # `python3 test/quick/check-core-list.py` checks that the libos entries name existing tests.
 
 [[known]]
-variants = ["vm", "sev", "sev-snp"]
+variants = ["vm", "sev", "sev-snp", "sev-emu"]
 vcpus = 1
 test = "TC_00_Unittests::test_000_spinlock"
 reason = "fails at 1 vCPU (measured under saguaro-vm on x86_64 and under SNP); tier 1 runs at 2 vCPUs, so only the extended sweep meets it"
 
 [[known]]
-variants = ["vm", "sev", "sev-snp"]
+variants = ["vm", "sev", "sev-snp", "sev-emu"]
 vcpus = 1
 test = "TC_30_Syscall::test_074_eventfd_races"
 reason = "fails at 1 vCPU (measured under saguaro-vm on x86_64 and under SNP); tier 1 runs at 2 vCPUs, so only the extended sweep meets it"
@@ -39,7 +39,7 @@ test = "python"
 reason = "the guest cannot map the system Python on aarch64 (CI-Examples/README.md, footnote 5)"
 
 [[known]]
-variants = ["vm", "sev", "sev-snp"]
+variants = ["vm", "sev", "sev-snp", "sev-emu"]
 step = "libos-fs"
 test = "TC_10_Tmpfs::test_111_read_write_mmap"
 reason = "under the VM PAL a shared mapping of a tmpfs file does not show what write() wrote just before (measured under saguaro-vm on x86_64; sev uses the same LibOS and PAL); libos/test/fs is in the extended tier only"
@@ -163,3 +163,9 @@ reason = "bind() of a pathname UNIX socket creates a host-visible node (libos/sr
 variants = ["sgx"]
 test = "TC_80_Socket::test_101_socket_unix_fdpass"
 reason = "fd passing over UNIX sockets uses PalHostSendmsg, which the SGX PAL does not implement (ENOSYS)"
+
+# --- sev-emu (the SEV PAL under the emulated SEV-SNP of QEMU TCG) ---
+[[known]]
+variants = ["sev-emu"]
+test = "TC_40_FileSystem::test_020_cpuinfo"
+reason = "the guest runs on QEMU's `max` CPU model under TCG: /proc/cpuinfo lists flags of the model, not of the host the test compares with (it fails on the AMD SEV host for the same reason)"

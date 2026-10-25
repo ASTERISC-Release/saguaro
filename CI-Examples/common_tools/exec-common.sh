@@ -56,6 +56,8 @@
 # Environment: EXEC_TIMEOUT (seconds per run, default 300; EXEC_BUILD_TIMEOUT, default 3600, for the build
 # of a vbs image), EXEC_LOG_DIR (default /tmp/saguaro-exec),
 # The backend sets SAGUARO_SEV_MODE for saguaro-sev: sev for --sev, snp for --sev-snp.
+# SAGUARO_ACCEL=tcg QEMU_PATH=<dev-sev qemu-system-x86_64> exec.sh --sev|--sev-snp runs the SEV backends under the
+# emulated SEV of QEMU TCG: no SEV device and no KVM needed, but the QEMU is checked first (sev-emu-check.sh).
 
 # EXEC_DIR (the directory to build and run in) and EXAMPLE_NAME default to the exec.sh's own directory;
 # unit_tests/exec.sh sets them to run each test of its subdirectories
@@ -65,6 +67,8 @@ EXEC_LOG_DIR=${EXEC_LOG_DIR:-/tmp/saguaro-exec}
 EXEC_TIMEOUT=${EXEC_TIMEOUT:-300}
 
 exec_host_arch() { uname -m; }
+
+EXEC_COMMON_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 # backend_base <backend>: the backend whose install and runner it uses (sev-snp is saguaro-sev, like sev)
 backend_base() {
@@ -114,8 +118,9 @@ backend_unavailable() {
         echo "SEV needs an x86_64 host"; return 0
     fi
     if [ "$b" = sev ] && [ "${SAGUARO_ACCEL:-kvm}" = tcg ]; then
-        # the emulated SEV of QEMU TCG (test/quick.sh sev-emu): no device, but the QEMU that emulates it
-        [ -x "${QEMU_PATH:-}" ] || { echo "the emulated SEV needs QEMU_PATH to name the QEMU with the sev-emu objects (SAGUARO_EMU_QEMU of test/quick.sh)"; return 0; }
+        # the emulated SEV of QEMU TCG (SAGUARO_ACCEL=tcg): no device, but a QEMU that has the emulated SEV
+        local why; why=$("$EXEC_COMMON_DIR/sev-emu-check.sh" "$([ "$1" = sev-snp ] && echo snp || echo sev)" 2>&1 >/dev/null) \
+            || { echo "${why#emulated SEV: }"; return 0; }
     elif [ "$b" = sev ]; then
         [ -e /dev/sev ] || { echo "no SEV device (/dev/sev) on this host"; return 0; }
         [ -r /dev/sev ] && [ -w /dev/sev ] || { echo "no read/write access to /dev/sev"; return 0; }

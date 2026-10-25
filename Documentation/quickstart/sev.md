@@ -128,7 +128,33 @@ summary line to keep with a release (there is no CI for SEV). The scripts undern
 (see the header of the script for the suites). `test/sev/test-sev.sh` passes in both modes
 ([RESULTS.md](../../CI-Examples/RESULTS.md)).
 
-# 5. Troubleshooting
+# 5. Without SEV hardware: the emulated SEV of QEMU TCG
+
+The SEV PAL also runs on a plain x86_64 machine (no `/dev/sev`, no KVM needed) under QEMU's software
+emulation with the `sev-emu` and `sev-snp-emu` objects of the `dev-sev` branch of the lab's QEMU fork
+(`qemu-sev`). This is a *functional* emulation of the guest-visible interface: SEV_STATUS and CPUID report
+SEV/SEV-ES/SEV-SNP, the intercepted instructions raise `#VC`, the GHCB protocol and VMGEXIT are answered as
+KVM answers them, the SNP CPUID and secrets pages exist, `PVALIDATE`/`RMPADJUST`/page-state changes keep a
+validation table and an access to an unvalidated private page raises `#VC` as on hardware, APs are created
+from their VMSA. It has **no attestation** (the report request fails, `/dev/attestation/quote` is not
+readable), **no memory encryption or isolation** (the host sees guest memory; the C-bit is bookkeeping) and
+no launch measurement to verify. Use it to test the PAL's SEV code paths where no SEV host is available
+(CI); the SEV host remains the reference.
+
+Run examples and tests with the same commands as on hardware, adding two variables. `QEMU_PATH` must name the
+`qemu-system-x86_64` built from the `dev-sev` branch; it is checked first (a stock QEMU is refused with the reason):
+
+    export SAGUARO_ACCEL=tcg QEMU_PATH=<qemu-sev build>/qemu-system-x86_64
+    CI-Examples/helloworld/exec.sh --sev            # or --sev-snp; every example's exec.sh works
+    test/sev/test-sev.sh hello vsock                # SAGUARO_SEV_MODE=snp for SNP; memory, measure, attest are skipped
+    test/quick.sh sev-snp --tier smoke              # or sev; add --tier regression for the LibOS core list
+
+`SAGUARO_ACCEL=tcg` makes the launcher use `-accel tcg`, `-cpu max`, the emulated SEV objects (C-bit
+position 51, `SAGUARO_SEV_CBITPOS` overrides) and pass the host's TSC frequency to the guest over fw_cfg.
+A boot takes about three times longer than under KVM on the same machine. `test_020_cpuinfo` of the LibOS
+suite fails (the guest sees QEMU's CPU model), see `test/quick/expected-failures.toml`.
+
+# 6. Troubleshooting
 
 - `exec.sh` reports that `sev` cannot run: it names the reason. No `/dev/sev`: add the user to the
   `sev` group on the host, log in again; the container may have to be recreated to see the device (`container/run.sh down`

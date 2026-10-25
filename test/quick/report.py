@@ -150,7 +150,7 @@ def cmd_add(args):
         # the run failed without a failed test: a crash, a timeout or a collection error
         rows.append((args.step, 'fail', 0.0))
     counts = dict.fromkeys(['pass', 'fail', 'skip', 'xfail', 'xpass', 'known-fail'], 0)
-    xf = xfail_ids() if args.variant in ('vm', 'sev', 'sev-snp') else set()
+    xf = xfail_ids() if args.variant in ('vm', 'sev', 'sev-snp', 'sev-emu') else set()
     with open(os.path.join(args.out, 'results.csv'), 'a', newline='') as f:
         writer = csv.writer(f, lineterminator='\n')
         for test, result, secs in rows:
