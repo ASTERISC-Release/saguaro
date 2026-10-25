@@ -70,7 +70,20 @@ data, and `saguaro-vbs verify` checks one on the same machine:
     saguaro-vbs verify attest data/out/report.bin --user-data <64 hex digits> --same-image --min-svn 1
 
 
-# 5. Troubleshooting
+# 5. Regression tests
+
+In WSL, after `scripts/install.sh --vbs`:
+
+    test/quick.sh vbs --tier smoke        # the runtime check and CI-Examples/helloworld
+    test/quick.sh vbs                     # the regression tier
+
+The regression tier runs the core programs of the LibOS regression suite that have a VBS case
+(`pal/src/host/vbs/test/regress/run-regress.sh`, selected by `test/quick/vbs-core.txt`), the examples
+`busybox sqlite python` and the enclave programs of `CI-Examples/vbs` through `exec.sh --vbs`, and prints a summary
+line to keep with a release (there is no CI for VBS). The whole case list is `test/quick.sh vbs --tier extended`;
+some of its cases fail by design (they need `fork` or host sockets and devices).
+
+# 6. Troubleshooting
 
 - A setup prerequisite is missing: run `saguaro-vbs check` (or `scripts/install.sh --vbs` again) and fix the
   first failed check.

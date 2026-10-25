@@ -118,8 +118,11 @@ production use.
   `--sgx` or `--vbs`: it explains why a backend cannot run, prints the command under test, streams the logs and ends
   with the example's check. The shared helpers (`CI-Examples/common_tools/`) also start and stop the server examples.
   Results per backend: [CI-Examples/README.md](../CI-Examples/README.md), [CI-Examples/RESULTS.md](../CI-Examples/RESULTS.md).
-- **Test batteries** (done). `test/direct/test-direct.sh` (PAL, LibOS, 12 example suites; `SAGUARO_RUNNER=saguaro-vm`
-  runs the server examples under the VM), the `test/test-vm*.sh` scripts, `test/sev/test-sev.sh` and the VM skip list.
+- **Test batteries** (done). `test/quick.sh <variant>` runs three tiers (smoke, regression, extended) with one
+  results format; the regression tier is the PAL suite, a core list of 127 LibOS tests, six examples through their
+  `exec.sh` and the steps of the variant, at 2 vCPUs on the VM variants (`test/README.md`). Underneath:
+  `test/direct/test-direct.sh` (PAL, LibOS), `test/vm/test-vm.sh`, `test/sev/test-sev.sh`, the VM stress tests
+  (`test/vm/stress/`) and the VM skip list.
   `dev docs: multiarch.md`
 - **CI workflows** (done). Manual workflows for direct x86_64, direct AArch64, emulated RISC-V, the x86_64
   VM PAL, the AArch64 VM PAL under software emulation (TCG), and the documentation check under `.github/workflows/`. `dev docs: multiarch.md`

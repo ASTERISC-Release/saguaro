@@ -67,11 +67,15 @@ file:/usr/bin/<program>`). Refer to each example folder for further per-applicat
 
 # 3. Regression Tests
 
-    test/vm/test-vm.sh libos              # the LibOS suite under saguaro-vm, about 2 to 3 minutes
+    test/quick.sh vm --tier smoke         # about 30 seconds
+    test/quick.sh vm                      # the regression tier, at 2 vCPUs: about 5 minutes
+    test/quick.sh vm --tier extended      # the full suite, the vCPU sweep (1 and 4), loops and stress tests: hours
 
-It ends with a pytest summary (failures with a known cause are marked xfail by
-`libos/test/regression/vm_skip.toml`) and `ALL VM SUITES PASSED`. `test/vm/test-vm.sh --help`
-lists the other suites.
+The regression tier runs the LibOS core list (127 tests; 121 pass, 4 skip and 2 xfail on x86_64, the skips and
+xfails come from `libos/test/regression/vm_skip.toml`), six examples through `exec.sh --vm`, the network suites
+and the multi-process probes, always at 2 vCPUs (`--vcpus` changes it; there is no sweep outside the extended
+tier). It ends with a summary line and writes `results.csv` (`test/README.md`). `test/vm/test-vm.sh libos` runs
+the whole LibOS suite once under `saguaro-vm` (2 vCPUs by default; `--help` lists the other suites).
 
 # 4. Other Information
 

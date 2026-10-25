@@ -8,7 +8,7 @@ questions and pull requests are welcome.
 - Keep a change to one topic, and match the style of the code around it (`.clang-format` and `.pylintrc` are in the
   root).
 - Build and test what you touched: [INSTALL.md](INSTALL.md) and the guides in
-  [Documentation/quickstart/](Documentation/quickstart/) say how, for example `test/direct/test-direct.sh libos`.
+  [Documentation/quickstart/](Documentation/quickstart/) say how, for example `test/quick.sh direct` (the tiers: [test/README.md](test/README.md)).
   Run `python3 scripts/check-docs.py` after changing documentation.
 - Give new files an SPDX line and a copyright line, as the files next to them do. Code outside `CI-Examples/` is
   LGPL-3.0-or-later and the examples are BSD-3-Clause (see [LICENSE.addendum.txt](LICENSE.addendum.txt)). Do not

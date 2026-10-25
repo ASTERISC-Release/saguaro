@@ -96,7 +96,19 @@ The enclave sizes are set by each manifest (`mongodb` 8G, `openjdk` 16G, `pytorc
 
 In a fresh container, `blender`, `mongodb`, `nodejs`, `openjdk` and `r` first stop with "cannot run here: missing on the host"; run `CI-Examples/install-all-prereqs.sh` once (or the `install-prereqs.sh` of that example, which the message names) and repeat the command.
 
-### 5. Troubleshooting
+### 5. Regression tests
+
+    test/quick.sh sgx --tier smoke        # helloworld, unit_tests, two LibOS tests
+    test/quick.sh sgx                     # the regression tier
+
+The regression tier runs the PAL suite, the LibOS core list (127 tests, the same list as on every variant), the
+examples `bash sqlite python busybox memcached nginx` through `exec.sh --sgx`, the tests that exist only under SGX
+(file check policy, CPUID and RDTSC, sealed files, MRENCLAVE) and `test/unit` with `test_sgx_sign.py`. It prints a
+summary line to keep with a release (there is no CI for SGX). The `unit_tests-mremap` failure listed above is a known
+failure (`test/quick/expected-failures.toml`). The LibOS suite has not been recorded on SGX yet: the first run fills
+the SGX row of `test/quick/expected.csv`.
+
+### 6. Troubleshooting
 
 - `./exec.sh --sgx` says `no SGX device (/dev/sgx_enclave)`: the host has no SGX driver, or the
   container was created without the device (before the user was in the `sgx` group, or with an older `container/run.sh`).
@@ -128,7 +140,8 @@ The install step links the PAL with TD-shim: it runs `cargo run -p td-shim-tools
 install stops there after everything has compiled.
 
 The examples that run on SEV also run on TDX. `exec.sh` has no TDX backend. CI compiles the `tdx` PAL
-(the `tdx-build` job of `direct-x86_64.yml`).
+(the `tdx-build` job of `direct-x86_64.yml`); `test/quick.sh tdx` does the same on a development machine, for every
+tier, because TDX has no tests that run without TDX hardware.
 
 ## Not covered
 

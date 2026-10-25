@@ -15,8 +15,8 @@ Open items by architecture and host. Longer lists are kept with the maintainers'
   `I915_EXEC_FENCE_IN`, engine maps with extensions and user-pointer objects, and the `xe` driver is not covered;
   an AArch64 build check of the changes; equal-scene frame-rate comparisons for The Witcher and BioShock 2.
 - `vm` with graphics: the QEMU fork (qemu-saguaro) will be published: give it a stable tag, add the clone URL to the guide, and decide whether to pin it as a git submodule (a pinned commit under a fixed path would remove the `QEMU_SAGUARO_DIR` step; a submodule needs `--recursive` and a 1+ GB build tree) or keep a documented separate checkout.
-- CI workflows, later: run the rewrite stress step by default on direct aarch64 and add one for riscv64; make the LibOS step of the x86_64 VM workflow strict (it is informational); run the full Python example (with its HTTP check) in the x86_64 VM workflow; make Python work in the aarch64 TCG workflow (the system Python is not PIE).
-- CI for hardware-bound backends (`sev`, `sgx`, `vbs`, `tdx`): there is no workflow and no self-hosted runner, deliberately (the repository is public); `test/sev/test-sev-all.sh` and the `./exec.sh --<backend>` runs are done by hand on the hardware.
+- CI workflows, later: run the rewrite stress step by default on direct aarch64 and add one for riscv64; run the regression tier on pushes (about 10 minutes per variant; the workflows are manual); make Python work in the aarch64 TCG workflow (the system Python is not PIE).
+- CI for hardware-bound backends (`sev`, `sgx`, `vbs`, `tdx`): there is no workflow and no self-hosted runner, deliberately (the repository is public); `test/quick.sh <backend>` (and `test/sev/test-sev-all.sh`) are run by hand on the hardware.
 - `sev`: trusted files, Secure TSC; `sgx`: remote attestation (AESM, PCCS) and the `ra-tls` examples.
 - Proton (Wine, DXVK) under `saguaro-vm`: phase 1 and later, see the status in the development notes.
 

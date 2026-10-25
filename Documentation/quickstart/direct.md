@@ -77,14 +77,17 @@ AArch64; `blender` runs on x86_64 only.
 
 # 3. Regression Tests
 
-The test scripts find the install through `SAGUARO_PREFIX` (default `~/.local/saguaro`):
+The test scripts find the install through `SAGUARO_PREFIX` (default `~/.local/saguaro`). One command runs a
+tier of the regression set (`test/README.md` describes them):
 
-    test/direct/test-direct.sh --list                       # the suites
-    test/direct/test-direct.sh pal libos helloworld python  # a quick selection, under a minute
-    test/direct/test-direct.sh                              # everything: PAL, LibOS, 12 example suites
+    test/quick.sh direct --tier smoke         # install check, helloworld, unit_tests, two LibOS tests: well under 3 minutes
+    test/quick.sh direct                      # the regression tier (default): PAL suite, LibOS core list (127 tests), six examples, test/unit: about 2 minutes once the examples are built
+    test/quick.sh direct --tier extended      # the full LibOS suite, all examples, libos/test/fs, libos/test/abi, the rewrite stress
 
-Each suite ends with a `PASS` or `FAIL` line. Logs are stored in `/tmp/saguaro-tests`.
-`scripts/install.sh --run-tests pal libos` builds and runs the tests in one step.
+It prints one line per step and a summary line, writes `results.csv`, `summary.txt` and the logs to
+`/tmp/saguaro-quick/...` (`--out DIR`), and exits 0 only if nothing failed unexpectedly. The examples run through
+their own `exec.sh --direct`. `test/direct/test-direct.sh` runs the PAL suite and the full LibOS suite alone
+(`pal`, `libos`); `scripts/install.sh --run-tests` builds and runs it in one step.
 
 # 4. Troubleshooting
 

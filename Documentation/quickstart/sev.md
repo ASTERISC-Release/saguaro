@@ -111,10 +111,18 @@ are currently not measured.
 
 # 4. Regression Tests
 
+    test/quick.sh sev-snp                         # the regression tier under SNP, at 2 vCPUs and 8G
+    test/quick.sh sev                             # the same under plain SEV (launch measurement instead of attestation)
+    test/quick.sh sev-snp --tier smoke            # a few minutes
+    test/quick.sh sev-snp --tier extended         # the full LibOS suite at 2, 1 and 4 vCPUs, loops, stress tests: hours
+
+The regression tier runs one vCPU count, 2: the LibOS core list (127 tests, the same as on every variant), six
+examples through `exec.sh --sev-snp`, `test/sev/test-sev.sh --vcpus 2` and the multi-process probes; it prints a
+summary line to keep with a release (there is no CI for SEV). The scripts underneath:
+
     SAGUARO_SEV_MODE=snp test/sev/test-sev.sh     # hello (1, 4 vCPUs), host-side memory check, vsock, attest
-    test/sev/test-sev.sh                          # the same under plain SEV, with the launch measurement
-    SAGUARO_VM_LAUNCHER=saguaro-sev SAGUARO_SEV_MODE=snp SAGUARO_RAM_SIZE=8G test/vm/test-vm.sh libos
-    test/sev/test-sev-all.sh                      # everything above, at 1, 2 and 4 vCPUs, plus examples
+    test/sev/test-sev.sh --vcpus 2                # the same suites, once, at 2 vCPUs
+    test/sev/test-sev-all.sh                      # the qualification run: builds, both modes, the LibOS suite at 2 vCPUs, examples
 
 `SAGUARO_SEV_MODE=snp test/sev/test-sev.sh` runs under SNP, `test/sev/test-sev.sh` under plain SEV
 (see the header of the script for the suites). `test/sev/test-sev.sh` passes in both modes

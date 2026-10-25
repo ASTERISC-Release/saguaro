@@ -26,7 +26,7 @@ saguaro-direct helloworld       # mremap/
 saguaro-direct align_test       # align_test/
 ```
 
-The `multi-thread` and `networks` suites also run from the repository root: `test/direct/test-direct.sh multithread` and `test/direct/test-direct.sh networks` (`SAGUARO_RUNNER=saguaro-vm` for the VM).
+The `exec.sh --<backend>` of this folder runs all of them (the `smoke` tier of `test/quick.sh`); the deprecated suites `test/direct/test-direct.sh multithread` and `test/direct/test-direct.sh networks` (`SAGUARO_RUNNER=saguaro-vm` for the VM).
 
 ## Notes
 

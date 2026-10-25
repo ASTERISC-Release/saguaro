@@ -43,12 +43,16 @@ From the repository root:
 | `--deps` | run `scripts/dependencies.sh --build-only` first |
 | `--add-to-profile` | source `<prefix>/env.sh` from `~/.bashrc` |
 | `-j N` | parallel build jobs (default: all cores) |
-| `--run-tests [suite...]` | run `test/direct/test-direct.sh` afterwards (naming suites implies it) |
+| `--run-tests [suite...]` | run `test/direct/test-direct.sh` (suites `pal` and `libos`) afterwards (naming suites implies it) |
 
 Check the install and run an example:
 
-    test/direct/test-direct.sh               # PAL + LibOS regression tests and the example applications
-    test/direct/test-direct.sh libos         # only the named suites (`--list` shows them)
+    test/quick.sh direct --tier smoke        # install check, helloworld, unit_tests, two LibOS tests (about 20 s)
+    test/quick.sh direct                     # the regression tier: PAL suite, LibOS core list, six examples (about 2 minutes)
+    test/direct/test-direct.sh libos         # the full PAL / LibOS suites alone (`pal`, `libos`; `--list` shows them)
+
+The tiers (`smoke`, `regression`, `extended`), their output files and the exit status are described in
+[test/README.md](test/README.md).
 
     cd CI-Examples/helloworld
     make
@@ -64,7 +68,8 @@ aarch64:
     scripts/dependencies.sh --build-only
     scripts/install.sh --vm           # into ~/.local/saguaro-vm, build dir build-vm-aarch64
     . ~/.local/saguaro-vm/env.sh
-    test/vm/test-vm.sh                   # LibOS suite under saguaro-vm, example apps, hello soak test
+    test/quick.sh vm                     # LibOS core list under saguaro-vm, examples, network suites (2 vCPUs)
+    test/vm/test-vm.sh                   # the whole LibOS suite under saguaro-vm and the loopback suite
 
 On aarch64 `--vm` builds *only* the vm PAL (no direct PAL, SGX or TDX), builds without graphics (the
 redirection needs the QEMU fork's host agent, which does not exist for aarch64) and builds the test
@@ -124,12 +129,11 @@ Typical session (on x86_64 the container is `saguaro-vm-x86_64`):
 
     container/run.sh                              # shell inside
     scripts/install.sh pal libos                  # direct PAL: build, install, run the PAL + LibOS suites
-    scripts/install.sh --vm libos examples hello  # aarch64 vm PAL: build, install, run the vm test battery
-    scripts/install.sh --vm && test/vm/test-vm.sh libos   # x86_64 vm PAL: build, install, LibOS suite in the VM
+    scripts/install.sh --vm libos loopback        # aarch64 vm PAL: build, install, run the vm test battery
+    scripts/install.sh --vm && test/quick.sh vm   # x86_64 vm PAL: build, install, the regression tier in the VM
 
-or as a one-shot command from the host: `container/run.sh 'scripts/install.sh --vm libos examples hello'`.
-(On x86_64, test suites named after `--vm` go to `test/direct/test-direct.sh`, which has no `examples` or
-`hello` suite.)
+or as a one-shot command from the host: `container/run.sh 'scripts/install.sh --vm && test/quick.sh vm'`.
+(On x86_64, test suites named after `--vm` go to `test/direct/test-direct.sh`, which has only `pal` and `libos`.)
 
 Notes:
 
@@ -189,6 +193,6 @@ defaults in [Which libc](#which-libc) are set by `scripts/install.sh`.
   without `/dev/kvm`, on x86_64 KVM is required.
 - `[ VM exited with code 134 ]`: the guest kernel panicked; the lines above it hold the register dump.
 - aarch64 `Mounting "file:<app>" ... failed: ENOENT`: the application binary is not built or is not a
-  PIE; rebuild it with `-fPIE -static-pie` (`tools/run-vm-aarch64-examples.sh` shows how).
+  PIE; rebuild it with `-fPIE -static-pie` (the example's `Makefile` builds it that way).
 - aarch64 `vhost-vsock: failed to open vhost device: Permission denied`: your user cannot open
   `/dev/vhost-vsock`; give it access (an ACL like `/dev/kvm`'s) and check that `vhost_vsock` is loaded.

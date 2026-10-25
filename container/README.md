@@ -12,7 +12,7 @@ container/run.sh --rebuild            # force an image rebuild + container recre
 container/run.sh down                 # stop and remove the container (image is kept)
 
 container/run.sh 'scripts/install.sh --vm'     # e.g. build the vm PAL inside
-container/run.sh 'test/vm/test-vm.sh'             # ... and run the vm battery
+container/run.sh 'test/quick.sh vm'               # ... and run the regression tier of the vm PAL
 ```
 
 | | aarch64 | x86_64 |

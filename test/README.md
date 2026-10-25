@@ -1,75 +1,139 @@
-# test/: map
+# test/: the regression tiers and the test tree
 
-Compiled from the file headers and the runners' usage text. "Not confirmed" marks a mapping taken from a
-header alone or not found in any runner, workflow or document. The refactor plan is
-`dev docs: test-layout/PLAN.md`.
+One command runs the regression set of a variant:
 
-## Commands that work today
+    test/quick.sh <direct|vm|sev|sev-snp|sgx|vbs|tdx> [--tier smoke|regression|extended]
+                  [--out DIR] [--vcpus N] [--list] [--dry-run] [--only STEP,...]
 
-Since phase 2 the files sit in backend folders. `test/test-direct.sh`, `test/test-vm.sh`, `test/test-sev.sh` and `test/test-sev-all.sh` are two-line forwarders that exec the new file with the same arguments; phase 4 removes them.
+The same steps have the same names on every variant, the output has one format, and the exit status is 0
+only when nothing failed unexpectedly. `--list` prints the steps of a variant and tier, `--dry-run` prints
+their commands, `--help` the options. Run it from the repository root with the variant installed
+(`scripts/install.sh` for `direct`, `scripts/install.sh --vm` for `vm`, `--sev` for `sev` and `sev-snp`, `--sgx`
+for `sgx`; the prefix is `SAGUARO_PREFIX`, or `SAGUARO_DIRECT_PREFIX`, `SAGUARO_VM_PREFIX`, `SAGUARO_SGX_PREFIX`).
+The VM variants need a user that may run `saguaro-vm` (root in the container of `container/run.sh`).
 
-Run from the repository root. `test/run.sh` forwards to the runners with the arguments unchanged; `test/run.sh list` prints the backends and suites; `RUN_DRY=1` prints the command instead of running it.
+## The three tiers
 
-| Backend | Command | Needs | Suites |
-|---|---|---|---|
-| direct | `test/direct/test-direct.sh [suite...]` or `test/run.sh direct [suite...]` | a direct install (`scripts/install.sh`) | `test/direct/test-direct.sh --list` |
-| vm | `test/vm/test-vm.sh [suite...]` or `test/run.sh vm [suite...]` | `/dev/kvm`, a vm install (`scripts/install.sh --vm`) | libos examples hello loopback epoll outbound udp guest-loopback |
-| vm, servers via the direct runner | `SAGUARO_RUNNER=saguaro-vm test/direct/test-direct.sh redis` | a vm install | server suites and `networks` |
-| sev | `test/sev/test-sev.sh [suite...]` or `test/run.sh sev [suite...]` | SEV host, container of `container/run.sh` | hello memory vsock measure attest |
-| sev, qualification | `test/sev/test-sev-all.sh` or `test/run.sh sev-all` | SEV-SNP host; builds with `scripts/install.sh --sev` | none (one run) |
-| vbs | none | Windows machine; steps are `.cmd` files in the folders | not confirmed |
-| unit tests | `test/unit/` (pytest) | none | how CI or a developer runs it: not confirmed |
+| Tier | Budget (the test run only: the install, the build and the RISC-V guest boot are not counted) | What runs |
+|---|---|---|
+| `smoke` | about 3 minutes | install check, `check-core-list`, `helloworld`, the `unit_tests` examples (mremap, thread-tls, thread-rwlock, thread-stress, networks), two LibOS tests (`202_fork_and_exec`, `600_multi_pthread`). tdx: the compile job. |
+| `regression` (the default) | 20 minutes per variant | `smoke`, then `pal` (direct and sgx: the PAL regression), `libos-core` (the 127 ids of `test/quick/core-tests.txt`), the examples `bash sqlite python busybox memcached nginx` through their `exec.sh`, and the steps of the variant (below). |
+| `extended` | hours; nightly or by hand | the full LibOS suite, the vCPU sweep, the loops, the stress tests, `libos/test/fs`, `libos/test/abi`, `test/unit`, every example that has an `exec.sh`, LTP. |
+
+Measured on a development PC (x86_64, 24 threads, KVM, examples already built): `direct` smoke 17 s,
+`direct` regression 107 s (the PAL suite 9 s, `libos-core` 8 s); `vm` smoke 25 s, `vm` regression 296 s
+(`libos-core` 113 s, `vm-net` 120 s, `vm-multiproc` 27 s). The first run also builds the examples (busybox,
+memcached and nginx download and compile their sources).
+
+The VM-based variants (`vm`, `sev`, `sev-snp`) run `smoke` and `regression` with exactly 2 vCPUs
+(`SAGUARO_CPU_NUM=2`; `--vcpus` changes it) and 8G of RAM (`SAGUARO_RAM_SIZE`): there is no sweep in these
+tiers. The `extended` tier keeps it, and the step names say the count: `libos-full-2vcpu`,
+`libos-sweep-1vcpu`, `libos-sweep-4vcpu`.
+
+Steps of the variants in `regression`, besides the common ones:
+
+| Variant | Extra steps |
+|---|---|
+| `direct` | `unit` (`test/unit`) |
+| `vm` | `vm-net` (`test/vm/test-vm.sh loopback outbound guest-loopback`), `vm-multiproc` (`test/vm/multiproc/check-probes.sh spawn signals forks misc sysv`; x86_64 only) |
+| `sev`, `sev-snp` | `sev-suite` (`test/sev/test-sev.sh --vcpus 2`), `vm-multiproc`; `sev-snp` also `libos-snp-attest` |
+| `sgx` | `libos-sgx-only` (file check policy, CPUID and RDTSC under SGX, sealed and MRENCLAVE tests), `unit` (with `test_sgx_sign.py`) |
+| `vbs` | `vbs-regress` (the core programs that have a VBS case, `test/quick/vbs-core.txt`), the examples `busybox sqlite python` and `CI-Examples/vbs`; no LibOS pytest |
+| `tdx` | `tdx-build` only: the TDX PAL cannot run without TDX hardware |
+
+`extended` adds `libos-fs` (`libos/test/fs`), `libos-abi` (`libos/test/abi`, x86_64 direct), `ex-<name>` for
+every other example, `stress-rewrite` and `prefix-sweep` (direct), and on the VM variants `vm-net-all`,
+`vm-multiproc-all` (the probes `libos examples redis` as well), `vm-sig-loop`, `vm-boot-loop`, `vm-stress`
+(below) and `ltp`. An example that does not offer the variant is reported as `skip`.
+
+`test/quick.sh direct --target riscv64` runs the direct variant in the RISC-V guest of
+`scripts/riscv64/guest.sh` (inside the cross container; `Documentation/quickstart/riscv.md`).
+
+## Results
+
+`--out DIR` (default `/tmp/saguaro-quick/<variant>-<arch>-<date>`) receives:
+
+- `results.csv`, one row per test (a pytest step, from its JUnit file), per example (the `[PASS]` lines of
+  `exec.sh`) or per step: `variant,arch,commit,tier,step,test,result,seconds,vcpus`. `result` is `pass`,
+  `fail`, `skip`, `xfail` or `known-fail`; `vcpus` is `-` for a variant without a vCPU count.
+- `summary.txt`, one line: `QUICK variant=vm arch=x86_64 tier=regression vcpus=2 commit=... pass=N fail=N skip=N xfail=N known=N secs=N status=PASS`.
+  Keep it for a release or a pull request, in particular for the variants without CI (sev, sev-snp, sgx, vbs).
+- `<step>.log` and `<step>.xml`: the raw output and the JUnit file of every step.
+
+The exit status is 1 if a test or a step failed unexpectedly. A failure listed in
+`test/quick/expected-failures.toml` (matched exactly on variant, architecture, vCPU count, step and test id) is
+`known-fail` and does not fail the run; every entry has a reason. `test/quick/expected.csv` has the counts the
+`libos-core` step gives per variant; for a measured row the run prints a `NOTE` when the counts differ.
+Skips and xfails under the VM PAL come from `libos/test/regression/vm_skip.toml`, as before.
 
 ## Files
 
-Backend names: direct, vm, sev, vbs, any (not tied to a backend), graphics (vm or direct, with a
-display).
+| File | Role |
+|---|---|
+| `test/quick.sh` | the entry point |
+| `test/quick/core-tests.txt` | the LibOS tests of the `regression` tier, one pytest id per line, the same on every variant |
+| `test/quick/check-core-list.py` | checks the list against `test_libos.py` without pytest (no SGX, ASAN, AVX, device or architecture-only test, no unknown id); a `smoke` step |
+| `test/quick/expected-failures.toml`, `expected.csv` | known failures and expected counts (see above) |
+| `test/quick/report.py` | writes `results.csv` and `summary.txt` for `quick.sh` |
+| `test/quick/vbs-core.txt` | the core tests that have a VBS case |
+| `libos/test/regression/conftest.py` | `SAGUARO_TESTSET=core` keeps only the ids of the core list (no pytest markers; the test functions are unchanged) |
 
-### Runners and VM network tests
+A test joins the core list by its id in `test/quick/core-tests.txt` (then run
+`python3 test/quick/check-core-list.py`). A test that fails on a variant for a known reason goes to
+`expected-failures.toml`; a flaky test leaves the core list. A test that is too slow on one host is left out of
+a run with the pytest expression in `QUICK_PYTEST_K`, which the workflow of that host sets
+(`.github/workflows/`).
 
-| File | Backend | Suite or role |
-|---|---|---|
-| `test/direct/test-direct.sh` | direct | the runner (pal, libos, examples) |
-| `test/vm/test-vm.sh` | vm | the runner |
-| `test/sev/test-sev.sh` | sev | the runner |
-| `test/sev/test-sev-all.sh` | sev | qualification run |
-| `test/vm/network/test-vm-loopback.sh` | vm (also sev) | vm suite `loopback`; sev suite `vsock` |
-| `test/vm/network/test-vm-epoll.sh` | vm | vm suite `epoll` |
-| `test/vm/network/test-vm-outbound.sh` | vm | vm suite `outbound` |
-| `test/vm/network/test-vm-udp.sh` | vm | vm suite `udp` |
-| `test/vm/network/test-vm-guest-loopback.sh` | vm | vm suite `guest-loopback` |
-| `test/vm/network/test-vm-redis.sh` | vm | not a suite of `test-vm.sh`; called by `vm-x86_64.yml` |
-| `test/vm/network/test-vm-relay.py` | vm | relay handshake and policy checks; the runner that calls it: not confirmed |
-| `test/vm/vsock-loopback/` | vm | programs and servers of the VM network tests; `tests.toml` for `saguaro-test` |
+## The runners the tiers call
 
-### Other single files
+| Command | Role |
+|---|---|
+| `CI-Examples/<name>/exec.sh --<variant>` | the single runner of the examples (`--direct --vm --sev --sev-snp --sgx --vbs`) |
+| `test/direct/test-direct.sh [pal] [libos]` | the PAL suite and the full LibOS suite of the direct PAL. Its example suites (`helloworld multithread busybox bash redis memcached sqlite python lighttpd nginx rust networks`) are deprecated and stay only for `scripts/riscv64/run-examples.sh`: the RISC-V board needs them until `exec.sh --direct` works there |
+| `test/vm/test-vm.sh [libos] [loopback] [epoll] [outbound] [udp] [guest-loopback]` | the LibOS suite under `saguaro-vm` (2 vCPUs unless `SAGUARO_CPU_NUM` says otherwise) and the VM network suites |
+| `test/vm/multiproc/check-probes.sh [check...]` | the multi-process checks of the VM PAL: `spawn signals forks misc sysv libos examples redis` (default: the first five) |
+| `test/vm/multiproc/sig-loop.sh`, `boot-loop.sh` | the signal loop and the boot loop (extended) |
+| `test/vm/stress/run-stress.sh` | the concurrency stress tests (extended, below) |
+| `test/sev/test-sev.sh [--vcpus N] [suite...]` | the SEV suites hello, memory, vsock, measure, attest (without `--vcpus`: hello at 1 and 4 vCPUs, the others at 1) |
+| `test/sev/test-sev-all.sh` | the SEV qualification run by hand: build, `test-sev.sh` in both modes, the full LibOS suite at one vCPU count, examples, probes |
+| `test/unit/` | pytest unit tests of `saguarolibos` |
+| `libos/test/fs`, `libos/test/abi/x86_64` | the file system and process-entry (ABI) suites, run with `saguaro-test pytest` in their folder (extended; the ABI suite exists for x86_64 only) |
 
-| File | Backend | Role (from header) |
-|---|---|---|
-| `test/boot-probe.sh` | graphics | boot time and memory commit of a graphics VM; not pass/fail |
-| `test/direct/direct-prefix-sweep.sh` | direct | `fork_and_exec` regression from install copies at many path lengths |
-| `test/calibrate-syscall-profile.py` | any | calibrates `scripts/syscall-profile.py`; needs strace and distro packages |
-| `test/runtime-check-syscall-profile.py` | direct | compares the profile with the syscalls saguaro-direct reports as unsupported |
-| `test/test-syscall-profile.py` | any | checks the profiler against raw strace output |
-| `test/tolerance-syscall-profile.py` | any | runs `scripts/syscall-tolerance.py` on ten applications |
+## Stress tests (`test/vm/stress/`)
 
-### Folders
+Three plain pthread and futex programs and a runner. `hangrepro` creates and joins threads, runs a futex ring,
+timed waits, and concurrent thread and page-table creation. `idlebench` runs a futex ring with random sleeps,
+mmap/munmap churn, short-lived threads and a pinned waiter, with a stall detector. `madv_stress` discards
+thread stacks and a large region with `MADV_DONTNEED` while other threads map and unmap. `run-stress.sh` builds
+them, renders `manifest.template` once per program and runs eight cases under `saguaro-vm` (`--list`, `-n
+ROUNDS`, `STRESS_SCALE`). A case passes with exit status 0 and its `... OK` line; a stall or a hang fails it.
+The cases check the concurrency fixes of the VM PAL: lost wake-ups and timeouts, page tables created
+concurrently, an exiting thread's stack, and the discard of pages on `MADV_DONTNEED`.
 
-| Folder | Backend | Content (from headers) |
-|---|---|---|
-| `test/unit/` | any | pytest unit tests of `saguarolibos` (chroot, ldd parsing, sgx sign) |
-| `test/benchmarks/` | direct | `run_benchmarks.sh` and `syscall-bench`: native against saguaro-direct |
-| `test/sev/` | sev | `sev_probe`, `sev_attest`, `qmp.py`, `sev_memcheck.py`: used by `test-sev.sh` |
-| `test/vm/multiproc/` | vm | multi-process checks; `check-probes.sh` is called by `vm-x86_64.yml`; `run-probes.sh`, `load.sh`, `vm-examples.sh`, `boot-loop.sh`, `sig-loop.sh`, `nginx-workers.sh`, `redis-bgsave.sh` are run by hand |
-| `test/vm/multiproc-aarch64/` | vm (aarch64) | `validate.sh` and its parts (`hello.sh`, `probes.sh`, `load.sh`, LTP scripts, hang tools) |
-| `test/vm/timer/` | vm, sev | timer measurements: `measure.sh` (aarch64 VM), `measure-sev.sh` (SEV-SNP), comparison scripts |
-| `test/vulkan/` | graphics | Vulkan probes, `vm-check.sh`, Quake II and vkcube scripts, `Makefile` |
-| `test/proton-vm/` | graphics | Proton and Wine run scripts, Windows test programs, probes |
-| `test/vbs/arm64/` | vbs (ARM64) | enclave spikes: `step0-sample`, `probe`, `elf-in-image`, `cross-build` |
-| `test/vbs/x64/` | vbs (x64) | the same steps for x64, plus `elf-scan.sh` and `aarch64-pp-compare.py` |
+## Other tests in this folder
+
+| Path | Role |
+|---|---|
+| `test/direct/direct-prefix-sweep.sh` | `fork_and_exec` from install copies at many path lengths (extended, direct) |
+| `test/vm/network/` | the VM network tests (`test-vm-loopback.sh`, `-epoll`, `-outbound`, `-udp`, `-guest-loopback`, `-redis`, `test-vm-relay.py`) |
+| `test/vm/vsock-loopback/` | programs and servers of the VM network tests |
+| `test/vm/multiproc-aarch64/` | the AArch64 multi-process scripts (`hello.sh`, `probes.sh`, `load.sh`, LTP scripts, hang tools), run by hand |
+| `test/vm/timer/` | timer measurements (`measure.sh`, `measure-sev.sh`) |
+| `test/benchmarks/` | native against `saguaro-direct` |
+| `test/boot-probe.sh` | boot time and memory commit of a graphics VM |
+| `test/*-syscall-profile.py` | checks and calibration of `scripts/syscall-profile.py` |
+| `test/vulkan/`, `test/proton-vm/` | graphics probes and Proton/Wine scripts (need a display) |
+| `test/vbs/` | VBS enclave spikes (Windows) |
+| `test/sev/` | `sev_probe`, `sev_attest`, `qmp.py`, `sev_memcheck.py`, used by `test-sev.sh` |
 
 ## CI
 
-All workflows are manual (`workflow_dispatch`). Calls into `test/`: `direct-x86_64.yml` and
-`direct-aarch64.yml` run `test/direct/test-direct.sh`; `vm-x86_64.yml` runs `test/vm/network/test-vm-redis.sh` and
-`test/vm/multiproc/check-probes.sh`; `test/sev/test-sev-all.sh` runs the SEV checks by hand on an AMD SEV-SNP host (there is no workflow for it).
+All workflows are manual (`workflow_dispatch`) and call `test/quick.sh` after their build steps:
+`direct-x86_64.yml` and `direct-aarch64.yml` (`direct`), `direct-riscv64-emulated.yml` (`direct --target
+riscv64`), `vm-x86_64.yml` (`vm`; it also runs `test/vm/network/test-vm-redis.sh` for the inbound relay) and
+`vm-aarch64-tcg.yml` (`vm` under QEMU TCG). Each has a `tier` input (default `regression`), writes `summary.txt` to
+the job summary and uploads the output directory. Deselects for a slow host are `QUICK_PYTEST_K` in the
+workflow (aarch64 TCG: `test_604_sigreturn_regs`; riscv64: `test_103_gettimeofday`, `test_603_rewrite_stress`)
+and entries of `expected-failures.toml`. The TDX PAL is compiled by the `tdx-build` job of `direct-x86_64.yml`.
+SEV, SGX and VBS have no CI (the repository is public): run `test/quick.sh sev`, `sev-snp`, `sgx` or `vbs` by
+hand per release and keep the summary line.

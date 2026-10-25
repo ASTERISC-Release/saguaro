@@ -49,9 +49,18 @@ The PAL and LibOS suites need their test manifests rendered first:
 
     scripts/riscv64/guest.sh stop
 
-`run-examples.sh` takes the suite names of `test/direct/test-direct.sh` (`bash`, `python`,
-`sqlite`, `redis`, ...); several need more packages in the guest (the `direct-riscv64-emulated`
+`run-examples.sh` takes the (deprecated) example suite names of `test/direct/test-direct.sh` (`bash`,
+`python`, `sqlite`, `redis`, ...); several need more packages in the guest (the `direct-riscv64-emulated`
 workflow in `.github/workflows/` lists the ones it installs).
+
+The regression tier of the other variants (the PAL suite, the LibOS core list of 127 tests, the examples) runs in
+the guest with one command, in the cross container with the guest started:
+
+    test/quick.sh direct --target riscv64 --tier smoke
+    QUICK_RISCV64_EXAMPLES=python test/quick.sh direct --target riscv64     # the regression tier; default examples: bash sqlite python busybox memcached nginx
+
+It writes `results.csv` and `summary.txt` like the other variants (`test/README.md`). Building the examples in the
+emulated guest is slow, so the `direct-riscv64-emulated` workflow runs `python` by default.
 
 ## Troubleshooting
 
@@ -72,7 +81,7 @@ On a riscv64 machine the same PAL builds and runs without the cross container an
 
     scripts/install.sh -j4                    # native build and install; keep -j low on a small board
     export SAGUARO_PREFIX="$HOME/.local/saguaro" LOGDIR="$HOME/saguaro-logs"
-    test/direct/test-direct.sh                # PAL, LibOS and the example suites (or name suites: libos pal redis)
+    test/direct/test-direct.sh                # PAL and LibOS suites; the example suites by name (deprecated, kept for the board): bash python sqlite redis ...
 
 Results: the PAL regression passes 27 tests (9 skipped); the LibOS regression 190 (40 skipped, 3 failed); all 12
 example suites of `test-direct.sh` pass (`helloworld`, `multi-thread`, `bash`, `sqlite`, `python`, `networks`,
