@@ -75,6 +75,11 @@ The exit status is 1 if a test or a step failed unexpectedly. A failure listed i
 `known-fail` and does not fail the run; every entry has a reason. `test/quick/expected.csv` has the counts the
 `libos-core` step gives per variant; for a measured row the run prints a `NOTE` when the counts differ.
 Skips and xfails under the VM PAL come from `libos/test/regression/vm_skip.toml`, as before.
+The seven SGX entries (`*_chroot` tests that need a file symlink or `RENAME_EXCHANGE`, and the two UNIX socket tests) are
+gaps of the SGX PAL by design of the enclave threat model (it refuses host-visible nodes and does not pass file
+descriptors through the host), not bugs. The helloworld example of sgx and vbs fails about 1 run in 8 with `mmap
+DATA_REGION: Cannot allocate memory` (a 512 MiB mapping in a 1G enclave); `quick.sh` runs that one step a second time
+in that case only, prints `NOTE retried` and records `retried=1` in `results.csv` and `summary.txt`.
 
 ## Files
 
