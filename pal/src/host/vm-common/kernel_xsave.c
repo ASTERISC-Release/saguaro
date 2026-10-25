@@ -23,7 +23,7 @@
 uint64_t g_xcr0 = 0;
 uint32_t g_xsave_size = 0;
 
-const uint32_t g_xsave_reset_state[VM_XSAVE_RESET_STATE_SIZE / sizeof(uint32_t)]
+uint32_t g_xsave_reset_state[VM_XSAVE_RESET_STATE_SIZE / sizeof(uint32_t)]
         __attribute__((aligned(VM_XSAVE_ALIGN))) = {
     0x037F, 0, 0, 0, 0, 0, 0x1F80,     0xFFFF, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0,      0, 0, 0, 0, 0, 0,          0,      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -77,6 +77,14 @@ int xsave_init(void) {
     /* enable AMX's XTILEDATA */
     if (xfeatures & VM_XFEATURE_MASK_AMX_DATA)
         xcr0 |= VM_XFEATURE_MASK_AMX_DATA;
+
+    /* the reset state is in the compacted format (XCOMP_BV[63]); a CPU
+     * without XSAVEC (QEMU TCG) raises #GP on it: use the standard format there */
+    cpuid(EXTENDED_STATE_LEAF, 1, words);
+    if (!(words[CPUID_WORD_EAX] & (1 << 1))) {
+        g_xsave_reset_state[(512 + 8) / 4 + 1] = 0; /* XCOMP_BV high dword */
+        log_always("XSAVE: no XSAVEC, standard-format reset state");
+    }
 
     __asm__ volatile("xsetbv" : : "a"(xcr0), "c"(0), "d"(0));
 

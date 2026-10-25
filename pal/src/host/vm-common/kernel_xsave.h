@@ -59,6 +59,6 @@ enum VM_XFEATURE {
 
 extern uint64_t g_xcr0;
 extern uint32_t g_xsave_size;
-extern const uint32_t g_xsave_reset_state[VM_XSAVE_RESET_STATE_SIZE / sizeof(uint32_t)];
+extern uint32_t g_xsave_reset_state[VM_XSAVE_RESET_STATE_SIZE / sizeof(uint32_t)];
 
 int xsave_init(void);
