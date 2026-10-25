@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
+#
+# Manifest of the stress programs (test/vm/stress/run-stress.sh renders it once per program):
+#   saguaro-manifest -Darch_libdir=<multiarch libdir> -Dentry=/stress/<program> -Dstressdir=<build dir> \
+#       manifest.template <program>.manifest
+# The programs are single-process, multi-threaded C programs; they only need the C library.
+libos.entrypoint = "{{ entry }}"
+loader.log_level = "error"
+loader.env.LD_LIBRARY_PATH = "/lib:{{ arch_libdir }}:/usr{{ arch_libdir }}"
+loader.insecure__use_cmdline_argv = true
+# hangrepro creates up to 256 threads from several creators at once
+sys.stack.size = "32M"
+fs.mounts = [
+  { path = "/lib", uri = "file:{{ saguaro.runtimedir() }}" },
+  { path = "{{ arch_libdir }}", uri = "file:{{ arch_libdir }}" },
+  { path = "/usr", uri = "file:/usr" },
+  { path = "/stress", uri = "file:{{ stressdir }}" },
+]
