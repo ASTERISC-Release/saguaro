@@ -13,8 +13,6 @@
 name: TDX PAL emulated (x86_64, QEMU TCG)
 
 on:
-  push:
-    branches: [tdx-emu-ci]   # TEMPORARY, to run the workflow from the branch; removed before merging
   schedule:
     - cron: '37 10 * * *'   # nightly, UTC
   workflow_dispatch:
