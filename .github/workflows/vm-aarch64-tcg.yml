@@ -12,8 +12,6 @@ name: VM PAL (aarch64, TCG)
 on:
   schedule:
     - cron: '57 9 * * *'   # nightly, UTC
-  push:
-    branches: [nightly-ci]   # TEMPORARY, to prove the scheduled path; removed before merging
   workflow_dispatch:
     inputs:
       tier:

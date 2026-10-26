@@ -19,8 +19,6 @@ name: VM PAL (x86_64)
 on:
   schedule:
     - cron: '47 9 * * *'   # nightly, UTC
-  push:
-    branches: [nightly-ci]   # TEMPORARY, to prove the scheduled path; removed before merging
   workflow_dispatch:
     inputs:
       tier:
