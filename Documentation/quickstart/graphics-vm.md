@@ -3,7 +3,8 @@
 With the graphics host redirection ([Tirith](https://arxiv.org/abs/2609.17525)) an OpenGL or
 Vulkan application runs inside the `saguaro-vm` microVM and draws on the host's GPU: a preload
 library in the guest (`libgraphics.so`) forwards the GPU work to a listener in a QEMU fork on the
-host, and the application's own X connection is relayed over vsock. 
+host ([`qemu-graphics`](https://github.com/adilahmad17/qemu-graphics), the submodule `vmm/graphics`), and
+the application's own X connection is relayed over vsock. 
 
 > **Disclaimer:** Graphics work is **heavily work-in-progress**. The performance of the graphical redirection
 approach has only been tested in a small set of hardware topologies, and more testing is ongoing to address 
@@ -14,31 +15,27 @@ performance quirks. This work will likely require many months of development.
 - An x86_64 machine with KVM (`/dev/kvm`), `/dev/vhost-vsock`, and an Intel or AMD GPU with a
   render node (`/dev/dri/renderD128`, `renderD129`) that the user can open.
 - An X server (Xwayland counts) with `DISPLAY` set when the container is created.
-- The QEMU fork (UNRELEASED) checked out **next to** this repository before the container is created (or
-  `QEMU_SAGUARO_DIR` set): `container/run.sh` mounts it at `/root/qemu-saguaro`.
-  - This will be released shortly.
+- A git clone of this repository: the QEMU fork is a git submodule, which `scripts/qemu.sh` fetches and
+  builds (a ZIP download does not contain it).
 
 ## 1. Build (in the container)
 
-From the folder that holds the checkout:
-
-    git clone <URL of the QEMU fork> qemu-saguaro      # the URL is published with the release of the fork
-    cd saguaro
+    cd <repo-home>
     container/run.sh                   # with DISPLAY set; the rest runs inside
 
 Inside the container:
 
-    /root/qemu-saguaro/build.sh                        # once: build/qemu-system-x86_64
+    scripts/qemu.sh build graphics                     # once: vmm/graphics/prefix/bin/qemu-system-x86_64
     scripts/install.sh --vm                            # graphics on by default; builds libgraphics.so
-    export QEMU_PATH=/root/qemu-saguaro/build/qemu-system-x86_64
+    export QEMU_PATH=$(scripts/qemu.sh path graphics)
     mkdir -p ~/.cache
 
 `container/run.sh` loads `~/.local/saguaro-vm/env.sh` in the container shell, so no environment step
 is needed. The graphics examples are started by hand (their `exec.sh` lists no backend: it needs a
 display), so `./exec.sh` does not apply to them.
 
-If the container already existed without `DISPLAY` or without the fork, recreate it
-(`container/run.sh down`, which discards the install inside it).
+If the container already existed without `DISPLAY`, recreate it (`container/run.sh down`, which
+discards the install inside it; the QEMU build in `vmm/graphics/prefix` is kept).
 
 ## 2. glxgears
 
@@ -78,7 +75,7 @@ Note that memory is allocated on-demand; so this simply denotes the maximum that
 
 ## Limits
 
-- x86_64 only; graphics-enabled builds have only been run on the QEMU fork.
+- x86_64 only; graphics-enabled builds have only been run on the QEMU fork (`vmm/graphics`).
 - Input arrives through a shared ring by default; applications that read input without the Xlib
   calls the ring covers need `SHARED_INPUT=0` (`running.md`).
 - Two graphics VMs at once share one X relay; the second loses its display when the first exits.

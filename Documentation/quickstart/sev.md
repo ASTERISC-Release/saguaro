@@ -23,8 +23,14 @@ All the requirements from [VM quickstart](vm.md) apply, and:
 
 We have also designed a functional emulation of SEV/SEV-SNP (for testing/development). For this, you need:
 
-- Our fork of QEMU--[`qemu-sev-tcg`](https://github.com/adilahmad17/qemu-sev-tcg)--from the `dev-sev` branch. 
-  - Build this fork (using `./build.sh`) inside the podman container (after step 1 below).
+- Our fork of QEMU--[`qemu-sev-tcg`](https://github.com/adilahmad17/qemu-sev-tcg)--from the `dev-sev` branch,
+  pinned as the git submodule `vmm/sev-tcg` (a git clone of this repository is needed; a ZIP download does not
+  contain it).
+  - Fetch and build it inside the podman container, into `vmm/sev-tcg/prefix`:
+
+        container/run.sh 'scripts/qemu.sh build sev-tcg'
+
+  - The emulation does not use `sev-tools/`: the `build-sev-tools.sh` step of section 1 can be left out.
 
 # 1. Build and install
 
@@ -53,9 +59,11 @@ In the container shell, `exec.sh` runs the example under SEV-SNP (`--sev-snp`) o
     ./exec.sh --sev-snp
     ./exec.sh --sev
 
-If you are using **emulation** mode, please export the following environment variables: 
+If you are using **emulation** mode, export the following environment variables first, in the container
+shell at the root of the checkout:
 
-    export SAGUARO_ACCEL=tcg QEMU_PATH=<qemu-sev-tcg prefix>/bin/qemu-system-x86_64
+    export SAGUARO_ACCEL=tcg QEMU_PATH=$(scripts/qemu.sh path sev-tcg)
+    cd CI-Examples/helloworld
     ./exec.sh --sev            # or --sev-snp; every example's exec.sh works
 
 The script builds the example, sets `SAGUARO_SEV_MODE` to `snp` or `sev` and runs `saguaro-sev`.
@@ -119,6 +127,7 @@ are currently not measured.
     test/quick.sh sev                             # the same under plain SEV (launch measurement instead of attestation)
     test/quick.sh sev-snp --tier smoke            # a few minutes
     test/quick.sh sev-snp --tier extended         # the full LibOS suite at 2, 1 and 4 vCPUs, loops, stress tests: hours
+    SAGUARO_ACCEL=tcg test/quick.sh sev-snp --tier smoke    # under the emulation (QEMU_PATH as above)
 
 The regression tier runs one vCPU count, 2: the LibOS core list (127 tests, the same as on every variant), six
 examples through `exec.sh --sev-snp`, `test/sev/test-sev.sh --vcpus 2` and the multi-process probes; it prints a

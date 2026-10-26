@@ -1,8 +1,9 @@
 # Names that documents mention and that are legitimately not files of this repository.
 # One regular expression per line; a document token that matches any of them is not reported.
 
-# the external QEMU fork (qemu-saguaro) and the graphics workspace layout
-^qemu-saguaro/
+# files of the QEMU submodules under vmm/ (not fetched by a clone, nor by the documentation check), files of
+# the graphics QEMU named by their path in it, and the graphics workspace layout
+^vmm/(graphics|sev-tcg|tdx-tcg)/.
 ^qemu/
 ^saguaro-graphics/
 ^build\.sh$

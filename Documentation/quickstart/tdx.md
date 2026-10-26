@@ -22,11 +22,12 @@ All the requirements from [VM quickstart](vm.md) apply, and:
 
 We have also designed a functional emulation of TDX (for testing/development). For this, you need:
 
-- Our fork of QEMU--[`qemu-tdx-tcg`](https://github.com/adilahmad17/qemu-tdx-tcg)--from the `dev-tdx` branch.
-  - Build this fork inside the podman container (after step 1 below), into `~/qemu-tdx-tcg/prefix` (the container's
-    home, like td-shim; no mount is needed):
+- Our fork of QEMU--[`qemu-tdx-tcg`](https://github.com/adilahmad17/qemu-tdx-tcg)--from the `dev-tdx` branch,
+  pinned as the git submodule `vmm/tdx-tcg` (a git clone of this repository is needed; a ZIP download does not
+  contain it).
+  - Fetch and build it inside the podman container, into `vmm/tdx-tcg/prefix`:
 
-        container/run.sh 'git clone -b dev-tdx https://github.com/adilahmad17/qemu-tdx-tcg ~/qemu-tdx-tcg && ~/qemu-tdx-tcg/build.sh --install-deps --prefix ~/qemu-tdx-tcg/prefix'
+        container/run.sh 'scripts/qemu.sh build tdx-tcg'
 
 # 1. Build and install
 
@@ -55,9 +56,11 @@ In the container shell, `exec.sh` runs the example under TDX (`--tdx`):
     cd CI-Examples/helloworld
     ./exec.sh --tdx
 
-If you are using **emulation** mode, please export the following environment variables:
+If you are using **emulation** mode, export the following environment variables first, in the container
+shell at the root of the checkout:
 
-    export SAGUARO_ACCEL=tcg QEMU_PATH=$HOME/qemu-tdx-tcg/prefix/bin/qemu-system-x86_64
+    export SAGUARO_ACCEL=tcg QEMU_PATH=$(scripts/qemu.sh path tdx-tcg)
+    cd CI-Examples/helloworld
     ./exec.sh --tdx            # every example's exec.sh works
 
 The script creates the enclave signing key `~/.config/saguaro/enclave-key.pem` once, runs `make SGX=1`
@@ -94,7 +97,7 @@ regression tier adds the LibOS core list (127 tests, the same as on every varian
 are expected failures (`test/quick/expected-failures.toml`): the TDX PAL has no process creation. The results say
 `tdx-emu`. The scripts underneath:
 
-    CI-Examples/common_tools/sev-emu-check.sh tdx     # the preflight: is QEMU_PATH the qemu-tdx-tcg QEMU?
+    CI-Examples/common_tools/sev-emu-check.sh tdx     # the preflight: is QEMU_PATH the QEMU of vmm/tdx-tcg?
 
 The workflow `.github/workflows/tdx-emulated-x86_64.yml` runs the emulated tiers on a hosted runner, nightly and on
 demand; the `tdx-build` job of `direct-x86_64.yml` compiles the TDX PAL.
@@ -103,7 +106,7 @@ demand; the `tdx-build` job of `direct-x86_64.yml` compiles the TDX PAL.
 
 - `exec.sh` reports that `tdx` cannot run: it names the reason. `no TDX host (kvm_intel tdx is not Y)`: the host has no
   TDX; use the emulation (`SAGUARO_ACCEL=tcg`, `QEMU_PATH`).
-- `has no 'tdx-emu' object`: `QEMU_PATH` is not the `dev-tdx` build of `qemu-tdx-tcg`.
+- `has no 'tdx-emu' object`: `QEMU_PATH` is not the QEMU of `vmm/tdx-tcg` (`scripts/qemu.sh path tdx-tcg`).
 - The install stops at the link step: `$HOME/td-shim` is missing or not built (section 1).
 - `saguaro-sgx-sign not installed`: the install lacks `--sgx`; repeat it with `--sgx --tdx`.
 - td-shim panics with `Secure Boot: Cannot read verify header`: it was built with its default features; build it with

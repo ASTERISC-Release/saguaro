@@ -5,8 +5,8 @@
 
 Reports every path-like token and markdown link in the checked documents that does
 not name a file of the repository (by path, path suffix or basename). Names that
-are legitimately external (for example files of the external QEMU fork, kernel
-paths or historical names) are listed in scripts/check-docs.allow.
+are legitimately external (for example files of the QEMU submodules under vmm/,
+kernel paths or historical names) are listed in scripts/check-docs.allow.
 
 Usage:  scripts/check-docs.py [FILE...]
 Exit status: 0 when nothing is reported, 1 otherwise.
