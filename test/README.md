@@ -42,6 +42,17 @@ to take 10 to 12 minutes there; `QUICK_PYTEST_K` can leave out the slowest tests
 `test_220_send_handle`, `test_076_timerfd`, `test_110_fcntl_lock`, `test_041_futex_timeout`) if a shorter
 run is wanted.
 
+`tdx` under `SAGUARO_ACCEL=tcg` (the emulated TDX of QEMU TCG, below; the results say `tdx-emu`): the install is
+`scripts/install.sh --sgx --tdx`, the launcher `saguaro-tdx`, the steps have the shape of `sev-emu`'s (`regression` adds
+only `libos-core`; the examples run in `extended`), plus `libos-manifests`, which signs the test manifests the TDX PAL
+reads. Measured (QEMU TCG, 2 vCPUs, examples built): `tdx-emu` smoke 19 s, regression 355 s (`libos-core` 340 s:
+95 pass, 4 skip, 2 xfail, 26 known; the known failures are the tests that fork, which the TDX PAL does not support,
+and four others, `test/quick/expected-failures.toml`). A TD boots in about 2.5 s under TCG, so `libos-core` is
+boot-bound; on a hosted 4-vCPU runner the regression tier is expected to take 11 to 13 minutes. If a shorter run is
+wanted, `QUICK_PYTEST_K` can leave out the tests that fork (the 22 known failures of `TC_01_Bootstrap`, `TC_30_Syscall`,
+`TC_40_FileSystem` and `TC_80_Socket` listed in `expected-failures.toml`, one boot each) and the slowest passing tests
+(`test_076_timerfd`, `test_070_eventfd`, `test_041_futex_timeout`, `test_099_sysv_sem`).
+
 The VM-based variants (`vm`, `sev`, `sev-snp`) run `smoke` and `regression` with exactly 2 vCPUs
 (`SAGUARO_CPU_NUM=2`; `--vcpus` changes it) and 8G of RAM (`SAGUARO_RAM_SIZE`): there is no sweep in these
 tiers. The `extended` tier keeps it, and the step names say the count: `libos-full-2vcpu`,
@@ -58,6 +69,7 @@ Steps of the variants in `regression`, besides the common ones:
 | `sgx` | `libos-sgx-only` (file check policy, CPUID and RDTSC under SGX, sealed and MRENCLAVE tests), `unit` (with `test_sgx_sign.py`) |
 | `vbs` | `vbs-regress` (the core programs that have a VBS case, `test/quick/vbs-core.txt`, one result row per case; the failures that need `fork` or host devices are known failures), the examples `busybox sqlite python redis lighttpd rust` and `CI-Examples/vbs`; no LibOS pytest |
 | `tdx` | `tdx-build` only: the TDX PAL cannot run without TDX hardware |
+| `tdx` under `SAGUARO_ACCEL=tcg` | the emulated TDX (results say `tdx-emu`): `libos-manifests` (the signed manifests the TDX PAL reads) before the LibOS steps; none else in `regression`; `extended` has the nine examples and the LibOS sweeps |
 
 `extended` adds `libos-fs` (`libos/test/fs`), `libos-abi` (`libos/test/abi`, x86_64 direct), `ex-<name>` for
 every other example, `stress-rewrite` (aarch64 and riscv64 only: x86_64 does not rewrite system calls, so its `blob` scenario fails there by design) and `prefix-sweep` (direct), and on the VM variants `vm-net-all`,
@@ -183,7 +195,9 @@ riscv64`), `vm-x86_64.yml` (`vm`; it also runs `test/vm/network/test-vm-redis.sh
 `vm-aarch64-tcg.yml` (`vm` under QEMU TCG). Each has a `tier` input (default `regression`), writes `summary.txt` to
 the job summary and uploads the output directory. Deselects for a slow host are `QUICK_PYTEST_K` in the
 workflow (aarch64 TCG: `test_604_sigreturn_regs`; riscv64: `test_103_gettimeofday`, `test_603_rewrite_stress`)
-and entries of `expected-failures.toml`. The TDX PAL is compiled by the `tdx-build` job of `direct-x86_64.yml`.
+and entries of `expected-failures.toml`. The TDX PAL is compiled by the `tdx-build` job of `direct-x86_64.yml` and
+run under the emulated TDX by `tdx-emulated-x86_64.yml` (nightly and on demand; it builds the `dev-tdx` QEMU and
+td-shim, both cached, installs Saguaro with `--sgx --tdx` and runs `test/quick.sh tdx` at 2 vCPUs).
 SEV, SGX and VBS have no CI (the repository is public): run `test/quick.sh sev`, `sev-snp`, `sgx` or `vbs` by
 hand per release and keep the summary line. The emulated SEV can run on a hosted x86_64 runner once
 the emulating QEMU is available to the workflow (the `dev-sev` fork is private: publish it or build the binary

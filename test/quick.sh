@@ -14,7 +14,15 @@
 #             QEMU_PATH is checked first (CI-Examples/common_tools/sev-emu-check.sh). The results say sev-emu. Its
 #             smoke tier adds the SEV smoke suite (hello at 1, 2 and 4 vCPUs, vsock); its regression tier the LibOS
 #             core list only (hosted runners: about 8 minutes).
-#   tier      smoke       about 3 minutes: install check, helloworld, unit_tests examples, two LibOS tests (not on vbs, tdx)
+#             tdx under SAGUARO_ACCEL=tcg runs the TDX PAL under the emulated TDX of QEMU TCG (td-shim boots the
+#             PAL; no TDX hardware, no KVM, no attestation, no memory isolation):
+#                 SAGUARO_ACCEL=tcg QEMU_PATH=<dev-tdx qemu-system-x86_64> test/quick.sh tdx
+#             The results say tdx-emu; its tiers have the shape of sev-emu (the regression tier is the LibOS core
+#             list, the examples run in the extended tier). The TDX PAL reads the signed SGX manifest, so the
+#             install is scripts/install.sh --sgx --tdx and the LibOS steps sign their manifests first.
+#             Without SAGUARO_ACCEL=tcg, tdx compiles the TDX PAL and runs nothing.
+#   tier      smoke       about 3 minutes: install check, helloworld, unit_tests examples, two LibOS tests (not on vbs,
+#                         nor on tdx without SAGUARO_ACCEL=tcg)
 #             regression  about 20 minutes at most (the default; includes smoke): PAL regression (direct, sgx),
 #                         the LibOS core list (SAGUARO_TESTSET=core, test/quick/core-tests.txt), the examples
 #                         bash sqlite python busybox memcached redis lighttpd rust nginx through their exec.sh, and the steps of
@@ -41,12 +49,14 @@
 # variant, architecture and vCPU count is reported as known-fail and does not fail the run.
 #
 # Install prefixes (scripts/install.sh): direct $SAGUARO_DIRECT_PREFIX, vm/sev/sev-snp $SAGUARO_VM_PREFIX, sgx
-# $SAGUARO_SGX_PREFIX; SAGUARO_PREFIX is used when the variant's own variable is not set. The VM variants must
+# $SAGUARO_SGX_PREFIX, tdx $SAGUARO_TDX_PREFIX (--sgx --tdx); SAGUARO_PREFIX is used when the variant's own variable
+# is not set. The VM variants must
 # run as a user that may run saguaro-vm (root in the container of container/run.sh).
 # Environment: QUICK_TIMEOUT_SCALE (multiplies every step timeout, default 1), QUICK_PYTEST_K (a pytest -k
 # expression added to the LibOS steps, for a test that is too slow on a given host), SAGUARO_RAM_SIZE (default
 # 8G for sev and sev-snp, the launcher of vm needs at least 5G), EXEC_TIMEOUT (seconds per example, exec.sh),
-# SAGUARO_ACCEL=tcg and QEMU_PATH (sev, sev-snp: the emulated SEV; QEMU_PATH names the dev-sev QEMU, required).
+# SAGUARO_ACCEL=tcg and QEMU_PATH (sev, sev-snp, tdx: the emulated SEV or TDX; QEMU_PATH names the dev-sev or dev-tdx
+# QEMU, required).
 set -u
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 REPO=${REPO:-$(cd "$HERE/.." && pwd)}
@@ -55,7 +65,7 @@ TARGET=""; VARIANT=""; TIER=regression; OUT=""; LIST=0; DRY=0; ONLY=""; CPUS=2
 while [ $# -gt 0 ]; do
     case $1 in
         direct|vm|sev|sev-snp|sgx|vbs|tdx) VARIANT=$1 ;;
-        sev-emu) echo "there is no sev-emu variant: run SAGUARO_ACCEL=tcg QEMU_PATH=<qemu> test/quick.sh sev|sev-snp" >&2; exit 2 ;;
+        sev-emu|tdx-emu) echo "there is no $1 variant: run SAGUARO_ACCEL=tcg QEMU_PATH=<qemu> test/quick.sh sev|sev-snp|tdx" >&2; exit 2 ;;
         --tier) TIER=${2:-}; shift ;;
         --out) OUT=${2:-}; shift ;;
         --vcpus) CPUS=${2:-}; shift ;;
@@ -69,10 +79,11 @@ while [ $# -gt 0 ]; do
     shift
 done
 [ -n "$VARIANT" ] || { echo "usage: test/quick.sh <direct|vm|sev|sev-snp|sgx|vbs|tdx> [options]  (--help)" >&2; exit 2; }
-# sev and sev-snp under SAGUARO_ACCEL=tcg are the emulated SEV: internally the variant sev-emu, in the mode asked for
+# sev and sev-snp under SAGUARO_ACCEL=tcg are the emulated SEV: internally the variant sev-emu, in the mode asked
+# for; tdx under SAGUARO_ACCEL=tcg is the emulated TDX, the variant tdx-emu
 EMU_MODE=
 if [ "${SAGUARO_ACCEL:-}" = tcg ]; then
-    case $VARIANT in sev) EMU_MODE=sev; VARIANT=sev-emu ;; sev-snp) EMU_MODE=snp; VARIANT=sev-emu ;; esac
+    case $VARIANT in sev) EMU_MODE=sev; VARIANT=sev-emu ;; sev-snp) EMU_MODE=snp; VARIANT=sev-emu ;; tdx) VARIANT=tdx-emu ;; esac
 fi
 case $TIER in smoke|regression|extended) ;; *) echo "bad tier: $TIER (smoke, regression or extended)" >&2; exit 2 ;; esac
 case $CPUS in ''|*[!0-9]*|0) echo "bad --vcpus: $CPUS" >&2; exit 2 ;; esac
@@ -95,8 +106,9 @@ case $VARIANT in
     sgx)     LAUNCH=saguaro-sgx;    EXEC=--sgx;     PREFIX=${SAGUARO_SGX_PREFIX:-${SAGUARO_PREFIX:-$HOME/.local/saguaro-sgx}} ;;
     vbs)     LAUNCH=saguaro-vbs;    EXEC=--vbs;     PREFIX= ;;
     tdx)     LAUNCH=;               EXEC=;          PREFIX= ;;
+    tdx-emu) LAUNCH=saguaro-tdx;    EXEC=--tdx;     PREFIX=${SAGUARO_TDX_PREFIX:-${SAGUARO_PREFIX:-$HOME/.local/saguaro-tdx}}; VCPUS=$CPUS ;;
 esac
-VMLIKE=0; case $VARIANT in vm|sev|sev-snp|sev-emu) VMLIKE=1 ;; esac
+VMLIKE=0; case $VARIANT in vm|sev|sev-snp|sev-emu|tdx-emu) VMLIKE=1 ;; esac
 
 # The environment of a real run (not of --list and --dry-run, which must work without an install).
 setup_env() {
@@ -107,6 +119,7 @@ setup_env() {
             direct) export SAGUARO_DIRECT_PREFIX=$PREFIX ;;
             vm|sev|sev-snp|sev-emu) export SAGUARO_VM_PREFIX=$PREFIX ;;
             sgx) export SAGUARO_SGX_PREFIX=$PREFIX ;;
+            tdx-emu) export SAGUARO_TDX_PREFIX=$PREFIX ;;
         esac
         if [ -r "$PREFIX/env.sh" ]; then . "$PREFIX/env.sh"; else . "$REPO/scripts/saguaro-env.sh"; fi
     fi
@@ -123,6 +136,7 @@ setup_env() {
             # QEMU that has it (not the one of the image)
             "$REPO/CI-Examples/common_tools/sev-emu-check.sh" "$EMU_MODE" || exit 2
             export SAGUARO_SEV_MODE=$EMU_MODE ;;
+        tdx-emu) "$REPO/CI-Examples/common_tools/sev-emu-check.sh" tdx || exit 2 ;;
     esac
     # the VBS examples need saguaro-vbs (~/.local/bin) and, for rust, cargo (~/.cargo/bin), which a non-login shell lacks
     [ "$VARIANT" != vbs ] || export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
@@ -132,7 +146,7 @@ setup_env() {
 # QEMU software emulation (TCG) is the accelerator of the aarch64 vm PAL when there is no usable /dev/kvm (or
 # SAGUARO_ACCEL names another one); the same test as exec_accel in CI-Examples/common_tools/exec-common.sh
 tcg() {
-    [ "$VARIANT" != sev-emu ] || return 0
+    case $VARIANT in sev-emu|tdx-emu) return 0 ;; esac
     [ "$VARIANT" = vm ] && [ "$ARCH" = aarch64 ] || return 1
     case ${SAGUARO_ACCEL:-} in
         kvm*) return 1 ;;
@@ -146,6 +160,7 @@ libos_env() {
     case $VARIANT in
         vm)      echo "SAGUARO_VM=1" ;;
         sev|sev-snp|sev-emu) echo "SAGUARO_VM=1 SAGUARO_VM_LAUNCHER=saguaro-sev" ;;
+        tdx-emu) echo "SAGUARO_VM=1 SAGUARO_VM_LAUNCHER=saguaro-tdx" ;;
         sgx)     echo "SGX=1" ;;
     esac
 }
@@ -206,10 +221,16 @@ steps() {
     # --- smoke ------------------------------------------------------------------------------------------------
     if [ "$VARIANT" = sev-emu ]; then
         echo "install-check|smoke|60|$cpu|plain|command -v $LAUNCH saguaro-manifest saguaro-test && python3 -c 'import saguarolibos' && CI-Examples/common_tools/sev-emu-check.sh $EMU_MODE"
+    elif [ "$VARIANT" = tdx-emu ]; then
+        # the enclave signing key signs the manifests the TDX PAL reads (as exec.sh makes it for sgx)
+        echo "install-check|smoke|60|$cpu|plain|command -v $LAUNCH saguaro-manifest saguaro-test saguaro-sgx-sign && python3 -c 'import saguarolibos' && CI-Examples/common_tools/sev-emu-check.sh tdx && { [ -e \"\${SGX_SIGNER_KEY:-\$HOME/.config/saguaro/enclave-key.pem}\" ] || saguaro-sgx-gen-private-key; }"
     else
         echo "install-check|smoke|60|$cpu|plain|command -v $LAUNCH saguaro-manifest saguaro-test && python3 -c 'import saguarolibos'"
     fi
     echo "check-core-list|smoke|60|-|plain|python3 test/quick/check-core-list.py"
+    # the TDX PAL reads the signed SGX manifest of each test: the LibOS steps need them signed first (the key is
+    # made by the install check); the pytest steps then run with the TDX launcher of the VM PAL family
+    [ "$VARIANT" != tdx-emu ] || echo "libos-manifests|smoke|600|-|plain|(cd libos/test/regression && saguaro-test --sgx build > /dev/null)"
     echo "ex-helloworld|smoke|300|$cpu|exec|(cd CI-Examples/helloworld && ./exec.sh $EXEC)"
     # thread-stress takes about 15 minutes under TCG: the extended tier runs it there (ex-thread-stress)
     local skip=; tcg && skip="UNIT_TESTS_SKIP=thread-stress "
@@ -226,11 +247,13 @@ steps() {
         echo "pal|regression|600|$cpu|pytest|(cd pal/regression && $env $st $PYARGS)" ;;      # 36 tests
     esac
     echo "libos-core|regression|1500|$cpu|pytest|(cd libos/test/regression && $env SAGUARO_TESTSET=core $st $PYARGS test_libos.py $KSEL)"
-    # sev-emu keeps its regression tier at the core list (the budget of a hosted runner); the examples and
-    # the multi-process probes run in its extended tier
-    [ "$VARIANT" = sev-emu ] || for e in bash sqlite python busybox memcached redis lighttpd rust nginx; do
-        echo "ex-$e|regression|600|$cpu|exec|(cd CI-Examples/$e && ./exec.sh $EXEC)"
-    done
+    # sev-emu and tdx-emu keep their regression tier at the core list (the budget of a hosted runner); the
+    # examples (and the multi-process probes of sev-emu) run in their extended tier
+    case $VARIANT in sev-emu|tdx-emu) ;; *)
+        for e in bash sqlite python busybox memcached redis lighttpd rust nginx; do
+            echo "ex-$e|regression|600|$cpu|exec|(cd CI-Examples/$e && ./exec.sh $EXEC)"
+        done ;;
+    esac
     case $VARIANT in
         direct)  echo "unit|regression|300|-|pytest|python3 -m pytest $PYARGS test/unit" ;;
         vm)      echo "vm-net|regression|600|$cpu|plain|test/vm/test-vm.sh --prefix \"\$SAGUARO_PREFIX\" loopback outbound"        # guest-loopback: extended (it hung on a hosted runner)
@@ -248,26 +271,29 @@ steps() {
     [ "$TIER" = regression ] && return
 
     # --- extended (tier 2): the long suites, the sweeps and the stress tests -----------------------------------
-    if [ "$VARIANT" = sev-emu ]; then
+    case $VARIANT in sev-emu|tdx-emu)
         for e in bash sqlite python busybox memcached redis lighttpd rust nginx; do
             echo "ex-$e|extended|900|$cpu|exec|(cd CI-Examples/$e && ./exec.sh $EXEC)"
-        done
+        done ;;
+    esac
+    if [ "$VARIANT" = sev-emu ]; then
         echo "vm-multiproc|extended|1800|$cpu|plain|SAGUARO_VM_LAUNCHER=saguaro-sev test/vm/multiproc/check-probes.sh spawn signals forks misc sysv"
         echo "sev-smoke-1vcpu|extended|600|1|plain|test/sev/test-sev.sh --prefix \"\$SAGUARO_PREFIX\" --vcpus 1 hello vsock"
     fi
     case $VARIANT in
         direct|sgx)
             echo "libos-full|extended|3600|-|pytest|(cd libos/test/regression && $env $st $PYARGS test_libos.py $KSEL)" ;;
-        vm|sev|sev-snp|sev-emu)
+        vm|sev|sev-snp|sev-emu|tdx-emu)
             echo "libos-full-${CPUS}vcpu|extended|3600|$cpu|pytest|(cd libos/test/regression && $env $st $PYARGS test_libos.py $KSEL)"
             for n in 1 4; do
                 echo "libos-sweep-${n}vcpu|extended|3600|$n|pytest|(cd libos/test/regression && SAGUARO_CPU_NUM=$n $env $st $PYARGS test_libos.py $KSEL)"
             done ;;
     esac
-    case $VARIANT in vm|sev|sev-snp|sev-emu)
+    case $VARIANT in vm|sev|sev-snp|sev-emu|tdx-emu)
         echo "unit|extended|300|-|pytest|python3 -m pytest $PYARGS test/unit" ;;
     esac
     tcg && echo "ex-thread-stress|extended|3600|$cpu|exec|(cd CI-Examples/unit_tests && EXEC_TIMEOUT=3000 UNIT_TESTS_ONLY=thread-stress ./exec.sh $EXEC)"
+    [ "$VARIANT" != tdx-emu ] || echo "libos-fs-manifests|extended|600|-|plain|(cd libos/test/fs && saguaro-test --sgx build > /dev/null)"
     echo "libos-fs|extended|900|$cpu|pytest|(cd libos/test/fs && $env $st $PYARGS test_fs.py test_tmpfs.py)"
     [ "$ARCH" = x86_64 ] && [ $VMLIKE = 0 ] && [ "$VARIANT" = direct ] \
         && echo "libos-abi|extended|300|-|pytest|(cd libos/test/abi/x86_64 && $st $PYARGS test_entrypoint.py)"
@@ -317,7 +343,8 @@ if [ $DRY = 1 ]; then
     env_line="SAGUARO_PREFIX=${PREFIX:-none}"
     [ $VMLIKE = 1 ] && env_line="$env_line SAGUARO_CPU_NUM=$CPUS SAGUARO_RAM_SIZE=${SAGUARO_RAM_SIZE:-8G}"
     case $VARIANT in sev) env_line="$env_line SAGUARO_SEV_MODE=sev" ;; sev-snp) env_line="$env_line SAGUARO_SEV_MODE=snp" ;;
-        sev-emu) env_line="$env_line SAGUARO_SEV_MODE=$EMU_MODE SAGUARO_ACCEL=tcg QEMU_PATH=${QEMU_PATH:-<unset>}" ;; esac
+        sev-emu) env_line="$env_line SAGUARO_SEV_MODE=$EMU_MODE SAGUARO_ACCEL=tcg QEMU_PATH=${QEMU_PATH:-<unset>}" ;;
+        tdx-emu) env_line="$env_line SAGUARO_ACCEL=tcg QEMU_PATH=${QEMU_PATH:-<unset>}" ;; esac
     echo "# environment: $env_line"
     bad=0
     while IFS='|' read -r n tr t v k c; do

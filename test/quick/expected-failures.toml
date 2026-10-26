@@ -169,3 +169,134 @@ reason = "fd passing over UNIX sockets uses PalHostSendmsg, which the SGX PAL do
 variants = ["sev-emu"]
 test = "TC_40_FileSystem::test_020_cpuinfo"
 reason = "the guest runs on QEMU's `max` CPU model under TCG: /proc/cpuinfo lists flags of the model, not of the host the test compares with (it fails on the AMD SEV host for the same reason)"
+
+# --- tdx-emu (the TDX PAL under the emulated TDX of QEMU TCG; measured in the libos-core step) ---
+[[known]]
+variants = ["tdx-emu"]
+test = "TC_01_Bootstrap::test_202_fork_and_exec"
+reason = "the test forks: the TDX PAL has no process creation (_PalProcessCreate returns PAL_ERROR_NOTIMPLEMENTED; pal/src/host/tdx/pal_process.c), so fork fails with ENOSYS"
+
+[[known]]
+variants = ["tdx-emu"]
+test = "TC_01_Bootstrap::test_204_vfork_and_exec"
+reason = "the test forks: the TDX PAL has no process creation (_PalProcessCreate returns PAL_ERROR_NOTIMPLEMENTED; pal/src/host/tdx/pal_process.c), so fork fails with ENOSYS"
+
+[[known]]
+variants = ["tdx-emu"]
+test = "TC_01_Bootstrap::test_205_exec_fork"
+reason = "the test forks: the TDX PAL has no process creation (_PalProcessCreate returns PAL_ERROR_NOTIMPLEMENTED; pal/src/host/tdx/pal_process.c), so fork fails with ENOSYS"
+
+[[known]]
+variants = ["tdx-emu"]
+test = "TC_01_Bootstrap::test_206_double_fork"
+reason = "the test forks: the TDX PAL has no process creation (_PalProcessCreate returns PAL_ERROR_NOTIMPLEMENTED; pal/src/host/tdx/pal_process.c), so fork fails with ENOSYS"
+
+[[known]]
+variants = ["tdx-emu"]
+test = "TC_01_Bootstrap::test_220_send_handle"
+reason = "the test forks: the TDX PAL has no process creation (_PalProcessCreate returns PAL_ERROR_NOTIMPLEMENTED; pal/src/host/tdx/pal_process.c), so fork fails with ENOSYS"
+
+[[known]]
+variants = ["tdx-emu"]
+test = "TC_01_Bootstrap::test_401_exit_group"
+reason = "the test forks: the TDX PAL has no process creation (_PalProcessCreate returns PAL_ERROR_NOTIMPLEMENTED; pal/src/host/tdx/pal_process.c), so fork fails with ENOSYS"
+
+[[known]]
+variants = ["tdx-emu"]
+test = "TC_01_Bootstrap::test_405_sigprocmask_pending"
+reason = "the test forks: the TDX PAL has no process creation (_PalProcessCreate returns PAL_ERROR_NOTIMPLEMENTED; pal/src/host/tdx/pal_process.c), so fork fails with ENOSYS"
+
+[[known]]
+variants = ["tdx-emu"]
+test = "TC_30_Syscall::test_020_getdents"
+reason = "the test forks: the TDX PAL has no process creation (_PalProcessCreate returns PAL_ERROR_NOTIMPLEMENTED; pal/src/host/tdx/pal_process.c), so fork fails with ENOSYS"
+
+[[known]]
+variants = ["tdx-emu"]
+test = "TC_30_Syscall::test_050_mmap"
+reason = "the test forks: the TDX PAL has no process creation (_PalProcessCreate returns PAL_ERROR_NOTIMPLEMENTED; pal/src/host/tdx/pal_process.c), so fork fails with ENOSYS"
+
+[[known]]
+variants = ["tdx-emu"]
+test = "TC_30_Syscall::test_057_mprotect_file_fork"
+reason = "the test forks: the TDX PAL has no process creation (_PalProcessCreate returns PAL_ERROR_NOTIMPLEMENTED; pal/src/host/tdx/pal_process.c), so fork fails with ENOSYS"
+
+[[known]]
+variants = ["tdx-emu"]
+test = "TC_30_Syscall::test_090_sighandler_reset"
+reason = "the test forks: the TDX PAL has no process creation (_PalProcessCreate returns PAL_ERROR_NOTIMPLEMENTED; pal/src/host/tdx/pal_process.c), so fork fails with ENOSYS"
+
+[[known]]
+variants = ["tdx-emu"]
+test = "TC_30_Syscall::test_095_kill_all"
+reason = "the test forks: the TDX PAL has no process creation (_PalProcessCreate returns PAL_ERROR_NOTIMPLEMENTED; pal/src/host/tdx/pal_process.c), so fork fails with ENOSYS"
+
+[[known]]
+variants = ["tdx-emu"]
+test = "TC_30_Syscall::test_110_fcntl_lock"
+reason = "the test forks: the TDX PAL has no process creation (_PalProcessCreate returns PAL_ERROR_NOTIMPLEMENTED; pal/src/host/tdx/pal_process.c), so fork fails with ENOSYS"
+
+[[known]]
+variants = ["tdx-emu"]
+test = "TC_30_Syscall::test_120_gethostname_default"
+reason = "the test forks: the TDX PAL has no process creation (_PalProcessCreate returns PAL_ERROR_NOTIMPLEMENTED; pal/src/host/tdx/pal_process.c), so fork fails with ENOSYS"
+
+[[known]]
+variants = ["tdx-emu"]
+test = "TC_30_Syscall::test_130_sid"
+reason = "the test forks: the TDX PAL has no process creation (_PalProcessCreate returns PAL_ERROR_NOTIMPLEMENTED; pal/src/host/tdx/pal_process.c), so fork fails with ENOSYS"
+
+[[known]]
+variants = ["tdx-emu"]
+test = "TC_30_Syscall::test_140_flock_lock"
+reason = "the test forks: the TDX PAL has no process creation (_PalProcessCreate returns PAL_ERROR_NOTIMPLEMENTED; pal/src/host/tdx/pal_process.c), so fork fails with ENOSYS"
+
+[[known]]
+variants = ["tdx-emu"]
+test = "TC_40_FileSystem::test_000_proc"
+reason = "the test forks: the TDX PAL has no process creation (_PalProcessCreate returns PAL_ERROR_NOTIMPLEMENTED; pal/src/host/tdx/pal_process.c), so fork fails with ENOSYS"
+
+[[known]]
+variants = ["tdx-emu"]
+test = "TC_40_FileSystem::test_011_open_opath"
+reason = "the test forks: the TDX PAL has no process creation (_PalProcessCreate returns PAL_ERROR_NOTIMPLEMENTED; pal/src/host/tdx/pal_process.c), so fork fails with ENOSYS"
+
+[[known]]
+variants = ["tdx-emu"]
+test = "TC_80_Socket::test_090_pipe"
+reason = "the test forks: the TDX PAL has no process creation (_PalProcessCreate returns PAL_ERROR_NOTIMPLEMENTED; pal/src/host/tdx/pal_process.c), so fork fails with ENOSYS"
+
+[[known]]
+variants = ["tdx-emu"]
+test = "TC_80_Socket::test_095_mkfifo"
+reason = "the test forks: the TDX PAL has no process creation (_PalProcessCreate returns PAL_ERROR_NOTIMPLEMENTED; pal/src/host/tdx/pal_process.c), so fork fails with ENOSYS"
+
+[[known]]
+variants = ["tdx-emu"]
+test = "TC_80_Socket::test_100_socket_unix"
+reason = "the test forks: the TDX PAL has no process creation (_PalProcessCreate returns PAL_ERROR_NOTIMPLEMENTED; pal/src/host/tdx/pal_process.c), so fork fails with ENOSYS"
+
+[[known]]
+variants = ["tdx-emu"]
+test = "TC_80_Socket::test_101_socket_unix_fdpass"
+reason = "the test forks: the TDX PAL has no process creation (_PalProcessCreate returns PAL_ERROR_NOTIMPLEMENTED; pal/src/host/tdx/pal_process.c), so fork fails with ENOSYS"
+
+[[known]]
+variants = ["tdx-emu"]
+test = "TC_01_Bootstrap::test_211_exec_script"
+reason = "execve of a script from the allowed directory scripts/ is refused by the TDX PAL (file check policy strict: the sgx.allowed_files directory entry is not applied as the SGX PAL applies it), EACCES"
+
+[[known]]
+variants = ["tdx-emu"]
+test = "TC_01_Bootstrap::test_213_shebang_test_script"
+reason = "the shebang script from the allowed directory scripts/ is refused by the TDX PAL at init_exec_handle (as test_211), EACCES"
+
+[[known]]
+variants = ["tdx-emu"]
+test = "TC_02_OpenMP::test_000_simple_for_loop"
+reason = "libgomp.so.1 cannot be opened through the mount /usr/{{ arch_libdir }} of the test manifest (an allowed file under the TDX PAL; the Linux-based PALs open it): ENOENT at load time"
+
+[[known]]
+variants = ["tdx-emu"]
+test = "TC_40_FileSystem::test_020_cpuinfo"
+reason = "the guest runs on QEMU's `max` CPU model under TCG: /proc/cpuinfo lists flags of the model (no avx_vnni), not of the host the test compares with (as for sev-emu)"

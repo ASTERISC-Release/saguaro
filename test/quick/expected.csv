@@ -8,3 +8,4 @@ sev,x86_64,AMD SEV host (container),2,121,4,2,0,yes,libos-core step. skip and xf
 sev-snp,x86_64,AMD SEV-SNP host (container),2,121,4,2,0,yes,libos-core step. same as sev; TC_04_AttestationSevSnp is a separate step (libos-snp-attest)
 sgx,x86_64,SGX host,-,120,0,0,7,yes,libos-core step. known: the five *_chroot tests (no symlink/RENAME_EXCHANGE in the SGX PAL) and 100_socket_unix 101_socket_unix_fdpass
 sev-emu,x86_64,x86_64 host (container; QEMU TCG emulation),2,120,4,2,1,yes,libos-core step. skip and xfail as vm; known: test_020_cpuinfo (QEMU CPU model). No attestation step: the emulation has no firmware
+tdx-emu,x86_64,x86_64 host (container; QEMU TCG emulation),2,95,4,2,26,yes,libos-core step. skip and xfail as vm; known: 22 tests that fork (the TDX PAL has no process creation), exec_script and shebang_test_script (scripts/ refused), simple_for_loop (libgomp through the mount), test_020_cpuinfo (QEMU CPU model)
