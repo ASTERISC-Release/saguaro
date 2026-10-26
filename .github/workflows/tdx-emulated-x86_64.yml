@@ -1,0 +1,170 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 The ASTERISC Research Lab
+# TDX PAL under the emulated TDX of QEMU TCG (saguaro-tdx, SAGUARO_ACCEL=tcg test/quick.sh tdx).
+#
+# No TDX hardware and no KVM are needed: the QEMU of the dev-tdx branch of adilahmad17/qemu-sev-tcg emulates
+# the TDX guest interface the PAL uses (functional only: no attestation, no memory isolation, so the results
+# do not replace a run on a TDX host). The job builds that QEMU with its build.sh (cached by its commit),
+# builds td-shim at the commit scripts/td-shim-build.sh names (cached by that commit and the script), installs
+# the SGX and TDX build of Saguaro (the TDX PAL reads the signed SGX manifest), and runs test/quick.sh at
+# 2 vCPUs.
+#
+# Nightly and manual trigger.
+name: TDX PAL emulated (x86_64, QEMU TCG)
+
+on:
+  schedule:
+    - cron: '37 10 * * *'   # nightly, UTC
+  workflow_dispatch:
+    inputs:
+      tier:
+        description: "test/quick.sh tier: smoke, regression or extended"
+        type: choice
+        options:
+          - smoke
+          - regression
+          - extended
+        default: regression
+      qemu_ref:
+        description: "branch or tag of adilahmad17/qemu-sev-tcg to build"
+        required: false
+        default: "dev-tdx"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tdx-emulated-x86_64-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  QEMU_PREFIX: ${{ github.workspace }}/.qemu-sev-tcg
+  TD_SHIM_COMMIT: 54a862b249a62248b726cd3dc4a96421fdc36d66
+
+jobs:
+  x86_64-tdx-emu:
+    name: x86_64 TDX PAL on the emulated TDX
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      SAGUARO_PREFIX: ${{ github.workspace }}/.install-tdx
+      SAGUARO_RAM_SIZE: "8G"
+      SAGUARO_CPU_NUM: "2"
+      # hosted runners are slower than a workstation: longer per-test and per-step limits
+      SAGUARO_TEST_TIMEOUT: "180"
+      QUICK_TIMEOUT_SCALE: "2"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies, virtiofsd and the td-shim toolchain
+        run: |
+          scripts/dependencies.sh --build-only
+          sudo apt-get install -y -qq virtiofsd lsof python3-psutil python3-numpy python3-scipy zstd \
+            libprotobuf-c-dev protobuf-c-compiler clang llvm
+          for d in /usr/libexec /usr/lib/qemu; do
+            if [ -x "$d/virtiofsd" ]; then sudo ln -sf "$d/virtiofsd" /usr/local/bin/virtiofsd; break; fi
+          done
+          command -v virtiofsd
+          sudo modprobe vhost_vsock && test -c /dev/vhost-vsock
+
+      # ---- the emulating QEMU: built from the fork's dev-tdx branch with its build.sh, cached by commit ----------
+      - name: Emulating QEMU - source
+        uses: actions/checkout@v4
+        with:
+          repository: adilahmad17/qemu-sev-tcg
+          ref: ${{ inputs.qemu_ref || 'dev-tdx' }}
+          path: qemu-sev-tcg
+
+      - name: Emulating QEMU - revision
+        id: qemu-rev
+        run: echo "sha=$(git -C qemu-sev-tcg rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Emulating QEMU - cache
+        id: qemu-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.QEMU_PREFIX }}
+          key: qemu-sev-tcg-${{ runner.os }}-${{ steps.qemu-rev.outputs.sha }}-${{ hashFiles('qemu-sev-tcg/build.sh') }}
+
+      - name: Emulating QEMU - build
+        if: steps.qemu-cache.outputs.cache-hit != 'true'
+        run: qemu-sev-tcg/build.sh --install-deps --prefix "$QEMU_PREFIX" --jobs "$(nproc)"
+
+      - name: Emulating QEMU - runtime libraries
+        # a cached build skips build.sh --install-deps, so the libraries the binary links against are installed here
+        run: |
+          sudo apt-get install -y -qq libfdt1 libslirp0 libpixman-1-0 libglib2.0-0t64
+          if ldd "$QEMU_PREFIX/bin/qemu-system-x86_64" | grep 'not found'; then echo "missing libraries above"; exit 1; fi
+
+      - name: Emulating QEMU - check
+        run: |
+          "$QEMU_PREFIX/bin/qemu-system-x86_64" --version | head -1
+          QEMU_PATH="$QEMU_PREFIX/bin/qemu-system-x86_64" CI-Examples/common_tools/sev-emu-check.sh tdx
+
+      # ---- td-shim: the TD firmware that boots the PAL, at the pinned commit, cached by commit and build script ----
+      - name: td-shim - source
+        uses: actions/checkout@v4
+        with:
+          repository: confidential-containers/td-shim
+          ref: ${{ env.TD_SHIM_COMMIT }}
+          path: td-shim
+          submodules: recursive
+
+      - name: td-shim - cache
+        id: td-shim-cache
+        uses: actions/cache@v4
+        with:
+          path: td-shim/target
+          key: td-shim-${{ runner.os }}-${{ env.TD_SHIM_COMMIT }}-${{ hashFiles('scripts/td-shim-build.sh') }}
+
+      - name: td-shim - build
+        if: steps.td-shim-cache.outputs.cache-hit != 'true'
+        run: scripts/td-shim-build.sh "$GITHUB_WORKSPACE/td-shim"
+
+      - name: td-shim - check
+        # the install step of the TDX PAL links the PAL with the td-shim of $HOME/td-shim
+        run: |
+          ln -sfn "$GITHUB_WORKSPACE/td-shim" "$HOME/td-shim"
+          ls -l "$HOME"/td-shim/target/x86_64-unknown-none/release/ResetVector.bin \
+                "$HOME"/td-shim/target/x86_64-unknown-none/release/td-shim
+
+      # ---- Saguaro --------------------------------------------------------------------------------------------
+      - name: Build and install Saguaro (SGX and TDX PALs, graphics disabled)
+        run: scripts/install.sh --sgx --tdx --graphics disabled --prefix "$SAGUARO_PREFIX" -j "$(nproc)"
+
+      - name: Regression tests (SAGUARO_ACCEL=tcg test/quick.sh tdx)
+        env:
+          TIER: ${{ inputs.tier || 'regression' }}
+        run: |
+          # saguaro-tdx's virtiofsd serves / and needs root, as the vm workflow does
+          . "$SAGUARO_PREFIX/env.sh"
+          sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "SAGUARO_PREFIX=$SAGUARO_PREFIX" \
+            "SAGUARO_TDX_PREFIX=$SAGUARO_PREFIX" "SAGUARO_ACCEL=tcg" "QEMU_PATH=$QEMU_PREFIX/bin/qemu-system-x86_64" \
+            "EXEC_LOG_DIR=$GITHUB_WORKSPACE/quick-out/exec-logs" \
+            test/quick.sh tdx --tier "$TIER" --vcpus "$SAGUARO_CPU_NUM" --out "$GITHUB_WORKSPACE/quick-out" \
+            2>&1 | tee quick.log
+          exit "${PIPESTATUS[0]}"
+
+      - name: Give the workspace back to the runner user
+        if: always()
+        run: sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo '## SAGUARO_ACCEL=tcg test/quick.sh tdx (QEMU TCG emulation: no attestation, no memory isolation; not a substitute for a TDX host)'
+            echo '```'
+            cat quick-out/summary.txt 2>/dev/null || echo "(no summary: the run did not finish)"
+            grep -E ',(fail|known-fail)(,|$)' quick-out/results.csv 2>/dev/null | cut -d, -f5-7 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tdx-emulated-${{ inputs.tier || 'regression' }}
+          path: |
+            quick-out
+            quick.log
+          if-no-files-found: ignore
