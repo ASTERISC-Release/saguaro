@@ -12,6 +12,9 @@ SEV-SNP and VBS PALs, the AArch64 and RISC-V ports, the graphics
 redirection, the tools under `scripts/` and `tools/`, and the `exec.sh`
 scripts of the examples. 
 
+`libos/src/graphics/xcb.c` is licensed LGPL-3.0-or-later OR GPL-2.0-or-later: the graphics QEMU fork
+(`vmm/graphics`) carries an identical copy, `util/sg-xcb.c`.
+
 Saguaro (and Gramine) also includes the following third party sources (and licenses):
 * cJSON - MIT
 * curl/libcurl - MIT derivative
