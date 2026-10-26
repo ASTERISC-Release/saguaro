@@ -1,4 +1,4 @@
-# Quickstart: Intel TDX Trust Domain (`saguaro-tdx`)
+# Quickstart: Intel Trust Domain eXtensions (`saguaro-tdx`)
 
 `saguaro-tdx` runs a Saguaro micro-VM as an Intel TDX trust domain (TD). TDX protects the memory
 and registers of the TD from the host. The TD boots from the [td-shim](https://github.com/confidential-containers/td-shim)
@@ -39,12 +39,14 @@ The container is opened as in [direct.md](direct.md), section 1. td-shim is buil
     container/run.sh 'PATH=/usr/bin:$PATH scripts/td-shim-build.sh'
     container/run.sh "scripts/install.sh --sgx --tdx --graphics disabled --prefix ~/.local/saguaro-tdx"   # SGX tools + TDX PAL + saguaro-tdx
 
-The PAL is linked without a signature, so `scripts/td-shim-build.sh` builds td-shim without its
-`secure-boot` feature. `--sgx` is required: the TDX PAL reads the signed manifest `<app>.manifest.sgx`
-that `make SGX=1` produces. `--prefix` is the default prefix of `exec.sh` and `test/quick.sh` for `tdx`
-(`SAGUARO_TDX_PREFIX`); without it `--sgx` installs into `~/.local/saguaro-sgx`. `PATH=/usr/bin:$PATH` makes `cargo` the
-rustup one, which reads the toolchain of td-shim (the image's own `cargo` is first on `PATH`). `--graphics disabled`
-leaves out the graphics paths, which the TD does not use.
+Note the following: 
+
+- The PAL is linked without a signature, so `scripts/td-shim-build.sh` builds td-shim without its
+`secure-boot` feature.
+- `--sgx` is required: the TDX PAL reads the signed manifest `<app>.manifest.sgx`
+that `make SGX=1` produces.
+- `--prefix` is the default prefix of `exec.sh` and `test/quick.sh` for `tdx`
+(`SAGUARO_TDX_PREFIX`); without it `--sgx` installs into `~/.local/saguaro-sgx`. 
 
 # 2. Example: Hello World
 
