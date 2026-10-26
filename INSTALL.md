@@ -72,9 +72,9 @@ aarch64:
     test/vm/test-vm.sh                   # the whole LibOS suite under saguaro-vm and the loopback suite
 
 On aarch64 `--vm` builds *only* the vm PAL (no direct PAL, SGX or TDX), builds without graphics (the
-redirection needs the QEMU fork's host agent, which does not exist for aarch64) and builds the test
+redirection needs the host agent of the graphics QEMU, which does not exist for aarch64) and builds the test
 programs as PIE, because the guest maps RAM at `0x40000000`. Use stock distribution QEMU; the
-repository's QEMU fork is not needed and does not build for aarch64. The VM PAL runs multi-process
+QEMU backends under `vmm/` are not needed and do not build for aarch64. The VM PAL runs multi-process
 applications (`fork`, `vfork`, `execve`) by default, as on x86_64 (`sys.experimental__multiprocess`, see
 [quickstart/vm.md](Documentation/quickstart/vm.md)). Guest TCP and UDP go through a vsock relay that the launcher starts,
 which needs `/dev/vhost-vsock` (module `vhost_vsock`) to be readable and writable by your user, as
@@ -87,9 +87,10 @@ x86_64:
     sudo ln -sf /usr/libexec/virtiofsd /usr/local/bin/virtiofsd    # if `command -v virtiofsd` finds nothing
 
 The x86_64 vm PAL is inherited from upstream gramine-tdx. `saguaro-vm` runs the QEMU named by
-`QEMU_PATH`, otherwise a stock `qemu-system-x86_64` from `PATH`. TDX and the graphics redirection
-need a QEMU fork kept outside this repository; for graphics see
-`dev docs: graphics/running.md`. With graphics enabled (the default), `--vm` also builds
+`QEMU_PATH`, otherwise a stock `qemu-system-x86_64` from `PATH`. The graphics redirection and the
+emulated SEV and TDX need a QEMU backend of `vmm/` (git submodules): `scripts/qemu.sh build graphics`
+(or `sev-tcg`, `tdx-tcg`) fetches and builds one, and `QEMU_PATH=$(scripts/qemu.sh path <name>)` selects
+it; for graphics see [graphics-vm.md](Documentation/quickstart/graphics-vm.md). With graphics enabled (the default), `--vm` also builds
 `libgraphics.so` and needs the Mesa, X and SDL2 development packages; `--graphics disabled` builds
 without them.
 

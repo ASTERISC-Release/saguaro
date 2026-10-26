@@ -110,6 +110,10 @@ Get the source:
 
     git clone https://github.com/ASTERISC-Release/saguaro
 
+The QEMU backends of the graphics redirection and of the emulated SEV and TDX are git submodules under
+`vmm/`, fetched and built on demand with `scripts/qemu.sh` (the guides below say when). GitHub's ZIP
+download and the release tarballs do not contain them: use `git clone`.
+
 Each quickstart guide goes from a checkout to a running example:
 
 - **Containerized userspace** (`direct`): [Documentation/quickstart/direct.md](Documentation/quickstart/direct.md)

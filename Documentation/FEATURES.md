@@ -93,7 +93,7 @@ production use.
   VM: TCP, UDP, DNS, loopback, non-blocking connect, `SO_RCVTIMEO`, with outbound policy and inbound forwards
   from the manifest's `vm.net`; x86_64 and AArch64. [CHANGELOG.md](../CHANGELOG.md)
 - **Graphics host redirection** (experimental, x86_64 only). EGL, GBM and DRM calls of the application are
-  forwarded through a shared page to a listener in QEMU that uses the host GPU, with stock Mesa; `glxgears`,
+  forwarded through a shared page to a listener in QEMU (`vmm/graphics`) that uses the host GPU, with stock Mesa; `glxgears`,
   SuperTuxKart, Quake II and Minetest run. `dev docs: graphics/`
 - **Vulkan** (experimental, x86_64). Works under `saguaro-direct` as is; under `saguaro-vm`, an implicit layer in
   `libgraphics.so` provides the device path and presentation (Quake II's Vulkan renderer runs). `dev docs: vulkan/`

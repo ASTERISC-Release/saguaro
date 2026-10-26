@@ -12,7 +12,12 @@ source files.
 - [gramine-tdx](https://github.com/gramineproject/gramine-tdx): the Intel TDX backend and the
   virtual-machine (`vm`) PAL, whose full history this repository keeps.
 - Tirith: the virtual-machine and graphics host-redirection work developed at the ASTERISC Research
-  Lab.
+  Lab. Its host side is the QEMU fork [qemu-graphics](https://github.com/adilahmad17/qemu-graphics)
+  (`vmm/graphics`).
+- [QEMU](https://www.qemu.org): the three QEMU backends under `vmm/`
+  ([qemu-graphics](https://github.com/adilahmad17/qemu-graphics),
+  [qemu-sev-tcg](https://github.com/adilahmad17/qemu-sev-tcg) and
+  [qemu-tdx-tcg](https://github.com/adilahmad17/qemu-tdx-tcg)) are forks of it.
 
 ## Organizations
 

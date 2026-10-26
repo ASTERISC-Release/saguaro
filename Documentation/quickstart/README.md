@@ -44,8 +44,8 @@ applicable.
   physical Linux machine of the same architecture with KVM.
 - **A game or another OpenGL/Vulkan program**: on a desktop with trusted code,
   [graphics-direct.md](graphics-direct.md) (fastest, but not isolated; also AArch64 with
-  NVIDIA); inside a microVM on x86_64, [graphics-vm.md](graphics-vm.md) (needs the QEMU
-  fork, kept outside this repository).
+  NVIDIA); inside a microVM on x86_64, [graphics-vm.md](graphics-vm.md) (needs the graphics
+  QEMU, the submodule `vmm/graphics`, built with `scripts/qemu.sh`).
 - **A RISC-V build**, without RISC-V hardware: [riscv.md](riscv.md).
 - **An application protected from Windows itself**, on an ARM64 or x64 Windows 11 PC, in WSL (the one guide without the container):
   [vbs-windows.md](vbs-windows.md).
