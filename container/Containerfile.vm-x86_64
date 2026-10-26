@@ -5,8 +5,9 @@
 # under QEMU/KVM. Counterpart of Containerfile.vm-aarch64.
 #
 # Requires an x86_64 host with working KVM (`/dev/kvm`) and `vhost-vsock` for the vm PAL; the direct
-# PAL needs neither. Stock Ubuntu QEMU is used; TDX and the graphics redirection need the QEMU fork,
-# which is not part of this image (build it separately and point QEMU_PATH at it).
+# PAL needs neither. Stock Ubuntu QEMU is used; the graphics redirection and the emulated SEV and TDX
+# need the QEMU backends under vmm/ of the checkout, which are not part of this image (build one with
+# scripts/qemu.sh and point QEMU_PATH at it).
 #
 # Build + start with container/run.sh.
 FROM ubuntu:noble
@@ -49,7 +50,7 @@ ENV PATH="/usr/lib/rust-1.85/bin:${PATH}"
 
 # Graphics layer (see dev docs: graphics/): stock Mesa and the X/GL/SDL2 headers for the
 # graphics preload library (libos/src/graphics) and CI-Examples/graphics, socat for the
-# vsock-to-X proxy, and the packages needed to build the QEMU fork (qemu-saguaro, kept outside this repository)
+# vsock-to-X proxy, and the packages needed to build the graphics QEMU (vmm/graphics, scripts/qemu.sh)
 # with its graphics listener.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \

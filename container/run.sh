@@ -172,13 +172,12 @@ if ! podman container exists "$CONTAINER"; then
         DEVICES+=(--group-add keep-groups)
     fi
     # Graphics (x86_64, see dev docs: graphics/): the host X socket and DISPLAY for the
-    # QEMU listener's window, and the QEMU fork when it is checked out next to this repository.
+    # QEMU listener's window. The graphics QEMU itself is vmm/graphics of the mounted checkout
+    # (scripts/qemu.sh build graphics).
     GRAPHICS=()
     if [ -d /tmp/.X11-unix ] && [ -n "${DISPLAY:-}" ]; then
         GRAPHICS+=(-v /tmp/.X11-unix:/tmp/.X11-unix:ro -e "DISPLAY=$DISPLAY")
     fi
-    QEMU_SAGUARO=${QEMU_SAGUARO_DIR:-$(dirname "$REPO_ROOT")/qemu-saguaro}
-    [ -d "$QEMU_SAGUARO" ] && GRAPHICS+=(-v "$QEMU_SAGUARO:/root/qemu-saguaro:rw")
     # AMD SEV tooling (QEMU with SEV-SNP/IGVM, snpguest, ...; container/sev/build-sev-tools.sh):
     # kept next to this repository as sev-tools/ (or at SEV_TOOLS_DIR) so it survives recreation.
     SEV_TOOLS=${SEV_TOOLS_DIR:-$(dirname "$REPO_ROOT")/sev-tools}

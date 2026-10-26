@@ -37,11 +37,12 @@ Each needs a **native** host of the same architecture (no emulation) with workin
 the container's `/` as the guest's `/`) and `seccomp=unconfined` (the direct PAL calls `personality()`,
 which the default profile blocks).
 
-QEMU: the images contain stock distribution QEMU only (see `dev docs: vm.md`). TDX and the graphics
-redirection need a QEMU fork kept outside this repository. For graphics on x86_64, `run.sh` mounts a
-`qemu-saguaro` checkout found next to this repository (or at `QEMU_SAGUARO_DIR`) at `/root/qemu-saguaro`, and
-passes the DRM render nodes, the host X socket and `DISPLAY` into the container; the image has the packages
-to build it. See `dev docs: graphics/running.md`.
+QEMU: the images contain stock distribution QEMU only (see `dev docs: vm.md`). The graphics redirection
+and the emulated SEV and TDX use the QEMU backends pinned as git submodules under `vmm/` of the checkout
+(`vmm/graphics`, `vmm/sev-tcg`, `vmm/tdx-tcg`). They are part of the mounted checkout; fetch and build one
+inside the container with `scripts/qemu.sh build <name>` (the image has the packages to build them), and
+select it with `QEMU_PATH=$(scripts/qemu.sh path <name>)`. For graphics on x86_64, `run.sh` passes the DRM
+render nodes, the host X socket and `DISPLAY` into the container. See `dev docs: graphics/running.md`.
 
 AMD SEV (see `dev docs: sev/`): when the host has `/dev/sev`, `run.sh` passes it into the
 container, with `--group-add keep-groups` when the user can open it through a group (for example
