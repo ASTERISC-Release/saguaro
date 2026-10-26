@@ -14,7 +14,9 @@ performance quirks. This work will likely require many months of development.
 
 - An x86_64 machine with KVM (`/dev/kvm`), `/dev/vhost-vsock`, and an Intel or AMD GPU with a
   render node (`/dev/dri/renderD128`, `renderD129`) that the user can open.
-- An X server (Xwayland counts) with `DISPLAY` set when the container is created.
+- An X server (Xwayland counts) with `DISPLAY` set when the container is created. On a headless host `DISPLAY` names
+  the Xwayland of a headless compositor (for example `sway`) whose socket exists in `/tmp/.X11-unix`.
+- Network access: the first `container/run.sh` builds the container image, and the QEMU build downloads its subprojects.
 - A git clone of this repository: the QEMU fork is a git submodule, which `scripts/qemu.sh` fetches and
   builds (a ZIP download does not contain it).
 

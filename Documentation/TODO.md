@@ -19,6 +19,7 @@ Open items by architecture and host. Longer lists are kept with the maintainers'
 - CI for hardware-bound backends (`sev`, `sgx`, `vbs`, `tdx`): there is no workflow and no self-hosted runner, deliberately (the repository is public); `test/quick.sh <backend>` (and `test/sev/test-sev-all.sh`) are run by hand on the hardware.
 - `sev`: trusted files, Secure TSC; `sgx`: remote attestation (AESM, PCCS) and the `ra-tls` examples.
 - Proton (Wine, DXVK) under `saguaro-vm`: phase 1 and later, see the status in the development notes.
+- `direct` on riscv64 (emulated guest): the step `ex-unit_tests` (`thread-tls` of the multi-thread suite) failed once in 11 hosted runs and passed on a rerun; cause not established.
 - `sgx`, extended tier (`test/quick.sh sgx --tier extended`), failures to triage: `test_2025_fork_reservation`, `test_2046_fcntl_dupfd`, `test_230_keys`, `test_075b_mmap_shared_ro`, `test_09f_cputime`, `test_076a_mremap_misc_chroot`, `test_077c_symlink_created_on_host`. They are not listed as known failures yet.
 
 ## AArch64

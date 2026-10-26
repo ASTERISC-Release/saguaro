@@ -111,6 +111,8 @@ demand; the `tdx-build` job of `direct-x86_64.yml` compiles the TDX PAL.
 - `saguaro-sgx-sign not installed`: the install lacks `--sgx`; repeat it with `--sgx --tdx`.
 - td-shim panics with `Secure Boot: Cannot read verify header`: it was built with its default features; build it with
   `scripts/td-shim-build.sh`.
+- `saguaro-tdx not installed in ~/.local/saguaro-vm`: the container loaded the `vm` install and set `SAGUARO_PREFIX`; in a
+  container that holds both the SEV and the TDX install, run `unset SAGUARO_PREFIX` first.
 - Two VM launchers (`saguaro-vm`, `saguaro-sev`, `saguaro-tdx`) at the same time in one container collide on the vsock
   relay: run one at a time. A TDX run leaves signed `.manifest.sgx` files in `libos/test/regression` that make
   `saguaro-sev` use 4G of RAM and fail with `Cannot initialize the multiprocess frame pool`: remove them between variants.
