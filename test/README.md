@@ -196,7 +196,7 @@ riscv64`), `vm-x86_64.yml` (`vm`; it also runs `test/vm/network/test-vm-redis.sh
 the job summary and uploads the output directory. Deselects for a slow host are `QUICK_PYTEST_K` in the
 workflow (aarch64 TCG: `test_604_sigreturn_regs`; riscv64: `test_103_gettimeofday`, `test_603_rewrite_stress`)
 and entries of `expected-failures.toml`. The TDX PAL is compiled by the `tdx-build` job of `direct-x86_64.yml` and
-run under the emulated TDX by `tdx-emulated-x86_64.yml` (nightly and on demand; it builds the `dev-tdx` QEMU and
+run under the emulated TDX by `tdx-emulated-x86_64.yml` (nightly and on demand; it builds the `dev-tdx` QEMU of `adilahmad17/qemu-tdx-tcg` and
 td-shim, both cached, installs Saguaro with `--sgx --tdx` and runs `test/quick.sh tdx` at 2 vCPUs).
 SEV, SGX and VBS have no CI (the repository is public): run `test/quick.sh sev`, `sev-snp`, `sgx` or `vbs` by
 hand per release and keep the summary line. The emulated SEV can run on a hosted x86_64 runner once

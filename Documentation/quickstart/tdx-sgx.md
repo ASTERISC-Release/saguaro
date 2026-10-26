@@ -147,14 +147,14 @@ without `SAGUARO_ACCEL=tcg`, `test/quick.sh tdx` does the same on a development 
 ### The emulated TDX of QEMU TCG
 
 Without TDX hardware, `saguaro-tdx` runs the TD under the emulated TDX of QEMU's software emulation (TCG): the
-`dev-tdx` branch of [qemu-sev-tcg](https://github.com/adilahmad17/qemu-sev-tcg) adds the object `tdx-emu`,
+`dev-tdx` branch of [qemu-tdx-tcg](https://github.com/adilahmad17/qemu-tdx-tcg), a fork of QEMU 11.1.2, adds the object `tdx-emu`,
 which provides the TDX guest interface the PAL uses (TDCALL and TDG.VP.VMCALL, `#VE`, the shared bit and page
 acceptance, the launch from td-shim with the TD HOB). The emulation is functional: it has no attestation (a
 TDREPORT without MAC, no quote) and no memory isolation. The QEMU is built with the fork's `build.sh`; td-shim is
 built by `scripts/td-shim-build.sh` (at the commit it names, in `$HOME/td-shim`, as the install step expects).
 `SAGUARO_ACCEL=tcg` selects the emulation and `QEMU_PATH` the QEMU:
 
-    export SAGUARO_ACCEL=tcg QEMU_PATH=<qemu-sev-tcg prefix>/bin/qemu-system-x86_64
+    export SAGUARO_ACCEL=tcg QEMU_PATH=<qemu-tdx-tcg prefix>/bin/qemu-system-x86_64
     CI-Examples/common_tools/sev-emu-check.sh tdx       # the preflight: is QEMU_PATH that QEMU?
     CI-Examples/helloworld/exec.sh --tdx                # an example under saguaro-tdx
     test/quick.sh tdx --tier smoke                      # the tiers smoke, regression and extended

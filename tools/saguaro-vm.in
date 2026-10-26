@@ -117,7 +117,7 @@ QEMU_PATH=${QEMU_PATH:-$(command -v qemu-system-x86_64 || echo qemu-system-x86_6
 # SAGUARO_ACCEL=tcg runs the guest under QEMU's software emulation (MTTCG) instead of KVM, for
 # hosts without /dev/kvm or without SEV; SAGUARO_CPU overrides the CPU model (TCG default: max).
 # Under TCG the SEV modes use the emulated objects sev-emu / sev-snp-emu of the dev-sev QEMU, and
-# saguaro-tdx the emulated TDX (tdx-emu) of its dev-tdx branch.
+# saguaro-tdx the emulated TDX (tdx-emu) of the dev-tdx branch of qemu-tdx-tcg.
 QEMU_ACCEL=${SAGUARO_ACCEL:-kvm}
 KIRQ=on
 if [ "$QEMU_ACCEL" = tcg ]; then
@@ -354,7 +354,7 @@ elif [ "$TDSHIM_PAL_PATH" == "" ]; then
     QEMU_MACHINE="-M q35,kernel_irqchip=$KIRQ"
     QEMU_BINARIES="-kernel $LIBPAL_PATH -device loader,file=$BIOS_PATH"
 elif [ "$QEMU_ACCEL" = tcg ]; then
-    # the emulated TDX of QEMU TCG (the dev-tdx branch of qemu-sev-tcg, object tdx-emu): no TDX
+    # the emulated TDX of QEMU TCG (the dev-tdx branch of qemu-tdx-tcg, object tdx-emu): no TDX
     # hardware, no KVM, no quote service; td-shim boots the PAL from the same image as on hardware
     # (pit=off as below)
     QEMU_MACHINE="-M q35,kernel_irqchip=$KIRQ,pit=off,confidential-guest-support=tdx -object tdx-emu,id=tdx"

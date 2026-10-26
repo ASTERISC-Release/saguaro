@@ -60,7 +60,7 @@
 # The backend sets SAGUARO_SEV_MODE for saguaro-sev: sev for --sev, snp for --sev-snp.
 # SAGUARO_ACCEL=tcg QEMU_PATH=<dev-sev qemu-system-x86_64> exec.sh --sev|--sev-snp runs the SEV backends under the
 # emulated SEV of QEMU TCG: no SEV device and no KVM needed, but the QEMU is checked first (sev-emu-check.sh);
-# the same with the dev-tdx QEMU and --tdx for the emulated TDX.
+# the same with the qemu-tdx-tcg QEMU (branch dev-tdx) and --tdx for the emulated TDX.
 
 # EXEC_DIR (the directory to build and run in) and EXAMPLE_NAME default to the exec.sh's own directory;
 # unit_tests/exec.sh sets them to run each test of its subdirectories
