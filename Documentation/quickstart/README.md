@@ -14,7 +14,8 @@ applicable.
 | `saguaro-vm` with graphics redirection: glxgears, Quake II (OpenGL, Vulkan) | ◐ | ◐ | ○ | ✗ | [graphics-vm.md](graphics-vm.md) |
 | Windows VBS enclaves (`saguaro-vbs`): hello world, Python, attestation | ◐ (Windows 11 x64) | ◐ (Windows 11 x64) | ◐ (Windows 11 ARM64) | – | [vbs-windows.md](vbs-windows.md); machine setup: [vbs-enable.md](vbs-enable.md) |
 | AMD SEV-SNP (`saguaro-sev`): hello world, regression tests, attestation | – | ◐ | – | – | [sev.md](sev.md) |
-| Intel SGX and TDX | ◐ | – | – | – | [tdx-sgx.md](tdx-sgx.md) |
+| Intel SGX (`saguaro-sgx`): hello world, regression tests | ◐ | – | – | – | [sgx.md](sgx.md) |
+| Intel TDX (`saguaro-tdx`): hello world, regression tests (under emulation) | ◐ | – | – | – | [tdx.md](tdx.md) |
 
 ## The route of all guides
 
@@ -48,8 +49,8 @@ applicable.
 - **A RISC-V build**, without RISC-V hardware: [riscv.md](riscv.md).
 - **An application protected from Windows itself**, on an ARM64 or x64 Windows 11 PC, in WSL (the one guide without the container):
   [vbs-windows.md](vbs-windows.md).
-- **Intel confidential computing**: [tdx-sgx.md](tdx-sgx.md). SGX: the container route,
-  `scripts/install.sh --sgx`, `./exec.sh --sgx`. TDX: `scripts/install.sh --vm --tdx` and `saguaro-tdx`; the
-  examples that run on SEV also run on TDX.
+- **Intel SGX**: [sgx.md](sgx.md). The container route, `scripts/install.sh --sgx`, `./exec.sh --sgx`.
+- **Intel TDX**: [tdx.md](tdx.md). `scripts/install.sh --sgx --tdx`, `./exec.sh --tdx`, also under a functional emulation
+  without TDX hardware.
 - **AMD confidential computing** (SEV-SNP, with attestation): [sev.md](sev.md). It needs an
   EPYC host with SEV-SNP and access to `/dev/sev`.

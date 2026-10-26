@@ -34,7 +34,7 @@ production use.
 - **Intel SGX route** (experimental, Intel x86_64). The inherited SGX backend builds and runs again: `scripts/install.sh --sgx`
   and a rootless container that passes the enclave devices (bound with `exec`, which a rootless `--device` mount
   lacks). 19 of 20 examples pass under `./exec.sh --sgx`. Remote attestation and the `ra-tls` examples are not
-  covered. [quickstart/tdx-sgx.md](quickstart/tdx-sgx.md)
+  covered. [quickstart/sgx.md](quickstart/sgx.md)
 - **Windows VBS enclaves** (experimental, ARM64 and x64 Windows 11). The `vbs` PAL runs an application inside a
   signed VBS enclave: the library OS, a glibc and the application are packed into the enclave image at build
   time. Threads, signals, host files and sockets, Python, servers (Redis, NGINX, memcached, lighttpd), SQLite,

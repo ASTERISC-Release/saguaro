@@ -10,7 +10,7 @@ Servers and SGX enclave clients that use the Secret Provisioning library: the se
 
 ## Prerequisites
 
-An SGX machine with Gramine installed for SGX ([`Documentation/quickstart/tdx-sgx.md`](../../../Documentation/quickstart/tdx-sgx.md)). EPID needs an [SPID and IAS API key](https://gramine.readthedocs.io/en/stable/sgx-intro.html#term-spid); DCAP needs a working DCAP setup and Gramine built with `-Ddcap=enabled`.
+An SGX machine with Gramine installed for SGX ([`Documentation/quickstart/sgx.md`](../../../Documentation/quickstart/sgx.md)). EPID needs an [SPID and IAS API key](https://gramine.readthedocs.io/en/stable/sgx-intro.html#term-spid); DCAP needs a working DCAP setup and Gramine built with `-Ddcap=enabled`.
 
 ## Run
 

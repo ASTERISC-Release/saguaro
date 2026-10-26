@@ -1,10 +1,9 @@
-# Quickstart: Intel SGX and TDX
+# Quickstart: Intel SGX Enclave (`saguaro-sgx`)
 
-This tree keeps the confidential-computing back ends of upstream [gramine-tdx](https://github.com/gramineproject/gramine-tdx) for Intel CPUs: `saguaro-sgx` (the application
-in an SGX enclave) and `saguaro-tdx` (the `vm` unikernel in a TDX trust domain). The examples that run on
-SEV also run on TDX.
+This tree keeps the SGX back end of upstream [gramine-tdx](https://github.com/gramineproject/gramine-tdx) for Intel CPUs: `saguaro-sgx` (the application
+in an SGX enclave). Intel TDX has its own guide: [tdx.md](tdx.md).
 
-Status (as in [README.md](../../README.md)): Intel x86_64 ◐ for SGX and for TDX; AMD64, AArch64 and RISC-V –.
+Status (as in [README.md](../../README.md)): Intel x86_64 ◐ for SGX; AMD64, AArch64 and RISC-V –.
 
 As in the other guides, the build runs in the container of `container/run.sh` (see
 [direct.md](direct.md), section 1); the commands below run in its shell, in the repository, unless
@@ -128,41 +127,6 @@ the SGX row of `test/quick/expected.csv`.
   container image has.
 
 Reference: the `sgx.*` keys in [Gramine's manifest documentation](https://gramine.readthedocs.io/en/latest/manifest-syntax.html), the [key catalog](../manifest-keys.md), and [gramine.readthedocs.io](https://gramine.readthedocs.io) (attestation).
-
-## TDX
-
-Needs an Intel CPU and host kernel with TDX, a QEMU with TDX support and the TD-shim firmware, as
-described by the upstream gramine-tdx project. The build is `scripts/install.sh --vm --tdx` (in the container); the
-launcher is `saguaro-tdx` (the TDX variant of `saguaro-vm`, `tools/saguaro-vm.in`).
-
-The install step links the PAL with TD-shim: it runs `cargo run -p td-shim-tools` in
-`$HOME/td-shim`, so that checkout (built as upstream gramine-tdx describes) must exist, or the
-install stops there after everything has compiled.
-
-The examples that run on SEV also run on TDX: `exec.sh --tdx` is their TDX backend (the install is
-`scripts/install.sh --sgx --tdx`, since the TDX PAL reads the signed `.manifest.sgx` that `make SGX=1` builds),
-`test/quick.sh tdx` the tiered test set. CI compiles the `tdx` PAL (the `tdx-build` job of `direct-x86_64.yml`);
-without `SAGUARO_ACCEL=tcg`, `test/quick.sh tdx` does the same on a development machine.
-
-### The emulated TDX of QEMU TCG
-
-Without TDX hardware, `saguaro-tdx` runs the TD under the emulated TDX of QEMU's software emulation (TCG): the
-`dev-tdx` branch of [qemu-tdx-tcg](https://github.com/adilahmad17/qemu-tdx-tcg), a fork of QEMU 11.1.2, adds the object `tdx-emu`,
-which provides the TDX guest interface the PAL uses (TDCALL and TDG.VP.VMCALL, `#VE`, the shared bit and page
-acceptance, the launch from td-shim with the TD HOB). The emulation is functional: it has no attestation (a
-TDREPORT without MAC, no quote) and no memory isolation. The QEMU is built with the fork's `build.sh`; td-shim is
-built by `scripts/td-shim-build.sh` (at the commit it names, in `$HOME/td-shim`, as the install step expects).
-`SAGUARO_ACCEL=tcg` selects the emulation and `QEMU_PATH` the QEMU:
-
-    export SAGUARO_ACCEL=tcg QEMU_PATH=<qemu-tdx-tcg prefix>/bin/qemu-system-x86_64
-    CI-Examples/common_tools/sev-emu-check.sh tdx       # the preflight: is QEMU_PATH that QEMU?
-    CI-Examples/helloworld/exec.sh --tdx                # an example under saguaro-tdx
-    test/quick.sh tdx --tier smoke                      # the tiers smoke, regression and extended
-
-The results of `test/quick.sh` say `tdx-emu`; its tiers have the shape of the emulated SEV's (`regression` is
-the LibOS core list, the examples run in `extended`). The workflow `.github/workflows/tdx-emulated-x86_64.yml`
-runs the same on a hosted runner, nightly and on demand: it builds the QEMU and td-shim (both cached), installs
-Saguaro with `--sgx --tdx` and runs `test/quick.sh tdx` at 2 vCPUs.
 
 ## Not covered
 

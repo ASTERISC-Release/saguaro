@@ -4,7 +4,7 @@ Attests a generic TLS server with RA-TLS: `saguaro-ratls` writes the certificate
 
 ## Prerequisites
 
-An SGX machine with Saguaro installed for SGX ([`Documentation/quickstart/tdx-sgx.md`](../../../Documentation/quickstart/tdx-sgx.md)) and, for the default DCAP attestation, a working DCAP setup.
+An SGX machine with Saguaro installed for SGX ([`Documentation/quickstart/sgx.md`](../../../Documentation/quickstart/sgx.md)) and, for the default DCAP attestation, a working DCAP setup.
 
 ## Run
 

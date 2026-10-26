@@ -115,7 +115,8 @@ Each quickstart guide goes from a checkout to a running example:
 - **Containerized userspace** (`direct`): [Documentation/quickstart/direct.md](Documentation/quickstart/direct.md)
 - **Micro-virtual machine** (`vm`): [Documentation/quickstart/vm.md](Documentation/quickstart/vm.md)
 - **Windows VBS enclaves** (`vbs`): [Documentation/quickstart/vbs-windows.md](Documentation/quickstart/vbs-windows.md)
-- **Intel TDX and SGX** (`tdx`, `sgx`): [Documentation/quickstart/tdx-sgx.md](Documentation/quickstart/tdx-sgx.md)
+- **Intel SGX** (`sgx`): [Documentation/quickstart/sgx.md](Documentation/quickstart/sgx.md)
+- **Intel TDX** (`tdx`): [Documentation/quickstart/tdx.md](Documentation/quickstart/tdx.md)
 - **AMD SEV-SNP** (`sev`): [Documentation/quickstart/sev.md](Documentation/quickstart/sev.md)
 
 Other important guides include: 

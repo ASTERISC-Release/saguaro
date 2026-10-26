@@ -183,7 +183,7 @@ The inherited SGX backend is built and tested again. `scripts/install.sh --sgx` 
   `vm.mmap_min_addr`, but the actual cause was that a rootless `--device` mount is `noexec`, so the enclave's
   `PROT_EXEC` mapping was refused. Binding the device nodes with `exec` fixes it.
 - Several manifests had to be corrected for SGX (`helloworld`, `gcc`, `openjdk`, `blender`).
-- **Use.** [quickstart/tdx-sgx.md](Documentation/quickstart/tdx-sgx.md).
+- **Use.** [quickstart/sgx.md](Documentation/quickstart/sgx.md).
 - **Limits.** Remote attestation and the `ra-tls` examples are not covered.
 
 ## Windows VBS enclaves (`saguaro-vbs`)
