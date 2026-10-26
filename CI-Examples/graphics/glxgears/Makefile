@@ -2,7 +2,7 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 
 # glxgears under saguaro-vm with the Tirith graphics redirection (x86_64). See
-# dev docs: graphics/ for the host setup (QEMU fork, X proxy).
+# dev docs: graphics/ for the host setup (graphics QEMU of vmm/graphics, X proxy).
 
 # The graphics preload library is built and installed with Saguaro (-Dgraphics=enabled and a
 # VM-type PAL); the manifest refers to it as saguaro.libgraphics.

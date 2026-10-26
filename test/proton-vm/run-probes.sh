@@ -11,7 +11,8 @@ ROOT=$(cd "$HERE/../.." && pwd)
 WORK=${WORK:-$ROOT/.proton-vm/probes}
 LOADER=${1:-vm}; shift || true
 . "${SAGUARO_PREFIX:-$HOME/.local/saguaro-vm}/env.sh"
-[ -n "${QEMU_PATH:-}" ] || { [ -x /root/qemu-saguaro/build/qemu-system-x86_64 ] && export QEMU_PATH=/root/qemu-saguaro/build/qemu-system-x86_64; }
+# the graphics QEMU of vmm/graphics (scripts/qemu.sh build graphics) unless QEMU_PATH names one
+[ -n "${QEMU_PATH:-}" ] || { q=$("$ROOT/scripts/qemu.sh" path graphics 2>/dev/null) && export QEMU_PATH=$q; }
 mkdir -p "$WORK/tmp" && cd "$WORK"
 gcc -O1 -g -pthread -fno-stack-protector -o probes "${PROBES_SRC:-$HERE/probes.c}" 2>&1 | grep -v "Wunused-result\|^ *|\|^ *[0-9]* |\|^ *\^\|In function"
 saguaro-manifest -Darch_libdir=/lib/$(uname -m)-linux-gnu -Dentry=/probe/probes -Dprobedir="$WORK" \

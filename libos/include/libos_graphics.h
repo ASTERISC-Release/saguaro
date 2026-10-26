@@ -34,8 +34,8 @@ static uint64_t __attribute__((unused)) fs_offset = GRAPHICS_FS_OFFSET;
 extern struct libos_lock graphics_comm_lock;
 
 /* Whether the graphics host comm window at COMM_ADDR can exist at all in this deployment: it is
- * attached by the host only under the VM/TDX PAL (full Tirith deployment with a qemu
- * sg-listener); under the plain `Linux` PAL nothing ever maps it. Defined (with the full
+ * attached by the host only under the VM/TDX PAL (full Tirith deployment with the sg-listener of
+ * the graphics QEMU, vmm/graphics); under the plain `Linux` PAL nothing ever maps it. Defined (with the full
  * rationale) in libos_open.c next to the other graphics entry point. Every comm_page() writer whose
  * predicate is path-based -- openat's is_graphics_host_path() (via that same helper) and
  * stat()/newfstatat()'s strstr() checks -- must consult this *before* touching the window:

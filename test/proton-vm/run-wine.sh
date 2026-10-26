@@ -21,7 +21,8 @@ WORK=${WORK:-$ROOT/.proton-vm/wine-vm}
 LOADER=${1:-vm}; shift || true
 [ $# -gt 0 ] || set -- --version
 . "${SAGUARO_PREFIX:-$HOME/.local/saguaro-vm}/env.sh"
-[ -n "${QEMU_PATH:-}" ] || { [ -x /root/qemu-saguaro/build/qemu-system-x86_64 ] && export QEMU_PATH=/root/qemu-saguaro/build/qemu-system-x86_64; }
+# the graphics QEMU of vmm/graphics (scripts/qemu.sh build graphics) unless QEMU_PATH names one
+[ -n "${QEMU_PATH:-}" ] || { q=$("$ROOT/scripts/qemu.sh" path graphics 2>/dev/null) && export QEMU_PATH=$q; }
 mkdir -p "$WORK/tmp" "$WORK/home" "$WORK/shm" && cd "$WORK"
 FFMPEG_LIBS=${FFMPEG_LIBS:-/opt/ffmpeg8/lib}; [ -d "$FFMPEG_LIBS" ] || FFMPEG_LIBS=
 # GPU=1: the graphics redirection (design-gpu.md): AMD by default (EGL_DISCRETE=1, renderD129)

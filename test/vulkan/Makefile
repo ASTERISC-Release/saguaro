@@ -62,7 +62,7 @@ direct-%.manifest: vk-direct.manifest.template FORCE
 # dlopen the Vulkan loader; SHIM=1 for the phase-0 shim; PRESENT=1 for windows through the layer;
 # MULTIPROCESS=1 for the VM PAL's demand-paged processes, which vm-vk-two needs: its children are
 # processes; TWO=1 also mounts /vk-headless for them), then
-# `QEMU_PATH=<qemu-saguaro>/build/qemu-system-x86_64 saguaro-vm vm-<prog> [args]`.
+# `QEMU_PATH=$(scripts/qemu.sh path graphics) saguaro-vm vm-<prog> [args]` (from the repository root).
 vm-%.manifest: vk-vm.manifest.template vk-session-shim.so FORCE
 	saguaro-manifest -Dlog_level=$(SAGUARO_LOG_LEVEL) -Degl_discrete=$${EGL_DISCRETE:-0} \
 		-Deager=$(EAGER) -Dshim=$(SHIM) -Dpresent=$(PRESENT) -Dlayer_dir=$(LAYER_DIR) \

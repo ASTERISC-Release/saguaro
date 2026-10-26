@@ -25,7 +25,7 @@ make run           # saguaro-vm
 make run-native    # without Saguaro, to tell a GPU problem from a Saguaro one
 ```
 
-For the VM, export `QEMU_PATH=<qemu checkout>/build/qemu-system-x86_64` first. The QEMU fork is a separate checkout, built as described in [`graphics-vm.md`](../../Documentation/quickstart/graphics-vm.md).
+For the VM, export `QEMU_PATH=$(scripts/qemu.sh path graphics)` first (from the repository root). The graphics QEMU is the submodule `vmm/graphics`, built with `scripts/qemu.sh build graphics` as described in [`graphics-vm.md`](../../Documentation/quickstart/graphics-vm.md).
 
 ## Notes
 

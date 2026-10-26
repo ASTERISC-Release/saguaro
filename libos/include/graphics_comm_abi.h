@@ -11,9 +11,9 @@
  *   - the guest LibOS (every /dev- and /sys-forwarding syscall), through
  *     libos/include/libos_graphics.h,
  *   - the guest preload library, through libos/src/graphics/common.h,
- *   - the QEMU host listener, whose build resolves this header from the
- *     sibling checkout of this repository (the fork's build.sh looks for it
- *     at ../saguaro; see the fork's README).
+ *   - the QEMU host listener (vmm/graphics), whose build resolves this header
+ *     from the Saguaro tree that contains the fork (its build.sh takes
+ *     SAGUARO_ROOT, default ../..; scripts/qemu.sh build graphics).
  *
  * The per-buffer render state (`struct graphics_buffer`, aka `check`) is
  * defined in each tree's own graphics headers (common.h and include/qemu/sg.h)

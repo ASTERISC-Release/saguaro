@@ -5,7 +5,7 @@
 # (dev docs: proton-vm/design-gpu.md: the bounce buffers and the pointer table, option
 # B; the shared session, option S): vk-headless alone, then N vk-headless processes at once
 # through vk-two, under saguaro-vm with the multiprocess key on. Needs the GPU (EGL_DISCRETE=1
-# for renderD129, the AMD GPU; 0 for the first render node) and the QEMU fork with the listener.
+# for renderD129, the AMD GPU; 0 for the first render node) and the graphics QEMU (vmm/graphics) with the listener.
 # Usage (in the container, after scripts/install.sh --vm):
 #   test/vulkan/vm-check.sh [N]        (default N=2; SAGUARO_PREFIX, QEMU_PATH, EGL_DISCRETE apply)
 # The guest's Vulkan loader lists every GPU of the host and vk-headless picks device 0 unless
@@ -17,7 +17,8 @@ set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
 N=${1:-2}
 . "${SAGUARO_PREFIX:-$HOME/.local/saguaro-vm}/env.sh"
-[ -n "${QEMU_PATH:-}" ] || { [ -x /root/qemu-saguaro/build/qemu-system-x86_64 ] && export QEMU_PATH=/root/qemu-saguaro/build/qemu-system-x86_64; }
+# the graphics QEMU of vmm/graphics (scripts/qemu.sh build graphics) unless QEMU_PATH names one
+[ -n "${QEMU_PATH:-}" ] || { q=$("$HERE/../../scripts/qemu.sh" path graphics 2>/dev/null) && export QEMU_PATH=$q; }
 export EGL_DISCRETE=${EGL_DISCRETE:-1}
 cd "$HERE" || exit 2
 make -s vk-headless vk-two gfx-fdpass vk-session-shim.so >/dev/null || exit 2

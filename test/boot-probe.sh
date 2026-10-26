@@ -17,7 +17,8 @@ REPO_ROOT=$(dirname "$HERE")
 cd "$REPO_ROOT/CI-Examples/graphics/glxgears"
 
 . ~/.local/saguaro-vm/env.sh
-export QEMU_PATH=${QEMU_PATH:-/root/qemu-saguaro/build/qemu-system-x86_64}
+[ -n "${QEMU_PATH:-}" ] || QEMU_PATH=$("$REPO_ROOT/scripts/qemu.sh" path graphics)   # vmm/graphics
+export QEMU_PATH
 export SAGUARO_RAM_SIZE=$RAM
 
 meminfo() { grep -E "^(Shmem|HugePages_Total|HugePages_Free):" /proc/meminfo | tr '\n' ' '; echo; }
