@@ -177,7 +177,7 @@ if [ "$VM" = enabled ]; then
         DIRECT=disabled
         TESTS=enabled
         TESTS_PIE=true
-        # graphics redirection needs the QEMU fork's host agent (sg-listener), which does not exist
+        # graphics redirection needs the host agent (sg-listener) of the graphics QEMU (vmm/graphics), which does not exist
         # for aarch64 (stock QEMU is the requirement): without an agent the redirected fd paths
         # misbehave (e.g. close() of an invalid fd returns 0 instead of EBADF).
         GRAPHICS=disabled

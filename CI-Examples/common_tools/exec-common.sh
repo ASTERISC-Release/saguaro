@@ -58,9 +58,9 @@
 # Environment: EXEC_TIMEOUT (seconds per run, default 300; EXEC_BUILD_TIMEOUT, default 3600, for the build
 # of a vbs image), EXEC_LOG_DIR (default /tmp/saguaro-exec),
 # The backend sets SAGUARO_SEV_MODE for saguaro-sev: sev for --sev, snp for --sev-snp.
-# SAGUARO_ACCEL=tcg QEMU_PATH=<dev-sev qemu-system-x86_64> exec.sh --sev|--sev-snp runs the SEV backends under the
-# emulated SEV of QEMU TCG: no SEV device and no KVM needed, but the QEMU is checked first (sev-emu-check.sh);
-# the same with the qemu-tdx-tcg QEMU (branch dev-tdx) and --tdx for the emulated TDX.
+# SAGUARO_ACCEL=tcg QEMU_PATH=$(scripts/qemu.sh path sev-tcg) exec.sh --sev|--sev-snp runs the SEV backends under
+# the emulated SEV of QEMU TCG: no SEV device and no KVM needed, but the QEMU is checked first (sev-emu-check.sh);
+# the same with the QEMU of vmm/tdx-tcg (scripts/qemu.sh path tdx-tcg) and --tdx for the emulated TDX.
 
 # EXEC_DIR (the directory to build and run in) and EXAMPLE_NAME default to the exec.sh's own directory;
 # unit_tests/exec.sh sets them to run each test of its subdirectories

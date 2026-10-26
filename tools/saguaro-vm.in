@@ -107,8 +107,8 @@ QEMU_CPU_NUM=${QEMU_CPU_NUM:-"1"}
 # SAGUARO_CPU_NUM="7"
 # QEMU_CPU_NUM=$SAGUARO_CPU_NUM
 
-# QEMU: QEMU_PATH in the environment, else a stock qemu-system-x86_64 from PATH. TDX and the graphics
-# redirection need a QEMU fork built outside this repository (see dev docs: graphics/).
+# QEMU: QEMU_PATH in the environment, else a stock qemu-system-x86_64 from PATH. The graphics redirection
+# and the emulated SEV and TDX need a QEMU backend of vmm/ (scripts/qemu.sh build graphics|sev-tcg|tdx-tcg).
 # saguaro-sev: the QEMU configured with -Dsev_qemu, if any (the LibOS tests run it with a stripped
 # environment)
 [ -n "$SEV_QEMU_PATH" ] && QEMU_PATH=${QEMU_PATH:-$SEV_QEMU_PATH}
@@ -116,8 +116,8 @@ QEMU_PATH=${QEMU_PATH:-$(command -v qemu-system-x86_64 || echo qemu-system-x86_6
 
 # SAGUARO_ACCEL=tcg runs the guest under QEMU's software emulation (MTTCG) instead of KVM, for
 # hosts without /dev/kvm or without SEV; SAGUARO_CPU overrides the CPU model (TCG default: max).
-# Under TCG the SEV modes use the emulated objects sev-emu / sev-snp-emu of the dev-sev QEMU, and
-# saguaro-tdx the emulated TDX (tdx-emu) of the dev-tdx branch of qemu-tdx-tcg.
+# Under TCG the SEV modes use the emulated objects sev-emu / sev-snp-emu of the QEMU of vmm/sev-tcg, and
+# saguaro-tdx the emulated TDX (tdx-emu) of the QEMU of vmm/tdx-tcg.
 QEMU_ACCEL=${SAGUARO_ACCEL:-kvm}
 KIRQ=on
 if [ "$QEMU_ACCEL" = tcg ]; then
@@ -218,7 +218,7 @@ fi
 [ -n "${GRAPHICS_HUGE_ADDR:-}" ] && export SAGUARO_HUGEPAGE_ADDR
 [ -n "${GRAPHICS_DATA_SIZE:-}" ] && export SAGUARO_DATA_SIZE
 [ -n "${GRAPHICS_DATA_ADDR:-}" ] && export SAGUARO_DATA_ADDR
-[ -n "${GRAPHICS_DATA_ADDR:-}" ] && export GRAMINE_DATA_ADDR=$GRAPHICS_DATA_ADDR   # read by the QEMU fork
+[ -n "${GRAPHICS_DATA_ADDR:-}" ] && export GRAMINE_DATA_ADDR=$GRAPHICS_DATA_ADDR   # read by the graphics QEMU
 GRAPHICS_BACKEND_ARGS=""
 
 if [ "$SAGUARO_HUGEPAGES" == "1" ]; then
@@ -235,7 +235,7 @@ if [ "$SAGUARO_HUGEPAGES" == "1" ]; then
     # arena), the dedicated 1G hugetlb bucket at 6-7G (the hugepage GEM arena -- the only
     # hugetlb memory), and normal pages for the rest: only the 3G of fixed backends is
     # committed up front. SAGUARO_RAM_BASES carries the guest base of each memfd backend,
-    # in -object order, to the QEMU fork's identity-mapped placement.
+    # in -object order, to the graphics QEMU's identity-mapped placement.
     RAM_BASES=0,4294967296,6442450944
     GRAPHICS_BACKEND_ARGS+="-object memory-backend-memfd,id=huge0,size=2G,hugetlb=on,hugetlbsize=2M \
     -object memory-backend-memfd,id=ram1,size=2G \
@@ -279,10 +279,10 @@ else
     [ "$HAVE_APP_BACKEND" = 1 ] && GRAPHICS_BACKEND_ARGS+="-numa node,memdev=huge2,nodeid=2 "
 fi
 QEMU_OPTS+="$GRAPHICS_BACKEND_ARGS"
-# The bases go to the QEMU fork's placement logic (per-backend identity mapping) as env -- the
+# The bases go to the graphics QEMU's placement logic (per-backend identity mapping) as env -- the
 # guest never sees this one.
 export SAGUARO_RAM_BASES=$RAM_BASES
-# the external QEMU fork reads the map and the arena address under their old names
+# the graphics QEMU (vmm/graphics) reads the map and the arena address under their old names
 export GRAMINE_RAM_BASES=$RAM_BASES
 
 if [ -n "$SEV_IGVM_PATH" ]; then
@@ -354,7 +354,7 @@ elif [ "$TDSHIM_PAL_PATH" == "" ]; then
     QEMU_MACHINE="-M q35,kernel_irqchip=$KIRQ"
     QEMU_BINARIES="-kernel $LIBPAL_PATH -device loader,file=$BIOS_PATH"
 elif [ "$QEMU_ACCEL" = tcg ]; then
-    # the emulated TDX of QEMU TCG (the dev-tdx branch of qemu-tdx-tcg, object tdx-emu): no TDX
+    # the emulated TDX of QEMU TCG (the QEMU of vmm/tdx-tcg, object tdx-emu): no TDX
     # hardware, no KVM, no quote service; td-shim boots the PAL from the same image as on hardware
     # (pit=off as below)
     QEMU_MACHINE="-M q35,kernel_irqchip=$KIRQ,pit=off,confidential-guest-support=tdx -object tdx-emu,id=tdx"

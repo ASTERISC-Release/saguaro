@@ -29,7 +29,7 @@
 #                            and 4 vCPUs and the other suites at 1.
 #   SAGUARO_SEV_MODE=sev     the saguaro-sev mode: sev or snp (measure: sev only)
 #   SAGUARO_ACCEL=tcg        the emulated SEV of QEMU TCG: hello and vsock only (QEMU_PATH names the
-#                            QEMU with sev-emu/sev-snp-emu)
+#                            QEMU with sev-emu/sev-snp-emu: scripts/qemu.sh path sev-tcg)
 #   SAGUARO_RAM_SIZE=8G      guest RAM (SEV pins all of it at launch, so smaller boots faster; the
 #                            multiprocess frame pool, on by default, needs more than 4G)
 #   COMPARE=1                memory: also run the probe under saguaro-vm as the control

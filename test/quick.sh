@@ -10,13 +10,13 @@
 #   variant   direct | vm | sev | sev-snp | sgx | vbs | tdx
 #             sev and sev-snp under SAGUARO_ACCEL=tcg run the SEV PAL under the emulated SEV of QEMU TCG
 #             (no SEV hardware, no KVM; no attestation, no memory isolation):
-#                 SAGUARO_ACCEL=tcg QEMU_PATH=<dev-sev qemu-system-x86_64> test/quick.sh sev|sev-snp
+#                 SAGUARO_ACCEL=tcg QEMU_PATH=$(scripts/qemu.sh path sev-tcg) test/quick.sh sev|sev-snp
 #             QEMU_PATH is checked first (CI-Examples/common_tools/sev-emu-check.sh). The results say sev-emu. Its
 #             smoke tier adds the SEV smoke suite (hello at 1, 2 and 4 vCPUs, vsock); its regression tier the LibOS
 #             core list only (hosted runners: about 8 minutes).
 #             tdx under SAGUARO_ACCEL=tcg runs the TDX PAL under the emulated TDX of QEMU TCG (td-shim boots the
 #             PAL; no TDX hardware, no KVM, no attestation, no memory isolation):
-#                 SAGUARO_ACCEL=tcg QEMU_PATH=<dev-tdx qemu-system-x86_64> test/quick.sh tdx
+#                 SAGUARO_ACCEL=tcg QEMU_PATH=$(scripts/qemu.sh path tdx-tcg) test/quick.sh tdx
 #             The results say tdx-emu; its tiers have the shape of sev-emu (the regression tier is the LibOS core
 #             list, the examples run in the extended tier). The TDX PAL reads the signed SGX manifest, so the
 #             install is scripts/install.sh --sgx --tdx and the LibOS steps sign their manifests first.
@@ -55,8 +55,8 @@
 # Environment: QUICK_TIMEOUT_SCALE (multiplies every step timeout, default 1), QUICK_PYTEST_K (a pytest -k
 # expression added to the LibOS steps, for a test that is too slow on a given host), SAGUARO_RAM_SIZE (default
 # 8G for sev and sev-snp, the launcher of vm needs at least 5G), EXEC_TIMEOUT (seconds per example, exec.sh),
-# SAGUARO_ACCEL=tcg and QEMU_PATH (sev, sev-snp, tdx: the emulated SEV or TDX; QEMU_PATH names the dev-sev or dev-tdx
-# QEMU, required).
+# SAGUARO_ACCEL=tcg and QEMU_PATH (sev, sev-snp, tdx: the emulated SEV or TDX; QEMU_PATH names the QEMU of vmm/sev-tcg or
+# vmm/tdx-tcg, built with scripts/qemu.sh build sev-tcg|tdx-tcg; required).
 set -u
 HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 REPO=${REPO:-$(cd "$HERE/.." && pwd)}

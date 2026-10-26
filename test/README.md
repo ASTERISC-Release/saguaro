@@ -89,7 +89,7 @@ about 15 minutes, so `smoke` and `regression` skip it there (`UNIT_TESTS_SKIP`, 
 
 `SAGUARO_ACCEL=tcg QEMU_PATH=<qemu> test/quick.sh sev|sev-snp` runs the SEV PAL (`saguaro-sev`, the same install as `sev`) on a host without SEV
 hardware and without KVM: QEMU's software emulation (TCG) with the `sev-emu` and `sev-snp-emu` objects of the
-`dev-sev` branch of the lab's QEMU fork, a *functional* emulation of what an SEV, SEV-ES or SEV-SNP guest can
+QEMU of `vmm/sev-tcg` (the `dev-sev` branch of [`qemu-sev-tcg`](https://github.com/adilahmad17/qemu-sev-tcg)), a *functional* emulation of what an SEV, SEV-ES or SEV-SNP guest can
 observe: `SEV_STATUS` and CPUID 0x8000001F, the C-bit in page tables (bookkeeping only), `#VC` for the
 intercepted instructions, the GHCB MSR protocol and the VMGEXIT events, the SNP CPUID and secrets pages,
 `PVALIDATE`, `RMPADJUST` and page-state changes with the "page not validated" `#VC`, AP creation from a
@@ -98,7 +98,7 @@ does, `/dev/attestation/quote` cannot be read), **no memory isolation or encrypt
 memory), no launch measurement that a report could be checked against, and no VMPL model. It validates the
 PAL's use of the protocols and finds regressions in that code; it does not replace a run on an SEV host,
 which stays the qualification of a release (`test/quick.sh sev` and `sev-snp` there). `QEMU_PATH`
-names the emulating QEMU (`qemu-system-x86_64` of that branch, built with `--enable-igvm`); it is checked
+names the emulating QEMU (`scripts/qemu.sh build sev-tcg`, then `QEMU_PATH=$(scripts/qemu.sh path sev-tcg)`); it is checked
 first by `CI-Examples/common_tools/sev-emu-check.sh` (set, a QEMU, TCG, the `sev-emu` or `sev-snp-emu` object), and
 `exec.sh --sev|--sev-snp` and `test/sev/test-sev.sh` run the same check. The mode follows the variant. The known differences are in `expected-failures.toml` (`test_020_cpuinfo`: the guest sees
 QEMU's `max` CPU model) and `test/sev/test-sev.sh` skips its `memory`, `measure` and `attest` suites under
@@ -196,9 +196,9 @@ riscv64`), `vm-x86_64.yml` (`vm`; it also runs `test/vm/network/test-vm-redis.sh
 the job summary and uploads the output directory. Deselects for a slow host are `QUICK_PYTEST_K` in the
 workflow (aarch64 TCG: `test_604_sigreturn_regs`; riscv64: `test_103_gettimeofday`, `test_603_rewrite_stress`)
 and entries of `expected-failures.toml`. The TDX PAL is compiled by the `tdx-build` job of `direct-x86_64.yml` and
-run under the emulated TDX by `tdx-emulated-x86_64.yml` (nightly and on demand; it builds the `dev-tdx` QEMU of `adilahmad17/qemu-tdx-tcg` and
+run under the emulated TDX by `tdx-emulated-x86_64.yml` (nightly and on demand; it builds the QEMU of `vmm/tdx-tcg` with `scripts/qemu.sh` and
 td-shim, both cached, installs Saguaro with `--sgx --tdx` and runs `test/quick.sh tdx` at 2 vCPUs).
 SEV, SGX and VBS have no CI (the repository is public): run `test/quick.sh sev`, `sev-snp`, `sgx` or `vbs` by
-hand per release and keep the summary line. The emulated SEV can run on a hosted x86_64 runner once
-the emulating QEMU is available to the workflow (the `dev-sev` fork is private: publish it or build the binary
-elsewhere and fetch it as an artifact); its results say `sev-emu` and are not a substitute for the SEV host.
+hand per release and keep the summary line. The emulated SEV runs on a hosted x86_64 runner
+(`sev-emulated-x86_64.yml`, with the QEMU of `vmm/sev-tcg`); its results say `sev-emu` and are not a
+substitute for the SEV host.
