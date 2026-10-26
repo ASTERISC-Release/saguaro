@@ -350,7 +350,10 @@ elif [ "$TDSHIM_PAL_PATH" == "" ]; then
     QEMU_MACHINE="-M q35,kernel_irqchip=$KIRQ"
     QEMU_BINARIES="-kernel $LIBPAL_PATH -device loader,file=$BIOS_PATH"
 else
-    QEMU_MACHINE="-M q35,kernel_irqchip=split,confidential-guest-support=tdx \
+    # pit=off: the PAL takes its time from the TSC and the local APIC timer, but routes every IOAPIC
+    # pin to its device-interrupt vector; the 8254 timer, which ticks from reset, would interrupt
+    # the kernel before its handlers and devices are set up (a crash or a hang at start-up)
+    QEMU_MACHINE="-M q35,kernel_irqchip=split,pit=off,confidential-guest-support=tdx \
     -object tdx-guest,id=tdx,quote-generation-service=vsock:2:4050"
     QEMU_BINARIES="-bios $TDSHIM_PAL_PATH"
 fi
