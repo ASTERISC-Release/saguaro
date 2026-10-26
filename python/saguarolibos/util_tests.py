@@ -248,7 +248,8 @@ def run_ninja(args):
 
 def exec_saguaro(sgx, name, args):
     prog = ('saguaro-sgx' if sgx else
-            'saguaro-vm' if os.environ.get('SAGUARO_VM') == '1' else 'saguaro-direct')
+            os.environ.get('SAGUARO_VM_LAUNCHER', 'saguaro-vm') if os.environ.get('SAGUARO_VM') == '1'
+            else 'saguaro-direct')
     argv = [prog, name] + list(args)
     print(' '.join(argv))
     os.execvp(prog, argv)

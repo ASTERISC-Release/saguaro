@@ -24,9 +24,10 @@ IS_VM = os.environ.get('IS_VM') == '1'
 # Run the tests under the VM PAL (`saguaro-vm`) instead of Linux-direct/SGX. Note this is not IS_VM,
 # which says the *test machine* is a VM.
 USE_SAGUARO_VM = os.environ.get('SAGUARO_VM') == '1'
-# the launcher of the VM runs: saguaro-vm, or saguaro-sev for the AMD SEV build of the vm PAL
-# (dev docs: sev/), whose PAL lives in <pkglibdir>/sev
+# the launcher of the VM runs: saguaro-vm, saguaro-sev for the AMD SEV build of the vm PAL (dev docs:
+# sev/), whose PAL lives in <pkglibdir>/sev, or saguaro-tdx for the Intel TDX build (<pkglibdir>/tdx)
 VM_LAUNCHER = os.environ.get('SAGUARO_VM_LAUNCHER', 'saguaro-vm')
+VM_HOST = {'saguaro-sev': 'sev', 'saguaro-tdx': 'tdx'}.get(VM_LAUNCHER, 'vm')
 ON_X86 = os.uname().machine in ['x86_64']
 USES_MUSL = os.environ.get('SAGUARO_MUSL') == '1'
 
@@ -186,8 +187,7 @@ class RegressionTestCase(unittest.TestCase):
     @property
     def pal_path(self):
         # pylint: disable=protected-access
-        vm_host = 'sev' if VM_LAUNCHER == 'saguaro-sev' else 'vm'
-        host = 'sgx' if HAS_SGX else vm_host if USE_SAGUARO_VM else 'direct'
+        host = 'sgx' if HAS_SGX else VM_HOST if USE_SAGUARO_VM else 'direct'
         return pathlib.Path(saguarolibos._CONFIG_PKGLIBDIR) / host
 
     @property
