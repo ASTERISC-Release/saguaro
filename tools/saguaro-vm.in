@@ -46,9 +46,10 @@ fi
 # Try to get the VM memory config from `.manifest.tdx` file, by parsing `tdx.enclave_size` value.
 # If this fails, try alternatively with `.manifest.sgx` and `sgx.enclave_size`
 #
-# We enforce a 1GB lower limit for VM memory because (a) Saguaro VM kernel reserves ~512MB for
-# shared virtio-queues memory, page tables, PAL binary, etc. and (b) for simplicity we want to reuse
-# already-existing SGX manifests, thus we don't want to bump `sgx.enclave_size` to 1GB explicitly.
+# We enforce a 4GB lower limit for VM memory because (a) Saguaro VM kernel reserves ~512MB for
+# shared virtio-queues memory, page tables, PAL binary, etc., (b) the memory layout below (the
+# NUMA nodes huge0 and ram1 of 2G each) needs 4G at least, and (c) for simplicity we want to
+# reuse already-existing SGX manifests, thus we don't want to bump `sgx.enclave_size` explicitly.
 export SAGUARO_MANIFEST=$APPLICATION.manifest
 if [ ! -f "$SAGUARO_MANIFEST" ]; then
     echo "saguaro-vm: manifest '$SAGUARO_MANIFEST' not found in $PWD." >&2
@@ -90,7 +91,7 @@ elif size_str.endswith('K'):
 
 try:
     size = int(re.search(r'\d+', size_str).group())
-    print(size_str if unit * size > 1024 * 1024 * 1024 else '1G')
+    print(size_str if unit * size > 4 * 1024 * 1024 * 1024 else '4G')
 except Exception:
     sys.exit(1)
 ")
