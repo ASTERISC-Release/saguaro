@@ -32,6 +32,8 @@
 #   vm       $SAGUARO_VM_PREFIX     (default ~/.local/saguaro-vm)   saguaro-vm, needs /dev/kvm
 #   sev      $SAGUARO_VM_PREFIX     (same install as vm, --sev)     saguaro-sev, x86_64 with SEV; plain SEV
 #   sev-snp  (same install and runner as sev)                        saguaro-sev in SEV-SNP mode
+#   tdx      $SAGUARO_TDX_PREFIX    (scripts/install.sh --sgx --tdx)  saguaro-tdx, x86_64 with TDX (td-shim + the TDX PAL;
+#                                                                    the manifest is the signed SGX one, make SGX=1)
 #   sgx      $SAGUARO_SGX_PREFIX    (default ~/.local/saguaro-sgx)   saguaro-sgx, x86_64 with SGX (/dev/sgx_enclave);
 #            scripts/install.sh --sgx; make SGX=1 signs the enclave with ~/.config/saguaro/enclave-key.pem
 #   vbs      scripts/install.sh --vbs, in WSL on a Windows machine   Windows VBS enclave (make VBS=1); an
@@ -40,9 +42,9 @@
 #
 # Usage of exec.sh:
 #   exec.sh --vm             build and run the example under backend vm; likewise --direct, --sev (plain
-#                            SEV), --sev-snp (SEV-SNP), --sgx (`make SGX=1`: the signed enclave) and --vbs (`make VBS=1` and `make VBS=1 check`, in
+#                            SEV), --sev-snp (SEV-SNP), --tdx (TDX), --sgx (`make SGX=1`: the signed enclave) and --vbs (`make VBS=1` and `make VBS=1 check`, in
 #                            WSL; the runtime must be installed with scripts/install.sh --vbs first).
-#   exec.sh --backend B      the same as --B (B is direct, vm, sev, sev-snp, sgx or vbs). Repeat either form for several
+#   exec.sh --backend B      the same as --B (B is direct, vm, sev, sev-snp, tdx, sgx or vbs). Repeat either form for several
 #                            backends. A backend is required: without one the script lists the
 #                            backends and whether this host can run each, and exits with status 2.
 #   exec.sh --keep           keep the program output; logs are always written to $EXEC_LOG_DIR
@@ -57,7 +59,8 @@
 # of a vbs image), EXEC_LOG_DIR (default /tmp/saguaro-exec),
 # The backend sets SAGUARO_SEV_MODE for saguaro-sev: sev for --sev, snp for --sev-snp.
 # SAGUARO_ACCEL=tcg QEMU_PATH=<dev-sev qemu-system-x86_64> exec.sh --sev|--sev-snp runs the SEV backends under the
-# emulated SEV of QEMU TCG: no SEV device and no KVM needed, but the QEMU is checked first (sev-emu-check.sh).
+# emulated SEV of QEMU TCG: no SEV device and no KVM needed, but the QEMU is checked first (sev-emu-check.sh);
+# the same with the dev-tdx QEMU and --tdx for the emulated TDX.
 
 # EXEC_DIR (the directory to build and run in) and EXAMPLE_NAME default to the exec.sh's own directory;
 # unit_tests/exec.sh sets them to run each test of its subdirectories
@@ -83,6 +86,7 @@ backend_prefix() {
     case $(backend_base "$1") in
         direct) echo "${SAGUARO_DIRECT_PREFIX:-$HOME/.local/saguaro}" ;;
         vm|sev) echo "${SAGUARO_VM_PREFIX:-$HOME/.local/saguaro-vm}" ;;
+        tdx)    echo "${SAGUARO_TDX_PREFIX:-$HOME/.local/saguaro-tdx}" ;;
         sgx)    echo "${SAGUARO_SGX_PREFIX:-$HOME/.local/saguaro-sgx}" ;;
     esac
 }
@@ -106,6 +110,7 @@ backend_unavailable() {
         direct) runner=saguaro-direct ;;
         vm)     runner=saguaro-vm ;;
         sev)    runner=saguaro-sev ;;
+        tdx)    runner=saguaro-tdx ;;
         sgx)    runner=saguaro-sgx ;;
         *)      echo "unknown backend $b"; return 0 ;;
     esac
@@ -125,12 +130,27 @@ backend_unavailable() {
         [ -e /dev/sev ] || { echo "no SEV device (/dev/sev) on this host"; return 0; }
         [ -r /dev/sev ] && [ -w /dev/sev ] || { echo "no read/write access to /dev/sev"; return 0; }
     fi
+    if [ "$b" = tdx ] && [ "$(exec_host_arch)" != x86_64 ]; then
+        echo "TDX needs an x86_64 host"; return 0
+    fi
+    if [ "$b" = tdx ] && [ "${SAGUARO_ACCEL:-kvm}" = tcg ]; then
+        # the emulated TDX of QEMU TCG (SAGUARO_ACCEL=tcg): no TDX host, but a QEMU that has the emulated TDX
+        local why; why=$("$EXEC_COMMON_DIR/sev-emu-check.sh" tdx 2>&1 >/dev/null) \
+            || { echo "${why#emulated TDX: }"; return 0; }
+    elif [ "$b" = tdx ]; then
+        grep -qx Y /sys/module/kvm_intel/parameters/tdx 2>/dev/null \
+            || { echo "no TDX host (kvm_intel tdx is not Y) and SAGUARO_ACCEL is not tcg"; return 0; }
+    fi
     # the aarch64 launcher falls back to software emulation (TCG) without /dev/kvm; x86_64 and SEV need KVM,
     # unless SAGUARO_ACCEL=tcg asks for the software emulation explicitly
-    if [ "${SAGUARO_ACCEL:-kvm}" != tcg ] && { [ "$b" = sev ] || { [ "$b" = vm ] && [ "$(uname -m)" != aarch64 ]; }; }; then
+    if [ "${SAGUARO_ACCEL:-kvm}" != tcg ] && { [ "$b" = sev ] || [ "$b" = tdx ] || { [ "$b" = vm ] && [ "$(uname -m)" != aarch64 ]; }; }; then
         [ -r /dev/kvm ] && [ -w /dev/kvm ] || { echo "no read/write access to /dev/kvm"; return 0; }
     fi
     [ -x "$prefix/bin/$runner" ] || { echo "$runner not installed in $prefix (scripts/install.sh)"; return 0; }
+    if [ "$b" = tdx ] && [ ! -x "$prefix/bin/saguaro-sgx-sign" ]; then
+        echo "saguaro-sgx-sign not installed in $prefix (scripts/install.sh --sgx --tdx: the TDX PAL reads the signed manifest)"
+        return 0
+    fi
     return 1
 }
 
@@ -197,7 +217,10 @@ exec_one() {
     case $b in
         sev)     export SAGUARO_SEV_MODE=sev ;;
         sev-snp) export SAGUARO_SEV_MODE=snp ;;
-        sgx)     export SGX=1; mtarget=all
+        # tdx: the TDX PAL reads <app>.manifest.sgx, the signed manifest with the trusted-file hashes
+        # (gramine-tdx's design), so it is built like sgx: make SGX=1, saguaro-sgx-sign from an install
+        # made with --sgx --tdx
+        sgx|tdx) export SGX=1; mtarget=all
                  # (a key at the earlier default ~/.config/gramine/ is still used by saguaro-sgx-sign)
                  [ -e "${SGX_SIGNER_KEY:-$HOME/.config/saguaro/enclave-key.pem}" ] \
                      || { [ -z "${SGX_SIGNER_KEY:-}" ] && [ -e "$HOME/.config/gramine/enclave-key.pem" ]; } \
@@ -214,7 +237,7 @@ exec_one() {
     local binary=${EXAMPLE_BINARY:-$EXAMPLE_NAME}
     local manifest=${EXAMPLE_MANIFEST:-$binary.manifest}
     local runner mode=${EXAMPLE_MODE:-run}
-    case $base in direct) runner=saguaro-direct ;; vm) runner=saguaro-vm ;; sev) runner=saguaro-sev ;; sgx) runner=saguaro-sgx ;; esac
+    case $base in direct) runner=saguaro-direct ;; vm) runner=saguaro-vm ;; sev) runner=saguaro-sev ;; tdx) runner=saguaro-tdx ;; sgx) runner=saguaro-sgx ;; esac
     mtarget=${mtarget:-$manifest}
 
     if [ "$mode" = check ]; then
@@ -227,8 +250,11 @@ exec_one() {
         # exec.sh may define example_check_args <backend>: extra make variables for `make check`
         local -a check_args=()
         if declare -F example_check_args >/dev/null; then check_args=($(example_check_args "$base")); fi
-        echo "+ make ${EXAMPLE_CHECK_TARGET:-check} SAGUARO=$runner ${check_args[*]}" | tee -a "$log"
-        timeout -s KILL "$EXEC_TIMEOUT" make "${EXAMPLE_CHECK_TARGET:-check}" SAGUARO="$runner" "${check_args[@]}" 2>&1 </dev/null | tee "$out"
+        # tdx builds its manifest with SGX=1 (above) but is no SGX enclave: the check runs without SGX in
+        # its environment, or the Makefiles would expect the SGX-only steps (reports, quotes) to pass
+        local -a check_env=(); [ "$base" != tdx ] || check_env=(env -u SGX)
+        echo "+ ${check_env[*]}${check_env[*]:+ }make ${EXAMPLE_CHECK_TARGET:-check} SAGUARO=$runner ${check_args[*]}" | tee -a "$log"
+        timeout -s KILL "$EXEC_TIMEOUT" "${check_env[@]}" make "${EXAMPLE_CHECK_TARGET:-check}" SAGUARO="$runner" "${check_args[@]}" 2>&1 </dev/null | tee "$out"
         rc=${PIPESTATUS[0]}
         cat "$out" >>"$log"
     else
@@ -276,9 +302,9 @@ exec_main() {
     KEEP=0
     while [ $# -gt 0 ]; do
         case $1 in
-            --backend) [ $# -ge 2 ] || { echo "--backend needs a value (direct, vm, sev, sev-snp, vbs or sgx)" >&2; exit 2; }
+            --backend) [ $# -ge 2 ] || { echo "--backend needs a value (direct, vm, sev, sev-snp, tdx, vbs or sgx)" >&2; exit 2; }
                        requested+=("$2"); shift 2 ;;
-            --direct|--vm|--sev|--sev-snp|--vbs|--sgx) requested+=("${1#--}"); shift ;;
+            --direct|--vm|--sev|--sev-snp|--tdx|--vbs|--sgx) requested+=("${1#--}"); shift ;;
             --keep)    KEEP=1; shift ;;
             -h|--help) sed -n '2,/^[^#]/p' "${BASH_SOURCE[0]}" | sed '$d; s/^# \{0,1\}//'; exit 0 ;;
             *) echo "unknown option: $1" >&2; exit 2 ;;
@@ -299,13 +325,19 @@ exec_main() {
             && [[ " $supported " != *" sgx "* ]]; then
         supported="$supported sgx"
     fi
+    # an example with an SGX build (the same test) that runs under the vm PAL runs under the TDX PAL too: the
+    # signed manifest of make SGX=1 is what that PAL reads (x86_64 only)
+    if [ "$arch" = x86_64 ] && [[ " $supported " == *" vm "* ]] && [[ " $supported " != *" tdx "* ]] \
+            && [ -f "$EXEC_DIR/Makefile" ] && grep -qF 'ifeq ($(SGX),1)' "$EXEC_DIR/Makefile"; then
+        supported="$supported tdx"
+    fi
     # an example with a vbs.manifest.template runs for a Windows VBS enclave too (make VBS=1)
     if [ -f "$EXEC_DIR/vbs.manifest.template" ] && [[ " $supported " != *" vbs "* ]]; then
         supported="$supported vbs"
     fi
     local -a backends=()
     if [ ${#requested[@]} -eq 0 ]; then
-        echo "usage: $0 --direct|--vm|--sev|--sev-snp|--vbs|--sgx [--keep]" >&2
+        echo "usage: $0 --direct|--vm|--sev|--sev-snp|--tdx|--vbs|--sgx [--keep]" >&2
         echo "$EXAMPLE_NAME supports these backends; this host ($arch) can run:" >&2
         for backend in ${supported/sev/sev sev-snp}; do
             if reason=$(backend_unavailable "$backend"); then

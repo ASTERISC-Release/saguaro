@@ -10,7 +10,7 @@ EXAMPLE_BACKENDS="direct vm sev"
 # The check's web server must be on an address the guest can reach: not the host's loopback, which
 # in a vm or sev guest is the guest itself (README footnote 3).
 example_check_args() {
-    case $1 in vm|sev) echo "HTTP_ADDR=$(hostname -I | awk '{print $1}')" ;; esac
+    case $1 in vm|sev|tdx) echo "HTTP_ADDR=$(hostname -I | awk '{print $1}')" ;; esac
 }
 
 . "$(dirname "$(readlink -f "$0")")/../common_tools/exec-common.sh"

@@ -139,9 +139,30 @@ The install step links the PAL with TD-shim: it runs `cargo run -p td-shim-tools
 `$HOME/td-shim`, so that checkout (built as upstream gramine-tdx describes) must exist, or the
 install stops there after everything has compiled.
 
-The examples that run on SEV also run on TDX. `exec.sh` has no TDX backend. CI compiles the `tdx` PAL
-(the `tdx-build` job of `direct-x86_64.yml`); `test/quick.sh tdx` does the same on a development machine, for every
-tier, because TDX has no tests that run without TDX hardware.
+The examples that run on SEV also run on TDX: `exec.sh --tdx` is their TDX backend (the install is
+`scripts/install.sh --sgx --tdx`, since the TDX PAL reads the signed `.manifest.sgx` that `make SGX=1` builds),
+`test/quick.sh tdx` the tiered test set. CI compiles the `tdx` PAL (the `tdx-build` job of `direct-x86_64.yml`);
+without `SAGUARO_ACCEL=tcg`, `test/quick.sh tdx` does the same on a development machine.
+
+### The emulated TDX of QEMU TCG
+
+Without TDX hardware, `saguaro-tdx` runs the TD under the emulated TDX of QEMU's software emulation (TCG): the
+`dev-tdx` branch of [qemu-sev-tcg](https://github.com/adilahmad17/qemu-sev-tcg) adds the object `tdx-emu`,
+which provides the TDX guest interface the PAL uses (TDCALL and TDG.VP.VMCALL, `#VE`, the shared bit and page
+acceptance, the launch from td-shim with the TD HOB). The emulation is functional: it has no attestation (a
+TDREPORT without MAC, no quote) and no memory isolation. The QEMU is built with the fork's `build.sh`; td-shim is
+built by `scripts/td-shim-build.sh` (at the commit it names, in `$HOME/td-shim`, as the install step expects).
+`SAGUARO_ACCEL=tcg` selects the emulation and `QEMU_PATH` the QEMU:
+
+    export SAGUARO_ACCEL=tcg QEMU_PATH=<qemu-sev-tcg prefix>/bin/qemu-system-x86_64
+    CI-Examples/common_tools/sev-emu-check.sh tdx       # the preflight: is QEMU_PATH that QEMU?
+    CI-Examples/helloworld/exec.sh --tdx                # an example under saguaro-tdx
+    test/quick.sh tdx --tier smoke                      # the tiers smoke, regression and extended
+
+The results of `test/quick.sh` say `tdx-emu`; its tiers have the shape of the emulated SEV's (`regression` is
+the LibOS core list, the examples run in `extended`). The workflow `.github/workflows/tdx-emulated-x86_64.yml`
+runs the same on a hosted runner, nightly and on demand: it builds the QEMU and td-shim (both cached), installs
+Saguaro with `--sgx --tdx` and runs `test/quick.sh tdx` at 2 vCPUs.
 
 ## Not covered
 

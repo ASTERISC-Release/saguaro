@@ -10,7 +10,7 @@ set -uo pipefail
 : "${SAGUARO:=saguaro-direct}"
 . ../common_tools/server-check.sh
 case $SAGUARO in
-    saguaro-vm|saguaro-sev)
+    saguaro-vm|saguaro-sev|saguaro-tdx)
         grep -q '^master_process' install/conf/nginx-saguaro.conf \
             || sed -i '1i master_process off;' install/conf/nginx-saguaro.conf ;;
 esac
