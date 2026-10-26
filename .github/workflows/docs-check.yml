@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 The ASTERISC Research Lab
 # Checks that the development documents name only files that exist and that README.md and INSTALL.md
-# parse (scripts/check-docs.py). It needs no build and runs in seconds.
+# parse (scripts/check-docs.py), and that the QEMU submodules under vmm/ are declared and pinned
+# (scripts/check-submodules.sh; they are not fetched). It needs no build and runs in seconds.
 #
 # Manual trigger only (Actions tab -> "Documentation check" -> Run workflow), like the other workflows.
 name: Documentation check
@@ -23,3 +24,5 @@ jobs:
       - uses: actions/checkout@v4
       - name: Check the documents
         run: scripts/check-docs.py
+      - name: Check the QEMU submodules
+        run: scripts/check-submodules.sh
