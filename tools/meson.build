@@ -104,6 +104,9 @@ if tdx
     hostpalpath_tdx = join_paths(get_option('prefix'), pkglibdir, 'tdx')
     conf_saguaro_tdx = configuration_data()
     conf_saguaro_tdx.merge_from(conf)
+    conf_saguaro_tdx.set_quoted('HOST_PAL_PATH', hostpalpath_tdx)
+    conf_saguaro_tdx.set_quoted('BIOS_PATH', join_paths(hostpalpath_tdx, 'bios'))
+    conf_saguaro_tdx.set_quoted('LIBPAL_PATH', join_paths(hostpalpath_tdx, 'pal'))
     conf_saguaro_tdx.set_quoted('TDSHIM_PAL_PATH', join_paths(hostpalpath_tdx, 'tdshim-pal'))
 
     # saguaro-tdx is saguaro-vm.in with the TDX paths: it sources the same relay library
