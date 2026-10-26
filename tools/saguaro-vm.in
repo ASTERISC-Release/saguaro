@@ -245,7 +245,7 @@ if [ "$SAGUARO_HUGEPAGES" == "1" ]; then
         GRAPHICS_BACKEND_ARGS+="-object memory-backend-memfd,id=ram2,size=$REM_MEM_SIZE "
         RAM_BASES+=",$((7 * 1073741824))"
     else
-        echo "no fourth backend (RAM=5G)"
+        echo "no fourth backend (RAM=5G)" >&2
     fi
     GRAPHICS_BACKEND_ARGS+="-numa node,memdev=huge0,nodeid=0 \
     -numa node,memdev=ram1,nodeid=1 \
@@ -268,7 +268,7 @@ else
         GRAPHICS_BACKEND_ARGS+="-object memory-backend-memfd,id=huge2,size=$REM_MEM_SIZE "
         RAM_BASES+=",$((6 * 1073741824))"
     else
-        echo "no third backend (RAM=4G; the GEM arenas live entirely in ram1)"
+        echo "no third backend (RAM=4G; the GEM arenas live entirely in ram1)" >&2
     fi
     GRAPHICS_BACKEND_ARGS+="-numa node,memdev=huge0,nodeid=0 \
     -numa node,memdev=ram1,nodeid=1 "
