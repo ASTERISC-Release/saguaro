@@ -93,6 +93,12 @@ jobs:
         if: steps.qemu-cache.outputs.cache-hit != 'true'
         run: qemu-sev-tcg/build.sh --install-deps --prefix "$QEMU_PREFIX" --jobs "$(nproc)"
 
+      - name: Emulating QEMU - runtime libraries
+        # a cached build skips build.sh --install-deps, so the libraries the binary links against are installed here
+        run: |
+          sudo apt-get install -y -qq libfdt1 libslirp0 libpixman-1-0 libglib2.0-0t64
+          if ldd "$QEMU_PREFIX/bin/qemu-system-x86_64" | grep 'not found'; then echo "missing libraries above"; exit 1; fi
+
       - name: Emulating QEMU - check
         run: |
           "$QEMU_PREFIX/bin/qemu-system-x86_64" --version | head -1
