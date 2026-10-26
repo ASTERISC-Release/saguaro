@@ -4,7 +4,9 @@ c_vdso_args = [
     '-ffreestanding',
 ]
 
-if vm
+# the PALs of the VM family (vm, sev and tdx) run the LibOS in ring 0 and keep their own code out of
+# user mode: the vDSO must enter the LibOS through the syscall instruction, not jump into it
+if vm or tdx
     c_vdso_args += ['-DVDSO_USE_SYSCALL_INSTR']
 endif
 
