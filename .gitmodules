@@ -1,0 +1,15 @@
+[submodule "vmm/graphics"]
+	path = vmm/graphics
+	url = https://github.com/adilahmad17/qemu-graphics
+	branch = dev-graphics
+	shallow = true
+[submodule "vmm/sev-tcg"]
+	path = vmm/sev-tcg
+	url = https://github.com/adilahmad17/qemu-sev-tcg
+	branch = dev-sev
+	shallow = true
+[submodule "vmm/tdx-tcg"]
+	path = vmm/tdx-tcg
+	url = https://github.com/adilahmad17/qemu-tdx-tcg
+	branch = dev-tdx
+	shallow = true
