@@ -2,9 +2,9 @@
 # Copyright (C) 2026 The ASTERISC Research Lab
 # TDX PAL under the emulated TDX of QEMU TCG (saguaro-tdx, SAGUARO_ACCEL=tcg test/quick.sh tdx).
 #
-# No TDX hardware and no KVM are needed: the QEMU of the dev-tdx branch of adilahmad17/qemu-tdx-tcg emulates
+# No TDX hardware and no KVM are needed: the QEMU of vmm/tdx-tcg (adilahmad17/qemu-tdx-tcg, branch dev-tdx) emulates
 # the TDX guest interface the PAL uses (functional only: no attestation, no memory isolation, so the results
-# do not replace a run on a TDX host). The job builds that QEMU with its build.sh (cached by its commit),
+# do not replace a run on a TDX host). The job builds that QEMU with scripts/qemu.sh (cached by its commit),
 # builds td-shim at the commit scripts/td-shim-build.sh names (cached by that commit and the script), installs
 # the SGX and TDX build of Saguaro (the TDX PAL reads the signed SGX manifest), and runs test/quick.sh at
 # 2 vCPUs.
@@ -26,9 +26,9 @@ on:
           - extended
         default: regression
       qemu_ref:
-        description: "branch or tag of adilahmad17/qemu-tdx-tcg to build"
+        description: "branch or commit of adilahmad17/qemu-tdx-tcg to build instead of the commit pinned at vmm/tdx-tcg"
         required: false
-        default: "dev-tdx"
+        default: ""
 
 permissions:
   contents: read
@@ -38,7 +38,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  QEMU_PREFIX: ${{ github.workspace }}/.qemu-tdx-tcg
+  QEMU_PREFIX: ${{ github.workspace }}/vmm/tdx-tcg/prefix
   TD_SHIM_COMMIT: 54a862b249a62248b726cd3dc4a96421fdc36d66
 
 jobs:
@@ -67,28 +67,35 @@ jobs:
           command -v virtiofsd
           sudo modprobe vhost_vsock && test -c /dev/vhost-vsock
 
-      # ---- the emulating QEMU: built from the fork's dev-tdx branch with its build.sh, cached by commit ----------
+      # ---- the emulating QEMU: the submodule vmm/tdx-tcg, built with scripts/qemu.sh, cached by commit ----------
       - name: Emulating QEMU - source
-        uses: actions/checkout@v4
-        with:
-          repository: adilahmad17/qemu-tdx-tcg
-          ref: ${{ inputs.qemu_ref || 'dev-tdx' }}
-          path: qemu-tdx-tcg
+        env:
+          QEMU_REF: ${{ inputs.qemu_ref }}
+        run: |
+          git submodule update --init --depth 1 -- vmm/tdx-tcg
+          if [ -n "$QEMU_REF" ]; then
+            git -C vmm/tdx-tcg fetch --depth 1 origin "$QEMU_REF"
+            git -C vmm/tdx-tcg checkout FETCH_HEAD
+          fi
 
       - name: Emulating QEMU - revision
         id: qemu-rev
-        run: echo "sha=$(git -C qemu-tdx-tcg rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+        env:
+          QEMU_REF: ${{ inputs.qemu_ref }}
+        run: |
+          if [ -n "$QEMU_REF" ]; then sha=$(git -C vmm/tdx-tcg rev-parse HEAD); else sha=$(git rev-parse HEAD:vmm/tdx-tcg); fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
       - name: Emulating QEMU - cache
         id: qemu-cache
         uses: actions/cache@v4
         with:
           path: ${{ env.QEMU_PREFIX }}
-          key: qemu-tdx-tcg-${{ runner.os }}-${{ steps.qemu-rev.outputs.sha }}-${{ hashFiles('qemu-tdx-tcg/build.sh') }}
+          key: qemu-tdx-tcg-${{ runner.os }}-${{ steps.qemu-rev.outputs.sha }}-${{ hashFiles('vmm/tdx-tcg/build.sh') }}
 
       - name: Emulating QEMU - build
         if: steps.qemu-cache.outputs.cache-hit != 'true'
-        run: qemu-tdx-tcg/build.sh --install-deps --prefix "$QEMU_PREFIX" --jobs "$(nproc)"
+        run: scripts/qemu.sh build tdx-tcg --jobs "$(nproc)"
 
       - name: Emulating QEMU - runtime libraries
         # a cached build skips build.sh --install-deps, so the libraries the binary links against are installed here
