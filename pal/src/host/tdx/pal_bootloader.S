@@ -22,6 +22,16 @@
 // This code setups GDT, IDT, CR4, XCR0, all data segment regs and CS segment reg.
 //
 pal_start:
+    // the #VE gate (vector 20) of our IDT points at _early_ve_handler; its address is known only at
+    // run time (the PAL is position-independent), so the gate is filled here
+    lea     _early_ve_handler(%rip), %rax
+    lea     _idt_start + 20 * 16(%rip), %rcx
+    mov     %ax, (%rcx)                         // VA[15..0]
+    shr     $16, %rax
+    mov     %ax, 6(%rcx)                        // VA[31..16]
+    shr     $16, %rax
+    mov     %eax, 8(%rcx)                       // VA[63..32]
+
     // set up our own GDT and IDT; this is important because e.g. TD-Shim installs its IDT that has
     // a #VE exception handler (that simply forwards requests to host VMM without sanitization)
     // TODO: this is probably not needed because our vm-common code resets these anyway
@@ -62,6 +72,77 @@ pal_start:
     push    %rax
     lretq
 
+//
+// A #VE before interrupts_init() installs the PAL's exception handlers (an instruction the TDX module
+// does not virtualize, an access beyond the TD's GPAW, ...): without this handler, the gate would
+// lead to address 0 and the TD would end in a silent triple fault. Print the exit reason, the RIP
+// and the GPA on the serial port (TDG.VP.VMCALL<Instruction.IO>, as the PAL's early log does), then
+// end the TD with a triple fault (an empty IDT), which QEMU reports as a reset of the guest.
+//
+_early_ve_handler:
+    mov     $3, %eax                            // TDG.VP.VEINFO.GET
+    .byte   0x66, 0x0f, 0x01, 0xcc              // TDCALL: RCX exit reason, R9 GPA
+    push    %r9
+    push    %rcx
+    lea     _early_ve_msg_reason(%rip), %rbx
+    call    _early_puts
+    mov     (%rsp), %ebp                        // exit reason (32 bits)
+    call    _early_puthex
+    lea     _early_ve_msg_rip(%rip), %rbx
+    call    _early_puts
+    mov     16(%rsp), %rbp                      // RIP of the exception frame (#VE pushes no code)
+    call    _early_puthex
+    lea     _early_ve_msg_gpa(%rip), %rbx
+    call    _early_puts
+    mov     8(%rsp), %rbp                       // GPA
+    call    _early_puthex
+    lea     _early_ve_msg_end(%rip), %rbx
+    call    _early_puts
+    lidt    _early_null_idtr(%rip)
+    ud2                                         // #UD, #GP, #DF: a triple fault
+
+// write the string at RBX (NUL-terminated) to the serial port; clobbers RAX, RCX, RDX, R10-R15
+_early_puts:
+    movzbl  (%rbx), %edx
+    test    %edx, %edx
+    jz      1f
+    call    _early_putc
+    inc     %rbx
+    jmp     _early_puts
+1:
+    ret
+
+// write RBP as 16 hex digits to the serial port; clobbers RAX, RBX, RCX, RDX, R10-R15
+_early_puthex:
+    mov     $16, %ebx
+1:
+    rol     $4, %rbp
+    mov     %ebp, %edx
+    and     $0xf, %edx
+    add     $'0', %edx
+    cmp     $'9', %edx
+    jbe     2f
+    add     $('a' - '0' - 10), %edx
+2:
+    call    _early_putc
+    dec     %ebx
+    jnz     1b
+    ret
+
+// write the byte in DL to the serial port 0x3F8 through TDG.VP.VMCALL<Instruction.IO>; the TDX
+// module passes only R10-R15 to the host VMM (RCX mask) and keeps the other registers
+_early_putc:
+    xor     %eax, %eax                          // TDG.VP.VMCALL
+    mov     $0xfc00, %ecx                       // pass R10-R15
+    xor     %r10d, %r10d
+    mov     $0x1e, %r11d                        // Instruction.IO
+    mov     $1, %r12d                           // 1 byte
+    mov     $1, %r13d                           // write
+    mov     $0x3f8, %r14d                       // COM1
+    movzbl  %dl, %r15d
+    .byte   0x66, 0x0f, 0x01, 0xcc              // TDCALL
+    ret
+
 
     .data
     .align  0x1000
@@ -80,6 +161,18 @@ _idt_start:
 _idtr:
     .word . - _idt_start - 1
     .quad _idt_start
+_early_null_idtr:
+    .word 0
+    .quad 0
+
+_early_ve_msg_reason:
+    .asciz  "\nPAL: #VE before the exception handlers are set up: exit reason 0x"
+_early_ve_msg_rip:
+    .asciz  ", RIP 0x"
+_early_ve_msg_gpa:
+    .asciz  ", GPA 0x"
+_early_ve_msg_end:
+    .asciz  "; stopping the TD\n"
 
 // GDT
     .align  0x10
