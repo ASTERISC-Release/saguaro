@@ -32,6 +32,12 @@ void vm_shared_wrmsr(uint64_t msr, uint64_t value) {
         wrmsr(msr, value);
 }
 
+int vm_shared_rdmsr(uint64_t msr, uint64_t* out_value) {
+    /* a plain RDMSR, as before this callback existed (with SEV-ES, the #VC handler serves it) */
+    *out_value = rdmsr(msr);
+    return 0;
+}
+
 uint8_t vm_shared_readb(uint8_t* shared_addr) {
     return READ_ONCE(*shared_addr);
 }

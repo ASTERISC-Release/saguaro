@@ -12,6 +12,9 @@
 void* vm_shared_memcpy(void* dest, const void* src, size_t n);
 void* vm_shared_memset(void* s, int c, size_t n);
 void vm_shared_wrmsr(uint64_t msr, uint64_t value);
+/* reads an MSR that the PAL may read in any state of the boot (e.g. before interrupts_init()):
+ * returns 0 and the value in `*out_value`, or a negative PAL error (TDX: the host VMM refused) */
+int vm_shared_rdmsr(uint64_t msr, uint64_t* out_value);
 
 uint8_t vm_shared_readb(uint8_t* shared_addr);
 uint16_t vm_shared_readw(uint16_t* shared_addr);

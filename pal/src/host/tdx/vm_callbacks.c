@@ -115,6 +115,25 @@ void vm_shared_wrmsr(uint64_t msr, uint64_t value) {
         BUG();
 }
 
+/* RDMSR of the x2APIC ID in a TD: a plain RDMSR is a #VE unless TD_CTLS.ENUM_TOPOLOGY is set (it is
+ * not on real TDX hardware), and the PAL has no #VE handler before interrupts_init(); the host VMM
+ * answers TDG.VP.VMCALL<Instruction.RDMSR> instead (KVM emulates the x2APIC registers). The value is
+ * untrusted: it only selects the destination of an IPI. */
+__attribute_no_sanitize_address
+int vm_shared_rdmsr(uint64_t msr, uint64_t* out_value) {
+    if (msr != MSR_IA32_LAPIC_ID) {
+        /* not a known insecure MSR */
+        BUG();
+    }
+
+    uint64_t value;
+    long ret = tdx_vmcall_instr_rdmsr(msr, &value);
+    if (ret)
+        return -PAL_ERROR_DENIED;
+    *out_value = value;
+    return 0;
+}
+
 uint8_t vm_shared_readb(uint8_t* shared_addr) {
     check_shared_memory_access((uintptr_t)shared_addr, sizeof(*shared_addr));
     return READ_ONCE(*shared_addr);

@@ -38,6 +38,14 @@ void vm_shared_wrmsr(uint64_t msr, uint64_t value) {
     BUG();
 }
 
+int vm_shared_rdmsr(uint64_t msr, uint64_t* out_value) {
+    /* No MSRs on aarch64; the only caller is the x86 APIC code. A link-satisfying trap, as above. */
+    __UNUSED(msr);
+    __UNUSED(out_value);
+    BUG();
+    return -PAL_ERROR_NOTIMPLEMENTED;
+}
+
 /*
  * The vm_shared_* accessors implement plain little-endian loads/stores with release/acquire
  * semantics: the shared memory regions here (virtqueues, pipes, comm rings) are written by

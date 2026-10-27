@@ -170,8 +170,15 @@ int apic_init(void) {
      * x2APIC mode, so no need to check or modify the IA32_APIC_BASE MSR */
     lapic_enable();
 
-    /* apic_init() runs on the BSP (pal_main), so this is CPU0's ID */
-    g_cpu0_apic_id = (uint32_t)rdmsr(MSR_IA32_LAPIC_ID);
+    /* apic_init() runs on the BSP (pal_main), so this is CPU0's ID; read through the PAL's callback
+     * (in a TD a plain RDMSR is a #VE, and this runs before interrupts_init()) */
+    uint64_t apic_id;
+    ret = vm_shared_rdmsr(MSR_IA32_LAPIC_ID, &apic_id);
+    if (ret < 0) {
+        log_warning("Cannot read the x2APIC ID of CPU0 (%s); assuming 0", pal_strerror(ret));
+        apic_id = 0;
+    }
+    g_cpu0_apic_id = (uint32_t)apic_id;
 
     return lapic_timer_init();
 }
