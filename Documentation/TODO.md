@@ -17,6 +17,7 @@ Open items by architecture and host. Longer lists are kept with the maintainers'
   an AArch64 build check of the changes; equal-scene frame-rate comparisons for The Witcher and BioShock 2.
 - CI workflows, later: run the rewrite stress step by default on direct aarch64 and add one for riscv64; run the regression tier on pushes (about 10 minutes per variant; the workflows are manual); make Python work in the aarch64 TCG workflow (the system Python is not PIE).
 - CI for hardware-bound backends (`sev`, `sgx`, `vbs`, `tdx`): there is no workflow and no self-hosted runner, deliberately (the repository is public); `test/quick.sh <backend>` (and `test/sev/test-sev-all.sh`) are run by hand on the hardware.
+- `sev`: build the hardware QEMU from `vmm/sev-tcg` (KVM enabled, same IGVM patch) instead of the QEMU step of `container/sev/build-sev-tools.sh`; needs a validation run on an SEV host.
 - `sev`: trusted files, Secure TSC; `sgx`: remote attestation (AESM, PCCS) and the `ra-tls` examples.
 - Proton (Wine, DXVK) under `saguaro-vm`: phase 1 and later, see the status in the development notes.
 - `direct` on riscv64 (emulated guest): the step `ex-unit_tests` (`thread-tls` of the multi-thread suite) failed once in 11 hosted runs and passed on a rerun; cause not established.
