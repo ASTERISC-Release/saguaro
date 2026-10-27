@@ -7,7 +7,8 @@
 # do not replace a run on a TDX host). The job builds that QEMU with scripts/qemu.sh (cached by its commit),
 # builds td-shim at the commit scripts/td-shim-build.sh names (cached by that commit and the script), installs
 # the SGX and TDX build of Saguaro (the TDX PAL reads the signed SGX manifest), and runs test/quick.sh at
-# 2 vCPUs.
+# 2 vCPUs. A second job runs the same tests with a TD that has a GPAW of 52 and enumerates the topology
+# (tdx-emu,gpaw=52,enum-topology=on); the default job is the TD of the TDX hosts tested so far (GPAW 48).
 #
 # Nightly and manual trigger.
 name: TDX PAL emulated (x86_64, QEMU TCG)
@@ -43,7 +44,15 @@ env:
 
 jobs:
   x86_64-tdx-emu:
-    name: x86_64 TDX PAL on the emulated TDX
+    name: x86_64 TDX PAL on the emulated TDX (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: default
+            props: ""
+          - name: gpaw=52,enum-topology=on
+            props: ",gpaw=52,enum-topology=on"
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     env:
@@ -142,11 +151,20 @@ jobs:
       - name: Regression tests (SAGUARO_ACCEL=tcg test/quick.sh tdx)
         env:
           TIER: ${{ inputs.tier || 'regression' }}
+          TDX_EMU_PROPS: ${{ matrix.props }}
         run: |
+          QEMU_RUN="$QEMU_PREFIX/bin/qemu-system-x86_64"
+          if [ -n "$TDX_EMU_PROPS" ]; then
+            # the launcher names the object `tdx-emu,id=tdx`; this wrapper adds the TD properties of the variant
+            printf '%s\n' '#!/bin/bash' 'args=()' 'for a in "$@"; do [ "$a" = "tdx-emu,id=tdx" ] && a="tdx-emu,id=tdx$TDX_EMU_PROPS"; args+=("$a"); done' \
+              "exec $QEMU_RUN \"\${args[@]}\"" > "$RUNNER_TEMP/qemu-variant"
+            chmod +x "$RUNNER_TEMP/qemu-variant"
+            QEMU_RUN="$RUNNER_TEMP/qemu-variant"
+          fi
           # saguaro-tdx's virtiofsd serves / and needs root, as the vm workflow does
           . "$SAGUARO_PREFIX/env.sh"
           sudo -E env "PATH=$PATH" "PYTHONPATH=$PYTHONPATH" "SAGUARO_PREFIX=$SAGUARO_PREFIX" \
-            "SAGUARO_TDX_PREFIX=$SAGUARO_PREFIX" "SAGUARO_ACCEL=tcg" "QEMU_PATH=$QEMU_PREFIX/bin/qemu-system-x86_64" \
+            "SAGUARO_TDX_PREFIX=$SAGUARO_PREFIX" "SAGUARO_ACCEL=tcg" "QEMU_PATH=$QEMU_RUN" "TDX_EMU_PROPS=$TDX_EMU_PROPS" \
             "EXEC_LOG_DIR=$GITHUB_WORKSPACE/quick-out/exec-logs" \
             test/quick.sh tdx --tier "$TIER" --vcpus "$SAGUARO_CPU_NUM" --out "$GITHUB_WORKSPACE/quick-out" \
             2>&1 | tee quick.log
@@ -160,7 +178,7 @@ jobs:
         if: always()
         run: |
           {
-            echo '## SAGUARO_ACCEL=tcg test/quick.sh tdx (QEMU TCG emulation: no attestation, no memory isolation; not a substitute for a TDX host)'
+            echo '## SAGUARO_ACCEL=tcg test/quick.sh tdx, ${{ matrix.name }} (QEMU TCG emulation: no attestation, no memory isolation; not a substitute for a TDX host)'
             echo '```'
             cat quick-out/summary.txt 2>/dev/null || echo "(no summary: the run did not finish)"
             grep -E ',(fail|known-fail)(,|$)' quick-out/results.csv 2>/dev/null | cut -d, -f5-7 || true
@@ -170,7 +188,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: tdx-emulated-${{ inputs.tier || 'regression' }}
+          name: tdx-emulated-${{ matrix.name }}-${{ inputs.tier || 'regression' }}
           path: |
             quick-out
             quick.log
