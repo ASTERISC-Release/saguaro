@@ -19,6 +19,15 @@ Open items by architecture and host. Longer lists are kept with the maintainers'
 - CI for hardware-bound backends (`sev`, `sgx`, `vbs`, `tdx`): there is no workflow and no self-hosted runner, deliberately (the repository is public); `test/quick.sh <backend>` (and `test/sev/test-sev-all.sh`) are run by hand on the hardware.
 - `sev`: build the hardware QEMU from `vmm/sev-tcg` (KVM enabled, same IGVM patch) instead of the QEMU step of `container/sev/build-sev-tools.sh`; needs a validation run on an SEV host.
 - `sev`: trusted files, Secure TSC; `sgx`: remote attestation (AESM, PCCS) and the `ra-tls` examples.
+- `tdx` on hardware: a retest of the fixes for TDX hardware (the x2APIC ID through TDG.VP.VMCALL<Instruction.RDMSR>
+  with the host's KVM and QEMU, the report of an early `#VE`, the QEMU query for the quote option, the
+  `SAGUARO_CONTAINER_HOST_QEMU=1` mount); quotes with a running quote generation service are untested.
+- `tdx`: a TDX-capable QEMU built in the container (e.g. from `vmm/tdx-tcg` with KVM, or upstream QEMU) instead of
+  the host's QEMU, which needs the container's distribution release on the host; the `hpet=off` machine option of
+  upstream gramine-tdx is not used (the PAL does not program the HPET).
+- `tdx` emulation: a TD with GPAW 52 (`tdx-emu,gpaw=52`) and one with `enum-topology=on` are not run by CI.
+- `tdx` emulation: the first `exec.sh --tdx` of `nginx` after a clean checkout failed once with `open()
+  ".../nginx-saguaro.conf" failed (13: Permission denied)` and passed on reruns; cause not established.
 - Proton (Wine, DXVK) under `saguaro-vm`: phase 1 and later, see the status in the development notes.
 - `direct` on riscv64 (emulated guest): the step `ex-unit_tests` (`thread-tls` of the multi-thread suite) failed once in 11 hosted runs and passed on a rerun; cause not established.
 - `sgx`, extended tier (`test/quick.sh sgx --tier extended`), failures to triage: `test_2025_fork_reservation`, `test_2046_fcntl_dupfd`, `test_230_keys`, `test_075b_mmap_shared_ro`, `test_09f_cputime`, `test_076a_mremap_misc_chroot`, `test_077c_symlink_created_on_host`. They are not listed as known failures yet.

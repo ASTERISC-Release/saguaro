@@ -16,7 +16,12 @@ All the requirements from [VM quickstart](vm.md) apply, and:
 - An Intel host with TDX enabled in the firmware and a host kernel with TDX support
   (`cat /sys/module/kvm_intel/parameters/tdx` prints `Y`).
   - Refer to the upstream [gramine-tdx](https://github.com/gramineproject/gramine-tdx) project for details on enabling TDX.
-- A QEMU with TDX support (`tdx-guest`): `QEMU_PATH`, or `qemu-system-x86_64` from `PATH`.
+- `/dev/kvm` and `/dev/vhost-vsock` readable and writable by the user (add the user to the `kvm` group on the
+  host and log in again). `container/run.sh` passes the group into the container.
+- A QEMU with TDX support (`tdx-guest`): `QEMU_PATH`, or `qemu-system-x86_64` from `PATH`. The QEMU
+  `2:8.2.2+ds-0ubuntu1.4+tdx1.1` of the kobuk-team/tdx PPA (Ubuntu 24.04) works. `saguaro-tdx` asks QEMU
+  whether its `tdx-guest` takes `quote-generation-socket` or the earlier `quote-generation-service`.
+- About 10 GB of free disk space (the container image, td-shim and the builds).
 
 ### Emulation (Optional)
 
@@ -49,6 +54,18 @@ that `make SGX=1` produces.
 - `--prefix` is the default prefix of `exec.sh` and `test/quick.sh` for `tdx`
 (`SAGUARO_TDX_PREFIX`); without it `--sgx` installs into `~/.local/saguaro-sgx`. 
 
+On TDX hardware, the container needs the host's QEMU: the container's own QEMU has no TDX support. Create the
+container with `SAGUARO_CONTAINER_HOST_QEMU=1` (run `container/run.sh down` first if it exists):
+
+    SAGUARO_CONTAINER_HOST_QEMU=1 container/run.sh 'ls /opt/host-qemu/bin'
+
+The host's `qemu-system-x86_64`, `/usr/share/qemu`, `/usr/share/seabios` and its module directory
+(`/usr/lib/x86_64-linux-gnu/qemu`) are mounted read-only under `/opt/host-qemu`. With
+`QEMU_PATH=/opt/host-qemu/bin/qemu-system-x86_64`, `saguaro-tdx` sets `QEMU_MODULE_DIR` to
+`/opt/host-qemu/lib/qemu` and passes the data directories with `-L`: QEMU loads only modules of its own build,
+not the container's. The host must run the container's distribution release (Ubuntu 24.04), so that the binary
+finds its libraries.
+
 # 2. Example: Hello World
 
 In the container shell, `exec.sh` runs the example under TDX (`--tdx`):
@@ -62,6 +79,10 @@ shell at the root of the checkout:
     export SAGUARO_ACCEL=tcg QEMU_PATH=$(scripts/qemu.sh path tdx-tcg)
     cd CI-Examples/helloworld
     ./exec.sh --tdx            # every example's exec.sh works
+
+On TDX hardware, export the host's QEMU first (section 1):
+
+    export QEMU_PATH=/opt/host-qemu/bin/qemu-system-x86_64
 
 The script creates the enclave signing key `~/.config/saguaro/enclave-key.pem` once, runs `make SGX=1`
 (renders and signs the manifest) and runs `saguaro-tdx`. The output contains:
@@ -84,6 +105,10 @@ Note the following:
 - Set `SAGUARO_CPU_NUM` as for `saguaro-vm`.
 - `./exec.sh --tdx` passes for the examples `helloworld`, `bash`, `sqlite`, `python`, `busybox`, `memcached`, `redis`,
   `lighttpd`, `rust` and `nginx` under the emulation. The tests of `unit_tests` that need an SGX build are skipped.
+- td-shim and the PAL log their first lines to the serial port; these lines stop once the virtio console is up.
+  `saguaro-tdx` shows the end of the serial output only when the guest ends without an exit code.
+- The emulation reports what a TD reports on TDX hardware: GPAW 48 (the shared bit is bit 47, although the CPU
+  HOB of td-shim reports a 52-bit width), the attributes `SEPT_VE_DISABLE` and `PKS`, no topology enumeration.
 
 # 3. Regression Tests
 
@@ -107,6 +132,19 @@ demand; the `tdx-build` job of `direct-x86_64.yml` compiles the TDX PAL.
 - `exec.sh` reports that `tdx` cannot run: it names the reason. `no TDX host (kvm_intel tdx is not Y)`: the host has no
   TDX; use the emulation (`SAGUARO_ACCEL=tcg`, `QEMU_PATH`).
 - `has no 'tdx-emu' object`: `QEMU_PATH` is not the QEMU of `vmm/tdx-tcg` (`scripts/qemu.sh path tdx-tcg`).
+- `container/run.sh` warns that `/dev/kvm` is not readable and writable, or QEMU reports `Could not access KVM kernel
+  module: Permission denied`: the user is not in the `kvm` group, or the container was created before the user
+  joined it; add the user, log in again, and recreate the container (`container/run.sh down`).
+- QEMU stops with `Only modules from the same build can be loaded`: `QEMU_PATH` is the host's QEMU but its modules
+  are the container's; use the `/opt/host-qemu` mount (section 1) or set `QEMU_MODULE_DIR`. Warnings `failed to
+  open module` for display and audio modules (`libepoxy.so.0`, `libpipewire-0.3.so.0`, `libjack.so.0`) do not
+  matter.
+- `Invalid parameter 'quote-generation-service'`: a `saguaro-tdx` from before the QEMU query; reinstall.
+- The guest ends without an exit code after `Initializing page tables for memory size ...`: a PAL from before the
+  fixes for TDX hardware (the shared bit from the CPU HOB, a `RDMSR` of the x2APIC ID); rebuild and reinstall.
+- `PAL: #VE before the exception handlers are set up: exit reason 0x...`: the PAL ran an instruction that the TDX
+  module does not virtualize (or accessed memory beyond the TD's GPAW) before its exception handlers were set up;
+  the line names the exit reason, the RIP and the GPA.
 - The install stops at the link step: `$HOME/td-shim` is missing or not built (section 1).
 - `saguaro-sgx-sign not installed`: the install lacks `--sgx`; repeat it with `--sgx --tdx`.
 - td-shim panics with `Secure Boot: Cannot read verify header`: it was built with its default features; build it with
