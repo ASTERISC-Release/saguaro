@@ -11,8 +11,11 @@ set -uo pipefail
 . ../common_tools/server-check.sh
 case $SAGUARO in
     saguaro-vm|saguaro-sev|saguaro-tdx)
-        grep -q '^master_process' install/conf/nginx-saguaro.conf \
-            || sed -i '1i master_process off;' install/conf/nginx-saguaro.conf ;;
+        if ! grep -q '^master_process' install/conf/nginx-saguaro.conf; then
+            sed -i '1i master_process off;' install/conf/nginx-saguaro.conf
+            # the configuration is a trusted file of the signed manifest (tdx): sign it again
+            [ ! -e nginx.manifest.sgx ] || make SGX=1 nginx.manifest.sgx >/dev/null
+        fi ;;
 esac
 server_start 8002:8002,8444:8444 "$SAGUARO" ./nginx
 fetch() {

@@ -135,6 +135,10 @@ demand; the `tdx-build` job of `direct-x86_64.yml` compiles the TDX PAL.
 - `container/run.sh` warns that `/dev/kvm` is not readable and writable, or QEMU reports `Could not access KVM kernel
   module: Permission denied`: the user is not in the `kvm` group, or the container was created before the user
   joined it; add the user, log in again, and recreate the container (`container/run.sh down`).
+- Inside the container `/dev/kvm` is listed as `nobody:nogroup`; this is normal. `--group-add keep-groups` keeps the
+  `kvm` group of the user, so the device is usable.
+- The PAL logs warnings at the manifest's `log_level`: build with `make SGX=1 SAGUARO_LOG_LEVEL=debug` to see them
+  (`SAGUARO_VM_SERIAL_LOG=<file>` and `SAGUARO_VM_CONSOLE_LOG=<file>` keep the serial and console output).
 - QEMU stops with `Only modules from the same build can be loaded`: `QEMU_PATH` is the host's QEMU but its modules
   are the container's; use the `/opt/host-qemu` mount (section 1) or set `QEMU_MODULE_DIR`. Warnings `failed to
   open module` for display and audio modules (`libepoxy.so.0`, `libpipewire-0.3.so.0`, `libjack.so.0`) do not
