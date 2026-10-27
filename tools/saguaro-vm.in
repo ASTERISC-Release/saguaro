@@ -113,6 +113,18 @@ QEMU_CPU_NUM=${QEMU_CPU_NUM:-"1"}
 # environment)
 [ -n "$SEV_QEMU_PATH" ] && QEMU_PATH=${QEMU_PATH:-$SEV_QEMU_PATH}
 QEMU_PATH=${QEMU_PATH:-$(command -v qemu-system-x86_64 || echo qemu-system-x86_64)}
+# A QEMU installed with its module directory next to it, in <dir>/bin, <dir>/lib/qemu and
+# <dir>/share/{qemu,seabios} (the host's QEMU that container/run.sh mounts at /opt/host-qemu with
+# SAGUARO_CONTAINER_HOST_QEMU=1): its own modules (QEMU refuses modules of another build, such as the
+# container's) and its own firmware directories.
+QEMU_HOME=$(dirname "$(dirname "$(readlink -f "$(command -v "$QEMU_PATH" || echo "$QEMU_PATH")")")")
+QEMU_DATADIRS=""
+if [ "$QEMU_HOME" != /usr ] && compgen -G "$QEMU_HOME/lib/qemu/*.so" >/dev/null; then
+    export QEMU_MODULE_DIR=${QEMU_MODULE_DIR:-$QEMU_HOME/lib/qemu}
+    for d in "$QEMU_HOME/share/qemu" "$QEMU_HOME/share/seabios"; do
+        [ -d "$d" ] && QEMU_DATADIRS+="-L $d "
+    done
+fi
 
 # SAGUARO_ACCEL=tcg runs the guest under QEMU's software emulation (MTTCG) instead of KVM, for
 # hosts without /dev/kvm or without SEV; SAGUARO_CPU overrides the CPU model (TCG default: max).
@@ -140,6 +152,7 @@ else
 -m $QEMU_MEM_SIZE -smp $QEMU_CPU_NUM"
     QEMU_OPTS="-enable-kvm -vga none -display none -no-reboot -monitor none "
 fi
+QEMU_OPTS+="$QEMU_DATADIRS"
 # SAGUARO_VM_MONITOR=<path>: the QEMU monitor on a unix socket, so that a hung guest can be looked
 # at from outside (test/vm/multiproc/vm-hang-report.py)
 [ -n "$SAGUARO_VM_MONITOR" ] && \
@@ -285,6 +298,25 @@ export SAGUARO_RAM_BASES=$RAM_BASES
 # the graphics QEMU (vmm/graphics) reads the map and the arena address under their old names
 export GRAMINE_RAM_BASES=$RAM_BASES
 
+# The tdx-guest object with the quote generation service on the host's vsock port 4050. QEMU 8.2 of
+# the TDX packages and upstream QEMU name the option quote-generation-socket, a SocketAddress that
+# only the JSON form of -object can give; the earlier QEMU-TDX branches took the string
+# quote-generation-service. QEMU says which one its tdx-guest has (QMP qom-list-properties, without
+# creating a VM); without an answer, the current spelling is used.
+tdx_guest_object() {
+    local props
+    props=$(printf '%s\n' '{"execute":"qmp_capabilities"}' \
+                '{"execute":"qom-list-properties","arguments":{"typename":"tdx-guest"}}' \
+                '{"execute":"quit"}' |
+            timeout 10 "$QEMU_PATH" -machine none -display none -nodefaults -S -qmp stdio 2>/dev/null)
+    case $props in
+        *'"quote-generation-service"'*)
+            echo 'tdx-guest,id=tdx,quote-generation-service=vsock:2:4050' ;;
+        *)
+            echo '{"qom-type":"tdx-guest","id":"tdx","quote-generation-socket":{"type":"vsock","cid":"2","port":"4050"}}' ;;
+    esac
+}
+
 if [ -n "$SEV_IGVM_PATH" ]; then
     # AMD SEV (dev docs: sev/): the IGVM file holds the PAL and its boot stub, QEMU
     # encrypts and measures every page of it at launch; no -kernel, no BIOS loader.
@@ -364,7 +396,7 @@ else
     # pin to its device-interrupt vector; the 8254 timer, which ticks from reset, would interrupt
     # the kernel before its handlers and devices are set up (a crash or a hang at start-up)
     QEMU_MACHINE="-M q35,kernel_irqchip=split,pit=off,confidential-guest-support=tdx \
-    -object tdx-guest,id=tdx,quote-generation-service=vsock:2:4050"
+    -object $(tdx_guest_object)"
     QEMU_BINARIES="-bios $TDSHIM_PAL_PATH"
 fi
 
