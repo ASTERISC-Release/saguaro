@@ -20,6 +20,8 @@
 # image saguaro-vm-<arch>:cf-<Containerfile hash>; see the image section below).
 # SAGUARO_CONTAINER_NVIDIA=1 (when the container is created) also passes the NVIDIA proprietary
 # driver's devices and the host's NVIDIA userspace libraries (off by default).
+# SAGUARO_CONTAINER_HOST_QEMU=1 (when the container is created) mounts the host's QEMU read-only at
+# /opt/host-qemu (off by default; dev docs: quickstart/tdx.md).
 #
 # Workspaces: when the checkout sits in a folder named saguaro-<name> (for example
 # .../saguaro-<name>/saguaro), the container is named after that folder
@@ -151,13 +153,27 @@ if ! podman container exists "$CONTAINER"; then
     for d in /dev/kvm /dev/vhost-vsock /dev/vhost-net /dev/net/tun /dev/dri/renderD*; do
         [ -e "$d" ] && DEVICES+=(--device "$d:$d")
     done
+    # /dev/kvm and /dev/vhost-vsock: where they belong to the group `kvm` (mode 0660) instead of being
+    # open to everyone, a rootless container sees them as nobody:nogroup and cannot open them;
+    # keep-groups carries the user's supplementary groups (`kvm`) into it (needs the crun runtime).
+    # A host where they are world-readable and -writable needs nothing.
+    for d in /dev/kvm /dev/vhost-vsock; do
+        [ -e "$d" ] || continue
+        if [ ! -r "$d" ] || [ ! -w "$d" ]; then
+            echo "warning: $d is not readable and writable for $(id -un) (add the user to its group," \
+                 "$(stat -L -c %G "$d"), and log in again); saguaro-vm cannot use it." >&2
+        elif [ $(( $(stat -L -c '%#a' "$d") & 6 )) -ne 6 ] && [[ " ${DEVICES[*]} " != *" keep-groups "* ]]; then
+            DEVICES+=(--group-add keep-groups)
+        fi
+    done
     # AMD SEV (dev docs: sev/): QEMU opens /dev/sev for the launch commands of an SEV,
     # SEV-ES or SEV-SNP guest. The node is usually root-only; where the host gives it to a group
     # (e.g. `sev`, mode 0660), keep-groups carries the user's supplementary groups into the
     # rootless container so the device stays accessible (needs the crun runtime).
     if [ -e /dev/sev ]; then
         DEVICES+=(--device /dev/sev:/dev/sev)
-        [ -r /dev/sev ] && [ -w /dev/sev ] && DEVICES+=(--group-add keep-groups)
+        [ -r /dev/sev ] && [ -w /dev/sev ] && [[ " ${DEVICES[*]} " != *" keep-groups "* ]] &&
+            DEVICES+=(--group-add keep-groups)
     fi
     # Intel SGX: the enclave device of the in-kernel driver, and /dev/sgx_provision (quotes). The nodes belong
     # to the group `sgx` (mode 0660, provision usually root-only), so keep-groups carries the user's
@@ -182,6 +198,25 @@ if ! podman container exists "$CONTAINER"; then
     # kept next to this repository as sev-tools/ (or at SEV_TOOLS_DIR) so it survives recreation.
     SEV_TOOLS=${SEV_TOOLS_DIR:-$(dirname "$REPO_ROOT")/sev-tools}
     [ -d "$SEV_TOOLS" ] && GRAPHICS+=(-v "$SEV_TOOLS:/root/sev-tools:rw")
+    # Opt-in (SAGUARO_CONTAINER_HOST_QEMU=1): the host's QEMU (e.g. a TDX-capable build of the host's
+    # distribution), read-only at /opt/host-qemu with its data and module directories, for
+    # QEMU_PATH=/opt/host-qemu/bin/qemu-system-<arch>. saguaro-vm then gives it its own modules
+    # (QEMU_MODULE_DIR) and firmware directories (-L): the container's are from another build.
+    if [ "${SAGUARO_CONTAINER_HOST_QEMU:-0}" = 1 ]; then
+        HOST_QEMU=$(command -v "qemu-system-$ARCH" || true)
+        [ -n "$HOST_QEMU" ] || { echo "SAGUARO_CONTAINER_HOST_QEMU=1: no qemu-system-$ARCH on this host" >&2; exit 1; }
+        GRAPHICS+=(-v "$(readlink -f "$HOST_QEMU"):/opt/host-qemu/bin/qemu-system-$ARCH:ro")
+        for m in /usr/share/qemu:share/qemu /usr/share/seabios:share/seabios; do
+            [ -d "${m%%:*}" ] && GRAPHICS+=(-v "${m%%:*}:/opt/host-qemu/${m#*:}:ro")
+        done
+        # the module directory: Debian/Ubuntu, else Fedora/Arch
+        for m in "/usr/lib/$(uname -m)-linux-gnu/qemu" /usr/lib64/qemu /usr/lib/qemu; do
+            if compgen -G "$m/*.so" >/dev/null; then
+                GRAPHICS+=(-v "$m:/opt/host-qemu/lib/qemu:ro")
+                break
+            fi
+        done
+    fi
     # Intel SGX: the socket of the host's AESM service (remote attestation), when it runs
     [ -S /var/run/aesmd/aesm.socket ] && GRAPHICS+=(-v /var/run/aesmd:/var/run/aesmd)
     # Opt-in (SAGUARO_CONTAINER_NVIDIA=1, see dev docs: graphics-aarch64/): the NVIDIA
