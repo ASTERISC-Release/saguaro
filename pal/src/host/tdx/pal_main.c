@@ -61,34 +61,82 @@ static int memory_mark_pages_shared(uint64_t addr, size_t size) {
     return 0;
 }
 
+/* MapGPA returns RETRY when the host VMM converted only a part of the range; the remainder is
+ * requested again, but a host that makes no progress is given up on after a few attempts */
+#define MAPGPA_MAX_RETRIES_WITHOUT_PROGRESS 3
+
 static int shared_memory_init(uint64_t gpa_width) {
+    /* the shared bit is the highest GPA bit of the TD, from the GPAW of TDG.VP.INFO */
     g_shared_bit = 1UL << (gpa_width - 1);
 
-    long ret = memory_mark_pages_shared(SHARED_MEM_ADDR, SHARED_MEM_SIZE);
+    int ret = memory_mark_pages_shared(SHARED_MEM_ADDR, SHARED_MEM_SIZE);
     if (ret < 0)
         return ret;
 
-    ret = TDG_VP_VMCALL_STATUS_RETRY;
     uint64_t map_addr = SHARED_MEM_ADDR;
     uint64_t map_size = SHARED_MEM_SIZE;
+    unsigned int retries_without_progress = 0;
 
-    while (ret == TDG_VP_VMCALL_STATUS_RETRY) {
+    while (true) {
         uint64_t failed_addr = 0;
-        long ret = tdx_vmcall_mapgpa(g_shared_bit | map_addr, map_size, &failed_addr);
-        if (ret != TDG_VP_VMCALL_STATUS_RETRY) {
-            /* done */
-            break;
-        }
-        failed_addr &= ~g_shared_bit; /* MAPGPA returns first failing addr with shared bit set */
-        if (!(map_addr <= failed_addr && failed_addr < map_addr + map_size)) {
-            /* sanity check, just in case */
+        long status = tdx_vmcall_mapgpa(g_shared_bit | map_addr, map_size, &failed_addr);
+        if (status == TDG_VP_VMCALL_STATUS_SUCCESS)
+            return 0;
+
+        if (status != TDG_VP_VMCALL_STATUS_RETRY) {
+            log_error("TDG.VP.VMCALL<MapGPA> of the shared memory [0x%lx, 0x%lx) with the shared "
+                      "bit 0x%lx failed with status 0x%lx", map_addr, map_addr + map_size,
+                      g_shared_bit, (uint64_t)status);
             return -PAL_ERROR_DENIED;
+        }
+
+        /* RETRY (GHCI): R11 holds the GPA (with the shared bit) to continue from */
+        failed_addr &= ~g_shared_bit;
+        if (!(map_addr <= failed_addr && failed_addr < map_addr + map_size)
+                || !IS_ALIGNED(failed_addr, PAGE_SIZE)) {
+            log_error("TDG.VP.VMCALL<MapGPA> asked to retry from 0x%lx, outside of the requested "
+                      "range [0x%lx, 0x%lx)", failed_addr, map_addr, map_addr + map_size);
+            return -PAL_ERROR_DENIED;
+        }
+
+        if (failed_addr == map_addr) {
+            if (++retries_without_progress > MAPGPA_MAX_RETRIES_WITHOUT_PROGRESS) {
+                log_error("TDG.VP.VMCALL<MapGPA> makes no progress at 0x%lx", map_addr);
+                return -PAL_ERROR_DENIED;
+            }
+        } else {
+            retries_without_progress = 0;
         }
         map_size -= failed_addr - map_addr;
         map_addr = failed_addr;
     }
+}
 
-    return ret;
+/*
+ * The TD's guest physical address width (GPAW), from TDG.VP.INFO. This is the width the shared bit
+ * derives from (bit GPAW-1). The CPU HOB of td-shim reports the physical-address width of CPUID
+ * 0x80000008 instead, which may be wider than GPAW (52 with a GPAW of 48 on real TDX hardware).
+ */
+static uint64_t tdx_gpaw_init(uint64_t hob_width) {
+    uint8_t gpaw;
+    uint64_t attributes_unused;
+    uint32_t num_cpus_unused;
+    uint32_t max_cpus_unused;
+    uint32_t cpu_index_unused;
+    bool sys_rd_available_unused;
+    long tdx_ret = tdx_tdcall_vp_info(&gpaw, &attributes_unused, &num_cpus_unused,
+                                      &max_cpus_unused, &cpu_index_unused,
+                                      &sys_rd_available_unused);
+    if (tdx_ret)
+        INIT_FAIL("Could not call TDCALL[TDG.VP.INFO] to learn the GPAW");
+
+    if (gpaw != 48 && gpaw != 52)
+        INIT_FAIL("Unsupported GPAW %u from TDG.VP.INFO (allowed values are 48 and 52)", gpaw);
+
+    if (hob_width != gpaw)
+        log_debug("TD GPAW is %u (TDG.VP.INFO), the CPU HOB reports %lu: the shared bit is bit %u",
+                  gpaw, hob_width, gpaw - 1);
+    return gpaw;
 }
 
 static int tsc_frequency_init(void) {
@@ -213,16 +261,15 @@ noreturn void pal_start_c(void* hob_addr, void* this_addr) {
     g_pal_public_state.alloc_align = PAGE_SIZE;
     assert(IS_POWER_OF_2(g_pal_public_state.alloc_align));
 
-    uint64_t gpa_width = 0;
+    /* the physical-address width of the CPU HOB (CPUID 0x80000008), for the log only: the GPAW
+     * comes from TDG.VP.INFO, see tdx_gpaw_init() */
+    uint64_t hob_width = 0;
     for (EFI_HOB_GENERIC_HEADER* hob = hob_addr; !END_OF_HOB_LIST(hob); hob = GET_NEXT_HOB(hob)) {
         if (GET_HOB_TYPE(hob) == EFI_HOB_TYPE_CPU) {
             EFI_HOB_CPU* cpu_hob = (EFI_HOB_CPU*)hob;
-            gpa_width = cpu_hob->SizeOfMemorySpace;
+            hob_width = cpu_hob->SizeOfMemorySpace;
         }
     }
-
-    if (gpa_width != 48 && gpa_width != 52)
-        INIT_FAIL("Failed to determine GPAW (allowed values are 48 and 52)");
 
     EFI_HOB_E820_TABLE* e820_hob = NULL;
     for (EFI_HOB_GENERIC_HEADER* hob = hob_addr; !END_OF_HOB_LIST(hob); hob = GET_NEXT_HOB(hob)) {
@@ -267,6 +314,7 @@ noreturn void pal_start_c(void* hob_addr, void* this_addr) {
      *        part of "preloaded ranges" */
     prot_none_memory();
 
+    uint64_t gpa_width = tdx_gpaw_init(hob_width);
     ret = shared_memory_init(gpa_width);
     if (ret < 0)
         INIT_FAIL("Failed to initialize shared TDX memory");
